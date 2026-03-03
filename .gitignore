@@ -1,0 +1,27 @@
+# Byte-compiled / Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs y bases de datos locales
+*.log
+*.sqlite
+*.db
+
+# Configs sensibles
+config.json
+.env
+secrets.yaml
+
+# Carpetas de trabajo de Freqtrade u otras herramientas
+user_data/
+backtest_results/
+strategy_results/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.tmp
+*.swp
