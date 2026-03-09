@@ -3,102 +3,84 @@ name: OrangeCashMachine CI
 on:
   push:
     branches: [ main ]
-
   pull_request:
     branches: [ main ]
 
 jobs:
 
   test-bots:
-
     name: Test Trading Bots
     runs-on: ubuntu-latest
-
-    env:
-      COMPOSE_FILE: docker-compose.test.yml
 
     steps:
 
       # -------------------------------------------------
-      # Checkout
+      # 1️⃣ Checkout
       # -------------------------------------------------
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
       # -------------------------------------------------
-      # Docker build system
+      # 2️⃣ Configurar Docker Buildx
       # -------------------------------------------------
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-
       # -------------------------------------------------
-      # Validar estructura del proyecto
+      # 3️⃣ Validar estructura del proyecto
       # -------------------------------------------------
-
       - name: Validate project structure
         run: |
-          echo "Validating project structure..."
-
-          test -d BOTS || (echo "❌ BOTS directory missing" && exit 1)
-
+          echo "🔹 Validating project structure..."
+          if [ ! -d BOTS ]; then
+            echo "❌ BOTS directory missing"
+            exit 1
+          fi
+          echo "✅ BOTS directory found"
 
       # -------------------------------------------------
-      # Validar estrategias Python
+      # 4️⃣ Validar estrategias Python
       # -------------------------------------------------
-
       - name: Validate Python strategies
         run: |
-          echo "Checking Python syntax..."
-
+          echo "🔹 Checking Python syntax for each bot..."
           find BOTS -name "*.py" -print0 | while IFS= read -r -d '' file; do
-              python -m py_compile "$file"
+              python -m py_compile "$file" || { echo "❌ Python syntax error in $file"; exit 1; }
           done
-
+          echo "✅ Python syntax validated"
 
       # -------------------------------------------------
-      # Validar archivos config.json
+      # 5️⃣ Validar archivos config.json
       # -------------------------------------------------
-
       - name: Validate freqtrade configs
         run: |
-          echo "Validating config.json files..."
-
+          echo "🔹 Validating config.json files..."
           find BOTS -name "config.json" -print0 | while IFS= read -r -d '' file; do
-              python -m json.tool "$file" > /dev/null
+              python -m json.tool "$file" > /dev/null || { echo "❌ Invalid JSON in $file"; exit 1; }
+          done
+          echo "✅ JSON configs validated"
+
+      # -------------------------------------------------
+      # 6️⃣ Construir y testear contenedores por bot
+      # -------------------------------------------------
+      - name: Build and test bot containers
+        run: |
+          echo "🔹 Building and testing Docker containers for each bot..."
+          for bot_dir in BOTS/*; do
+            if [ -f "$bot_dir/docker-compose.yml" ]; then
+              echo "⚙️ Processing $bot_dir..."
+              docker compose -f "$bot_dir/docker-compose.yml" build || { echo "❌ Build failed for $bot_dir"; exit 1; }
+              docker compose -f "$bot_dir/docker-compose.yml" up --abort-on-container-exit || { echo "❌ Container test failed for $bot_dir"; exit 1; }
+              docker compose -f "$bot_dir/docker-compose.yml" down -v
+              echo "✅ $bot_dir tested successfully"
+            else
+              echo "ℹ️ No docker-compose.yml in $bot_dir, skipping..."
+            fi
           done
 
-
       # -------------------------------------------------
-      # Build contenedores
+      # 7️⃣ Mensaje final
       # -------------------------------------------------
-
-      - name: Build docker images
+      - name: CI Completed
         run: |
-          echo "Building containers..."
-
-          docker compose build
-
-
-      # -------------------------------------------------
-      # Ejecutar test containers
-      # -------------------------------------------------
-
-      - name: Run bot tests
-        run: |
-          echo "Running bot containers..."
-
-          docker compose up --abort-on-container-exit
-
-
-      # -------------------------------------------------
-      # Cleanup
-      # -------------------------------------------------
-
-      - name: Cleanup containers
-        if: always()
-        run: |
-          docker compose down -v
+          echo "🎉 OrangeCashMachine CI pipeline completed successfully!"
