@@ -1,0 +1,62 @@
+version: '3.8'
+
+# ==============================================
+# Docker Compose para Freqtrade - Bot BTCUSDT Estrategia1
+# Proyecto: OrangeCashMachine (OCM)
+# Propósito: Levantar un contenedor Freqtrade independiente
+# Autor: OrangeMusic
+# Fecha: 2026-03-08
+# ==============================================
+
+services:
+  freqtrade:
+    # Construcción de imagen desde Dockerfile local del bot
+    build:
+      context: .              # Carpeta del bot
+      dockerfile: Dockerfile  # Dockerfile propio para este bot
+
+    # Nombre del contenedor (único y descriptivo)
+    container_name: OCM_BTCUSDT_estrategia1
+
+    # Montaje de volúmenes persistentes
+    volumes:
+      # Configuración del bot en solo lectura para seguridad
+      - ./user_data/config.json:/freqtrade/user_data/config.json:ro
+      # Estrategias en solo lectura
+      - ./user_data/strategies:/freqtrade/user_data/strategies:ro
+      # Datos históricos (OHLCV, etc.)
+      - ./user_data/data:/freqtrade/user_data/data
+      # Logs generados por Freqtrade
+      - ./user_data/logs:/freqtrade/user_data/logs
+
+    # Comando de ejecución del bot
+    command: >
+      trade
+      --config /freqtrade/user_data/config.json
+      --strategy BTCUSDT_estrategia1
+      # --dry-run  # Descomentar para simulación sin dinero real
+
+    # Variables de entorno
+    environment:
+      - TZ=America/Bogota
+      # Ejemplo: variables para alertas o APIs externas
+      # - TELEGRAM_TOKEN=xxxx
+      # - EMAIL_SMTP_USER=xxxx
+
+    # Política de reinicio para producción
+    restart: unless-stopped
+
+    # Buenas prácticas opcionales:
+    # logging:
+    #   driver: "json-file"
+    #   options:
+    #     max-size: "10m"
+    #     max-file: "3"
+
+# =============================================
+# Notas:
+# 1. Cada bot puede tener su propio docker-compose.yml y Dockerfile,
+#    permitiendo independencia total y escalabilidad.
+# 2. Separación de config, estrategias, datos y logs asegura seguridad y facilidad de backup.
+# 3. Para desarrollo, usar --dry-run antes de ejecutar en producción.
+# =============================================
