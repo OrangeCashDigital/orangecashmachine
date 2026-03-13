@@ -1,0 +1,61 @@
+# ===============================================================
+# OrangeCashMachine – Configuración del Exchange y Pipeline de Market Data
+# ==================================================================
+# Este archivo define la configuración central para:
+# - Exchange Client (CCXT)
+# - Pipelines históricos y en tiempo real
+# - Símbolos y timeframes a monitorizar
+# - Fecha de inicio para descarga histórica
+#
+# NOTA DE SEGURIDAD:
+# - No subir a repositorios públicos las API Keys.
+# - Para producción, utilizar variables de entorno o un gestor de secretos.
+# =================================================================
+
+exchange:
+  # Identificador del exchange soportado por CCXT (ej: binance, bybit, coinbasepro)
+  id: binance
+  
+  # Habilitar limitador de requests para no saturar la API
+  enableRateLimit: true
+  
+  # Claves API (para desarrollo se pueden dejar aquí, en producción usar env vars)
+  apiKey: "TU_API_KEY_AQUI"
+  secret: "TU_API_SECRET_AQUI"
+  
+  # Opciones avanzadas para el cliente CCXT
+  options:
+    adjustForTimeDifference: true   # Ajusta diferencia horaria entre exchange y local
+    recvWindow: 10000               # Ventana de recepción para requests largas
+
+symbols:
+  # Lista de pares que serán monitorizados y descargados
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT
+
+timeframes:
+  # Lista de intervalos de tiempo que se desean usar para OHLCV
+  - 1m
+  - 5m
+  - 1h
+  - 1d
+
+start_date: "2023-01-01T00:00:00Z"
+# Fecha inicial para descargar datos históricos (ISO 8601)
+
+# ==================================================================
+# Ejemplo de extensión futura (opcional):
+# connectors:
+#   redis:
+#     host: "localhost"
+#     port: 6379
+#   kafka:
+#     bootstrap_servers: "localhost:9092"
+#   database:
+#     type: "postgres"
+#     host: "localhost"
+#     port: 5432
+#     user: "user"
+#     password: "pass"
+# ==================================================================
