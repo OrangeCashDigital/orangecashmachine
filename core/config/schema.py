@@ -1,40 +1,23 @@
 """
-orchestration/config.py
+core/config/schema.py
 
 Schema de configuración del sistema OrangeCashMachine.
 
-Responsabilidad única
----------------------
+Responsabilidad
+---------------
 Definir y validar la estructura completa del archivo settings.yaml.
-Es la única fuente de verdad sobre qué campos existen, qué tipos
-tienen y qué valores son válidos.
+Este módulo es la única fuente de verdad para la configuración.
 
-Ningún otro módulo debe parsear el YAML directamente.
-Todos importan AppConfig desde aquí.
-
-Arquitectura multi-exchange
----------------------------
-El YAML define exchanges como un dict nombrado:
-
-exchanges:
-  bybit:
-    enabled: true
-    markets:
-      spot:
-        symbols: [BTC/USDT]
-      futures:
-        symbols: [BTC/USDT]
-
-AppConfig.parse_exchanges_dict convierte ese dict a List[ExchangeConfig]
-e inyecta el nombre como campo.
+Todos los módulos del sistema deben importar AppConfig desde aquí.
+Nunca se debe parsear el YAML directamente fuera de este módulo.
 
 Principios aplicados
 --------------------
-SOLID  – SRP: solo modela config
-OCP    – añadir exchange/dataset sin modificar validaciones
-DRY    – lógica de secretos centralizada
-KISS   – modelos simples
-SafeOps – SecretStr para credenciales y validaciones explícitas
+SOLID   – SRP: este módulo solo modela configuración
+OCP     – añadir exchanges o datasets sin modificar validaciones
+DRY     – lógica de secretos y normalización centralizada
+KISS    – modelos simples y claros
+SafeOps – validaciones explícitas y uso de SecretStr
 """
 
 from __future__ import annotations
@@ -48,15 +31,21 @@ from typing import Dict, List, Optional
 import pandas as pd
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
-# ==============================================================
-# Constants
-# ==============================================================
+
+# ==========================================================
+# Paths
+# ==========================================================
 
 BASE_DIR: Path = Path(__file__).resolve().parents[3]
 
 CONFIG_PATH: Path = Path(
     os.getenv("OCM_CONFIG_PATH", str(BASE_DIR / "config" / "settings.yaml"))
 )
+
+
+# ==========================================================
+# System constants
+# ==========================================================
 
 EXCHANGE_TASK_TIMEOUT: int = 30
 PIPELINE_TASK_TIMEOUT: int = 3600
@@ -69,20 +58,13 @@ DERIVATIVE_DATASET_KEYS: tuple[str, ...] = (
     "index_price",
 )
 
-# ==============================================================
-# Enums
-# ==============================================================
 
+# ==========================================================
+# Enums
+# ==========================================================
 
 class SupportedExchange(str, Enum):
-    """
-    Exchanges soportados por el sistema.
-
-    Usar Enum permite:
-    - Autocompletado en IDE
-    - Validación automática en Pydantic
-    - Errores claros cuando el valor es inválido
-    """
+    """Exchanges soportados por el sistema."""
 
     BINANCE = "binance"
     BYBIT = "bybit"
@@ -91,15 +73,12 @@ class SupportedExchange(str, Enum):
     GATE = "gate"
 
 
-# ==============================================================
-# Exchange models
-# ==============================================================
-
+# ==========================================================
+# Exchange configuration
+# ==========================================================
 
 class MarketConfig(BaseModel):
-    """
-    Configuración de un mercado específico (spot o futures).
-    """
+    """Configuración de un mercado específico."""
 
     enabled: bool = False
     symbols: List[str] = Field(default_factory=list)
@@ -107,35 +86,35 @@ class MarketConfig(BaseModel):
 
     @field_validator("symbols")
     @classmethod
-    def normalize_symbols(cls, v: List[str]) -> List[str]:
-        """Normaliza símbolos a mayúsculas."""
-        return [s.upper() for s in v]
+    def normalize_symbols(cls, symbols: List[str]) -> List[str]:
+        """Normaliza símbolos a formato estándar."""
+        return [s.strip().upper() for s in symbols]
 
 
 class MarketsConfig(BaseModel):
-    """
-    Agrupa los mercados disponibles para un exchange.
-    """
+    """Configuración de mercados disponibles."""
 
     spot: MarketConfig = Field(default_factory=MarketConfig)
     futures: MarketConfig = Field(default_factory=MarketConfig)
 
     @property
     def enabled_markets(self) -> Dict[str, MarketConfig]:
-        """Devuelve solo mercados habilitados."""
+        """Retorna solo mercados habilitados."""
         return {
-            name: mkt
-            for name, mkt in (("spot", self.spot), ("futures", self.futures))
-            if mkt.enabled
+            name: market
+            for name, market in (
+                ("spot", self.spot),
+                ("futures", self.futures),
+            )
+            if market.enabled
         }
 
 
 class ExchangeConfig(BaseModel):
-    """
-    Configuración completa de un exchange.
-    """
+    """Configuración completa de un exchange."""
 
     name: SupportedExchange
+
     enabled: bool = True
     enableRateLimit: bool = True
 
@@ -146,39 +125,47 @@ class ExchangeConfig(BaseModel):
 
     markets: MarketsConfig = Field(default_factory=MarketsConfig)
 
+    # ------------------------------------------------------
+    # Credential resolution
+    # ------------------------------------------------------
+
     @model_validator(mode="before")
     @classmethod
     def resolve_credentials(cls, values: dict) -> dict:
         """
-        Resuelve credenciales desde variables de entorno.
+        Resuelve credenciales desde:
+
+        1. credentials en YAML
+        2. variables de entorno específicas
+        3. variables globales
         """
 
         name = str(values.get("name", "")).upper()
 
-        if creds := values.pop("credentials", {}):
+        creds = values.pop("credentials", None)
+        if creds:
             values.setdefault("api_key", creds.get("apiKey", ""))
             values.setdefault("api_secret", creds.get("secret", ""))
 
-        if key := os.getenv(f"{name}_API_KEY"):
-            values["api_key"] = key
+        values["api_key"] = os.getenv(
+            f"{name}_API_KEY",
+            values.get("api_key", os.getenv("OCM_API_KEY", "")),
+        )
 
-        if secret := os.getenv(f"{name}_API_SECRET"):
-            values["api_secret"] = secret
-
-        if not values.get("api_key"):
-            values["api_key"] = os.getenv("OCM_API_KEY", "")
-
-        if not values.get("api_secret"):
-            values["api_secret"] = os.getenv("OCM_API_SECRET", "")
+        values["api_secret"] = os.getenv(
+            f"{name}_API_SECRET",
+            values.get("api_secret", os.getenv("OCM_API_SECRET", "")),
+        )
 
         return values
 
+    # ------------------------------------------------------
+    # Helper properties
+    # ------------------------------------------------------
+
     @property
     def all_symbols(self) -> List[str]:
-        """
-        Todos los símbolos únicos del exchange.
-        """
-
+        """Retorna todos los símbolos únicos del exchange."""
         seen: set[str] = set()
         result: List[str] = []
 
@@ -192,17 +179,16 @@ class ExchangeConfig(BaseModel):
 
     @property
     def has_credentials(self) -> bool:
-        """True si el exchange tiene credenciales."""
+        """Indica si el exchange tiene credenciales."""
         return bool(
             self.api_key.get_secret_value()
             and self.api_secret.get_secret_value()
         )
 
 
-# ==============================================================
-# Pipeline
-# ==============================================================
-
+# ==========================================================
+# Pipeline configuration
+# ==========================================================
 
 class RetryPolicy(BaseModel):
     """Política de reintentos."""
@@ -213,38 +199,39 @@ class RetryPolicy(BaseModel):
 
 
 class HistoricalConfig(BaseModel):
-    """
-    Parámetros globales de ingestión histórica.
-    """
+    """Configuración del pipeline histórico."""
 
     start_date: str = "2017-01-01T00:00:00Z"
     fetch_all_history: bool = False
+
     max_concurrent_tasks: int = Field(default=6, ge=1, le=50)
 
     timeframes: List[str] = Field(default_factory=list)
+
     retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
 
     @field_validator("timeframes")
     @classmethod
-    def validate_timeframes(cls, v: List[str]) -> List[str]:
-        if not v:
+    def validate_timeframes(cls, value: List[str]) -> List[str]:
+        if not value:
             raise ValueError("timeframes cannot be empty")
-        return v
+        return value
 
     @field_validator("start_date")
     @classmethod
-    def validate_start_date(cls, v: str) -> str:
+    def validate_start_date(cls, value: str) -> str:
+        """Valida formato ISO8601."""
         try:
-            ts = pd.Timestamp(v)
-        except Exception:
+            ts = pd.Timestamp(value)
+        except Exception as exc:
             raise ValueError(
-                f"Invalid start_date '{v}'. Use ISO 8601 format."
-            )
+                f"Invalid start_date '{value}'. Use ISO 8601 format."
+            ) from exc
 
         if ts > pd.Timestamp.now(tz="UTC"):
             raise ValueError("start_date cannot be in the future")
 
-        return v
+        return value
 
 
 class RealtimeConfig(BaseModel):
@@ -263,15 +250,12 @@ class PipelineConfig(BaseModel):
     realtime: RealtimeConfig = Field(default_factory=RealtimeConfig)
 
 
-# ==============================================================
-# Datasets
-# ==============================================================
-
+# ==========================================================
+# Dataset configuration
+# ==========================================================
 
 class DatasetsConfig(BaseModel):
-    """
-    Activación de datasets.
-    """
+    """Activación de datasets."""
 
     ohlcv: bool = False
     trades: bool = False
@@ -300,15 +284,15 @@ class DatasetsConfig(BaseModel):
         )
 
 
-# ==============================================================
-# Storage
-# ==============================================================
-
+# ==========================================================
+# Storage configuration
+# ==========================================================
 
 class StorageConfig(BaseModel):
     """Configuración del Data Lake."""
 
     data_lake_path: str = "data_platform/data_lake"
+
     format: str = "parquet"
     compression: str = "snappy"
 
@@ -325,15 +309,12 @@ class StorageConfig(BaseModel):
     )
 
 
-# ==============================================================
-# Root config
-# ==============================================================
-
+# ==========================================================
+# Root configuration
+# ==========================================================
 
 class AppConfig(BaseModel):
-    """
-    Schema completo de settings.yaml.
-    """
+    """Schema completo de settings.yaml."""
 
     exchanges: List[ExchangeConfig]
 
@@ -342,6 +323,10 @@ class AppConfig(BaseModel):
     storage: StorageConfig = Field(default_factory=StorageConfig)
 
     max_concurrent: int = Field(default=6, ge=1, le=50)
+
+    # ------------------------------------------------------
+    # Exchange parsing
+    # ------------------------------------------------------
 
     @model_validator(mode="before")
     @classmethod
@@ -357,12 +342,14 @@ class AppConfig(BaseModel):
 
         return values
 
+    # ------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------
+
     @model_validator(mode="after")
     def validate_exchanges(self) -> "AppConfig":
         if not self.exchanges:
-            raise ValueError(
-                "No enabled exchanges found in configuration"
-            )
+            raise ValueError("No enabled exchanges found in configuration")
         return self
 
     @model_validator(mode="after")
@@ -375,9 +362,9 @@ class AppConfig(BaseModel):
             )
         return self
 
-    # ----------------------------------------------------------
-    # Convenience properties
-    # ----------------------------------------------------------
+    # ------------------------------------------------------
+    # Convenience helpers
+    # ------------------------------------------------------
 
     @property
     def enabled_exchanges(self) -> List[ExchangeConfig]:

@@ -1,205 +1,338 @@
 """
-HistoricalFetcherAsync – OrangeCashMachine
-==========================================
+fetcher.py
+==========
 
 Fetcher profesional de datos históricos OHLCV.
 
 Responsabilidades
 -----------------
-
-• Descargar datos OHLCV desde exchange
-• Manejar retries y rate limits
-• Aplicar circuit breaker
-• Transformar datos antes de almacenarlos
+• Descargar OHLCV histórico desde exchange via ccxt.async_support
 • Soportar descargas incrementales
+• Manejar paginación robusta
+• Implementar retries con backoff exponencial
+• Proteger con circuit breaker
+• Transformar y validar cada chunk
 
-Principios aplicados
---------------------
+Principios
+----------
+SOLID
+    SRP  – Solo descarga datos
+    DIP  – client, storage y transformer inyectables
 
-• SOLID
-• DRY
-• KISS
-• SafeOps
+DRY
+    Retry centralizado
+
+KISS
+    Pipeline controla throttling
+
+SafeOps
+    Circuit breaker
+    logs estructurados
+    protecciones anti-loop
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, List
+from dataclasses import dataclass
+from typing import List, Optional
 
 import pandas as pd
 import pybreaker
 from loguru import logger
 
-from market_data.batch.storage.historical_storage import HistoricalStorage
+from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from market_data.connectors.exchange_client_async import ExchangeClientAsync
+from core.config.schema import AppConfig
+
+
+# ==========================================================
+# Constants
+# ==========================================================
+
+DEFAULT_CHUNK_LIMIT: int = 500
+MAX_RETRIES: int = 5
+BACKOFF_BASE: float = 1.6
+MAX_CHUNKS_PER_RUN: int = 100_000  # SafeOps guard
+
+OHLCV_COLUMNS: tuple[str, ...] = (
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+)
+
+_TIMEFRAME_UNIT_MS: dict[str, int] = {
+    "m": 60_000,
+    "h": 3_600_000,
+    "d": 86_400_000,
+    "w": 604_800_000,
+}
+
+_CIRCUIT_BREAKER_FAIL_MAX: int = 5
+_CIRCUIT_BREAKER_RESET_TIMEOUT: int = 60
 
 
 # ==========================================================
 # Exceptions
 # ==========================================================
 
-class HistoricalFetcherAsyncError(Exception):
-    """Errores del fetcher."""
+class FetcherError(Exception):
+    """Base error for fetcher."""
+
+
+class InvalidTimeframeError(FetcherError):
+    """Invalid timeframe format."""
+
+
+class MissingStartDateError(FetcherError):
+    """Start date required for first download."""
+
+
+class ChunkFetchError(FetcherError):
+    """Chunk download failed after retries."""
 
 
 # ==========================================================
-# Adaptive Throttler
+# Download Result
 # ==========================================================
 
-class AdaptiveThrottlerAsync:
-    """
-    Control dinámico de concurrencia para APIs externas.
-    """
+@dataclass(slots=True)
+class DownloadResult:
+    """Typed result of a full download."""
 
-    def __init__(
-        self,
-        initial_limit: int = 6,
-        min_limit: int = 1,
-        max_limit: int = 12,
-    ):
+    symbol: str
+    timeframe: str
+    df: pd.DataFrame
+    chunks: int = 0
+    total_rows: int = 0
 
-        self.limit = initial_limit
-        self.min_limit = min_limit
-        self.max_limit = max_limit
-
-        self._semaphore = asyncio.Semaphore(initial_limit)
-        self._lock = asyncio.Lock()
-
-    async def acquire(self):
-        await self._semaphore.acquire()
-
-    def release(self):
-        self._semaphore.release()
-
-    async def decrease(self):
-
-        async with self._lock:
-
-            if self.limit > self.min_limit:
-                self.limit -= 1
-                logger.warning(f"Concurrency reduced → {self.limit}")
-
-    async def increase(self):
-
-        async with self._lock:
-
-            if self.limit < self.max_limit:
-                self.limit += 1
-                logger.info(f"Concurrency increased → {self.limit}")
+    @property
+    def has_data(self) -> bool:
+        return not self.df.empty
 
 
 # ==========================================================
-# Fetcher
+# HistoricalFetcherAsync
 # ==========================================================
 
 class HistoricalFetcherAsync:
     """
-    Fetcher profesional para datasets OHLCV históricos.
+    Async OHLCV historical downloader.
+
+    Robust downloader designed for large scale pipelines.
     """
-
-    DEFAULT_LIMIT = 500
-    MAX_RETRIES = 5
-    BACKOFF_BASE = 1.6
-
-    OHLCV_COLUMNS = [
-        "timestamp",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-    ]
-
-    VALID_UNITS = {
-        "m": 60_000,
-        "h": 3_600_000,
-        "d": 86_400_000,
-    }
-
-    # ------------------------------------------------------
 
     def __init__(
         self,
+        config: Optional[AppConfig] = None,
         exchange_client: Optional[ExchangeClientAsync] = None,
         storage: Optional[HistoricalStorage] = None,
         transformer: Optional[OHLCVTransformer] = None,
-        max_concurrent: int = 6,
-    ):
+    ) -> None:
 
-        self.exchange_client = exchange_client or ExchangeClientAsync()
-        self.storage = storage or HistoricalStorage()
-        self.transformer = transformer or OHLCVTransformer
+        self._config = config
 
-        self.throttler = AdaptiveThrottlerAsync(initial_limit=max_concurrent)
-
-        self.circuit_breaker = pybreaker.CircuitBreaker(
-            fail_max=5,
-            reset_timeout=30,
+        self._exchange_client = exchange_client or ExchangeClientAsync(
+            config_path=None,
+            app_config=config,
         )
 
-    # ------------------------------------------------------
-    # Utilities
-    # ------------------------------------------------------
+        self._storage = storage or HistoricalStorage()
 
-    @classmethod
-    def _timeframe_to_ms(cls, timeframe: str) -> int:
+        self._transformer = transformer or OHLCVTransformer()
 
-        try:
+        self._circuit_breaker = pybreaker.CircuitBreaker(
+            fail_max=_CIRCUIT_BREAKER_FAIL_MAX,
+            reset_timeout=_CIRCUIT_BREAKER_RESET_TIMEOUT,
+        )
 
-            unit = timeframe[-1]
-            value = int(timeframe[:-1])
+    # ----------------------------------------------------------
+    # Public API
+    # ----------------------------------------------------------
 
-        except Exception:
-            raise HistoricalFetcherAsyncError(
-                f"Invalid timeframe format: {timeframe}"
+    async def download_data(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: Optional[str] = None,
+        limit: int = DEFAULT_CHUNK_LIMIT,
+    ) -> pd.DataFrame:
+        """
+        Download OHLCV historical data.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+
+        self._validate_inputs(symbol, timeframe, limit)
+
+        result = await self._download_chunked(
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            limit=limit,
+        )
+
+        if not result.has_data:
+
+            logger.info(
+                "No new data | symbol={} timeframe={}",
+                symbol,
+                timeframe,
             )
 
-        if unit not in cls.VALID_UNITS:
-            raise HistoricalFetcherAsyncError(
-                f"Invalid timeframe unit: {unit}"
+            return pd.DataFrame(columns=list(OHLCV_COLUMNS))
+
+        logger.info(
+            "Download complete | symbol={} timeframe={} chunks={} rows={}",
+            symbol,
+            timeframe,
+            result.chunks,
+            result.total_rows,
+        )
+
+        return result.df
+
+    async def close(self) -> None:
+        """Close exchange connection safely."""
+        await self._exchange_client.close()
+
+    # ----------------------------------------------------------
+    # Core Download Logic
+    # ----------------------------------------------------------
+
+    async def _download_chunked(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: Optional[str],
+        limit: int,
+    ) -> DownloadResult:
+
+        since_ts = await self._resolve_start_timestamp(
+            symbol,
+            timeframe,
+            start_date,
+        )
+
+        delta_ms = _timeframe_to_ms(timeframe)
+
+        collected: List[pd.DataFrame] = []
+
+        total_rows = 0
+        last_seen_ts: Optional[int] = None
+
+        chunk_counter = 0
+
+        while True:
+
+            if chunk_counter > MAX_CHUNKS_PER_RUN:
+
+                raise FetcherError(
+                    "Maximum chunk limit reached (possible infinite loop)"
+                )
+
+            raw = await self._fetch_chunk_with_retry(
+                symbol,
+                timeframe,
+                since_ts,
+                limit,
             )
 
-        return value * cls.VALID_UNITS[unit]
+            if not raw:
+                break
 
-    # ------------------------------------------------------
+            chunk_df = _raw_to_dataframe(raw)
 
-    async def _determine_start_ts(
+            chunk_df = self._transformer.transform(chunk_df)
+
+            if chunk_df.empty:
+                break
+
+            collected.append(chunk_df)
+
+            total_rows += len(chunk_df)
+            chunk_counter += 1
+
+            last_ts = int(chunk_df["timestamp"].max().timestamp() * 1000)
+
+            if last_seen_ts == last_ts:
+
+                logger.warning(
+                    "Duplicate timestamp detected | symbol={} timeframe={}",
+                    symbol,
+                    timeframe,
+                )
+
+                break
+
+            last_seen_ts = last_ts
+            since_ts = last_ts + delta_ms
+
+            if len(raw) < limit:
+                break
+
+        if not collected:
+            return DownloadResult(symbol, timeframe, pd.DataFrame())
+
+        combined = (
+            pd.concat(collected, ignore_index=True)
+            .sort_values("timestamp")
+            .reset_index(drop=True)
+        )
+
+        return DownloadResult(
+            symbol=symbol,
+            timeframe=timeframe,
+            df=combined,
+            chunks=len(collected),
+            total_rows=total_rows,
+        )
+
+    # ----------------------------------------------------------
+    # Timestamp Resolution
+    # ----------------------------------------------------------
+
+    async def _resolve_start_timestamp(
         self,
         symbol: str,
         timeframe: str,
         start_date: Optional[str],
     ) -> int:
 
-        last_ts = self.storage.get_last_timestamp(symbol, timeframe)
+        last_ts = self._storage.get_last_timestamp(symbol, timeframe)
 
         if last_ts is not None:
 
-            logger.info(
-                f"Incremental download → {symbol} {timeframe} from {last_ts}"
+            logger.debug(
+                "Incremental download | symbol={} timeframe={} since={}",
+                symbol,
+                timeframe,
+                last_ts,
             )
 
             return int(last_ts.timestamp() * 1000)
 
         if start_date is None:
-            raise HistoricalFetcherAsyncError(
-                "start_date required when no historical data exists"
+
+            raise MissingStartDateError(
+                f"First download requires start_date for {symbol}/{timeframe}"
             )
 
-        client = await self.exchange_client.get_client()
+        client = await self._exchange_client.get_client()
 
-        ts = client.parse8601(start_date)
+        return client.parse8601(start_date)
 
-        logger.info(
-            f"Initial download → {symbol} {timeframe} from {start_date}"
-        )
+    # ----------------------------------------------------------
+    # Chunk Fetch
+    # ----------------------------------------------------------
 
-        return ts
-
-    # ------------------------------------------------------
-
-    async def _fetch_chunk(
+    async def _fetch_chunk_with_retry(
         self,
         symbol: str,
         timeframe: str,
@@ -207,147 +340,108 @@ class HistoricalFetcherAsync:
         limit: int,
     ) -> List[list]:
 
-        client = await self.exchange_client.get_client()
+        last_exc: Optional[Exception] = None
 
-        for attempt in range(1, self.MAX_RETRIES + 1):
+        client = await self._exchange_client.get_client()
+
+        for attempt in range(1, MAX_RETRIES + 1):
 
             try:
 
-                async def call():
-                    return await client.fetch_ohlcv(
-                        symbol,
-                        timeframe,
-                        since=since,
-                        limit=limit,
-                    )
-
-                data = await self.circuit_breaker.call_async(call)
-
-                await self.throttler.increase()
+                data = await self._circuit_breaker.call_async(
+                    client.fetch_ohlcv,
+                    symbol,
+                    timeframe,
+                    since=since,
+                    limit=limit,
+                )
 
                 return data
 
-            except Exception as e:
+            except pybreaker.CircuitBreakerError as exc:
 
-                await self.throttler.decrease()
+                logger.error(
+                    "Circuit breaker OPEN | symbol={} timeframe={}",
+                    symbol,
+                    timeframe,
+                )
 
-                wait = self.BACKOFF_BASE ** attempt
+                raise ChunkFetchError(
+                    f"Circuit breaker open for {symbol}/{timeframe}"
+                ) from exc
+
+            except Exception as exc:
+
+                last_exc = exc
+
+                wait = BACKOFF_BASE ** attempt
 
                 logger.warning(
-                    f"Fetch retry {attempt}/{self.MAX_RETRIES} "
-                    f"{symbol} {timeframe} error={e} wait={wait:.2f}s"
+                    "Chunk fetch failed | symbol={} timeframe={} attempt={}/{} wait={:.1f}s error={}",
+                    symbol,
+                    timeframe,
+                    attempt,
+                    MAX_RETRIES,
+                    wait,
+                    exc,
                 )
 
                 await asyncio.sleep(wait)
 
-        logger.error(f"Fetch failed → {symbol} {timeframe}")
+        raise ChunkFetchError(
+            f"Failed to fetch chunk for {symbol}/{timeframe}"
+        ) from last_exc
 
-        return []
+    # ----------------------------------------------------------
+    # Input Validation
+    # ----------------------------------------------------------
 
-    # ------------------------------------------------------
-    # Chunk Downloader
-    # ------------------------------------------------------
-
-    async def download_data_chunked(
-        self,
+    @staticmethod
+    def _validate_inputs(
         symbol: str,
         timeframe: str,
-        start_date: Optional[str] = None,
-        limit: int = DEFAULT_LIMIT,
-    ) -> List[pd.DataFrame]:
+        limit: int,
+    ) -> None:
 
-        since_ts = await self._determine_start_ts(
-            symbol,
-            timeframe,
-            start_date,
+        if not symbol:
+            raise ValueError("symbol cannot be empty")
+
+        if limit <= 0:
+            raise ValueError("limit must be > 0")
+
+        _timeframe_to_ms(timeframe)
+
+
+# ==========================================================
+# Helpers
+# ==========================================================
+
+def _timeframe_to_ms(timeframe: str) -> int:
+
+    try:
+        unit = timeframe[-1].lower()
+        value = int(timeframe[:-1])
+    except Exception as exc:
+        raise InvalidTimeframeError(
+            f"Invalid timeframe '{timeframe}'"
+        ) from exc
+
+    if unit not in _TIMEFRAME_UNIT_MS:
+        raise InvalidTimeframeError(
+            f"Invalid timeframe unit '{unit}'"
         )
 
-        delta_ms = self._timeframe_to_ms(timeframe)
+    return value * _TIMEFRAME_UNIT_MS[unit]
 
-        chunks: List[pd.DataFrame] = []
-        total_rows = 0
 
-        while True:
+def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:
 
-            await self.throttler.acquire()
+    df = pd.DataFrame(raw, columns=list(OHLCV_COLUMNS))
 
-            try:
+    df["timestamp"] = pd.to_datetime(
+        df["timestamp"],
+        unit="ms",
+        utc=True,
+    )
 
-                raw = await self._fetch_chunk(
-                    symbol,
-                    timeframe,
-                    since_ts,
-                    limit,
-                )
-
-            finally:
-
-                self.throttler.release()
-
-            if not raw:
-                break
-
-            df = pd.DataFrame(raw, columns=self.OHLCV_COLUMNS)
-
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-
-            df = self.transformer.transform(df)
-
-            if df.empty:
-                break
-
-            total_rows += len(df)
-
-            chunks.append(df)
-
-            last_ts = df["timestamp"].max()
-
-            since_ts = int(last_ts.timestamp() * 1000) + delta_ms
-
-            if len(raw) < limit:
-                break
-
-        logger.success(
-            f"Downloaded {total_rows} rows → {symbol} {timeframe}"
-        )
-
-        return chunks
-
-    # ------------------------------------------------------
-    # Full Download
-    # ------------------------------------------------------
-
-    async def download_data(
-        self,
-        symbol: str,
-        timeframe: str,
-        start_date: Optional[str] = None,
-        limit: int = DEFAULT_LIMIT,
-    ) -> pd.DataFrame:
-
-        chunks = await self.download_data_chunked(
-            symbol,
-            timeframe,
-            start_date,
-            limit,
-        )
-
-        if not chunks:
-            return pd.DataFrame(columns=self.OHLCV_COLUMNS)
-
-        return (
-            pd.concat(chunks)
-            .sort_values("timestamp")
-            .reset_index(drop=True)
-        )
-
-    # ------------------------------------------------------
-    # Shutdown
-    # ------------------------------------------------------
-
-    async def close(self):
-        """
-        Cierra conexiones async con el exchange.
-        """
-
-        await self.exchange_client.close()
+    return df

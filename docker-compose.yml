@@ -1,0 +1,87 @@
+# ==========================================================
+# OrangeCashMachine – Market Data Infrastructure
+# Docker Compose Configuration (Profesional)
+#
+# Principios aplicados:
+# - KISS: configuración simple y clara
+# - DRY: paths y variables reutilizables
+# - SafeOps: control de reinicios y logs
+# - Observability: logging consistente y persistente
+# - Extensibility: preparado para más servicios (research, backtesting)
+# ==========================================================
+
+services:
+
+  # =======================================================
+  # Market Data App
+  # =======================================================
+  market-data:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ocm_market_data
+
+    # -------------------- Environment ---------------------
+    environment:
+      OCM_CONFIG_PATH: /app/config/settings.yaml
+      PYTHONUNBUFFERED: "1"
+
+    # ---------------------- Volumes -----------------------
+    volumes:
+      - ./config:/app/config:ro           # configuración
+      - ./logs:/app/logs                  # logs persistentes
+      - ./data_platform:/app/data_platform  # data lake
+
+    # ------------------- Restart Policy -------------------
+    restart: "unless-stopped"
+
+    # ---------------------- Logging -----------------------
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ------------------ Working Directory -----------------
+    working_dir: /app
+
+    # --------------------- Command -----------------------
+    command: >
+      python -m market_data.orchestration.entrypoint
+
+  # =======================================================
+  # Prefect UI / Orion (Opcional, para visualizar flujos)
+  # =======================================================
+  prefect-ui:
+    image: prefecthq/prefect:2.19.5-python3.11
+    container_name: ocm_prefect_ui
+
+    ports:
+      - "4200:4200"  # UI
+      - "4201:4201"  # API
+
+    environment:
+      PREFECT_API_URL: http://localhost:4201
+      PREFECT_SERVER_DATABASE_CONNECTION_URL: sqlite:///prefect.db
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      - ./logs:/app/logs
+      - ./data_platform:/app/data_platform
+
+    command: prefect server start --host 0.0.0.0 --port 4201
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ==========================================================
+# Notas de diseño:
+# - Cada servicio es independiente y puede reiniciarse solo.
+# - Market Data y Prefect UI separados: KISS y DRY.
+# - Prefect UI preparado para múltiples flujos de Market Data, Research o Backtesting.
+# - SafeOps: logging limitado y persistente, reinicio controlado.
+# - Extensible: agregar otros servicios es directo.
+# ==========================================================

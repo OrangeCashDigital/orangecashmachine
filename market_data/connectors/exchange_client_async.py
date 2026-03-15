@@ -1,117 +1,307 @@
 """
-ExchangeClient Async – OrangeCashMachine (Profesional)
-======================================================
+connectors/exchange_client_async.py
+===================================
 
-Responsabilidad:
-Centralizar la conexión con exchanges usando ccxt.async_support.
-Diseñado para pipelines históricos y en tiempo real asíncronos.
+Cliente asíncrono centralizado para exchanges usando ccxt.
 
-Mejoras Profesionales:
-- Retry + Circuit Breaker (pybreaker) para resiliencia frente a fallos.
-- Logging robusto de latencia y errores por tipo.
-- SafeOps: manejo seguro de API keys, fallos de carga y validación.
-- Principios SOLID, KISS, DRY aplicados.
+Responsabilidad
+---------------
+Gestionar el ciclo de vida del cliente ccxt:
+• inicialización
+• validación de conexión
+• acceso al cliente
+• cierre seguro
+
+NO descarga datos.
+NO gestiona retries de fetch.
+NO implementa circuit breakers.
+
+Principios
+----------
+SOLID   – SRP: solo lifecycle del cliente
+DRY     – construcción del cliente en un único lugar
+KISS    – wrapper mínimo sobre ccxt
+SafeOps – cierre seguro, credenciales protegidas
 """
 
-from pathlib import Path
-import os
+from __future__ import annotations
+
 import asyncio
+import random
 import time
-import yaml
-import ccxt.async_support as ccxt
-from loguru import logger
-import pybreaker
 from typing import Optional
 
-class ExchangeClientAsyncError(Exception):
-    """Excepción personalizada para ExchangeClientAsync."""
-    pass
+import ccxt.async_support as ccxt
+from loguru import logger
+
+from core.config.schema import AppConfig
+
+
+# ==========================================================
+# Constants
+# ==========================================================
+
+_INIT_RETRIES = 3
+_BACKOFF_BASE = 2.0
+_LOAD_MARKETS_TIMEOUT = 30.0
+
+_DEFAULT_EXCHANGE = "binance"
+
+_CCXT_OPTIONS = {
+    "enableRateLimit": True,
+    "options": {
+        "adjustForTimeDifference": True,
+        "recvWindow": 10_000,
+    },
+}
+
+
+# ==========================================================
+# Exceptions
+# ==========================================================
+
+class ExchangeClientError(Exception):
+    """Base error."""
+
+
+class UnsupportedExchangeError(ExchangeClientError):
+    """Exchange no soportado por ccxt."""
+
+
+class ExchangeConnectionError(ExchangeClientError):
+    """No se pudo establecer conexión."""
+
+
+# ==========================================================
+# ExchangeClientAsync
+# ==========================================================
 
 class ExchangeClientAsync:
-    """Cliente central para interactuar con exchanges Async vía CCXT."""
+    """
+    Cliente ccxt asíncrono.
 
-    DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "settings.yaml"
-    CIRCUIT_BREAKER = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=30)
+    Inicialización lazy y thread-safe.
 
-    def __init__(self, config_path: Optional[str | Path] = None, exchange_id: Optional[str] = None) -> None:
-        self.config_path = Path(config_path) if config_path else self.DEFAULT_CONFIG_PATH
-        self.config = self._load_config(self.config_path)
-        self.exchange_id = exchange_id or os.getenv("EXCHANGE_ID", self.config["exchange"]["id"])
-        self.client: Optional[ccxt.Exchange] = None
+    Uso
+    ---
+    async with ExchangeClientAsync(app_config=config) as client:
+        exchange = await client.get_client()
+    """
 
-    def _load_config(self, path: Path) -> dict:
-        """Carga configuración desde YAML con logging profesional."""
-        try:
-            with open(path, "r") as f:
-                config = yaml.safe_load(f)
-            logger.info(f"Configuración cargada desde {path}")
-            return config
-        except Exception as e:
-            logger.error(f"Error cargando configuración: {e}")
-            raise ExchangeClientAsyncError(f"No se pudo cargar configuración: {e}") from e
+    def __init__(
+        self,
+        app_config: Optional[AppConfig] = None,
+        api_key: Optional[str] = None,
+        api_secret: Optional[str] = None,
+        exchange_id: Optional[str] = None,
+    ) -> None:
 
-    async def initialize_client(self) -> ccxt.Exchange:
-        """Inicializa el cliente CCXT async con retry, backoff y circuit breaker."""
-        if self.client:
-            return self.client
+        self._exchange_id = _resolve_exchange_id(app_config, exchange_id)
 
-        retries = 3
-        for attempt in range(1, retries + 1):
-            try:
-                client_class = getattr(ccxt, self.exchange_id)
-                self.client = client_class({
-                    "apiKey": os.getenv("EXCHANGE_API_KEY", self.config["exchange"].get("apiKey")),
-                    "secret": os.getenv("EXCHANGE_API_SECRET", self.config["exchange"].get("secret")),
-                    "enableRateLimit": self.config["exchange"].get("enableRateLimit", True),
-                    "options": self.config["exchange"].get("options", {
-                        "adjustForTimeDifference": True,
-                        "recvWindow": 10000,
-                    }),
-                })
+        self._api_key = _resolve_api_key(app_config, api_key)
+        self._api_secret = _resolve_api_secret(app_config, api_secret)
 
-                # Validación de conexión y latencia
-                start = time.time()
-                await self.client.load_markets()
-                latency = (time.time() - start) * 1000
-                logger.success(f"Conectado async a {self.exchange_id.upper()} | Latencia: {latency:.1f} ms")
-                return self.client
+        self._client: Optional[ccxt.Exchange] = None
 
-            except AttributeError:
-                logger.critical(f"Exchange no soportado por CCXT: {self.exchange_id}")
-                raise ExchangeClientAsyncError(f"Exchange no soportado: {self.exchange_id}")
+        # lock evita doble inicialización concurrente
+        self._init_lock = asyncio.Lock()
 
-            except Exception as e:
-                delay = 2 ** attempt
-                logger.warning(f"[Intento {attempt}/{retries}] Error conectando a {self.exchange_id}: {e}. Reintentando en {delay}s")
-                await asyncio.sleep(delay)
-
-        logger.critical(f"No se pudo conectar al exchange {self.exchange_id} después de {retries} intentos")
-        raise ExchangeClientAsyncError(f"Conexión async fallida al exchange {self.exchange_id}")
+    # ------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------
 
     async def get_client(self) -> ccxt.Exchange:
-        """Devuelve el cliente CCXT async conectado, inicializándolo si es necesario."""
-        if not self.client:
-            await self.initialize_client()
-        return self.client
+        """Devuelve cliente ccxt inicializado."""
+
+        if self._client is not None:
+            return self._client
+
+        async with self._init_lock:
+            if self._client is None:
+                await self._initialize()
+
+        return self._client
 
     async def test_connection(self) -> bool:
-        """Prueba la conexión al exchange, retornando True si OK y registrando latencia."""
+        """
+        Test de conexión.
+
+        SafeOps: nunca lanza excepción.
+        """
+
         try:
             client = await self.get_client()
-            start = time.time()
-            markets = await client.load_markets()
-            latency = (time.time() - start) * 1000
-            logger.info(f"Test conexión async OK | Mercados cargados: {len(markets)} | Latencia: {latency:.1f} ms")
+
+            start = time.perf_counter()
+
+            markets = await asyncio.wait_for(
+                client.load_markets(),
+                timeout=_LOAD_MARKETS_TIMEOUT,
+            )
+
+            latency = (time.perf_counter() - start) * 1000
+
+            logger.info(
+                "Exchange OK | exchange={} markets={} latency={:.1f}ms",
+                self._exchange_id,
+                len(markets),
+                latency,
+            )
+
             return True
-        except Exception as e:
-            logger.error(f"Test de conexión async fallido: {e}")
+
+        except Exception as exc:
+            logger.error(
+                "Exchange connection failed | exchange={} error={}",
+                self._exchange_id,
+                exc,
+            )
             return False
 
-    async def close(self):
-        """Cierra la conexión async de manera segura."""
-        if self.client:
+    async def close(self) -> None:
+        """Cierre seguro."""
+
+        if self._client is None:
+            return
+
+        try:
+            await self._client.close()
+            logger.debug("Exchange connection closed | {}", self._exchange_id)
+
+        except Exception as exc:
+            logger.warning(
+                "Error closing exchange | {} | {}",
+                self._exchange_id,
+                exc,
+            )
+
+        finally:
+            self._client = None
+
+    # ------------------------------------------------------
+    # Context manager
+    # ------------------------------------------------------
+
+    async def __aenter__(self) -> "ExchangeClientAsync":
+        return self
+
+    async def __aexit__(self, *_):
+        await self.close()
+
+    # ------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------
+
+    async def _initialize(self) -> None:
+
+        if not hasattr(ccxt, self._exchange_id):
+            raise UnsupportedExchangeError(
+                f"Exchange '{self._exchange_id}' not supported"
+            )
+
+        exchange_class = getattr(ccxt, self._exchange_id)
+
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(1, _INIT_RETRIES + 1):
+
             try:
-                await self.client.close()
-                logger.info(f"Cerrada conexión async con {self.exchange_id.upper()}")
-            except Exception as e:
-                logger.warning(f"Error cerrando conexión async: {e}")
+
+                client = exchange_class({
+                    **_CCXT_OPTIONS,
+                    "apiKey": self._api_key,
+                    "secret": self._api_secret,
+                })
+
+                start = time.perf_counter()
+
+                await asyncio.wait_for(
+                    client.load_markets(),
+                    timeout=_LOAD_MARKETS_TIMEOUT,
+                )
+
+                latency = (time.perf_counter() - start) * 1000
+
+                self._client = client
+
+                logger.info(
+                    "Exchange connected | {} latency={:.1f}ms",
+                    self._exchange_id,
+                    latency,
+                )
+
+                return
+
+            except asyncio.TimeoutError as exc:
+                last_exc = exc
+
+                logger.warning(
+                    "load_markets timeout | exchange={} attempt={}",
+                    self._exchange_id,
+                    attempt,
+                )
+
+            except Exception as exc:
+                last_exc = exc
+
+                delay = (_BACKOFF_BASE ** attempt) + random.random()
+
+                logger.warning(
+                    "Connection attempt failed | exchange={} attempt={} wait={:.1f}s error={}",
+                    self._exchange_id,
+                    attempt,
+                    delay,
+                    exc,
+                )
+
+                await asyncio.sleep(delay)
+
+        raise ExchangeConnectionError(
+            f"Failed to connect to '{self._exchange_id}'"
+        ) from last_exc
+
+
+# ==========================================================
+# Credential resolvers
+# ==========================================================
+
+def _resolve_exchange_id(
+    config: Optional[AppConfig],
+    explicit: Optional[str],
+) -> str:
+
+    if explicit:
+        return explicit.lower()
+
+    if config and config.exchanges:
+        return config.exchanges[0].name.value
+
+    return _DEFAULT_EXCHANGE
+
+
+def _resolve_api_key(
+    config: Optional[AppConfig],
+    explicit: Optional[str],
+) -> str:
+
+    if explicit:
+        return explicit
+
+    if config and config.exchanges:
+        return config.exchanges[0].api_key.get_secret_value()
+
+    raise ExchangeClientError("No api_key available")
+
+
+def _resolve_api_secret(
+    config: Optional[AppConfig],
+    explicit: Optional[str],
+) -> str:
+
+    if explicit:
+        return explicit
+
+    if config and config.exchanges:
+        return config.exchanges[0].api_secret.get_secret_value()
+
+    raise ExchangeClientError("No api_secret available")

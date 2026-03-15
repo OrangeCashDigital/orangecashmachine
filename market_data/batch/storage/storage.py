@@ -1,35 +1,49 @@
 """
-historical_storage.py
-=====================
+storage.py
+==========
 
 Gestión profesional del almacenamiento OHLCV en Data Lake.
 
 Características
 ---------------
+• particionado por símbolo / timeframe / año / mes
+• escritura atómica segura
+• append incremental con deduplicación
+• lectura eficiente de timestamps
 
-• Organización por símbolo / timeframe / año / mes
-• Escritura atómica (safe write)
-• Append incremental eficiente
-• Optimizado para datasets grandes
-• Compatible con pipelines concurrentes
-• Logging profesional
-
-Principios aplicados
---------------------
-
-• SOLID
-• DRY
-• KISS
-• SafeOps
+Principios
+----------
+SOLID   – SRP claro
+DRY     – paths centralizados
+KISS    – implementación simple
+SafeOps – escrituras atómicas y limpieza segura
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional, Literal
 
 import pandas as pd
 from loguru import logger
+
+
+# ==========================================================
+# Constants
+# ==========================================================
+
+REQUIRED_COLUMNS: tuple[str, ...] = (
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+)
+
+_DEFAULT_DATA_LAKE: tuple[str, ...] = ("data_lake", "ohlcv")
+
+WriteMode = Literal["append", "overwrite"]
 
 
 # ==========================================================
@@ -37,69 +51,117 @@ from loguru import logger
 # ==========================================================
 
 class HistoricalStorageError(Exception):
-    """Errores del storage layer."""
+    """Base error."""
+
+
+class InvalidDataFrameError(HistoricalStorageError):
+    """DataFrame inválido."""
+
+
+class PartitionWriteError(HistoricalStorageError):
+    """Fallo escribiendo partición."""
 
 
 # ==========================================================
-# Storage
+# HistoricalStorage
 # ==========================================================
 
 class HistoricalStorage:
     """
-    Storage profesional para datasets OHLCV en Parquet.
+    Storage OHLCV basado en parquet particionado.
 
-    Diseñado para:
+    Estructura:
 
-    • pipelines de ingestión
-    • datasets grandes
-    • append incremental seguro
+    base/
+        BTC_USDT/
+            1h/
+                2024/
+                    01/
+                        BTC_USDT_1h.parquet
     """
-
-    REQUIRED_COLUMNS: List[str] = [
-        "timestamp",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-    ]
-
-    # ------------------------------------------------------
-    # Initialization
-    # ------------------------------------------------------
 
     def __init__(self, base_path: Optional[str | Path] = None) -> None:
 
-        self.base_path: Path = (
-            Path(base_path)
-            if base_path
-            else Path(__file__).resolve().parents[3] / "data_lake" / "ohlcv"
+        self._base_path: Path = _resolve_base_path(base_path)
+        self._base_path.mkdir(parents=True, exist_ok=True)
+
+        logger.info("HistoricalStorage ready | {}", self._base_path)
+
+    # ======================================================
+    # Public API
+    # ======================================================
+
+    def save_ohlcv(
+        self,
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        mode: WriteMode = "append",
+    ) -> None:
+
+        _validate_dataframe(df)
+
+        df = df.copy()
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=False)
+
+        partitions = df.groupby(
+            [df["timestamp"].dt.year, df["timestamp"].dt.month],
+            sort=True,
         )
 
-        self.base_path.mkdir(parents=True, exist_ok=True)
+        for (year, month), part in partitions:
 
-        logger.info(f"HistoricalStorage initialized → {self.base_path}")
+            self._write_partition(
+                df=part,
+                symbol=symbol,
+                timeframe=timeframe,
+                year=int(year),
+                month=int(month),
+                mode=mode,
+            )
 
-    # ------------------------------------------------------
-    # Utilities
-    # ------------------------------------------------------
+    def get_last_timestamp(
+        self,
+        symbol: str,
+        timeframe: str,
+    ) -> Optional[pd.Timestamp]:
+
+        files = self._find_partition_files(symbol, timeframe)
+
+        if not files:
+            return None
+
+        timestamps: List[pd.Timestamp] = []
+
+        for f in files:
+
+            ts = _read_max_timestamp(f)
+
+            if ts is not None:
+                timestamps.append(ts)
+
+        if not timestamps:
+            return None
+
+        return max(timestamps)
+
+    # ======================================================
+    # Path helpers
+    # ======================================================
 
     @staticmethod
     def _safe_symbol(symbol: str) -> str:
-        """Convierte BTC/USDT → BTC_USDT."""
         return symbol.replace("/", "_")
 
-    def _symbol_timeframe_path(
+    def _symbol_timeframe_dir(
         self,
         symbol: str,
         timeframe: str,
     ) -> Path:
 
-        safe_symbol = self._safe_symbol(symbol)
+        return self._base_path / self._safe_symbol(symbol) / timeframe
 
-        return self.base_path / safe_symbol / timeframe
-
-    def _partition_folder(
+    def _partition_dir(
         self,
         symbol: str,
         timeframe: str,
@@ -107,78 +169,51 @@ class HistoricalStorage:
         month: int,
     ) -> Path:
 
-        folder = (
-            self._symbol_timeframe_path(symbol, timeframe)
+        path = (
+            self._symbol_timeframe_dir(symbol, timeframe)
             / str(year)
             / f"{month:02d}"
         )
 
-        folder.mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True)
 
-        return folder
+        return path
 
-    # ------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------
-
-    def _validate_dataframe(self, df: pd.DataFrame) -> None:
-        """
-        Validación mínima antes de escribir.
-        """
-
-        if df is None or df.empty:
-            raise HistoricalStorageError("Empty dataframe received")
-
-        missing = set(self.REQUIRED_COLUMNS) - set(df.columns)
-
-        if missing:
-            raise HistoricalStorageError(
-                f"Missing OHLCV columns: {missing}"
-            )
-
-    # ------------------------------------------------------
-    # Save OHLCV
-    # ------------------------------------------------------
-
-    def save_ohlcv(
+    def _partition_file(
         self,
-        df: pd.DataFrame,
         symbol: str,
         timeframe: str,
-        mode: str = "append",
-    ) -> None:
+        year: int,
+        month: int,
+    ) -> Path:
 
-        if df is None or df.empty:
-            logger.warning(f"No data to store → {symbol} {timeframe}")
-            return
+        safe = self._safe_symbol(symbol)
 
-        self._validate_dataframe(df)
-
-        df = df.copy()
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=False)
-
-        # --------------------------------------------------
-        # Partition by year/month
-        # --------------------------------------------------
-
-        grouped = df.groupby(
-            [df.timestamp.dt.year, df.timestamp.dt.month]
+        return (
+            self._partition_dir(symbol, timeframe, year, month)
+            / f"{safe}_{timeframe}.parquet"
         )
 
-        for (year, month), group in grouped:
+    def _find_partition_files(
+        self,
+        symbol: str,
+        timeframe: str,
+    ) -> List[Path]:
 
-            self._write_partition(
-                group,
-                symbol,
-                timeframe,
-                year,
-                month,
-                mode,
-            )
+        root = self._symbol_timeframe_dir(symbol, timeframe)
 
-    # ------------------------------------------------------
-    # Partition Writer
-    # ------------------------------------------------------
+        if not root.exists():
+            return []
+
+        safe = self._safe_symbol(symbol)
+
+        pattern = f"{safe}_{timeframe}.parquet"
+
+        return sorted(root.rglob(pattern))
+
+    # ======================================================
+    # Partition writer
+    # ======================================================
 
     def _write_partition(
         self,
@@ -187,66 +222,32 @@ class HistoricalStorage:
         timeframe: str,
         year: int,
         month: int,
-        mode: str,
+        mode: WriteMode,
     ) -> None:
 
-        safe_symbol = self._safe_symbol(symbol)
+        file_path = self._partition_file(symbol, timeframe, year, month)
 
-        folder = self._partition_folder(
-            symbol,
-            timeframe,
-            year,
-            month,
-        )
-
-        file_path = folder / f"{safe_symbol}_{timeframe}.parquet"
         temp_path = file_path.with_suffix(".tmp")
 
         try:
 
-            # --------------------------------------------------
-            # Incremental append
-            # --------------------------------------------------
-
             if file_path.exists() and mode == "append":
 
-                existing_ts = pd.read_parquet(
-                    file_path,
-                    columns=["timestamp"],
-                )
+                merged = _merge_with_existing(df, file_path)
 
-                last_ts = existing_ts["timestamp"].max()
-
-                df = df[df["timestamp"] > last_ts]
-
-                if df.empty:
-
-                    logger.info(
-                        f"No new rows → {symbol} {timeframe} {year}-{month:02d}"
+                if merged is None:
+                    logger.debug(
+                        "No new rows | {} {} {}-{:02d}",
+                        symbol,
+                        timeframe,
+                        year,
+                        month,
                     )
                     return
 
-                existing_full = pd.read_parquet(file_path)
+                df = merged
 
-                df = pd.concat(
-                    [existing_full, df],
-                    ignore_index=True,
-                )
-
-            # --------------------------------------------------
-            # Cleanup
-            # --------------------------------------------------
-
-            df = (
-                df
-                .sort_values("timestamp")
-                .drop_duplicates(subset="timestamp")
-                .reset_index(drop=True)
-            )
-
-            # --------------------------------------------------
-            # Atomic write
-            # --------------------------------------------------
+            df = _clean_partition(df)
 
             df.to_parquet(
                 temp_path,
@@ -256,65 +257,116 @@ class HistoricalStorage:
 
             temp_path.replace(file_path)
 
-            logger.success(
-                f"Stored → {symbol} {timeframe} "
-                f"{year}/{month:02d} rows={len(df)}"
+            logger.info(
+                "Partition saved | {} {} {}/{:02d} rows={}",
+                symbol,
+                timeframe,
+                year,
+                month,
+                len(df),
             )
 
-        except Exception as e:
+        except Exception as exc:
 
-            if temp_path.exists():
-                temp_path.unlink(missing_ok=True)
+            _cleanup_temp(temp_path)
 
-            logger.error(
-                f"Storage failure → {symbol} {timeframe} {year}-{month:02d}: {e}"
-            )
+            raise PartitionWriteError(
+                f"Failed writing partition {symbol}/{timeframe}/{year}/{month}"
+            ) from exc
 
-            raise HistoricalStorageError(e)
 
-    # ------------------------------------------------------
-    # Last Timestamp
-    # ------------------------------------------------------
+# ==========================================================
+# Pure helpers
+# ==========================================================
 
-    def get_last_timestamp(
-        self,
-        symbol: str,
-        timeframe: str,
-    ) -> Optional[pd.Timestamp]:
+def _resolve_base_path(
+    base_path: Optional[str | Path],
+) -> Path:
 
-        symbol_path = self._symbol_timeframe_path(symbol, timeframe)
+    if base_path:
+        return Path(base_path).resolve()
 
-        if not symbol_path.exists():
-            return None
+    return Path(__file__).resolve().parents[3].joinpath(*_DEFAULT_DATA_LAKE)
 
-        safe_symbol = self._safe_symbol(symbol)
 
-        files = list(
-            symbol_path.rglob(f"{safe_symbol}_{timeframe}.parquet")
+def _validate_dataframe(df: pd.DataFrame) -> None:
+
+    if df is None or df.empty:
+        raise InvalidDataFrameError("DataFrame vacío")
+
+    missing = set(REQUIRED_COLUMNS) - set(df.columns)
+
+    if missing:
+        raise InvalidDataFrameError(
+            f"Missing OHLCV columns: {sorted(missing)}"
         )
 
-        if not files:
-            return None
 
-        # usamos el archivo más reciente por fecha de modificación
-        latest_file = max(
-            files,
-            key=lambda p: p.stat().st_mtime
+def _merge_with_existing(
+    new_df: pd.DataFrame,
+    file_path: Path,
+) -> Optional[pd.DataFrame]:
+
+    existing_ts = pd.read_parquet(file_path, columns=["timestamp"])
+
+    last_ts = existing_ts["timestamp"].max()
+
+    new_rows = new_df[new_df["timestamp"] > last_ts]
+
+    if new_rows.empty:
+        return None
+
+    existing_full = pd.read_parquet(file_path)
+
+    return pd.concat(
+        [existing_full, new_rows],
+        ignore_index=True,
+    )
+
+
+def _clean_partition(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+
+    return (
+        df.sort_values("timestamp")
+        .drop_duplicates(subset="timestamp")
+        .reset_index(drop=True)
+    )
+
+
+def _read_max_timestamp(
+    file: Path,
+) -> Optional[pd.Timestamp]:
+
+    try:
+
+        df = pd.read_parquet(file, columns=["timestamp"])
+
+        return pd.to_datetime(df["timestamp"].max())
+
+    except Exception as exc:
+
+        logger.warning(
+            "Timestamp read failed | {} | {}",
+            file,
+            exc,
         )
 
-        try:
+        return None
 
-            df = pd.read_parquet(
-                latest_file,
-                columns=["timestamp"],
-            )
 
-            return pd.to_datetime(df["timestamp"].max())
+def _cleanup_temp(temp_path: Path) -> None:
 
-        except Exception as e:
+    try:
 
-            logger.warning(
-                f"Failed reading timestamp from {latest_file}: {e}"
-            )
+        if temp_path.exists():
+            temp_path.unlink(missing_ok=True)
 
-            return None
+    except Exception as exc:
+
+        logger.warning(
+            "Temp cleanup failed | {} | {}",
+            temp_path,
+            exc,
+        )
