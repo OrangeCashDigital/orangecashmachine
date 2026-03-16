@@ -77,9 +77,9 @@ class ExchangeProbe:
     def log_summary(self, log) -> None:
         """Resumen estructurado en logs."""
         log.info(
-            "ExchangeProbe | exchange={} reachable={} latency={}ms "
-            "last_price={} spread={} rate_limit={}ms max_concurrent={} "
-            "datasets={} markets={} clock_drift={}ms",
+            "ExchangeProbe | exchange=%s reachable=%s latency=%sms "
+            "last_price=%s spread=%s rate_limit=%sms max_concurrent=%s "
+            "datasets=%s markets=%s clock_drift=%sms",
             self.exchange,
             self.reachable,
             self.latency_ms,
@@ -94,7 +94,7 @@ class ExchangeProbe:
 
         for w in self.warnings:
             log.warning(
-                "ExchangeProbe warning | exchange={} msg={}",
+                "ExchangeProbe warning | exchange=%s msg=%s",
                 self.exchange,
                 w,
             )
@@ -141,11 +141,11 @@ def _build_ccxt_client(exchange_cfg: ExchangeConfig) -> Any:
 
     params: Dict[str, Any] = {
         "enableRateLimit": exchange_cfg.enableRateLimit,
+        "options": {"defaultType": "spot"},
     }
 
     if exchange_cfg.has_credentials:
-        params["apiKey"] = exchange_cfg.api_key.get_secret_value()
-        params["secret"] = exchange_cfg.api_secret.get_secret_value()
+        params.update(exchange_cfg.ccxt_credentials())
 
     return getattr(ccxt, name)(params)
 
@@ -191,7 +191,7 @@ async def _fetch_trading_fees(
     except Exception as exc:
 
         log.debug(
-            "Fee fetch skipped | reason={}",
+            "Fee fetch skipped | reason=%s",
             exc,
         )
 
@@ -221,7 +221,7 @@ async def _check_clock_sync(
     except Exception as exc:
 
         log.debug(
-            "Clock sync check skipped | reason={}",
+            "Clock sync check skipped | reason=%s",
             exc,
         )
 
@@ -252,7 +252,7 @@ async def validate_exchange_connection(
         raise ValueError("test_symbol must be defined in ExchangeConfig")
 
     log.info(
-        "Validating exchange | name={} symbol={} credentials={}",
+        "Validating exchange | name=%s symbol=%s credentials=%s",
         name,
         symbol,
         "yes" if exchange_cfg.has_credentials else "no",
@@ -313,7 +313,7 @@ async def validate_exchange_connection(
             warnings.append(msg)
 
             log.warning(
-                "Clock drift | name={} drift={}ms",
+                "Clock drift | name=%s drift=%sms",
                 name,
                 clock_drift_ms,
             )
@@ -346,7 +346,7 @@ async def validate_exchange_connection(
     except asyncio.TimeoutError:
 
         log.error(
-            "Validation timed out | name={} timeout={}s",
+            "Validation timed out | name=%s timeout=%ss",
             name,
             EXCHANGE_TASK_TIMEOUT,
         )
@@ -356,7 +356,7 @@ async def validate_exchange_connection(
     except Exception as exc:
 
         log.error(
-            "Validation failed | name={} error={}",
+            "Validation failed | name=%s error=%s",
             name,
             exc,
         )

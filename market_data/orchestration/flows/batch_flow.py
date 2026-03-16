@@ -1,26 +1,24 @@
 """
 orchestration/flows/batch_flow.py
-==================================
+====================================
+Orquestador principal de ingestión batch multi-exchange.
 
-Responsabilidad única
----------------------
-Definir el flow principal de ingestión batch y el helper
-de agregación de resultados.
-
-No contiene lógica de negocio ni accede directamente
-a exchanges o storage.
+Principios: SOLID, DRY, KISS, SafeOps
 """
-
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import List
 
 from prefect import flow, get_run_logger
 
-from market_data.orchestration.config import AppConfig, CONFIG_PATH
+from core.config.schema import AppConfig, CONFIG_PATH
 from market_data.orchestration.tasks.config_tasks import load_and_validate_config
-from market_data.orchestration.tasks.exchange_tasks import validate_exchange_connection
+from market_data.orchestration.tasks.exchange_tasks import (
+    ExchangeProbe,
+    validate_exchange_connection,
+)
 from market_data.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
     run_trades_pipeline,
@@ -28,22 +26,9 @@ from market_data.orchestration.tasks.batch_tasks import (
 )
 
 
-# ==========================================================
-# Result Aggregator
-# ==========================================================
-
 async def _collect_task_results(futures: list) -> None:
-    """
-    Espera todas las tasks y agrega resultados.
-
-    return_exceptions=True garantiza que el fallo de un pipeline
-    no cancele los demás (SafeOps: fallos parciales aislados).
-
-    Relanza solo si el 100% de las tasks fallaron.
-    """
     log = get_run_logger()
-
-    outcomes = await asyncio.gather(*futures, return_exceptions=True)
+    outcomes  = await asyncio.gather(*futures, return_exceptions=True)
     failures  = [r for r in outcomes if isinstance(r, BaseException)]
     successes = len(outcomes) - len(failures)
 
@@ -51,21 +36,48 @@ async def _collect_task_results(futures: list) -> None:
         log.error("Pipeline task failed | error=%s", exc)
 
     if failures and successes == 0:
-        raise RuntimeError(
-            f"All {len(failures)} pipeline(s) failed. "
-            "Review individual task logs for details."
-        )
+        raise RuntimeError(f"All {len(failures)} pipeline(s) failed.")
 
     if failures:
-        log.warning(
-            "Flow completed with partial failures | ok=%s failed=%s",
-            successes, len(failures),
-        )
+        log.warning("Flow completed with partial failures | ok=%s failed=%s", successes, len(failures))
 
 
-# ==========================================================
-# Batch Flow
-# ==========================================================
+def _launch_exchange_pipelines(config: AppConfig, probe: ExchangeProbe) -> list:
+    log = get_run_logger()
+
+    exc_cfg = config.get_exchange(probe.exchange)
+    if exc_cfg is None:
+        log.warning("Exchange not found in config | exchange=%s", probe.exchange)
+        return []
+
+    requested = set(d for d in ("ohlcv","trades","orderbook","funding_rate","open_interest","liquidations","mark_price","index_price") if getattr(config.datasets, d, False))
+    supported = set(probe.supported_datasets)
+    active    = requested & supported
+    skipped   = requested - supported
+
+    if skipped:
+        log.warning("Datasets skipped (unsupported) | exchange=%s skipped=%s",
+                    probe.exchange, sorted(skipped))
+
+    log.info("Launching pipelines | exchange=%s datasets=%s max_concurrent=%s",
+             probe.exchange, sorted(active), probe.max_concurrent)
+
+    futures = []
+
+    if "ohlcv" in active:
+        futures.append(run_historical_pipeline.submit(config, exc_cfg, probe))
+
+    if "trades" in active:
+        futures.append(run_trades_pipeline.submit(config, exc_cfg, probe))
+
+    derivative_datasets = [
+        d for d in config.datasets.active_derivative_datasets if d in active
+    ]
+    if derivative_datasets:
+        futures.append(run_derivatives_pipeline.submit(config, exc_cfg, probe, derivative_datasets))
+
+    return futures
+
 
 @flow(
     name="market_data_ingestion",
@@ -74,49 +86,44 @@ async def _collect_task_results(futures: list) -> None:
     retry_delay_seconds=60,
 )
 async def market_data_flow(config_path: Path = CONFIG_PATH) -> None:
-    """
-    Orquestador principal de ingestión de market data.
-
-    Secuencia
-    ---------
-    1. Cargar y validar config     – falla rápido si el YAML es inválido
-    2. Validar exchange            – falla rápido si no hay conectividad
-    3. Lanzar pipelines en paralelo con fallos parciales aislados
-
-    Parameters
-    ----------
-    config_path : Path
-        Ruta al settings.yaml. Sobreescribible para testing
-        o deployments en distintos entornos sin tocar código.
-    """
     log = get_run_logger()
 
+    # 1. Config
     config: AppConfig = load_and_validate_config(config_path)
-    await validate_exchange_connection(config)
 
     if not config.datasets.any_active:
-        log.warning("No pipelines enabled in configuration. Flow exiting.")
+        log.warning("No datasets active. Flow exiting.")
         return
 
-    log.info(
-        "Launching pipelines | ohlcv=%s trades=%s derivatives=%s",
-        config.datasets.ohlcv,
-        config.datasets.trades,
-        bool(config.datasets.active_derivative_datasets),
-    )
+    log.info("Flow starting | exchanges=%s datasets=%s",
+             config.exchange_names, [d for d in ("ohlcv","trades","orderbook","funding_rate","open_interest","liquidations","mark_price","index_price") if getattr(config.datasets, d, False)])
 
-    futures = []
+    # 2. Validar exchanges en paralelo
+    probes: List[ExchangeProbe] = []
+    for exc_cfg in config.enabled_exchanges:
+        try:
+            probe = await validate_exchange_connection.fn(exc_cfg)
+            probes.append(probe)
+        except Exception as exc:
+            import traceback
+            log.error("Exchange validation failed | exchange=%s error=%s\n%s",
+                      exc_cfg.name.value, exc, traceback.format_exc())
 
-    if config.datasets.ohlcv:
-        futures.append(run_historical_pipeline.submit(config))
+    if not probes:
+        raise RuntimeError("All exchange validations failed.")
 
-    if config.datasets.trades:
-        futures.append(run_trades_pipeline.submit(config))
+    log.info("Exchanges validated | ok=%s/%s", len(probes), len(config.enabled_exchanges))
 
-    derivative_datasets = config.datasets.active_derivative_datasets
-    if derivative_datasets:
-        futures.append(run_derivatives_pipeline.submit(config, derivative_datasets))
+    # 3. Lanzar pipelines por exchange
+    all_futures = []
+    for probe in probes:
+        all_futures.extend(_launch_exchange_pipelines(config, probe))
 
-    await _collect_task_results(futures)
+    if not all_futures:
+        log.warning("No pipelines launched.")
+        return
+
+    # 4. Agregar resultados
+    await _collect_task_results(all_futures)
 
     log.info("Market data flow completed successfully")

@@ -1,51 +1,82 @@
 """
 core/config/schema.py
+=====================
 
-Schema de configuración del sistema OrangeCashMachine.
+Schema de configuración central del sistema OrangeCashMachine.
 
-Responsabilidad
----------------
+Responsabilidad única
+---------------------
 Definir y validar la estructura completa del archivo settings.yaml.
-Este módulo es la única fuente de verdad para la configuración.
+Es la única fuente de verdad sobre qué campos existen, qué tipos
+tienen y qué valores son válidos.
 
-Todos los módulos del sistema deben importar AppConfig desde aquí.
-Nunca se debe parsear el YAML directamente fuera de este módulo.
+Ningún módulo debe parsear el YAML directamente.
+Todos importan desde core.config:
+
+    from core.config import AppConfig, load_config
+
+Arquitectura multi-exchange
+---------------------------
+El YAML define exchanges como un dict nombrado:
+
+    exchanges:
+      bybit:
+        enabled: true
+        credentials:
+          apiKey: \${BYBIT_API_KEY}
+          secret: \${BYBIT_API_SECRET}
+        markets:
+          spot:
+            enabled: true
+            symbols: [BTC/USDT]
+
+parse_exchanges_dict convierte ese dict a List[ExchangeConfig]
+e inyecta el nombre como campo.
+
+Resolución de credenciales (orden de prioridad)
+-----------------------------------------------
+1. Variables de entorno específicas: BYBIT_API_KEY / BYBIT_API_SECRET
+2. Variables genéricas:              OCM_API_KEY   / OCM_API_SECRET
+3. Bloque 'credentials' en el YAML  (nunca en producción)
+
+Campos de credenciales por exchange
+-------------------------------------
+• Bybit   → apiKey, secret
+• KuCoin  → apiKey, secret, password (passphrase requerido)
+• OKX     → apiKey, secret, password (passphrase requerido)
+• Binance → apiKey, secret
 
 Principios aplicados
 --------------------
-SOLID   – SRP: este módulo solo modela configuración
-OCP     – añadir exchanges o datasets sin modificar validaciones
-DRY     – lógica de secretos y normalización centralizada
-KISS    – modelos simples y claros
-SafeOps – validaciones explícitas y uso de SecretStr
+• SOLID  – SRP: solo modela config, no ejecuta nada
+           OCP: añadir exchange/dataset = una línea
+• DRY    – resolución de credenciales centralizada en resolve_credentials
+• KISS   – modelos planos, sin capas innecesarias
+• SafeOps – SecretStr para credenciales, opt-in para datasets,
+            fallo explícito ante config inválida, sin pandas en imports
 """
 
 from __future__ import annotations
 
 import os
 import warnings
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import pandas as pd
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 
-# ==========================================================
-# Paths
-# ==========================================================
+# ==============================================================
+# Constants
+# ==============================================================
 
 BASE_DIR: Path = Path(__file__).resolve().parents[3]
 
 CONFIG_PATH: Path = Path(
     os.getenv("OCM_CONFIG_PATH", str(BASE_DIR / "config" / "settings.yaml"))
 )
-
-
-# ==========================================================
-# System constants
-# ==========================================================
 
 EXCHANGE_TASK_TIMEOUT: int = 30
 PIPELINE_TASK_TIMEOUT: int = 3600
@@ -58,313 +89,369 @@ DERIVATIVE_DATASET_KEYS: tuple[str, ...] = (
     "index_price",
 )
 
+# Exchanges que requieren passphrase además de apiKey/secret
+_EXCHANGES_WITH_PASSPHRASE: frozenset[str] = frozenset({"kucoin", "okx"})
 
-# ==========================================================
+
+# ==============================================================
 # Enums
-# ==========================================================
+# ==============================================================
 
 class SupportedExchange(str, Enum):
-    """Exchanges soportados por el sistema."""
+    """
+    Exchanges soportados por el sistema.
 
+    Añadir un exchange nuevo: una línea aquí + credenciales en .env.
+    No requiere tocar validaciones.
+    """
     BINANCE = "binance"
-    BYBIT = "bybit"
-    OKX = "okx"
-    KUCOIN = "kucoin"
-    GATE = "gate"
+    BYBIT   = "bybit"
+    OKX     = "okx"
+    KUCOIN  = "kucoin"
+    GATE    = "gate"
 
 
-# ==========================================================
-# Exchange configuration
-# ==========================================================
+# ==============================================================
+# Exchange models
+# ==============================================================
 
 class MarketConfig(BaseModel):
-    """Configuración de un mercado específico."""
+    """Configuración de un tipo de mercado (spot o futures)."""
 
-    enabled: bool = False
-    symbols: List[str] = Field(default_factory=list)
-    defaultType: str = "spot"
+    enabled:     bool      = False
+    symbols:     List[str] = Field(default_factory=list)
+    defaultType: str       = "spot"
 
     @field_validator("symbols")
     @classmethod
-    def normalize_symbols(cls, symbols: List[str]) -> List[str]:
-        """Normaliza símbolos a formato estándar."""
-        return [s.strip().upper() for s in symbols]
+    def normalize_symbols(cls, v: List[str]) -> List[str]:
+        """Normaliza a mayúsculas: 'btc/usdt' → 'BTC/USDT'."""
+        return [s.strip().upper() for s in v]
 
 
 class MarketsConfig(BaseModel):
-    """Configuración de mercados disponibles."""
+    """Agrupa los tipos de mercado disponibles para un exchange."""
 
-    spot: MarketConfig = Field(default_factory=MarketConfig)
+    spot:    MarketConfig = Field(default_factory=MarketConfig)
     futures: MarketConfig = Field(default_factory=MarketConfig)
 
     @property
     def enabled_markets(self) -> Dict[str, MarketConfig]:
-        """Retorna solo mercados habilitados."""
+        """Dict {nombre: config} de mercados activos únicamente."""
         return {
-            name: market
-            for name, market in (
-                ("spot", self.spot),
-                ("futures", self.futures),
-            )
-            if market.enabled
+            name: mkt
+            for name, mkt in [("spot", self.spot), ("futures", self.futures)]
+            if mkt.enabled
         }
 
 
 class ExchangeConfig(BaseModel):
-    """Configuración completa de un exchange."""
+    """
+    Configuración completa de un exchange individual.
 
-    name: SupportedExchange
+    Credenciales soportadas
+    -----------------------
+    • api_key      → apiKey en ccxt    (todos los exchanges)
+    • api_secret   → secret en ccxt    (todos los exchanges)
+    • api_password → password en ccxt  (KuCoin, OKX — passphrase)
 
-    enabled: bool = True
-    enableRateLimit: bool = True
-
-    api_key: SecretStr = SecretStr("")
-    api_secret: SecretStr = SecretStr("")
-
-    test_symbol: str = "BTC/USDT"
-
-    markets: MarketsConfig = Field(default_factory=MarketsConfig)
-
-    # ------------------------------------------------------
-    # Credential resolution
-    # ------------------------------------------------------
+    resolve_credentials aplica la prioridad:
+      env específico > env genérico > YAML
+    """
+    name:            SupportedExchange
+    enabled:         bool          = True
+    enableRateLimit: bool          = True
+    api_key:         SecretStr     = SecretStr("")
+    api_secret:      SecretStr     = SecretStr("")
+    api_password:    SecretStr     = SecretStr("")  # passphrase para KuCoin/OKX
+    test_symbol:     str           = "BTC/USDT"
+    markets:         MarketsConfig = Field(default_factory=MarketsConfig)
 
     @model_validator(mode="before")
     @classmethod
     def resolve_credentials(cls, values: dict) -> dict:
         """
-        Resuelve credenciales desde:
+        Inyecta credenciales desde variables de entorno.
 
-        1. credentials en YAML
-        2. variables de entorno específicas
-        3. variables globales
+        Extrae el bloque 'credentials' del YAML si existe,
+        luego sobreescribe con variables de entorno si están definidas.
+        Acepta tanto KUCOIN_PASSPHRASE como KUCOIN_PASSWORD como alias.
         """
-
         name = str(values.get("name", "")).upper()
 
-        creds = values.pop("credentials", None)
-        if creds:
-            values.setdefault("api_key", creds.get("apiKey", ""))
-            values.setdefault("api_secret", creds.get("secret", ""))
+        # 1. Extraer credenciales del YAML
+        if creds := values.pop("credentials", {}):
+            values.setdefault("api_key",      creds.get("apiKey",   ""))
+            values.setdefault("api_secret",   creds.get("secret",   ""))
+            values.setdefault("api_password", creds.get("password", ""))
 
+        # 2. Variables de entorno específicas (mayor prioridad)
         values["api_key"] = os.getenv(
             f"{name}_API_KEY",
             values.get("api_key", os.getenv("OCM_API_KEY", "")),
         )
-
         values["api_secret"] = os.getenv(
             f"{name}_API_SECRET",
             values.get("api_secret", os.getenv("OCM_API_SECRET", "")),
         )
 
-        return values
+        # Acepta KUCOIN_PASSPHRASE o KUCOIN_PASSWORD como alias
+        passphrase = (
+            os.getenv(f"{name}_PASSPHRASE")
+            or os.getenv(f"{name}_PASSWORD")
+            or values.get("api_password", "")
+        )
+        values["api_password"] = passphrase
 
-    # ------------------------------------------------------
-    # Helper properties
-    # ------------------------------------------------------
+        return values
 
     @property
     def all_symbols(self) -> List[str]:
-        """Retorna todos los símbolos únicos del exchange."""
-        seen: set[str] = set()
-        result: List[str] = []
+        """
+        Todos los símbolos únicos (spot + futures), orden estable.
 
-        for market in (self.markets.spot, self.markets.futures):
-            for symbol in market.symbols:
+        Deduplicados: BTC/USDT en spot y futures se descarga una sola vez.
+        """
+        seen:   set[str]  = set()
+        result: List[str] = []
+        for mkt in (self.markets.spot, self.markets.futures):
+            for symbol in mkt.symbols:
                 if symbol not in seen:
                     seen.add(symbol)
                     result.append(symbol)
-
         return result
 
     @property
     def has_credentials(self) -> bool:
-        """Indica si el exchange tiene credenciales."""
+        """True si el exchange tiene apiKey y secret configurados."""
         return bool(
             self.api_key.get_secret_value()
             and self.api_secret.get_secret_value()
         )
 
+    @property
+    def requires_passphrase(self) -> bool:
+        """True si el exchange requiere passphrase (KuCoin, OKX)."""
+        return self.name.value in _EXCHANGES_WITH_PASSPHRASE
 
-# ==========================================================
-# Pipeline configuration
-# ==========================================================
+    @property
+    def has_passphrase(self) -> bool:
+        """True si el passphrase está configurado."""
+        return bool(self.api_password.get_secret_value())
+
+    def ccxt_credentials(self) -> dict:
+        """
+        Devuelve el dict de credenciales listo para ccxt.
+
+        Uso en exchange_tasks.py:
+            exchange = getattr(ccxt, name)(cfg.ccxt_credentials())
+        """
+        creds: dict = {
+            "apiKey":          self.api_key.get_secret_value(),
+            "secret":          self.api_secret.get_secret_value(),
+            "enableRateLimit": self.enableRateLimit,
+        }
+        if self.requires_passphrase and self.has_passphrase:
+            creds["password"] = self.api_password.get_secret_value()
+        return creds
+
+
+# ==============================================================
+# Pipeline models
+# ==============================================================
 
 class RetryPolicy(BaseModel):
-    """Política de reintentos."""
-
-    max_attempts: int = 5
-    backoff_factor: int = 2
-    jitter: bool = True
+    """Política de reintentos para pipelines de descarga."""
+    max_attempts:   int  = 5
+    backoff_factor: int  = 2
+    jitter:         bool = True
 
 
 class HistoricalConfig(BaseModel):
-    """Configuración del pipeline histórico."""
+    """Parámetros globales del pipeline histórico OHLCV."""
 
-    start_date: str = "2017-01-01T00:00:00Z"
-    fetch_all_history: bool = False
-
-    max_concurrent_tasks: int = Field(default=6, ge=1, le=50)
-
-    timeframes: List[str] = Field(default_factory=list)
-
-    retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
+    start_date:           str         = "2017-01-01T00:00:00Z"
+    fetch_all_history:    bool        = False
+    max_concurrent_tasks: int         = Field(default=6, ge=1, le=50)
+    timeframes:           List[str]   = Field(default_factory=list)
+    retry_policy:         RetryPolicy = Field(default_factory=RetryPolicy)
 
     @field_validator("timeframes")
     @classmethod
-    def validate_timeframes(cls, value: List[str]) -> List[str]:
-        if not value:
-            raise ValueError("timeframes cannot be empty")
-        return value
+    def validate_timeframes(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError(
+                "'timeframes' cannot be empty. "
+                "Add at least one timeframe in settings.yaml."
+            )
+        return v
 
     @field_validator("start_date")
     @classmethod
-    def validate_start_date(cls, value: str) -> str:
-        """Valida formato ISO8601."""
+    def validate_start_date(cls, v: str) -> str:
+        """Valida formato ISO 8601 y que no sea fecha futura."""
         try:
-            ts = pd.Timestamp(value)
-        except Exception as exc:
+            ts = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
             raise ValueError(
-                f"Invalid start_date '{value}'. Use ISO 8601 format."
-            ) from exc
-
-        if ts > pd.Timestamp.now(tz="UTC"):
-            raise ValueError("start_date cannot be in the future")
-
-        return value
+                f"Invalid start_date '{v}'. "
+                "Use ISO 8601, e.g. '2022-01-01' or '2022-01-01T00:00:00Z'."
+            )
+        if ts > datetime.now(tz=timezone.utc):
+            raise ValueError(f"start_date '{v}' is in the future.")
+        return v
 
 
 class RealtimeConfig(BaseModel):
-    """Configuración del pipeline realtime."""
-
-    reconnect_delay_seconds: int = 5
-    heartbeat_timeout_seconds: int = 30
-    snapshot_interval_seconds: int = 60
-    max_stream_buffer: int = 50_000
+    """Parámetros del pipeline de streaming."""
+    reconnect_delay_seconds:   int = Field(default=5,      ge=1)
+    heartbeat_timeout_seconds: int = Field(default=30,     ge=5)
+    snapshot_interval_seconds: int = Field(default=60,     ge=10)
+    max_stream_buffer:         int = Field(default=50_000, ge=1000)
 
 
 class PipelineConfig(BaseModel):
-    """Configuración global de pipelines."""
-
+    """Configuración de todos los pipelines."""
     historical: HistoricalConfig = Field(default_factory=HistoricalConfig)
-    realtime: RealtimeConfig = Field(default_factory=RealtimeConfig)
+    realtime:   RealtimeConfig   = Field(default_factory=RealtimeConfig)
 
 
-# ==========================================================
-# Dataset configuration
-# ==========================================================
+# ==============================================================
+# Datasets model
+# ==============================================================
 
 class DatasetsConfig(BaseModel):
-    """Activación de datasets."""
+    """
+    Flags de activación por tipo de dataset.
 
-    ohlcv: bool = False
-    trades: bool = False
+    Todos desactivados por defecto (SafeOps: opt-in explícito).
+    Habilitar solo lo que está implementado.
+    """
+    ohlcv:     bool = False
+    trades:    bool = False
     orderbook: bool = False
 
-    funding_rate: bool = False
+    funding_rate:  bool = False
     open_interest: bool = False
-    liquidations: bool = False
-    mark_price: bool = False
-    index_price: bool = False
+    liquidations:  bool = False
+    mark_price:    bool = False
+    index_price:   bool = False
 
     @property
     def active_derivative_datasets(self) -> List[str]:
+        """Lista de datasets de derivados activos."""
         return [
             key for key in DERIVATIVE_DATASET_KEYS
             if getattr(self, key, False)
         ]
 
     @property
+    def active_datasets(self) -> List[str]:
+        """Lista completa de datasets activos (core + derivados)."""
+        core = [
+            name for name in ("ohlcv", "trades", "orderbook")
+            if getattr(self, name, False)
+        ]
+        return core + self.active_derivative_datasets
+
+    @property
     def any_active(self) -> bool:
-        return (
-            self.ohlcv
-            or self.trades
-            or self.orderbook
-            or bool(self.active_derivative_datasets)
-        )
+        """True si al menos un dataset está activo."""
+        return bool(self.active_datasets)
 
 
-# ==========================================================
-# Storage configuration
-# ==========================================================
+# ==============================================================
+# Storage model
+# ==============================================================
 
 class StorageConfig(BaseModel):
     """Configuración del Data Lake."""
-
-    data_lake_path: str = "data_platform/data_lake"
-
-    format: str = "parquet"
-    compression: str = "snappy"
-
-    partitioning: List[str] = Field(
+    data_lake_path: str       = "data_platform/data_lake"
+    format:         str       = "parquet"
+    compression:    str       = "snappy"
+    partitioning:   List[str] = Field(
         default_factory=lambda: [
-            "exchange",
-            "market",
-            "symbol",
-            "dataset",
-            "timeframe",
-            "year",
-            "month",
+            "exchange", "market", "symbol",
+            "dataset", "timeframe", "year", "month",
         ]
     )
 
 
-# ==========================================================
-# Root configuration
-# ==========================================================
+# ==============================================================
+# AppConfig — raíz del schema
+# ==============================================================
 
 class AppConfig(BaseModel):
-    """Schema completo de settings.yaml."""
+    """
+    Schema completo de settings.yaml.
 
-    exchanges: List[ExchangeConfig]
+    Ejemplo mínimo válido
+    ---------------------
+    exchanges:
+      bybit:
+        enabled: true
+        credentials:
+          apiKey: \${BYBIT_API_KEY}
+          secret: \${BYBIT_API_SECRET}
+        markets:
+          spot:
+            enabled: true
+            symbols: [BTC/USDT]
 
-    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
-    datasets: DatasetsConfig = Field(default_factory=DatasetsConfig)
-    storage: StorageConfig = Field(default_factory=StorageConfig)
+    pipeline:
+      historical:
+        timeframes: [1h, 4h]
+        start_date: "2022-01-01"
 
-    max_concurrent: int = Field(default=6, ge=1, le=50)
-
-    # ------------------------------------------------------
-    # Exchange parsing
-    # ------------------------------------------------------
+    datasets:
+      ohlcv: true
+    """
+    exchanges:      List[ExchangeConfig]
+    pipeline:       PipelineConfig = Field(default_factory=PipelineConfig)
+    datasets:       DatasetsConfig = Field(default_factory=DatasetsConfig)
+    storage:        StorageConfig  = Field(default_factory=StorageConfig)
+    max_concurrent: int            = Field(default=6, ge=1, le=50)
 
     @model_validator(mode="before")
     @classmethod
     def parse_exchanges_dict(cls, values: dict) -> dict:
-        raw = values.get("exchanges", {})
+        """
+        Convierte el dict de exchanges del YAML a List[ExchangeConfig].
 
+        El YAML usa nombres como claves para legibilidad humana.
+        Este validator convierte e inyecta 'name' en cada item.
+        Solo incluye exchanges con enabled=true (default).
+        """
+        raw = values.get("exchanges", {})
         if isinstance(raw, dict):
             values["exchanges"] = [
-                {"name": name, **cfg}
-                for name, cfg in raw.items()
-                if cfg.get("enabled", True)
+                {"name": exchange_name, **exchange_cfg}
+                for exchange_name, exchange_cfg in raw.items()
+                if exchange_cfg.get("enabled", True)
             ]
-
         return values
 
-    # ------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------
-
     @model_validator(mode="after")
-    def validate_exchanges(self) -> "AppConfig":
+    def validate_at_least_one_exchange(self) -> AppConfig:
+        """Falla explícitamente si no hay exchanges habilitados."""
         if not self.exchanges:
-            raise ValueError("No enabled exchanges found in configuration")
+            raise ValueError(
+                "No enabled exchanges found. "
+                "Enable at least one exchange in settings.yaml."
+            )
         return self
 
     @model_validator(mode="after")
-    def validate_datasets(self) -> "AppConfig":
+    def warn_if_no_datasets_active(self) -> AppConfig:
+        """Emite warning si ningún dataset está activo."""
         if not self.datasets.any_active:
             warnings.warn(
-                "No datasets are active in configuration",
+                "No datasets are active. "
+                "Enable at least one dataset in settings.yaml.",
                 UserWarning,
                 stacklevel=2,
             )
         return self
-
-    # ------------------------------------------------------
-    # Convenience helpers
-    # ------------------------------------------------------
 
     @property
     def enabled_exchanges(self) -> List[ExchangeConfig]:
@@ -375,7 +462,9 @@ class AppConfig(BaseModel):
         return [e.name.value for e in self.exchanges]
 
     def get_exchange(self, name: str) -> Optional[ExchangeConfig]:
+        """Busca exchange por nombre (case-insensitive). Devuelve None si no existe."""
+        target = name.lower()
         for exc in self.exchanges:
-            if exc.name.value == name.lower():
+            if exc.name.value == target:
                 return exc
         return None

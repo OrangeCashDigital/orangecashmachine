@@ -2,39 +2,29 @@
 # OrangeCashMachine – Market Data Infrastructure Configuration
 # ===============================================================
 #
-# Configuración central del sistema de datos de mercado.
 # Arquitectura:
-# Exchange APIs → Data Acquisition → Data Platform → Feature Engineering → Research / Trading
+#   Exchange APIs → Data Acquisition → Data Platform → Research / Trading
 #
-# Principios de ingeniería aplicados: SOLID, KISS, DRY, SafeOps
-# Seguridad: nunca almacenar API keys reales; usar variables de entorno
+# Principios: SOLID, KISS, DRY, SafeOps
+# Seguridad: nunca almacenar credenciales aquí — usar variables de entorno
+# Credenciales: definir en .env en la raíz del proyecto
 # ===============================================================
 
 # ===============================================================
-# PIPELINE CONFIGURATION
+# PIPELINE
 # ===============================================================
 pipeline:
 
-  # -------------------------------------------------------------
-  # HISTORICAL DATA PIPELINE
-  # -------------------------------------------------------------
   historical:
-    # Fecha inicial para descargas históricas
     start_date: "2017-01-01T00:00:00Z"
-
-    # Descarga completa desde el inicio de datos (ignora último timestamp guardado)
     fetch_all_history: false
-
-    # Concurrencia paralela
     max_concurrent_tasks: 6
 
-    # Política de reintentos ante fallos de red o API
     retry_policy:
       max_attempts: 5
       backoff_factor: 2
       jitter: true
 
-    # Timeframes requeridos por estrategias o ML
     timeframes:
       - 1m
       - 5m
@@ -43,9 +33,6 @@ pipeline:
       - 4h
       - 1d
 
-  # -------------------------------------------------------------
-  # REALTIME DATA PIPELINE
-  # -------------------------------------------------------------
   realtime:
     reconnect_delay_seconds: 5
     heartbeat_timeout_seconds: 30
@@ -53,23 +40,23 @@ pipeline:
     max_stream_buffer: 50000
 
 # ===============================================================
-# DATASETS CONFIGURATION
+# DATASETS
 # ===============================================================
 datasets:
-  # Core market data
+  # Core
   ohlcv: true
-  trades: true
-  orderbook: false  # recomendado solo en realtime
+  trades: false       # pendiente de implementación
+  orderbook: false    # recomendado solo en realtime
 
-  # Derivatives / Advanced data
-  funding_rate: true
-  open_interest: true
-  liquidations: true
-  mark_price: true
-  index_price: true
+  # Derivatives
+  funding_rate: false
+  open_interest: false
+  liquidations: false
+  mark_price: false
+  index_price: false
 
 # ===============================================================
-# EXCHANGE CONFIGURATION
+# EXCHANGES
 # ===============================================================
 exchanges:
 
@@ -79,6 +66,7 @@ exchanges:
     credentials:
       apiKey: ${BYBIT_API_KEY}
       secret: ${BYBIT_API_SECRET}
+      # password: no requerido por Bybit
     options:
       adjustForTimeDifference: true
     markets:
@@ -87,7 +75,7 @@ exchanges:
         symbols:
           - BTC/USDT
       futures:
-        enabled: true
+        enabled: false
         defaultType: swap
         symbols:
           - BTC/USDT
@@ -98,6 +86,7 @@ exchanges:
     credentials:
       apiKey: ${KUCOIN_API_KEY}
       secret: ${KUCOIN_API_SECRET}
+      password: ${KUCOIN_PASSPHRASE}   # requerido por KuCoin
     options:
       adjustForTimeDifference: true
     markets:
@@ -106,20 +95,19 @@ exchanges:
         symbols:
           - BTC/USDT
       futures:
-        enabled: true
+        enabled: false
         defaultType: swap
         symbols:
           - BTC/USDT
 
 # ===============================================================
-# DATA PLATFORM CONFIGURATION
+# STORAGE
 # ===============================================================
 storage:
   data_lake_path: "data_platform/data_lake"
   format: parquet
   compression: snappy
-
-  partitioning:  # Optimizado para analytics y ML
+  partitioning:
     - exchange
     - market
     - symbol
@@ -129,7 +117,7 @@ storage:
     - month
 
 # ===============================================================
-# OPTIONAL INFRASTRUCTURE INTEGRATIONS
+# INTEGRATIONS (todas deshabilitadas por defecto — opt-in)
 # ===============================================================
 integrations:
 
@@ -146,5 +134,5 @@ integrations:
     enabled: false
     host: localhost
     port: 5432
-    user: user
-    password: password
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}

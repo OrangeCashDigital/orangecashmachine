@@ -134,8 +134,9 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             nullable=False,
             coerce=True,
             checks=[
-                Check.ge(
-                    MIN_TIMESTAMP,
+                Check(
+                    lambda s: s >= MIN_TIMESTAMP,
+                    element_wise=False,
                     error=f"Timestamp before market origin ({MIN_TIMESTAMP.date()})",
                 ),
             ],

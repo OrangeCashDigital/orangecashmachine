@@ -41,7 +41,7 @@ REQUIRED_COLUMNS: tuple[str, ...] = (
     "volume",
 )
 
-_DEFAULT_DATA_LAKE: tuple[str, ...] = ("data_lake", "ohlcv")
+_DEFAULT_DATA_LAKE: tuple[str, ...] = ("data_platform", "data_lake", "ohlcv")
 
 WriteMode = Literal["append", "overwrite"]
 

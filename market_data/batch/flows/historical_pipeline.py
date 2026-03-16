@@ -30,7 +30,7 @@ import yaml
 from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
-from market_data.batch.storage.historical_storage import HistoricalStorage
+from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 
 
@@ -166,29 +166,27 @@ class HistoricalPipelineAsync:
 
     def __init__(
         self,
-        symbols:     List[str],
-        timeframes:  List[str],
-        start_date:  str,
-        max_workers: int = DEFAULT_MAX_WORKERS,
-        storage:     HistoricalStorage | None = None,
+        symbols:         List[str],
+        timeframes:      List[str],
+        start_date:      str,
+        max_workers:     int = DEFAULT_MAX_WORKERS,
+        storage:         HistoricalStorage | None = None,
+        exchange_client = None,
     ) -> None:
         _validate_pipeline_inputs(symbols, timeframes, start_date)
 
         self.symbols    = symbols
         self.timeframes = timeframes
-        self.start_date = _parse_start_date(start_date)   # falla rápido si el formato es inválido
+        self.start_date = _parse_start_date(start_date)
         self.max_workers = max_workers
 
-        # Inyección de dependencias: facilita testing con mocks
         self._storage = storage or HistoricalStorage()
-
-        # Semáforo único para el pipeline – el fetcher NO debe tener el suyo
         self._semaphore = asyncio.Semaphore(max_workers)
 
         self._fetcher = HistoricalFetcherAsync(
             storage=self._storage,
-            transformer=OHLCVTransformer,
-            max_concurrent=max_workers,   # coherente con el semáforo del pipeline
+            transformer=OHLCVTransformer(),
+            exchange_client=exchange_client,
         )
 
     # ----------------------------------------------------------
@@ -343,7 +341,7 @@ def _parse_start_date(start_date: str) -> "pd.Timestamp":
             "Expected ISO 8601, e.g. '2022-01-01'."
         )
 
-    if ts > pd.Timestamp.now():
+    if ts > pd.Timestamp.now(tz="UTC"):
         raise ValueError(
             f"start_date '{start_date}' is in the future. "
             "Historical pipeline requires a past date."

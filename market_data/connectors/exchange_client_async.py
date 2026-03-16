@@ -207,11 +207,13 @@ class ExchangeClientAsync:
 
             try:
 
-                client = exchange_class({
-                    **_CCXT_OPTIONS,
-                    "apiKey": self._api_key,
-                    "secret": self._api_secret,
-                })
+                params = {**_CCXT_OPTIONS}
+                if self._api_key:
+                    params["apiKey"] = self._api_key
+                if self._api_secret:
+                    params["secret"] = self._api_secret
+
+                client = exchange_class(params)
 
                 start = time.perf_counter()
 

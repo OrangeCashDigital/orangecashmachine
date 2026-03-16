@@ -83,11 +83,7 @@ def load_and_validate_config(path: Path) -> AppConfig:
 
     except yaml.YAMLError as exc:
 
-        log.critical(
-            "YAML parsing failed | file={} error={}",
-            path,
-            exc,
-        )
+        log.critical("YAML parsing failed | file=%s error=%s", path, exc)
 
         raise
 
@@ -97,18 +93,11 @@ def load_and_validate_config(path: Path) -> AppConfig:
 
     except ValidationError as exc:
 
-        log.critical(
-            "Config validation failed | file={} error={}",
-            path,
-            exc,
-        )
+        log.critical("Config validation failed | file=%s error=%s", path, exc)
 
         raise
 
-    log.info(
-        "Config loaded and validated | file={}",
-        path,
-    )
+    log.info("Config loaded and validated | file=%s", path)
 
     return config
 

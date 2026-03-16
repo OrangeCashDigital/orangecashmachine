@@ -137,7 +137,6 @@ class HistoricalFetcherAsync:
         self._config = config
 
         self._exchange_client = exchange_client or ExchangeClientAsync(
-            config_path=None,
             app_config=config,
         )
 
@@ -348,8 +347,7 @@ class HistoricalFetcherAsync:
 
             try:
 
-                data = await self._circuit_breaker.call_async(
-                    client.fetch_ohlcv,
+                data = await client.fetch_ohlcv(
                     symbol,
                     timeframe,
                     since=since,

@@ -1,394 +1,68 @@
 """
-orchestration/config.py
+market_data/orchestration/config.py
+=====================================
 
-Schema de configuración del sistema OrangeCashMachine.
+Capa de compatibilidad hacia atrás.
 
 Responsabilidad única
 ---------------------
-Definir y validar la estructura completa del archivo settings.yaml.
-Es la única fuente de verdad sobre qué campos existen, qué tipos
-tienen y qué valores son válidos.
+Re-exportar todo desde core.config.schema para que los módulos
+que aún importen desde aquí sigan funcionando sin cambios
+durante la migración hacia core.config.
 
-Ningún otro módulo debe parsear el YAML directamente.
-Todos importan AppConfig desde aquí.
+Migración
+---------
+El destino final es que todos los módulos importen directamente:
 
-Arquitectura multi-exchange
----------------------------
-El YAML define exchanges como un dict nombrado:
+    from core.config import AppConfig, load_config
 
-exchanges:
-  bybit:
-    enabled: true
-    markets:
-      spot:
-        symbols: [BTC/USDT]
-      futures:
-        symbols: [BTC/USDT]
-
-AppConfig.parse_exchanges_dict convierte ese dict a List[ExchangeConfig]
-e inyecta el nombre como campo.
+Una vez completada la migración, este archivo puede eliminarse.
+Hasta entonces, actúa como alias transparente.
 
 Principios aplicados
 --------------------
-SOLID  – SRP: solo modela config
-OCP    – añadir exchange/dataset sin modificar validaciones
-DRY    – lógica de secretos centralizada
-KISS   – modelos simples
-SafeOps – SecretStr para credenciales y validaciones explícitas
+• DRY    – no duplica código, solo re-exporta
+• KISS   – archivo mínimo, sin lógica propia
+• SOLID  – OCP: no modifica la fuente de verdad (core.config.schema)
 """
 
 from __future__ import annotations
 
-import os
-import warnings
-from enum import Enum
-from pathlib import Path
-from typing import Dict, List, Optional
-
-import pandas as pd
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
-
-# ==============================================================
-# Constants
-# ==============================================================
-
-BASE_DIR: Path = Path(__file__).resolve().parents[3]
-
-CONFIG_PATH: Path = Path(
-    os.getenv("OCM_CONFIG_PATH", str(BASE_DIR / "config" / "settings.yaml"))
+# Re-exportar todo desde la fuente de verdad
+from core.config.schema import (
+    AppConfig,
+    ExchangeConfig,
+    MarketsConfig,
+    MarketConfig,
+    PipelineConfig,
+    HistoricalConfig,
+    RealtimeConfig,
+    RetryPolicy,
+    DatasetsConfig,
+    StorageConfig,
+    SupportedExchange,
+    DERIVATIVE_DATASET_KEYS,
+    EXCHANGE_TASK_TIMEOUT,
+    PIPELINE_TASK_TIMEOUT,
+    CONFIG_PATH,
+    _EXCHANGES_WITH_PASSPHRASE,
 )
 
-EXCHANGE_TASK_TIMEOUT: int = 30
-PIPELINE_TASK_TIMEOUT: int = 3600
-
-DERIVATIVE_DATASET_KEYS: tuple[str, ...] = (
-    "funding_rate",
-    "open_interest",
-    "liquidations",
-    "mark_price",
-    "index_price",
-)
-
-# ==============================================================
-# Enums
-# ==============================================================
-
-
-class SupportedExchange(str, Enum):
-    """
-    Exchanges soportados por el sistema.
-
-    Usar Enum permite:
-    - Autocompletado en IDE
-    - Validación automática en Pydantic
-    - Errores claros cuando el valor es inválido
-    """
-
-    BINANCE = "binance"
-    BYBIT = "bybit"
-    OKX = "okx"
-    KUCOIN = "kucoin"
-    GATE = "gate"
-
-
-# ==============================================================
-# Exchange models
-# ==============================================================
-
-
-class MarketConfig(BaseModel):
-    """
-    Configuración de un mercado específico (spot o futures).
-    """
-
-    enabled: bool = False
-    symbols: List[str] = Field(default_factory=list)
-    defaultType: str = "spot"
-
-    @field_validator("symbols")
-    @classmethod
-    def normalize_symbols(cls, v: List[str]) -> List[str]:
-        """Normaliza símbolos a mayúsculas."""
-        return [s.upper() for s in v]
-
-
-class MarketsConfig(BaseModel):
-    """
-    Agrupa los mercados disponibles para un exchange.
-    """
-
-    spot: MarketConfig = Field(default_factory=MarketConfig)
-    futures: MarketConfig = Field(default_factory=MarketConfig)
-
-    @property
-    def enabled_markets(self) -> Dict[str, MarketConfig]:
-        """Devuelve solo mercados habilitados."""
-        return {
-            name: mkt
-            for name, mkt in (("spot", self.spot), ("futures", self.futures))
-            if mkt.enabled
-        }
-
-
-class ExchangeConfig(BaseModel):
-    """
-    Configuración completa de un exchange.
-    """
-
-    name: SupportedExchange
-    enabled: bool = True
-    enableRateLimit: bool = True
-
-    api_key: SecretStr = SecretStr("")
-    api_secret: SecretStr = SecretStr("")
-
-    test_symbol: str = "BTC/USDT"
-
-    markets: MarketsConfig = Field(default_factory=MarketsConfig)
-
-    @model_validator(mode="before")
-    @classmethod
-    def resolve_credentials(cls, values: dict) -> dict:
-        """
-        Resuelve credenciales desde variables de entorno.
-        """
-
-        name = str(values.get("name", "")).upper()
-
-        if creds := values.pop("credentials", {}):
-            values.setdefault("api_key", creds.get("apiKey", ""))
-            values.setdefault("api_secret", creds.get("secret", ""))
-
-        if key := os.getenv(f"{name}_API_KEY"):
-            values["api_key"] = key
-
-        if secret := os.getenv(f"{name}_API_SECRET"):
-            values["api_secret"] = secret
-
-        if not values.get("api_key"):
-            values["api_key"] = os.getenv("OCM_API_KEY", "")
-
-        if not values.get("api_secret"):
-            values["api_secret"] = os.getenv("OCM_API_SECRET", "")
-
-        return values
-
-    @property
-    def all_symbols(self) -> List[str]:
-        """
-        Todos los símbolos únicos del exchange.
-        """
-
-        seen: set[str] = set()
-        result: List[str] = []
-
-        for market in (self.markets.spot, self.markets.futures):
-            for symbol in market.symbols:
-                if symbol not in seen:
-                    seen.add(symbol)
-                    result.append(symbol)
-
-        return result
-
-    @property
-    def has_credentials(self) -> bool:
-        """True si el exchange tiene credenciales."""
-        return bool(
-            self.api_key.get_secret_value()
-            and self.api_secret.get_secret_value()
-        )
-
-
-# ==============================================================
-# Pipeline
-# ==============================================================
-
-
-class RetryPolicy(BaseModel):
-    """Política de reintentos."""
-
-    max_attempts: int = 5
-    backoff_factor: int = 2
-    jitter: bool = True
-
-
-class HistoricalConfig(BaseModel):
-    """
-    Parámetros globales de ingestión histórica.
-    """
-
-    start_date: str = "2017-01-01T00:00:00Z"
-    fetch_all_history: bool = False
-    max_concurrent_tasks: int = Field(default=6, ge=1, le=50)
-
-    timeframes: List[str] = Field(default_factory=list)
-    retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
-
-    @field_validator("timeframes")
-    @classmethod
-    def validate_timeframes(cls, v: List[str]) -> List[str]:
-        if not v:
-            raise ValueError("timeframes cannot be empty")
-        return v
-
-    @field_validator("start_date")
-    @classmethod
-    def validate_start_date(cls, v: str) -> str:
-        try:
-            ts = pd.Timestamp(v)
-        except Exception:
-            raise ValueError(
-                f"Invalid start_date '{v}'. Use ISO 8601 format."
-            )
-
-        if ts > pd.Timestamp.now(tz="UTC"):
-            raise ValueError("start_date cannot be in the future")
-
-        return v
-
-
-class RealtimeConfig(BaseModel):
-    """Configuración del pipeline realtime."""
-
-    reconnect_delay_seconds: int = 5
-    heartbeat_timeout_seconds: int = 30
-    snapshot_interval_seconds: int = 60
-    max_stream_buffer: int = 50_000
-
-
-class PipelineConfig(BaseModel):
-    """Configuración global de pipelines."""
-
-    historical: HistoricalConfig = Field(default_factory=HistoricalConfig)
-    realtime: RealtimeConfig = Field(default_factory=RealtimeConfig)
-
-
-# ==============================================================
-# Datasets
-# ==============================================================
-
-
-class DatasetsConfig(BaseModel):
-    """
-    Activación de datasets.
-    """
-
-    ohlcv: bool = False
-    trades: bool = False
-    orderbook: bool = False
-
-    funding_rate: bool = False
-    open_interest: bool = False
-    liquidations: bool = False
-    mark_price: bool = False
-    index_price: bool = False
-
-    @property
-    def active_derivative_datasets(self) -> List[str]:
-        return [
-            key for key in DERIVATIVE_DATASET_KEYS
-            if getattr(self, key, False)
-        ]
-
-    @property
-    def any_active(self) -> bool:
-        return (
-            self.ohlcv
-            or self.trades
-            or self.orderbook
-            or bool(self.active_derivative_datasets)
-        )
-
-
-# ==============================================================
-# Storage
-# ==============================================================
-
-
-class StorageConfig(BaseModel):
-    """Configuración del Data Lake."""
-
-    data_lake_path: str = "data_platform/data_lake"
-    format: str = "parquet"
-    compression: str = "snappy"
-
-    partitioning: List[str] = Field(
-        default_factory=lambda: [
-            "exchange",
-            "market",
-            "symbol",
-            "dataset",
-            "timeframe",
-            "year",
-            "month",
-        ]
-    )
-
-
-# ==============================================================
-# Root config
-# ==============================================================
-
-
-class AppConfig(BaseModel):
-    """
-    Schema completo de settings.yaml.
-    """
-
-    exchanges: List[ExchangeConfig]
-
-    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
-    datasets: DatasetsConfig = Field(default_factory=DatasetsConfig)
-    storage: StorageConfig = Field(default_factory=StorageConfig)
-
-    max_concurrent: int = Field(default=6, ge=1, le=50)
-
-    @model_validator(mode="before")
-    @classmethod
-    def parse_exchanges_dict(cls, values: dict) -> dict:
-        raw = values.get("exchanges", {})
-
-        if isinstance(raw, dict):
-            values["exchanges"] = [
-                {"name": name, **cfg}
-                for name, cfg in raw.items()
-                if cfg.get("enabled", True)
-            ]
-
-        return values
-
-    @model_validator(mode="after")
-    def validate_exchanges(self) -> "AppConfig":
-        if not self.exchanges:
-            raise ValueError(
-                "No enabled exchanges found in configuration"
-            )
-        return self
-
-    @model_validator(mode="after")
-    def validate_datasets(self) -> "AppConfig":
-        if not self.datasets.any_active:
-            warnings.warn(
-                "No datasets are active in configuration",
-                UserWarning,
-                stacklevel=2,
-            )
-        return self
-
-    # ----------------------------------------------------------
-    # Convenience properties
-    # ----------------------------------------------------------
-
-    @property
-    def enabled_exchanges(self) -> List[ExchangeConfig]:
-        return self.exchanges
-
-    @property
-    def exchange_names(self) -> List[str]:
-        return [e.name.value for e in self.exchanges]
-
-    def get_exchange(self, name: str) -> Optional[ExchangeConfig]:
-        for exc in self.exchanges:
-            if exc.name.value == name.lower():
-                return exc
-        return None
+__all__ = [
+    "AppConfig",
+    "ExchangeConfig",
+    "MarketsConfig",
+    "MarketConfig",
+    "PipelineConfig",
+    "HistoricalConfig",
+    "RealtimeConfig",
+    "RetryPolicy",
+    "DatasetsConfig",
+    "StorageConfig",
+    "SupportedExchange",
+    "DERIVATIVE_DATASET_KEYS",
+    "EXCHANGE_TASK_TIMEOUT",
+    "PIPELINE_TASK_TIMEOUT",
+    "CONFIG_PATH",
+    "_EXCHANGES_WITH_PASSPHRASE",
+]

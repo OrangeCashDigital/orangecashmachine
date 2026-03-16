@@ -1,87 +1,113 @@
 # ==========================================================
 # OrangeCashMachine – Market Data Infrastructure
-# Docker Compose Configuration (Profesional)
+# Docker Compose Configuration
+#
+# Arquitectura de servicios:
+#   prefect-ui   → Servidor de orquestación (arranca primero)
+#   market-data  → Pipeline de ingestión (espera a prefect-ui)
 #
 # Principios aplicados:
-# - KISS: configuración simple y clara
-# - DRY: paths y variables reutilizables
-# - SafeOps: control de reinicios y logs
-# - Observability: logging consistente y persistente
-# - Extensibility: preparado para más servicios (research, backtesting)
+#   KISS     – configuración mínima y explícita
+#   DRY      – variables de entorno y paths sin repetición
+#   SafeOps  – healthcheck, restart policies y logs acotados
+#   SRP      – cada servicio tiene una responsabilidad única
 # ==========================================================
 
+# ----------------------------------------------------------
+# Variables reutilizables (DRY)
+# ----------------------------------------------------------
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-prefect-api-url: &prefect-api-url
+  PREFECT_API_URL: http://prefect-ui:4201/api
+
+# ==========================================================
+# Services
+# ==========================================================
 services:
 
-  # =======================================================
-  # Market Data App
-  # =======================================================
+  # --------------------------------------------------------
+  # prefect-ui
+  # Servidor Prefect – orquestación y UI de flujos.
+  # Debe estar healthy antes de que market-data arranque.
+  # --------------------------------------------------------
+  prefect-ui:
+    image: prefecthq/prefect:2.19.5-python3.11
+    container_name: ocm_prefect_ui
+
+    ports:
+      - "4200:4200"   # UI dashboard
+      - "4201:4201"   # API REST
+
+    environment:
+      PREFECT_API_URL: http://0.0.0.0:4201/api
+      PREFECT_SERVER_DATABASE_CONNECTION_URL: sqlite+aiosqlite:////prefect/prefect.db
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      - prefect_data:/prefect   # DB SQLite persistente
+      - ./logs:/app/logs        # logs compartidos
+
+    command: prefect server start --host 0.0.0.0 --port 4201
+
+    # SafeOps: market-data espera este healthcheck antes de arrancar
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:4201/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+    restart: unless-stopped
+    logging: *default-logging
+
+  # --------------------------------------------------------
+  # market-data
+  # Pipeline de ingestión 24/7 de datos de mercado.
+  # Se ejecuta una sola vez por invocación (restart: "no").
+  # En producción, un scheduler externo (cron, Prefect deploy)
+  # lo invoca periódicamente.
+  # --------------------------------------------------------
   market-data:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ocm_market_data
 
-    # -------------------- Environment ---------------------
+    # SafeOps: no arranca hasta que prefect-ui esté healthy
+    depends_on:
+      prefect-ui:
+        condition: service_healthy
+
     environment:
+      <<: *prefect-api-url
       OCM_CONFIG_PATH: /app/config/settings.yaml
       PYTHONUNBUFFERED: "1"
 
-    # ---------------------- Volumes -----------------------
     volumes:
-      - ./config:/app/config:ro           # configuración
-      - ./logs:/app/logs                  # logs persistentes
-      - ./data_platform:/app/data_platform  # data lake
+      - ./config:/app/config:ro             # YAML de config (read-only)
+      - ./logs:/app/logs                    # logs persistentes
+      - ./data_platform:/app/data_platform  # Data Lake
 
-    # ------------------- Restart Policy -------------------
-    restart: "unless-stopped"
-
-    # ---------------------- Logging -----------------------
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-    # ------------------ Working Directory -----------------
     working_dir: /app
 
-    # --------------------- Command -----------------------
-    command: >
-      python -m market_data.orchestration.entrypoint
+    command: python -m market_data.orchestration.entrypoint
 
-  # =======================================================
-  # Prefect UI / Orion (Opcional, para visualizar flujos)
-  # =======================================================
-  prefect-ui:
-    image: prefecthq/prefect:2.19.5-python3.11
-    container_name: ocm_prefect_ui
-
-    ports:
-      - "4200:4200"  # UI
-      - "4201:4201"  # API
-
-    environment:
-      PREFECT_API_URL: http://localhost:4201
-      PREFECT_SERVER_DATABASE_CONNECTION_URL: sqlite:///prefect.db
-      PYTHONUNBUFFERED: "1"
-
-    volumes:
-      - ./logs:/app/logs
-      - ./data_platform:/app/data_platform
-
-    command: prefect server start --host 0.0.0.0 --port 4201
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    # restart: "no" — el pipeline corre una vez y termina.
+    # El orquestador externo decide cuándo relanzarlo.
+    restart: "no"
+    logging: *default-logging
 
 # ==========================================================
-# Notas de diseño:
-# - Cada servicio es independiente y puede reiniciarse solo.
-# - Market Data y Prefect UI separados: KISS y DRY.
-# - Prefect UI preparado para múltiples flujos de Market Data, Research o Backtesting.
-# - SafeOps: logging limitado y persistente, reinicio controlado.
-# - Extensible: agregar otros servicios es directo.
+# Volumes
 # ==========================================================
+volumes:
+  prefect_data:
+    driver: local
+    # Persiste la base de datos SQLite de Prefect entre reinicios.
+    # Sin esto, cada docker compose up pierde el historial de flows.
