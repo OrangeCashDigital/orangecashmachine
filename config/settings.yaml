@@ -17,7 +17,7 @@ pipeline:
 
   historical:
     start_date: "2017-01-01T00:00:00Z"
-    fetch_all_history: false
+    fetch_all_history: true
     max_concurrent_tasks: 6
 
     retry_policy:
