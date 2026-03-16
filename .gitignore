@@ -18,6 +18,12 @@ user_data/
 backtest_results/
 strategy_results/
 
+# Datos históricos y parquet del trading
+data_platform/data_lake/**/*.parquet
+
+# Prefect temporal
+.prefect/
+
 # Archivos del sistema
 .DS_Store
 Thumbs.db
