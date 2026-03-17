@@ -48,11 +48,11 @@ async def run_historical_pipeline(
 
     hist          = config.pipeline.historical
     exchange_name = exchange_cfg.name.value
-    max_workers   = probe.max_concurrent
+    max_concurrency = probe.max_concurrent
 
     log.info(
         "Historical pipeline starting | exchange=%s symbols=%s timeframes=%s workers=%s",
-        exchange_name, len(exchange_cfg.all_symbols), len(hist.timeframes), max_workers,
+        exchange_name, len(exchange_cfg.all_symbols), len(hist.timeframes), max_concurrency,
     )
 
     from services.exchange.ccxt_adapter import CCXTAdapter
@@ -63,7 +63,7 @@ async def run_historical_pipeline(
         symbols        =exchange_cfg.all_symbols,
         timeframes     =hist.timeframes,
         start_date     =hist.start_date,
-        max_workers    =max_workers,
+        max_concurrency=max_concurrency,
         exchange_client=exchange_client,
     )
     summary = await pipeline.run()

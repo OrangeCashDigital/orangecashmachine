@@ -1,105 +1,135 @@
 """
-historical_pipeline_async.py
-============================
+market_data/batch/flows/historical_pipeline.py
+===============================================
 
 Pipeline profesional de ingestión OHLCV histórico.
 
 Responsabilidades
 -----------------
-• Orquestar descarga histórica incremental
-• Controlar concurrencia (semáforo único y centralizado)
+• Orquestar descarga histórica incremental por par (símbolo × timeframe)
+• Controlar backpressure mediante semáforo acotado
 • Persistir datos validados en el Data Lake
+• Emitir métricas de observabilidad (throughput, latencia, progreso)
+• Garantizar shutdown limpio ante cancelación o error
 
 Principios aplicados
 --------------------
-• SOLID  – cada clase/función tiene responsabilidad única
-• DRY    – lógica de concurrencia y logging centralizada
-• KISS   – sin abstracciones innecesarias
-• SafeOps – fallos explícitos, cierre seguro de recursos,
-            tracking de resultados por par
+SOLID   – SRP: cada clase tiene una única responsabilidad
+DRY     – lógica de concurrencia y logging centralizada
+KISS    – sin abstracciones innecesarias
+SafeOps – fallos aislados por par, cierre seguro de recursos,
+          backpressure explícito, cancelación limpia
 """
 
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
+import pandas as pd
 import yaml
 from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
-from services.exchange.ccxt_adapter import CCXTAdapter
 from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
+from services.exchange.ccxt_adapter import CCXTAdapter
 
 
 # ==========================================================
-# Constants
+# Constantes
 # ==========================================================
 
-DEFAULT_MAX_WORKERS: int = 6
-DEFAULT_CONFIG_PATH: Path = Path("config/settings.yaml")
-LOG_ROTATION:   str = "1 day"
-LOG_RETENTION:  str = "14 days"
-LOG_LEVEL:      str = "INFO"
+DEFAULT_MAX_CONCURRENCY: int  = 6
+DEFAULT_CONFIG_PATH:     Path = Path("config/settings.yaml")
+LOG_ROTATION:            str  = "1 day"
+LOG_RETENTION:           str  = "14 days"
+LOG_LEVEL:               str  = "INFO"
+
+_TRANSIENT_ERRORS: tuple = (TimeoutError, ConnectionError, OSError)
 
 
 # ==========================================================
-# Result Tracking
+# Tracking de resultados
 # ==========================================================
 
 @dataclass
 class PairResult:
     """
-    Resultado del procesamiento de un par símbolo/timeframe.
+    Resultado inmutable del procesamiento de un par símbolo/timeframe.
 
-    Permite al pipeline agregar métricas sin depender de estado
-    mutable compartido entre coroutines (SafeOps).
+    Diseñado para ser creado por coroutines y agregado sin estado
+    compartido mutable (SafeOps).
     """
-    symbol:    str
-    timeframe: str
-    rows:      int  = 0
-    skipped:   bool = False
-    error:     str  = ""
+    symbol:      str
+    timeframe:   str
+    rows:        int  = 0
+    skipped:     bool = False
+    error:       str  = ""
+    duration_ms: int  = 0
 
     @property
     def success(self) -> bool:
         return not self.error and not self.skipped
 
+    @property
+    def is_transient_error(self) -> bool:
+        return any(t.__name__ in self.error for t in _TRANSIENT_ERRORS)
+
     def __str__(self) -> str:
         if self.error:
-            return f"{self.symbol}/{self.timeframe} ERROR: {self.error}"
+            tag = "TRANSIENT" if self.is_transient_error else "FATAL"
+            return f"{self.symbol}/{self.timeframe} ERROR[{tag}]: {self.error}"
         if self.skipped:
-            return f"{self.symbol}/{self.timeframe} SKIPPED (no new data)"
-        return f"{self.symbol}/{self.timeframe} OK rows={self.rows}"
+            return f"{self.symbol}/{self.timeframe} SKIPPED (sin datos nuevos)"
+        return f"{self.symbol}/{self.timeframe} OK rows={self.rows} duration={self.duration_ms}ms"
 
 
 @dataclass
 class PipelineSummary:
-    """Agrega los resultados de todos los pares procesados."""
-    results: List[PairResult] = field(default_factory=list)
+    """
+    Agrega y expone métricas del pipeline completo.
+
+    Métricas de observabilidad
+    --------------------------
+    • total / succeeded / skipped / failed
+    • total_rows         — volumen ingestado
+    • throughput         — filas por segundo
+    • duration_ms        — duración total
+    """
+    results:     List[PairResult] = field(default_factory=list)
+    duration_ms: int              = 0
 
     @property
-    def total(self)    -> int: return len(self.results)
+    def total(self)     -> int: return len(self.results)
 
     @property
     def succeeded(self) -> int: return sum(1 for r in self.results if r.success)
 
     @property
-    def skipped(self)  -> int: return sum(1 for r in self.results if r.skipped)
+    def skipped(self)   -> int: return sum(1 for r in self.results if r.skipped)
 
     @property
-    def failed(self)   -> int: return sum(1 for r in self.results if r.error)
+    def failed(self)    -> int: return sum(1 for r in self.results if r.error)
 
     @property
     def total_rows(self) -> int: return sum(r.rows for r in self.results)
 
+    @property
+    def throughput_rows_per_sec(self) -> float:
+        if not self.duration_ms:
+            return 0.0
+        return round(self.total_rows / (self.duration_ms / 1000), 2)
+
     def log(self) -> None:
         logger.info(
-            "Pipeline summary | total={} ok={} skipped={} failed={} rows={}",
-            self.total, self.succeeded, self.skipped, self.failed, self.total_rows,
+            "Pipeline summary | total={} ok={} skipped={} failed={} "
+            "rows={} throughput={} rows/s duration={}ms",
+            self.total, self.succeeded, self.skipped, self.failed,
+            self.total_rows, self.throughput_rows_per_sec, self.duration_ms,
         )
         for r in self.results:
             if r.error:
@@ -111,58 +141,62 @@ class PipelineSummary:
 
 
 # ==========================================================
-# Config Loader
+# Carga de configuración standalone
 # ==========================================================
 
 def load_config(config_file: Path) -> Dict:
     """
-    Carga y devuelve la configuración YAML del pipeline.
+    Carga configuración YAML con validaciones tempranas (fail-fast).
 
     Raises
     ------
-    FileNotFoundError
-        Si el archivo no existe.
-    ValueError
-        Si el YAML está vacío o malformado.
+    FileNotFoundError  – archivo no encontrado
+    ValueError         – YAML vacío o estructura inválida
+    yaml.YAMLError     – YAML malformado
     """
     if not config_file.exists():
-        raise FileNotFoundError(f"Config not found → {config_file}")
+        raise FileNotFoundError(f"Archivo de configuración no encontrado: {config_file}")
+    if not config_file.is_file():
+        raise ValueError(f"La ruta no es un archivo: {config_file}")
 
     try:
-        with open(config_file, "r", encoding="utf-8") as fh:
-            config = yaml.safe_load(fh)
+        data = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
-        logger.critical("Failed parsing YAML config | file={} error={}", config_file, exc)
+        logger.critical("Error al parsear YAML | file={} error={}", config_file, exc)
         raise
 
-    if not config or not isinstance(config, dict):
-        raise ValueError(f"Config is empty or invalid → {config_file}")
+    if not isinstance(data, dict):
+        raise ValueError(f"La raíz del YAML debe ser un dict: {config_file}")
 
-    logger.info("Config loaded | file={}", config_file)
-    return config
+    logger.info("Configuración cargada | file={}", config_file)
+    return data
 
 
 # ==========================================================
-# Historical Pipeline
+# Pipeline principal
 # ==========================================================
 
 class HistoricalPipelineAsync:
     """
     Pipeline asíncrono de ingestión OHLCV histórica.
 
-    Responsabilidades
-    -----------------
-    • Iterar sobre todos los pares (símbolo × timeframe)
-    • Controlar concurrencia con un único semáforo (no duplicado en fetcher)
-    • Delegar descarga al fetcher y persistencia al storage
-    • Devolver un PipelineSummary con el resultado de cada par
+    Arquitectura de concurrencia
+    ----------------------------
+    • Semáforo acotado controla backpressure (max_concurrency activas).
+    • El fetcher NO tiene semáforo propio → evita doble throttling.
+    • asyncio.gather con return_exceptions=False propaga CancelledError
+      limpiamente sin suprimir cancelaciones del sistema.
 
-    Concurrencia
-    ------------
-    El semáforo vive exclusivamente aquí. El HistoricalFetcherAsync
-    debe ser construido con max_concurrent=None (sin límite propio)
-    para evitar doble throttling. Si el fetcher tiene su propio semáforo,
-    pasa max_concurrent=max_workers para que ambos sean coherentes.
+    Shutdown limpio
+    ---------------
+    El bloque finally en run() garantiza cierre del fetcher ante
+    CancelledError, TimeoutError o cualquier excepción inesperada.
+
+    Observabilidad
+    --------------
+    • Progreso por par: índice, rows y duración individual.
+    • Métricas agregadas: throughput, duración total del pipeline.
+    • Clasificación de errores: transient vs fatal.
     """
 
     def __init__(
@@ -170,247 +204,208 @@ class HistoricalPipelineAsync:
         symbols:         List[str],
         timeframes:      List[str],
         start_date:      str,
-        max_workers:     int = DEFAULT_MAX_WORKERS,
-        storage:         HistoricalStorage | None = None,
-        exchange_client: CCXTAdapter | None = None,
+        max_concurrency: int                       = DEFAULT_MAX_CONCURRENCY,
+        storage:         Optional[HistoricalStorage] = None,
+        exchange_client: Optional[CCXTAdapter]       = None,
     ) -> None:
-        _validate_pipeline_inputs(symbols, timeframes, start_date)
-
-        self.symbols    = symbols
-        self.timeframes = timeframes
-        self.start_date = _parse_start_date(start_date)
-        self.max_workers = max_workers
-
-        self._storage = storage or HistoricalStorage()
-        self._semaphore = asyncio.Semaphore(max_workers)
+        _validate_inputs(symbols, timeframes, start_date)
 
         if exchange_client is None:
             raise ValueError(
-                "exchange_client is required by HistoricalPipelineAsync. "
-                "Pass a CCXTAdapter configured for the target exchange."
+                "exchange_client es obligatorio. "
+                "HistoricalPipelineAsync no decide qué exchange usar — "
+                "esa responsabilidad pertenece al orchestrator (DIP)."
             )
 
+        self.symbols         = symbols
+        self.timeframes      = timeframes
+        self.start_date      = _parse_start_date(start_date)
+        self.max_concurrency = max_concurrency
+
+        self._storage   = storage or HistoricalStorage()
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+
         self._fetcher = HistoricalFetcherAsync(
-            storage=self._storage,
-            transformer=OHLCVTransformer(),
-            exchange_client=exchange_client,
+            storage         = self._storage,
+            transformer     = OHLCVTransformer(),
+            exchange_client = exchange_client,
         )
 
     # ----------------------------------------------------------
-    # Public API
+    # API pública
     # ----------------------------------------------------------
 
     async def run(self) -> PipelineSummary:
         """
-        Ejecuta el pipeline completo y devuelve el resumen de resultados.
+        Ejecuta el pipeline completo.
 
-        Garantiza el cierre del fetcher incluso si alguna tarea falla
-        o es cancelada (SafeOps).
+        Flujo
+        -----
+        1. Construir lista de pares (símbolo × timeframe)
+        2. Lanzar coroutines con backpressure via semáforo
+        3. Agregar resultados en PipelineSummary con métricas
+        4. Cerrar fetcher en finally (shutdown limpio)
+
+        Returns
+        -------
+        PipelineSummary con métricas completas.
         """
-        pairs = [
-            (symbol, timeframe)
-            for symbol in self.symbols
-            for timeframe in self.timeframes
-        ]
+        pairs       = [(s, tf) for s in self.symbols for tf in self.timeframes]
+        total_pairs = len(pairs)
 
         logger.info(
-            "Historical pipeline starting | symbols={} timeframes={} pairs={} workers={}",
-            len(self.symbols), len(self.timeframes), len(pairs), self.max_workers,
+            "Pipeline iniciando | símbolos={} timeframes={} pares={} concurrencia_max={}",
+            len(self.symbols), len(self.timeframes), total_pairs, self.max_concurrency,
         )
+
+        pipeline_start = time.monotonic()
 
         try:
             results: List[PairResult] = await asyncio.gather(
-                *[self._process_pair(symbol, tf) for symbol, tf in pairs],
-                return_exceptions=False,   # CancelledError se propaga limpiamente
+                *[
+                    self._process_pair(symbol, tf, idx, total_pairs)
+                    for idx, (symbol, tf) in enumerate(pairs, 1)
+                ],
+                return_exceptions=False,
             )
+        except asyncio.CancelledError:
+            logger.warning("Pipeline cancelado externamente — cerrando recursos...")
+            raise
         finally:
             await self._fetcher.close()
 
-        summary = PipelineSummary(results=list(results))
+        duration_ms = int((time.monotonic() - pipeline_start) * 1000)
+        summary     = PipelineSummary(results=list(results), duration_ms=duration_ms)
         summary.log()
 
         if summary.failed:
             logger.warning(
-                "Pipeline finished with errors | failed={}/{}",
+                "Pipeline con errores | fallidos={}/{} transient={}",
                 summary.failed, summary.total,
+                sum(1 for r in summary.results if r.is_transient_error),
             )
         else:
             logger.success(
-                "Historical pipeline completed | rows={} pairs={}",
+                "Pipeline completado | rows={} pares={} throughput={} rows/s duration={}ms",
                 summary.total_rows, summary.total,
+                summary.throughput_rows_per_sec, duration_ms,
             )
 
         return summary
 
     # ----------------------------------------------------------
-    # Private
+    # Procesamiento de un par (privado)
     # ----------------------------------------------------------
 
-    async def _process_pair(self, symbol: str, timeframe: str) -> PairResult:
+    async def _process_pair(
+        self,
+        symbol:    str,
+        timeframe: str,
+        idx:       int,
+        total:     int,
+    ) -> PairResult:
         """
         Descarga y persiste un único par símbolo/timeframe.
 
-        Devuelve siempre un PairResult (nunca lanza excepciones al caller)
-        para que asyncio.gather pueda agregar todos los resultados
-        independientemente de los fallos individuales.
+        Aislamiento de errores
+        ----------------------
+        Siempre retorna PairResult — nunca propaga excepciones al gather,
+        excepto CancelledError que se re-eleva para respetar el shutdown.
 
-        La única excepción que se propaga es CancelledError (SafeOps:
-        no suprimir cancelaciones del sistema).
+        Observabilidad
+        --------------
+        Loggea progreso (idx/total), rows y duración por par.
         """
-        result = PairResult(symbol=symbol, timeframe=timeframe)
+        result     = PairResult(symbol=symbol, timeframe=timeframe)
+        pair_start = time.monotonic()
 
         async with self._semaphore:
             try:
-                logger.debug("Fetching | symbol={} timeframe={}", symbol, timeframe)
+                logger.debug(
+                    "Descargando [{}/{}] | symbol={} timeframe={}",
+                    idx, total, symbol, timeframe,
+                )
 
                 df = await self._fetcher.download_data(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    start_date=str(self.start_date.date()),
+                    symbol     = symbol,
+                    timeframe  = timeframe,
+                    start_date = str(self.start_date.date()),
                 )
 
                 if df is None or df.empty:
-                    result.skipped = True
-                    logger.debug("No new data | symbol={} timeframe={}", symbol, timeframe)
+                    result.skipped     = True
+                    result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+                    logger.debug(
+                        "Sin datos nuevos [{}/{}] | symbol={} timeframe={}",
+                        idx, total, symbol, timeframe,
+                    )
                     return result
 
                 self._storage.save_ohlcv(
-                    df=df,
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    mode="append",
+                    df        = df,
+                    symbol    = symbol,
+                    timeframe = timeframe,
+                    mode      = "append",
                 )
 
-                result.rows = len(df)
+                result.rows        = len(df)
+                result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+
                 logger.info(
-                    "Pair completed | symbol={} timeframe={} rows={}",
-                    symbol, timeframe, result.rows,
+                    "Par completado [{}/{}] | symbol={} timeframe={} rows={} duration={}ms",
+                    idx, total, symbol, timeframe, result.rows, result.duration_ms,
                 )
 
             except asyncio.CancelledError:
-                # SafeOps: cancelaciones del event loop nunca se suprimen
                 raise
 
             except Exception as exc:
-                result.error = str(exc)
+                result.error       = str(exc)
+                result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 logger.error(
-                    "Pair failed | symbol={} timeframe={} error={}",
-                    symbol, timeframe, exc,
+                    "Par fallido [{}/{}] | symbol={} timeframe={} error={} duration={}ms",
+                    idx, total, symbol, timeframe, exc, result.duration_ms,
                 )
 
         return result
 
 
 # ==========================================================
-# Private Input Validation Helpers
+# Validación de inputs
 # ==========================================================
 
-def _validate_pipeline_inputs(
+def _validate_inputs(
     symbols:    List[str],
     timeframes: List[str],
     start_date: str,
 ) -> None:
-    """
-    Valida los inputs del constructor en un único lugar (DRY).
-
-    Raises
-    ------
-    ValueError
-        Si cualquier input es inválido.
-    """
+    """Validación temprana fail-fast de inputs del constructor."""
     if not symbols:
-        raise ValueError("symbols list cannot be empty")
+        raise ValueError("La lista de símbolos no puede estar vacía.")
     if not timeframes:
-        raise ValueError("timeframes list cannot be empty")
+        raise ValueError("La lista de timeframes no puede estar vacía.")
     if not start_date or not start_date.strip():
-        raise ValueError("start_date must be provided and non-empty")
+        raise ValueError("start_date es obligatorio y no puede estar vacío.")
 
 
-def _parse_start_date(start_date: str) -> "pd.Timestamp":
+def _parse_start_date(start_date: str) -> pd.Timestamp:
     """
-    Parsea y valida start_date en el constructor (fail-fast).
+    Parsea y valida start_date (fail-fast).
 
-    Un formato inválido como '2024-13-01' fallaría silenciosamente
-    más adelante en el fetcher. Lo detectamos aquí.
-
-    Raises
-    ------
-    ValueError
-        Si el formato de fecha no es parseable.
+    Raises ValueError si el formato es inválido o la fecha está en el futuro.
     """
-    import pandas as pd
-
     try:
         ts = pd.Timestamp(start_date)
     except Exception:
         raise ValueError(
-            f"start_date has invalid format: '{start_date}'. "
-            "Expected ISO 8601, e.g. '2022-01-01'."
+            f"start_date tiene formato inválido: '{start_date}'. "
+            "Se esperaba ISO 8601, ej: '2022-01-01'."
         )
 
     if ts > pd.Timestamp.now(tz="UTC"):
         raise ValueError(
-            f"start_date '{start_date}' is in the future. "
-            "Historical pipeline requires a past date."
+            f"start_date '{start_date}' está en el futuro. "
+            "El pipeline histórico requiere una fecha pasada."
         )
 
     return ts
-
-
-# ==========================================================
-# Runner
-# ==========================================================
-
-async def run_historical_pipeline_async(
-    config_path: Path = DEFAULT_CONFIG_PATH,
-) -> PipelineSummary:
-    """
-    Entry point funcional del pipeline.
-
-    Acepta config_path como parámetro para facilitar testing
-    y ejecución desde otros módulos (main.py, Prefect, etc.)
-    sin depender de la ruta hardcodeada.
-    """
-    config = load_config(config_path)
-
-    # Extraer sección correcta del YAML (coherente con main.py)
-    pipeline_cfg  = config.get("pipeline", {}) or {}
-    historical_cfg = pipeline_cfg.get("historical", {}) or {}
-
-    symbols    = historical_cfg.get("symbols", [])
-    timeframes = historical_cfg.get("timeframes", [])
-    start_date = historical_cfg.get("start_date")
-    max_workers = config.get("max_concurrent", DEFAULT_MAX_WORKERS)
-
-    pipeline = HistoricalPipelineAsync(
-        symbols=symbols,
-        timeframes=timeframes,
-        start_date=start_date,
-        max_workers=max_workers,
-    )
-
-    return await pipeline.run()
-
-
-# ==========================================================
-# Entrypoint
-# ==========================================================
-
-if __name__ == "__main__":
-    import sys
-
-    logger.remove()   # elimina el handler por defecto antes de añadir los propios
-    logger.add(
-        sys.stderr,
-        level=LOG_LEVEL,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | {message}",
-    )
-    logger.add(
-        "logs/historical_pipeline_{time}.log",
-        rotation=LOG_ROTATION,
-        retention=LOG_RETENTION,
-        level=LOG_LEVEL,
-        encoding="utf-8",
-    )
-
-    asyncio.run(run_historical_pipeline_async())

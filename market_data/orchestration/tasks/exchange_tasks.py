@@ -40,7 +40,7 @@ from services.exchange.ccxt_adapter import CCXTAdapter
 _MAX_CLOCK_DRIFT_MS:  int = 5_000
 _FEE_FETCH_TIMEOUT:   int = 10
 _CLOCK_FETCH_TIMEOUT: int = 5
-_DATASET_PROBE_TIMEOUT: int = 5
+_DATASET_PROBE_TIMEOUT: int = 3
 
 _DATASET_CAPABILITY_MAP: Dict[str, str] = {
     "ohlcv":        "fetchOHLCV",
@@ -150,29 +150,26 @@ async def _detect_supported_datasets(
     log: Any,
 ) -> List[str]:
     """
-    Detecta datasets operativos del exchange.
+    Detecta datasets soportados via has{} de ccxt (sin prueba real).
 
-    Estrategia:
-    - Datasets en _PROBE_REQUIRED: prueba real con llamada mínima (limit=1)
-    - Resto: basta con que has{} declare soporte
-    SafeOps: excepciones individuales se loggean y se omite el dataset.
+    Estrategia deliberada
+    ---------------------
+    Las pruebas reales (fetch mínimo) causan timeouts impredecibles
+    en algunos exchanges — especialmente en conexiones con alta latencia.
+    has{} es suficientemente confiable para decidir qué pipelines lanzar.
+    Los pipelines mismos fallarán explícitamente si el dataset no funciona.
+
+    SafeOps: nunca lanza excepción al caller.
     """
     has: Dict[str, Any] = getattr(exchange, "has", {}) or {}
     supported: List[str] = []
 
     for dataset, method in _DATASET_CAPABILITY_MAP.items():
-        if not has.get(method, False):
-            continue
-        if dataset not in _PROBE_REQUIRED:
+        if has.get(method, False):
             supported.append(dataset)
-            continue
-        try:
-            coro = getattr(exchange, method)
-            await asyncio.wait_for(coro(symbol, limit=1), timeout=_DATASET_PROBE_TIMEOUT)
-            supported.append(dataset)
-        except Exception as exc:
-            log.debug("Dataset skipped | dataset=%s reason=%s", dataset, exc)
+            log.debug("Dataset disponible | dataset=%s method=%s", dataset, method)
 
+    log.info("Datasets detectados | exchange=%s datasets=%s", exchange.id, supported)
     return supported
 
 
@@ -299,7 +296,14 @@ async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
         server_time_ok, drift  = await _check_clock_sync(exchange, log)
 
         # --- Capacidades ---
-        supported_datasets = await _detect_supported_datasets(exchange, symbol, log)
+        try:
+            supported_datasets = await asyncio.wait_for(
+                _detect_supported_datasets(exchange, symbol, log),
+                timeout=15,
+            )
+        except asyncio.TimeoutError:
+            log.warning("Dataset detection timed out | name=%s — usando lista vacía", name)
+            supported_datasets = []
         available_markets  = _detect_available_markets(has)
 
         # --- Warnings ---
