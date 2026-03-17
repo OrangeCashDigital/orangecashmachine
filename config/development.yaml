@@ -1,0 +1,72 @@
+# ==============================================================================
+# OrangeCashMachine – Configuración de Desarrollo
+# ==============================================================================
+#
+# Este archivo sobrescribe la configuración base para entornos de desarrollo.
+# Se utiliza para pruebas locales y debugging.
+#
+# Se aplica automáticamente como:
+#
+#   base.yaml + development.yaml
+#
+# ==============================================================================
+
+environment:
+
+  name: development
+
+
+# ==============================================================================
+# PIPELINE
+# ==============================================================================
+
+pipeline:
+
+  historical:
+
+    # Reducir concurrencia para desarrollo local
+    max_concurrent_tasks: 2
+
+
+# ==============================================================================
+# OBSERVABILIDAD
+# ==============================================================================
+
+observability:
+
+  logging:
+
+    # Logging detallado para debugging
+    level: DEBUG
+
+
+# ==============================================================================
+# STORAGE
+# ==============================================================================
+
+storage:
+
+  data_lake:
+
+    # Ruta local para desarrollo
+    path: "data_platform/dev_data_lake"
+
+
+# ==============================================================================
+# INTEGRACIONES
+# ==============================================================================
+
+integrations:
+
+  redis:
+
+    enabled: false
+
+  kafka:
+
+    # En desarrollo normalmente no se usa Kafka
+    enabled: false
+
+  postgres:
+
+    enabled: false

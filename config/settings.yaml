@@ -1,23 +1,40 @@
-# ===============================================================
+# ======================================================================
 # OrangeCashMachine – Market Data Infrastructure Configuration
-# ===============================================================
+# ======================================================================
 #
-# Arquitectura:
-#   Exchange APIs → Data Acquisition → Data Platform → Research / Trading
+# Architecture
+# ----------------------------------------------------------------------
+# Exchange APIs → Data Acquisition → Data Platform → Research / Trading
 #
-# Principios: SOLID, KISS, DRY, SafeOps
-# Seguridad: nunca almacenar credenciales aquí — usar variables de entorno
-# Credenciales: definir en .env en la raíz del proyecto
-# ===============================================================
+# Design Principles
+# ----------------------------------------------------------------------
+# SOLID   → Modular and extensible components
+# KISS    → Simple and predictable configuration
+# DRY     → Avoid configuration duplication
+# SafeOps → Secure, observable and resilient operations
+#
+# Security Policy
+# ----------------------------------------------------------------------
+# - Never store credentials in this file
+# - Use environment variables (.env)
+# - Rotate API keys regularly
+#
+# ==================================================================
 
-# ===============================================================
-# PIPELINE
-# ===============================================================
+# ==================================================================
+# PIPELINE CONFIGURATION
+# ==================================================================
 pipeline:
 
+  # ------------------------------------------------------------------
+  # Historical Data Acquisition
+  # ------------------------------------------------------------------
   historical:
+
     start_date: "2017-01-01T00:00:00Z"
     fetch_all_history: true
+
+    # Auto-tuned concurrency based on system resources
     max_concurrent_tasks: 6
 
     retry_policy:
@@ -25,6 +42,7 @@ pipeline:
       backoff_factor: 2
       jitter: true
 
+    # Supported OHLCV timeframes
     timeframes:
       - 1m
       - 5m
@@ -33,92 +51,169 @@ pipeline:
       - 4h
       - 1d
 
+
+  # ------------------------------------------------------------------
+  # Real-time Streaming Configuration
+  # ------------------------------------------------------------------
   realtime:
+
     reconnect_delay_seconds: 5
     heartbeat_timeout_seconds: 30
+
+    # Periodic snapshot to guarantee state consistency
     snapshot_interval_seconds: 60
+
+    # Maximum buffer size for incoming streaming messages
     max_stream_buffer: 50000
 
-# ===============================================================
-# DATASETS
-# ===============================================================
-datasets:
-  # Core
-  ohlcv: true
-  trades: false       # pendiente de implementación
-  orderbook: false    # recomendado solo en realtime
+    # Backpressure policy
+    # reject → prevents memory overflow and protects pipeline stability
+    drop_policy: reject
 
-  # Derivatives
+
+# ==================================================================
+# DATASETS
+# ==================================================================
+datasets:
+
+  # ------------------------------------------------------------------
+  # Core Market Data
+  # ------------------------------------------------------------------
+  ohlcv: true
+  trades: false        # planned future implementation
+  orderbook: false     # recommended only for realtime ingestion
+
+
+  # ------------------------------------------------------------------
+  # Derivatives Market Data
+  # ------------------------------------------------------------------
   funding_rate: false
   open_interest: false
   liquidations: false
   mark_price: false
   index_price: false
 
-# ===============================================================
-# EXCHANGES
-# ===============================================================
+
+# ==================================================================
+# EXCHANGE CONFIGURATION
+# ==================================================================
 exchanges:
 
+  # ------------------------------------------------------------------
+  # BYBIT
+  # ------------------------------------------------------------------
   bybit:
+
     enabled: true
     enableRateLimit: true
+
+    # Prevent unexpected symbol expansion
+    auto_discover_symbols: false
+
     credentials:
       apiKey: ${BYBIT_API_KEY}
       secret: ${BYBIT_API_SECRET}
-      # password: no requerido por Bybit
+
     options:
       adjustForTimeDifference: true
+
     markets:
+
       spot:
         enabled: true
         symbols:
           - BTC/USDT
+
       futures:
         enabled: false
         defaultType: swap
         symbols:
           - BTC/USDT
 
+
+  # ------------------------------------------------------------------
+  # KUCOIN
+  # ------------------------------------------------------------------
   kucoin:
+
     enabled: true
     enableRateLimit: true
+
+    auto_discover_symbols: false
+
     credentials:
       apiKey: ${KUCOIN_API_KEY}
       secret: ${KUCOIN_API_SECRET}
-      password: ${KUCOIN_PASSPHRASE}   # requerido por KuCoin
+      password: ${KUCOIN_PASSPHRASE}
+
     options:
       adjustForTimeDifference: true
+
     markets:
+
       spot:
         enabled: true
         symbols:
           - BTC/USDT
+
       futures:
         enabled: false
         defaultType: swap
         symbols:
           - BTC/USDT
 
-# ===============================================================
-# STORAGE
-# ===============================================================
+
+# ==================================================================
+# STORAGE – DATA LAKE
+# ==================================================================
 storage:
+
+  # Root path for market data storage
   data_lake_path: "data_platform/data_lake"
+
   format: parquet
   compression: snappy
+
+  # Optimized partitioning for analytical workloads
   partitioning:
     - exchange
-    - market
     - symbol
-    - dataset
     - timeframe
     - year
     - month
 
-# ===============================================================
-# INTEGRATIONS (todas deshabilitadas por defecto — opt-in)
-# ===============================================================
+
+# ==================================================================
+# FEATURE STORE
+# ==================================================================
+# Storage for derived datasets used in research and ML pipelines
+feature_store:
+
+  enabled: true
+  path: "data_platform/features"
+  format: parquet
+
+
+# ==================================================================
+# OBSERVABILITY
+# ==================================================================
+observability:
+
+  logging:
+    level: INFO
+    format: json
+
+  metrics:
+    enabled: true
+    exporter: prometheus
+
+  tracing:
+    enabled: false
+
+
+# ==================================================================
+# OPTIONAL INFRASTRUCTURE INTEGRATIONS (OPT-IN)
+# ==================================================================
 integrations:
 
   redis:

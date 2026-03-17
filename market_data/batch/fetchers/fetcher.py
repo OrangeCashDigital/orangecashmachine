@@ -43,7 +43,7 @@ from loguru import logger
 
 from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
-from market_data.connectors.exchange_client_async import ExchangeClientAsync
+from services.exchange.ccxt_adapter import CCXTAdapter
 from core.config.schema import AppConfig
 
 
@@ -129,16 +129,20 @@ class HistoricalFetcherAsync:
     def __init__(
         self,
         config: Optional[AppConfig] = None,
-        exchange_client: Optional[ExchangeClientAsync] = None,
+        exchange_client: Optional[CCXTAdapter] = None,
         storage: Optional[HistoricalStorage] = None,
         transformer: Optional[OHLCVTransformer] = None,
     ) -> None:
 
         self._config = config
 
-        self._exchange_client = exchange_client or ExchangeClientAsync(
-            app_config=config,
-        )
+        if exchange_client is None:
+            raise ValueError(
+                "exchange_client is required. "
+                "HistoricalFetcherAsync never decides which exchange to use — "
+                "that responsibility belongs to the pipeline/orchestrator (DIP)."
+            )
+        self._exchange_client = exchange_client
 
         self._storage = storage or HistoricalStorage()
 
@@ -263,9 +267,11 @@ class HistoricalFetcherAsync:
             if last_seen_ts == last_ts:
 
                 logger.warning(
-                    "Duplicate timestamp detected | symbol={} timeframe={}",
+                    "Duplicate timestamp detected | symbol={} timeframe={} since_ts={} last_ts={}",
                     symbol,
                     timeframe,
+                    since_ts,
+                    last_ts,
                 )
 
                 break
@@ -323,9 +329,7 @@ class HistoricalFetcherAsync:
                 f"First download requires start_date for {symbol}/{timeframe}"
             )
 
-        client = await self._exchange_client.get_client()
-
-        return client.parse8601(start_date)
+        return self._exchange_client.parse8601(start_date)
 
     # ----------------------------------------------------------
     # Chunk Fetch
@@ -341,17 +345,14 @@ class HistoricalFetcherAsync:
 
         last_exc: Optional[Exception] = None
 
-        client = await self._exchange_client.get_client()
-
         for attempt in range(1, MAX_RETRIES + 1):
 
             try:
 
-                data = await client.fetch_ohlcv(
-                    symbol,
-                    timeframe,
-                    since=since,
-                    limit=limit,
+                if self._circuit_breaker.current_state == "open":
+                    raise pybreaker.CircuitBreakerError("Circuit breaker is OPEN")
+                data = await self._exchange_client.fetch_ohlcv(
+                    symbol, timeframe, since=since, limit=limit,
                 )
 
                 return data

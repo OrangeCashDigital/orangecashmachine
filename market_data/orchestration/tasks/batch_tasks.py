@@ -55,13 +55,9 @@ async def run_historical_pipeline(
         exchange_name, len(exchange_cfg.all_symbols), len(hist.timeframes), max_workers,
     )
 
-    from market_data.connectors.exchange_client_async import ExchangeClientAsync
+    from services.exchange.ccxt_adapter import CCXTAdapter
 
-    exchange_client = ExchangeClientAsync(
-        api_key    =exchange_cfg.api_key.get_secret_value() or None,
-        api_secret =exchange_cfg.api_secret.get_secret_value() or None,
-        exchange_id=exchange_cfg.name.value,
-    )
+    exchange_client = CCXTAdapter(config=exchange_cfg)
 
     pipeline = HistoricalPipelineAsync(
         symbols        =exchange_cfg.all_symbols,

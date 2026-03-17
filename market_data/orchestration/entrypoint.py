@@ -1,20 +1,27 @@
 """
 orchestration/entrypoint.py
-============================
+===========================
 
-Responsabilidad única
----------------------
-Configurar logging local (Loguru) y lanzar el flow de ingestión.
-Es el único archivo del sistema con bloque if __name__ == "__main__".
+Entrypoint operativo del sistema OrangeCashMachine.
 
-Principios aplicados
---------------------
-• SOLID  – responsabilidad única; no contiene lógica de negocio
-• KISS   – sin abstracciones innecesarias sobre asyncio o Prefect
-• DRY    – setup_logging() centraliza toda la configuración de logs
-• SafeOps – get_run_logger() nunca se llama fuera de contexto Prefect,
-            sys.exit(1) en fallo garantiza código de salida correcto,
-            logs de Prefect integrados via logging stdlib sin PrefectHandler
+Responsabilidad
+---------------
+Configurar el sistema de logging y lanzar el flow principal
+de ingestión de datos de mercado.
+
+Este archivo es el único punto del sistema que contiene
+un bloque `if __name__ == "__main__"`.
+
+Principios de ingeniería
+------------------------
+SOLID
+    SRP – solo arranque del sistema
+KISS
+    sin abstracciones innecesarias
+DRY
+    configuración de logging centralizada
+SafeOps
+    manejo explícito de errores y códigos de salida
 """
 
 from __future__ import annotations
@@ -31,19 +38,21 @@ from market_data.orchestration.flows.batch_flow import market_data_flow
 
 
 # ==========================================================
-# Constants
+# CONSTANTS
 # ==========================================================
 
 DEFAULT_CONFIG_PATH: Path = Path("config/settings.yaml")
-LOG_DIR:             Path = Path("logs")
 
-_LOG_FORMAT_CONSOLE: str = (
+LOG_DIR: Path = Path("logs")
+
+_LOG_FORMAT_CONSOLE = (
     "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
     "<level>{level:<8}</level> | "
     "<cyan>{name}</cyan>:<cyan>{line}</cyan> | "
     "{message}"
 )
-_LOG_FORMAT_FILE: str = (
+
+_LOG_FORMAT_FILE = (
     "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{line} | {message}"
 )
 
@@ -52,187 +61,208 @@ _LOG_FORMAT_FILE: str = (
 # Loguru ↔ stdlib logging bridge
 # ==========================================================
 
-class _InterceptHandler(logging.Handler):
+class InterceptHandler(logging.Handler):
     """
-    Redirige logs de stdlib logging (incluido Prefect) a Loguru.
+    Redirige logs del módulo `logging` hacia Loguru.
 
-    Prefect usa stdlib logging internamente. Este handler intercepta
-    todos los loggers de stdlib y los envía a Loguru, unificando
-    el output en un único sistema de logging.
+    Librerías externas (Prefect, CCXT, Pandas, etc.)
+    usan `logging`. Este handler intercepta esos logs
+    y los redirige al logger principal de Loguru.
 
-    Referencia
-    ----------
-    https://loguru.readthedocs.io/en/stable/overview.html#entirely-compatible-with-standard-logging
+    Referencia:
+    https://loguru.readthedocs.io
     """
 
     def emit(self, record: logging.LogRecord) -> None:
+
         try:
             level = logger.level(record.levelname).name
         except ValueError:
             level = str(record.levelno)
 
-        # Subir en el call stack para encontrar el origen real del log
-        frame, depth = logging.currentframe(), 0
-        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+        frame = logging.currentframe()
+        depth = 2
+
+        while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
 
-        logger.opt(depth=depth, exception=record.exc_info).log(
-            level, record.getMessage()
-        )
+        logger.opt(
+            depth=depth,
+            exception=record.exc_info,
+        ).log(level, record.getMessage())
 
 
 # ==========================================================
-# Logging Setup
+# Logging setup
 # ==========================================================
 
 def setup_logging(
-    debug:   bool           = False,
+    debug: bool = False,
     log_dir: Optional[Path] = LOG_DIR,
 ) -> None:
     """
-    Configura Loguru para consola y archivo rotativo.
+    Configura Loguru como sistema global de logging.
 
-    Integra stdlib logging (y por tanto los logs de Prefect)
-    con Loguru via _InterceptHandler, sin usar PrefectHandler
-    que requiere contexto de ejecución activo.
+    Incluye:
+    - logs en consola con colores
+    - logs rotativos en archivo
+    - interceptación de logging estándar
 
     Parameters
     ----------
     debug : bool
-        Nivel DEBUG si True, INFO si False.
-    log_dir : Path, optional
-        Carpeta de logs rotativos. Si None, solo loguea en consola.
+        Activa nivel DEBUG.
+    log_dir : Path | None
+        Directorio de logs rotativos.
     """
+
     level = "DEBUG" if debug else "INFO"
 
-    # 1. Limpiar handlers previos de Loguru
     logger.remove()
 
-    # 2. Consola con colores y traceback enriquecido
     logger.add(
         sys.stderr,
         level=level,
         format=_LOG_FORMAT_CONSOLE,
         backtrace=True,
-        diagnose=debug,   # diagnose=True solo en debug (expone locals)
+        diagnose=debug,
         colorize=True,
     )
 
-    # 3. Archivo rotativo (opcional)
     if log_dir:
+
         log_dir.mkdir(parents=True, exist_ok=True)
+
         logger.add(
             log_dir / "market_data_{time:YYYY-MM-DD}.log",
             rotation="1 day",
             retention="14 days",
+            compression="gz",
             level=level,
             format=_LOG_FORMAT_FILE,
             encoding="utf-8",
             backtrace=True,
-            diagnose=False,   # nunca exponer locals en archivos de log
-            compression="gz",
+            diagnose=False,
         )
 
-    # 4. Interceptar stdlib logging → Loguru
-    #    Cubre: prefect, uvicorn, ccxt, pybreaker, pandas, etc.
-    intercept = _InterceptHandler()
-    logging.basicConfig(handlers=[intercept], level=0, force=True)
+    intercept = InterceptHandler()
 
-    # Asegurar que los loggers de Prefect se propagan al root logger
+    logging.basicConfig(
+        handlers=[intercept],
+        level=0,
+        force=True,
+    )
+
     for name in ("prefect", "prefect.flow_runs", "prefect.task_runs"):
+
         prefect_logger = logging.getLogger(name)
-        prefect_logger.handlers  = [intercept]
+
+        prefect_logger.handlers = [intercept]
+
         prefect_logger.propagate = False
 
     logger.debug("Logging configured | level={} log_dir={}", level, log_dir)
 
 
 # ==========================================================
-# Flow Runner
+# Flow runner
 # ==========================================================
 
 async def _run_flow(config_path: Path) -> None:
     """
-    Ejecuta market_data_flow de forma asíncrona.
+    Ejecuta el flow principal de ingestión.
 
-    No usa get_run_logger() — ese método solo es válido dentro
-    de un @flow o @task activo. Aquí usamos loguru directamente.
-
-    Raises
-    ------
-    Exception
-        Re-lanza cualquier excepción del flow para que run()
-        pueda capturarla y llamar sys.exit(1).
+    Parameters
+    ----------
+    config_path : Path
+        Ruta al archivo de configuración.
     """
-    logger.info("Launching market_data_flow | config_path={}", config_path)
+
+    logger.info(
+        "Launching market_data_flow | config_path={}",
+        config_path,
+    )
 
     try:
+
         await market_data_flow(config_path=config_path)
+
     except Exception as exc:
-        logger.exception("market_data_flow failed | error={}", exc)
+
+        logger.exception(
+            "market_data_flow failed | error={}",
+            exc,
+        )
+
         raise
 
 
 # ==========================================================
-# Public Entrypoint
+# Public entrypoint
 # ==========================================================
 
 def run(
-    debug:       bool                    = False,
-    config_path: Optional[Path | str]    = None,
-    log_dir:     Optional[Path]          = LOG_DIR,
+    debug: bool = False,
+    config_path: Optional[str | Path] = None,
+    log_dir: Optional[Path] = LOG_DIR,
 ) -> None:
     """
-    Configura el sistema y lanza el flow de ingestión.
+    Arranca el sistema OrangeCashMachine.
 
-    Diseñado para ser importable desde otros módulos (tests,
-    scripts de CI, schedulers externos) sin efectos secundarios
-    en el import — setup_logging() solo se llama al invocar run().
+    Configura logging y ejecuta el flow principal.
 
     Parameters
     ----------
     debug : bool
-        Activa logging DEBUG y diagnose de Loguru.
-    config_path : Path | str, optional
-        Ruta al settings.yaml. Si None, usa DEFAULT_CONFIG_PATH.
-    log_dir : Path, optional
-        Carpeta de logs rotativos. Si None, solo consola.
-
-    Exit codes
-    ----------
-    0 – flow completado sin errores
-    1 – flow terminado con errores (cualquier excepción no capturada)
+        Activa logs DEBUG.
+    config_path : str | Path | None
+        Ruta al archivo de configuración.
+    log_dir : Path | None
+        Directorio de logs.
     """
-    resolved_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+
+    resolved_config = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
 
     setup_logging(debug=debug, log_dir=log_dir)
 
     logger.info(
         "OrangeCashMachine starting | config={} debug={}",
-        resolved_path, debug,
+        resolved_config,
+        debug,
     )
 
     try:
-        asyncio.run(_run_flow(resolved_path))
+
+        asyncio.run(_run_flow(resolved_config))
+
     except KeyboardInterrupt:
-        logger.warning("Interrupted by user (KeyboardInterrupt)")
+
+        logger.warning("Execution interrupted by user")
+
         sys.exit(0)
+
     except Exception:
-        logger.error("Market Data Flow terminated with errors. Check logs above.")
+
+        logger.error(
+            "Market Data Flow terminated with errors. Check logs."
+        )
+
         sys.exit(1)
 
     logger.info("OrangeCashMachine finished successfully.")
 
 
 # ==========================================================
-# Local Execution
+# CLI execution
 # ==========================================================
 
 if __name__ == "__main__":
+
     run(debug=True)
 
-    # Producción (Prefect Cloud/Server):
+    # Producción (Prefect deployment)
+    #
     # market_data_flow.serve(
     #     name="market-data-ingestion",
     #     cron="0 * * * *",

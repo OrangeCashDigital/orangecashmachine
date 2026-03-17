@@ -30,6 +30,7 @@ import yaml
 from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
+from services.exchange.ccxt_adapter import CCXTAdapter
 from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 
@@ -171,7 +172,7 @@ class HistoricalPipelineAsync:
         start_date:      str,
         max_workers:     int = DEFAULT_MAX_WORKERS,
         storage:         HistoricalStorage | None = None,
-        exchange_client = None,
+        exchange_client: CCXTAdapter | None = None,
     ) -> None:
         _validate_pipeline_inputs(symbols, timeframes, start_date)
 
@@ -182,6 +183,12 @@ class HistoricalPipelineAsync:
 
         self._storage = storage or HistoricalStorage()
         self._semaphore = asyncio.Semaphore(max_workers)
+
+        if exchange_client is None:
+            raise ValueError(
+                "exchange_client is required by HistoricalPipelineAsync. "
+                "Pass a CCXTAdapter configured for the target exchange."
+            )
 
         self._fetcher = HistoricalFetcherAsync(
             storage=self._storage,

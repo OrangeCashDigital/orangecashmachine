@@ -1,0 +1,337 @@
+# ==============================================================================
+# OrangeCashMachine – Configuración Base de Infraestructura
+# ==============================================================================
+#
+# Este archivo define la CONFIGURACIÓN BASE del sistema.
+# Todas las configuraciones específicas de entorno deben definirse en:
+#
+#   development.yaml
+#   production.yaml
+#
+# El loader del sistema combinará automáticamente:
+#
+#   base.yaml + environment.yaml
+#
+# Arquitectura del sistema
+# ------------------------------------------------------------------------------
+# Exchanges → Adquisición de Datos → Plataforma de Datos → Research / Trading
+#
+# Principios de ingeniería aplicados
+# ------------------------------------------------------------------------------
+# SOLID   → Componentes modulares y extensibles
+# KISS    → Configuración simple y predecible
+# DRY     → Evitar duplicación de configuración
+# SafeOps → Operación segura y resiliente
+#
+# Política de seguridad
+# ------------------------------------------------------------------------------
+# - Nunca almacenar credenciales directamente en este archivo
+# - Utilizar variables de entorno (.env)
+# - Rotar claves de API periódicamente
+#
+# Este archivo debe permanecer estable y genérico.
+# Los cambios específicos de entorno deben realizarse en los archivos de override.
+# ==============================================================================
+
+
+# ==============================================================================
+# METADATOS DE ENTORNO
+# ==============================================================================
+environment:
+
+  # Nombre del entorno (sobrescrito por el loader)
+  name: base
+
+
+# ==============================================================================
+# CONFIGURACIÓN DE PIPELINES
+# ==============================================================================
+pipeline:
+
+  # ---------------------------------------------------------------------------
+  # Pipeline de datos históricos
+  # ---------------------------------------------------------------------------
+  historical:
+
+    # Fecha inicial para la descarga histórica
+    start_date: "2017-01-01T00:00:00Z"
+
+    # Si es true, se intentará descargar todo el histórico disponible
+    fetch_all_history: true
+
+    # Estrategia de concurrencia
+    # "auto" permite que el sistema determine el paralelismo óptimo
+    max_concurrent_tasks: auto
+
+    # Política de reintentos para llamadas a APIs
+    retry_policy:
+
+      # Número máximo de intentos
+      max_attempts: 5
+
+      # Factor exponencial de backoff
+      backoff_factor: 2
+
+      # Añade jitter para evitar sincronización de reintentos
+      jitter: true
+
+    # Timeframes soportados para OHLCV
+    timeframes:
+
+      - 1m
+      - 5m
+      - 15m
+      - 1h
+      - 4h
+      - 1d
+
+
+  # ---------------------------------------------------------------------------
+  # Pipeline de datos en tiempo real (streaming)
+  # ---------------------------------------------------------------------------
+  realtime:
+
+    # Tiempo de espera antes de reconectar al WebSocket
+    reconnect_delay_seconds: 5
+
+    # Timeout de heartbeat del stream
+    heartbeat_timeout_seconds: 30
+
+    # Intervalo para snapshots de consistencia
+    snapshot_interval_seconds: 60
+
+    # Tamaño máximo del buffer de mensajes en memoria
+    max_stream_buffer: 50000
+
+    # Política de protección contra backpressure
+    #
+    # reject  → rechaza nuevos mensajes si el buffer está lleno
+    # drop    → descarta mensajes antiguos
+    drop_policy: reject
+
+
+# ==============================================================================
+# DATASETS DISPONIBLES
+# ==============================================================================
+datasets:
+
+  # ---------------------------------------------------------------------------
+  # Datos básicos de mercado
+  # ---------------------------------------------------------------------------
+  ohlcv: true
+  trades: false
+  orderbook: false
+
+  # ---------------------------------------------------------------------------
+  # Datos de derivados
+  # ---------------------------------------------------------------------------
+  funding_rate: false
+  open_interest: false
+  liquidations: false
+  mark_price: false
+  index_price: false
+
+
+# ==============================================================================
+# CONFIGURACIÓN DE EXCHANGES
+# ==============================================================================
+exchanges:
+
+  # ---------------------------------------------------------------------------
+  # BYBIT
+  # ---------------------------------------------------------------------------
+  bybit:
+
+    enabled: true
+
+    # Activa limitador automático de requests
+    enableRateLimit: true
+
+    # Evita descubrimiento automático de símbolos
+    auto_discover_symbols: false
+
+    credentials:
+
+      apiKey: ${BYBIT_API_KEY}
+      secret: ${BYBIT_API_SECRET}
+
+    options:
+
+      # Sincroniza el tiempo local con el exchange
+      adjustForTimeDifference: true
+
+    markets:
+
+      # -----------------------------
+      # Spot
+      # -----------------------------
+      spot:
+
+        enabled: true
+
+        symbols:
+
+          - BTC/USDT
+
+      # -----------------------------
+      # Futuros
+      # -----------------------------
+      futures:
+
+        enabled: false
+
+        defaultType: swap
+
+        symbols:
+
+          - BTC/USDT
+
+
+  # ---------------------------------------------------------------------------
+  # KUCOIN
+  # ---------------------------------------------------------------------------
+  kucoin:
+
+    enabled: true
+
+    enableRateLimit: true
+
+    auto_discover_symbols: false
+
+    credentials:
+
+      apiKey: ${KUCOIN_API_KEY}
+      secret: ${KUCOIN_API_SECRET}
+      password: ${KUCOIN_PASSPHRASE}
+
+    options:
+
+      adjustForTimeDifference: true
+
+    markets:
+
+      spot:
+
+        enabled: true
+
+        symbols:
+
+          - BTC/USDT
+
+      futures:
+
+        enabled: false
+
+        defaultType: swap
+
+        symbols:
+
+          - BTC/USDT
+
+
+# ==============================================================================
+# ALMACENAMIENTO – DATA PLATFORM
+# ==============================================================================
+storage:
+
+  data_lake:
+
+    # Ruta raíz del Data Lake
+    path: "data_platform/data_lake"
+
+    # Formato de almacenamiento
+    format: parquet
+
+    # Algoritmo de compresión
+    compression: snappy
+
+    # Estrategia de particionado
+    partitioning:
+
+      - exchange
+      - symbol
+      - timeframe
+      - year
+      - month
+
+
+# ==============================================================================
+# FEATURE STORE
+# ==============================================================================
+feature_store:
+
+  enabled: true
+
+  # Ruta del almacenamiento de features
+  path: "data_platform/features"
+
+  format: parquet
+
+
+# ==============================================================================
+# OBSERVABILIDAD
+# ==============================================================================
+observability:
+
+  logging:
+
+    # Nivel de logging por defecto
+    level: INFO
+
+    # Formato estructurado de logs
+    format: json
+
+  metrics:
+
+    # Exportador de métricas
+    enabled: true
+    exporter: prometheus
+
+  tracing:
+
+    # Distributed tracing (opcional)
+    enabled: false
+
+
+# ==============================================================================
+# INTEGRACIONES DE INFRAESTRUCTURA
+# ==============================================================================
+integrations:
+
+  redis:
+
+    enabled: false
+
+    host: localhost
+    port: 6379
+
+  kafka:
+
+    enabled: false
+
+    bootstrap_servers: localhost:9092
+
+  postgres:
+
+    enabled: false
+
+    host: localhost
+    port: 5432
+
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+
+
+# ==============================================================================
+# HEALTH CHECKS
+# ==============================================================================
+healthchecks:
+
+  # Activa chequeos automáticos al iniciar el sistema
+  enabled: true
+
+  # Lista de chequeos disponibles
+  checks:
+
+    - storage
+    - exchanges

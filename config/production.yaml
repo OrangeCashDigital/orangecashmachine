@@ -1,0 +1,88 @@
+# ==============================================================================
+# OrangeCashMachine – Configuración de Producción
+# ==============================================================================
+#
+# Este archivo contiene overrides para entornos de producción.
+# Se utiliza para despliegues reales del sistema.
+#
+# Se aplica automáticamente como:
+#
+#   base.yaml + production.yaml
+#
+# ==============================================================================
+
+environment:
+
+  name: production
+
+
+# ==============================================================================
+# PIPELINE
+# ==============================================================================
+
+pipeline:
+
+  historical:
+
+    # Mayor paralelismo para ingestión masiva
+    max_concurrent_tasks: auto
+
+
+# ==============================================================================
+# OBSERVABILIDAD
+# ==============================================================================
+
+observability:
+
+  logging:
+
+    level: INFO
+
+  metrics:
+
+    enabled: true
+
+  tracing:
+
+    enabled: false
+
+
+# ==============================================================================
+# STORAGE
+# ==============================================================================
+
+storage:
+
+  data_lake:
+
+    # Ruta típica en servidores
+    path: "/var/lib/orangecashmachine/data_lake"
+
+
+# ==============================================================================
+# INTEGRACIONES
+# ==============================================================================
+
+integrations:
+
+  redis:
+
+    enabled: true
+
+    host: redis
+    port: 6379
+
+
+  kafka:
+
+    enabled: true
+
+    bootstrap_servers: kafka:9092
+
+
+  postgres:
+
+    enabled: true
+
+    host: postgres
+    port: 5432
