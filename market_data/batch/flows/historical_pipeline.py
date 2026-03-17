@@ -37,6 +37,9 @@ from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
 from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter
+from services.observability.metrics import (
+    ROWS_INGESTED, PAIR_DURATION, PIPELINE_ERRORS, ACTIVE_PAIRS
+)
 
 
 # ==========================================================
@@ -350,6 +353,10 @@ class HistoricalPipelineAsync:
 
                 result.rows        = len(df)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+                # Métricas Prometheus
+                exchange_id = getattr(self._fetcher._exchange_client, '_exchange_id', 'unknown')
+                ROWS_INGESTED.labels(exchange=exchange_id, symbol=symbol, timeframe=timeframe).inc(result.rows)
+                PAIR_DURATION.labels(exchange=exchange_id, symbol=symbol, timeframe=timeframe).observe(result.duration_ms / 1000)
 
                 logger.info(
                     "Par completado [{}/{}] | symbol={} timeframe={} rows={} duration={}ms",
@@ -362,6 +369,9 @@ class HistoricalPipelineAsync:
             except Exception as exc:
                 result.error       = str(exc)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+                exchange_id = getattr(self._fetcher._exchange_client, '_exchange_id', 'unknown')
+                error_type = 'transient' if result.is_transient_error else 'fatal'
+                PIPELINE_ERRORS.labels(exchange=exchange_id, error_type=error_type).inc()
                 logger.error(
                     "Par fallido [{}/{}] | symbol={} timeframe={} error={} duration={}ms",
                     idx, total, symbol, timeframe, exc, result.duration_ms,

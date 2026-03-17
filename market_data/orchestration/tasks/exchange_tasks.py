@@ -32,6 +32,7 @@ from prefect import task, get_run_logger
 
 from core.config.schema import ExchangeConfig, EXCHANGE_TASK_TIMEOUT
 from services.exchange.ccxt_adapter import CCXTAdapter
+from services.observability.metrics import EXCHANGE_LATENCY, EXCHANGE_CLOCK_DRIFT, EXCHANGE_RATE_LIMIT
 
 # ==========================================================
 # Constants
@@ -333,6 +334,12 @@ async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
             available_markets = available_markets,
             warnings          = warnings,
         )
+
+        # Métricas Prometheus
+        EXCHANGE_LATENCY.labels(exchange=name).observe(latency_ms)
+        if drift is not None:
+            EXCHANGE_CLOCK_DRIFT.labels(exchange=name).set(drift)
+        EXCHANGE_RATE_LIMIT.labels(exchange=name).set(rate_limit_ms)
 
         probe.log_summary(log)
         return probe

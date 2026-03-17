@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+from services.observability.metrics import push_metrics
 
 from market_data.orchestration.flows.batch_flow import market_data_flow
 
@@ -250,6 +251,7 @@ def run(
 
         sys.exit(1)
 
+    push_metrics()
     logger.info("OrangeCashMachine finished successfully.")
 
 

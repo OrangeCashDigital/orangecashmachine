@@ -26,4 +26,6 @@ loguru==0.7.2           # Logging estructurado y seguro
 pyyaml==6.0.2           # Lectura y parse de YAML
 
 # Resiliencia
-pybreaker==1.1.0        # Circuit breaker para llamadas externas
+pybreaker==1.1.0        # Circuit breaker para llamadas externasprometheus-client>=0.20.0
+prometheus-client>=0.20.0
+prometheus-client>=0.20.0
