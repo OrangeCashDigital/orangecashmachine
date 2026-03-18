@@ -245,8 +245,7 @@ class HistoricalFetcherAsync:
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                return await self._breaker.call_async(
-                    self._exchange.fetch_ohlcv,
+                return await self._exchange.fetch_ohlcv(
                     symbol,
                     timeframe,
                     since,
@@ -262,6 +261,10 @@ class HistoricalFetcherAsync:
                     "Fetch failed | {} {} attempt={} wait={:.2f}s err={}",
                     symbol, timeframe, attempt, wait, exc
                 )
+
+                # Reconectar si la sesión fue cerrada
+                if any(msg in str(exc) for msg in ("Session is closed", "Connection closed")):
+                    await self._exchange.reconnect()
 
                 await asyncio.sleep(wait)
 

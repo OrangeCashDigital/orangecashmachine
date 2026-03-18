@@ -15,7 +15,7 @@ from prefect import task, get_run_logger
 
 from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
-from market_data.batch.flows.historical_pipeline import HistoricalPipelineAsync
+from market_data.batch.pipelines.historical_pipeline import HistoricalPipelineAsync
 
 
 def _validate_historical_inputs(exchange_cfg: ExchangeConfig, config: AppConfig) -> None:
@@ -59,14 +59,17 @@ async def run_historical_pipeline(
 
     exchange_client = CCXTAdapter(config=exchange_cfg)
 
-    pipeline = HistoricalPipelineAsync(
-        symbols        =exchange_cfg.all_symbols,
-        timeframes     =hist.timeframes,
-        start_date     =hist.start_date,
-        max_concurrency=max_concurrency,
-        exchange_client=exchange_client,
-    )
-    summary = await pipeline.run()
+    try:
+        pipeline = HistoricalPipelineAsync(
+            symbols        =exchange_cfg.all_symbols,
+            timeframes     =hist.timeframes,
+            start_date     =hist.start_date,
+            max_concurrency=max_concurrency,
+            exchange_client=exchange_client,
+        )
+        summary = await pipeline.run()
+    finally:
+        await exchange_client.close()
 
     log.info(
         "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",

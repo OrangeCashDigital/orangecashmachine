@@ -274,8 +274,6 @@ class HistoricalPipelineAsync:
         except asyncio.CancelledError:
             logger.warning("Pipeline cancelado externamente — cerrando recursos...")
             raise
-        finally:
-            await self._fetcher.close()
 
         duration_ms = int((time.monotonic() - pipeline_start) * 1000)
         summary     = PipelineSummary(results=list(results), duration_ms=duration_ms)

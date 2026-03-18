@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 """
-Entrypoint principal de OrangeCashMachine.
+main.py – Entrypoint principal de OrangeCashMachine
+===================================================
 
 Responsabilidad
 ---------------
 - Inicializar logging centralizado.
-- Cargar y validar configuración multi-env.
-- Ejecutar pipeline principal de trading/market data.
-- Manejar errores críticos de manera segura y trazable.
+- Cargar y validar configuración multi-entorno.
+- Ejecutar pipeline principal de trading / market data.
+- Manejar errores críticos de forma segura y trazable.
 
 Principios aplicados
 -------------------
@@ -21,13 +22,13 @@ Principios aplicados
 import sys
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from loguru import logger
 
 from core.config.loader import load_config
 from core.config.schema import AppConfig
-from orchestration.entrypoint import run_main_pipeline
+from market_data.orchestration.entrypoint import run as run_main_pipeline
 
 
 # ============================================================================
@@ -57,15 +58,13 @@ def setup_logging(debug: bool = False, log_dir: Optional[Path] = LOG_DIR) -> Non
     Configura Loguru como sistema de logging global.
 
     Incluye:
-    - Consola con colores y backtrace
+    - Consola coloreada y backtrace
     - Archivo rotativo diario con retención de 14 días y compresión
     """
     level = "DEBUG" if debug else "INFO"
-
-    # Limpiar handlers previos
     logger.remove()
 
-    # Logging en consola
+    # Consola
     logger.add(
         sys.stderr,
         level=level,
@@ -75,7 +74,7 @@ def setup_logging(debug: bool = False, log_dir: Optional[Path] = LOG_DIR) -> Non
         colorize=True,
     )
 
-    # Logging en archivo
+    # Archivo
     if log_dir:
         log_dir.mkdir(parents=True, exist_ok=True)
         logger.add(
@@ -96,16 +95,16 @@ def setup_logging(debug: bool = False, log_dir: Optional[Path] = LOG_DIR) -> Non
 # Configuration Loader
 # ============================================================================
 
-def initialize_config(env: Optional[str] = None, path: Optional[Path] = None) -> AppConfig:
+def initialize_config(env: Optional[str] = None, path: Optional[Union[str, Path]] = None) -> AppConfig:
     """
     Carga y valida la configuración central del sistema.
 
     Parameters
     ----------
     env : str | None
-        Nombre del entorno opcional (dev, prod, staging).
-    path : Path | None
-        Ruta al directorio o archivo de configuración opcional.
+        Entorno opcional (dev, prod, staging)
+    path : str | Path | None
+        Ruta a archivo o directorio de configuración
 
     Returns
     -------
@@ -113,10 +112,10 @@ def initialize_config(env: Optional[str] = None, path: Optional[Path] = None) ->
         Configuración validada.
     """
     try:
-        config = load_config(env=env, path=path)
+        config = load_config(env=env, path=Path(path) if path else None)
         logger.info("Configuración cargada correctamente | exchanges=%s", config.exchange_names)
         return config
-    except Exception as exc:
+    except Exception:
         logger.exception("Fallo al cargar la configuración")
         raise
 
@@ -125,18 +124,18 @@ def initialize_config(env: Optional[str] = None, path: Optional[Path] = None) ->
 # Main Entrypoint
 # ============================================================================
 
-def main(env: Optional[str] = None, config_path: Optional[Path] = None, debug: bool = False) -> None:
+def main(env: Optional[str] = None, config_path: Optional[Union[str, Path]] = None, debug: bool = False) -> None:
     """
     Punto de entrada principal de OrangeCashMachine.
 
     Parameters
     ----------
     env : str | None
-        Entorno a utilizar (overridable via OCM_ENV).
-    config_path : Path | None
-        Ruta al archivo de configuración (overridable via OCM_CONFIG_PATH).
+        Entorno a utilizar (override vía OCM_ENV)
+    config_path : str | Path | None
+        Ruta al archivo de configuración (override vía OCM_CONFIG_PATH)
     debug : bool
-        Activa logging DEBUG.
+        Activa logging DEBUG
     """
     try:
         setup_logging(debug=debug)
@@ -146,7 +145,8 @@ def main(env: Optional[str] = None, config_path: Optional[Path] = None, debug: b
         run_main_pipeline(config)
 
         logger.info("Pipeline principal ejecutado correctamente.")
-    except Exception as exc:
+
+    except Exception:
         logger.exception("Error crítico al iniciar la aplicación")
         sys.exit(1)
 
@@ -156,7 +156,6 @@ def main(env: Optional[str] = None, config_path: Optional[Path] = None, debug: b
 # ============================================================================
 
 if __name__ == "__main__":
-    # Permite override vía variables de entorno
     env_override = os.getenv("OCM_ENV")
     config_path_override = os.getenv("OCM_CONFIG_PATH")
 

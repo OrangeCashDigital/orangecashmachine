@@ -109,17 +109,31 @@ class CCXTAdapter:
             if self._client is None:
                 await self._initialize()
 
+    async def reconnect(self) -> None:
+        """Fuerza reconexión cerrando el cliente actual."""
+        old_client = self._client
+        self._client = None
+        if old_client is not None:
+            try:
+                await old_client.close()
+            except Exception:
+                pass
+        async with self._init_lock:
+            if self._client is None:
+                await self._initialize()
+
     async def close(self) -> None:
-        """Cierre seguro — nunca lanza excepción."""
-        if self._client is None:
-            return
-        try:
-            await self._client.close()
-            logger.debug("Exchange closed | {}", self._exchange_id)
-        except Exception as exc:
-            logger.warning("Error closing exchange | {} | {}", self._exchange_id, exc)
-        finally:
-            self._client = None
+        """Cierre seguro e idempotente — nunca lanza excepción."""
+        async with self._init_lock:
+            if self._client is None:
+                return
+            try:
+                await self._client.close()
+                logger.debug("Exchange closed | {}", self._exchange_id)
+            except Exception as exc:
+                logger.warning("Error closing exchange | {} | {}", self._exchange_id, exc)
+            finally:
+                self._client = None
 
     async def __aenter__(self) -> "CCXTAdapter":
         await self.connect()
@@ -143,8 +157,14 @@ class CCXTAdapter:
         since:     Optional[int] = None,
         limit:     int = 100,
     ) -> List[List[Any]]:
+        import time as _time
         client = await self._get_client()
-        return await client.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
+        params = {}
+        if self._exchange_id == 'kucoin' and since is not None:
+            now_ts = int(_time.time())
+            if since > now_ts:
+                params['endAt'] = now_ts
+        return await client.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params=params)
 
     async def fetch_trades(
         self,
@@ -243,8 +263,11 @@ class CCXTAdapter:
     # ----------------------------------------------------------
 
     async def _get_client(self) -> ccxt.Exchange:
-        if self._client is None:
-            await self.connect()
+        if self._client is not None:
+            return self._client
+        async with self._init_lock:
+            if self._client is None:
+                await self._initialize()
         return self._client
 
     async def _initialize(self) -> None:

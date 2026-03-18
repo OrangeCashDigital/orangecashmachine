@@ -1,4 +1,7 @@
+
 from __future__ import annotations
+from dotenv import load_dotenv
+load_dotenv()
 
 """
 Loader central de configuración profesional para OrangeCashMachine.
@@ -152,7 +155,7 @@ def _log_audit_in_config(config: AppConfig, cache_key: str, config_hash: str, pa
         source_file=str(path)
     )
     config.audit_log.append(entry)
-    config.last_reload = datetime.now(timezone.utc)
+    config = config.model_copy(update={"last_reload": datetime.now(timezone.utc)})
 
 
 # ============================================================================

@@ -32,7 +32,7 @@ from typing import List, Set, Tuple
 from prefect import flow, get_run_logger
 
 from core.config.schema import AppConfig, CONFIG_PATH
-from market_data.orchestration.tasks.config_tasks import load_and_validate_config_task
+from core.config.loader import load_and_validate_config_task
 from market_data.orchestration.tasks.exchange_tasks import (
     ExchangeProbe,
     validate_exchange_connection,

@@ -1,36 +1,30 @@
+from __future__ import annotations
+
 """
 orchestration/entrypoint.py
 ===========================
 
-Entrypoint operativo del sistema OrangeCashMachine.
+Entrypoint operativo del flujo de Market Data de OrangeCashMachine.
 
 Responsabilidad
 ---------------
-Configurar el sistema de logging y lanzar el flow principal
-de ingestión de datos de mercado.
+- Configurar logging centralizado y redirigir logs externos a Loguru.
+- Ejecutar el flow principal de ingestión de datos de mercado.
+- Manejar errores críticos y códigos de salida.
 
-Este archivo es el único punto del sistema que contiene
-un bloque `if __name__ == "__main__"`.
-
-Principios de ingeniería
-------------------------
-SOLID
-    SRP – solo arranque del sistema
-KISS
-    sin abstracciones innecesarias
-DRY
-    configuración de logging centralizada
-SafeOps
-    manejo explícito de errores y códigos de salida
+Principios aplicados
+-------------------
+- SOLID: SRP → este módulo solo arranca el flujo.
+- KISS: flujo lineal, sin abstracciones innecesarias.
+- DRY: logging centralizado y reutilizable.
+- SafeOps: manejo explícito de errores, KeyboardInterrupt y métricas.
 """
-
-from __future__ import annotations
 
 import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from loguru import logger
 from services.observability.metrics import push_metrics
@@ -38,12 +32,11 @@ from services.observability.metrics import push_metrics
 from market_data.orchestration.flows.batch_flow import market_data_flow
 
 
-# ==========================================================
-# CONSTANTS
-# ==========================================================
+# ============================================================================
+# Constants
+# ============================================================================
 
 DEFAULT_CONFIG_PATH: Path = Path("config/settings.yaml")
-
 LOG_DIR: Path = Path("logs")
 
 _LOG_FORMAT_CONSOLE = (
@@ -58,24 +51,17 @@ _LOG_FORMAT_FILE = (
 )
 
 
-# ==========================================================
-# Loguru ↔ stdlib logging bridge
-# ==========================================================
+# ============================================================================
+# Logging
+# ============================================================================
 
 class InterceptHandler(logging.Handler):
     """
     Redirige logs del módulo `logging` hacia Loguru.
-
-    Librerías externas (Prefect, CCXT, Pandas, etc.)
-    usan `logging`. Este handler intercepta esos logs
-    y los redirige al logger principal de Loguru.
-
-    Referencia:
-    https://loguru.readthedocs.io
+    Permite unificar logs de librerías externas (Prefect, CCXT, Pandas, etc.)
     """
 
     def emit(self, record: logging.LogRecord) -> None:
-
         try:
             level = logger.level(record.levelname).name
         except ValueError:
@@ -83,45 +69,25 @@ class InterceptHandler(logging.Handler):
 
         frame = logging.currentframe()
         depth = 2
-
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
 
-        logger.opt(
-            depth=depth,
-            exception=record.exc_info,
-        ).log(level, record.getMessage())
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
-# ==========================================================
-# Logging setup
-# ==========================================================
-
-def setup_logging(
-    debug: bool = False,
-    log_dir: Optional[Path] = LOG_DIR,
-) -> None:
+def setup_logging(debug: bool = False, log_dir: Optional[Path] = LOG_DIR) -> None:
     """
     Configura Loguru como sistema global de logging.
-
-    Incluye:
-    - logs en consola con colores
-    - logs rotativos en archivo
-    - interceptación de logging estándar
-
-    Parameters
-    ----------
-    debug : bool
-        Activa nivel DEBUG.
-    log_dir : Path | None
-        Directorio de logs rotativos.
+    - Consola coloreada
+    - Archivo rotativo diario
+    - Intercepta logging estándar de librerías externas
     """
 
     level = "DEBUG" if debug else "INFO"
-
     logger.remove()
 
+    # Consola
     logger.add(
         sys.stderr,
         level=level,
@@ -131,10 +97,9 @@ def setup_logging(
         colorize=True,
     )
 
+    # Archivo rotativo
     if log_dir:
-
         log_dir.mkdir(parents=True, exist_ok=True)
-
         logger.add(
             log_dir / "market_data_{time:YYYY-MM-DD}.log",
             rotation="1 day",
@@ -147,124 +112,85 @@ def setup_logging(
             diagnose=False,
         )
 
+    # Intercepta logging estándar
     intercept = InterceptHandler()
+    logging.basicConfig(handlers=[intercept], level=0, force=True)
 
-    logging.basicConfig(
-        handlers=[intercept],
-        level=0,
-        force=True,
-    )
-
-    for name in ("prefect", "prefect.flow_runs", "prefect.task_runs"):
-
-        prefect_logger = logging.getLogger(name)
-
-        prefect_logger.handlers = [intercept]
-
-        prefect_logger.propagate = False
+    for lib_name in ("prefect", "prefect.flow_runs", "prefect.task_runs"):
+        lib_logger = logging.getLogger(lib_name)
+        lib_logger.handlers = [intercept]
+        lib_logger.propagate = False
 
     logger.debug("Logging configured | level={} log_dir={}", level, log_dir)
 
 
-# ==========================================================
+# ============================================================================
 # Flow runner
-# ==========================================================
+# ============================================================================
 
 async def _run_flow(config_path: Path) -> None:
     """
-    Ejecuta el flow principal de ingestión.
+    Ejecuta el flow principal de ingestión de Market Data.
 
-    Parameters
-    ----------
-    config_path : Path
-        Ruta al archivo de configuración.
+    Raises
+    ------
+    Exception: cualquier fallo dentro de market_data_flow se propaga.
     """
-
-    logger.info(
-        "Launching market_data_flow | config_path={}",
-        config_path,
-    )
-
-    try:
-
-        await market_data_flow(config_path=config_path)
-
-    except Exception as exc:
-
-        logger.exception(
-            "market_data_flow failed | error={}",
-            exc,
-        )
-
-        raise
+    logger.info("Launching market_data_flow | config_path=%s", config_path)
+    await market_data_flow(config_path=config_path)
+    logger.info("market_data_flow completed successfully")
 
 
-# ==========================================================
+# ============================================================================
 # Public entrypoint
-# ==========================================================
+# ============================================================================
 
 def run(
     debug: bool = False,
-    config_path: Optional[str | Path] = None,
+    config_path: Optional[Union[str, Path]] = None,
     log_dir: Optional[Path] = LOG_DIR,
 ) -> None:
     """
-    Arranca el sistema OrangeCashMachine.
+    EntryPoint operativo para el flujo de Market Data.
 
     Configura logging y ejecuta el flow principal.
 
     Parameters
     ----------
     debug : bool
-        Activa logs DEBUG.
+        Habilita nivel DEBUG.
     config_path : str | Path | None
         Ruta al archivo de configuración.
     log_dir : Path | None
         Directorio de logs.
     """
-
     resolved_config = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
-
     setup_logging(debug=debug, log_dir=log_dir)
 
-    logger.info(
-        "OrangeCashMachine starting | config={} debug={}",
-        resolved_config,
-        debug,
-    )
+    logger.info("OrangeCashMachine starting | config=%s debug=%s", resolved_config, debug)
 
     try:
-
         asyncio.run(_run_flow(resolved_config))
-
     except KeyboardInterrupt:
-
         logger.warning("Execution interrupted by user")
-
         sys.exit(0)
-
     except Exception:
-
-        logger.error(
-            "Market Data Flow terminated with errors. Check logs."
-        )
-
+        logger.exception("Market Data Flow terminated with errors. Check logs.")
         sys.exit(1)
+    finally:
+        push_metrics()
+        logger.info("OrangeCashMachine finished successfully.")
 
-    push_metrics()
-    logger.info("OrangeCashMachine finished successfully.")
 
-
-# ==========================================================
+# ============================================================================
 # CLI execution
-# ==========================================================
+# ============================================================================
 
 if __name__ == "__main__":
-
+    # Ejecuta para pruebas locales o debugging
     run(debug=True)
 
-    # Producción (Prefect deployment)
-    #
+    # Nota: en producción Prefect se encarga de orquestar el flujo:
     # market_data_flow.serve(
     #     name="market-data-ingestion",
     #     cron="0 * * * *",
