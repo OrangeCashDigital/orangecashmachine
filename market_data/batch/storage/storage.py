@@ -172,7 +172,7 @@ class HistoricalStorage:
 
     def _symbol_timeframe_dir(self, symbol: str, timeframe: str) -> Path:
         if self._exchange:
-            return self._base_path / self._exchange / self._safe_symbol(symbol) / timeframe
+            return self._base_path / "exchanges" / self._exchange / self._safe_symbol(symbol) / timeframe
         return self._base_path / self._safe_symbol(symbol) / timeframe
 
     def _partition_dir(
