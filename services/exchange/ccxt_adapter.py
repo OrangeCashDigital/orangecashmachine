@@ -110,17 +110,16 @@ class CCXTAdapter:
                 await self._initialize()
 
     async def reconnect(self) -> None:
-        """Fuerza reconexión cerrando el cliente actual."""
-        old_client = self._client
-        self._client = None
-        if old_client is not None:
-            try:
-                await old_client.close()
-            except Exception:
-                pass
+        """Fuerza reconexión cerrando el cliente actual (thread-safe)."""
         async with self._init_lock:
-            if self._client is None:
-                await self._initialize()
+            old_client = self._client
+            self._client = None
+            if old_client is not None:
+                try:
+                    await old_client.close()
+                except Exception:
+                    pass
+            await self._initialize()
 
     async def close(self) -> None:
         """Cierre seguro e idempotente — nunca lanza excepción."""

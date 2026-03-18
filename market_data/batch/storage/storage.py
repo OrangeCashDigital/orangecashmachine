@@ -269,6 +269,7 @@ def _merge_full(new_df: pd.DataFrame, file_path: Path) -> pd.DataFrame:
     • elimina duplicados
     """
     existing = pd.read_parquet(file_path)
+    existing["timestamp"] = pd.to_datetime(existing["timestamp"], utc=True)
 
     combined = pd.concat([existing, new_df], ignore_index=True)
 

@@ -256,6 +256,10 @@ class HistoricalPipelineAsync:
         pairs       = [(s, tf) for s in self.symbols for tf in self.timeframes]
         total_pairs = len(pairs)
 
+        logger.debug("Reconectando exchange antes de iniciar pipeline...")
+        await self._fetcher._exchange.reconnect()
+        logger.debug("Exchange listo para pipeline")
+
         logger.info(
             "Pipeline iniciando | símbolos={} timeframes={} pares={} concurrencia_max={}",
             len(self.symbols), len(self.timeframes), total_pairs, self.max_concurrency,
@@ -352,7 +356,7 @@ class HistoricalPipelineAsync:
                 result.rows        = len(df)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 # Métricas Prometheus
-                exchange_id = getattr(self._fetcher._exchange_client, '_exchange_id', 'unknown')
+                exchange_id = getattr(self._fetcher._exchange, '_exchange_id', 'unknown')
                 ROWS_INGESTED.labels(exchange=exchange_id, symbol=symbol, timeframe=timeframe).inc(result.rows)
                 PAIR_DURATION.labels(exchange=exchange_id, symbol=symbol, timeframe=timeframe).observe(result.duration_ms / 1000)
 
@@ -367,7 +371,7 @@ class HistoricalPipelineAsync:
             except Exception as exc:
                 result.error       = str(exc)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                exchange_id = getattr(self._fetcher._exchange_client, '_exchange_id', 'unknown')
+                exchange_id = getattr(self._fetcher._exchange, '_exchange_id', 'unknown')
                 error_type = 'transient' if result.is_transient_error else 'fatal'
                 PIPELINE_ERRORS.labels(exchange=exchange_id, error_type=error_type).inc()
                 logger.error(
