@@ -30,4 +30,5 @@ Thumbs.db
 
 # Archivos temporales
 *.tmp
-*.swp
+*.swpdata_platform/data_lake/
+data_platform/data_lake/

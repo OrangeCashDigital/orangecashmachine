@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import List, Set, Tuple
 
 from prefect import flow, get_run_logger
+from prefect.concurrency.asyncio import concurrency
 
 from core.config.schema import AppConfig, CONFIG_PATH
 from core.config.loader import load_and_validate_config_task
@@ -270,7 +271,10 @@ async def market_data_flow(config_path: Path = CONFIG_PATH) -> None:
     # 2. Validar exchanges → ExchangeProbes reales (futures resueltos aquí)
     probes = await _validate_exchanges(config, log)
 
-    # 3. Lanzar pipelines — dominio recibe ExchangeProbe, nunca PrefectFuture
+    # 3. Lanzar pipelines secuencialmente por exchange para evitar ejecución duplicada.
+    # Cada exchange tiene su propio adapter y sus propios datos — no hay race condition
+    # entre exchanges distintos. El paralelismo interno (por timeframe) lo maneja
+    # el semáforo dentro de HistoricalPipelineAsync.
     pipeline_futures: list = []
     for probe in probes:
         pipeline_futures.extend(

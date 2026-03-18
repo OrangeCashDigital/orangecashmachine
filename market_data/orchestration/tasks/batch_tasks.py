@@ -37,6 +37,7 @@ def _validate_derivatives_datasets(datasets: Sequence[str]) -> None:
     timeout_seconds=PIPELINE_TASK_TIMEOUT,
     task_run_name="{exchange_cfg.name.value}-ohlcv",
     description="Ingests historical OHLCV data for a specific exchange.",
+    tags=["ohlcv"],
 )
 async def run_historical_pipeline(
     config:       AppConfig,

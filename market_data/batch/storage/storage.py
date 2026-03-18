@@ -105,20 +105,39 @@ class HistoricalStorage:
 
         df = _normalize_dataframe(df)
 
-        partitions = df.groupby(
-            [df["timestamp"].dt.year, df["timestamp"].dt.month],
-            sort=True,
-        )
+        # 1m usa partición diaria para que cada merge sea barato (O(n) sobre ~1440 filas)
+        # Timeframes >= 5m usan partición mensual (volumen manejable)
+        use_daily = (timeframe == "1m")
 
-        for (year, month), part in partitions:
-            self._write_partition(
-                df=part,
-                symbol=symbol,
-                timeframe=timeframe,
-                year=int(year),
-                month=int(month),
-                mode=mode,
+        if use_daily:
+            partitions = df.groupby(
+                [df["timestamp"].dt.year, df["timestamp"].dt.month, df["timestamp"].dt.day],
+                sort=True,
             )
+            for (year, month, day), part in partitions:
+                self._write_partition(
+                    df=part,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    year=int(year),
+                    month=int(month),
+                    mode=mode,
+                    day=int(day),
+                )
+        else:
+            partitions = df.groupby(
+                [df["timestamp"].dt.year, df["timestamp"].dt.month],
+                sort=True,
+            )
+            for (year, month), part in partitions:
+                self._write_partition(
+                    df=part,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    year=int(year),
+                    month=int(month),
+                    mode=mode,
+                )
 
     def get_last_timestamp(
         self,
@@ -159,12 +178,11 @@ class HistoricalStorage:
         timeframe: str,
         year: int,
         month: int,
+        day: Optional[int] = None,
     ) -> Path:
-        path = (
-            self._symbol_timeframe_dir(symbol, timeframe)
-            / str(year)
-            / f"{month:02d}"
-        )
+        path = self._symbol_timeframe_dir(symbol, timeframe) / str(year) / f"{month:02d}"
+        if day is not None:
+            path = path / f"{day:02d}"
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -174,9 +192,10 @@ class HistoricalStorage:
         timeframe: str,
         year: int,
         month: int,
+        day: Optional[int] = None,
     ) -> Path:
         safe = self._safe_symbol(symbol)
-        return self._partition_dir(symbol, timeframe, year, month) / f"{safe}_{timeframe}.parquet"
+        return self._partition_dir(symbol, timeframe, year, month, day) / f"{safe}_{timeframe}.parquet"
 
     def _find_partition_files(
         self,
@@ -203,6 +222,7 @@ class HistoricalStorage:
         year: int,
         month: int,
         mode: WriteMode,
+        day: Optional[int] = None,
     ) -> None:
         """
         Escritura atómica con merge profesional.
@@ -219,7 +239,7 @@ class HistoricalStorage:
         • Idempotente: reinsertar los mismos datos no genera duplicados
         • last-write-wins: correcciones del exchange se aplican correctamente
         """
-        file_path = self._partition_file(symbol, timeframe, year, month)
+        file_path = self._partition_file(symbol, timeframe, year, month, day)
         temp_path = file_path.with_suffix(".tmp")
         meta_path = file_path.with_suffix(".meta.json")
 
@@ -240,9 +260,10 @@ class HistoricalStorage:
             # Metadata sidecar: permite auditoría sin leer el parquet completo
             _write_metadata(meta_path, df, symbol, timeframe)
 
+            partition_label = f"{year}/{month:02d}/{day:02d}" if day is not None else f"{year}/{month:02d}"
             logger.info(
-                "Partition saved | {} {} {}/{:02d} rows={} [{} → {}]",
-                symbol, timeframe, year, month, len(df),
+                "Partition saved | {} {} {} rows={} [{} → {}]",
+                symbol, timeframe, partition_label, len(df),
                 df["timestamp"].min().isoformat(),
                 df["timestamp"].max().isoformat(),
             )

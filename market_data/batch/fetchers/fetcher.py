@@ -235,6 +235,11 @@ class HistoricalFetcherAsync:
     # Fetch with retry + breaker
     # ======================================================
 
+    # Errores que indican sesión HTTP muerta → reconnect obligatorio
+    _SESSION_ERRORS = ("Session is closed", "Connection closed", "aiohttp")
+    # Errores transitorios → retry sin reconectar (rate limit, timeout, glitch)
+    _TRANSIENT_ERRORS = ("rate limit", "timeout", "timed out", "429", "503")
+
     async def _fetch_chunk_with_retry(
         self,
         symbol: str,
@@ -242,8 +247,20 @@ class HistoricalFetcherAsync:
         since: int,
         limit: int,
     ) -> List[list]:
+        """
+        Retry con clasificación de errores (lazy reconnect):
 
+        1. Errores transitorios (rate limit, timeout, glitch):
+           → retry con backoff, SIN reconectar (overhead innecesario)
+        2. Errores de sesión muerta (Session closed, Connection closed):
+           → reconnect() una sola vez, luego retry
+        3. Errores desconocidos:
+           → retry con backoff, sin reconnect (puede ser error de datos)
+
+        Objetivo: reconectar solo cuando realmente hace falta.
+        """
         last_exc: Optional[Exception] = None
+        session_reconnected = False  # evita reconectar más de una vez por ciclo
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
@@ -256,17 +273,32 @@ class HistoricalFetcherAsync:
 
             except Exception as exc:
                 last_exc = exc
-
+                err_str = str(exc)
                 wait = BACKOFF_BASE ** attempt
 
-                logger.warning(
-                    "Fetch failed | {} {} attempt={} wait={:.2f}s err={}",
-                    symbol, timeframe, attempt, wait, exc
-                )
+                is_session_error   = any(m in err_str for m in self._SESSION_ERRORS)
+                is_transient_error = any(m in err_str.lower() for m in self._TRANSIENT_ERRORS)
 
-                # Reconectar si la sesión fue cerrada
-                if any(msg in str(exc) for msg in ("Session is closed", "Connection closed")):
+                if is_session_error and not session_reconnected:
+                    logger.warning(
+                        "Session dead — reconnecting | {} {} attempt={} err={}",
+                        symbol, timeframe, attempt, exc
+                    )
                     await self._exchange.reconnect()
+                    session_reconnected = True
+                    # No sleep tras reconnect: la sesión es nueva, reintenta rápido
+                    continue
+
+                elif is_transient_error:
+                    logger.warning(
+                        "Transient error — retrying | {} {} attempt={} wait={:.2f}s err={}",
+                        symbol, timeframe, attempt, wait, exc
+                    )
+                else:
+                    logger.warning(
+                        "Fetch failed | {} {} attempt={} wait={:.2f}s err={}",
+                        symbol, timeframe, attempt, wait, exc
+                    )
 
                 await asyncio.sleep(wait)
 
