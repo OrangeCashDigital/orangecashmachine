@@ -256,9 +256,11 @@ class HistoricalPipelineAsync:
         pairs       = [(s, tf) for s in self.symbols for tf in self.timeframes]
         total_pairs = len(pairs)
 
-        logger.debug("Reconectando exchange antes de iniciar pipeline...")
-        await self._fetcher._exchange.reconnect()
-        logger.debug("Exchange listo para pipeline")
+        if not await self._fetcher._exchange.is_healthy():
+            logger.debug("Exchange sesión cerrada — reconectando antes de pipeline...")
+            await self._fetcher._exchange.reconnect()
+        else:
+            logger.debug("Exchange sesión activa — sin reconexión necesaria")
 
         logger.info(
             "Pipeline iniciando | símbolos={} timeframes={} pares={} concurrencia_max={}",

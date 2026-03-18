@@ -121,6 +121,21 @@ class CCXTAdapter:
                     pass
             await self._initialize()
 
+    async def is_healthy(self) -> bool:
+        """
+        Healthcheck ligero: verifica que el cliente existe y la sesión HTTP está abierta.
+        No hace ninguna llamada de red — solo inspecciona estado interno.
+        """
+        if self._client is None:
+            return False
+        try:
+            session = getattr(self._client, "session", None)
+            if session is not None and hasattr(session, "closed"):
+                return not session.closed
+            return True
+        except Exception:
+            return False
+
     async def close(self) -> None:
         """Cierre seguro e idempotente — nunca lanza excepción."""
         async with self._init_lock:

@@ -38,8 +38,10 @@ MAX_RETRIES = 5
 BACKOFF_BASE = 1.6
 MAX_CHUNKS_PER_RUN = 100_000
 
-# 🔥 NUEVO
-DEFAULT_OVERLAP_BARS = 2  # CRÍTICO para consistencia
+# Overlap determinístico: cuántas velas hacia atrás pedir sobre el último timestamp.
+# Protege contra correcciones de exchange (velas que cambian retroactivamente).
+# El storage hace dedup estricto (last-write-wins), así que el overlap es seguro.
+DEFAULT_OVERLAP_BARS = 3  # 3 velas = protección estándar en trading cuantitativo
 
 OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 

@@ -22,8 +22,11 @@ SafeOps – atomicidad + consistencia + cleanup seguro
 
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Literal
+from typing import Dict, List, Optional, Literal
 
 import pandas as pd
 from loguru import logger
@@ -201,9 +204,24 @@ class HistoricalStorage:
         month: int,
         mode: WriteMode,
     ) -> None:
+        """
+        Escritura atómica con merge profesional.
 
+        Secuencia:
+        1. Leer partición existente (si existe y mode=append)
+        2. Merge + dedup (last-write-wins) — tolera overlap y correcciones
+        3. Escribir a .tmp
+        4. atomic rename .tmp → .parquet
+        5. Escribir metadata sidecar .meta.json
+
+        Garantías:
+        • Nunca corrompe datos si el proceso muere entre pasos 3 y 4
+        • Idempotente: reinsertar los mismos datos no genera duplicados
+        • last-write-wins: correcciones del exchange se aplican correctamente
+        """
         file_path = self._partition_file(symbol, timeframe, year, month)
         temp_path = file_path.with_suffix(".tmp")
+        meta_path = file_path.with_suffix(".meta.json")
 
         try:
             if file_path.exists() and mode == "append":
@@ -219,9 +237,14 @@ class HistoricalStorage:
 
             temp_path.replace(file_path)
 
+            # Metadata sidecar: permite auditoría sin leer el parquet completo
+            _write_metadata(meta_path, df, symbol, timeframe)
+
             logger.info(
-                "Partition saved | {} {} {}/{:02d} rows={}",
+                "Partition saved | {} {} {}/{:02d} rows={} [{} → {}]",
                 symbol, timeframe, year, month, len(df),
+                df["timestamp"].min().isoformat(),
+                df["timestamp"].max().isoformat(),
             )
 
         except Exception as exc:
@@ -304,3 +327,32 @@ def _cleanup_temp(temp_path: Path) -> None:
             temp_path.unlink(missing_ok=True)
     except Exception as exc:
         logger.warning("Temp cleanup failed | {} | {}", temp_path, exc)
+
+
+def _write_metadata(meta_path: Path, df: pd.DataFrame, symbol: str, timeframe: str) -> None:
+    """
+    Escribe sidecar JSON con metadata de la partición.
+
+    Permite auditoría rápida (min/max/rows/checksum) sin leer el parquet.
+    No es crítico — fallo silencioso para no bloquear el pipeline.
+    """
+    try:
+        ts_col = df["timestamp"]
+        # Checksum ligero sobre timestamps: detecta corrupción o gaps
+        ts_bytes = ts_col.astype("int64").values.tobytes()
+        checksum = hashlib.md5(ts_bytes).hexdigest()
+
+        meta: Dict = {
+            "symbol":     symbol,
+            "timeframe":  timeframe,
+            "rows":       len(df),
+            "min_ts":     ts_col.min().isoformat(),
+            "max_ts":     ts_col.max().isoformat(),
+            "checksum":   checksum,
+            "written_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    except Exception as exc:
+        logger.warning("Metadata write failed (non-critical) | {} | {}", meta_path, exc)
