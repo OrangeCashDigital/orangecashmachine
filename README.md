@@ -1,83 +1,88 @@
-OrangeCashMachine
+# OrangeCashMachine (OCM)
 
-OrangeCashMachine (OCM) es una plataforma modular para trading algorítmico cuantitativo en criptomonedas diseñada para construir infraestructuras profesionales de trading y análisis de mercado.
+OrangeCashMachine (OCM) es una **plataforma modular de trading algorítmico cuantitativo en criptomonedas**, diseñada para construir **infraestructuras profesionales de trading y análisis de mercado**.
 
-El sistema sigue principios modernos de:
-	•	data engineering
-	•	arquitecturas event-driven
-	•	pipelines reproducibles
-	•	infraestructura desacoplada
+El sistema sigue principios modernos de ingeniería de datos y software:
 
-El objetivo del proyecto es construir una plataforma cuantitativa escalable donde cada componente tenga una responsabilidad clara dentro del sistema.
+- Data engineering
+- Arquitecturas event-driven
+- Pipelines reproducibles
+- Infraestructura desacoplada
 
-⸻
+El objetivo del proyecto es construir una plataforma cuantitativa **escalable**, donde cada componente tenga una **responsabilidad clara** dentro del sistema.
 
-Objetivo de la Plataforma
+---
+
+## Objetivo de la Plataforma
 
 OrangeCashMachine busca construir una infraestructura capaz de soportar:
-	•	investigación cuantitativa
-	•	generación de señales
-	•	backtesting reproducible
-	•	trading automatizado
-	•	ingestión de datos de mercado a gran escala
+
+- Investigación cuantitativa
+- Generación de señales
+- Backtesting reproducible
+- Trading automatizado
+- Ingestión de datos de mercado a gran escala
 
 La arquitectura separa claramente cuatro dominios principales:
 
-Market Data
-Research
-Execution
-Monitoring
+1. **Market Data**
+2. **Research**
+3. **Execution**
+4. **Monitoring**
 
 Esta separación permite escalar cada componente independientemente.
 
-Principios de Arquitectura
+---
 
-La arquitectura sigue principios utilizados en infraestructuras de trading profesionales:
-	•	Event-Driven Systems
-	•	Data Platform Architecture
-	•	Microservice Decoupling
-	•	Reproducible Data Pipelines
+## Principios de Arquitectura
 
-Estos principios son comunes en infraestructuras utilizadas por:
-	•	fondos cuantitativos
-	•	trading firms
-	•	fintechs de alta frecuencia
-	•	plataformas de análisis financiero
+La arquitectura sigue estándares de **infraestructuras de trading profesionales**:
 
-Arquitectura General
+- Event-Driven Systems
+- Data Platform Architecture
+- Microservice Decoupling
+- Reproducible Data Pipelines
 
-OrangeCashMachine utiliza una arquitectura event-driven desacoplada.
+Estas prácticas son comunes en fondos cuantitativos, trading firms, fintechs de alta frecuencia y plataformas de análisis financiero.
 
-                Exchanges
-                     │
-                     ▼
-              Data Collectors
-                     │
-                     ▼
-               Event Bus
-               (Kafka)
-                     │
-        ┌────────────┼────────────┐
-        │            │            │
-        ▼            ▼            ▼
-   Data Lake     Feature Store  Stream DB
-   (Parquet)       (Parquet)    (ClickHouse)
-        │
-        ▼
-      Research
+---
 
-Este diseño evita cuellos de botella en la ingesta de datos y permite escalar cada componente del sistema.
+## Arquitectura General
 
-Capas del Sistema
+OCM utiliza una arquitectura **event-driven y desacoplada**:
 
-El sistema se organiza en cuatro capas principales.
+Exchanges
+     │
+     ▼
+Data Collectors
+     │
+     ▼
+Event Bus (Kafka)
+     │
+ ┌───┼───┐
+ │   │   │
+ ▼   ▼   ▼
+Data Lake   Feature Store   Stream DB
+(Parquet)   (Parquet)       (ClickHouse)
+     │
+     ▼
+   Research
 
-Market Data Layer
-Data Platform Layer
-Strategy Layer
-Execution Layer
+Este diseño evita cuellos de botella en la ingesta de datos y permite escalar cada componente de forma independiente.
+
+---
+
+## Capas del Sistema
+
+El sistema se organiza en **cuatro capas principales**:
+
+1. **Market Data Layer**
+2. **Data Platform Layer**
+3. **Strategy / Research Layer**
+4. **Execution Layer**
 
 Flujo general:
+
 Exchange
    ↓
 Market Data Layer
@@ -88,32 +93,33 @@ Strategy Layer
    ↓
 Execution Layer
 
-Cada capa puede evolucionar como un servicio independiente.
+Cada capa puede evolucionar como un **servicio independiente**.
 
-⸻
+---
 
-Market Data Layer
+## Market Data Layer
 
 Responsable de recolectar datos de mercado desde exchanges.
 
-Funciones principales:
-	•	ingestión histórica
-	•	ingestión de streaming
-	•	normalización de datos
-	•	publicación de eventos de mercado
+**Funciones principales:**
 
-Componentes:
+- Ingestión histórica
+- Ingestión en streaming
+- Normalización de datos
+- Publicación de eventos de mercado
+
+### Componentes:
 
 Market Data
 │
 ├── Historical Pipeline
 └── Stream Collectors
 
-Historical Data Pipeline
+### Historical Data Pipeline
 
-El pipeline histórico descarga datasets reproducibles desde APIs REST.
+Descarga datasets reproducibles desde APIs REST.
 
-flujo:
+**Flujo:**
 
 Exchange REST API
         ↓
@@ -127,19 +133,20 @@ Parquet Writer
         ↓
 Data Lake
 
-flujo:
+**Responsabilidades:**
 
-Responsabilidades:
-	•	descarga de datos históricos
-	•	normalización de datasets
-	•	persistencia eficiente
-	•	actualización incremental
+- Descarga de datos históricos
+- Normalización de datasets
+- Persistencia eficiente
+- Actualización incremental
 
-⸻
+---
 
-Real-Time Stream Pipeline
+### Real-Time Stream Pipeline
 
-La ingestión en tiempo real utiliza WebSockets y un Event Bus para desacoplar el sistema.
+La ingestión en tiempo real utiliza **WebSockets** y un **Event Bus** para desacoplar el sistema.
+
+**Flujo:**
 
 Exchange WebSocket
         ↓
@@ -149,19 +156,21 @@ Kafka Event Bus
         ↓
 Stream Consumers
 
-lo consumidores pueden incluir:
+**Consumidores posibles:**
 
-Storage Workers
-Feature Generators
-Analytics Services
+- Storage Workers
+- Feature Generators
+- Analytics Services
 
-Este diseño permite manejar altos volúmenes de eventos de mercado sin bloquear el sistema.
+Este diseño permite manejar **altos volúmenes de eventos** sin bloquear el sistema.
 
-Data Platform Layer
+---
 
-La Data Platform gestiona almacenamiento y distribución de datos.
+## Data Platform Layer
 
-Componentes principales:
+Gestiona almacenamiento y distribución de datos.
+
+**Componentes principales:**
 
 Data Platform
 │
@@ -169,17 +178,18 @@ Data Platform
 ├── Feature Store
 └── Stream Database
 
-Data Lake
+### Data Lake
 
-Los datos históricos se almacenan en Parquet.
+Datos históricos almacenados en **Parquet**.
 
-Ventajas:
-	•	formato columnar eficiente
-	•	compresión optimizada
-	•	compatibilidad con herramientas analíticas
-	•	almacenamiento escalable
+**Ventajas:**
 
-Ejemplo de estructura:
+- Formato columnar eficiente
+- Compresión optimizada
+- Compatible con herramientas analíticas
+- Escalable
+
+**Ejemplo de estructura:**
 
 data_lake/
  └── ohlcv/
@@ -188,117 +198,100 @@ data_lake/
              └── timeframe=1m/
                  └── year=2024/
 
-Feature Store
+### Feature Store
 
-El Feature Store almacena variables derivadas utilizadas por modelos y estrategias.
+Almacena variables derivadas utilizadas por modelos y estrategias.
 
-Ejemplos de features:
-	•	indicadores técnicos
-	•	factores cuantitativos
-	•	métricas de microestructura
-	•	señales de trading
+**Ejemplos de features:**
 
-Esto permite reutilizar features entre:
-	•	research
-	•	backtesting
-	•	trading en vivo
+- Indicadores técnicos
+- Factores cuantitativos
+- Métricas de microestructura
+- Señales de trading
 
-⸻
+Permite **reutilizar features** entre:
 
-Stream Database
+- Research
+- Backtesting
+- Trading en vivo
 
-Los datos en tiempo real se almacenan en una base de datos analítica.
+### Stream Database
 
-Tecnología utilizada:
+Almacena datos en tiempo real en una base analítica.
 
-ClickHouse
+**Tecnología:** ClickHouse
 
-Ventajas:
-	•	alto rendimiento en series temporales
-	•	ingestión de gran volumen
-	•	consultas analíticas rápidas
-	•	compresión eficiente
+**Ventajas:**
 
-⸻
+- Alto rendimiento en series temporales
+- Ingestión de gran volumen
+- Consultas analíticas rápidas
+- Compresión eficiente
 
-Research Layer
+---
 
-La capa de research consume datasets desde el Data Lake y el Feature Store.
+## Research Layer
 
-Responsabilidades:
-	•	exploración de datos
-	•	generación de señales
-	•	entrenamiento de modelos
-	•	experimentación cuantitativa
+Consume datasets desde el **Data Lake** y **Feature Store**.
 
-⸻
+**Responsabilidades:**
 
-Execution Layer
+- Exploración de datos
+- Generación de señales
+- Entrenamiento de modelos
+- Experimentación cuantitativa
+
+---
+
+## Execution Layer
 
 Responsable de ejecutar órdenes en exchanges.
 
-Funciones:
-	•	gestión de órdenes
-	•	control de riesgo
-	•	ejecución algorítmica
-	•	conexión con exchanges
+**Funciones:**
 
-⸻
+- Gestión de órdenes
+- Control de riesgo
+- Ejecución algorítmica
+- Conexión con exchanges
 
-Observabilidad
+---
 
-El sistema incluye mecanismos de observabilidad para operación segura.
+## Observabilidad
 
-componentes:
+Incluye mecanismos de **monitorización y operación segura**:
 
-Logging estructurado
-Metrics (Prometheus)
-Monitoring dashboards
-Error tracking
+- Logging estructurado
+- Metrics (Prometheus)
+- Dashboards de monitoring
+- Error tracking
 
-Principios de Ingeniería
+---
 
-El proyecto sigue principios de ingeniería ampliamente utilizados en sistemas de producción.
+## Principios de Ingeniería
 
-SOLID
+- **SOLID:** Cada componente tiene una única responsabilidad.
+- **KISS:** Simplicidad y claridad priorizadas.
+- **DRY:** Lógica común reutilizable entre módulos.
+- **SafeOps:** Operación segura mediante validación, manejo de errores, retries y logging.
 
-Cada componente tiene una única responsabilidad.
+---
 
-KISS
-
-Las soluciones priorizan simplicidad y claridad.
-
-DRY
-
-La lógica común se reutiliza entre módulos.
-
-SafeOps
-
-El sistema prioriza la operación segura mediante:
-	•	validación de configuración
-	•	manejo robusto de errores
-	•	retries controlados
-	•	logging estructurado
-	•	observabilidad
-
-⸻
-
-Roadmap
+## Roadmap
 
 Próximas etapas del proyecto:
-	1.	Integración completa con Prefect
-	2.	Implementación del Event Bus
-	3.	Integración con ClickHouse
-	4.	Feature Engineering pipelines
-	5.	Backtesting framework
-	6.	Motor de ejecución de trading
-	7.	Sistema de monitoreo y risk management
 
-⸻
+1. Integración completa con Prefect
+2. Implementación del Event Bus
+3. Integración con ClickHouse
+4. Feature Engineering pipelines
+5. Backtesting framework
+6. Motor de ejecución de trading
+7. Sistema de monitoreo y risk management
 
-Objetivo Final
+---
 
-OrangeCashMachine busca evolucionar hacia una plataforma cuantitativa completa capaz de operar en entornos de trading automatizado y análisis de mercado a gran escala.
+## Objetivo Final
 
-La arquitectura modular permite escalar gradualmente cada componente sin comprometer la mantenibilidad del sistema.
+OCM busca evolucionar hacia una **plataforma cuantitativa completa**, capaz de operar en entornos de trading automatizado y análisis de mercado a gran escala.
 
+La **arquitectura modular** permite escalar gradualmente cada componente sin comprometer la mantenibilidad.

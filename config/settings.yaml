@@ -1,233 +1,74 @@
-# ======================================================================
-# OrangeCashMachine – Market Data Infrastructure Configuration
-# ======================================================================
+# ==============================================================================
+# OrangeCashMachine – Configuración de Overrides Opcional
+# ==============================================================================
 #
-# Architecture
-# ----------------------------------------------------------------------
-# Exchange APIs → Data Acquisition → Data Platform → Research / Trading
+# Este archivo se utiliza para ajustes locales, temporales o experimentales.
+# Siempre se mergea como última capa: base.yaml → <env>.yaml → settings.yaml
 #
-# Design Principles
-# ----------------------------------------------------------------------
-# SOLID   → Modular and extensible components
-# KISS    → Simple and predictable configuration
-# DRY     → Avoid configuration duplication
-# SafeOps → Secure, observable and resilient operations
+# No se deben colocar credenciales sensibles aquí.
+# ==============================================================================
 #
-# Security Policy
-# ----------------------------------------------------------------------
-# - Never store credentials in this file
-# - Use environment variables (.env)
-# - Rotate API keys regularly
-#
-# ==================================================================
+# NOTA:
+# - Se puede usar en desarrollo, staging o pruebas.
+# - Puede contener overrides de pipelines, logging, storage, integraciones, etc.
+# ==============================================================================
 
-# ==================================================================
-# PIPELINE CONFIGURATION
-# ==================================================================
+# ==============================================================================
+# ENVIRONMENT METADATA
+# ==============================================================================
+environment:
+  # Este nombre no sobrescribe <env>.yaml; sirve solo para tracking opcional
+  name: local-overrides
+
+# ==============================================================================
+# PIPELINE OVERRIDES
+# ==============================================================================
 pipeline:
-
-  # ------------------------------------------------------------------
-  # Historical Data Acquisition
-  # ------------------------------------------------------------------
   historical:
+    # Ajuste temporal para debugging
+    max_concurrent_tasks: 1
+    fetch_all_history: false
 
-    start_date: "2017-01-01T00:00:00Z"
-    fetch_all_history: true
-
-    # Auto-tuned concurrency based on system resources
-    max_concurrent_tasks: 6
-
-    retry_policy:
-      max_attempts: 5
-      backoff_factor: 2
-      jitter: true
-
-    # Supported OHLCV timeframes
-    timeframes:
-      - 1m
-      - 5m
-      - 15m
-      - 1h
-      - 4h
-      - 1d
-
-
-  # ------------------------------------------------------------------
-  # Real-time Streaming Configuration
-  # ------------------------------------------------------------------
   realtime:
+    # Debugging: disminuir buffer de stream
+    max_stream_buffer: 1000
+    snapshot_interval_seconds: 10
 
-    reconnect_delay_seconds: 5
-    heartbeat_timeout_seconds: 30
-
-    # Periodic snapshot to guarantee state consistency
-    snapshot_interval_seconds: 60
-
-    # Maximum buffer size for incoming streaming messages
-    max_stream_buffer: 50000
-
-    # Backpressure policy
-    # reject → prevents memory overflow and protects pipeline stability
-    drop_policy: reject
-
-
-# ==================================================================
-# DATASETS
-# ==================================================================
-datasets:
-
-  # ------------------------------------------------------------------
-  # Core Market Data
-  # ------------------------------------------------------------------
-  ohlcv: true
-  trades: false        # planned future implementation
-  orderbook: false     # recommended only for realtime ingestion
-
-
-  # ------------------------------------------------------------------
-  # Derivatives Market Data
-  # ------------------------------------------------------------------
-  funding_rate: false
-  open_interest: false
-  liquidations: false
-  mark_price: false
-  index_price: false
-
-
-# ==================================================================
-# EXCHANGE CONFIGURATION
-# ==================================================================
-exchanges:
-
-  # ------------------------------------------------------------------
-  # BYBIT
-  # ------------------------------------------------------------------
-  bybit:
-
-    enabled: true
-    enableRateLimit: true
-
-    # Prevent unexpected symbol expansion
-    auto_discover_symbols: false
-
-    credentials:
-      apiKey: ${BYBIT_API_KEY}
-      secret: ${BYBIT_API_SECRET}
-
-    options:
-      adjustForTimeDifference: true
-
-    markets:
-
-      spot:
-        enabled: true
-        symbols:
-          - BTC/USDT
-
-      futures:
-        enabled: false
-        defaultType: swap
-        symbols:
-          - BTC/USDT
-
-
-  # ------------------------------------------------------------------
-  # KUCOIN
-  # ------------------------------------------------------------------
-  kucoin:
-
-    enabled: true
-    enableRateLimit: true
-
-    auto_discover_symbols: false
-
-    credentials:
-      apiKey: ${KUCOIN_API_KEY}
-      secret: ${KUCOIN_API_SECRET}
-      password: ${KUCOIN_PASSPHRASE}
-
-    options:
-      adjustForTimeDifference: true
-
-    markets:
-
-      spot:
-        enabled: true
-        symbols:
-          - BTC/USDT
-
-      futures:
-        enabled: false
-        defaultType: swap
-        symbols:
-          - BTC/USDT
-
-
-# ==================================================================
-# STORAGE – DATA LAKE
-# ==================================================================
-storage:
-
-  # Root path for market data storage
-  data_lake_path: "data_platform/data_lake"
-
-  format: parquet
-  compression: snappy
-
-  # Optimized partitioning for analytical workloads
-  partitioning:
-    - exchange
-    - symbol
-    - timeframe
-    - year
-    - month
-
-
-# ==================================================================
-# FEATURE STORE
-# ==================================================================
-# Storage for derived datasets used in research and ML pipelines
-feature_store:
-
-  enabled: true
-  path: "data_platform/features"
-  format: parquet
-
-
-# ==================================================================
-# OBSERVABILITY
-# ==================================================================
+# ==============================================================================
+# OBSERVABILIDAD / LOGGING
+# ==============================================================================
 observability:
-
   logging:
-    level: INFO
+    level: DEBUG
     format: json
 
-  metrics:
-    enabled: true
-    exporter: prometheus
+# ==============================================================================
+# STORAGE OVERRIDES
+# ==============================================================================
+storage:
+  data_lake:
+    path: "data_platform/local_data_lake"
+  feature_store:
+    path: "data_platform/local_features"
 
-  tracing:
-    enabled: false
+# ==============================================================================
+# EXPERIMENTAL / FEATURE FLAGS
+# ==============================================================================
+features:
+  enable_new_strategy: true
+  enable_risk_simulator: false
 
-
-# ==================================================================
-# OPTIONAL INFRASTRUCTURE INTEGRATIONS (OPT-IN)
-# ==================================================================
+# ==============================================================================
+# INTEGRACIONES TEMPORALES
+# ==============================================================================
 integrations:
-
   redis:
-    enabled: false
+    enabled: true
     host: localhost
     port: 6379
 
   kafka:
     enabled: false
-    bootstrap_servers: localhost:9092
 
   postgres:
     enabled: false
-    host: localhost
-    port: 5432
-    user: ${POSTGRES_USER}
-    password: ${POSTGRES_PASSWORD}
