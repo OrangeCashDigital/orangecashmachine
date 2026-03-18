@@ -225,7 +225,8 @@ class HistoricalPipelineAsync:
         self.start_date      = _parse_start_date(start_date)
         self.max_concurrency = max_concurrency
 
-        self._storage   = storage or HistoricalStorage()
+        exchange_id = getattr(exchange_client, '_exchange_id', None)
+        self._storage   = storage or HistoricalStorage(exchange=exchange_id)
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
         self._fetcher = HistoricalFetcherAsync(

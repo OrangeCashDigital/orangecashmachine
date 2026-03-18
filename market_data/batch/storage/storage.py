@@ -76,11 +76,12 @@ class HistoricalStorage:
     • Consistente ante correcciones de exchange
     """
 
-    def __init__(self, base_path: Optional[str | Path] = None) -> None:
+    def __init__(self, base_path: Optional[str | Path] = None, exchange: Optional[str] = None) -> None:
         self._base_path: Path = _resolve_base_path(base_path)
+        self._exchange: Optional[str] = exchange.lower() if exchange else None
         self._base_path.mkdir(parents=True, exist_ok=True)
 
-        logger.info("HistoricalStorage ready | {}", self._base_path)
+        logger.info("HistoricalStorage ready | {} exchange={}", self._base_path, self._exchange or "shared")
 
     # ======================================================
     # Public API
@@ -170,6 +171,8 @@ class HistoricalStorage:
         return symbol.replace("/", "_")
 
     def _symbol_timeframe_dir(self, symbol: str, timeframe: str) -> Path:
+        if self._exchange:
+            return self._base_path / self._exchange / self._safe_symbol(symbol) / timeframe
         return self._base_path / self._safe_symbol(symbol) / timeframe
 
     def _partition_dir(
