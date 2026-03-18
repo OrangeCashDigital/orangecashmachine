@@ -1,113 +1,171 @@
+#
 # ==========================================================
-# OrangeCashMachine – Market Data Infrastructure
-# Docker Compose Configuration
-#
-# Arquitectura de servicios:
-#   prefect-ui   → Servidor de orquestación (arranca primero)
-#   market-data  → Pipeline de ingestión (espera a prefect-ui)
-#
-# Principios aplicados:
-#   KISS     – configuración mínima y explícita
-#   DRY      – variables de entorno y paths sin repetición
-#   SafeOps  – healthcheck, restart policies y logs acotados
-#   SRP      – cada servicio tiene una responsabilidad única
+# OrangeCashMachine – Market Data Infrastructure (Production-Ready)
 # ==========================================================
 
 # ----------------------------------------------------------
-# Variables reutilizables (DRY)
+# Logging (DRY + SafeOps)
 # ----------------------------------------------------------
 x-logging: &default-logging
   driver: "json-file"
   options:
     max-size: "10m"
-    max-file: "3"
+    max-file: "5"
 
-x-prefect-api-url: &prefect-api-url
-  PREFECT_API_URL: http://prefect-ui:4201/api
+# ----------------------------------------------------------
+# Entorno común (DRY)
+# ----------------------------------------------------------
+x-common-env: &common-env
+  PYTHONUNBUFFERED: "1"
+  OCM_CONFIG_DIR: /app/config
+  OCM_ENV: ${OCM_ENV:-production}
+
+# ----------------------------------------------------------
+# Prefect client config
+# ----------------------------------------------------------
+x-prefect-env: &prefect-env
+  PREFECT_API_URL: http://prefect-server:4200/api
 
 # ==========================================================
-# Services
+# SERVICES
 # ==========================================================
 services:
 
-  # --------------------------------------------------------
-  # prefect-ui
-  # Servidor Prefect – orquestación y UI de flujos.
-  # Debe estar healthy antes de que market-data arranque.
-  # --------------------------------------------------------
-  prefect-ui:
+  # =======================================================
+  # PREFECT SERVER (Orquestación)
+  # =======================================================
+  prefect-server:
     image: prefecthq/prefect:2.19.5-python3.11
-    container_name: ocm_prefect_ui
+    container_name: ocm_prefect_server
+
+    command: prefect server start --host 0.0.0.0 --port 4200
 
     ports:
-      - "4200:4200"   # UI dashboard
-      - "4201:4201"   # API REST
+      - "4200:4200"
 
     environment:
-      PREFECT_API_URL: http://0.0.0.0:4201/api
+      <<: *common-env
+      PREFECT_API_URL: http://0.0.0.0:4200/api
       PREFECT_SERVER_DATABASE_CONNECTION_URL: sqlite+aiosqlite:////prefect/prefect.db
-      PYTHONUNBUFFERED: "1"
 
     volumes:
-      - prefect_data:/prefect   # DB SQLite persistente
-      - ./logs:/app/logs        # logs compartidos
+      - prefect_data:/prefect
 
-    command: prefect server start --host 0.0.0.0 --port 4201
-
-    # SafeOps: market-data espera este healthcheck antes de arrancar
     healthcheck:
       test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:4201/api/health')"]
+             "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 30s
+      retries: 10
+      start_period: 20s
 
     restart: unless-stopped
     logging: *default-logging
 
-  # --------------------------------------------------------
-  # market-data
-  # Pipeline de ingestión 24/7 de datos de mercado.
-  # Se ejecuta una sola vez por invocación (restart: "no").
-  # En producción, un scheduler externo (cron, Prefect deploy)
-  # lo invoca periódicamente.
-  # --------------------------------------------------------
+  # =======================================================
+  # REDIS (Estado / Cursor / Cache)
+  # =======================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ocm_redis
+
+    command: redis-server --appendonly yes --save 60 1000
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+    restart: unless-stopped
+    logging: *default-logging
+
+  # =======================================================
+  # PROMETHEUS (Métricas)
+  # =======================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ocm_prometheus
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+    depends_on:
+      - market-data
+
+    restart: unless-stopped
+    logging: *default-logging
+
+  # =======================================================
+  # GRAFANA (Visualización)
+  # =======================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ocm_grafana
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+    depends_on:
+      - prometheus
+
+    restart: unless-stopped
+    logging: *default-logging
+
+  # =======================================================
+  # MARKET DATA PIPELINE
+  # =======================================================
   market-data:
     build:
       context: .
       dockerfile: Dockerfile
+
     container_name: ocm_market_data
 
-    # SafeOps: no arranca hasta que prefect-ui esté healthy
     depends_on:
-      prefect-ui:
+      prefect-server:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
     environment:
-      <<: *prefect-api-url
-      OCM_CONFIG_PATH: /app/config/settings.yaml
-      PYTHONUNBUFFERED: "1"
+      <<: [*common-env, *prefect-env]
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
     volumes:
-      - ./config:/app/config:ro             # YAML de config (read-only)
-      - ./logs:/app/logs                    # logs persistentes
-      - ./data_platform:/app/data_platform  # Data Lake
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data_platform:/app/data_platform
 
     working_dir: /app
 
     command: python -m market_data.orchestration.entrypoint
 
-    # restart: "no" — el pipeline corre una vez y termina.
-    # El orquestador externo decide cuándo relanzarlo.
     restart: "no"
     logging: *default-logging
 
 # ==========================================================
-# Volumes
+# VOLUMES (Persistencia)
 # ==========================================================
 volumes:
   prefect_data:
-    driver: local
-    # Persiste la base de datos SQLite de Prefect entre reinicios.
-    # Sin esto, cada docker compose up pierde el historial de flows.
+  redis_data:
+  grafana_data:

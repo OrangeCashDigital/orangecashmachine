@@ -1,70 +1,33 @@
 # ==============================================================================
-# OrangeCashMachine – Configuración Base de Infraestructura (Versión Controlada)
-# ==============================================================================
-#
-# Este archivo define la CONFIGURACIÓN BASE del sistema.
-# Todas las configuraciones específicas de entorno deben definirse en:
-#
-#   development.yaml
-#   production.yaml
-#
-# El loader del sistema combinará automáticamente:
-#
-#   base.yaml + <env>.yaml + settings.yaml
-#
-# Arquitectura del sistema
-# ------------------------------------------------------------------------------
-# Exchanges → Adquisición de Datos → Plataforma de Datos → Research / Trading
-#
-# Principios de ingeniería aplicados
-# ------------------------------------------------------------------------------
-# SOLID   → Componentes modulares y extensibles
-# KISS    → Configuración simple y predecible
-# DRY     → Evitar duplicación de configuración
-# SafeOps → Operación segura y resiliente
-#
-# Política de seguridad
-# ------------------------------------------------------------------------------
-# - Nunca almacenar credenciales directamente en este archivo
-# - Utilizar variables de entorno (.env)
-# - Rotar claves de API periódicamente
-#
-# Trazabilidad / Control de versiones
-# ------------------------------------------------------------------------------
-# version           → Número de versión de la configuración (SemVer)
-# last_modified_by  → Usuario o sistema que realizó el último cambio
-# last_modified_at  → Timestamp ISO8601 del último cambio
-# hash_sha256       → Calculado dinámicamente al cargar para detectar cambios
+# OrangeCashMachine – Base Configuration (Production-Ready)
 # ==============================================================================
 
 # ==============================================================================
-# METADATOS DE ENTORNO
+# ENVIRONMENT METADATA
 # ==============================================================================
 environment:
   name: base
-  version: 1.0.0
+  version: 1.1.0
   last_modified_by: orangemusic
-  last_modified_at: 2026-03-17T18:52:26Z
+  last_modified_at: 2026-03-18T00:00:00Z
 
 # ==============================================================================
-# CONFIGURACIÓN DE PIPELINES
+# PIPELINES
 # ==============================================================================
 pipeline:
   historical:
     start_date: "2017-01-01T00:00:00Z"
     fetch_all_history: true
+
+    # Auto → resuelto dinámicamente en runtime (CPU-bound safe default)
     max_concurrent_tasks: auto
+
     retry_policy:
       max_attempts: 5
       backoff_factor: 2
       jitter: true
-    timeframes:
-      - 1m
-      - 5m
-      - 15m
-      - 1h
-      - 4h
-      - 1d
+
+    timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
 
   realtime:
     reconnect_delay_seconds: 5
@@ -74,7 +37,7 @@ pipeline:
     drop_policy: reject
 
 # ==============================================================================
-# DATASETS DISPONIBLES
+# DATASETS
 # ==============================================================================
 datasets:
   ohlcv: true
@@ -87,58 +50,63 @@ datasets:
   index_price: false
 
 # ==============================================================================
-# CONFIGURACIÓN DE EXCHANGES
+# EXCHANGES
 # ==============================================================================
 exchanges:
   bybit:
     enabled: true
     enableRateLimit: true
     auto_discover_symbols: false
+
     credentials:
       apiKey: ${BYBIT_API_KEY}
       secret: ${BYBIT_API_SECRET}
+
     options:
       adjustForTimeDifference: true
+
     markets:
       spot:
         enabled: true
-        symbols:
-          - BTC/USDT
+        symbols: [BTC/USDT]
+
       futures:
         enabled: false
         defaultType: swap
-        symbols:
-          - BTC/USDT
+        symbols: [BTC/USDT]
 
   kucoin:
     enabled: true
     enableRateLimit: true
     auto_discover_symbols: false
+
     credentials:
       apiKey: ${KUCOIN_API_KEY}
       secret: ${KUCOIN_API_SECRET}
       password: ${KUCOIN_PASSPHRASE}
+
     options:
       adjustForTimeDifference: true
+
     markets:
       spot:
         enabled: true
-        symbols:
-          - BTC/USDT
+        symbols: [BTC/USDT]
+
       futures:
         enabled: false
         defaultType: swap
-        symbols:
-          - BTC/USDT
+        symbols: [BTC/USDT]
 
 # ==============================================================================
-# ALMACENAMIENTO – DATA PLATFORM
+# STORAGE (Data Platform)
 # ==============================================================================
 storage:
   data_lake:
-    path: "data_platform/data_lake"
+    path: ${DATA_LAKE_PATH:-data_platform/data_lake}
     format: parquet
     compression: snappy
+
     partitioning:
       - exchange
       - symbol
@@ -151,37 +119,57 @@ storage:
 # ==============================================================================
 feature_store:
   enabled: true
-  path: "data_platform/features"
+  path: ${FEATURE_STORE_PATH:-data_platform/features}
   format: parquet
 
 # ==============================================================================
-# OBSERVABILIDAD
+# OBSERVABILITY
 # ==============================================================================
 observability:
   logging:
-    level: INFO
+    level: ${LOG_LEVEL:-INFO}
     format: json
+
   metrics:
     enabled: true
     exporter: prometheus
+    port: ${METRICS_PORT:-8000}
+
   tracing:
     enabled: false
 
 # ==============================================================================
-# INTEGRACIONES DE INFRAESTRUCTURA
+# INFRASTRUCTURE INTEGRATIONS
 # ==============================================================================
 integrations:
+
+  # --------------------------------------------------------
+  # Redis (Cursor Store / Cache)
+  # --------------------------------------------------------
   redis:
-    enabled: false
-    host: localhost
-    port: 6379
+    enabled: ${REDIS_ENABLED:-true}
+    host: ${REDIS_HOST:-localhost}
+    port: ${REDIS_PORT:-6379}
+    db: ${REDIS_DB:-0}
+
+    # SafeOps
+    socket_timeout: 5
+    retry_on_timeout: true
+
+  # --------------------------------------------------------
+  # Kafka (streaming future-ready)
+  # --------------------------------------------------------
   kafka:
     enabled: false
-    bootstrap_servers: localhost:9092
+    bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}
+
+  # --------------------------------------------------------
+  # Postgres (metadata / analytics future)
+  # --------------------------------------------------------
   postgres:
     enabled: false
-    host: localhost
-    port: 5432
+    host: ${POSTGRES_HOST:-localhost}
+    port: ${POSTGRES_PORT:-5432}
     user: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
 
@@ -190,6 +178,8 @@ integrations:
 # ==============================================================================
 healthchecks:
   enabled: true
+
   checks:
     - storage
     - exchanges
+    - redis
