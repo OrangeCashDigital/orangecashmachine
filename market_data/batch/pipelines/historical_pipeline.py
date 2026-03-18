@@ -35,6 +35,8 @@ from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
 from market_data.batch.storage.storage import HistoricalStorage
+from market_data.batch.storage.bronze_storage import BronzeStorage
+from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter
 from services.observability.metrics import (
@@ -226,7 +228,9 @@ class HistoricalPipelineAsync:
         self.max_concurrency = max_concurrency
 
         exchange_id = getattr(exchange_client, '_exchange_id', None)
-        self._storage   = storage or HistoricalStorage(exchange=exchange_id)
+        self._storage        = storage or HistoricalStorage(exchange=exchange_id)
+        self._bronze_storage = BronzeStorage(exchange=exchange_id)
+        self._silver_storage = SilverStorage(exchange=exchange_id)
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
         self._fetcher = HistoricalFetcherAsync(
@@ -349,6 +353,20 @@ class HistoricalPipelineAsync:
                     )
                     return result
 
+                # Bronze: datos crudos tal como llegan (append-only, sin merge)
+                run_id = self._bronze_storage.append(
+                    df        = df,
+                    symbol    = symbol,
+                    timeframe = timeframe,
+                )
+                # Silver: datos limpios con versionado
+                self._silver_storage.save_ohlcv(
+                    df        = df,
+                    symbol    = symbol,
+                    timeframe = timeframe,
+                    run_id    = run_id,
+                )
+                # Legacy storage (exchanges/ path) — mantener por compatibilidad
                 self._storage.save_ohlcv(
                     df        = df,
                     symbol    = symbol,
