@@ -167,7 +167,12 @@ class HistoricalFetcherAsync:
                 break
 
             df = _raw_to_dataframe(raw)
-            df = self._transformer.transform(df)
+            df = self._transformer.transform(
+                df,
+                symbol=symbol,
+                timeframe=timeframe,
+                exchange=getattr(self._exchange, '_exchange_id', 'unknown'),
+            )
             df = _sanitize_dataframe(df)
 
             if df.empty:

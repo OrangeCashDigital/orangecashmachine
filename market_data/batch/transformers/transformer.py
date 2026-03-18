@@ -32,6 +32,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.batch.schemas.ohlcv_schema import validate_ohlcv
+from market_data.batch.schemas.data_quality import DataQualityChecker
 
 
 class OHLCVTransformer:
@@ -167,7 +168,13 @@ class OHLCVTransformer:
     # ---------------------------------------------------------
 
     @classmethod
-    def transform(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def transform(
+        cls,
+        df: pd.DataFrame,
+        symbol: str = "unknown",
+        timeframe: str = "unknown",
+        exchange: str = "unknown",
+    ) -> pd.DataFrame:
         """
         Pipeline completo de transformación OHLCV.
 
@@ -175,6 +182,12 @@ class OHLCVTransformer:
         ----------
         df : pd.DataFrame
             DataFrame OHLCV crudo.
+        symbol : str
+            Par de trading (para data quality reporting).
+        timeframe : str
+            Intervalo temporal (para detección de gaps).
+        exchange : str
+            Exchange fuente (para trazabilidad).
 
         Returns
         -------
@@ -201,8 +214,14 @@ class OHLCVTransformer:
 
         df = cls._sort(df)
 
-        # Validación final
+        # Validación final de schema (estructura y tipos)
         df = validate_ohlcv(df)
+
+        # Data quality checks (gaps, outliers, flatlines)
+        checker = DataQualityChecker(timeframe=timeframe, exchange=exchange)
+        report  = checker.check(df, symbol=symbol)
+        if report.issues:
+            logger.warning(report.summary())
 
         logger.info(
             f"OHLCV transformed → {original_rows} → {len(df)} rows"
