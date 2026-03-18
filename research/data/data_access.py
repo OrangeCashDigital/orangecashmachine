@@ -75,6 +75,9 @@ _DATA_LAKE_PATH: Optional[Path] = (
     else None
 )
 
+# Exchange por defecto para research
+_DEFAULT_EXCHANGE: str = _os.environ.get("OCM_EXCHANGE", "kucoin")
+
 
 # ==========================================================
 # Lazy Loader
@@ -83,32 +86,24 @@ _DATA_LAKE_PATH: Optional[Path] = (
 _loader_instance: Optional[MarketDataLoader] = None
 
 
-def _get_loader() -> MarketDataLoader:
+def _get_loader(exchange: Optional[str] = None) -> MarketDataLoader:
     """
     Devuelve el loader singleton, inicializándolo de forma lazy.
 
-    Lazy init en lugar de singleton en import time:
-    - El import del módulo no falla si el Data Lake no existe todavía
-    - El loader se puede resetear en tests sobreescribiendo _loader_instance
-    - El path del Data Lake se resuelve cuando se necesita, no antes
-
-    Returns
-    -------
-    MarketDataLoader
-        Instancia compartida del loader.
-
-    Raises
-    ------
-    MarketDataLoaderError
-        Si el Data Lake no existe en el path configurado.
+    El loader ahora soporta versionado: carga desde silver/_versions/
+    en lugar de leer directamente el filesystem.
     """
     global _loader_instance
 
     if _loader_instance is None:
-        _loader_instance = MarketDataLoader(data_lake_path=_DATA_LAKE_PATH)
+        _loader_instance = MarketDataLoader(
+            data_lake_path=_DATA_LAKE_PATH,
+            exchange=exchange or _DEFAULT_EXCHANGE,
+        )
         logger.debug(
-            "MarketDataLoader initialized (lazy) | path={}",
+            "MarketDataLoader initialized | path={} exchange={}",
             _DATA_LAKE_PATH or "default",
+            exchange or _DEFAULT_EXCHANGE,
         )
 
     return _loader_instance
@@ -138,6 +133,8 @@ def get_ohlcv(
     start:     Optional[str] = None,
     end:       Optional[str] = None,
     columns:   Optional[List[str]] = None,
+    version:   str = "latest",
+    exchange:  Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Carga datos OHLCV desde el Data Lake.
@@ -169,7 +166,7 @@ def get_ohlcv(
     ValueError
         Si start o end tienen formato inválido, o start > end.
     """
-    loader = _get_loader()
+    loader = _get_loader(exchange)
 
     df = loader.load_ohlcv_range(
         symbol=symbol,
@@ -177,11 +174,12 @@ def get_ohlcv(
         start_date=start,
         end_date=end,
         columns=columns,
+        version=version,
     )
 
     logger.info(
-        "Research OHLCV loaded | symbol={} timeframe={} start={} end={} rows={}",
-        symbol, timeframe, start, end, len(df),
+        "Research OHLCV loaded | symbol={} timeframe={} version={} start={} end={} rows={}",
+        symbol, timeframe, version, start, end, len(df),
     )
 
     return df

@@ -30,6 +30,7 @@ from loguru import logger
 from services.observability.metrics import push_metrics
 
 from market_data.orchestration.flows.batch_flow import market_data_flow
+from market_data.batch.storage.snapshot import SnapshotManager
 
 
 # ============================================================================
@@ -139,6 +140,12 @@ async def _run_flow(config_path: Path) -> None:
     logger.info("Launching market_data_flow | config_path=%s", config_path)
     await market_data_flow(config_path=config_path)
     logger.info("market_data_flow completed successfully")
+    # Snapshot global del estado del data lake post-ingestión
+    try:
+        snapshot_id = SnapshotManager().create_snapshot()
+        logger.info("Global snapshot created | id={}", snapshot_id)
+    except Exception as exc:
+        logger.warning("Snapshot creation failed (non-critical) | {}", exc)
 
 
 # ============================================================================
