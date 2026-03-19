@@ -1,14 +1,4 @@
-"""
-orchestration/tasks/batch_tasks.py
-====================================
-Prefect tasks que ejecutan pipelines batch del dominio.
-
-Responsabilidad única: instanciar pipelines y delegar ejecución.
-
-Principios: SOLID, DRY, KISS, SafeOps
-"""
 from __future__ import annotations
-
 from typing import List, Sequence
 
 from prefect import task, get_run_logger
@@ -17,8 +7,12 @@ from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
 from market_data.batch.pipelines.historical_pipeline import HistoricalPipelineAsync
 
+# -----------------------------------------------------------------------------
+# Validaciones independientes y testeables (SafeOps)
+# -----------------------------------------------------------------------------
 
 def _validate_historical_inputs(exchange_cfg: ExchangeConfig, config: AppConfig) -> None:
+    """Valida que haya símbolos y timeframes antes de ejecutar historical pipeline."""
     if not exchange_cfg.all_symbols:
         raise ValueError(f"Exchange '{exchange_cfg.name.value}' has no symbols configured.")
     if not config.pipeline.historical.timeframes:
@@ -26,9 +20,14 @@ def _validate_historical_inputs(exchange_cfg: ExchangeConfig, config: AppConfig)
 
 
 def _validate_derivatives_datasets(datasets: Sequence[str]) -> None:
+    """Valida que se hayan seleccionado datasets para derivados."""
     if not datasets:
         raise ValueError("Derivatives pipeline requires at least one dataset.")
 
+
+# -----------------------------------------------------------------------------
+# Historical Pipeline
+# -----------------------------------------------------------------------------
 
 @task(
     name="historical_ohlcv_pipeline",
@@ -40,31 +39,36 @@ def _validate_derivatives_datasets(datasets: Sequence[str]) -> None:
     tags=["ohlcv"],
 )
 async def run_historical_pipeline(
-    config:       AppConfig,
+    config: AppConfig,
     exchange_cfg: ExchangeConfig,
-    probe:        ExchangeProbe,
+    probe: ExchangeProbe,
 ) -> None:
+    """
+    Ejecuta el pipeline histórico (OHLCV) de manera asíncrona para un exchange.
+    SafeOps: errores parciales loggeados, raise solo si todos fallan.
+    """
     log = get_run_logger()
     _validate_historical_inputs(exchange_cfg, config)
 
-    hist          = config.pipeline.historical
+    hist_cfg = config.pipeline.historical
     exchange_name = exchange_cfg.name.value
     max_concurrency = probe.max_concurrent
 
     log.info(
         "Historical pipeline starting | exchange=%s symbols=%s timeframes=%s workers=%s",
-        exchange_name, len(exchange_cfg.all_symbols), len(hist.timeframes), max_concurrency,
+        exchange_name, len(exchange_cfg.all_symbols), len(hist_cfg.timeframes), max_concurrency,
     )
 
+    # Lazy import para desacoplar dependencias externas
     from services.exchange.ccxt_adapter import CCXTAdapter
 
     exchange_client = CCXTAdapter(config=exchange_cfg)
 
     try:
         pipeline = HistoricalPipelineAsync(
-            symbols        =exchange_cfg.all_symbols,
-            timeframes     =hist.timeframes,
-            start_date     =hist.start_date,
+            symbols=exchange_cfg.all_symbols,
+            timeframes=hist_cfg.timeframes,
+            start_date=hist_cfg.start_date,
             max_concurrency=max_concurrency,
             exchange_client=exchange_client,
         )
@@ -79,7 +83,7 @@ async def run_historical_pipeline(
 
     if summary.total > 0 and summary.failed == summary.total:
         raise RuntimeError(
-            f"Historical pipeline failed for all {summary.total} pairs on '{exchange_name}'."
+            f"Historical pipeline failed for all {summary.total} symbols on '{exchange_name}'."
         )
 
     if summary.failed > 0:
@@ -89,39 +93,55 @@ async def run_historical_pipeline(
         )
 
 
+# -----------------------------------------------------------------------------
+# Trades Pipeline (SafeOps Placeholder)
+# -----------------------------------------------------------------------------
+
 @task(
     name="trades_pipeline",
     retries=3,
     retry_delay_seconds=[30, 120, 300],
     timeout_seconds=PIPELINE_TASK_TIMEOUT,
     task_run_name="{exchange_cfg.name.value}-trades",
-    description="[NOT IMPLEMENTED] Disable 'datasets.trades' in settings.yaml.",
+    description="[NOT IMPLEMENTED] Trades dataset currently disabled.",
 )
 async def run_trades_pipeline(
-    config:       AppConfig,
+    config: AppConfig,
     exchange_cfg: ExchangeConfig,
-    probe:        ExchangeProbe,
+    probe: ExchangeProbe,
 ) -> None:
+    """
+    Placeholder para pipeline de trades. SafeOps: solo raise NotImplementedError.
+    """
     log = get_run_logger()
     log.error("Trades pipeline not implemented | exchange=%s", exchange_cfg.name.value)
     raise NotImplementedError("Disable 'datasets.trades' in settings.yaml.")
 
+
+# -----------------------------------------------------------------------------
+# Derivatives Pipeline (SafeOps Placeholder)
+# -----------------------------------------------------------------------------
 
 @task(
     name="derivatives_pipeline",
     retries=0,
     timeout_seconds=PIPELINE_TASK_TIMEOUT,
     task_run_name="{exchange_cfg.name.value}-derivatives",
-    description="[NOT IMPLEMENTED] Disable derivative datasets in settings.yaml.",
+    description="[NOT IMPLEMENTED] Derivative datasets currently disabled.",
 )
 async def run_derivatives_pipeline(
-    config:       AppConfig,
+    config: AppConfig,
     exchange_cfg: ExchangeConfig,
-    probe:        ExchangeProbe,
-    datasets:     List[str],
+    probe: ExchangeProbe,
+    datasets: List[str],
 ) -> None:
+    """
+    Placeholder para pipeline de derivados. SafeOps: valida datasets y raise NotImplementedError.
+    """
     log = get_run_logger()
     _validate_derivatives_datasets(datasets)
-    log.error("Derivatives pipeline not implemented | exchange=%s datasets=%s",
-              exchange_cfg.name.value, datasets)
+    log.error(
+        "Derivatives pipeline not implemented | exchange=%s datasets=%s",
+        exchange_cfg.name.value, datasets,
+    )
     raise NotImplementedError(f"Disable {datasets} in settings.yaml.")

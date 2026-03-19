@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 """
-core/config/schema.py (PRO+)
+core/config/schema.py
+=====================
 
-Schema tipado, seguro y extensible para OrangeCashMachine.
+Schema canónico de configuración para OrangeCashMachine.
+Cubre todos los campos de base.yaml + development.yaml + settings.yaml.
 
-Principios:
-SOLID · KISS · DRY · SafeOps
+Principios: SOLID · KISS · DRY · SafeOps
 """
 
 import os
@@ -15,292 +16,419 @@ import warnings
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import (
-    BaseModel,
-    Field,
-    SecretStr,
-    field_validator,
-    model_validator,
-    ConfigDict,
-)
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator, ConfigDict
 
 CONFIG_PATH: Path = Path("config/settings.yaml")
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Constants
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 SYMBOL_REGEX = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+$")
-_ALLOWED_TIMEFRAMES = {"1m", "5m", "15m", "1h", "4h", "1d"}
-_EXCHANGES_WITH_PASSPHRASE = {"kucoin", "okx"}
+
+EXCHANGE_TASK_TIMEOUT: int = 120
+PIPELINE_TASK_TIMEOUT: int = 3_600
+
+_ALLOWED_TIMEFRAMES:        frozenset[str] = frozenset({"1m", "5m", "15m", "1h", "4h", "1d"})
+_EXCHANGES_WITH_PASSPHRASE: frozenset[str] = frozenset({"kucoin", "okx"})
 
 
-# -----------------------------------------------------------------------------
-# Base Model (SafeOps)
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Base Model
+# =============================================================================
 
 class StrictBaseModel(BaseModel):
-    model_config = ConfigDict(
-        frozen=True,
-        extra="forbid",   # 🔥 bloquea campos inesperados
-        validate_assignment=True,
-    )
+    model_config = ConfigDict(frozen=True, extra="forbid", validate_assignment=True)
 
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Enums
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class SupportedExchange(str, Enum):
     BINANCE = "binance"
-    BYBIT = "bybit"
-    OKX = "okx"
-    KUCOIN = "kucoin"
+    BYBIT   = "bybit"
+    OKX     = "okx"
+    KUCOIN  = "kucoin"
+    GATE    = "gate"
 
 
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Environment
+# =============================================================================
+
+class EnvironmentConfig(StrictBaseModel):
+    name:             str           = "base"
+    version:          Optional[str] = None
+    debug:            bool          = False
+    last_modified_by: Optional[str] = None
+    last_modified_at: Optional[Any] = None
+
+
+# =============================================================================
 # Market
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class MarketConfig(StrictBaseModel):
-    enabled: bool = False
-    symbols: List[str] = Field(default_factory=list)
+    enabled:     bool          = False
+    symbols:     List[str]     = Field(default_factory=list)
+    defaultType: Optional[str] = None
 
     @field_validator("symbols")
     @classmethod
     def normalize_symbols(cls, v: List[str]) -> List[str]:
-        seen = set()
-        result = []
-
+        seen, result = set(), []
         for symbol in v:
             s = symbol.strip().upper()
             if not SYMBOL_REGEX.match(s):
-                raise ValueError(f"Invalid symbol: {symbol}")
+                raise ValueError(f"Invalid symbol format: '{symbol}'. Expected BTC/USDT style.")
             if s not in seen:
                 seen.add(s)
                 result.append(s)
-
         return result
 
 
 class MarketsConfig(StrictBaseModel):
-    spot: MarketConfig = Field(default_factory=MarketConfig)
+    spot:    MarketConfig = Field(default_factory=MarketConfig)
     futures: MarketConfig = Field(default_factory=MarketConfig)
 
+    @property
+    def all_symbols(self) -> List[str]:
+        seen, result = set(), []
+        for mkt in (self.spot, self.futures):
+            for s in mkt.symbols:
+                if s not in seen:
+                    seen.add(s)
+                    result.append(s)
+        return result
 
-# -----------------------------------------------------------------------------
+
+# =============================================================================
 # Exchange
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class ExchangeConfig(StrictBaseModel):
+    name:                 SupportedExchange
+    enabled:              bool           = True
+    enableRateLimit:      bool           = True
+    auto_discover_symbols: bool          = False
+    options:              Dict[str, Any] = Field(default_factory=dict)
+    test_symbol:          str            = "BTC/USDT"
 
-    name: SupportedExchange
-    enabled: bool = True
-    enableRateLimit: bool = True
-
-    api_key: SecretStr = SecretStr("")
-    api_secret: SecretStr = SecretStr("")
+    api_key:      SecretStr = SecretStr("")
+    api_secret:   SecretStr = SecretStr("")
     api_password: SecretStr = SecretStr("")
 
     markets: MarketsConfig = Field(default_factory=MarketsConfig)
 
-    # -------------------
-    # Credentials
-    # -------------------
-
     @model_validator(mode="before")
     @classmethod
-    def resolve_credentials(cls, values: dict):
-
-        name = str(values.get("name", "")).upper()
-
+    def resolve_credentials(cls, values: dict) -> dict:
+        name  = str(values.get("name", "")).upper()
         creds = values.pop("credentials", {}) or {}
-
-        values["api_key"] = os.getenv(f"{name}_API_KEY", creds.get("apiKey", ""))
-        values["api_secret"] = os.getenv(f"{name}_API_SECRET", creds.get("secret", ""))
-
-        values["api_password"] = (
-            os.getenv(f"{name}_PASSPHRASE")
-            or creds.get("password", "")
-        )
-
+        values["api_key"]      = os.getenv(f"{name}_API_KEY",    creds.get("apiKey",    os.getenv("OCM_API_KEY", "")))
+        values["api_secret"]   = os.getenv(f"{name}_API_SECRET", creds.get("secret",    os.getenv("OCM_API_SECRET", "")))
+        values["api_password"] = os.getenv(f"{name}_PASSPHRASE") or os.getenv(f"{name}_PASSWORD") or creds.get("password", "")
         return values
 
     @model_validator(mode="after")
-    def validate_credentials(self):
-
-        if self.enabled:
-            if not self.api_key.get_secret_value() or not self.api_secret.get_secret_value():
-                raise ValueError(f"{self.name} missing credentials")
-
-        if self.name.value in _EXCHANGES_WITH_PASSPHRASE:
-            if not self.api_password.get_secret_value():
-                raise ValueError(f"{self.name} requires passphrase")
-
+    def validate_credentials(self) -> "ExchangeConfig":
+        if self.enabled and not self.has_credentials:
+            raise ValueError(f"Exchange '{self.name.value}' is enabled but credentials are missing.")
+        if self.requires_passphrase and not self.has_passphrase:
+            raise ValueError(f"Exchange '{self.name.value}' requires a passphrase.")
         return self
 
+    @property
+    def has_credentials(self) -> bool:
+        return bool(self.api_key.get_secret_value() and self.api_secret.get_secret_value())
 
-# -----------------------------------------------------------------------------
+    @property
+    def requires_passphrase(self) -> bool:
+        return self.name.value in _EXCHANGES_WITH_PASSPHRASE
+
+    @property
+    def has_passphrase(self) -> bool:
+        return bool(self.api_password.get_secret_value())
+
+    @property
+    def all_symbols(self) -> List[str]:
+        return self.markets.all_symbols
+
+    def ccxt_credentials(self) -> dict:
+        creds = {"apiKey": self.api_key.get_secret_value(), "secret": self.api_secret.get_secret_value(), "enableRateLimit": self.enableRateLimit}
+        if self.requires_passphrase and self.has_passphrase:
+            creds["password"] = self.api_password.get_secret_value()
+        return creds
+
+
+# =============================================================================
 # Pipeline
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class RetryPolicy(StrictBaseModel):
-    max_attempts: int = 5
+    max_attempts:  int  = 5
     backoff_factor: int = 2
-    jitter: bool = True
+    jitter:        bool = True
 
 
 class HistoricalConfig(StrictBaseModel):
+    start_date:           str       = "2017-01-01T00:00:00Z"
+    fetch_all_history:    bool      = False
+    max_concurrent_tasks: int       = Field(default=4, ge=1, le=64)
+    timeframes:           List[str] = Field(default_factory=list)
+    retry_policy:         RetryPolicy = Field(default_factory=RetryPolicy)
 
-    start_date: str
-    fetch_all_history: bool = False
-    max_concurrent_tasks: int = Field(default=4, ge=1, le=32)
-    timeframes: List[str]
-    retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_auto_concurrency(cls, values: dict) -> dict:
+        if values.get("max_concurrent_tasks") == "auto":
+            import os as _os
+            values["max_concurrent_tasks"] = max(1, min((_os.cpu_count() or 4), 16))
+        return values
 
     @field_validator("timeframes")
     @classmethod
-    def validate_timeframes(cls, v):
+    def validate_timeframes(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("At least one timeframe must be defined.")
         invalid = [tf for tf in v if tf not in _ALLOWED_TIMEFRAMES]
         if invalid:
-            raise ValueError(f"Invalid timeframes: {invalid}")
+            raise ValueError(f"Invalid timeframes: {invalid}. Allowed: {sorted(_ALLOWED_TIMEFRAMES)}")
         return v
 
     @field_validator("start_date")
     @classmethod
-    def validate_date(cls, v):
-        dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+    def validate_start_date(cls, v: str) -> str:
+        try:
+            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            raise ValueError(f"start_date must be ISO 8601: '{v}'")
         if dt > datetime.now(timezone.utc):
-            raise ValueError("start_date in future")
+            raise ValueError("start_date cannot be in the future.")
         return v
 
 
 class RealtimeConfig(StrictBaseModel):
-    reconnect_delay_seconds: int = 5
-    heartbeat_timeout_seconds: int = 30
-    snapshot_interval_seconds: int = 60
-    max_stream_buffer: int = 50000
+    reconnect_delay_seconds:   int = Field(default=5,      ge=1)
+    heartbeat_timeout_seconds: int = Field(default=30,     ge=5)
+    snapshot_interval_seconds: int = Field(default=60,     ge=10)
+    max_stream_buffer:         int = Field(default=50_000, ge=1_000)
+    drop_policy: Literal["reject", "drop_oldest", "drop_newest"] = "reject"
+
+
+class TimeoutsConfig(StrictBaseModel):
+    exchange_task:        int = Field(default=120,   ge=1)
+    historical_pipeline:  int = Field(default=3_600, ge=1)
+    trades_pipeline:      int = Field(default=1_800, ge=1)
+    derivatives_pipeline: int = Field(default=2_700, ge=1)
 
 
 class PipelineConfig(StrictBaseModel):
-    historical: HistoricalConfig
-    realtime: RealtimeConfig
+    historical: HistoricalConfig = Field(default_factory=HistoricalConfig)
+    realtime:   RealtimeConfig   = Field(default_factory=RealtimeConfig)
+    timeouts:   TimeoutsConfig   = Field(default_factory=TimeoutsConfig)
 
 
-# -----------------------------------------------------------------------------
-# Storage (aligned with YAML)
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Storage
+# =============================================================================
 
 class DataLakeConfig(StrictBaseModel):
-    path: str
-    format: str = "parquet"
-    compression: str = "snappy"
-    partitioning: List[str]
+    path:         str       = "data_platform/data_lake"
+    format:       str       = "parquet"
+    compression:  str       = "snappy"
+    partitioning: List[str] = Field(default_factory=lambda: ["exchange", "symbol", "timeframe", "year", "month"])
+
+
+class FeatureStoreConfig(StrictBaseModel):
+    enabled: bool = False
+    path:    str  = "data_platform/features"
+    format:  str  = "parquet"
 
 
 class StorageConfig(StrictBaseModel):
-    data_lake: DataLakeConfig
+    data_lake:     DataLakeConfig     = Field(default_factory=DataLakeConfig)
+    feature_store: FeatureStoreConfig = Field(default_factory=FeatureStoreConfig)
 
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Datasets
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class DatasetsConfig(StrictBaseModel):
-    ohlcv: bool = False
-    trades: bool = False
-    orderbook: bool = False
+    ohlcv:         bool = False
+    trades:        bool = False
+    orderbook:     bool = False
+    funding_rate:  bool = False
+    open_interest: bool = False
+    liquidations:  bool = False
+    mark_price:    bool = False
+    index_price:   bool = False
 
+    @property
+    def active_datasets(self) -> List[str]:
+        return [k for k, v in self.model_dump().items() if v]
+
+    @property
     def any_active(self) -> bool:
-        return any(self.model_dump().values())
+        return bool(self.active_datasets)
+
+    @property
+    def active_derivative_datasets(self) -> List[str]:
+        derivatives = {"funding_rate", "open_interest", "liquidations", "mark_price", "index_price"}
+        return [d for d in self.active_datasets if d in derivatives]
 
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Integrations
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class RedisConfig(StrictBaseModel):
-    enabled: bool = False
-    host: str = "localhost"
-    port: int = 6379
-    db: int = 0
+    enabled:          bool = False
+    host:             str  = "localhost"
+    port:             int  = Field(default=6379, ge=1, le=65535)
+    db:               int  = Field(default=0,    ge=0)
+    socket_timeout:   int  = Field(default=5,    ge=1)
+    retry_on_timeout: bool = True
+
+
+class KafkaConfig(StrictBaseModel):
+    enabled:           bool = False
+    bootstrap_servers: str  = "localhost:9092"
+
+
+class PostgresConfig(StrictBaseModel):
+    enabled:  bool          = False
+    host:     str           = "localhost"
+    port:     int           = Field(default=5432, ge=1, le=65535)
+    user:     Optional[str] = None
+    password: Optional[str] = None
+    database: Optional[str] = None
 
 
 class IntegrationsConfig(StrictBaseModel):
-    redis: RedisConfig = Field(default_factory=RedisConfig)
+    redis:    RedisConfig    = Field(default_factory=RedisConfig)
+    kafka:    KafkaConfig    = Field(default_factory=KafkaConfig)
+    postgres: PostgresConfig = Field(default_factory=PostgresConfig)
 
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Observability
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class LoggingConfig(StrictBaseModel):
-    level: str = "INFO"
+    level:  str = "INFO"
     format: str = "json"
+
+
+class MetricsConfig(StrictBaseModel):
+    enabled:  bool = False
+    exporter: str  = "prometheus"
+    port:     int  = Field(default=8000, ge=1, le=65535)
+
+
+class TracingConfig(StrictBaseModel):
+    enabled: bool = False
 
 
 class ObservabilityConfig(StrictBaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    metrics: MetricsConfig = Field(default_factory=MetricsConfig)
+    tracing: TracingConfig = Field(default_factory=TracingConfig)
 
 
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Health Checks
+# =============================================================================
+
+class HealthChecksConfig(StrictBaseModel):
+    enabled: bool      = True
+    checks:  List[str] = Field(default_factory=lambda: ["storage", "exchanges", "redis"])
+
+
+# =============================================================================
+# Safety
+# =============================================================================
+
+class SafetyConfig(StrictBaseModel):
+    prevent_full_reingestion: bool = True
+    require_explicit_start:   bool = False
+
+
+# =============================================================================
+# Features (feature flags dinamicos)
+# =============================================================================
+
+class FeaturesConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+
+# =============================================================================
 # Audit
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class AuditEntry(StrictBaseModel):
-    timestamp: datetime
-    cache_key: str
-    hash: str
+    timestamp:   datetime
+    cache_key:   str
+    hash:        str
     source_file: str
 
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # AppConfig
-# -----------------------------------------------------------------------------
+# =============================================================================
 
 class AppConfig(StrictBaseModel):
-
     exchanges: List[ExchangeConfig]
-    pipeline: PipelineConfig
-    storage: StorageConfig
+    pipeline:  PipelineConfig
 
-    datasets: DatasetsConfig = Field(default_factory=DatasetsConfig)
-    integrations: IntegrationsConfig = Field(default_factory=IntegrationsConfig)
+    storage:       StorageConfig       = Field(default_factory=StorageConfig)
+    datasets:      DatasetsConfig      = Field(default_factory=DatasetsConfig)
+    integrations:  IntegrationsConfig  = Field(default_factory=IntegrationsConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+    environment:   EnvironmentConfig   = Field(default_factory=EnvironmentConfig)
+    feature_store: FeatureStoreConfig  = Field(default_factory=FeatureStoreConfig)
+    healthchecks:  HealthChecksConfig  = Field(default_factory=HealthChecksConfig)
+    safety:        SafetyConfig        = Field(default_factory=SafetyConfig)
+    features:      FeaturesConfig      = Field(default_factory=FeaturesConfig)
 
-    audit_log: List[AuditEntry] = Field(default_factory=list)
+    audit_log:   List[AuditEntry]   = Field(default_factory=list)
     last_reload: Optional[datetime] = None
 
-    # -------------------
     @model_validator(mode="before")
     @classmethod
-    def parse_exchanges(cls, values):
-
+    def parse_exchanges(cls, values: dict) -> dict:
         raw = values.get("exchanges", {})
-
         if isinstance(raw, dict):
             values["exchanges"] = [
                 {"name": name, **cfg}
                 for name, cfg in raw.items()
                 if cfg.get("enabled", True)
             ]
-
         return values
 
     @model_validator(mode="after")
-    def validate(self):
-
+    def validate_exchanges(self) -> "AppConfig":
         if not self.exchanges:
-            raise ValueError("No exchanges enabled")
-
-        if not self.datasets.any_active():
-            warnings.warn("No datasets enabled", stacklevel=2)
-
+            raise ValueError("At least one exchange must be enabled.")
         return self
 
-    # -------------------
+    @model_validator(mode="after")
+    def warn_if_no_datasets(self) -> "AppConfig":
+        if not self.datasets.any_active:
+            warnings.warn("No datasets enabled.", UserWarning, stacklevel=2)
+        return self
+
     @property
     def exchange_names(self) -> List[str]:
         return [e.name.value for e in self.exchanges]
+
+    def get_exchange(self, name: str) -> Optional[ExchangeConfig]:
+        target = name.lower()
+        for exc in self.exchanges:
+            if exc.name.value == target:
+                return exc
+        return None

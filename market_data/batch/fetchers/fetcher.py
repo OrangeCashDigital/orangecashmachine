@@ -84,6 +84,9 @@ class DownloadResult:
 # Fetcher
 # ==========================================================
 
+# CursorStore se importa aqui para evitar circular import
+from services.state.cursor_store import CursorStore, InMemoryCursorStore
+
 class HistoricalFetcherAsync:
 
     def __init__(
@@ -92,12 +95,14 @@ class HistoricalFetcherAsync:
         storage: Optional[HistoricalStorage] = None,
         transformer: Optional[OHLCVTransformer] = None,
         overlap_bars: int = DEFAULT_OVERLAP_BARS,
+        cursor_store: Optional[CursorStore] = None,
     ) -> None:
 
         self._exchange = exchange_client
         self._storage = storage or HistoricalStorage()
         self._transformer = transformer or OHLCVTransformer()
         self._overlap = overlap_bars
+        self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
 
         self._breaker = pybreaker.CircuitBreaker(
             fail_max=5,
@@ -224,13 +229,30 @@ class HistoricalFetcherAsync:
         start_date: Optional[str],
     ) -> int:
 
-        last_ts = self._storage.get_last_timestamp(symbol, timeframe)
+        exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
 
+        # 1. Intentar cursor Redis (O(1))
+        cursor_ts = self._cursor.get(exchange_name, symbol, timeframe)
+        if cursor_ts is not None:
+            tf_ms = _timeframe_to_ms(timeframe)
+            logger.debug(
+                "Cursor hit (Redis) | {}/{}/{} ts_ms={}",
+                exchange_name, symbol, timeframe, cursor_ts,
+            )
+            return cursor_ts - (self._overlap * tf_ms)
+
+        # 2. Fallback: ultimo timestamp en parquet
+        last_ts = self._storage.get_last_timestamp(symbol, timeframe)
         tf_ms = _timeframe_to_ms(timeframe)
 
         if last_ts is not None:
+            logger.debug(
+                "Cursor miss — fallback to parquet | {}/{}/{}",
+                exchange_name, symbol, timeframe,
+            )
             return int(last_ts.timestamp() * 1000) - (self._overlap * tf_ms)
 
+        # 3. Sin historial: usar start_date de configuracion
         if not start_date:
             raise MissingStartDateError(f"{symbol}/{timeframe} needs start_date")
 

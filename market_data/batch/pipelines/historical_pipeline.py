@@ -34,6 +34,7 @@ import yaml
 from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
+from services.state.cursor_store import CursorStore, InMemoryCursorStore, build_cursor_store_from_config
 from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.storage.bronze_storage import BronzeStorage
 from market_data.batch.storage.silver_storage import SilverStorage
@@ -181,6 +182,25 @@ def load_config(config_file: Path) -> Dict:
 # Pipeline principal
 # ==========================================================
 
+def _build_cursor_store_safe() -> CursorStore:
+    """
+    Construye CursorStore desde config centralizada.
+    SafeOps: si Redis no esta disponible, retorna InMemoryCursorStore
+    para no bloquear el pipeline.
+    """
+    try:
+        store = build_cursor_store_from_config()
+        if store.is_healthy():
+            return store
+        from loguru import logger
+        logger.warning("Redis no disponible — cursor store en memoria (fallback)")
+        return InMemoryCursorStore()
+    except Exception as exc:
+        from loguru import logger
+        logger.warning("CursorStore init failed (fallback) | error={}", exc)
+        return InMemoryCursorStore()
+
+
 class HistoricalPipelineAsync:
     """
     Pipeline asíncrono de ingestión OHLCV histórica.
@@ -209,9 +229,10 @@ class HistoricalPipelineAsync:
         symbols:         List[str],
         timeframes:      List[str],
         start_date:      str,
-        max_concurrency: int                       = DEFAULT_MAX_CONCURRENCY,
+        max_concurrency: int                         = DEFAULT_MAX_CONCURRENCY,
         storage:         Optional[HistoricalStorage] = None,
         exchange_client: Optional[CCXTAdapter]       = None,
+        cursor_store:    Optional[CursorStore]       = None,
     ) -> None:
         _validate_inputs(symbols, timeframes, start_date)
 
@@ -233,10 +254,14 @@ class HistoricalPipelineAsync:
         self._silver_storage = SilverStorage(exchange=exchange_id)
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
+        # CursorStore: Redis si disponible, InMemory como fallback (SafeOps)
+        self._cursor: CursorStore = cursor_store or _build_cursor_store_safe()
+
         self._fetcher = HistoricalFetcherAsync(
             storage         = self._storage,
             transformer     = OHLCVTransformer(),
             exchange_client = exchange_client,
+            cursor_store    = self._cursor,
         )
 
     # ----------------------------------------------------------
@@ -373,6 +398,13 @@ class HistoricalPipelineAsync:
                     timeframe = timeframe,
                     mode      = "append",
                 )
+
+                # Cursor: actualizar DESPUES de persistir en storage (consistencia)
+                # Si Redis falla, SafeOps garantiza que no interrumpe el pipeline
+                if not df.empty:
+                    last_ts_ms = int(df["timestamp"].max().timestamp() * 1000) if hasattr(df["timestamp"].max(), "timestamp") else int(df["timestamp"].max())
+                    exchange_id = getattr(self._fetcher._exchange, "_exchange_id", "unknown")
+                    self._cursor.update(exchange_id, symbol, timeframe, last_ts_ms)
 
                 result.rows        = len(df)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)

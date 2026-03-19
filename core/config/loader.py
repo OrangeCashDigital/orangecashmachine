@@ -1,19 +1,13 @@
 from __future__ import annotations
-
 """
-core/config/loader.py (PRO+)
+core/config/loader.py (PRO+ refactor)
 
-Sistema de configuración production-grade con soporte multi-entorno automático.
+Configuración multi-entorno, cache segura, validación y reload automático.
 
-Mejoras:
-• Auto-detección de entorno (OCM_ENV)
-• Validación de entorno
-• Logging estructurado
-• SafeOps reforzado
-• Preparado para cache distribuido (Redis-ready)
-
-Principios:
-SOLID · KISS · DRY · SafeOps
+Principios aplicados:
+- SOLID · KISS · DRY · SafeOps
+- Prefect-ready
+- Cache thread-safe y audit log
 """
 
 import hashlib
@@ -36,34 +30,29 @@ from watchdog.observers import Observer
 from core.config.schema import AppConfig, AuditEntry, CONFIG_PATH
 
 # -----------------------------------------------------------------------------
-# Init
+# Init & Logger
 # -----------------------------------------------------------------------------
-
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
-
 _ENV_PATTERN = re.compile(r"\$\{([^}:]+)(:-([^}]+))?\}")
 _DEBOUNCE_SECONDS = 0.5
-_ALLOWED_ENVS = {"development", "test", "production", "staging"}
-
+_ALLOWED_ENVS = {"development", "test", "staging", "production"}
 
 # -----------------------------------------------------------------------------
 # Exceptions
 # -----------------------------------------------------------------------------
-
 class ConfigurationError(RuntimeError):
     """Error crítico de configuración."""
 
-
 # -----------------------------------------------------------------------------
-# Cache (Thread-safe)
+# Cache Thread-safe
 # -----------------------------------------------------------------------------
-
 class ConfigCache:
+    """Cache in-memory de AppConfig, con protección thread-safe y hash check."""
 
     def __init__(self) -> None:
         self._cache: dict[str, AppConfig] = {}
@@ -81,27 +70,23 @@ class ConfigCache:
             self._cache[key] = config
             self._hashes[key] = hash_value
 
-
 _config_cache = ConfigCache()
-
 
 # -----------------------------------------------------------------------------
 # Env Resolver
 # -----------------------------------------------------------------------------
-
 class EnvResolver:
+    """Resuelve variables ${ENV_VAR} en diccionarios/lists/strings recursivamente."""
 
     @staticmethod
     def _replace(match: re.Match[str]) -> str:
         var, _, default = match.groups()
         value = os.getenv(var)
-
         if value is not None:
             return value
         if default is not None:
             return default
-
-        raise ConfigurationError(f"Missing required env var: {var}")
+        raise ConfigurationError(f"Missing required environment variable: {var}")
 
     @classmethod
     def resolve(cls, data: Any) -> Any:
@@ -113,12 +98,11 @@ class EnvResolver:
             return _ENV_PATTERN.sub(cls._replace, data)
         return data
 
-
 # -----------------------------------------------------------------------------
 # YAML Loader
 # -----------------------------------------------------------------------------
-
 class YamlLoader:
+    """Carga y merge de YAMLs, con validación mínima de estructura."""
 
     @staticmethod
     def load(path: Path, required: bool = True) -> dict[str, Any]:
@@ -127,19 +111,17 @@ class YamlLoader:
                 raise ConfigurationError(f"Config file not found: {path}")
             logger.warning("Optional config not found: %s", path)
             return {}
-
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         except yaml.YAMLError as e:
             raise ConfigurationError(f"Invalid YAML in {path}: {e}") from e
-
         if not isinstance(data, dict):
-            raise ConfigurationError(f"Root must be dict: {path}")
-
+            raise ConfigurationError(f"Root must be a dict: {path}")
         return data
 
     @classmethod
     def merge(cls, base: dict, override: dict) -> dict:
+        """Merge profundo de diccionarios, override sobre base."""
         result = dict(base)
         for k, v in override.items():
             if isinstance(result.get(k), dict) and isinstance(v, dict):
@@ -148,12 +130,11 @@ class YamlLoader:
                 result[k] = v
         return result
 
-
 # -----------------------------------------------------------------------------
-# Validation
+# Config Validator
 # -----------------------------------------------------------------------------
-
 class ConfigValidator:
+    """Valida dict -> AppConfig usando Pydantic, captura errores legibles."""
 
     @staticmethod
     def validate(data: dict, source: Path) -> AppConfig:
@@ -166,67 +147,46 @@ class ConfigValidator:
             )
             raise ConfigurationError(f"Validation error ({source}):\n{errors}") from e
 
-
 # -----------------------------------------------------------------------------
-# Hash
+# Utils
 # -----------------------------------------------------------------------------
-
 def compute_hash(data: dict) -> str:
-    return hashlib.sha256(
-        yaml.dump(data, sort_keys=True).encode()
-    ).hexdigest()
-
-
-# -----------------------------------------------------------------------------
-# Audit
-# -----------------------------------------------------------------------------
+    """SHA256 del YAML para cache y detección de cambios."""
+    return hashlib.sha256(yaml.dump(data, sort_keys=True).encode()).hexdigest()
 
 def audit_config(config: AppConfig, key: str, h: str, source: Path) -> AppConfig:
+    """Agrega entrada de audit log y last_reload a AppConfig."""
     entry = AuditEntry(
         timestamp=datetime.now(timezone.utc),
         cache_key=key,
         hash=h,
         source_file=str(source),
     )
-
     return config.model_copy(update={
         "audit_log": [*config.audit_log, entry],
         "last_reload": datetime.now(timezone.utc),
     })
 
-
-# -----------------------------------------------------------------------------
-# Paths
-# -----------------------------------------------------------------------------
-
-def _resolve_paths(
-    path: Optional[Union[str, Path]],
-    env: Optional[str],
-) -> tuple[Path, Optional[Path], Path]:
-
+def _resolve_paths(path: Optional[Union[str, Path]], env: Optional[str]) -> tuple[Path, Optional[Path], Path]:
     config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
-
     return (
         config_dir / "base.yaml",
         config_dir / f"{env}.yaml" if env else None,
         config_dir / "settings.yaml",
     )
 
-
 # -----------------------------------------------------------------------------
 # Core Loader
 # -----------------------------------------------------------------------------
-
 def load_config(
     env: Optional[str] = None,
     path: Optional[Union[str, Path]] = None,
     use_cache: bool = True,
     force_reload: bool = False,
 ) -> AppConfig:
+    """Carga, merge, valida, audita y cachea la configuración completa."""
 
-    # 🔥 AUTO-DETECCIÓN DE ENTORNO
     env = env or os.getenv("OCM_ENV") or "development"
-
     if env not in _ALLOWED_ENVS:
         raise ConfigurationError(f"Invalid environment: '{env}'")
 
@@ -235,27 +195,19 @@ def load_config(
 
     logger.debug("Loading config | env=%s path=%s", env, path or CONFIG_PATH.parent)
 
-    # --- Load ---
+    # --- Load & Merge ---
     merged = YamlLoader.load(base)
-
     if env_path:
-        merged = YamlLoader.merge(
-            merged,
-            YamlLoader.load(env_path, required=False),
-        )
+        merged = YamlLoader.merge(merged, YamlLoader.load(env_path, required=False))
+    merged = YamlLoader.merge(merged, YamlLoader.load(settings, required=False))
 
-    merged = YamlLoader.merge(
-        merged,
-        YamlLoader.load(settings, required=False),
-    )
-
-    # --- Resolve env ---
+    # --- Resolve env variables ---
     merged = EnvResolver.resolve(merged)
 
     # --- Hash ---
     h = compute_hash(merged)
 
-    # --- Cache ---
+    # --- Cache hit ---
     if use_cache and not force_reload:
         cached = _config_cache.get(cache_key, h)
         if cached:
@@ -269,25 +221,18 @@ def load_config(
     # --- Audit ---
     config = audit_config(config, cache_key, h, source)
 
-    # --- Cache ---
+    # --- Set cache ---
     if use_cache:
         _config_cache.set(cache_key, h, config)
 
-    logger.info(
-        "Config loaded | env=%s hash=%s source=%s",
-        env,
-        h[:8],
-        source.name,
-    )
-
+    logger.info("Config loaded | env=%s hash=%s source=%s", env, h[:8], source.name)
     return config
-
 
 # -----------------------------------------------------------------------------
 # Watchdog
 # -----------------------------------------------------------------------------
-
 class ConfigChangeHandler(FileSystemEventHandler):
+    """Reload automático de config.yaml con debounce y SafeOps."""
 
     def __init__(self, env: Optional[str], path: Optional[Union[str, Path]]):
         self.env = env
@@ -297,44 +242,29 @@ class ConfigChangeHandler(FileSystemEventHandler):
     def on_modified(self, event):
         if not event.src_path.endswith(".yaml"):
             return
-
         now = time.monotonic()
         if now - self._last < _DEBOUNCE_SECONDS:
             return
         self._last = now
-
         try:
             load_config(env=self.env, path=self.path, force_reload=True)
             logger.info("Config reloaded: %s", event.src_path)
         except ConfigurationError as e:
             logger.error("Config reload failed: %s", e)
 
-
-def watch_config_files(
-    env: Optional[str] = None,
-    path: Optional[Union[str, Path]] = None,
-) -> Observer:
-
+def watch_config_files(env: Optional[str] = None, path: Optional[Union[str, Path]] = None) -> Observer:
+    """Observa cambios en directorio de configuración."""
     env = env or os.getenv("OCM_ENV")
-
     config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
-
     observer = Observer()
-    observer.schedule(
-        ConfigChangeHandler(env, path),
-        str(config_dir),
-        recursive=False,
-    )
+    observer.schedule(ConfigChangeHandler(env, path), str(config_dir), recursive=False)
     observer.start()
-
     logger.info("Watching config dir: %s | env=%s", config_dir, env)
     return observer
-
 
 # -----------------------------------------------------------------------------
 # Prefect Task
 # -----------------------------------------------------------------------------
-
 @task(name="load_config", retries=2, retry_delay_seconds=[5, 30])
 async def load_and_validate_config_task(
     env: Optional[str] = None,
@@ -342,15 +272,8 @@ async def load_and_validate_config_task(
     use_cache: bool = True,
     force_reload: bool = False,
 ) -> AppConfig:
-
+    """Task Prefect para cargar config dentro de flows async."""
     log = get_run_logger()
-
     config = load_config(env, path, use_cache, force_reload)
-
-    log.info(
-        "Config loaded | env=%s exchanges=%s",
-        env or os.getenv("OCM_ENV"),
-        getattr(config, "exchange_names", []),
-    )
-
+    log.info("Config loaded | env=%s exchanges=%s", env or os.getenv("OCM_ENV"), getattr(config, "exchange_names", []))
     return config
