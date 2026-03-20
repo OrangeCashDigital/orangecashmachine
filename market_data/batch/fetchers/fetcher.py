@@ -24,7 +24,7 @@ import pandas as pd
 import pybreaker
 from loguru import logger
 
-from market_data.batch.storage.storage import HistoricalStorage
+from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter
 
@@ -92,14 +92,14 @@ class HistoricalFetcherAsync:
     def __init__(
         self,
         exchange_client: CCXTAdapter,
-        storage: Optional[HistoricalStorage] = None,
+        storage: Optional[SilverStorage] = None,
         transformer: Optional[OHLCVTransformer] = None,
         overlap_bars: int = DEFAULT_OVERLAP_BARS,
         cursor_store: Optional[CursorStore] = None,
     ) -> None:
 
         self._exchange = exchange_client
-        self._storage = storage or HistoricalStorage()
+        self._storage = storage or SilverStorage()
         self._transformer = transformer or OHLCVTransformer()
         self._overlap = overlap_bars
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()

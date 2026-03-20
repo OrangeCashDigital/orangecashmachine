@@ -35,7 +35,6 @@ from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
 from services.state.cursor_store import CursorStore, InMemoryCursorStore, build_cursor_store_from_config
-from market_data.batch.storage.storage import HistoricalStorage
 from market_data.batch.storage.bronze_storage import BronzeStorage
 from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
@@ -230,7 +229,6 @@ class HistoricalPipelineAsync:
         timeframes:      List[str],
         start_date:      str,
         max_concurrency: int                         = DEFAULT_MAX_CONCURRENCY,
-        storage:         Optional[HistoricalStorage] = None,
         exchange_client: Optional[CCXTAdapter]       = None,
         cursor_store:    Optional[CursorStore]       = None,
     ) -> None:
@@ -249,7 +247,6 @@ class HistoricalPipelineAsync:
         self.max_concurrency = max_concurrency
 
         exchange_id = getattr(exchange_client, '_exchange_id', None)
-        self._storage        = storage or HistoricalStorage(exchange=exchange_id)
         self._bronze_storage = BronzeStorage(exchange=exchange_id)
         self._silver_storage = SilverStorage(exchange=exchange_id)
         self._semaphore = asyncio.Semaphore(max_concurrency)
@@ -258,7 +255,7 @@ class HistoricalPipelineAsync:
         self._cursor: CursorStore = cursor_store or _build_cursor_store_safe()
 
         self._fetcher = HistoricalFetcherAsync(
-            storage         = self._storage,
+            storage         = self._silver_storage,
             transformer     = OHLCVTransformer(),
             exchange_client = exchange_client,
             cursor_store    = self._cursor,
@@ -390,13 +387,6 @@ class HistoricalPipelineAsync:
                     symbol    = symbol,
                     timeframe = timeframe,
                     run_id    = run_id,
-                )
-                # Legacy storage (exchanges/ path) — mantener por compatibilidad
-                self._storage.save_ohlcv(
-                    df        = df,
-                    symbol    = symbol,
-                    timeframe = timeframe,
-                    mode      = "append",
                 )
 
                 # Cursor: actualizar DESPUES de persistir en storage (consistencia)
