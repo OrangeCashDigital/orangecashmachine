@@ -7,6 +7,7 @@ from prefect import flow, get_run_logger
 from core.config.schema import AppConfig
 from core.config.loader import load_config
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe, validate_exchange_connection
+from services.exchange.ccxt_adapter import CCXTAdapter
 from market_data.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
     run_trades_pipeline,
@@ -26,7 +27,7 @@ def _supports_market_type(probe: ExchangeProbe, market_type: str) -> bool:
     """Chequea si un tipo de mercado está disponible en el exchange."""
     return market_type in probe.available_markets
 
-def _launch_spot_pipelines(config: AppConfig, exc_cfg, probe: ExchangeProbe, active: Set[str], log) -> List[asyncio.Future]:
+def _launch_spot_pipelines(config: AppConfig, exc_cfg, probe: ExchangeProbe, active: Set[str], log, adapter=None) -> List[asyncio.Future]:
     """Lanza pipelines de mercado spot (ohlcv, trades, orderbook) si el exchange los soporta."""
     spot_requested = active & {"ohlcv", "trades", "orderbook"}
     if not spot_requested:
@@ -41,7 +42,7 @@ def _launch_spot_pipelines(config: AppConfig, exc_cfg, probe: ExchangeProbe, act
 
     futures: List[asyncio.Future] = []
     if "ohlcv" in spot_requested:
-        futures.append(run_historical_pipeline(config, exc_cfg, probe))
+        futures.append(run_historical_pipeline(config, exc_cfg, probe, exchange_client=adapter))
     if "trades" in spot_requested:
         futures.append(run_trades_pipeline(config, exc_cfg, probe))
     if "orderbook" in spot_requested:
@@ -66,7 +67,7 @@ def _launch_derivative_pipelines(config: AppConfig, exc_cfg, probe: ExchangeProb
 
     return [run_derivatives_pipeline(config, exc_cfg, probe, list(deriv_requested))]
 
-def _launch_pipelines_for_exchange(config: AppConfig, probe: ExchangeProbe, requested: Set[str], log) -> List[asyncio.Future]:
+def _launch_pipelines_for_exchange(config: AppConfig, probe: ExchangeProbe, requested: Set[str], log, adapter: "CCXTAdapter | None" = None) -> List[asyncio.Future]:
     """Orquesta pipelines spot y derivados para un exchange."""
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
@@ -82,27 +83,30 @@ def _launch_pipelines_for_exchange(config: AppConfig, probe: ExchangeProbe, requ
 
     log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
     return [
-        *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
+        *_launch_spot_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
         *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
     ]
 
-async def _validate_exchanges(config: AppConfig, log) -> List[ExchangeProbe]:
-    """Valida exchanges en paralelo y retorna ExchangeProbes. SafeOps: errores parciales loggeados."""
+async def _validate_exchanges(config: AppConfig, log) -> "tuple[List[ExchangeProbe], dict[str, CCXTAdapter]]":
+    """Valida exchanges en paralelo. Retorna probes + adapters ya conectados (load_markets hecho)."""
     futures = [validate_exchange_connection(exc) for exc in config.exchanges]
     results = await asyncio.gather(*futures, return_exceptions=True)
 
     probes: List[ExchangeProbe] = []
+    adapters: dict[str, CCXTAdapter] = {}
     for exc, res in zip(config.exchanges, results):
         if isinstance(res, Exception):
             log.error("Exchange validation failed | exchange=%s error=%s", exc.name.value, res)
         else:
-            probes.append(res)
+            probe, adapter = res
+            probes.append(probe)
+            adapters[probe.exchange] = adapter
 
     if not probes:
         raise RuntimeError("All exchange validations failed. Cannot proceed.")
 
     log.info("Exchanges validated | ok=%s/%s", len(probes), len(config.exchanges))
-    return probes
+    return probes, adapters
 
 async def _consolidate_results(futures: List[asyncio.Future], log) -> None:
     """Espera todas las futures y consolida resultados, loggeando fallos parciales."""
@@ -145,17 +149,23 @@ async def market_data_flow(config: AppConfig | None = None):
     log.info("Flow starting | exchanges=%s datasets=%s", config.exchange_names, sorted(requested))
 
     # --- Validar exchanges ---
-    probes = await _validate_exchanges(config, log)
+    probes, adapters = await _validate_exchanges(config, log)
 
-    # --- Lanzar pipelines ---
+    # --- Lanzar pipelines (adapter inyectado — load_markets() no se repite) ---
     pipeline_futures: List[asyncio.Future] = []
     for probe in probes:
-        pipeline_futures.extend(_launch_pipelines_for_exchange(config, probe, requested, log))
+        adapter = adapters.get(probe.exchange)
+        pipeline_futures.extend(_launch_pipelines_for_exchange(config, probe, requested, log, adapter=adapter))
 
     if not pipeline_futures:
         log.warning("No pipelines launched. Check config and exchange capabilities.")
         return
 
     # --- Consolidar resultados ---
-    await _consolidate_results(pipeline_futures, log)
+    try:
+        await _consolidate_results(pipeline_futures, log)
+    finally:
+        # Cerrar adapters al final del flow — lifecycle correcto
+        for name, adapter in adapters.items():
+            await adapter.close()
     log.info("Market data flow completed successfully")

@@ -42,6 +42,7 @@ _INIT_RETRIES        = 3
 _BACKOFF_BASE        = 2.0
 _LOAD_MARKETS_TIMEOUT = 30.0
 _DEFAULT_EXCHANGE    = "binance"
+_MARKETS_CACHE_TTL   = 60.0  # segundos — reutilizar markets en reconnect
 
 
 # ==========================================================
@@ -96,6 +97,8 @@ class CCXTAdapter:
 
         self._client:    Optional[ccxt.Exchange] = None
         self._init_lock: asyncio.Lock = asyncio.Lock()
+        self._markets_cache:     Optional[Dict[str, Any]] = None
+        self._markets_cached_at: float = 0.0
 
     # ----------------------------------------------------------
     # Lifecycle
@@ -130,8 +133,21 @@ class CCXTAdapter:
             return False
         try:
             session = getattr(self._client, "session", None)
-            if session is not None and hasattr(session, "closed"):
-                return not session.closed
+            if session is None:
+                return True
+            # Sesión cerrada explícitamente
+            if hasattr(session, "closed") and session.closed:
+                return False
+            # Sesión ligada a otro event loop (cross-task Prefect)
+            session_loop = getattr(session, "_loop", None) or getattr(session, "connector", None)
+            if session_loop is not None:
+                try:
+                    current_loop = asyncio.get_running_loop()
+                    loop = getattr(session, "_loop", None)
+                    if loop is not None and loop is not current_loop:
+                        return False
+                except RuntimeError:
+                    pass
             return True
         except Exception:
             return False
@@ -310,12 +326,28 @@ class CCXTAdapter:
 
                 client = exchange_class(params)
 
-                start = time.perf_counter()
-                await asyncio.wait_for(
-                    client.load_markets(),
-                    timeout=_LOAD_MARKETS_TIMEOUT,
+                now = time.perf_counter()
+                cache_valid = (
+                    self._markets_cache is not None
+                    and (now - self._markets_cached_at) < _MARKETS_CACHE_TTL
                 )
-                latency = (time.perf_counter() - start) * 1000
+
+                if cache_valid:
+                    client.markets = self._markets_cache
+                    latency = 0.0
+                    logger.debug(
+                        "Exchange connected (markets from cache) | {} cache_age={:.1f}s",
+                        self._exchange_id, now - self._markets_cached_at,
+                    )
+                else:
+                    start = time.perf_counter()
+                    await asyncio.wait_for(
+                        client.load_markets(),
+                        timeout=_LOAD_MARKETS_TIMEOUT,
+                    )
+                    latency = (time.perf_counter() - start) * 1000
+                    self._markets_cache     = client.markets
+                    self._markets_cached_at = time.perf_counter()
 
                 self._client = client
                 logger.info(

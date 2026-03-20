@@ -342,7 +342,7 @@ async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
         EXCHANGE_RATE_LIMIT.labels(exchange=name).set(rate_limit_ms)
 
         probe.log_summary(log)
-        return probe
+        return probe, adapter
 
     except asyncio.TimeoutError:
         log.error("Validation timed out | name=%s timeout=%ss", name, EXCHANGE_TASK_TIMEOUT)
@@ -352,5 +352,6 @@ async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
         log.error("Validation failed | name=%s error=%s", name, exc)
         raise
 
-    finally:
+    except Exception:
         await adapter.close()
+        raise

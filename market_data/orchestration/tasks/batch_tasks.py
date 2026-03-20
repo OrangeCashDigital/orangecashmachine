@@ -42,6 +42,7 @@ async def run_historical_pipeline(
     config: AppConfig,
     exchange_cfg: ExchangeConfig,
     probe: ExchangeProbe,
+    exchange_client: "CCXTAdapter | None" = None,
 ) -> None:
     """
     Ejecuta el pipeline histórico (OHLCV) de manera asíncrona para un exchange.
@@ -59,10 +60,12 @@ async def run_historical_pipeline(
         exchange_name, len(exchange_cfg.all_symbols), len(hist_cfg.timeframes), max_concurrency,
     )
 
-    # Lazy import para desacoplar dependencias externas
+    # Usar adapter inyectado (ya conectado, load_markets() ya hecho)
+    # o crear uno nuevo como fallback para compatibilidad
     from services.exchange.ccxt_adapter import CCXTAdapter
-
-    exchange_client = CCXTAdapter(config=exchange_cfg)
+    _owns_client = exchange_client is None
+    if _owns_client:
+        exchange_client = CCXTAdapter(config=exchange_cfg)
 
     try:
         pipeline = HistoricalPipelineAsync(
@@ -74,7 +77,8 @@ async def run_historical_pipeline(
         )
         summary = await pipeline.run()
     finally:
-        await exchange_client.close()
+        if _owns_client:
+            await exchange_client.close()
 
     log.info(
         "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
