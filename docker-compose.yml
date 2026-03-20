@@ -287,6 +287,21 @@ services:
   #   networks:
   #     - ocm_internal
 
+  ocm_pushgateway:
+    image: prom/pushgateway:v1.8.0
+    container_name: ocm_pushgateway
+    restart: unless-stopped
+    ports:
+      - "9091:9091"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+    networks:
+      - ocm_internal
+
 # ==========================================================
 # VOLUMES — Estado persistente
 # ==========================================================
