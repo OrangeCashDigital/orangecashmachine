@@ -18,7 +18,7 @@ Principios
 SOLID  – SRP: solo validación pre-vuelo
 KISS   – helpers pequeños y enfocados
 DRY    – lógica centralizada, sin repetición
-SafeOps – fallos parciales loggeados, cierre seguro via CCXTAdapter
+SafeOps – fallos parciales loggeados, cierre seguro via finally
 """
 
 from __future__ import annotations
@@ -34,32 +34,30 @@ from core.config.schema import ExchangeConfig, EXCHANGE_TASK_TIMEOUT
 from services.exchange.ccxt_adapter import CCXTAdapter
 from services.observability.metrics import EXCHANGE_LATENCY, EXCHANGE_CLOCK_DRIFT, EXCHANGE_RATE_LIMIT
 
+
 # ==========================================================
 # Constants
 # ==========================================================
 
-_MAX_CLOCK_DRIFT_MS:  int = 5_000
-_FEE_FETCH_TIMEOUT:   int = 10
-_CLOCK_FETCH_TIMEOUT: int = 5
-_DATASET_PROBE_TIMEOUT: int = 3
+_MAX_CLOCK_DRIFT_MS:    int = 5_000
+_FEE_FETCH_TIMEOUT:     int = 10
+_CLOCK_FETCH_TIMEOUT:   int = 5
+_DATASET_PROBE_TIMEOUT: int = 15  # aumentado: 3s era insuficiente en exchanges lentos
 
 _DATASET_CAPABILITY_MAP: Dict[str, str] = {
-    "ohlcv":        "fetchOHLCV",
-    "trades":       "fetchTrades",
-    "orderbook":    "fetchOrderBook",
-    "funding_rate": "fetchFundingRates",
-    "open_interest":"fetchOpenInterest",
-    "liquidations": "fetchMyLiquidations",
-    "mark_price":   "fetchMarkOHLCV",
-    "index_price":  "fetchIndexOHLCV",
+    "ohlcv":         "fetchOHLCV",
+    "trades":        "fetchTrades",
+    "orderbook":     "fetchOrderBook",
+    "funding_rate":  "fetchFundingRates",
+    "open_interest": "fetchOpenInterest",
+    "liquidations":  "fetchMyLiquidations",
+    "mark_price":    "fetchMarkOHLCV",
+    "index_price":   "fetchIndexOHLCV",
 }
 
 _MARKET_TYPE_KEYS: Tuple[str, ...] = (
     "spot", "margin", "swap", "future", "option"
 )
-
-# Datasets que requieren prueba real (no solo declaración en has{})
-_PROBE_REQUIRED: frozenset[str] = frozenset({"ohlcv", "trades"})
 
 
 # ==========================================================
@@ -77,24 +75,24 @@ class ExchangeProbe:
     - qué datasets están disponibles
     """
 
-    exchange:         str
-    reachable:        bool
-    rate_limit_ms:    int            = 20
-    max_concurrent:   int            = 10
-    last_price:       Optional[float] = None
-    bid:              Optional[float] = None
-    ask:              Optional[float] = None
-    spread_pct:       Optional[float] = None
-    base_volume_24h:  Optional[float] = None
-    quote_volume_24h: Optional[float] = None
-    fee_rate_maker:   Optional[float] = None
-    fee_rate_taker:   Optional[float] = None
-    server_time_ok:   bool            = True
-    clock_drift_ms:   Optional[int]   = None
-    latency_ms:       Optional[int]   = None
-    supported_datasets: List[str]    = field(default_factory=list)
-    available_markets:  List[str]    = field(default_factory=list)
-    warnings:           List[str]    = field(default_factory=list)
+    exchange:           str
+    reachable:          bool
+    rate_limit_ms:      int             = 20
+    max_concurrent:     int             = 10
+    last_price:         Optional[float] = None
+    bid:                Optional[float] = None
+    ask:                Optional[float] = None
+    spread_pct:         Optional[float] = None
+    base_volume_24h:    Optional[float] = None
+    quote_volume_24h:   Optional[float] = None
+    fee_rate_maker:     Optional[float] = None
+    fee_rate_taker:     Optional[float] = None
+    server_time_ok:     bool            = True
+    clock_drift_ms:     Optional[int]   = None
+    latency_ms:         Optional[int]   = None
+    supported_datasets: List[str]       = field(default_factory=list)
+    available_markets:  List[str]       = field(default_factory=list)
+    warnings:           List[str]       = field(default_factory=list)
 
     def log_summary(self, log) -> None:
         """Emite resumen estructurado en una sola línea de log."""
@@ -127,8 +125,8 @@ def _select_test_symbol(exchange: Any, preferred: Optional[str] = None) -> str:
     """
     Selecciona un símbolo de prueba válido con fallback al primero disponible.
 
-    Raises RuntimeError si el exchange no tiene símbolos cargados
-    (indica que load_markets() no fue llamado).
+    Raises RuntimeError si el exchange no tiene símbolos cargados,
+    lo que indica que load_markets() no fue llamado previamente.
     """
     symbols: List[str] = getattr(exchange, "symbols", [])
     if not symbols:
@@ -155,10 +153,9 @@ async def _detect_supported_datasets(
 
     Estrategia deliberada
     ---------------------
-    Las pruebas reales (fetch mínimo) causan timeouts impredecibles
-    en algunos exchanges — especialmente en conexiones con alta latencia.
-    has{} es suficientemente confiable para decidir qué pipelines lanzar.
-    Los pipelines mismos fallarán explícitamente si el dataset no funciona.
+    Las pruebas reales causan timeouts impredecibles en exchanges con alta
+    latencia. has{} es suficientemente confiable para decidir qué pipelines
+    lanzar. Los pipelines mismos fallarán explícitamente si algo no funciona.
 
     SafeOps: nunca lanza excepción al caller.
     """
@@ -183,6 +180,7 @@ async def _fetch_trading_fees(
     Obtiene maker/taker fees con doble fallback:
     1. fetch_trading_fee() (endpoint dedicado)
     2. markets dict (metadata estática ya cargada)
+
     SafeOps: nunca lanza excepción al caller.
     """
     try:
@@ -209,7 +207,9 @@ async def _check_clock_sync(
 ) -> Tuple[bool, Optional[int]]:
     """
     Verifica sincronización del reloj del exchange vs reloj local.
-    SafeOps: fallo en fetch_time() se considera aceptable (True, None).
+
+    SafeOps: fallo en fetch_time() se considera aceptable — retorna (True, None)
+    para no bloquear la validación por un endpoint no crítico.
     """
     try:
         local_before = int(time.time() * 1000)
@@ -235,25 +235,33 @@ async def _check_clock_sync(
     retry_delay_seconds=[10, 30, 60],
     timeout_seconds=EXCHANGE_TASK_TIMEOUT,
     description="Validates exchange connectivity and collects operational metadata.",
+    tags=["exchange", "validation"],
 )
-async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
+async def validate_exchange_connection(
+    cfg: ExchangeConfig,
+) -> Tuple[ExchangeProbe, CCXTAdapter]:
     """
     Valida conectividad de un exchange y construye un ExchangeProbe.
 
+    Retorna (probe, adapter) — el adapter queda abierto para reutilización
+    en pipelines downstream, evitando repetir load_markets().
+    El caller (batch_flow) es responsable de cerrar el adapter.
+
     Flujo
     -----
-    1. Conectar via CCXTAdapter (retry + backoff encapsulados)
+    1. Conectar via CCXTAdapter
     2. Seleccionar símbolo de prueba
-    3. Medir latencia y precios (ticker)
-    4. Obtener fees y verificar clock drift
+    3. Medir latencia y precios via ticker
+    4. Obtener fees y verificar clock drift (fallos tolerados)
     5. Detectar datasets y mercados disponibles
-    6. Construir y retornar ExchangeProbe
+    6. Emitir métricas Prometheus
+    7. Retornar (ExchangeProbe, CCXTAdapter)
 
     SafeOps
     -------
-    - Fallos parciales (fees, clock) son loggeados y no detienen la validación
-    - Timeout y errores críticos propagan excepción (Prefect reintenta)
-    - CCXTAdapter garantiza cierre seguro del cliente en finally
+    - Fallos parciales (fees, clock) loggeados sin interrumpir validación
+    - Error crítico: adapter.close() garantizado en except antes de re-raise
+    - Prefect reintenta automáticamente según retry_delay_seconds
     """
     log  = get_run_logger()
     name = cfg.name.value
@@ -278,8 +286,8 @@ async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
         rate_limit_ms = getattr(exchange, "rateLimit", 20)
 
         # --- Latencia y precios ---
-        t0        = time.monotonic()
-        ticker    = await asyncio.wait_for(
+        t0 = time.monotonic()
+        ticker = await asyncio.wait_for(
             exchange.fetch_ticker(symbol),
             timeout=EXCHANGE_TASK_TIMEOUT,
         )
@@ -293,19 +301,20 @@ async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
         )
 
         # --- Fees y clock (fallos parciales tolerados) ---
-        maker_fee, taker_fee   = await _fetch_trading_fees(exchange, symbol, log)
-        server_time_ok, drift  = await _check_clock_sync(exchange, log)
+        maker_fee, taker_fee  = await _fetch_trading_fees(exchange, symbol, log)
+        server_time_ok, drift = await _check_clock_sync(exchange, log)
 
         # --- Capacidades ---
         try:
             supported_datasets = await asyncio.wait_for(
                 _detect_supported_datasets(exchange, symbol, log),
-                timeout=15,
+                timeout=_DATASET_PROBE_TIMEOUT,
             )
         except asyncio.TimeoutError:
             log.warning("Dataset detection timed out | name=%s — usando lista vacía", name)
             supported_datasets = []
-        available_markets  = _detect_available_markets(has)
+
+        available_markets = _detect_available_markets(has)
 
         # --- Warnings ---
         warnings: List[str] = []
@@ -315,43 +324,37 @@ async def validate_exchange_connection(cfg: ExchangeConfig) -> ExchangeProbe:
             log.warning("Clock drift | name=%s drift=%sms", name, drift)
 
         probe = ExchangeProbe(
-            exchange          = name,
-            reachable         = True,
-            rate_limit_ms     = rate_limit_ms,
-            max_concurrent    = _calculate_max_concurrent(rate_limit_ms),
-            last_price        = last,
-            bid               = bid,
-            ask               = ask,
-            spread_pct        = spread_pct,
-            base_volume_24h   = ticker.get("baseVolume"),
-            quote_volume_24h  = ticker.get("quoteVolume"),
-            fee_rate_maker    = maker_fee,
-            fee_rate_taker    = taker_fee,
-            server_time_ok    = server_time_ok,
-            clock_drift_ms    = drift,
-            latency_ms        = latency_ms,
-            supported_datasets= supported_datasets,
-            available_markets = available_markets,
-            warnings          = warnings,
+            exchange           = name,
+            reachable          = True,
+            rate_limit_ms      = rate_limit_ms,
+            max_concurrent     = _calculate_max_concurrent(rate_limit_ms),
+            last_price         = last,
+            bid                = bid,
+            ask                = ask,
+            spread_pct         = spread_pct,
+            base_volume_24h    = ticker.get("baseVolume"),
+            quote_volume_24h   = ticker.get("quoteVolume"),
+            fee_rate_maker     = maker_fee,
+            fee_rate_taker     = taker_fee,
+            server_time_ok     = server_time_ok,
+            clock_drift_ms     = drift,
+            latency_ms         = latency_ms,
+            supported_datasets = supported_datasets,
+            available_markets  = available_markets,
+            warnings           = warnings,
         )
 
-        # Métricas Prometheus
+        # --- Métricas Prometheus ---
         EXCHANGE_LATENCY.labels(exchange=name).observe(latency_ms)
         if drift is not None:
             EXCHANGE_CLOCK_DRIFT.labels(exchange=name).set(drift)
         EXCHANGE_RATE_LIMIT.labels(exchange=name).set(rate_limit_ms)
 
         probe.log_summary(log)
-        return probe, adapter
-
-    except asyncio.TimeoutError:
-        log.error("Validation timed out | name=%s timeout=%ss", name, EXCHANGE_TASK_TIMEOUT)
-        raise
+        return probe, adapter   # adapter queda abierto — caller lo cierra
 
     except Exception as exc:
-        log.error("Validation failed | name=%s error=%s", name, exc)
-        raise
-
-    except Exception:
+        # Cierre garantizado ante cualquier fallo — evita fugas de conexión
         await adapter.close()
+        log.error("Validation failed | name=%s error=%s", name, exc)
         raise
