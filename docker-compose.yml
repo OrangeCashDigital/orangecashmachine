@@ -301,6 +301,7 @@ services:
     logging: *default-logging
     networks:
       - ocm_internal
+      - ocm_public
 
 # ==========================================================
 # VOLUMES — Estado persistente
