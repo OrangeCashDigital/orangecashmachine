@@ -8,6 +8,30 @@ from market_data.batch.storage.feature_engineer import FeatureEngineer
 _SILVER_PATH = Path("data_platform/data_lake/silver/ohlcv")
 _GOLD_PATH   = Path("data_platform/data_lake/gold/features/ohlcv")
 
+def _resolve_partitions(base_dir: "Path", start: "Optional[pd.Timestamp]", end: "Optional[pd.Timestamp]") -> list:
+    from pathlib import Path
+    parquets = sorted(base_dir.rglob("*.parquet"))
+    if start is None and end is None:
+        return parquets
+    result = []
+    for p in parquets:
+        parts = p.parts
+        try:
+            year_idx  = next(i for i, x in enumerate(parts) if x.isdigit() and len(x) == 4)
+            year  = int(parts[year_idx])
+            month = int(parts[year_idx + 1]) if year_idx + 1 < len(parts) and parts[year_idx + 1].isdigit() else 1
+            day   = int(parts[year_idx + 2]) if year_idx + 2 < len(parts) and parts[year_idx + 2].isdigit() else 1
+            import pandas as _pd
+            partition_start = _pd.Timestamp(year=year, month=month, day=day, tz="UTC")
+            partition_end   = partition_start + _pd.offsets.MonthEnd(1) if day == 1 else partition_start + _pd.Timedelta(days=1)
+            if start and partition_end < start: continue
+            if end   and partition_start > end:  continue
+        except (StopIteration, ValueError, IndexError):
+            pass
+        result.append(p)
+    return result
+
+
 class GoldStorage:
     def __init__(self, silver_path: Optional[Path] = None, gold_path: Optional[Path] = None) -> None:
         self._silver = silver_path or _SILVER_PATH
@@ -16,13 +40,15 @@ class GoldStorage:
         self._engineer = FeatureEngineer()
         logger.info("GoldStorage ready | gold_path={}", self._gold)
 
-    def build(self, exchange: str, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
+    def build(self, exchange: str, symbol: str, timeframe: str, **kwargs) -> Optional[pd.DataFrame]:
         symbol_path = symbol.replace("/", "_")
         silver_dir = self._silver / f"exchange={exchange}" / f"symbol={symbol_path}" / f"timeframe={timeframe}"
         if not silver_dir.exists():
             logger.warning("Gold build: no existe Silver | {}/{}/{}", exchange, symbol, timeframe)
             return None
-        parquets = sorted(silver_dir.rglob("*.parquet"))
+        start_ts = kwargs.get("start", None)
+        end_ts   = kwargs.get("end", None)
+        parquets = _resolve_partitions(silver_dir, start_ts, end_ts)
         if not parquets:
             logger.warning("Gold build: sin parquets | {}/{}/{}", exchange, symbol, timeframe)
             return None
