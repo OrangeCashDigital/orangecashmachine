@@ -73,21 +73,27 @@ class InterceptHandler(logging.Handler):
 def setup_logging(level: str = "INFO", log_dir: Optional[Path] = LOG_DIR) -> None:
     """
     Configura loguru como sistema de logging global.
-    Incluye consola coloreada y archivo rotativo diario.
+
+    Si ya hay handlers activos (ej: main.py ya configuro loguru),
+    solo instala el InterceptHandler para stdlib sin resetear handlers.
+    Si se llama standalone, configura consola + archivo completo.
     """
-    logger.remove()
-    logger.add(sys.stderr, level=level, format=_LOG_FORMAT, colorize=True)
+    already_configured = len(logger._core.handlers) > 0
 
-    if log_dir:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        logger.add(
-            log_dir / "ocm_{time:YYYY-MM-DD}.log",
-            rotation="1 day",
-            retention="14 days",
-            compression="gz",
-            level=level,
-        )
+    if not already_configured:
+        logger.remove()
+        logger.add(sys.stderr, level=level, format=_LOG_FORMAT, colorize=True)
+        if log_dir:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            logger.add(
+                log_dir / "ocm_{time:YYYY-MM-DD}.log",
+                rotation="1 day",
+                retention="14 days",
+                compression="gz",
+                level="DEBUG",  # archivo siempre DEBUG para trazabilidad completa
+            )
 
+    # Siempre instalar InterceptHandler para capturar stdlib logging (prefect, ccxt, etc)
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
     logger.debug("Logging initialized | level={}", level)
 
