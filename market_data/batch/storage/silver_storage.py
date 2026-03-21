@@ -391,6 +391,22 @@ class SilverStorage:
         """
         versions_dir = self._versions_dir(symbol, timeframe)
 
+        # Dedup: si los checksums de todas las particiones no cambiaron, no crear version nueva
+        latest_path = versions_dir / "latest.json"
+        if latest_path.exists():
+            try:
+                latest = json.loads(latest_path.read_text(encoding="utf-8"))
+                latest_checksums = {p["path"]: p.get("checksum") for p in latest.get("partitions", [])}
+                new_checksums    = {p["path"]: p.get("checksum") for p in partitions}
+                if latest_checksums == new_checksums:
+                    logger.debug(
+                        "Version skip (no changes) | {}/{} exchange={}",
+                        symbol, timeframe, self._exchange or "shared",
+                    )
+                    return
+            except Exception as exc:
+                logger.warning("Version dedup check failed | {} | {}", latest_path, exc)
+
         # Calcular número de versión secuencial
         existing = sorted(versions_dir.glob("v*.json"))
         version_num = len(existing) + 1
