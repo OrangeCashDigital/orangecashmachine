@@ -82,7 +82,7 @@ def setup_logging(debug: bool = False, log_dir: Optional[Path] = LOG_DIR) -> Non
             rotation="1 day",
             retention="14 days",
             compression="gz",
-            level=level,
+            level="DEBUG",  # archivo siempre DEBUG para trazabilidad completa en produccion
             format=_LOG_FORMAT_FILE,
             backtrace=True,
             diagnose=False,
@@ -145,6 +145,7 @@ def main(env: Optional[str] = None, config_path: Optional[Union[str, Path]] = No
         run_main_pipeline(config)
 
         logger.info("Pipeline principal ejecutado correctamente.")
+        sys.exit(0)
 
     except Exception:
         logger.exception("Error crítico al iniciar la aplicación")
@@ -159,8 +160,9 @@ if __name__ == "__main__":
     env_override = os.getenv("OCM_ENV")
     config_path_override = os.getenv("OCM_CONFIG_PATH")
 
+    debug_mode = os.getenv("OCM_DEBUG", "false").lower() in ("1", "true", "yes")
     main(
         env=env_override,
         config_path=Path(config_path_override) if config_path_override else None,
-        debug=True,
+        debug=debug_mode,
     )

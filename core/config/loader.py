@@ -43,6 +43,7 @@ except ImportError:
     _PREFECT_AVAILABLE = False
 
 from core.config.schema import AppConfig, AuditEntry, CONFIG_PATH
+from core.config.rules import check_all_rules
 
 logger = logging.getLogger(__name__)
 
