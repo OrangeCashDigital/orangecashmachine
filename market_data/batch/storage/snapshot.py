@@ -118,6 +118,28 @@ class SnapshotManager:
             "datasets":    datasets,
         }
 
+        # Dedup: si los checksums no cambiaron respecto al ultimo snapshot, no crear uno nuevo
+        latest_path = self._manifests_dir / "latest.json"
+        if latest_path.exists():
+            try:
+                prev = json.loads(latest_path.read_text(encoding="utf-8"))
+                prev_sigs = {
+                    (d["exchange"], d["symbol"], d["timeframe"]): d.get("checksums")
+                    for d in prev.get("datasets", [])
+                }
+                new_sigs = {
+                    (d["exchange"], d["symbol"], d["timeframe"]): d.get("checksums")
+                    for d in datasets
+                }
+                if prev_sigs == new_sigs:
+                    logger.debug(
+                        "Snapshot skip (no changes) | datasets={} rows={}",
+                        len(datasets), snapshot["total_rows"],
+                    )
+                    return prev["snapshot_id"]
+            except Exception as exc:
+                logger.warning("Snapshot dedup check failed | {}", exc)
+
         # Escribir snapshot específico
         path = self._manifests_dir / f"snapshot_{snapshot_id}.json"
         path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
