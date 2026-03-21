@@ -96,6 +96,7 @@ class HistoricalFetcherAsync:
         transformer: Optional[OHLCVTransformer] = None,
         overlap_bars: int = DEFAULT_OVERLAP_BARS,
         cursor_store: Optional[CursorStore] = None,
+        fetch_all_history: bool = False,
     ) -> None:
 
         self._exchange = exchange_client
@@ -103,6 +104,7 @@ class HistoricalFetcherAsync:
         self._transformer = transformer or OHLCVTransformer()
         self._overlap = overlap_bars
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
+        self._fetch_all_history = fetch_all_history
 
         self._breaker = pybreaker.CircuitBreaker(
             fail_max=5,
@@ -230,6 +232,16 @@ class HistoricalFetcherAsync:
     ) -> int:
 
         exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
+
+        # 0. Modo full historical: ignora cursor y parquet, siempre desde start_date
+        if self._fetch_all_history:
+            if not start_date:
+                raise MissingStartDateError(f"{symbol}/{timeframe} needs start_date for full history mode")
+            logger.info(
+                "Full history mode | {}/{}/{} desde={}",
+                exchange_name, symbol, timeframe, start_date,
+            )
+            return self._exchange.parse8601(start_date)
 
         # 1. Intentar cursor Redis (O(1))
         cursor_ts = self._cursor.get(exchange_name, symbol, timeframe)

@@ -102,11 +102,12 @@ async def run_historical_pipeline(
 
     try:
         pipeline = HistoricalPipelineAsync(
-            symbols         = exchange_cfg.all_symbols,
-            timeframes      = hist_cfg.timeframes,
-            start_date      = hist_cfg.start_date,
-            max_concurrency = max_concurrency,
-            exchange_client = exchange_client,
+            symbols           = exchange_cfg.all_symbols,
+            timeframes        = hist_cfg.timeframes,
+            start_date        = hist_cfg.start_date,
+            max_concurrency   = max_concurrency,
+            exchange_client   = exchange_client,
+            fetch_all_history = hist_cfg.fetch_all_history,
         )
         summary = await pipeline.run()
     finally:

@@ -225,12 +225,13 @@ class HistoricalPipelineAsync:
 
     def __init__(
         self,
-        symbols:         List[str],
-        timeframes:      List[str],
-        start_date:      str,
-        max_concurrency: int                         = DEFAULT_MAX_CONCURRENCY,
-        exchange_client: Optional[CCXTAdapter]       = None,
-        cursor_store:    Optional[CursorStore]       = None,
+        symbols:           List[str],
+        timeframes:        List[str],
+        start_date:        str,
+        max_concurrency:   int                   = DEFAULT_MAX_CONCURRENCY,
+        exchange_client:   Optional[CCXTAdapter] = None,
+        cursor_store:      Optional[CursorStore] = None,
+        fetch_all_history: bool                  = False,
     ) -> None:
         _validate_inputs(symbols, timeframes, start_date)
 
@@ -255,10 +256,11 @@ class HistoricalPipelineAsync:
         self._cursor: CursorStore = cursor_store or _build_cursor_store_safe()
 
         self._fetcher = HistoricalFetcherAsync(
-            storage         = self._silver_storage,
-            transformer     = OHLCVTransformer(),
-            exchange_client = exchange_client,
-            cursor_store    = self._cursor,
+            storage            = self._silver_storage,
+            transformer        = OHLCVTransformer(),
+            exchange_client    = exchange_client,
+            cursor_store       = self._cursor,
+            fetch_all_history  = fetch_all_history,
         )
 
     # ----------------------------------------------------------
