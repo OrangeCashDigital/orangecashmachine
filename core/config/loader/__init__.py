@@ -15,6 +15,7 @@ from typing import Optional, Union
 from .audit         import record as _audit
 from .cache         import ConfigCache, _config_cache, make_cache_key
 from .env_resolver  import EnvResolver, load_dotenv_for_env, resolve_env, _ALLOWED_ENVS
+from .env_overrides import apply_env_overrides
 from .exceptions    import ConfigurationError, ConfigValidationError
 from .metrics       import (
     CONFIG_CACHE_HITS, CONFIG_LOAD_COUNT, CONFIG_LOAD_DURATION,
@@ -58,6 +59,7 @@ def load_config(
         merged = YamlLoader.merge(merged, YamlLoader.load(env_file, required=False))
         merged = YamlLoader.merge(merged, YamlLoader.load(settings, required=False))
         merged = EnvResolver.resolve(merged)
+        merged = apply_env_overrides(merged)
         h      = compute_hash(merged)
 
         if use_cache and not force_reload:
