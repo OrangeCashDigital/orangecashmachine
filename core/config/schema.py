@@ -50,11 +50,12 @@ class StrictBaseModel(BaseModel):
 # =============================================================================
 
 class SupportedExchange(str, Enum):
-    BINANCE = "binance"
-    BYBIT   = "bybit"
-    OKX     = "okx"
-    KUCOIN  = "kucoin"
-    GATE    = "gate"
+    BINANCE        = "binance"
+    BYBIT          = "bybit"
+    OKX            = "okx"
+    KUCOIN         = "kucoin"
+    KUCOINFUTURES  = "kucoinfutures"
+    GATE           = "gate"
 
 
 # =============================================================================

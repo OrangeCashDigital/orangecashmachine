@@ -96,6 +96,28 @@ exchanges:
         symbols: [BTC/USDT]
 
       futures:
+        enabled: false   # kucoin (ccxt) = spot only — derivados via kucoinfutures
+
+  kucoinfutures:
+    enabled: true
+    enableRateLimit: true
+    auto_discover_symbols: false
+
+    credentials:
+      apiKey: ${KUCOIN_API_KEY}
+      secret: ${KUCOIN_API_SECRET}
+      password: ${KUCOIN_PASSPHRASE}
+
+    options:
+      adjustForTimeDifference: true
+      defaultType: swap
+
+    markets:
+      spot:
+        enabled: false
+        symbols: []
+
+      futures:
         enabled: true
         defaultType: swap
         symbols:
