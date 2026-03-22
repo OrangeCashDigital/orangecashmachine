@@ -214,13 +214,7 @@ class ConfigValidator:
 
     @staticmethod
     def _check_business_rules(config: AppConfig, source: str) -> None:
-        errors: list[str] = []
-        if getattr(config, "env", None) == "production":
-            db = getattr(config, "db", None)
-            if db is not None:
-                password = getattr(db, "password", None)
-                if isinstance(password, str) and password.startswith("CHANGE_ME"):
-                    errors.append("db.password must not use placeholder in production")
+        errors = check_all_rules(config, source)
         if errors:
             raise ConfigValidationError(
                 f"Business rule violations ({source}):\n" + "\n".join(f"  - {e}" for e in errors)

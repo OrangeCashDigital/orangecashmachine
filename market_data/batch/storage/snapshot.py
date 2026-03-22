@@ -38,7 +38,7 @@ Formato de snapshot
 from __future__ import annotations
 
 import json
-import subprocess
+from core.utils import get_git_hash
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -112,7 +112,7 @@ class SnapshotManager:
         snapshot: Dict = {
             "snapshot_id": snapshot_id,
             "created_at":  now.isoformat(),
-            "git_hash":    _get_git_hash(),
+            "git_hash":    get_git_hash(),
             "total_datasets": len(datasets),
             "total_rows":  sum(d.get("rows", 0) for d in datasets),
             "datasets":    datasets,
@@ -256,13 +256,3 @@ class SnapshotManager:
 # ==========================================================
 # Helpers
 # ==========================================================
-
-def _get_git_hash() -> str:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=2,
-        )
-        return result.stdout.strip() or "unknown"
-    except Exception:
-        return "unknown"

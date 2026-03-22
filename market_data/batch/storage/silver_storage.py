@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
+from core.utils import get_git_hash
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Literal
@@ -432,7 +432,7 @@ class SilverStorage:
             "exchange":    self._exchange or "shared",
             "market_type": self._market_type,
             "layer":       "silver",
-            "git_hash":    _get_git_hash(),
+            "git_hash":    get_git_hash(),
             "partitions":  partitions,
         }
 
@@ -533,14 +533,3 @@ def _write_partition_meta(
     except Exception as exc:
         logger.warning("Partition meta write failed (non-critical) | {} | {}", meta_path, exc)
         return {"rows": len(df), "error": str(exc)}
-
-def _get_git_hash() -> str:
-    """Git hash del commit actual para trazabilidad de lineage."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=2,
-        )
-        return result.stdout.strip() or "unknown"
-    except Exception:
-        return "unknown"
