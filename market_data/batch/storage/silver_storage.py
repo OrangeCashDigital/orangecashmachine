@@ -513,8 +513,11 @@ def _write_partition_meta(
     """Escribe sidecar .meta.json y devuelve el dict para el manifest de versión."""
     try:
         ts_col = df["timestamp"]
-        ts_bytes = ts_col.astype("int64").values.tobytes()
-        checksum = hashlib.md5(ts_bytes).hexdigest()
+        # Checksum sobre todo el DataFrame (timestamp + OHLCV values)
+        # pd.util.hash_pandas_object es deterministico y cubre todos los valores
+        checksum = hashlib.md5(
+            pd.util.hash_pandas_object(df[["timestamp","open","high","low","close","volume"]], index=False).values.tobytes()
+        ).hexdigest()
 
         meta: Dict = {
             "symbol":     symbol,

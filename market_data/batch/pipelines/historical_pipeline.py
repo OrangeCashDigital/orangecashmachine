@@ -38,6 +38,7 @@ from services.state.cursor_store import CursorStore, InMemoryCursorStore, build_
 from market_data.batch.storage.bronze_storage import BronzeStorage
 from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
+from market_data.batch.pipelines.quality_pipeline import QualityPipeline
 from services.exchange.ccxt_adapter import CCXTAdapter
 from services.observability.metrics import (
     ROWS_INGESTED, PAIR_DURATION, PIPELINE_ERRORS, ACTIVE_PAIRS
@@ -258,6 +259,8 @@ class HistoricalPipelineAsync:
         # CursorStore: Redis si disponible, InMemory como fallback (SafeOps)
         self._cursor: CursorStore = cursor_store or _build_cursor_store_safe()
 
+        self._quality_pipeline = QualityPipeline()
+
         self._fetcher = HistoricalFetcherAsync(
             storage            = self._silver_storage,
             transformer        = OHLCVTransformer(),
@@ -388,9 +391,27 @@ class HistoricalPipelineAsync:
                     symbol    = symbol,
                     timeframe = timeframe,
                 )
-                # Silver: datos limpios con versionado
-                self._silver_storage.save_ohlcv(
+
+                # Quality enforcement: evaluar antes de persistir en Silver
+                qres = self._quality_pipeline.run(
                     df        = df,
+                    symbol    = symbol,
+                    timeframe = timeframe,
+                    exchange  = self._exchange_id,
+                )
+
+                if not qres.accepted:
+                    logger.warning(
+                        'Par rechazado por calidad [{}/{}] | exchange={} symbol={} timeframe={} score={:.1f}',
+                        idx, total, self._exchange_id, symbol, timeframe, qres.score,
+                    )
+                    result.skipped     = True
+                    result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+                    return result
+
+                # Silver: persistir con tier correcto (clean o flagged)
+                self._silver_storage.save_ohlcv(
+                    df        = qres.df,
                     symbol    = symbol,
                     timeframe = timeframe,
                     run_id    = run_id,

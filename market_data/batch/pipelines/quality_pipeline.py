@@ -8,9 +8,9 @@ from market_data.batch.schemas.data_quality import DataQualityChecker, DataQuali
 from market_data.batch.schemas.data_quality_policy import DataQualityPolicy, PolicyResult, QualityDecision, default_policy
 
 class DataTier(str, Enum):
-    RAW     = "raw"
-    CLEAN   = "clean"
-    REJECTED = "rejected"
+    CLEAN    = "clean"    # ACCEPT: sin issues
+    FLAGGED  = "flagged"  # ACCEPT_WITH_FLAGS: warnings presentes, usable con precaucion
+    REJECTED = "rejected" # REJECT: datos inutilizables
 
 @dataclass
 class QualityPipelineResult:
@@ -21,6 +21,9 @@ class QualityPipelineResult:
 
     @property
     def accepted(self) -> bool: return self.tier != DataTier.REJECTED
+
+    @property
+    def flagged(self) -> bool: return self.tier == DataTier.FLAGGED
 
     @property
     def score(self) -> float: return self.policy.score
@@ -39,7 +42,7 @@ class QualityPipeline:
             logger.warning("QualityPipeline REJECT | {}/{} exchange={} score={:.1f} reasons={}",
                 symbol, timeframe, exchange, result.score, result.reasons)
         elif result.decision == QualityDecision.ACCEPT_WITH_FLAGS:
-            tier = DataTier.CLEAN
+            tier = DataTier.FLAGGED
             logger.info("QualityPipeline ACCEPT_WITH_FLAGS | {}/{} exchange={} score={:.1f}",
                 symbol, timeframe, exchange, result.score)
         else:
