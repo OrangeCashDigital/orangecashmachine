@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+"""
+core/config/loader/__init__.py
+==============================
+Paquete de carga de configuración. Flujo:
+  YamlLoader → EnvResolver → ConfigValidator → audit → ConfigCache
+"""
+
+import logging
+import time
+from pathlib import Path
+from typing import Optional, Union
+
+from .audit         import record as _audit
+from .cache         import ConfigCache, _config_cache, make_cache_key
+from .env_resolver  import EnvResolver, load_dotenv_for_env, resolve_env, _ALLOWED_ENVS
+from .exceptions    import ConfigurationError, ConfigValidationError
+from .metrics       import (
+    CONFIG_CACHE_HITS, CONFIG_LOAD_COUNT, CONFIG_LOAD_DURATION,
+    CONFIG_RELOAD_TIME, _PROMETHEUS_AVAILABLE,
+)
+from .secret_masker import SecretMasker
+from .validator     import ConfigValidator
+from .watch         import watch_config_files, stop_config_watcher
+from .yaml_loader   import YamlLoader, compute_hash
+
+_make_cache_key      = make_cache_key
+_load_dotenv_for_env = load_dotenv_for_env
+
+logger = logging.getLogger(__name__)
+
+
+def load_config(
+    env:          Optional[str]             = None,
+    path:         Optional[Union[str, Path]] = None,
+    use_cache:    bool                       = True,
+    force_reload: bool                       = False,
+    market_type:  Optional[str]             = None,
+):
+    from core.config.schema import CONFIG_PATH
+
+    env = resolve_env(env, Path(path).resolve() if path else None)
+    if env not in _ALLOWED_ENVS:
+        raise ConfigurationError(f"Invalid environment: '{env}'. Allowed: {sorted(_ALLOWED_ENVS)}")
+
+    config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
+    cache_key  = make_cache_key(env, config_dir, market_type)
+    load_dotenv_for_env(env)
+
+    base     = config_dir / "base.yaml"
+    env_file = config_dir / f"{env}.yaml"
+    settings = config_dir / "settings.yaml"
+
+    start = time.monotonic()
+    try:
+        merged = YamlLoader.load(base, required=True)
+        merged = YamlLoader.merge(merged, YamlLoader.load(env_file, required=False))
+        merged = YamlLoader.merge(merged, YamlLoader.load(settings, required=False))
+        merged = EnvResolver.resolve(merged)
+        h      = compute_hash(merged)
+
+        if use_cache and not force_reload:
+            cached = _config_cache.get(cache_key, h)
+            if cached:
+                CONFIG_CACHE_HITS.labels(env=env).inc()
+                CONFIG_LOAD_COUNT.labels(env=env, status="cache_hit").inc()
+                logger.debug("Config cache hit | env=%s hash=%s", env, h[:8])
+                return cached
+
+        source_name = next(
+            (p.name for p in (settings, env_file, base) if p.exists()), base.name
+        )
+        config = ConfigValidator.validate(merged, source_name)
+        config = _audit(config, cache_key, h, source_name)
+
+        if use_cache:
+            _config_cache.set(cache_key, h, config)
+
+        duration = time.monotonic() - start
+        CONFIG_LOAD_COUNT.labels(env=env, status="success").inc()
+        CONFIG_LOAD_DURATION.labels(env=env).observe(duration)
+        logger.info("Config loaded | env=%s hash=%s source=%s duration=%.3fs",
+                    env, h[:8], source_name, duration)
+        return config
+
+    except Exception as exc:
+        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
+        logger.error("Config load failed | env=%s error=%s", env, exc)
+        raise
+
+
+try:
+    from .prefect_integration import load_and_validate_config_task
+    _PREFECT_AVAILABLE_LOADER = True
+except ImportError:
+    _PREFECT_AVAILABLE_LOADER = False
+
+
+__all__ = [
+    "load_config", "watch_config_files", "stop_config_watcher",
+    "ConfigCache", "ConfigurationError", "ConfigValidationError",
+    "SecretMasker", "YamlLoader", "EnvResolver", "ConfigValidator",
+    "_make_cache_key", "_load_dotenv_for_env",
+    "CONFIG_LOAD_COUNT", "CONFIG_LOAD_DURATION", "CONFIG_RELOAD_TIME",
+    "CONFIG_CACHE_HITS", "_PROMETHEUS_AVAILABLE",
+    *(["load_and_validate_config_task"] if _PREFECT_AVAILABLE_LOADER else []),
+]
