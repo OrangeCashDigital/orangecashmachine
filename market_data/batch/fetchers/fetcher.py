@@ -17,6 +17,7 @@ SafeOps Ready 🚀
 from __future__ import annotations
 
 import asyncio
+import random
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -36,6 +37,7 @@ from services.exchange.ccxt_adapter import CCXTAdapter
 DEFAULT_CHUNK_LIMIT = 500
 MAX_RETRIES = 5
 BACKOFF_BASE = 1.6
+MAX_BACKOFF_SECONDS = 30.0  # cap para evitar waits excesivos
 MAX_CHUNKS_PER_RUN = 100_000
 
 # Overlap determinístico: cuántas velas hacia atrás pedir sobre el último timestamp.
@@ -315,7 +317,8 @@ class HistoricalFetcherAsync:
             except Exception as exc:
                 last_exc = exc
                 err_str = str(exc)
-                wait = BACKOFF_BASE ** attempt
+                wait = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
+                wait += random.uniform(0, 0.5)  # jitter: evita thundering herd con workers paralelos
 
                 is_session_error   = any(m in err_str for m in self._SESSION_ERRORS)
                 is_transient_error = any(m in err_str.lower() for m in self._TRANSIENT_ERRORS)
