@@ -35,6 +35,7 @@ from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe, valida
 from services.exchange.ccxt_adapter import CCXTAdapter
 from market_data.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
+    run_futures_pipeline,
     run_trades_pipeline,
     run_derivatives_pipeline,
 )
@@ -95,6 +96,39 @@ def _launch_spot_pipelines(
     return futures
 
 
+def _launch_futures_pipelines(
+    config:  AppConfig,
+    exc_cfg,
+    probe:   ExchangeProbe,
+    active:  Set[str],
+    log,
+) -> List[asyncio.Future]:
+    """
+    Lanza pipeline de futuros si el exchange tiene futuros habilitados en config.
+    El adapter de futuros se crea dentro de run_futures_pipeline (no se inyecta)
+    porque necesita defaultType=swap distinto del adapter spot del flow.
+    """
+    if "ohlcv" not in active:
+        return []
+    if not exc_cfg.has_futures:
+        return []
+    has_swap   = _supports_market_type(probe, "swap")
+    has_future = _supports_market_type(probe, "future")
+    if not has_swap and not has_future:
+        log.warning(
+            "Futures configured but exchange has no swap/future market | exchange=%s",
+            probe.exchange,
+        )
+        return []
+    log.info(
+        "Launching futures pipeline | exchange=%s symbols=%s market=%s",
+        probe.exchange,
+        exc_cfg.markets.futures_symbols,
+        exc_cfg.markets.futures_default_type or "swap",
+    )
+    return [run_futures_pipeline(config, exc_cfg, probe)]
+
+
 def _launch_derivative_pipelines(
     config: AppConfig,
     exc_cfg,
@@ -153,6 +187,7 @@ def _launch_pipelines_for_exchange(
     log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
     return [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
+        *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
         *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
     ]
 

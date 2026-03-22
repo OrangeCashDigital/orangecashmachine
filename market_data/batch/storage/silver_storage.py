@@ -100,15 +100,17 @@ class SilverStorage:
 
     def __init__(
         self,
-        base_path: Optional[str | Path] = None,
-        exchange: Optional[str] = None,
+        base_path:   Optional[str | Path] = None,
+        exchange:    Optional[str]        = None,
+        market_type: str                  = "spot",
     ) -> None:
-        self._base_path: Path = _resolve_base_path(base_path)
-        self._exchange: Optional[str] = exchange.lower() if exchange else None
+        self._base_path:   Path = _resolve_base_path(base_path)
+        self._exchange:    Optional[str] = exchange.lower() if exchange else None
+        self._market_type: str = market_type.lower()
         self._base_path.mkdir(parents=True, exist_ok=True)
         logger.info(
-            "SilverStorage ready | exchange={} path={}",
-            self._exchange or "shared", self._base_path,
+            "SilverStorage ready | exchange={} market_type={} path={}",
+            self._exchange or "shared", self._market_type, self._base_path,
         )
 
     # ======================================================
@@ -245,17 +247,25 @@ class SilverStorage:
         return symbol.replace("/", "_")
 
     def _dataset_root(self, symbol: str, timeframe: str) -> Path:
-        """Raíz del dataset para este symbol/timeframe."""
+        """
+        Raíz del dataset para este symbol/timeframe.
+        market_type separa spot de futuros físicamente en el lake:
+          exchange=bybit/symbol=BTC_USDT/market_type=spot/timeframe=1h/
+          exchange=bybit/symbol=BTC_USDT:USDT/market_type=swap/timeframe=1h/
+        """
+        safe_sym = self._safe_symbol(symbol)
         if self._exchange:
             return (
                 self._base_path
                 / f"exchange={self._exchange}"
-                / f"symbol={self._safe_symbol(symbol)}"
+                / f"symbol={safe_sym}"
+                / f"market_type={self._market_type}"
                 / f"timeframe={timeframe}"
             )
         return (
             self._base_path
-            / f"symbol={self._safe_symbol(symbol)}"
+            / f"symbol={safe_sym}"
+            / f"market_type={self._market_type}"
             / f"timeframe={timeframe}"
         )
 
@@ -413,16 +423,17 @@ class SilverStorage:
         version_id = f"v{version_num:06d}"
 
         version_data: Dict = {
-            "version":    version_num,
-            "version_id": version_id,
-            "run_id":     run_id or "unknown",
-            "written_at": datetime.now(timezone.utc).isoformat(),
-            "symbol":     symbol,
-            "timeframe":  timeframe,
-            "exchange":   self._exchange or "shared",
-            "layer":      "silver",
-            "git_hash":   _get_git_hash(),
-            "partitions": partitions,
+            "version":     version_num,
+            "version_id":  version_id,
+            "run_id":      run_id or "unknown",
+            "written_at":  datetime.now(timezone.utc).isoformat(),
+            "symbol":      symbol,
+            "timeframe":   timeframe,
+            "exchange":    self._exchange or "shared",
+            "market_type": self._market_type,
+            "layer":       "silver",
+            "git_hash":    _get_git_hash(),
+            "partitions":  partitions,
         }
 
         # Escribir versión específica

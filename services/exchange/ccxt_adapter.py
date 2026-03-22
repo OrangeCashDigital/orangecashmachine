@@ -85,18 +85,22 @@ class CCXTAdapter:
 
     def __init__(
         self,
-        exchange_id: Optional[str] = None,
-        api_key:     Optional[str] = None,
-        api_secret:  Optional[str] = None,
-        config:      Optional["ExchangeConfig"] = None,
+        exchange_id:  Optional[str] = None,
+        api_key:      Optional[str] = None,
+        api_secret:   Optional[str] = None,
+        config:       Optional["ExchangeConfig"] = None,
+        default_type: Optional[str] = None,
     ) -> None:
 
-        self._exchange_id = self._resolve_exchange_id(exchange_id, config)
-        self._api_key     = self._resolve_api_key(api_key, config)
-        self._api_secret  = self._resolve_api_secret(api_secret, config)
+        self._exchange_id  = self._resolve_exchange_id(exchange_id, config)
+        self._api_key      = self._resolve_api_key(api_key, config)
+        self._api_secret   = self._resolve_api_secret(api_secret, config)
+        self._api_password = self._resolve_api_password(config)
+        # defaultType: parámetro explícito > config.markets.futures.defaultType > None (spot)
+        self._default_type = default_type or self._resolve_default_type(config)
 
-        self._client:    Optional[ccxt.Exchange] = None
-        self._init_lock: asyncio.Lock = asyncio.Lock()
+        self._client:            Optional[ccxt.Exchange] = None
+        self._init_lock:         asyncio.Lock            = asyncio.Lock()
         self._markets_cache:     Optional[Dict[str, Any]] = None
         self._markets_cached_at: float = 0.0
 
@@ -182,18 +186,23 @@ class CCXTAdapter:
 
     async def fetch_ohlcv(
         self,
-        symbol:    str,
-        timeframe: str,
-        since:     Optional[int] = None,
-        limit:     int = 100,
+        symbol:      str,
+        timeframe:   str,
+        since:       Optional[int] = None,
+        limit:       int = 100,
+        market_type: Optional[str] = None,
     ) -> List[List[Any]]:
         import time as _time
         client = await self._get_client()
-        params = {}
-        if self._exchange_id == 'kucoin' and since is not None:
+        params: Dict[str, Any] = {}
+        # defaultType: override por llamada > default del adapter > sin defaultType (spot)
+        effective_type = market_type or self._default_type
+        if effective_type:
+            params["defaultType"] = effective_type
+        if self._exchange_id == "kucoin" and since is not None and not effective_type:
             now_ts = int(_time.time())
             if since > now_ts:
-                params['endAt'] = now_ts
+                params["endAt"] = now_ts
         return await client.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params=params)
 
     async def fetch_trades(
@@ -288,6 +297,23 @@ class CCXTAdapter:
             return config.api_secret.get_secret_value() or None
         return None
 
+    @staticmethod
+    def _resolve_api_password(
+        config: Optional["ExchangeConfig"],
+    ) -> Optional[str]:
+        if config is not None and config.has_passphrase:
+            return config.api_password.get_secret_value() or None
+        return None
+
+    @staticmethod
+    def _resolve_default_type(
+        config: Optional["ExchangeConfig"],
+    ) -> Optional[str]:
+        """Resuelve defaultType desde config. None si futures no está habilitado."""
+        if config is None:
+            return None
+        return config.markets.futures_default_type
+
     # ----------------------------------------------------------
     # Internal
     # ----------------------------------------------------------
@@ -323,6 +349,10 @@ class CCXTAdapter:
                     params["apiKey"] = self._api_key
                 if self._api_secret:
                     params["secret"] = self._api_secret
+                if self._api_password:
+                    params["password"] = self._api_password
+                if self._default_type:
+                    params["options"]["defaultType"] = self._default_type
 
                 client = exchange_class(params)
 

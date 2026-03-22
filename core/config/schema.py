@@ -26,7 +26,9 @@ CONFIG_PATH: Path = Path("config/settings.yaml")
 # Constants
 # =============================================================================
 
-SYMBOL_REGEX = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+$")
+SYMBOL_REGEX         = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+(:[A-Z0-9]+)?$")
+FUTURES_SYMBOL_REGEX = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+:[A-Z0-9]+$")
+_ALLOWED_FUTURES_TYPES: frozenset[str] = frozenset({"swap", "future", "option"})
 
 EXCHANGE_TASK_TIMEOUT: int = 120
 PIPELINE_TASK_TIMEOUT: int = 3_600
@@ -74,7 +76,16 @@ class EnvironmentConfig(StrictBaseModel):
 class MarketConfig(StrictBaseModel):
     enabled:     bool          = False
     symbols:     List[str]     = Field(default_factory=list)
-    defaultType: Optional[str] = None
+    defaultType: Optional[str] = None  # ccxt market type: swap | future | option
+
+    @field_validator("defaultType")
+    @classmethod
+    def validate_default_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _ALLOWED_FUTURES_TYPES:
+            raise ValueError(
+                f"Invalid defaultType: '{v}'. Allowed: {sorted(_ALLOWED_FUTURES_TYPES)}"
+            )
+        return v
 
     @field_validator("symbols")
     @classmethod
@@ -83,7 +94,10 @@ class MarketConfig(StrictBaseModel):
         for symbol in v:
             s = symbol.strip().upper()
             if not SYMBOL_REGEX.match(s):
-                raise ValueError(f"Invalid symbol format: '{symbol}'. Expected BTC/USDT style.")
+                raise ValueError(
+                    f"Invalid symbol format: '{symbol}'. "
+                    "Expected spot (BTC/USDT) or futures (BTC/USDT:USDT) notation."
+                )
             if s not in seen:
                 seen.add(s)
                 result.append(s)
@@ -96,13 +110,27 @@ class MarketsConfig(StrictBaseModel):
 
     @property
     def all_symbols(self) -> List[str]:
+        """Todos los símbolos activos (spot + futures habilitados)."""
         seen, result = set(), []
         for mkt in (self.spot, self.futures):
-            for s in mkt.symbols:
-                if s not in seen:
-                    seen.add(s)
-                    result.append(s)
+            if mkt.enabled:
+                for s in mkt.symbols:
+                    if s not in seen:
+                        seen.add(s)
+                        result.append(s)
         return result
+
+    @property
+    def spot_symbols(self) -> List[str]:
+        return self.spot.symbols if self.spot.enabled else []
+
+    @property
+    def futures_symbols(self) -> List[str]:
+        return self.futures.symbols if self.futures.enabled else []
+
+    @property
+    def futures_default_type(self) -> Optional[str]:
+        return self.futures.defaultType if self.futures.enabled else None
 
 
 # =============================================================================
@@ -156,6 +184,14 @@ class ExchangeConfig(StrictBaseModel):
     @property
     def all_symbols(self) -> List[str]:
         return self.markets.all_symbols
+
+    @property
+    def has_spot(self) -> bool:
+        return self.markets.spot.enabled and bool(self.markets.spot_symbols)
+
+    @property
+    def has_futures(self) -> bool:
+        return self.markets.futures.enabled and bool(self.markets.futures_symbols)
 
     def ccxt_credentials(self) -> dict:
         creds = {"apiKey": self.api_key.get_secret_value(), "secret": self.api_secret.get_secret_value(), "enableRateLimit": self.enableRateLimit}

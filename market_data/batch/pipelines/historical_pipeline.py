@@ -232,6 +232,7 @@ class HistoricalPipelineAsync:
         exchange_client:   Optional[CCXTAdapter] = None,
         cursor_store:      Optional[CursorStore] = None,
         fetch_all_history: bool                  = False,
+        market_type:       str                   = "spot",
     ) -> None:
         _validate_inputs(symbols, timeframes, start_date)
 
@@ -246,11 +247,13 @@ class HistoricalPipelineAsync:
         self.timeframes      = timeframes
         self.start_date      = _parse_start_date(start_date)
         self.max_concurrency = max_concurrency
+        self.market_type     = market_type.lower()
 
-        exchange_id = getattr(exchange_client, '_exchange_id', None)
-        self._bronze_storage = BronzeStorage(exchange=exchange_id)
-        self._silver_storage = SilverStorage(exchange=exchange_id)
-        self._semaphore = asyncio.Semaphore(max_concurrency)
+        # exchange_id resuelto una sola vez — DRY
+        self._exchange_id    = getattr(exchange_client, "_exchange_id", "unknown")
+        self._bronze_storage = BronzeStorage(exchange=self._exchange_id)
+        self._silver_storage = SilverStorage(exchange=self._exchange_id, market_type=self.market_type)
+        self._semaphore      = asyncio.Semaphore(max_concurrency)
 
         # CursorStore: Redis si disponible, InMemory como fallback (SafeOps)
         self._cursor: CursorStore = cursor_store or _build_cursor_store_safe()
@@ -291,12 +294,10 @@ class HistoricalPipelineAsync:
         else:
             logger.debug("Exchange sesión activa — sin reconexión necesaria")
 
-        # Enriquecer contexto del pipeline para todos los logs subsiguientes
-        exchange_id = getattr(self._fetcher._exchange, '_exchange_id', 'unknown')
-        pipeline_logger = logger.bind(exchange=exchange_id, dataset="ohlcv")
-
+        pipeline_logger = logger.bind(exchange=self._exchange_id, dataset="ohlcv")
         pipeline_logger.info(
-            "Pipeline iniciando | símbolos={} timeframes={} pares={} concurrencia_max={}",
+            "Pipeline iniciando | exchange={} market={} símbolos={} timeframes={} pares={} concurrencia_max={}",
+            self._exchange_id, self.market_type,
             len(self.symbols), len(self.timeframes), total_pairs, self.max_concurrency,
         )
 
@@ -399,19 +400,18 @@ class HistoricalPipelineAsync:
                 # Si Redis falla, SafeOps garantiza que no interrumpe el pipeline
                 if not df.empty:
                     last_ts_ms = int(df["timestamp"].max().timestamp() * 1000) if hasattr(df["timestamp"].max(), "timestamp") else int(df["timestamp"].max())
-                    exchange_id = getattr(self._fetcher._exchange, "_exchange_id", "unknown")
-                    self._cursor.update(exchange_id, symbol, timeframe, last_ts_ms)
+                    self._cursor.update(self._exchange_id, symbol, timeframe, last_ts_ms)
 
                 result.rows        = len(df)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 # Métricas Prometheus
-                exchange_id = getattr(self._fetcher._exchange, '_exchange_id', 'unknown')
-                ROWS_INGESTED.labels(exchange=exchange_id, symbol=symbol, timeframe=timeframe).inc(result.rows)
-                PAIR_DURATION.labels(exchange=exchange_id, symbol=symbol, timeframe=timeframe).observe(result.duration_ms / 1000)
+                ROWS_INGESTED.labels(exchange=self._exchange_id, symbol=symbol, timeframe=timeframe).inc(result.rows)
+                PAIR_DURATION.labels(exchange=self._exchange_id, symbol=symbol, timeframe=timeframe).observe(result.duration_ms / 1000)
 
                 logger.info(
-                    "Par completado [{}/{}] | symbol={} timeframe={} rows={} duration={}ms",
-                    idx, total, symbol, timeframe, result.rows, result.duration_ms,
+                    "Par completado [{}/{}] | exchange={} market={} symbol={} timeframe={} rows={} duration={}ms",
+                    idx, total, self._exchange_id, self.market_type, symbol, timeframe,
+                    result.rows, result.duration_ms,
                 )
 
             except asyncio.CancelledError:
@@ -420,12 +420,12 @@ class HistoricalPipelineAsync:
             except Exception as exc:
                 result.error       = str(exc)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                exchange_id = getattr(self._fetcher._exchange, '_exchange_id', 'unknown')
-                error_type = 'transient' if result.is_transient_error else 'fatal'
-                PIPELINE_ERRORS.labels(exchange=exchange_id, error_type=error_type).inc()
+                error_type = "transient" if result.is_transient_error else "fatal"
+                PIPELINE_ERRORS.labels(exchange=self._exchange_id, error_type=error_type).inc()
                 logger.error(
-                    "Par fallido [{}/{}] | symbol={} timeframe={} error={} duration={}ms",
-                    idx, total, symbol, timeframe, exc, result.duration_ms,
+                    "Par fallido [{}/{}] | exchange={} market={} symbol={} timeframe={} error={} duration={}ms",
+                    idx, total, self._exchange_id, self.market_type, symbol, timeframe,
+                    exc, result.duration_ms,
                 )
 
         return result

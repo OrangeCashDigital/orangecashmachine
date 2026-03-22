@@ -71,9 +71,11 @@ exchanges:
         symbols: [BTC/USDT]
 
       futures:
-        enabled: false
+        enabled: true
         defaultType: swap
-        symbols: [BTC/USDT]
+        symbols:
+          - BTC/USDT:USDT   # linear perpetual USDT-margined
+          - BTC/USD:BTC     # inverse perpetual coin-margined
 
   kucoin:
     enabled: true
@@ -94,9 +96,10 @@ exchanges:
         symbols: [BTC/USDT]
 
       futures:
-        enabled: false
+        enabled: true
         defaultType: swap
-        symbols: [BTC/USDT]
+        symbols:
+          - BTC/USDT:USDT   # linear perpetual USDT-margined
 
 # ==============================================================================
 # STORAGE (Data Platform)

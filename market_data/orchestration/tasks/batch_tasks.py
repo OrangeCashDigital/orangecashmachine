@@ -34,8 +34,8 @@ from market_data.batch.pipelines.historical_pipeline import HistoricalPipelineAs
 
 def _validate_historical_inputs(exchange_cfg: ExchangeConfig, config: AppConfig) -> None:
     """Valida que haya símbolos y timeframes antes de ejecutar el pipeline histórico."""
-    if not exchange_cfg.all_symbols:
-        raise ValueError(f"Exchange '{exchange_cfg.name.value}' has no symbols configured.")
+    if not exchange_cfg.markets.spot_symbols:
+        raise ValueError(f"Exchange '{exchange_cfg.name.value}' has no spot symbols configured.")
     if not config.pipeline.historical.timeframes:
         raise ValueError("Historical pipeline requires at least one timeframe.")
 
@@ -84,11 +84,12 @@ async def run_historical_pipeline(
     hist_cfg        = config.pipeline.historical
     exchange_name   = exchange_cfg.name.value
     max_concurrency = probe.max_concurrent
+    spot_symbols    = exchange_cfg.markets.spot_symbols
 
     log.info(
-        "Historical pipeline starting | exchange=%s symbols=%s timeframes=%s workers=%s",
+        "Historical pipeline starting | exchange=%s market=spot symbols=%s timeframes=%s workers=%s",
         exchange_name,
-        len(exchange_cfg.all_symbols),
+        len(spot_symbols),
         len(hist_cfg.timeframes),
         max_concurrency,
     )
@@ -98,16 +99,17 @@ async def run_historical_pipeline(
     from services.exchange.ccxt_adapter import CCXTAdapter
     _owns_client = exchange_client is None
     if _owns_client:
-        exchange_client = CCXTAdapter(config=exchange_cfg)
+        exchange_client = CCXTAdapter(config=exchange_cfg, default_type=None)
 
     try:
         pipeline = HistoricalPipelineAsync(
-            symbols           = exchange_cfg.all_symbols,
+            symbols           = spot_symbols,
             timeframes        = hist_cfg.timeframes,
             start_date        = hist_cfg.start_date,
             max_concurrency   = max_concurrency,
             exchange_client   = exchange_client,
             fetch_all_history = hist_cfg.fetch_all_history,
+            market_type       = "spot",
         )
         summary = await pipeline.run()
     finally:
@@ -132,6 +134,87 @@ async def run_historical_pipeline(
         log.warning(
             "Historical pipeline partial failures | exchange=%s failed=%s/%s",
             exchange_name, summary.failed, summary.total,
+        )
+
+
+# ==========================================================
+# Futures Pipeline
+# ==========================================================
+
+@task(
+    name="historical_futures_pipeline",
+    retries=3,
+    retry_delay_seconds=[30, 120, 300],
+    timeout_seconds=PIPELINE_TASK_TIMEOUT,
+    task_run_name="{exchange_cfg.name.value}-futures",
+    description="Ingests historical OHLCV futures/perpetuals data.",
+    tags=["ohlcv", "historical", "futures"],
+)
+async def run_futures_pipeline(
+    config:       AppConfig,
+    exchange_cfg: ExchangeConfig,
+    probe:        ExchangeProbe,
+) -> None:
+    """
+    Ejecuta el pipeline histórico OHLCV para futuros/perpetuos.
+
+    Crea su propio CCXTAdapter con defaultType configurado.
+    Storage silver separado por market_type (swap).
+    Cursores independientes del spot.
+
+    SafeOps
+    -------
+    - Skip silencioso si futures no está habilitado en config
+    - Solo falla si el 100% de símbolos fallan
+    - Adapter siempre cerrado en finally
+    """
+    from services.exchange.ccxt_adapter import CCXTAdapter
+
+    log = get_run_logger()
+
+    if not exchange_cfg.has_futures:
+        log.warning(
+            "Futures pipeline skipped — futures not enabled | exchange=%s",
+            exchange_cfg.name.value,
+        )
+        return
+
+    futures_symbols     = exchange_cfg.markets.futures_symbols
+    futures_market_type = exchange_cfg.markets.futures_default_type or "swap"
+    hist_cfg            = config.pipeline.historical
+    exchange_name       = exchange_cfg.name.value
+
+    log.info(
+        "Futures pipeline starting | exchange=%s market=%s symbols=%s timeframes=%s workers=%s",
+        exchange_name, futures_market_type,
+        len(futures_symbols), len(hist_cfg.timeframes), probe.max_concurrent,
+    )
+
+    futures_client = CCXTAdapter(config=exchange_cfg, default_type=futures_market_type)
+
+    try:
+        pipeline = HistoricalPipelineAsync(
+            symbols           = futures_symbols,
+            timeframes        = hist_cfg.timeframes,
+            start_date        = hist_cfg.start_date,
+            max_concurrency   = probe.max_concurrent,
+            exchange_client   = futures_client,
+            fetch_all_history = hist_cfg.fetch_all_history,
+            market_type       = futures_market_type,
+        )
+        summary = await pipeline.run()
+    finally:
+        await futures_client.close()
+
+    log.info(
+        "Futures pipeline finished | exchange=%s market=%s ok=%s failed=%s skipped=%s rows=%s",
+        exchange_name, futures_market_type,
+        summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
+    )
+
+    if summary.total > 0 and summary.failed == summary.total:
+        raise RuntimeError(
+            f"Futures pipeline failed for all {summary.total} symbols on '{exchange_name}'."
         )
 
 
