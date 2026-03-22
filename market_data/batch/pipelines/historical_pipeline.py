@@ -41,7 +41,7 @@ from market_data.batch.transformers.transformer import OHLCVTransformer
 from market_data.batch.pipelines.quality_pipeline import QualityPipeline
 from services.exchange.ccxt_adapter import CCXTAdapter
 from services.observability.metrics import (
-    ROWS_INGESTED, PAIR_DURATION, PIPELINE_ERRORS, ACTIVE_PAIRS
+    ROWS_INGESTED, PAIR_DURATION, PIPELINE_ERRORS, ACTIVE_PAIRS, QUALITY_DECISIONS
 )
 
 
@@ -399,6 +399,11 @@ class HistoricalPipelineAsync:
                     timeframe = timeframe,
                     exchange  = self._exchange_id,
                 )
+
+                QUALITY_DECISIONS.labels(
+                    exchange=self._exchange_id, symbol=symbol,
+                    timeframe=timeframe, decision=qres.tier.value,
+                ).inc()
 
                 if not qres.accepted:
                     logger.warning(
