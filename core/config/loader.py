@@ -272,6 +272,74 @@ def _audit(config: AppConfig, key: str, h: str, source: str) -> AppConfig:
     })
 
 
+# Cache módulo-nivel para evitar releer settings.yaml en cada llamada a load_config
+_resolved_env_cache: dict[str, str] = {}
+
+
+def _read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optional[str]:
+    """
+    Lee default_env de settings.yaml sin cargar el config completo.
+    Cachea el resultado por config_dir para evitar I/O repetido.
+    """
+    settings_path = (config_dir or CONFIG_PATH.parent) / "settings.yaml"
+    cache_key     = str(settings_path.resolve())
+
+    if cache_key in _resolved_env_cache:
+        return _resolved_env_cache[cache_key]
+
+    if not settings_path.exists():
+        return None
+
+    try:
+        data = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
+        env_section = data.get("environment", {})
+        value = env_section.get("default_env") if isinstance(env_section, dict) else None
+        if value:
+            value = str(value)
+            if value not in _ALLOWED_ENVS:
+                logger.warning(
+                    "settings.yaml environment.default_env='%s' no es un entorno válido "
+                    "(permitidos: %s) — ignorado, usando 'development'",
+                    value, sorted(_ALLOWED_ENVS),
+                )
+                value = None
+        _resolved_env_cache[cache_key] = value or ""
+        return value or None
+    except yaml.YAMLError as exc:
+        logger.warning("No se pudo leer default_env de settings.yaml: %s", exc)
+        return None
+
+
+def _resolve_env(
+    explicit_env: Optional[str] = None,
+    config_dir:   Optional[Path] = None,
+) -> str:
+    """
+    Resolución automática de entorno. Prioridad (mayor a menor):
+      1. Argumento explícito (llamada programática o CLI)
+      2. OCM_ENV  (variable de entorno — Docker / CI / Kubernetes)
+      3. environment.default_env en settings.yaml  (fuente de verdad local)
+      4. "development"  (fallback seguro)
+
+    El campo settings.yaml::environment.default_env es solo una pista local
+    por defecto. Siempre puede ser sobreescrito por OCM_ENV o argumento explícito.
+    """
+    if explicit_env:
+        logger.debug("Entorno resuelto desde argumento explícito: %s", explicit_env)
+        return explicit_env
+
+    if ocm := os.getenv("OCM_ENV"):
+        logger.debug("Entorno resuelto desde OCM_ENV: %s", ocm)
+        return ocm
+
+    if yaml_env := _read_default_env_from_settings(config_dir):
+        logger.debug("Entorno resuelto desde settings.yaml (default_env): %s", yaml_env)
+        return yaml_env
+
+    logger.debug("Entorno resuelto por fallback: development")
+    return "development"
+
+
 def load_config(
     env:          Optional[str]             = None,
     path:         Optional[Union[str, Path]] = None,
@@ -286,7 +354,7 @@ def load_config(
     market_type : incluido en el cache key para aislar spot/swap.
                   No afecta al merge de YAML. Default: None.
     """
-    env = env or os.getenv("OCM_ENV") or "development"
+    env = _resolve_env(env, Path(path).resolve() if path else None)
     if env not in _ALLOWED_ENVS:
         raise ConfigurationError(f"Invalid environment: '{env}'. Allowed: {sorted(_ALLOWED_ENVS)}")
 

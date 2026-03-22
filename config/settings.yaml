@@ -24,6 +24,7 @@
 # ENVIRONMENT METADATA (tracking no funcional)
 # ==============================================================================
 environment:
+  default_env: development  # pista local — ignorado si hay OCM_ENV o argumento explícito
   name: local-overrides
   debug: true
 
