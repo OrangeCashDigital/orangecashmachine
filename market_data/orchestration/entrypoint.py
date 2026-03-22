@@ -39,6 +39,7 @@ from core.config.schema import AppConfig
 from services.observability.metrics import push_metrics
 from market_data.orchestration.flows.batch_flow import market_data_flow
 from market_data.batch.storage.snapshot import SnapshotManager
+from market_data.batch.storage.gold_storage import GoldStorage
 
 
 # ==========================================================
@@ -127,6 +128,28 @@ async def _run_flow_local(config: AppConfig) -> None:
         logger.info("Snapshot created | id={}", snapshot_id)
     except Exception as exc:
         logger.warning("Snapshot creation failed (non-critical) | {}", exc)
+
+    # SafeOps: Gold build — features para trading/backtesting
+    try:
+        gold = GoldStorage()
+        for ex in config.exchanges:
+            if ex.has_spot and ex.markets.spot_symbols:
+                gold.build_all(
+                    exchange=ex.name.lower(),
+                    symbols=ex.markets.spot_symbols,
+                    market_type="spot",
+                    timeframes=config.pipeline.historical.timeframes,
+                )
+            if ex.has_futures and ex.markets.futures_symbols:
+                gold.build_all(
+                    exchange=ex.name.lower(),
+                    symbols=ex.markets.futures_symbols,
+                    market_type="swap",
+                    timeframes=config.pipeline.historical.timeframes,
+                )
+        logger.info("Gold build completed")
+    except Exception as exc:
+        logger.warning("Gold build failed (non-critical) | {}", exc)
 
 
 # ==========================================================
