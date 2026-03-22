@@ -401,8 +401,8 @@ class HistoricalPipelineAsync:
                 )
 
                 QUALITY_DECISIONS.labels(
-                    exchange=self._exchange_id, symbol=symbol,
-                    timeframe=timeframe, decision=qres.tier.value,
+                    exchange=self._exchange_id, market_type=self.market_type,
+                    symbol=symbol, timeframe=timeframe, decision=qres.tier.value,
                 ).inc()
 
                 if not qres.accepted:

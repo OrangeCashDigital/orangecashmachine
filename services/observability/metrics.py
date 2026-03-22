@@ -60,7 +60,7 @@ ACTIVE_PAIRS = Gauge(
 QUALITY_DECISIONS = Counter(
     "ocm_pipeline_quality_decisions_total",
     "Decisiones de calidad por par (clean/flagged/rejected)",
-    ["exchange", "symbol", "timeframe", "decision"],
+    ["exchange", "market_type", "symbol", "timeframe", "decision"],
 )
 
 # ==========================================================
