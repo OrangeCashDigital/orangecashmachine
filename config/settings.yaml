@@ -37,9 +37,6 @@ pipeline:
     # Debug mode → baja concurrencia para trazabilidad
     max_concurrent_tasks: 1
 
-    # Evita descargas masivas accidentales en local
-    fetch_all_history: false
-
   realtime:
     # Reduce uso de memoria en local
     max_stream_buffer: 1000
@@ -54,7 +51,13 @@ observability:
 
   logging:
     level: DEBUG
-    format: json
+    format: console
+    log_dir: logs
+    rotation: 1 day
+    retention: 7 days
+    console: true
+    file: true
+    pipeline: true
 
   metrics:
     enabled: true

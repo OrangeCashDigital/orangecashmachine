@@ -33,9 +33,6 @@ pipeline:
     # Baja concurrencia → logs legibles + debugging controlado
     max_concurrent_tasks: 2
 
-    # Evita descargas masivas accidentales
-    fetch_all_history: false
-
   realtime:
     # Feedback rápido en local
     snapshot_interval_seconds: 10
@@ -48,7 +45,13 @@ observability:
 
   logging:
     level: DEBUG
-    format: json
+    format: console
+    log_dir: logs
+    rotation: 1 day
+    retention: 7 days
+    console: true
+    file: true
+    pipeline: true
 
   metrics:
     enabled: true
