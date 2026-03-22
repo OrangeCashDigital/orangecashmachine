@@ -291,7 +291,11 @@ class HistoricalPipelineAsync:
         else:
             logger.debug("Exchange sesión activa — sin reconexión necesaria")
 
-        logger.info(
+        # Enriquecer contexto del pipeline para todos los logs subsiguientes
+        exchange_id = getattr(self._fetcher._exchange, '_exchange_id', 'unknown')
+        pipeline_logger = logger.bind(exchange=exchange_id, dataset="ohlcv")
+
+        pipeline_logger.info(
             "Pipeline iniciando | símbolos={} timeframes={} pares={} concurrencia_max={}",
             len(self.symbols), len(self.timeframes), total_pairs, self.max_concurrency,
         )

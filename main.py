@@ -48,6 +48,11 @@ _LOG_FORMAT_FILE = (
     "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{line} | {message}"
 )
 
+_LOG_FORMAT_PIPELINE = (
+    "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{line} | "
+    "{extra[exchange]}/{extra[dataset]} | {message}"
+)
+
 
 # ============================================================================
 # Logging Setup
@@ -74,7 +79,7 @@ def setup_logging(debug: bool = False, log_dir: Optional[Path] = LOG_DIR) -> Non
         colorize=True,
     )
 
-    # Archivo
+    # Archivo principal — DEBUG completo para trazabilidad
     if log_dir:
         log_dir.mkdir(parents=True, exist_ok=True)
         logger.add(
@@ -82,13 +87,46 @@ def setup_logging(debug: bool = False, log_dir: Optional[Path] = LOG_DIR) -> Non
             rotation="1 day",
             retention="14 days",
             compression="gz",
-            level="DEBUG",  # archivo siempre DEBUG para trazabilidad completa en produccion
+            level="DEBUG",
             format=_LOG_FORMAT_FILE,
             backtrace=True,
             diagnose=False,
         )
 
-    logger.debug("Logging configured | level={} log_dir={}", level, log_dir)
+        # Sink de errores — solo WARNING+ para alertas rápidas
+        logger.add(
+            log_dir / "errors_{time:YYYY-MM-DD}.log",
+            rotation="1 day",
+            retention="30 days",
+            compression="gz",
+            level="WARNING",
+            format=_LOG_FORMAT_FILE,
+            backtrace=True,
+            diagnose=False,
+        )
+
+        # Sink de pipeline — solo módulos propios, nivel DEBUG, con contexto bind
+        logger.add(
+            log_dir / "pipeline_{time:YYYY-MM-DD}.log",
+            rotation="1 day",
+            retention="14 days",
+            compression="gz",
+            level="DEBUG",
+            format=(
+                "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{line} | "
+                "{extra[exchange]}/{extra[dataset]} | {message}"
+            ),
+            filter=lambda r: (
+                r["name"].startswith((
+                    "market_data.",
+                    "services.exchange.",
+                    "services.state.",
+                ))
+                and r["extra"].get("exchange")  # solo logs con contexto bind
+            ),
+        )
+
+    logger.debug("Logging configured | level={} log_dir={} sinks=3", level, log_dir)
 
 
 # ============================================================================

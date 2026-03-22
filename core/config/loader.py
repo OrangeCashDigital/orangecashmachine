@@ -48,26 +48,26 @@ from core.config.rules import check_all_rules
 logger = logging.getLogger(__name__)
 
 if _PROMETHEUS_AVAILABLE:
-    CONFIG_LOAD_COUNT = Counter("config_loads_total", "Config load attempts", ["env", "status"])
+    CONFIG_LOAD_COUNT    = Counter("config_loads_total",           "Config load attempts", ["env", "status"])
     CONFIG_LOAD_DURATION = Histogram("config_load_duration_seconds", "Config load duration", ["env"])
-    CONFIG_CACHE_HITS = Counter("config_cache_hits_total", "Cache hits", ["env"])
+    CONFIG_CACHE_HITS    = Counter("config_cache_hits_total",      "Cache hits", ["env"])
 else:
     class _NoOpMetric:
-        def labels(self, **_):
-            return self
-        def inc(self, _=1):
-            pass
-        def observe(self, _):
-            pass
-    CONFIG_LOAD_COUNT = _NoOpMetric()
+        def labels(self, **_): return self
+        def inc(self, _=1):    pass
+        def observe(self, _):  pass
+    CONFIG_LOAD_COUNT    = _NoOpMetric()
     CONFIG_LOAD_DURATION = _NoOpMetric()
-    CONFIG_CACHE_HITS = _NoOpMetric()
+    CONFIG_CACHE_HITS    = _NoOpMetric()
 
-_ENV_PATTERN = re.compile(r"\$\{([^}:]+)(:-([^}]+))?\}")
-_ALLOWED_ENVS = {"development", "test", "staging", "production"}
+# Alias para compatibilidad con tests que importan CONFIG_RELOAD_TIME
+CONFIG_RELOAD_TIME = CONFIG_LOAD_DURATION
+
+_ENV_PATTERN        = re.compile(r"\$\{([^}:]+)(:-([^}]+))?\}")
+_ALLOWED_ENVS       = {"development", "test", "staging", "production"}
 _WATCH_ENABLED_ENVS = {"development", "test", "local"}
-_DEBOUNCE_SECONDS = 0.5
-_SENSITIVE_KEYS = frozenset({
+_DEBOUNCE_SECONDS   = 0.5
+_SENSITIVE_KEYS     = frozenset({
     "password", "passwd", "secret", "token", "api_key", "apikey",
     "private_key", "auth", "credential", "credentials", "access_key",
     "secret_key", "jwt", "bearer", "passphrase", "encryption_key",
@@ -105,9 +105,9 @@ class SecretMasker:
 
 class ConfigCache:
     def __init__(self) -> None:
-        self._cache: dict[str, AppConfig] = {}
-        self._hashes: dict[str, str] = {}
-        self._lock = threading.RLock()
+        self._cache:  dict[str, AppConfig] = {}
+        self._hashes: dict[str, str]       = {}
+        self._lock    = threading.RLock()
 
     def get(self, key: str, h: str) -> Optional[AppConfig]:
         with self._lock:
@@ -117,7 +117,7 @@ class ConfigCache:
 
     def set(self, key: str, h: str, config: AppConfig) -> None:
         with self._lock:
-            self._cache[key] = config
+            self._cache[key]  = config
             self._hashes[key] = h
 
     def invalidate(self, key: str) -> None:
@@ -157,6 +157,21 @@ class EnvResolver:
 
 
 class YamlLoader:
+    """
+    Carga y merge de archivos YAML.
+
+    Comportamiento de merge
+    -----------------------
+    El merge es recursivo para dicts. Esto garantiza que campos como
+    defaultType en markets.futures definidos en base.yaml NO se pierden
+    si un override solo sobreescribe parte del dict sin incluir defaultType.
+
+    Ejemplo:
+      base.yaml:    markets.futures.defaultType = swap
+      dev.yaml:     markets.futures.symbols = [ETH/USDT:USDT]
+      resultado:    defaultType=swap  +  symbols=[ETH/USDT:USDT]  ← ambos preservados
+    """
+
     @staticmethod
     def load(path: Path, required: bool = True) -> dict[str, Any]:
         if not path.exists():
@@ -216,12 +231,27 @@ def _compute_hash(data: dict) -> str:
     return hashlib.sha256(yaml.dump(data, sort_keys=True).encode()).hexdigest()
 
 
-def _make_cache_key(env: str, config_dir: Path) -> str:
+def _make_cache_key(
+    env:         str,
+    config_dir:  Path,
+    market_type: Optional[str] = None,
+) -> str:
+    """
+    Cache key único por (env, config_dir, market_type).
+
+    market_type se incluye para aislar invalidaciones spot/swap.
+    Sin market_type el comportamiento es idéntico a la versión anterior.
+    Formato: {dir_hash_8}:{env}[:{market_type}]
+    """
     dir_hash = hashlib.sha256(str(config_dir.resolve()).encode()).hexdigest()[:8]
-    return f"{dir_hash}:{env}"
+    key = f"{dir_hash}:{env}"
+    if market_type:
+        key = f"{key}:{market_type}"
+    return key
 
 
 def _load_dotenv_for_env(env: str) -> None:
+    """Carga .env, .env.{env}, .env.{env}.local en orden con override progresivo."""
     for filename in (".env", f".env.{env}", f".env.{env}.local"):
         p = Path(filename)
         if p.exists():
@@ -237,27 +267,34 @@ def _audit(config: AppConfig, key: str, h: str, source: str) -> AppConfig:
         source_file=source,
     )
     return config.model_copy(update={
-        "audit_log": [*config.audit_log, entry],
+        "audit_log":   [*config.audit_log, entry],
         "last_reload": datetime.now(timezone.utc),
     })
 
 
 def load_config(
-    env: Optional[str] = None,
-    path: Optional[Union[str, Path]] = None,
-    use_cache: bool = True,
-    force_reload: bool = False,
+    env:          Optional[str]             = None,
+    path:         Optional[Union[str, Path]] = None,
+    use_cache:    bool                       = True,
+    force_reload: bool                       = False,
+    market_type:  Optional[str]             = None,
 ) -> AppConfig:
-    """Load, merge, validate, audit and cache config. Priority: settings > {env} > base."""
+    """
+    Load, merge, validate, audit and cache config.
+    Priority: settings > {env} > base.
+
+    market_type : incluido en el cache key para aislar spot/swap.
+                  No afecta al merge de YAML. Default: None.
+    """
     env = env or os.getenv("OCM_ENV") or "development"
     if env not in _ALLOWED_ENVS:
         raise ConfigurationError(f"Invalid environment: '{env}'. Allowed: {sorted(_ALLOWED_ENVS)}")
 
     config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
-    cache_key = _make_cache_key(env, config_dir)
+    cache_key  = _make_cache_key(env, config_dir, market_type)
     _load_dotenv_for_env(env)
 
-    base = config_dir / "base.yaml"
+    base     = config_dir / "base.yaml"
     env_file = config_dir / f"{env}.yaml"
     settings = config_dir / "settings.yaml"
 
@@ -267,7 +304,7 @@ def load_config(
         merged = YamlLoader.merge(merged, YamlLoader.load(env_file, required=False))
         merged = YamlLoader.merge(merged, YamlLoader.load(settings, required=False))
         merged = EnvResolver.resolve(merged)
-        h = _compute_hash(merged)
+        h      = _compute_hash(merged)
 
         if use_cache and not force_reload:
             cached = _config_cache.get(cache_key, h)
@@ -289,7 +326,10 @@ def load_config(
         duration = time.monotonic() - start
         CONFIG_LOAD_COUNT.labels(env=env, status="success").inc()
         CONFIG_LOAD_DURATION.labels(env=env).observe(duration)
-        logger.info("Config loaded | env=%s hash=%s source=%s duration=%.3fs", env, h[:8], source_name, duration)
+        logger.info(
+            "Config loaded | env=%s hash=%s source=%s duration=%.3fs",
+            env, h[:8], source_name, duration,
+        )
         return config
 
     except Exception as exc:
@@ -300,7 +340,7 @@ def load_config(
 
 class ConfigChangeHandler(FileSystemEventHandler):
     def __init__(self, env: Optional[str], path: Optional[Union[str, Path]]) -> None:
-        self.env = env
+        self.env  = env
         self.path = path
         self._last = 0.0
 
@@ -312,7 +352,9 @@ class ConfigChangeHandler(FileSystemEventHandler):
             return
         self._last = now
         config_dir = Path(self.path).resolve() if self.path else CONFIG_PATH.parent
-        _config_cache.invalidate(_make_cache_key(self.env or "development", config_dir))
+        # Invalidar todas las variantes de market_type para este env+dir
+        for mt in (None, "spot", "swap", "future"):
+            _config_cache.invalidate(_make_cache_key(self.env or "development", config_dir, mt))
         try:
             load_config(self.env, self.path, force_reload=True)
             logger.info("Config hot-reloaded | file=%s", event.src_path)
@@ -321,20 +363,20 @@ class ConfigChangeHandler(FileSystemEventHandler):
 
 
 def watch_config_files(
-    env: Optional[str] = None,
-    path: Optional[Union[str, Path]] = None,
-    watch: Optional[bool] = None,
+    env:   Optional[str]             = None,
+    path:  Optional[Union[str, Path]] = None,
+    watch: Optional[bool]            = None,
 ) -> Optional[Any]:
     if not _WATCHDOG_AVAILABLE:
         logger.warning("Hot-reload unavailable: run pip install watchdog")
         return None
-    env = env or os.getenv("OCM_ENV") or "development"
+    env     = env or os.getenv("OCM_ENV") or "development"
     enabled = watch if watch is not None else (env in _WATCH_ENABLED_ENVS)
     if not enabled:
         logger.info("Hot-reload disabled | env=%s", env)
         return None
     config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
-    observer = Observer()
+    observer   = Observer()
     observer.schedule(ConfigChangeHandler(env, path), str(config_dir), recursive=False)
     observer.start()
     logger.info("Hot-reload started | dir=%s env=%s", config_dir, env)
@@ -351,14 +393,19 @@ def stop_config_watcher(observer: Optional[Any]) -> None:
 if _PREFECT_AVAILABLE:
     @task(name="load_config", retries=2, retry_delay_seconds=[5, 30])
     async def load_and_validate_config_task(
-        env: Optional[str] = None,
-        path: Optional[Union[str, Path]] = None,
-        use_cache: bool = True,
-        force_reload: bool = False,
+        env:          Optional[str]             = None,
+        path:         Optional[Union[str, Path]] = None,
+        use_cache:    bool                       = True,
+        force_reload: bool                       = False,
+        market_type:  Optional[str]             = None,
     ) -> AppConfig:
         prefect_log = get_run_logger()
-        config = load_config(env, path, use_cache, force_reload)
-        prefect_log.info("Config loaded | env=%s exchanges=%s", env or os.getenv("OCM_ENV"), getattr(config, "exchange_names", []))
+        config = load_config(env, path, use_cache, force_reload, market_type)
+        prefect_log.info(
+            "Config loaded | env=%s exchanges=%s",
+            env or os.getenv("OCM_ENV"),
+            getattr(config, "exchange_names", []),
+        )
         return config
 
 
@@ -370,8 +417,15 @@ __all__ = [
     "ConfigurationError",
     "ConfigValidationError",
     "SecretMasker",
+    "YamlLoader",
+    "EnvResolver",
+    "ConfigValidator",
+    "_make_cache_key",
+    "_load_dotenv_for_env",
     "CONFIG_LOAD_COUNT",
     "CONFIG_LOAD_DURATION",
+    "CONFIG_RELOAD_TIME",
     "CONFIG_CACHE_HITS",
+    "_PROMETHEUS_AVAILABLE",
     *(["load_and_validate_config_task"] if _PREFECT_AVAILABLE else []),
 ]
