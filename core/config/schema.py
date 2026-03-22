@@ -67,6 +67,7 @@ class EnvironmentConfig(StrictBaseModel):
     debug:            bool          = False
     last_modified_by: Optional[str] = None
     last_modified_at: Optional[Any] = None
+    default_env:      Optional[str] = None  # pista local para _resolve_env — ignorado en runtime
 
 
 # =============================================================================
