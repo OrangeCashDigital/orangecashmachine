@@ -93,7 +93,7 @@ def run(config: AppConfig, debug: bool = False) -> int:
         0 → éxito, 1 → error crítico, 130 → interrumpido (SIGINT).
     """
     log_level = "DEBUG" if debug else config.observability.logging.level
-    setup_logging(debug=(log_level == "DEBUG"))
+    setup_logging(cfg=config.observability.logging, debug=(log_level == "DEBUG"))
 
     logger.info(
         "OrangeCashMachine starting (local) | env={} exchanges={}",

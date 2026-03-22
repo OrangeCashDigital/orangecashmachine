@@ -357,8 +357,14 @@ class IntegrationsConfig(StrictBaseModel):
 # =============================================================================
 
 class LoggingConfig(StrictBaseModel):
-    level:  str = "INFO"
-    format: str = "json"
+    level:     str  = "INFO"
+    format:    str  = "console"
+    log_dir:   str  = "logs"
+    rotation:  str  = "1 day"
+    retention: str  = "14 days"
+    console:   bool = True
+    file:      bool = True
+    pipeline:  bool = True
 
 
 class MetricsConfig(StrictBaseModel):
