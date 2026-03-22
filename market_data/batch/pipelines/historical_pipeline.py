@@ -267,6 +267,7 @@ class HistoricalPipelineAsync:
             exchange_client    = exchange_client,
             cursor_store       = self._cursor,
             fetch_all_history  = fetch_all_history,
+            market_type        = market_type,
         )
 
     # ----------------------------------------------------------

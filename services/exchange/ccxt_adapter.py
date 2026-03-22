@@ -217,6 +217,12 @@ class CCXTAdapter:
         client = await self._get_client()
         return await client.load_markets()
 
+    def get_market(self, symbol: str) -> Optional[Dict[str, Any]]:
+        # Retorna metadata del simbolo desde cache (sincrono, O(1)).
+        # Requiere connect() previo. Retorna None si no hay cache.
+        return (self._markets_cache or {}).get(symbol)
+
+
     def parse8601(self, date_str: str) -> int:
         """Parsea fecha ISO 8601 a timestamp ms — no requiere cliente inicializado."""
         import ccxt as ccxt_sync

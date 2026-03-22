@@ -275,7 +275,7 @@ async def validate_exchange_connection(
         "yes" if cfg.has_credentials else "no",
     )
 
-    adapter = CCXTAdapter(config=cfg)
+    adapter = CCXTAdapter(config=cfg, default_type=None)  # probe adapter = spot context siempre
 
     try:
         await adapter.connect()

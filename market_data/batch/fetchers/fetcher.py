@@ -63,6 +63,8 @@ class FetcherError(Exception): ...
 class InvalidTimeframeError(FetcherError): ...
 class MissingStartDateError(FetcherError): ...
 class ChunkFetchError(FetcherError): ...
+class SymbolNotFoundError(FetcherError): ...
+class InvalidMarketTypeError(FetcherError): ...
 
 
 # ==========================================================
@@ -99,6 +101,7 @@ class HistoricalFetcherAsync:
         overlap_bars: int = DEFAULT_OVERLAP_BARS,
         cursor_store: Optional[CursorStore] = None,
         fetch_all_history: bool = False,
+        market_type: Optional[str] = None,
     ) -> None:
 
         self._exchange = exchange_client
@@ -107,6 +110,7 @@ class HistoricalFetcherAsync:
         self._overlap = overlap_bars
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
         self._fetch_all_history = fetch_all_history
+        self._market_type: Optional[str] = market_type  # source of truth para validacion
 
         self._breaker = pybreaker.CircuitBreaker(
             fail_max=5,
@@ -126,6 +130,7 @@ class HistoricalFetcherAsync:
     ) -> pd.DataFrame:
 
         self._validate_inputs(symbol, timeframe, limit)
+        self._validate_market(symbol, self._market_type)
 
         result = await self._download_chunked(
             symbol, timeframe, start_date, limit
@@ -359,6 +364,27 @@ class HistoricalFetcherAsync:
         if limit <= 0:
             raise ValueError("limit > 0 required")
         _timeframe_to_ms(timeframe)
+
+    def _validate_market(self, symbol: str, market_type: Optional[str] = None) -> None:
+        # Valida simbolo contra exchange.markets usando market_type explicito.
+        # NO usa _default_type del adapter — ese estado puede ser mutado por CCXT.
+        # Si no hay cache (mock/test sin connect), omite silenciosamente.
+        market = self._exchange.get_market(symbol)
+        if not market:
+            return  # sin cache o simbolo no encontrado: omitir silenciosamente
+
+        exchange_id = getattr(self._exchange, '_exchange_id', 'unknown')
+
+        if market_type == 'swap' and not market.get('swap', False):
+            raise InvalidMarketTypeError(
+                f"Symbol '{symbol}' is not swap/futures in {exchange_id} "
+                f"(type={market.get('type', '?')}) — fix config"
+            )
+        if market_type == 'spot' and not market.get('spot', False):
+            raise InvalidMarketTypeError(
+                f"Symbol '{symbol}' is not spot in {exchange_id} "
+                f"(type={market.get('type', '?')}) — fix config"
+            )
 
 
 # ==========================================================
