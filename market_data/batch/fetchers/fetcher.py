@@ -189,8 +189,10 @@ class HistoricalFetcherAsync:
 
             last_ts = int(df["timestamp"].max().timestamp() * 1000)
 
-            # 🔥 Protección anti-loop
-            if last_seen_ts == last_ts:
+            # 🔥 Protección anti-loop: solo es loop real si el exchange
+            # devuelve chunk completo pero el cursor no avanzó.
+            # Si len(raw) < limit, es fin de datos — el break de abajo lo maneja.
+            if last_seen_ts == last_ts and len(raw) >= limit:
                 logger.warning("Loop detected | {} {}", symbol, timeframe)
                 break
 
