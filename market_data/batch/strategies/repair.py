@@ -231,32 +231,56 @@ class RepairStrategy(StrategyMixin):
         try:
             logger.debug("Healing gap | symbol={} timeframe={} {}", symbol, timeframe, gap)
 
-            # Fetch quirúrgico: solo las velas del gap, sin traer historial completo.
-            # limit = expected + 2 de margen (overlap mínimo).
-            tf_ms  = _timeframe_to_ms(timeframe)
-            limit  = min(gap.expected + 2, 1000)
-            raw    = await ctx.fetcher.fetch_chunk(
-                symbol    = symbol,
-                timeframe = timeframe,
-                since     = gap.start_ms - tf_ms,  # un tick antes para overlap
-                limit     = limit,
-            )
+            # Fetch quirúrgico con paginación completa.
+            # Gaps pequeños (<= 1000 velas): un solo fetch.
+            # Gaps grandes (> 1000 velas): paginar igual que backfill.
+            tf_ms     = _timeframe_to_ms(timeframe)
+            gap_start = pd.Timestamp(gap.start_ms, unit="ms", tz="UTC")
+            gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
 
-            if not raw:
+            _CHUNK = 1000
+            since  = gap.start_ms - tf_ms  # un tick antes para overlap
+            collected_raw: list = []
+            _MAX_GAP_CHUNKS = 200  # techo de seguridad: 200k velas por gap
+
+            for _chunk_idx in range(_MAX_GAP_CHUNKS):
+                raw_chunk = await ctx.fetcher.fetch_chunk(
+                    symbol    = symbol,
+                    timeframe = timeframe,
+                    since     = since,
+                    limit     = _CHUNK,
+                )
+                if not raw_chunk:
+                    break
+                collected_raw.extend(raw_chunk)
+                last_ts = raw_chunk[-1][0]  # timestamp ms del último item
+                if last_ts >= gap.end_ms or len(raw_chunk) < _CHUNK:
+                    break  # llegamos al final del gap o el exchange no tiene más
+                since = last_ts  # avanzar sin overlap — estamos en rango exacto
+
+            if not collected_raw:
                 logger.warning(
                     "Gap heal: no data | symbol={} timeframe={} {}", symbol, timeframe, gap,
                 )
                 return False, 0
 
-            df = pd.DataFrame(raw, columns=["timestamp","open","high","low","close","volume"])
+            df = pd.DataFrame(
+                collected_raw,
+                columns=["timestamp", "open", "high", "low", "close", "volume"],
+            )
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-
-            gap_start = pd.Timestamp(gap.start_ms, unit="ms", tz="UTC")
-            gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
-            df        = df[(df["timestamp"] >= gap_start) & (df["timestamp"] <= gap_end)]
+            df = df[(df["timestamp"] >= gap_start) & (df["timestamp"] <= gap_end)]
+            df = df.drop_duplicates(subset="timestamp", keep="last").sort_values("timestamp")
 
             if df.empty:
                 return False, 0
+
+            if gap.expected > 1000:
+                logger.info(
+                    "Gap heal: gap grande paginado | symbol={} timeframe={} "
+                    "expected={} fetched={} chunks={}",
+                    symbol, timeframe, gap.expected, len(df), _chunk_idx + 1,
+                )
 
             qres = ctx.quality.run(
                 df=df, symbol=symbol, timeframe=timeframe, exchange=ctx.exchange_id,
