@@ -99,7 +99,7 @@ integrations:
 safety:
 
   # Nunca reingestar todo accidentalmente
-  prevent_full_reingestion: true
+  prevent_full_reingestion: false
 
   # Permite ejecución sin confirmación (dev-friendly)
   require_explicit_start: false

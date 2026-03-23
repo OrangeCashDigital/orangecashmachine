@@ -16,8 +16,8 @@ except ImportError:
         def inc(self, _=1):    pass
         def observe(self, _):  pass
 
-    CONFIG_LOAD_COUNT    = _NoOpMetric()
-    CONFIG_LOAD_DURATION = _NoOpMetric()
-    CONFIG_CACHE_HITS    = _NoOpMetric()
+    CONFIG_LOAD_COUNT    = _NoOpMetric()  # type: ignore[assignment]
+    CONFIG_LOAD_DURATION = _NoOpMetric()  # type: ignore[assignment]
+    CONFIG_CACHE_HITS    = _NoOpMetric()  # type: ignore[assignment]
 
 CONFIG_RELOAD_TIME = CONFIG_LOAD_DURATION

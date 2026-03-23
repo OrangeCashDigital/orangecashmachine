@@ -92,6 +92,12 @@ class DownloadResult:
 from services.state.cursor_store import CursorStore, InMemoryCursorStore
 
 class HistoricalFetcherAsync:
+    async def ensure_exchange(self) -> None:
+
+        if not await self._exchange.is_healthy():
+
+            await self._exchange.reconnect()
+
 
     def __init__(
         self,

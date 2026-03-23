@@ -21,7 +21,7 @@ try:
     _WATCHDOG_AVAILABLE = True
 except ImportError:
     _WATCHDOG_AVAILABLE = False
-    FileSystemEventHandler = object
+    FileSystemEventHandler = object  # type: ignore[misc, assignment]
 
 
 class ConfigChangeHandler(FileSystemEventHandler):
