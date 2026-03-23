@@ -241,7 +241,7 @@ class BackfillStrategy(StrategyMixin):
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
         try:
-            files = ctx.storage._find_partition_files(symbol, timeframe)
+            files = ctx.storage.find_partition_files(symbol, timeframe)
             if not files:
                 return None
             timestamps = []

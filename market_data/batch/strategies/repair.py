@@ -191,7 +191,7 @@ class RepairStrategy(StrategyMixin):
             con datasets grandes — ej. 2.5M filas de 1m).
         """
         try:
-            files = ctx.storage._find_partition_files(symbol, timeframe)
+            files = ctx.storage.find_partition_files(symbol, timeframe)
             if not files:
                 return None
 
@@ -231,17 +231,25 @@ class RepairStrategy(StrategyMixin):
         try:
             logger.debug("Healing gap | symbol={} timeframe={} {}", symbol, timeframe, gap)
 
-            df = await ctx.fetcher.download_data(
-                symbol     = symbol,
-                timeframe  = timeframe,
-                start_date = pd.Timestamp(gap.start_ms, unit="ms", tz="UTC").strftime("%Y-%m-%d"),
+            # Fetch quirúrgico: solo las velas del gap, sin traer historial completo.
+            # limit = expected + 2 de margen (overlap mínimo).
+            tf_ms  = timeframe_to_ms(timeframe)
+            limit  = min(gap.expected + 2, 1000)
+            raw    = await ctx.fetcher.fetch_chunk(
+                symbol    = symbol,
+                timeframe = timeframe,
+                since     = gap.start_ms - tf_ms,  # un tick antes para overlap
+                limit     = limit,
             )
 
-            if df is None or df.empty:
+            if not raw:
                 logger.warning(
                     "Gap heal: no data | symbol={} timeframe={} {}", symbol, timeframe, gap,
                 )
                 return False, 0
+
+            df = pd.DataFrame(raw, columns=["timestamp","open","high","low","close","volume"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
 
             gap_start = pd.Timestamp(gap.start_ms, unit="ms", tz="UTC")
             gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
