@@ -155,6 +155,16 @@ class HistoricalFetcherAsync:
 
         return result.df
 
+    async def fetch_chunk(
+        self,
+        symbol:    str,
+        timeframe: str,
+        since:     int,
+        limit:     int = DEFAULT_CHUNK_LIMIT,
+    ) -> List[list]:
+        """API pública de fetch de un chunk. Usada por BackfillStrategy."""
+        return await self._fetch_chunk_with_retry(symbol, timeframe, since, limit)
+
     async def close(self) -> None:
         await self._exchange.close()
 
@@ -452,3 +462,11 @@ def _sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.dropna(subset=["timestamp"])
     return df.sort_values("timestamp")
+
+# ----------------------------------------------------------
+# Public aliases
+# ----------------------------------------------------------
+
+def timeframe_to_ms(timeframe: str) -> int:
+    """Alias público de _timeframe_to_ms."""
+    return _timeframe_to_ms(timeframe)

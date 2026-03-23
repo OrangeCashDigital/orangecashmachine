@@ -38,9 +38,12 @@ latest.json apunta siempre a la versión más reciente.
 """
 
 from __future__ import annotations
+import os
 
+import asyncio
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from core.utils import get_git_hash
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,6 +51,12 @@ from typing import Dict, List, Optional, Literal
 
 import pandas as pd
 from loguru import logger
+
+# Worker pool para I/O de particiones — compartido por instancia
+_PARTITION_EXECUTOR = ThreadPoolExecutor(
+    max_workers=min(32, (os.cpu_count() or 4) * 2),
+    thread_name_prefix="silver-io",
+)
 
 
 # ==========================================================
@@ -149,44 +158,65 @@ class SilverStorage:
         run_id : str, optional
             ID del run de ingestión para correlación con bronze.
         """
+        import time as _time
+        _t0 = _time.monotonic()
+
         _validate_dataframe(df)
         df = _normalize_dataframe(df)
-
-        partitions_written: List[Dict] = []
 
         use_daily = (timeframe == "1m")
 
         if use_daily:
-            groups = df.groupby(
-                [df["timestamp"].dt.year, df["timestamp"].dt.month, df["timestamp"].dt.day],
-                sort=True,
-            )
-            for (year, month, day), part in groups:
-                meta = self._write_partition(
-                    df=part,
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    year=int(year),
-                    month=int(month),
-                    mode=mode,
-                    day=int(day),
+            groups = [
+                (int(y), int(m), int(d), part)
+                for (y, m, d), part in df.groupby(
+                    [df["timestamp"].dt.year, df["timestamp"].dt.month, df["timestamp"].dt.day],
+                    sort=True,
                 )
-                partitions_written.append(meta)
+            ]
+            tasks = [
+                (part, symbol, timeframe, y, m, mode, d)
+                for y, m, d, part in groups
+            ]
         else:
-            groups = df.groupby(
-                [df["timestamp"].dt.year, df["timestamp"].dt.month],
-                sort=True,
-            )
-            for (year, month), part in groups:
-                meta = self._write_partition(
-                    df=part,
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    year=int(year),
-                    month=int(month),
-                    mode=mode,
+            groups = [
+                (int(y), int(m), part)
+                for (y, m), part in df.groupby(
+                    [df["timestamp"].dt.year, df["timestamp"].dt.month],
+                    sort=True,
                 )
-                partitions_written.append(meta)
+            ]
+            tasks = [
+                (part, symbol, timeframe, y, m, mode, None)
+                for y, m, part in groups
+            ]
+
+        # Escritura paralela de particiones independientes
+        futures = [
+            _PARTITION_EXECUTOR.submit(self._write_partition, *args)
+            for args in tasks
+        ]
+        partitions_written: List[Dict] = []
+        errors = []
+        for f in futures:
+            try:
+                partitions_written.append(f.result())
+            except Exception as exc:
+                errors.append(exc)
+
+        if errors:
+            raise PartitionWriteError(
+                f"Silver write failed for {len(errors)}/{len(futures)} partitions: {errors[0]}"
+            )
+
+        # Log de resumen (no por partición individual — reduce ruido en 1m)
+        _duration_ms = int((_time.monotonic() - _t0) * 1000)
+        total_rows = sum(p.get("rows", 0) for p in partitions_written)
+        logger.debug(
+            "Silver written | {}/{} exchange={} partitions={} rows={} duration={}ms",
+            symbol, timeframe, self._exchange or "shared",
+            len(partitions_written), total_rows, _duration_ms,
+        )
 
         # Generar versión del dataset
         if partitions_written:
@@ -299,6 +329,10 @@ class SilverStorage:
         safe = self._safe_symbol(symbol)
         return self._partition_dir(symbol, timeframe, year, month, day) / f"{safe}_{timeframe}.parquet"
 
+    def find_partition_files(self, symbol: str, timeframe: str) -> List[Path]:
+        """Alias público de _find_partition_files."""
+        return self._find_partition_files(symbol, timeframe)
+
     def _find_partition_files(self, symbol: str, timeframe: str) -> List[Path]:
         root = self._dataset_root(symbol, timeframe)
         if not root.exists():
@@ -346,7 +380,7 @@ class SilverStorage:
             partition_meta = _write_partition_meta(meta_path, df, symbol, timeframe)
 
             label = f"{year}/{month:02d}/{day:02d}" if day is not None else f"{year}/{month:02d}"
-            logger.info(
+            logger.debug(
                 "Partition saved | {} {} {} rows={} [{} → {}]",
                 symbol, timeframe, label, len(df),
                 df["timestamp"].min().isoformat(),

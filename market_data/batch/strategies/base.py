@@ -7,9 +7,17 @@ Contrato central del sistema de pipeline unificado.
 
 from __future__ import annotations
 
+import asyncio
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Protocol, runtime_checkable
+
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
 from market_data.batch.storage.silver_storage import SilverStorage
@@ -36,11 +44,22 @@ class PipelineContext:
     start_date:  str
 
 
+# Nombres de clase de excepción que indican error transitorio
 _TRANSIENT_ERROR_NAMES: frozenset[str] = frozenset({
     "TimeoutError", "ConnectionError", "OSError",
     "ConnectionRefusedError", "ConnectionResetError",
-    "BrokenPipeError",
+    "BrokenPipeError", "ChunkFetchError",
+    # asyncio / aiohttp
+    "ClientConnectorError", "ServerDisconnectedError",
+    "ClientOSError", "ClientResponseError",
 })
+
+# Substrings en el mensaje de error que indican error transitorio de red/exchange
+_TRANSIENT_ERROR_MSGS: tuple[str, ...] = (
+    "timeout", "timed out", "rate limit", "429", "503", "502",
+    "connection", "network", "session is closed", "temporarily",
+    "too many requests", "service unavailable",
+)
 
 
 @dataclass
@@ -51,6 +70,7 @@ class PairResult:
     rows:        int  = 0
     skipped:     bool = False
     error:       str  = ""
+    error_type:  str  = ""
     duration_ms: int  = 0
     gaps_found:  int  = 0
     gaps_healed: int  = 0
@@ -62,8 +82,19 @@ class PairResult:
 
     @property
     def is_transient_error(self) -> bool:
-        """Clasifica error como transitorio por nombre de clase (el error ya es string)."""
-        return any(name in self.error for name in _TRANSIENT_ERROR_NAMES)
+        """
+        Clasifica el error como transitorio usando dos criterios independientes:
+        1. error_type: nombre exacto de la clase de excepción (capturado en StrategyMixin)
+        2. error: substrings de mensaje de red/exchange (insensible a mayúsculas)
+
+        Separar los dos criterios evita falsos positivos: comparar el *mensaje*
+        contra nombres de clase ("TimeoutError" in "connection timed out") nunca
+        coincide, mientras que comparar substrings de red sí es semánticamente correcto.
+        """
+        if self.error_type in _TRANSIENT_ERROR_NAMES:
+            return True
+        err_lower = self.error.lower()
+        return any(msg in err_lower for msg in _TRANSIENT_ERROR_MSGS)
 
     def __str__(self) -> str:
         if self.error:
@@ -141,6 +172,75 @@ class PipelineSummary:
                 logger.debug("  ↷ {}", r)
             else:
                 logger.debug("  ✓ {}", r)
+
+
+
+# ==========================================================
+# StrategyMixin
+# ==========================================================
+
+class StrategyMixin:
+    """
+    Boilerplate compartido: timing, error_type, métricas, logging de fallo.
+
+    Uso
+    ---
+    class MiStrategy(StrategyMixin):
+        _mode = PipelineMode.INCREMENTAL
+
+        async def _run(self, symbol, timeframe, idx, total, ctx, result):
+            ...  # solo lógica de negocio
+    """
+
+    _mode: "PipelineMode"
+
+    async def execute_pair(
+        self,
+        symbol:    str,
+        timeframe: str,
+        idx:       int,
+        total:     int,
+        ctx:       "PipelineContext",
+    ) -> "PairResult":
+        from services.observability.metrics import PIPELINE_ERRORS  # evita circular
+
+        result     = PairResult(symbol=symbol, timeframe=timeframe, mode=self._mode)
+        pair_start = time.monotonic()
+
+        try:
+            await self._run(symbol, timeframe, idx, total, ctx, result)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            result.error       = str(exc)
+            result.error_type  = type(exc).__name__          # ← fix bug #5
+            result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+            error_label = "transient" if result.is_transient_error else "fatal"
+            PIPELINE_ERRORS.labels(
+                exchange=ctx.exchange_id, error_type=error_label,
+            ).inc()
+            logger.error(
+                "{} fallido [{}/{}] | exchange={} symbol={} timeframe={} "
+                "error_type={} error={} duration={}ms",
+                self._mode.value, idx, total, ctx.exchange_id,
+                symbol, timeframe, result.error_type, exc, result.duration_ms,
+            )
+        finally:
+            if not result.duration_ms:
+                result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+
+        return result
+
+    async def _run(
+        self,
+        symbol:    str,
+        timeframe: str,
+        idx:       int,
+        total:     int,
+        ctx:       "PipelineContext",
+        result:    "PairResult",
+    ) -> None:
+        raise NotImplementedError(f"{type(self).__name__} debe implementar _run()")
 
 
 @runtime_checkable

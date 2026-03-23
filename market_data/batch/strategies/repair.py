@@ -19,6 +19,7 @@ from market_data.batch.strategies.base import (
     PairResult,
     PipelineContext,
     PipelineMode,
+    StrategyMixin,
 )
 from market_data.batch.fetchers.fetcher import _timeframe_to_ms
 from services.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
@@ -75,7 +76,8 @@ def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapR
     return gaps
 
 
-class RepairStrategy:
+class RepairStrategy(StrategyMixin):
+    _mode = PipelineMode.REPAIR
 
     def __init__(self, gap_tolerance: int = 0) -> None:
         self._tolerance = gap_tolerance
@@ -270,8 +272,16 @@ class RepairStrategy:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.warning(
-                "Gap heal failed | symbol={} timeframe={} {} error={}",
-                symbol, timeframe, gap, exc,
-            )
+            from market_data.batch.fetchers.fetcher import ChunkFetchError
+            if isinstance(exc, ChunkFetchError):
+                logger.warning(
+                    "Gap heal: fetch transitorio | symbol={} timeframe={} {} error={}",
+                    symbol, timeframe, gap, exc,
+                )
+            else:
+                logger.error(
+                    "Gap heal: error inesperado | symbol={} timeframe={} {} "
+                    "error_type={} error={}",
+                    symbol, timeframe, gap, type(exc).__name__, exc,
+                )
             return False, 0

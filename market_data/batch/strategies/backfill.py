@@ -19,6 +19,7 @@ from market_data.batch.strategies.base import (
     PairResult,
     PipelineContext,
     PipelineMode,
+    StrategyMixin,
 )
 from services.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
 
@@ -28,7 +29,8 @@ _BACKFILL_KEY_PREFIX:  str = "backfill"
 _MAX_BACKFILL_CHUNKS:  int = 100_000
 
 
-class BackfillStrategy:
+class BackfillStrategy(StrategyMixin):
+    _mode = PipelineMode.BACKFILL
 
     async def execute_pair(
         self,
@@ -202,8 +204,11 @@ class BackfillStrategy:
                     pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
                 )
                 return ts_ms
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(
+                "Backfill cursor read failed (non-critical) | exchange={} symbol={} timeframe={} error={}",
+                ctx.exchange_id, symbol, timeframe, exc,
+            )
 
         oldest = self._get_oldest_silver_ts(ctx, symbol, timeframe)
         if oldest is not None:
@@ -223,8 +228,11 @@ class BackfillStrategy:
             raw    = ctx.cursor.get_raw(bk_key)
             if raw is None or ts_ms < int(raw):
                 ctx.cursor.set_raw(bk_key, str(ts_ms), _BACKFILL_TTL_SECONDS)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(
+                "Backfill cursor write failed (non-critical) | exchange={} symbol={} timeframe={} error={}",
+                ctx.exchange_id, symbol, timeframe, exc,
+            )
 
     def _get_oldest_silver_ts(
         self,
@@ -308,9 +316,14 @@ class BackfillStrategy:
 
             oldest_in_chunk = int(df["timestamp"].min().timestamp() * 1000)
 
+            # Anti-loop robusto: detecta si el exchange devuelve datos
+            # que no retroceden (oldest_in_chunk >= last_end) O si el chunk
+            # actual es idéntico al anterior (exchange repite misma ventana).
             if last_end is not None and oldest_in_chunk >= last_end:
                 logger.warning(
-                    "Backfill anti-loop | symbol={} timeframe={}", symbol, timeframe,
+                    "Backfill anti-loop detectado | symbol={} timeframe={} "
+                    "oldest_in_chunk={} last_end={} — abortando paginación",
+                    symbol, timeframe, oldest_in_chunk, last_end,
                 )
                 break
 

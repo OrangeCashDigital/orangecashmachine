@@ -4,6 +4,12 @@ market_data/batch/pipelines/unified_pipeline.py
 
 Pipeline unificado con mode explicito.
 Unico punto de entrada para todos los modos de ingestion OHLCV.
+
+Concurrencia
+------------
+Usa un producer/worker pool en lugar de asyncio.gather ilimitado.
+Esto evita crear miles de coroutines simultáneas ("over-scheduling")
+y da control real sobre el paralelismo.
 """
 
 from __future__ import annotations
@@ -97,7 +103,6 @@ class UnifiedPipeline:
         self.market_type     = market_type.lower()
         self.backfill_mode   = backfill_mode
         self._exchange_id    = getattr(exchange_client, "_exchange_id", "unknown")
-        self._semaphore      = asyncio.Semaphore(max_concurrency)
 
         cursor  = cursor_store or _build_cursor_store_safe()
         bronze  = BronzeStorage(exchange=self._exchange_id)
@@ -132,6 +137,10 @@ class UnifiedPipeline:
             PipelineMode.REPAIR:      RepairStrategy(),
         }
 
+    # ======================================================
+    # Public
+    # ======================================================
+
     async def run(self, mode: PipelineModeStr = "incremental") -> PipelineSummary:
         pipeline_mode = PipelineMode(mode)
         strategy      = self._strategies[pipeline_mode]
@@ -149,22 +158,11 @@ class UnifiedPipeline:
         )
 
         pipeline_start = time.monotonic()
+        results        = await self._run_worker_pool(strategy, pairs, pipeline_mode)
+        duration_ms    = int((time.monotonic() - pipeline_start) * 1000)
 
-        try:
-            results: List[PairResult] = await asyncio.gather(
-                *[
-                    self._execute_pair(strategy, symbol, tf, idx, total_pairs)
-                    for idx, (symbol, tf) in enumerate(pairs, 1)
-                ],
-                return_exceptions=False,
-            )
-        except asyncio.CancelledError:
-            logger.warning("Pipeline cancelado externamente")
-            raise
-
-        duration_ms = int((time.monotonic() - pipeline_start) * 1000)
-        summary     = PipelineSummary(
-            results     = list(results),
+        summary = PipelineSummary(
+            results     = results,
             duration_ms = duration_ms,
             mode        = pipeline_mode,
         )
@@ -186,6 +184,67 @@ class UnifiedPipeline:
 
         return summary
 
+    # ======================================================
+    # Worker pool (producer/consumer)
+    # ======================================================
+
+    async def _run_worker_pool(
+        self,
+        strategy:     PipelineStrategy,
+        pairs:        List[tuple[str, str]],
+        mode:         PipelineMode,
+    ) -> List[PairResult]:
+        """
+        Producer/consumer pool: evita crear todas las coroutines a la vez.
+
+        El producer encola pares de a uno. Cada worker toma un par,
+        lo procesa, y deposita el resultado. El número de workers activos
+        nunca supera max_concurrency.
+        """
+        queue:   asyncio.Queue = asyncio.Queue()
+        results: List[PairResult] = []
+        total   = len(pairs)
+
+        # Encolar todos los trabajos
+        for idx, (symbol, tf) in enumerate(pairs, 1):
+            await queue.put((idx, symbol, tf))
+
+        async def worker() -> None:
+            while True:
+                item = await queue.get()
+                try:
+                    idx, symbol, tf = item
+                    result = await self._execute_pair(strategy, symbol, tf, idx, total, mode)
+                    results.append(result)
+                finally:
+                    queue.task_done()
+
+        workers = [
+            asyncio.create_task(worker())
+            for _ in range(self.max_concurrency)
+        ]
+
+        try:
+            # queue.join() bloquea hasta que todos los items fueron procesados.
+            # Es más limpio que sentinels: no hay riesgo de contar mal los None.
+            await queue.join()
+        except asyncio.CancelledError:
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+            logger.warning("Pipeline cancelado — {} workers detenidos", len(workers))
+            raise
+        finally:
+            for w in workers:
+                if not w.done():
+                    w.cancel()
+
+        return results
+
+    # ======================================================
+    # Single pair execution (barrera de seguridad)
+    # ======================================================
+
     async def _execute_pair(
         self,
         strategy:  PipelineStrategy,
@@ -193,12 +252,37 @@ class UnifiedPipeline:
         timeframe: str,
         idx:       int,
         total:     int,
+        mode:      PipelineMode,
     ) -> PairResult:
-        async with self._semaphore:
+        """
+        Barrera de seguridad alrededor de strategy.execute_pair.
+
+        Las strategies capturan sus propias excepciones internamente.
+        Este wrapper captura cualquier escape inesperado (bug de infra,
+        error en el semáforo, etc.) y lo convierte en PairResult con error,
+        garantizando que el worker pool nunca pierda un resultado.
+        """
+        try:
             return await strategy.execute_pair(
                 symbol    = symbol,
                 timeframe = timeframe,
                 idx       = idx,
                 total     = total,
                 ctx       = self._ctx,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "execute_pair unhandled | exchange={} symbol={} tf={} "
+                "error_type={} error={}",
+                self._exchange_id, symbol, timeframe,
+                type(exc).__name__, exc,
+            )
+            return PairResult(
+                symbol     = symbol,
+                timeframe  = timeframe,
+                mode       = mode,
+                error      = str(exc),
+                error_type = type(exc).__name__,
             )
