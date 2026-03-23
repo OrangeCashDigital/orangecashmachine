@@ -233,7 +233,7 @@ class RepairStrategy(StrategyMixin):
 
             # Fetch quirúrgico: solo las velas del gap, sin traer historial completo.
             # limit = expected + 2 de margen (overlap mínimo).
-            tf_ms  = timeframe_to_ms(timeframe)
+            tf_ms  = _timeframe_to_ms(timeframe)
             limit  = min(gap.expected + 2, 1000)
             raw    = await ctx.fetcher.fetch_chunk(
                 symbol    = symbol,
