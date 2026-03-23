@@ -330,7 +330,39 @@ class SilverStorage:
         return self._partition_dir(symbol, timeframe, year, month, day) / f"{safe}_{timeframe}.parquet"
 
     def find_partition_files(self, symbol: str, timeframe: str) -> List[Path]:
-        """Alias público de _find_partition_files."""
+        """
+        Lista archivos de partición usando latest.json como índice primario.
+
+        Evita rglob O(N archivos) — lee el manifest en O(1) y resuelve paths.
+        Fallback a rglob si no existe versión (dataset nuevo o sin versión aún).
+        """
+        versions_dir = self._dataset_root(symbol, timeframe) / "_versions"
+        latest_path  = versions_dir / "latest.json"
+
+        if latest_path.exists():
+            try:
+                manifest   = json.loads(latest_path.read_text(encoding="utf-8"))
+                partitions = manifest.get("partitions", [])
+                files = []
+                for p in partitions:
+                    full_path = self._base_path / p["path"]
+                    if full_path.exists():
+                        files.append(full_path)
+                    else:
+                        logger.debug(
+                            "Partition en manifest no existe en disco | path={}",
+                            full_path,
+                        )
+                if files:
+                    return sorted(files)
+                # manifest vacío o todos los paths inválidos → fallback
+            except Exception as exc:
+                logger.warning(
+                    "latest.json read failed, fallback a rglob | symbol={} timeframe={} error={}",
+                    symbol, timeframe, exc,
+                )
+
+        # Fallback: rglob (dataset nuevo o manifest corrupto)
         return self._find_partition_files(symbol, timeframe)
 
     def _find_partition_files(self, symbol: str, timeframe: str) -> List[Path]:
