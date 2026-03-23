@@ -17,7 +17,7 @@ environment:
 pipeline:
   historical:
     start_date: "2017-01-01T00:00:00Z"
-    fetch_all_history: true
+    backfill_mode: true
 
     # Auto → resuelto dinámicamente en runtime (CPU-bound safe default)
     max_concurrent_tasks: auto

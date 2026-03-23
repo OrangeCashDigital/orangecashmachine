@@ -33,7 +33,7 @@ pipeline:
     max_concurrent_tasks: auto
 
     # Producción SIEMPRE incremental (evita reingestión masiva)
-    fetch_all_history: false
+    backfill_mode: false
 
   realtime:
     # Más resiliencia en producción

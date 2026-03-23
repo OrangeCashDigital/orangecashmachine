@@ -34,7 +34,8 @@ environment:
 pipeline:
 
   historical:
-    # Debug mode → baja concurrencia para trazabilidad
+    backfill_mode: true
+    start_date: "2019-01-01T00:00:00Z"
     max_concurrent_tasks: 1
 
   realtime:
@@ -97,3 +98,5 @@ integrations:
 
   postgres:
     enabled: false
+safety:
+  prevent_full_reingestion: false

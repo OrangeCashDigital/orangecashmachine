@@ -214,7 +214,7 @@ class RetryPolicy(StrictBaseModel):
 
 class HistoricalConfig(StrictBaseModel):
     start_date:           str       = "2017-01-01T00:00:00Z"
-    fetch_all_history:    bool      = False
+    backfill_mode:    bool      = False
     max_concurrent_tasks: int       = Field(default=4, ge=1, le=64)
     timeframes:           List[str] = Field(default_factory=list)
     retry_policy:         RetryPolicy = Field(default_factory=RetryPolicy)

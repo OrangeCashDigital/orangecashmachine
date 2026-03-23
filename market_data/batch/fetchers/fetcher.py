@@ -100,7 +100,7 @@ class HistoricalFetcherAsync:
         transformer: Optional[OHLCVTransformer] = None,
         overlap_bars: int = DEFAULT_OVERLAP_BARS,
         cursor_store: Optional[CursorStore] = None,
-        fetch_all_history: bool = False,
+        backfill_mode: bool = False,
         market_type: Optional[str] = None,
         config_start_date: Optional[str] = None,
     ) -> None:
@@ -110,7 +110,7 @@ class HistoricalFetcherAsync:
         self._transformer = transformer or OHLCVTransformer()
         self._overlap = overlap_bars
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
-        self._fetch_all_history = fetch_all_history
+        self._backfill_mode = backfill_mode
         self._market_type: Optional[str] = market_type  # source of truth para validacion
         self._config_start_date: Optional[str] = config_start_date
 
@@ -244,12 +244,12 @@ class HistoricalFetcherAsync:
         """
         Jerarquía de resolución de timestamp de inicio.
 
-        fetch_all_history=True:
+        backfill_mode=True:
             1. Discovery (since=0) → primera vela real del exchange
             2. start_date del argumento como FLOOR opcional (no descargar antes de X)
             3. Fallback cascada: arg → config YAML → epoch 2010
 
-        fetch_all_history=False (incremental):
+        backfill_mode=False (incremental):
             1. Cursor Redis          → reanuda desde último punto guardado
             2. Parquet last_ts       → fallback si Redis vacío
             3. start_date del arg    → primer inicio manual
@@ -262,7 +262,7 @@ class HistoricalFetcherAsync:
         # ══════════════════════════════════════════════════════════════
         # MODO FULL HISTORY
         # ══════════════════════════════════════════════════════════════
-        if self._fetch_all_history:
+        if self._backfill_mode:
             # Backfill siempre desde config_start_date — sin discovery dinámico.
             # since=0 no está estandarizado en ccxt: Bybit y otros exchanges
             # devuelven la vela más reciente en lugar de la más antigua.
@@ -270,7 +270,7 @@ class HistoricalFetcherAsync:
             candidate = start_date or self._config_start_date
             if not candidate:
                 raise MissingStartDateError(
-                    f"fetch_all_history=True requiere config_start_date | {symbol}/{timeframe}"
+                    f"backfill_mode=True requiere config_start_date | {symbol}/{timeframe}"
                 )
             logger.info(
                 "Backfill mode | {}/{}/{} desde={}",

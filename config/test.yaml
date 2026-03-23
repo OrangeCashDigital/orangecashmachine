@@ -34,7 +34,7 @@ pipeline:
     max_concurrent_tasks: 1
 
     # Nunca descargar historia completa en tests
-    fetch_all_history: false
+    backfill_mode: false
 
     # Reducir timeframes para acelerar tests
     timeframes: [1m]

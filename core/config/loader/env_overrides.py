@@ -8,7 +8,7 @@ mergeado, después del merge YAML y antes de la validación Pydantic.
 
 Patrón:
     OCM_PIPELINE_HISTORICAL_FETCH_ALL_HISTORY=true
-    → config["pipeline"]["historical"]["fetch_all_history"] = True
+    → config["pipeline"]["historical"]["backfill_mode"] = True
 
 Coerción automática de tipos:
     "true" / "false"  → bool
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Mapping explícito: env var → path en el dict de config
 # Ventaja sobre el recorrido dinámico: auditables, sin typos silenciosos
 _OCM_OVERRIDES: dict[str, tuple[str, ...]] = {
-    "OCM_FETCH_ALL_HISTORY": ("pipeline", "historical", "fetch_all_history"),
+    "OCM_BACKFILL_MODE": ("pipeline", "historical", "backfill_mode"),
     "OCM_START_DATE":        ("pipeline", "historical", "start_date"),
     "OCM_MAX_CONCURRENT":    ("pipeline", "historical", "max_concurrent_tasks"),
     "OCM_LOG_LEVEL":         ("observability", "logging", "level"),

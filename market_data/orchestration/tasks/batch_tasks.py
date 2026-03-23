@@ -108,7 +108,7 @@ async def run_historical_pipeline(
             start_date        = hist_cfg.start_date,
             max_concurrency   = max_concurrency,
             exchange_client   = exchange_client,
-            fetch_all_history = hist_cfg.fetch_all_history,
+            backfill_mode = hist_cfg.backfill_mode,
             market_type       = "spot",
         )
         summary = await pipeline.run()
@@ -199,7 +199,7 @@ async def run_futures_pipeline(
             start_date        = hist_cfg.start_date,
             max_concurrency   = probe.max_concurrent,
             exchange_client   = futures_client,
-            fetch_all_history = hist_cfg.fetch_all_history,
+            backfill_mode = hist_cfg.backfill_mode,
             market_type       = futures_market_type,
         )
         summary = await pipeline.run()
@@ -375,7 +375,7 @@ async def run_backfill_pipeline(
             max_concurrency   = probe.max_concurrent,
             exchange_client   = exchange_client,
             market_type       = market_type,
-            fetch_all_history = True,  # backfill siempre descarga desde el origen
+            backfill_mode = True,  # backfill siempre descarga desde el origen
         )
         summary = await pipeline.run(mode="backfill")
     finally:
@@ -451,7 +451,7 @@ async def run_repair_pipeline(
             max_concurrency   = probe.max_concurrent,
             exchange_client   = exchange_client,
             market_type       = market_type,
-            fetch_all_history = hist_cfg.fetch_all_history,
+            backfill_mode = hist_cfg.backfill_mode,
         )
         summary = await pipeline.run(mode="repair")
     finally:
