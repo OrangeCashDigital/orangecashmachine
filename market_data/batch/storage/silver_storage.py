@@ -367,13 +367,39 @@ class SilverStorage:
                 files = []
                 for p in partitions:
                     full_path = self._base_path / p["path"]
-                    if full_path.exists():
-                        files.append(full_path)
-                    else:
-                        logger.debug(
+                    if not full_path.exists():
+                        logger.warning(
                             "Partition en manifest no existe en disco | path={}",
                             full_path,
                         )
+                        continue
+                    # Validación de integridad: checksum opcional pero recomendado.
+                    # Solo si el manifest tiene checksum y el archivo es pequeño (<50MB).
+                    # En producción con archivos grandes, omitir checksum en lectura caliente.
+                    expected_checksum = p.get("checksum")
+                    if expected_checksum and full_path.stat().st_size < 50 * 1024 * 1024:
+                        try:
+                            actual = hashlib.md5(
+                                pd.util.hash_pandas_object(
+                                    pd.read_parquet(full_path)[
+                                        ["timestamp","open","high","low","close","volume"]
+                                    ],
+                                    index=False,
+                                ).values.tobytes()
+                            ).hexdigest()
+                            if actual != expected_checksum:
+                                logger.error(
+                                    "Checksum mismatch — partición corrupta | path={} "
+                                    "expected={} actual={}",
+                                    full_path, expected_checksum, actual,
+                                )
+                                continue  # excluir del resultado — no usar datos corruptos
+                        except Exception as exc:
+                            logger.warning(
+                                "Checksum validation failed (non-critical) | path={} error={}",
+                                full_path, exc,
+                            )
+                    files.append(full_path)
                 if files:
                     return sorted(files)
                 # manifest vacío o todos los paths inválidos → fallback
@@ -523,13 +549,21 @@ class SilverStorage:
             "partitions":  partitions,
         }
 
-        # Escribir versión específica
-        version_path = versions_dir / f"{version_id}.json"
-        version_path.write_text(json.dumps(version_data, indent=2), encoding="utf-8")
+        # Escritura atómica del manifest:
+        # 1. Escribir versión específica vía tmp + rename
+        # 2. Actualizar latest.json vía tmp + rename
+        # Si crashea entre pasos, latest.json sigue apuntando a versión anterior (safe).
+        serialized = json.dumps(version_data, indent=2)
 
-        # Actualizar latest.json (siempre apunta a la última)
+        version_path = versions_dir / f"{version_id}.json"
+        version_tmp  = version_path.with_suffix(".tmp")
+        version_tmp.write_text(serialized, encoding="utf-8")
+        version_tmp.replace(version_path)
+
         latest_path = versions_dir / "latest.json"
-        latest_path.write_text(json.dumps(version_data, indent=2), encoding="utf-8")
+        latest_tmp  = latest_path.with_suffix(".tmp")
+        latest_tmp.write_text(serialized, encoding="utf-8")
+        latest_tmp.replace(latest_path)
 
         logger.info(
             "Dataset version created | {}/{} {} exchange={} partitions={}",

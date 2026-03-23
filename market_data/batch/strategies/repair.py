@@ -76,6 +76,13 @@ def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapR
     return gaps
 
 
+# Guardrail: gaps más grandes que esto se logean y se skipean.
+# 43200 velas = 30 días en 1m. Gaps más grandes indican exchange sin datos históricos.
+_MAX_HEALABLE_GAP_CANDLES: int = 43_200
+# Máximo de gaps procesados en paralelo — evita saturar el exchange.
+_GAP_CONCURRENCY: int = 4
+
+
 class RepairStrategy(StrategyMixin):
     _mode = PipelineMode.REPAIR
 
@@ -132,11 +139,27 @@ class RepairStrategy(StrategyMixin):
 
             total_healed_rows = 0
             healed_count      = 0
+            sem = asyncio.Semaphore(_GAP_CONCURRENCY)
 
-            for gap in gaps:
-                healed, rows = await self._heal_gap(
-                    gap=gap, symbol=symbol, timeframe=timeframe, ctx=ctx,
-                )
+            async def _heal_with_sem(gap: GapRange) -> tuple[bool, int]:
+                # Guardrail: gaps imposibles se skipean sin llamar al exchange.
+                if gap.expected > _MAX_HEALABLE_GAP_CANDLES:
+                    logger.warning(
+                        "Gap demasiado grande — skip | symbol={} timeframe={} "
+                        "expected={} max={}",
+                        symbol, timeframe, gap.expected, _MAX_HEALABLE_GAP_CANDLES,
+                    )
+                    return False, 0
+                async with sem:
+                    return await self._heal_gap(
+                        gap=gap, symbol=symbol, timeframe=timeframe, ctx=ctx,
+                    )
+
+            heal_results = await asyncio.gather(
+                *[_heal_with_sem(gap) for gap in gaps],
+                return_exceptions=False,
+            )
+            for healed, rows in heal_results:
                 if healed:
                     healed_count      += 1
                     total_healed_rows += rows
