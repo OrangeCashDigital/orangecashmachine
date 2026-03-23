@@ -227,17 +227,38 @@ class SilverStorage:
         symbol: str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
-        """Obtiene el último timestamp disponible leyendo metadata."""
+        """
+        Obtiene el último timestamp disponible.
+
+        Lee max_ts del manifest latest.json en O(1) — sin abrir ningún parquet.
+        Fallback a lectura de parquet si el manifest no existe o no tiene max_ts.
+        """
+        versions_dir = self._dataset_root(symbol, timeframe) / "_versions"
+        latest_path  = versions_dir / "latest.json"
+
+        if latest_path.exists():
+            try:
+                manifest   = json.loads(latest_path.read_text(encoding="utf-8"))
+                partitions = manifest.get("partitions", [])
+                max_ts_strs = [p["max_ts"] for p in partitions if "max_ts" in p]
+                if max_ts_strs:
+                    return max(pd.Timestamp(ts, tz="UTC") for ts in max_ts_strs)
+            except Exception as exc:
+                logger.warning(
+                    "latest.json max_ts read failed, fallback a parquet | "
+                    "symbol={} timeframe={} error={}",
+                    symbol, timeframe, exc,
+                )
+
+        # Fallback: leer parquet (dataset sin versión o manifest corrupto)
         files = self._find_partition_files(symbol, timeframe)
         if not files:
             return None
-
         timestamps: List[pd.Timestamp] = []
         for f in files:
             ts = _read_max_timestamp(f)
             if ts is not None:
                 timestamps.append(ts)
-
         return max(timestamps) if timestamps else None
 
     def get_version(self, symbol: str, timeframe: str, version: str = "latest") -> Optional[Dict]:
