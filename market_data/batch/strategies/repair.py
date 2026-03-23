@@ -48,11 +48,12 @@ def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapR
     threshold = tf_ms * (tolerance + 2)
 
     df_sorted = df.sort_values("timestamp").reset_index(drop=True)
-    ts_ms = (
-        df_sorted["timestamp"]
-        .apply(lambda t: int(t.timestamp() * 1000) if hasattr(t, "timestamp") else int(t))
-        .values
-    )
+    # Vectorizado: evita .apply(lambda) en loops críticos con millones de filas
+    ts_col = df_sorted["timestamp"]
+    if hasattr(ts_col.dtype, "tz"):
+        ts_ms = (ts_col.astype("int64") // 1_000_000).values
+    else:
+        ts_ms = ts_col.astype("int64").values
 
     gaps: List[GapRange] = []
     for i in range(1, len(ts_ms)):
@@ -97,7 +98,7 @@ class RepairStrategy:
                 idx, total, ctx.exchange_id, symbol, timeframe,
             )
 
-            df_existing = self._read_silver(ctx, symbol, timeframe)
+            df_existing = self._read_silver(ctx, symbol, timeframe, columns_only=["timestamp"])
 
             if df_existing is None or df_existing.empty:
                 result.skipped     = True
@@ -177,7 +178,16 @@ class RepairStrategy:
         ctx:       PipelineContext,
         symbol:    str,
         timeframe: str,
+        columns_only: Optional[list] = None,
     ) -> Optional[pd.DataFrame]:
+        """Lee particiones Silver.
+
+        Parameters
+        ----------
+        columns_only : list, optional
+            Si se especifica, lee solo esas columnas (útil para scan de gaps
+            con datasets grandes — ej. 2.5M filas de 1m).
+        """
         try:
             files = ctx.storage._find_partition_files(symbol, timeframe)
             if not files:
@@ -186,7 +196,7 @@ class RepairStrategy:
             parts = []
             for f in files:
                 try:
-                    df = pd.read_parquet(f)
+                    df = pd.read_parquet(f, columns=columns_only)
                     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
                     parts.append(df)
                 except Exception as exc:

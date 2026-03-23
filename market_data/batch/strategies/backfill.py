@@ -138,7 +138,7 @@ class BackfillStrategy:
         timeframe: str,
         ctx:       PipelineContext,
     ) -> Optional[int]:
-        cache_key = self._origin_key(ctx)
+        cache_key = self._origin_key(ctx, symbol, timeframe)
 
         try:
             raw = ctx.cursor.get_raw(cache_key)
@@ -300,8 +300,8 @@ class BackfillStrategy:
 
             df = pd.DataFrame(raw, columns=["timestamp","open","high","low","close","volume"])
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-            df = df[df["timestamp"].apply(lambda t: int(t.timestamp()*1000)) < current_end]
-            df = df.sort_values("timestamp").reset_index(drop=True)
+            ts_ns = df["timestamp"].astype("int64") // 1_000_000
+            df = df[ts_ns < current_end].sort_values("timestamp").reset_index(drop=True)
 
             if df.empty:
                 break
@@ -354,10 +354,10 @@ class BackfillStrategy:
     # Key helpers
     # ----------------------------------------------------------
 
-    def _origin_key(self, ctx: PipelineContext) -> str:
+    def _origin_key(self, ctx: PipelineContext, symbol: str, timeframe: str) -> str:
         from services.state.cursor_store import _encode
         env = getattr(ctx.cursor, "_env", "development")
-        return f"{env}:{_ORIGIN_KEY_PREFIX}:{_encode(ctx.exchange_id)}"
+        return f"{env}:{_ORIGIN_KEY_PREFIX}:{_encode(ctx.exchange_id)}:{_encode(symbol)}:{_encode(timeframe)}"
 
     def _backfill_key(self, ctx: PipelineContext, symbol: str, timeframe: str) -> str:
         from services.state.cursor_store import _encode

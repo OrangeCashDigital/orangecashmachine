@@ -36,7 +36,11 @@ class PipelineContext:
     start_date:  str
 
 
-_TRANSIENT_ERRORS: tuple = (TimeoutError, ConnectionError, OSError)
+_TRANSIENT_ERROR_NAMES: frozenset[str] = frozenset({
+    "TimeoutError", "ConnectionError", "OSError",
+    "ConnectionRefusedError", "ConnectionResetError",
+    "BrokenPipeError",
+})
 
 
 @dataclass
@@ -58,7 +62,8 @@ class PairResult:
 
     @property
     def is_transient_error(self) -> bool:
-        return any(t.__name__ in self.error for t in _TRANSIENT_ERRORS)
+        """Clasifica error como transitorio por nombre de clase (el error ya es string)."""
+        return any(name in self.error for name in _TRANSIENT_ERROR_NAMES)
 
     def __str__(self) -> str:
         if self.error:

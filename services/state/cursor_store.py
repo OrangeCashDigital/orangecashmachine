@@ -32,46 +32,11 @@ _RETRY_BASE_MS:     float = 50.0
 
 @runtime_checkable
 class CursorStore(Protocol):
-
-
-    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
-
-    def _exchange_prefix(self, exchange: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:"
-
-    def _record_lag(self, exchange: str, ts_ms: int) -> None:
-        if _cursor_lag:
-            try:
-                lag = (time.time() * 1000 - ts_ms) / 1000.0
-                _cursor_lag.labels(exchange=exchange).set(lag)
-            except Exception:
-                pass
-
-    def is_healthy(self) -> bool:
-        try:
-            return self._client.ping()
-        except Exception:
-            return False
+    """Contrato mínimo que cualquier cursor store debe cumplir."""
 
     def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]: ...
     def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool: ...
     def delete(self, exchange: str, symbol: str, timeframe: str) -> bool: ...
-
-    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
-
-    def _exchange_prefix(self, exchange: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:"
-
-    def _record_lag(self, exchange: str, ts_ms: int) -> None:
-        if _cursor_lag:
-            try:
-                lag = (time.time() * 1000 - ts_ms) / 1000.0
-                _cursor_lag.labels(exchange=exchange).set(lag)
-            except Exception:
-                pass
-
     def is_healthy(self) -> bool: ...
     def get_raw(self, key: str) -> Optional[str]: ...
     def set_raw(self, key: str, value: str, ttl_seconds: int) -> None: ...
@@ -299,27 +264,8 @@ class InMemoryCursorStore:
         self._store: dict[str, int] = {}
         self._store_raw: dict[str, str] = {}
 
-
-
-    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
-
-    def _exchange_prefix(self, exchange: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:"
-
-    def _record_lag(self, exchange: str, ts_ms: int) -> None:
-        if _cursor_lag:
-            try:
-                lag = (time.time() * 1000 - ts_ms) / 1000.0
-                _cursor_lag.labels(exchange=exchange).set(lag)
-            except Exception:
-                pass
-
     def is_healthy(self) -> bool:
-        try:
-            return self._client.ping()
-        except Exception:
-            return False
+        return True
 
     def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
         return self._store.get(f"{exchange}:{symbol}:{timeframe}")
@@ -340,24 +286,6 @@ class InMemoryCursorStore:
 
     def set_raw(self, key: str, value: str, ttl_seconds: int) -> None:
         self._store_raw[key] = value  # TTL ignorado en memoria — solo para tests
-
-
-    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
-
-    def _exchange_prefix(self, exchange: str) -> str:
-        return f"{self._env}:cursor:{_encode(exchange)}:"
-
-    def _record_lag(self, exchange: str, ts_ms: int) -> None:
-        if _cursor_lag:
-            try:
-                lag = (time.time() * 1000 - ts_ms) / 1000.0
-                _cursor_lag.labels(exchange=exchange).set(lag)
-            except Exception:
-                pass
-
-    def is_healthy(self) -> bool:
-        return True
 
 
 def _encode(value: str) -> str:

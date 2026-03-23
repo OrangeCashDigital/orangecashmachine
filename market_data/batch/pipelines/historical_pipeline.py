@@ -294,11 +294,7 @@ class HistoricalPipelineAsync:
         pairs       = [(s, tf) for s in self.symbols for tf in self.timeframes]
         total_pairs = len(pairs)
 
-        if not await self._fetcher._exchange.is_healthy():
-            logger.debug("Exchange sesión cerrada — reconectando antes de pipeline...")
-            await self._fetcher._exchange.reconnect()
-        else:
-            logger.debug("Exchange sesión activa — sin reconexión necesaria")
+        await self._fetcher.ensure_exchange()
 
         pipeline_logger = logger.bind(exchange=self._exchange_id, dataset="ohlcv")
         pipeline_logger.info(
