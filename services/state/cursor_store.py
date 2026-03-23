@@ -32,10 +32,49 @@ _RETRY_BASE_MS:     float = 50.0
 
 @runtime_checkable
 class CursorStore(Protocol):
+
+
+    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
+
+    def _exchange_prefix(self, exchange: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:"
+
+    def _record_lag(self, exchange: str, ts_ms: int) -> None:
+        if _cursor_lag:
+            try:
+                lag = (time.time() * 1000 - ts_ms) / 1000.0
+                _cursor_lag.labels(exchange=exchange).set(lag)
+            except Exception:
+                pass
+
+    def is_healthy(self) -> bool:
+        try:
+            return self._client.ping()
+        except Exception:
+            return False
+
     def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]: ...
     def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool: ...
     def delete(self, exchange: str, symbol: str, timeframe: str) -> bool: ...
+
+    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
+
+    def _exchange_prefix(self, exchange: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:"
+
+    def _record_lag(self, exchange: str, ts_ms: int) -> None:
+        if _cursor_lag:
+            try:
+                lag = (time.time() * 1000 - ts_ms) / 1000.0
+                _cursor_lag.labels(exchange=exchange).set(lag)
+            except Exception:
+                pass
+
     def is_healthy(self) -> bool: ...
+    def get_raw(self, key: str) -> Optional[str]: ...
+    def set_raw(self, key: str, value: str, ttl_seconds: int) -> None: ...
 
 _CAS_SCRIPT = """
 local current = redis.call("GET", KEYS[1])
@@ -104,6 +143,28 @@ class RedisCursorStore:
         self._cas_script = self._client.register_script(_CAS_SCRIPT)
         logger.debug("CursorStore v5 ready | host={}:{} db={} env={} ttl_days={}", host, port, db, env, ttl_days)
 
+
+
+    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
+
+    def _exchange_prefix(self, exchange: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:"
+
+    def _record_lag(self, exchange: str, ts_ms: int) -> None:
+        if _cursor_lag:
+            try:
+                lag = (time.time() * 1000 - ts_ms) / 1000.0
+                _cursor_lag.labels(exchange=exchange).set(lag)
+            except Exception:
+                pass
+
+    def is_healthy(self) -> bool:
+        try:
+            return self._client.ping()
+        except Exception:
+            return False
+
     def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
         key = self._key(exchange, symbol, timeframe)
         t0  = time.monotonic()
@@ -157,7 +218,7 @@ class RedisCursorStore:
         try:
             for batch in _batched(self._scan_iter(pattern), _DELETE_BATCH_SIZE):
                 if batch:
-                    deleted += self._client.delete(*batch)
+                    deleted += int(self._client.delete(*batch))
             if _active_cursors: _active_cursors.labels(exchange=exchange).set(0)
             logger.info("All cursors deleted | exchange={} count={}", exchange, deleted)
             return deleted
@@ -208,11 +269,37 @@ class RedisCursorStore:
             logger.warning("CursorStore.scan_exchanges failed | error={}", exc)
             return []
 
-    def is_healthy(self) -> bool:
+    def get_raw(self, key: str) -> Optional[str]:
         try:
-            return bool(self._client.ping())
-        except Exception:
-            return False
+            return _retry(lambda: self._client.get(key))
+        except Exception as exc:
+            logger.warning("CursorStore.get_raw failed | key={} error={}", key, exc)
+            return None
+
+    def set_raw(self, key: str, value: str, ttl_seconds: int) -> None:
+        try:
+            _retry(lambda: self._client.set(key, value, ex=ttl_seconds))
+        except Exception as exc:
+            logger.warning("CursorStore.set_raw failed | key={} error={}", key, exc)
+
+    def _scan_iter(self, pattern: str) -> Iterator[str]:
+        cursor = 0
+        while True:
+            result = self._client.scan(cursor=cursor, match=pattern, count=_SCAN_COUNT)
+            cursor, keys = result[0], result[1]
+            for k in keys:
+                yield k
+            if cursor == 0:
+                break
+
+class InMemoryCursorStore:
+    """CursorStore en memoria. Uso: tests unitarios y entornos sin Redis."""
+
+    def __init__(self) -> None:
+        self._store: dict[str, int] = {}
+        self._store_raw: dict[str, str] = {}
+
+
 
     def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
         return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
@@ -220,29 +307,19 @@ class RedisCursorStore:
     def _exchange_prefix(self, exchange: str) -> str:
         return f"{self._env}:cursor:{_encode(exchange)}:"
 
-    def _scan_iter(self, pattern: str) -> Iterator[str]:
-        cursor = 0
-        while True:
-            cursor, keys = self._client.scan(cursor=cursor, match=pattern, count=_SCAN_COUNT)
-            yield from keys
-            if cursor == 0:
-                break
-
     def _record_lag(self, exchange: str, ts_ms: int) -> None:
-        if not _cursor_lag:
-            return
+        if _cursor_lag:
+            try:
+                lag = (time.time() * 1000 - ts_ms) / 1000.0
+                _cursor_lag.labels(exchange=exchange).set(lag)
+            except Exception:
+                pass
+
+    def is_healthy(self) -> bool:
         try:
-            lag = max(0, (int(time.time() * 1000) - ts_ms) / 1000.0)
-            _cursor_lag.labels(exchange=exchange).set(lag)
+            return self._client.ping()
         except Exception:
-            pass
-
-
-class InMemoryCursorStore:
-    """CursorStore en memoria. Uso: tests unitarios y entornos sin Redis."""
-
-    def __init__(self) -> None:
-        self._store: dict[str, int] = {}
+            return False
 
     def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
         return self._store.get(f"{exchange}:{symbol}:{timeframe}")
@@ -250,13 +327,34 @@ class InMemoryCursorStore:
     def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool:
         key     = f"{exchange}:{symbol}:{timeframe}"
         current = self._store.get(key)
-        if current is not None and current >= timestamp_ms:
+        if current is not None and current > timestamp_ms:
             return False
         self._store[key] = timestamp_ms
         return True
 
     def delete(self, exchange: str, symbol: str, timeframe: str) -> bool:
         return bool(self._store.pop(f"{exchange}:{symbol}:{timeframe}", None))
+
+    def get_raw(self, key: str) -> Optional[str]:
+        return self._store_raw.get(key)
+
+    def set_raw(self, key: str, value: str, ttl_seconds: int) -> None:
+        self._store_raw[key] = value  # TTL ignorado en memoria — solo para tests
+
+
+    def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
+
+    def _exchange_prefix(self, exchange: str) -> str:
+        return f"{self._env}:cursor:{_encode(exchange)}:"
+
+    def _record_lag(self, exchange: str, ts_ms: int) -> None:
+        if _cursor_lag:
+            try:
+                lag = (time.time() * 1000 - ts_ms) / 1000.0
+                _cursor_lag.labels(exchange=exchange).set(lag)
+            except Exception:
+                pass
 
     def is_healthy(self) -> bool:
         return True

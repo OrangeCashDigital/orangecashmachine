@@ -33,7 +33,7 @@ import pandas as pd
 import yaml
 from loguru import logger
 
-from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
+from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync, _timeframe_to_ms
 from services.state.cursor_store import CursorStore, InMemoryCursorStore, build_cursor_store_from_config
 from market_data.batch.storage.bronze_storage import BronzeStorage
 from market_data.batch.storage.silver_storage import SilverStorage
@@ -234,6 +234,7 @@ class HistoricalPipelineAsync:
         cursor_store:      Optional[CursorStore] = None,
         fetch_all_history: bool                  = False,
         market_type:       str                   = "spot",
+        backfill_mode:     bool                  = False,
     ) -> None:
         _validate_inputs(symbols, timeframes, start_date)
 
@@ -266,8 +267,9 @@ class HistoricalPipelineAsync:
             transformer        = OHLCVTransformer(),
             exchange_client    = exchange_client,
             cursor_store       = self._cursor,
-            fetch_all_history  = fetch_all_history,
             market_type        = market_type,
+            config_start_date  = start_date,
+            backfill_mode      = backfill_mode,
         )
 
     # ----------------------------------------------------------
@@ -426,8 +428,9 @@ class HistoricalPipelineAsync:
                 # Cursor: actualizar DESPUES de persistir en storage (consistencia)
                 # Si Redis falla, SafeOps garantiza que no interrumpe el pipeline
                 if not df.empty:
+                    tf_ms_cursor = _timeframe_to_ms(timeframe)
                     last_ts_ms = int(df["timestamp"].max().timestamp() * 1000) if hasattr(df["timestamp"].max(), "timestamp") else int(df["timestamp"].max())
-                    self._cursor.update(self._exchange_id, symbol, timeframe, last_ts_ms)
+                    self._cursor.update(self._exchange_id, symbol, timeframe, last_ts_ms + tf_ms_cursor)
 
                 result.rows        = len(df)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
