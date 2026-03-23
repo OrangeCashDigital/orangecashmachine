@@ -316,3 +316,158 @@ async def run_derivatives_pipeline(
         f"Derivatives pipeline not implemented for '{exchange_cfg.name.value}'. "
         f"Disable {datasets} in settings.yaml to suppress this error."
     )
+
+
+# ==========================================================
+# Backfill Pipeline Task
+# ==========================================================
+
+@task(
+    name="backfill_pipeline",
+    retries=2,
+    retry_delay_seconds=[60, 300],
+    timeout_seconds=PIPELINE_TASK_TIMEOUT * 4,
+    task_run_name="{exchange_cfg.name.value}-backfill",
+    description="Backfills complete historical OHLCV data to exchange origin.",
+    tags=["ohlcv", "backfill"],
+)
+async def run_backfill_pipeline(
+    config:          AppConfig,
+    exchange_cfg:    ExchangeConfig,
+    probe:           ExchangeProbe,
+    market_type:     str = "spot",
+    exchange_client=None,
+) -> None:
+    from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
+    from services.exchange.ccxt_adapter import CCXTAdapter
+
+    log           = get_run_logger()
+    exchange_name = exchange_cfg.name.value
+    hist_cfg      = config.pipeline.historical
+
+    symbols = (
+        exchange_cfg.markets.spot_symbols
+        if market_type == "spot"
+        else exchange_cfg.markets.futures_symbols
+    )
+
+    if not symbols:
+        log.warning(
+            "Backfill skip — no symbols configured | exchange=%s market=%s",
+            exchange_name, market_type,
+        )
+        return
+
+    log.info(
+        "Backfill pipeline starting | exchange=%s market=%s symbols=%s timeframes=%s",
+        exchange_name, market_type, len(symbols), len(hist_cfg.timeframes),
+    )
+
+    _owns_client = exchange_client is None
+    if _owns_client:
+        exchange_client = CCXTAdapter(config=exchange_cfg, default_type=market_type)
+
+    try:
+        pipeline = UnifiedPipeline(
+            symbols           = symbols,
+            timeframes        = hist_cfg.timeframes,
+            start_date        = hist_cfg.start_date,
+            max_concurrency   = probe.max_concurrent,
+            exchange_client   = exchange_client,
+            market_type       = market_type,
+            fetch_all_history = True,  # backfill siempre descarga desde el origen
+        )
+        summary = await pipeline.run(mode="backfill")
+    finally:
+        if _owns_client:
+            await exchange_client.close()
+
+    log.info(
+        "Backfill pipeline finished | exchange=%s market=%s ok=%s failed=%s rows=%s",
+        exchange_name, market_type,
+        summary.succeeded, summary.failed, summary.total_rows,
+    )
+
+    if summary.total > 0 and summary.failed == summary.total:
+        raise RuntimeError(
+            f"Backfill failed for all {summary.total} symbols on '{exchange_name}'."
+        )
+
+
+# ==========================================================
+# Repair Pipeline Task
+# ==========================================================
+
+@task(
+    name="repair_pipeline",
+    retries=1,
+    retry_delay_seconds=[120],
+    timeout_seconds=PIPELINE_TASK_TIMEOUT * 2,
+    task_run_name="{exchange_cfg.name.value}-repair",
+    description="Detects and repairs temporal gaps in Silver OHLCV data.",
+    tags=["ohlcv", "repair"],
+)
+async def run_repair_pipeline(
+    config:          AppConfig,
+    exchange_cfg:    ExchangeConfig,
+    probe:           ExchangeProbe,
+    market_type:     str = "spot",
+    exchange_client=None,
+) -> None:
+    from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
+    from services.exchange.ccxt_adapter import CCXTAdapter
+
+    log           = get_run_logger()
+    exchange_name = exchange_cfg.name.value
+    hist_cfg      = config.pipeline.historical
+
+    symbols = (
+        exchange_cfg.markets.spot_symbols
+        if market_type == "spot"
+        else exchange_cfg.markets.futures_symbols
+    )
+
+    if not symbols:
+        log.warning(
+            "Repair skip — no symbols configured | exchange=%s market=%s",
+            exchange_name, market_type,
+        )
+        return
+
+    log.info(
+        "Repair pipeline starting | exchange=%s market=%s symbols=%s timeframes=%s",
+        exchange_name, market_type, len(symbols), len(hist_cfg.timeframes),
+    )
+
+    _owns_client = exchange_client is None
+    if _owns_client:
+        exchange_client = CCXTAdapter(config=exchange_cfg, default_type=market_type)
+
+    try:
+        pipeline = UnifiedPipeline(
+            symbols           = symbols,
+            timeframes        = hist_cfg.timeframes,
+            start_date        = hist_cfg.start_date,
+            max_concurrency   = probe.max_concurrent,
+            exchange_client   = exchange_client,
+            market_type       = market_type,
+            fetch_all_history = hist_cfg.fetch_all_history,
+        )
+        summary = await pipeline.run(mode="repair")
+    finally:
+        if _owns_client:
+            await exchange_client.close()
+
+    log.info(
+        "Repair pipeline finished | exchange=%s market=%s ok=%s failed=%s "
+        "gaps_found=%s gaps_healed=%s rows=%s",
+        exchange_name, market_type,
+        summary.succeeded, summary.failed,
+        summary.total_gaps_found, summary.total_gaps_healed,
+        summary.total_rows,
+    )
+
+    if summary.total > 0 and summary.failed == summary.total:
+        raise RuntimeError(
+            f"Repair failed for all {summary.total} symbols on '{exchange_name}'."
+        )

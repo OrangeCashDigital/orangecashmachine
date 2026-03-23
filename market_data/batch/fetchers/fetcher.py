@@ -102,6 +102,7 @@ class HistoricalFetcherAsync:
         cursor_store: Optional[CursorStore] = None,
         fetch_all_history: bool = False,
         market_type: Optional[str] = None,
+        config_start_date: Optional[str] = None,
     ) -> None:
 
         self._exchange = exchange_client
@@ -111,6 +112,7 @@ class HistoricalFetcherAsync:
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
         self._fetch_all_history = fetch_all_history
         self._market_type: Optional[str] = market_type  # source of truth para validacion
+        self._config_start_date: Optional[str] = config_start_date
 
         self._breaker = pybreaker.CircuitBreaker(
             fail_max=5,
@@ -239,45 +241,79 @@ class HistoricalFetcherAsync:
         timeframe: str,
         start_date: Optional[str],
     ) -> int:
+        """
+        Jerarquía de resolución de timestamp de inicio.
 
+        fetch_all_history=True:
+            1. Discovery (since=0) → primera vela real del exchange
+            2. start_date del argumento como FLOOR opcional (no descargar antes de X)
+            3. Fallback cascada: arg → config YAML → epoch 2010
+
+        fetch_all_history=False (incremental):
+            1. Cursor Redis          → reanuda desde último punto guardado
+            2. Parquet last_ts       → fallback si Redis vacío
+            3. start_date del arg    → primer inicio manual
+            4. _config_start_date    → primer inicio desde config YAML
+            5. MissingStartDateError → falla explícita, sin recursión
+        """
         exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
+        tf_ms = _timeframe_to_ms(timeframe)
 
-        # 0. Modo full historical: ignora cursor y parquet, siempre desde start_date
+        # ══════════════════════════════════════════════════════════════
+        # MODO FULL HISTORY
+        # ══════════════════════════════════════════════════════════════
         if self._fetch_all_history:
-            if not start_date:
-                raise MissingStartDateError(f"{symbol}/{timeframe} needs start_date for full history mode")
+            # Backfill siempre desde config_start_date — sin discovery dinámico.
+            # since=0 no está estandarizado en ccxt: Bybit y otros exchanges
+            # devuelven la vela más reciente en lugar de la más antigua.
+            # Regla: Backfill → config_start_date | Realtime → cursor
+            candidate = start_date or self._config_start_date
+            if not candidate:
+                raise MissingStartDateError(
+                    f"fetch_all_history=True requiere config_start_date | {symbol}/{timeframe}"
+                )
             logger.info(
-                "Full history mode | {}/{}/{} desde={}",
-                exchange_name, symbol, timeframe, start_date,
+                "Backfill mode | {}/{}/{} desde={}",
+                exchange_name, symbol, timeframe, candidate,
             )
-            return self._exchange.parse8601(start_date)
+            return self._exchange.parse8601(candidate)
 
-        # 1. Intentar cursor Redis (O(1))
+        # ══════════════════════════════════════════════════════════════
+        # MODO INCREMENTAL
+        # ══════════════════════════════════════════════════════════════
+
+        # A. Cursor Redis — O(1), ruta más común en runs repetidos
         cursor_ts = self._cursor.get(exchange_name, symbol, timeframe)
         if cursor_ts is not None:
-            tf_ms = _timeframe_to_ms(timeframe)
             logger.debug(
                 "Cursor hit (Redis) | {}/{}/{} ts_ms={}",
                 exchange_name, symbol, timeframe, cursor_ts,
             )
             return cursor_ts - (self._overlap * tf_ms)
 
-        # 2. Fallback: ultimo timestamp en parquet
+        # B. Fallback: último timestamp en parquet
         last_ts = self._storage.get_last_timestamp(symbol, timeframe)
-        tf_ms = _timeframe_to_ms(timeframe)
-
         if last_ts is not None:
             logger.debug(
-                "Cursor miss — fallback to parquet | {}/{}/{}",
+                "Cursor miss — fallback parquet | {}/{}/{}",
                 exchange_name, symbol, timeframe,
             )
             return int(last_ts.timestamp() * 1000) - (self._overlap * tf_ms)
 
-        # 3. Sin historial: usar start_date de configuracion
-        if not start_date:
-            raise MissingStartDateError(f"{symbol}/{timeframe} needs start_date")
+        # C. Primer inicio — sin historial previo
+        for candidate in [start_date, self._config_start_date]:
+            if candidate:
+                logger.info(
+                    "Primer inicio | {}/{}/{} desde={}",
+                    exchange_name, symbol, timeframe, candidate,
+                )
+                return self._exchange.parse8601(candidate)
 
-        return self._exchange.parse8601(start_date)
+        # D. Sin ninguna fuente — falla explícita, SIN recursión
+        raise MissingStartDateError(
+            f"{symbol}/{timeframe} en modo incremental sin cursor, "
+            f"sin parquet y sin start_date configurado."
+        )
 
     # ======================================================
     # Fetch with retry + breaker

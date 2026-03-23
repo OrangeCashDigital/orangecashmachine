@@ -228,6 +228,11 @@ class CCXTAdapter:
         import ccxt as ccxt_sync
         return ccxt_sync.Exchange.parse8601(date_str)
 
+    def iso8601(self, timestamp_ms: int) -> str:
+        """Convierte timestamp ms a string ISO 8601 — no requiere cliente inicializado."""
+        import ccxt as ccxt_sync
+        return ccxt_sync.Exchange.iso8601(timestamp_ms)
+
 
     async def inspect_required_credentials(self) -> Dict[str, Any]:
         """
