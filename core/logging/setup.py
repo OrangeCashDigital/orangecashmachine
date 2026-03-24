@@ -11,17 +11,27 @@ Sinks activos (controlados por LoggingConfig)
 2. orangecashmachine_*.log   — si cfg.file=True, rotación/retención desde config
 3. errors_*.log              — si cfg.file=True, retención extendida
 4. pipeline_*.log            — si cfg.pipeline=True
+
+Extra defaults
+--------------
+logger.configure(patcher=...) inyecta defaults en cada record ANTES de
+que llegue a los sinks. Esto evita KeyError en CONSOLE y FILE cuando
+un log no proviene de un contexto con logger.bind(request_id=...).
 """
 
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from loguru import logger
 
 from core.logging.formats import CONSOLE, FILE, PIPELINE
 from core.logging.filters import pipeline_filter
+
+# Flag de módulo: reemplaza logger._core.handlers (API privada de loguru).
+# Inmune a cambios de API en minor releases.
+_LOGGING_CONFIGURED: bool = False
 
 
 class InterceptHandler(logging.Handler):
@@ -35,29 +45,37 @@ class InterceptHandler(logging.Handler):
         logger.opt(exception=record.exc_info).log(level, record.getMessage())
 
 
+def _patch_extra(record: dict) -> None:
+    """
+    Inyecta defaults en extra antes de que el record llegue a los sinks.
+    Evita KeyError en CONSOLE y FILE cuando el log no tiene request_id.
+    """
+    record["extra"].setdefault("request_id", "-")
+
+
 def setup_logging(
     cfg: Optional[object] = None,
     debug: bool = False,
-    # parámetros legacy para retrocompatibilidad
     log_dir: Optional[Path] = None,
 ) -> None:
     """
     Inicializa Loguru consumiendo LoggingConfig desde el sistema de configuración.
 
-    Idempotente: si ya hay handlers activos no resetea sinks,
-    solo instala el InterceptHandler para stdlib.
+    Idempotente: la segunda llamada (desde entrypoint.py cuando se invoca
+    desde main.py) instala el InterceptHandler pero no resetea sinks.
 
     Parameters
     ----------
     cfg : LoggingConfig | None
-        Configuración de logging desde config.observability.logging.
-        Si None, usa defaults seguros (equivalente al comportamiento anterior).
+        Configuración desde config.observability.logging.
+        Si None, usa defaults seguros.
     debug : bool
-        Override de nivel: si True fuerza DEBUG independientemente de cfg.level.
+        Si True fuerza nivel DEBUG independientemente de cfg.level.
     log_dir : Path | None
         Override de directorio (legacy). Ignorado si cfg está presente.
     """
-    # Normalizar cfg a valores concretos
+    global _LOGGING_CONFIGURED
+
     if cfg is not None:
         _level     = "DEBUG" if debug else cfg.level.upper()
         _log_dir   = Path(cfg.log_dir) if cfg.file or cfg.pipeline else None
@@ -67,7 +85,6 @@ def setup_logging(
         _file      = cfg.file
         _pipeline  = cfg.pipeline
     else:
-        # modo legacy / bootstrap sin config
         _level     = "DEBUG" if debug else "INFO"
         _log_dir   = log_dir or Path("logs")
         _rotation  = "1 day"
@@ -76,10 +93,12 @@ def setup_logging(
         _file      = True
         _pipeline  = True
 
-    already_configured = len(logger._core.handlers) > 0
-
-    if not already_configured:
+    if not _LOGGING_CONFIGURED:
         logger.remove()
+
+        # Patcher global: garantiza defaults en extra para todos los sinks.
+        # Se configura una sola vez junto con los sinks.
+        logger.configure(patcher=_patch_extra)
 
         if _console:
             logger.add(
@@ -105,7 +124,6 @@ def setup_logging(
                     backtrace=True,
                     diagnose=False,
                 )
-
                 logger.add(
                     _log_dir / "errors_{time:YYYY-MM-DD}.log",
                     rotation=_rotation,
@@ -128,10 +146,12 @@ def setup_logging(
                     filter=pipeline_filter,
                 )
 
-        sinks = sum([_console, _file * 2 if _file else 0, _pipeline])
+        _LOGGING_CONFIGURED = True
         logger.debug(
             "Logging configured | level={} log_dir={} console={} file={} pipeline={}",
             _level, _log_dir, _console, _file, _pipeline,
         )
 
+    # Siempre — instala el bridge stdlib→loguru aunque los sinks ya existan.
+    # force=True garantiza que reemplaza cualquier handler previo de basicConfig.
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)

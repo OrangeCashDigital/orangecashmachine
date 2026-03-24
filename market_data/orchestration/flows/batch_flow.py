@@ -296,6 +296,6 @@ async def market_data_flow(
         # Push por exchange — evita last-write-wins collision en Pushgateway.
         for probe in probes:
             push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
-            log.info("Metrics pushed and cleaned | exchange=%s", probe.exchange)
+            log.info("Metrics pushed | exchange=%s", probe.exchange)
 
     log.info("Market data flow completed successfully.")

@@ -42,7 +42,10 @@ async def _run_flow_local(config: AppConfig) -> None:
         snapshot_id = SnapshotManager().create_snapshot()
         logger.info("Snapshot created | id={}", snapshot_id)
     except Exception as exc:
-        logger.warning("Snapshot creation failed (non-critical) | {}", exc)
+        logger.warning(
+            "Snapshot creation failed (non-critical) | type={} error={}",
+            type(exc).__name__, exc,
+        )
 
     try:
         gold = GoldStorage()
@@ -63,7 +66,10 @@ async def _run_flow_local(config: AppConfig) -> None:
                 )
         logger.info("Gold build completed")
     except Exception as exc:
-        logger.warning("Gold build failed (non-critical) | {}", exc)
+        logger.warning(
+            "Gold build failed (non-critical) | type={} error={}",
+            type(exc).__name__, exc,
+        )
 
 
 def run(config: AppConfig, debug: bool = False) -> int:
@@ -74,9 +80,17 @@ def run(config: AppConfig, debug: bool = False) -> int:
     -------
     int
         0 → éxito, 1 → error crítico, 130 → interrumpido (SIGINT).
+
+    Notes
+    -----
+    setup_logging es idempotente: si ya fue llamado desde main.py no
+    reconfigura sinks. El flag _LOGGING_CONFIGURED en core.logging.setup
+    garantiza una sola inicialización aunque run() se llame directamente.
+
+    El timeout se toma de config.pipeline.timeouts.historical_pipeline
+    para no hardcodear valores en el código.
     """
-    log_level = "DEBUG" if debug else config.observability.logging.level
-    setup_logging(cfg=config.observability.logging, debug=(log_level == "DEBUG"))
+    setup_logging(cfg=config.observability.logging, debug=debug)
 
     logger.info(
         "OrangeCashMachine starting (local) | env={} exchanges={}",
@@ -84,16 +98,28 @@ def run(config: AppConfig, debug: bool = False) -> int:
         config.exchange_names,
     )
 
+    timeout = config.pipeline.timeouts.historical_pipeline
     exit_code = 0
     try:
-        asyncio.run(_run_flow_local(config))
+        asyncio.run(
+            asyncio.wait_for(_run_flow_local(config), timeout=timeout)
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "Pipeline timed out | timeout={}s", timeout
+        )
+        exit_code = 1
     except KeyboardInterrupt:
-        logger.warning("Execution interrupted by user")
+        logger.warning("Execution interrupted by user (SIGINT)")
         exit_code = 130
-    except Exception:
-        logger.exception("Fatal error in Market Data Flow")
+    except Exception as exc:
+        logger.exception(
+            "Fatal error in Market Data Flow | type={} error={}",
+            type(exc).__name__, exc,
+        )
         exit_code = 1
     finally:
+        # push_metrics es SafeOps: nunca lanza excepción al caller.
         gateway = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
         for ex in config.exchanges:
             push_metrics(exchange=ex.name.value, gateway=gateway)
