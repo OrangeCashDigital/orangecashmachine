@@ -26,6 +26,8 @@ from prefect import task, get_run_logger
 from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
 from market_data.batch.pipelines.historical_pipeline import HistoricalPipelineAsync
+from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
+from services.exchange.ccxt_adapter import CCXTAdapter
 
 
 # ==========================================================
@@ -94,22 +96,19 @@ async def run_historical_pipeline(
         max_concurrency,
     )
 
-    # Adapter inyectado → el flow gestiona su ciclo de vida
-    # Adapter interno  → esta task lo crea y lo cierra
-    from services.exchange.ccxt_adapter import CCXTAdapter
     _owns_client = exchange_client is None
     if _owns_client:
         exchange_client = CCXTAdapter(config=exchange_cfg, default_type=None)
 
     try:
         pipeline = HistoricalPipelineAsync(
-            symbols           = spot_symbols,
-            timeframes        = hist_cfg.timeframes,
-            start_date        = hist_cfg.start_date,
-            max_concurrency   = max_concurrency,
-            exchange_client   = exchange_client,
-            backfill_mode = hist_cfg.backfill_mode,
-            market_type       = "spot",
+            symbols         = spot_symbols,
+            timeframes      = hist_cfg.timeframes,
+            start_date      = hist_cfg.start_date,
+            max_concurrency = max_concurrency,
+            exchange_client = exchange_client,
+            backfill_mode   = hist_cfg.backfill_mode,
+            market_type     = "spot",
         )
         summary = await pipeline.run()
     finally:
@@ -168,8 +167,193 @@ async def run_futures_pipeline(
     - Solo falla si el 100% de símbolos fallan
     - Adapter siempre cerrado en finally
     """
-    from services.exchange.ccxt_adapter import CCXTAdapter
+    log = get_run_logger()
 
+    if not exchange_cfg.has_futures:
+        log.warning(
+            "Futures pipeline skipped — futures not enabled | exchange=%s",
+            exchange_cfg.name.value,
+        )
+        return
+
+    futures_symbols     = exchange_cfg.markets.futures_symbols
+    futures_market_type = exchange_cfg.markets.futures_default_type or "swap"
+    hist_cfg            = config.pipeline.historical
+    exchange_name       = exchange_cfg.name.value
+
+    log.info(
+        "Futures pipeline starting | exchange=%s market​​​​​​​​​​​​​​​​
+
+cat > market_data/orchestration/tasks/batch_tasks.py << 'EOF'
+from __future__ import annotations
+
+"""
+market_data/orchestration/tasks/batch_tasks.py
+===============================================
+
+Prefect tasks de ejecución de pipelines de datos de mercado.
+
+Responsabilidad
+---------------
+Cada task encapsula un pipeline específico (historical, trades, derivatives)
+y gestiona su ciclo de vida: validación, ejecución, logging y errores.
+
+Principios
+----------
+SOLID  – SRP: cada task tiene una sola responsabilidad
+KISS   – sin lógica innecesaria, flujo lineal y predecible
+DRY    – validaciones centralizadas, sin repetición
+SafeOps – placeholders no fallan en producción si están desactivados por config
+"""
+
+from typing import List, Sequence
+
+from prefect import task, get_run_logger
+
+from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
+from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
+from market_data.batch.pipelines.historical_pipeline import HistoricalPipelineAsync
+from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
+from services.exchange.ccxt_adapter import CCXTAdapter
+
+
+# ==========================================================
+# Validaciones independientes y testeables (SafeOps)
+# ==========================================================
+
+def _validate_historical_inputs(exchange_cfg: ExchangeConfig, config: AppConfig) -> None:
+    """Valida que haya símbolos y timeframes antes de ejecutar el pipeline histórico."""
+    if not exchange_cfg.markets.spot_symbols:
+        raise ValueError(f"Exchange '{exchange_cfg.name.value}' has no spot symbols configured.")
+    if not config.pipeline.historical.timeframes:
+        raise ValueError("Historical pipeline requires at least one timeframe.")
+
+
+def _validate_derivatives_datasets(datasets: Sequence[str]) -> None:
+    """Valida que se hayan especificado datasets antes de ejecutar derivados."""
+    if not datasets:
+        raise ValueError("Derivatives pipeline requires at least one dataset.")
+
+
+# ==========================================================
+# Historical Pipeline
+# ==========================================================
+
+@task(
+    name="historical_ohlcv_pipeline",
+    retries=3,
+    retry_delay_seconds=[30, 120, 300],
+    timeout_seconds=PIPELINE_TASK_TIMEOUT,
+    task_run_name="{exchange_cfg.name.value}-ohlcv",
+    description="Ingests historical OHLCV data for a specific exchange.",
+    tags=["ohlcv", "historical"],
+)
+async def run_historical_pipeline(
+    config: AppConfig,
+    exchange_cfg: ExchangeConfig,
+    probe: ExchangeProbe,
+    exchange_client: "CCXTAdapter | None" = None,
+) -> None:
+    """
+    Ejecuta el pipeline histórico (OHLCV) para un exchange.
+
+    El adapter puede ser inyectado desde el flow (ya conectado, load_markets
+    ya ejecutado) o creado internamente como fallback. En el segundo caso,
+    esta task es responsable de cerrarlo.
+
+    SafeOps
+    -------
+    - Errores parciales loggeados — solo falla si el 100% de symbols fallan
+    - Adapter externo nunca se cierra aquí — lifecycle del flow
+    - Adapter interno siempre se cierra en finally
+    """
+    log = get_run_logger()
+    _validate_historical_inputs(exchange_cfg, config)
+
+    hist_cfg        = config.pipeline.historical
+    exchange_name   = exchange_cfg.name.value
+    max_concurrency = probe.max_concurrent
+    spot_symbols    = exchange_cfg.markets.spot_symbols
+
+    log.info(
+        "Historical pipeline starting | exchange=%s market=spot symbols=%s timeframes=%s workers=%s",
+        exchange_name,
+        len(spot_symbols),
+        len(hist_cfg.timeframes),
+        max_concurrency,
+    )
+
+    _owns_client = exchange_client is None
+    if _owns_client:
+        exchange_client = CCXTAdapter(config=exchange_cfg, default_type=None)
+
+    try:
+        pipeline = HistoricalPipelineAsync(
+            symbols         = spot_symbols,
+            timeframes      = hist_cfg.timeframes,
+            start_date      = hist_cfg.start_date,
+            max_concurrency = max_concurrency,
+            exchange_client = exchange_client,
+            backfill_mode   = hist_cfg.backfill_mode,
+            market_type     = "spot",
+        )
+        summary = await pipeline.run()
+    finally:
+        if _owns_client:
+            await exchange_client.close()
+
+    log.info(
+        "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
+        exchange_name,
+        summary.succeeded,
+        summary.failed,
+        summary.skipped,
+        summary.total_rows,
+    )
+
+    if summary.total > 0 and summary.failed == summary.total:
+        raise RuntimeError(
+            f"Historical pipeline failed for all {summary.total} symbols on '{exchange_name}'."
+        )
+
+    if summary.failed > 0:
+        log.warning(
+            "Historical pipeline partial failures | exchange=%s failed=%s/%s",
+            exchange_name, summary.failed, summary.total,
+        )
+
+
+# ==========================================================
+# Futures Pipeline
+# ==========================================================
+
+@task(
+    name="historical_futures_pipeline",
+    retries=3,
+    retry_delay_seconds=[30, 120, 300],
+    timeout_seconds=PIPELINE_TASK_TIMEOUT,
+    task_run_name="{exchange_cfg.name.value}-futures",
+    description="Ingests historical OHLCV futures/perpetuals data.",
+    tags=["ohlcv", "historical", "futures"],
+)
+async def run_futures_pipeline(
+    config:       AppConfig,
+    exchange_cfg: ExchangeConfig,
+    probe:        ExchangeProbe,
+) -> None:
+    """
+    Ejecuta el pipeline histórico OHLCV para futuros/perpetuos.
+
+    Crea su propio CCXTAdapter con defaultType configurado.
+    Storage silver separado por market_type (swap).
+    Cursores independientes del spot.
+
+    SafeOps
+    -------
+    - Skip silencioso si futures no está habilitado en config
+    - Solo falla si el 100% de símbolos fallan
+    - Adapter siempre cerrado en finally
+    """
     log = get_run_logger()
 
     if not exchange_cfg.has_futures:
@@ -194,13 +378,13 @@ async def run_futures_pipeline(
 
     try:
         pipeline = HistoricalPipelineAsync(
-            symbols           = futures_symbols,
-            timeframes        = hist_cfg.timeframes,
-            start_date        = hist_cfg.start_date,
-            max_concurrency   = probe.max_concurrent,
-            exchange_client   = futures_client,
-            backfill_mode = hist_cfg.backfill_mode,
-            market_type       = futures_market_type,
+            symbols         = futures_symbols,
+            timeframes      = hist_cfg.timeframes,
+            start_date      = hist_cfg.start_date,
+            max_concurrency = probe.max_concurrent,
+            exchange_client = futures_client,
+            backfill_mode   = hist_cfg.backfill_mode,
+            market_type     = futures_market_type,
         )
         summary = await pipeline.run()
     finally:
@@ -241,11 +425,7 @@ async def run_trades_pipeline(
     Pipeline de trades.
 
     SafeOps: si datasets.trades está desactivado en config, retorna
-    silenciosamente sin error. Esto evita fallos en producción por
-    pipelines aún no implementados.
-
-    Para activar: set 'datasets.trades: true' en settings.yaml
-    e implementar la lógica de ingestión.
+    silenciosamente sin error.
     """
     log = get_run_logger()
 
@@ -290,11 +470,7 @@ async def run_derivatives_pipeline(
     Pipeline de derivados (funding_rate, open_interest, liquidations, etc.).
 
     SafeOps: si ningún dataset de derivados está activo en config, retorna
-    silenciosamente sin error. Esto evita fallos en producción por
-    pipelines aún no implementados.
-
-    Para activar: habilitar al menos un dataset de derivados en settings.yaml
-    e implementar la lógica de ingestión.
+    silenciosamente sin error.
     """
     log = get_run_logger()
     _validate_derivatives_datasets(datasets)
@@ -336,11 +512,8 @@ async def run_backfill_pipeline(
     exchange_cfg:    ExchangeConfig,
     probe:           ExchangeProbe,
     market_type:     str = "spot",
-    exchange_client=None,
+    exchange_client: "CCXTAdapter | None" = None,
 ) -> None:
-    from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
-    from services.exchange.ccxt_adapter import CCXTAdapter
-
     log           = get_run_logger()
     exchange_name = exchange_cfg.name.value
     hist_cfg      = config.pipeline.historical
@@ -369,13 +542,13 @@ async def run_backfill_pipeline(
 
     try:
         pipeline = UnifiedPipeline(
-            symbols           = symbols,
-            timeframes        = hist_cfg.timeframes,
-            start_date        = hist_cfg.start_date,
-            max_concurrency   = probe.max_concurrent,
-            exchange_client   = exchange_client,
-            market_type       = market_type,
-            backfill_mode = True,  # backfill siempre descarga desde el origen
+            symbols         = symbols,
+            timeframes      = hist_cfg.timeframes,
+            start_date      = hist_cfg.start_date,
+            max_concurrency = probe.max_concurrent,
+            exchange_client = exchange_client,
+            market_type     = market_type,
+            backfill_mode   = True,
         )
         summary = await pipeline.run(mode="backfill")
     finally:
@@ -412,11 +585,8 @@ async def run_repair_pipeline(
     exchange_cfg:    ExchangeConfig,
     probe:           ExchangeProbe,
     market_type:     str = "spot",
-    exchange_client=None,
+    exchange_client: "CCXTAdapter | None" = None,
 ) -> None:
-    from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
-    from services.exchange.ccxt_adapter import CCXTAdapter
-
     log           = get_run_logger()
     exchange_name = exchange_cfg.name.value
     hist_cfg      = config.pipeline.historical
@@ -445,13 +615,13 @@ async def run_repair_pipeline(
 
     try:
         pipeline = UnifiedPipeline(
-            symbols           = symbols,
-            timeframes        = hist_cfg.timeframes,
-            start_date        = hist_cfg.start_date,
-            max_concurrency   = probe.max_concurrent,
-            exchange_client   = exchange_client,
-            market_type       = market_type,
-            backfill_mode = hist_cfg.backfill_mode,
+            symbols         = symbols,
+            timeframes      = hist_cfg.timeframes,
+            start_date      = hist_cfg.start_date,
+            max_concurrency = probe.max_concurrent,
+            exchange_client = exchange_client,
+            market_type     = market_type,
+            backfill_mode   = hist_cfg.backfill_mode,
         )
         summary = await pipeline.run(mode="repair")
     finally:

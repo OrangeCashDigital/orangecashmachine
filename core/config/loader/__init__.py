@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from typing import Optional, Union
 
+from pydantic import ValidationError
+
 from .audit         import record as _audit
 from .cache         import ConfigCache, _config_cache, make_cache_key
 from .env_resolver  import EnvResolver, load_dotenv_for_env, resolve_env, _ALLOWED_ENVS
@@ -43,7 +45,9 @@ def load_config(
 
     env = resolve_env(env, Path(path).resolve() if path else None)
     if env not in _ALLOWED_ENVS:
-        raise ConfigurationError(f"Invalid environment: '{env}'. Allowed: {sorted(_ALLOWED_ENVS)}")
+        raise ConfigurationError(
+            f"Invalid environment: '{env}'. Allowed: {sorted(_ALLOWED_ENVS)}"
+        )
 
     config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
     cache_key  = make_cache_key(env, config_dir, market_type)
@@ -82,14 +86,42 @@ def load_config(
         duration = time.monotonic() - start
         CONFIG_LOAD_COUNT.labels(env=env, status="success").inc()
         CONFIG_LOAD_DURATION.labels(env=env).observe(duration)
-        logger.info("Config loaded | env=%s hash=%s source=%s duration=%.3fs",
-                    env, h[:8], source_name, duration)
+        logger.info(
+            "Config loaded | env=%s hash=%s source=%s duration=%.3fs",
+            env, h[:8], source_name, duration,
+        )
         return config
 
-    except Exception as exc:
+    except (ConfigurationError, ConfigValidationError):
+        # Ya tienen tipo preciso — dejar propagar sin envolver
         CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
-        logger.error("Config load failed | env=%s error=%s", env, exc)
         raise
+
+    except FileNotFoundError as exc:
+        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
+        logger.error("Config file not found | env=%s error=%s", env, exc)
+        raise ConfigurationError(
+            f"Config file not found | env={env} path={exc.filename}"
+        ) from exc
+
+    except ValidationError as exc:
+        # ValidationError de pydantic — error de schema, no de IO
+        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
+        logger.error("Config schema validation failed | env=%s errors=%s", env, exc.error_count())
+        raise ConfigValidationError(
+            f"Config schema validation failed | env={env} errors={exc.error_count()}"
+        ) from exc
+
+    except Exception as exc:
+        # Residual: errores de YAML malformado, permisos, etc.
+        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
+        logger.error(
+            "Config load failed | env=%s type=%s error=%s",
+            env, type(exc).__name__, exc,
+        )
+        raise ConfigurationError(
+            f"Config load failed | env={env} type={type(exc).__name__}"
+        ) from exc
 
 
 try:
