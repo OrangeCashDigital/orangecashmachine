@@ -15,7 +15,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.batch.fetchers.fetcher import DEFAULT_CHUNK_LIMIT
-from market_data.batch.schemas.timeframe import timeframe_to_ms as _timeframe_to_ms
+from market_data.batch.schemas.timeframe import timeframe_to_ms
 from market_data.batch.strategies.base import (
     PairResult,
     PipelineContext,
@@ -274,7 +274,7 @@ class BackfillStrategy(StrategyMixin):
         ctx:       PipelineContext,
     ) -> tuple[int, int]:
 
-        tf_ms       = _timeframe_to_ms(timeframe)
+        tf_ms       = timeframe_to_ms(timeframe)
         chunk_limit = DEFAULT_CHUNK_LIMIT
         current_end = since_ms
         total_rows  = 0

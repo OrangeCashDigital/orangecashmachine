@@ -21,7 +21,7 @@ from market_data.batch.strategies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from market_data.batch.schemas.timeframe import timeframe_to_ms as _timeframe_to_ms
+from market_data.batch.schemas.timeframe import timeframe_to_ms
 from services.observability.metrics import (
     ROWS_INGESTED, PIPELINE_ERRORS,
     REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED, REPAIR_GAPS_SKIPPED,
@@ -48,7 +48,7 @@ def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapR
     if df is None or df.empty or len(df) < 2:
         return []
 
-    tf_ms     = _timeframe_to_ms(timeframe)
+    tf_ms     = timeframe_to_ms(timeframe)
     threshold = tf_ms * (tolerance + 2)
 
     df_sorted = df.sort_values("timestamp").reset_index(drop=True)
@@ -270,7 +270,7 @@ class RepairStrategy(StrategyMixin):
             # Fetch quirúrgico con paginación completa.
             # Gaps pequeños (<= 1000 velas): un solo fetch.
             # Gaps grandes (> 1000 velas): paginar igual que backfill.
-            tf_ms     = _timeframe_to_ms(timeframe)
+            tf_ms     = timeframe_to_ms(timeframe)
             gap_start = pd.Timestamp(gap.start_ms, unit="ms", tz="UTC")
             gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
 

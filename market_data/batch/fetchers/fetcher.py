@@ -438,9 +438,7 @@ class HistoricalFetcherAsync:
 # Helpers
 # ==========================================================
 
-# _timeframe_to_ms: alias interno apuntando a la implementación canónica.
-# La lógica real vive en schemas/timeframe.py
-from market_data.batch.schemas.timeframe import timeframe_to_ms as _timeframe_to_ms  # noqa: E402
+from market_data.batch.schemas.timeframe import timeframe_to_ms  # noqa: E402
 
 
 def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:
