@@ -18,6 +18,12 @@ SOLID  – SRP: el flow orquesta, los tasks ejecutan
 KISS   – flujo lineal y predecible
 DRY    – helpers desacoplados y testeables
 SafeOps – adapters siempre cerrados en finally, fallos parciales tolerados
+
+Métricas
+--------
+push_metrics en el finally garantiza que las métricas
+lleguen al Pushgateway en producción (Prefect Worker), donde entrypoint.py
+no se ejecuta. Job por exchange evita colisiones last-write-wins.
 """
 
 from __future__ import annotations
@@ -39,6 +45,9 @@ from market_data.orchestration.tasks.batch_tasks import (
     run_trades_pipeline,
     run_derivatives_pipeline,
 )
+from services.observability.metrics import push_metrics
+
+_PUSHGATEWAY = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 
 # ==================================================================
 # Helpers de dominio (desacoplados y testeables)
@@ -48,16 +57,11 @@ def _filter_active_datasets(
     requested: Set[str],
     probe: ExchangeProbe,
 ) -> Tuple[Set[str], Set[str]]:
-    """
-    Intersecta datasets solicitados con los soportados por el exchange.
-    Retorna (activos, omitidos).
-    """
     supported = set(probe.supported_datasets)
     return requested & supported, requested - supported
 
 
 def _supports_market_type(probe: ExchangeProbe, market_type: str) -> bool:
-    """Chequea si un tipo de mercado está disponible en el exchange."""
     return market_type in probe.available_markets
 
 
@@ -69,11 +73,6 @@ def _launch_spot_pipelines(
     log,
     adapter: "CCXTAdapter | None" = None,
 ) -> List[asyncio.Future]:
-    """
-    Lanza pipelines spot (ohlcv, trades, orderbook) si el exchange los soporta.
-    Retorna lista vacía si no hay datasets spot solicitados o el exchange no
-    tiene mercado spot disponible.
-    """
     spot_requested = active & {"ohlcv", "trades", "orderbook"}
     if not spot_requested:
         return []
@@ -103,11 +102,6 @@ def _launch_futures_pipelines(
     active:  Set[str],
     log,
 ) -> List[asyncio.Future]:
-    """
-    Lanza pipeline de futuros si el exchange tiene futuros habilitados en config.
-    El adapter de futuros se crea dentro de run_futures_pipeline (no se inyecta)
-    porque necesita defaultType=swap distinto del adapter spot del flow.
-    """
     if "ohlcv" not in active:
         return []
     if not exc_cfg.has_futures:
@@ -136,11 +130,6 @@ def _launch_derivative_pipelines(
     active: Set[str],
     log,
 ) -> List[asyncio.Future]:
-    """
-    Lanza pipelines de derivados si el exchange soporta futuros o swaps.
-    Retorna lista vacía si no hay datasets de derivados solicitados o el
-    exchange no tiene mercado de futuros/swaps disponible.
-    """
     derivative_datasets = {
         "funding_rate", "open_interest", "liquidations", "mark_price", "index_price"
     }
@@ -165,10 +154,6 @@ def _launch_pipelines_for_exchange(
     log,
     adapter: "CCXTAdapter | None" = None,
 ) -> List[asyncio.Future]:
-    """
-    Orquesta pipelines spot y derivados para un exchange.
-    Filtra datasets no soportados antes de lanzar cualquier pipeline.
-    """
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
         log.warning("Exchange config not found | exchange=%s", probe.exchange)
@@ -196,15 +181,10 @@ async def _validate_exchanges(
     config: AppConfig,
     log,
 ) -> Tuple[List[ExchangeProbe], Dict[str, CCXTAdapter]]:
-    """
-    Valida exchanges en paralelo.
-    Retorna (probes, adapters) — adapters ya conectados con load_markets hecho.
-    Los adapters deben cerrarse en el caller (finally del flow).
-    """
     futures = [validate_exchange_connection(exc) for exc in config.exchanges]
     results = await asyncio.gather(*futures, return_exceptions=True)
 
-    probes:   List[ExchangeProbe]       = []
+    probes:   List[ExchangeProbe]    = []
     adapters: Dict[str, CCXTAdapter] = {}
 
     for exc, res in zip(config.exchanges, results):
@@ -226,10 +206,6 @@ async def _validate_exchanges(
 
 
 async def _consolidate_results(futures: List[asyncio.Future], log) -> None:
-    """
-    Espera todas las futures y consolida resultados.
-    SafeOps: loggea fallos parciales sin interrumpir — solo falla si el 100% fallan.
-    """
     results   = await asyncio.gather(*futures, return_exceptions=True)
     failures  = [r for r in results if isinstance(r, Exception)]
     successes = len(results) - len(failures)
@@ -263,25 +239,18 @@ async def market_data_flow(
     """
     Flow principal de ingestión de datos de mercado.
 
-    Parámetros del deployment
-    -------------------------
-    env        : entorno de configuración (production, development, staging).
-                 Prioridad: parámetro > OCM_ENV > 'production'.
-    config_dir : ruta al directorio de configuración.
-                 Prioridad: parámetro > OCM_CONFIG_DIR > '/app/config'.
-                 En desarrollo local usar: 'config'
-
     Flujo
     -----
     1. Resolver configuración portable (parámetros > env vars > defaults)
     2. Validar exchanges en paralelo → ExchangeProbes reales
     3. Lanzar pipelines por exchange (adapter inyectado)
     4. Consolidar resultados
-    5. Cerrar adapters en finally — lifecycle garantizado
+    5. Push métricas por exchange (evita colisiones en Pushgateway)
+    6. Delete métricas (evita stale metrics en próximo run fallido)
+    7. Cerrar adapters — lifecycle garantizado en finally
     """
     log = get_run_logger()
 
-    # --- Configuración portable: parámetros > env vars > defaults ---
     resolved_env = env or os.getenv("OCM_ENV", "production")
     resolved_dir = Path(config_dir) if config_dir else Path(
         os.getenv("OCM_CONFIG_DIR", "/app/config")
@@ -301,10 +270,8 @@ async def market_data_flow(
         config.exchange_names, sorted(requested),
     )
 
-    # --- Validar exchanges ---
     probes, adapters = await _validate_exchanges(config, log)
 
-    # --- Lanzar pipelines (adapter inyectado — load_markets() no se repite) ---
     pipeline_futures: List[asyncio.Future] = []
     for probe in probes:
         adapter = adapters.get(probe.exchange)
@@ -316,14 +283,19 @@ async def market_data_flow(
         log.warning("No pipelines launched. Check config and exchange capabilities.")
         return
 
-    # --- Consolidar resultados — adapters cerrados siempre en finally ---
     try:
         await _consolidate_results(pipeline_futures, log)
     finally:
+        # Cerrar adapters
         for name, adapter in adapters.items():
             try:
                 await adapter.close()
             except Exception as exc:
                 log.warning("Adapter close failed | exchange=%s error=%s", name, exc)
+
+        # Push por exchange — evita last-write-wins collision en Pushgateway.
+        for probe in probes:
+            push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
+            log.info("Metrics pushed and cleaned | exchange=%s", probe.exchange)
 
     log.info("Market data flow completed successfully.")

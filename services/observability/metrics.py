@@ -4,9 +4,6 @@ services/observability/metrics.py
 
 Métricas Prometheus para OrangeCashMachine.
 
-Expone un endpoint HTTP /metrics en el puerto 8000
-que Prometheus scrapea periódicamente.
-
 Métricas disponibles
 --------------------
 • pipeline_rows_ingested_total      — filas ingestadas por exchange/timeframe
@@ -15,11 +12,26 @@ Métricas disponibles
 • exchange_latency_ms               — latencia del exchange en validación
 • exchange_clock_drift_ms           — drift de reloj por exchange
 • pipeline_active_pairs             — pares procesándose actualmente (gauge)
+• pipeline_last_run_timestamp       — timestamp Unix del último run exitoso
+• pipeline_heartbeat_total          — counter que incrementa cada run (deadman)
+
+Notas de diseño
+---------------
+• push_metrics(exchange=) usa job distinto por exchange para evitar
+  last-write-wins collision en Pushgateway cuando corren en paralelo.
+• NO se hace delete después del push — los counters deben persistir
+  entre runs para que PipelineStalled pueda calcular time() - max(counter).
+• El heartbeat es un counter que solo crece: Prometheus lo ve siempre,
+  y si deja de crecer → el pipeline dejó de correr.
 """
 
 from __future__ import annotations
 
+import logging as _logging
+import time as _time
+
 from prometheus_client import (
+    CollectorRegistry,
     Counter,
     Gauge,
     Histogram,
@@ -27,6 +39,8 @@ from prometheus_client import (
     start_http_server,
     REGISTRY,
 )
+
+_log = _logging.getLogger(__name__)
 
 # ==========================================================
 # Métricas de pipeline
@@ -63,6 +77,18 @@ QUALITY_DECISIONS = Counter(
     ["exchange", "market_type", "symbol", "timeframe", "decision"],
 )
 
+PIPELINE_LAST_RUN = Gauge(
+    "ocm_pipeline_last_run_timestamp",
+    "Timestamp Unix del último run completado (exitoso o parcial)",
+    ["exchange"],
+)
+
+PIPELINE_HEARTBEAT = Counter(
+    "ocm_pipeline_heartbeat_total",
+    "Incrementa en cada run — usado como deadman switch",
+    ["exchange"],
+)
+
 # ==========================================================
 # Métricas de exchange
 # ==========================================================
@@ -87,25 +113,110 @@ EXCHANGE_RATE_LIMIT = Gauge(
 )
 
 # ==========================================================
+# Métricas de storage y repair
+# ==========================================================
+
+FETCH_CHUNK_DURATION = Histogram(
+    "ocm_fetch_chunk_duration_seconds",
+    "Duración de fetch de un chunk del exchange",
+    ["exchange", "symbol", "timeframe"],
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0],
+)
+
+FETCH_CHUNKS_TOTAL = Counter(
+    "ocm_fetch_chunks_total",
+    "Total de chunks fetched del exchange",
+    ["exchange", "symbol", "timeframe"],
+)
+
+STORAGE_WRITE_DURATION = Histogram(
+    "ocm_storage_write_duration_seconds",
+    "Duración de escritura de partición en Silver",
+    ["exchange", "symbol", "timeframe"],
+    buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0],
+)
+
+STORAGE_PARTITION_SIZE_ROWS = Histogram(
+    "ocm_storage_partition_size_rows",
+    "Tamaño de partición en filas al escribir",
+    ["exchange", "symbol", "timeframe"],
+    buckets=[100, 500, 1000, 5000, 10000, 50000, 100000],
+)
+
+REPAIR_GAPS_FOUND = Counter(
+    "ocm_repair_gaps_found_total",
+    "Total de gaps detectados por repair",
+    ["exchange", "symbol", "timeframe"],
+)
+
+REPAIR_GAPS_HEALED = Counter(
+    "ocm_repair_gaps_healed_total",
+    "Total de gaps reparados exitosamente",
+    ["exchange", "symbol", "timeframe"],
+)
+
+REPAIR_GAPS_SKIPPED = Counter(
+    "ocm_repair_gaps_skipped_total",
+    "Gaps skipeados por guardrail (demasiado grandes)",
+    ["exchange", "symbol", "timeframe"],
+)
+
+MANIFEST_CHECKSUM_FAILURES = Counter(
+    "ocm_manifest_checksum_failures_total",
+    "Particiones con checksum inválido detectadas en lectura",
+    ["exchange", "symbol", "timeframe"],
+)
+
+WRITE_LOCK_WAIT_DURATION = Histogram(
+    "ocm_write_lock_wait_seconds",
+    "Tiempo esperando el write lock Redis por dataset",
+    ["exchange", "symbol", "timeframe"],
+    buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0],
+)
+
+WRITE_LOCK_CONFLICTS = Counter(
+    "ocm_write_lock_conflicts_total",
+    "Intentos de adquirir lock ya tomado por otro writer",
+    ["exchange", "symbol", "timeframe"],
+)
+
+# ==========================================================
 # Servidor de métricas
 # ==========================================================
 
 def start_metrics_server(port: int = 8000) -> None:
-    """
-    Levanta el servidor HTTP de métricas en el puerto indicado.
-    Prometheus hace scraping a http://host:8000/metrics
-    """
+    """Levanta el servidor HTTP de métricas en el puerto indicado."""
     start_http_server(port)
 
 
-def push_metrics(job: str = "ocm_pipeline", gateway: str = "localhost:9091") -> None:
+# ==========================================================
+# Push hacia Pushgateway
+# ==========================================================
+
+def push_metrics(
+    exchange: str = "local",
+    gateway: str = "localhost:9091",
+    registry: CollectorRegistry = REGISTRY,
+) -> None:
     """
     Empuja métricas al Pushgateway al finalizar el pipeline.
-    Correcto para procesos batch que no corren continuamente.
+
+    Diseño
+    ------
+    • job=ocm_pipeline_{exchange} — un job por exchange evita
+      last-write-wins cuando exchanges corren en paralelo.
+    • NO se hace delete — los counters deben persistir entre runs
+      para que PipelineStalled calcule correctamente el delta temporal.
+    • Actualiza PIPELINE_LAST_RUN e incrementa PIPELINE_HEARTBEAT
+      antes del push para que el estado final quede registrado.
+
     SafeOps: nunca lanza excepción al caller.
     """
+    job = f"ocm_pipeline_{exchange}"
     try:
-        push_to_gateway(gateway, job=job, registry=REGISTRY)
+        PIPELINE_LAST_RUN.labels(exchange=exchange).set(_time.time())
+        PIPELINE_HEARTBEAT.labels(exchange=exchange).inc()
+        push_to_gateway(gateway, job=job, registry=registry)
+        _log.debug("Metrics pushed | job=%s gateway=%s", job, gateway)
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("Metrics push failed | error=%s", exc)
+        _log.warning("Metrics push failed | job=%s error=%s", job, exc)

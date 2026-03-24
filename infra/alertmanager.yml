@@ -1,0 +1,21 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "exchange"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "default"
+
+receivers:
+  - name: "default"
+
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+      alertname: "PipelineStalled"
+    target_match:
+      severity: "warning"
+      alertname: "HighPipelineErrorRate"
+    equal: ["exchange"]

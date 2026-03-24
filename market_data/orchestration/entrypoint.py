@@ -8,18 +8,6 @@ Entrypoint LOCAL — solo para desarrollo y debug.
 
 En producción el flow es disparado por Prefect Server/Worker
 via deployment. Este archivo NO forma parte del path de producción.
-
-Uso
----
-    python -m market_data.orchestration.entrypoint
-    OCM_ENV=development python main.py
-
-Principios
-----------
-SOLID  – SRP: orquesta el arranque local, no decide exit codes
-KISS   – flujo lineal, sin lógica de negocio
-DRY    – reutiliza core.logging, load_config y market_data_flow
-SafeOps – run() retorna int, sys.exit solo en __main__
 """
 
 import asyncio
@@ -39,10 +27,6 @@ from services.observability.metrics import push_metrics
 
 
 async def _run_flow_local(config: AppConfig) -> None:
-    """
-    Ejecuta market_data_flow en modo local.
-    SafeOps: snapshot y gold build no interrumpen el flujo.
-    """
     env        = os.getenv("OCM_ENV", "development")
     config_dir = str(Path("config").resolve())
 
@@ -85,7 +69,6 @@ async def _run_flow_local(config: AppConfig) -> None:
 def run(config: AppConfig, debug: bool = False) -> int:
     """
     Ejecuta el pipeline en modo local.
-    Retorna int — el caller decide qué hacer con el exit code.
 
     Returns
     -------
@@ -111,7 +94,9 @@ def run(config: AppConfig, debug: bool = False) -> int:
         logger.exception("Fatal error in Market Data Flow")
         exit_code = 1
     finally:
-        push_metrics()
+        gateway = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
+        for ex in config.exchanges:
+            push_metrics(exchange=ex.name.value, gateway=gateway)
         logger.info("Shutdown complete | exit_code={}", exit_code)
 
     return exit_code
