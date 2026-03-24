@@ -179,7 +179,7 @@ class HistoricalFetcherAsync:
             symbol, timeframe, start_date
         )
 
-        tf_ms = _timeframe_to_ms(timeframe)
+        tf_ms = timeframe_to_ms(timeframe)
 
         collected: List[pd.DataFrame] = []
         last_seen_ts: Optional[int] = None
@@ -268,7 +268,7 @@ class HistoricalFetcherAsync:
             5. MissingStartDateError → falla explícita, sin recursión
         """
         exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
-        tf_ms = _timeframe_to_ms(timeframe)
+        tf_ms = timeframe_to_ms(timeframe)
 
         # ══════════════════════════════════════════════════════════════
         # MODO FULL HISTORY
@@ -410,7 +410,7 @@ class HistoricalFetcherAsync:
             raise ValueError("symbol required")
         if limit <= 0:
             raise ValueError("limit > 0 required")
-        _timeframe_to_ms(timeframe)
+        timeframe_to_ms(timeframe)
 
     def _validate_market(self, symbol: str, market_type: Optional[str] = None) -> None:
         # Valida simbolo contra exchange.markets usando market_type explicito.
