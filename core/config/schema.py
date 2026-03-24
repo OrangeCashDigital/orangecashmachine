@@ -156,11 +156,11 @@ class ExchangeConfig(StrictBaseModel):
     @model_validator(mode="before")
     @classmethod
     def resolve_credentials(cls, values: dict) -> dict:
+        from core.config.credentials import resolve_exchange_credentials
         name  = str(values.get("name", "")).upper()
         creds = values.pop("credentials", {}) or {}
-        values["api_key"]      = os.getenv(f"{name}_API_KEY",    creds.get("apiKey",    os.getenv("OCM_API_KEY", "")))
-        values["api_secret"]   = os.getenv(f"{name}_API_SECRET", creds.get("secret",    os.getenv("OCM_API_SECRET", "")))
-        values["api_password"] = os.getenv(f"{name}_PASSPHRASE") or os.getenv(f"{name}_PASSWORD") or creds.get("password", "")
+        resolved = resolve_exchange_credentials(name, creds)
+        values.update(resolved)
         return values
 
     @model_validator(mode="after")

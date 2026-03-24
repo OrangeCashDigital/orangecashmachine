@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
+
+from core.config.env_vars import OCM_ENV
 import time
 from itertools import islice
 from typing import Iterator, Optional, Protocol, runtime_checkable
@@ -391,6 +393,6 @@ def build_cursor_store_from_env() -> RedisCursorStore:
         host=os.getenv("REDIS_HOST", _DEFAULT_HOST),
         port=int(os.getenv("REDIS_PORT", str(_DEFAULT_PORT))),
         db=int(os.getenv("REDIS_DB", str(_DEFAULT_DB))),
-        env=os.getenv("OCM_ENV", _DEFAULT_ENV),
+        env=os.getenv(OCM_ENV, _DEFAULT_ENV),
         ttl_days=int(os.getenv("CURSOR_TTL_DAYS", str(_DEFAULT_TTL_DAYS))),
     )

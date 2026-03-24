@@ -11,12 +11,12 @@ via deployment. Este archivo NO forma parte del path de producción.
 """
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 
 from loguru import logger
 
+from core.config.runtime import RunConfig
 from core.config.loader import load_config
 from core.config.schema import AppConfig
 from core.logging import setup_logging
@@ -26,16 +26,15 @@ from market_data.batch.storage.gold_storage import GoldStorage
 from services.observability.metrics import push_metrics
 
 
-async def _run_flow_local(config: AppConfig) -> None:
-    env        = os.getenv("OCM_ENV", "development")
+async def _run_flow_local(config: AppConfig, run_cfg: RunConfig) -> None:
     config_dir = str(Path("config").resolve())
 
     logger.info(
         "Launching market_data_flow (local) | env={} config_dir={}",
-        env, config_dir,
+        run_cfg.env, config_dir,
     )
 
-    await market_data_flow(env=env, config_dir=config_dir)
+    await market_data_flow(env=run_cfg.env, config_dir=config_dir)
     logger.info("market_data_flow completed")
 
     try:
@@ -76,6 +75,13 @@ def run(config: AppConfig, debug: bool = False) -> int:
     """
     Ejecuta el pipeline en modo local.
 
+    Parameters
+    ----------
+    config : AppConfig
+        Configuración de aplicación ya cargada y validada.
+    debug : bool
+        Flag de debug resuelto por RunConfig — no leer OCM_DEBUG aquí.
+
     Returns
     -------
     int
@@ -86,15 +92,15 @@ def run(config: AppConfig, debug: bool = False) -> int:
     setup_logging es idempotente: si ya fue llamado desde main.py no
     reconfigura sinks. El flag _LOGGING_CONFIGURED en core.logging.setup
     garantiza una sola inicialización aunque run() se llame directamente.
-
-    El timeout se toma de config.pipeline.timeouts.historical_pipeline
-    para no hardcodear valores en el código.
     """
+    # RunConfig mínimo para pasar env al flow — sin releer el entorno
+    # porque debug ya viene resuelto desde el caller.
+    run_cfg = RunConfig.from_env()
     setup_logging(cfg=config.observability.logging, debug=debug)
 
     logger.info(
         "OrangeCashMachine starting (local) | env={} exchanges={}",
-        os.getenv("OCM_ENV", "development"),
+        run_cfg.env,
         config.exchange_names,
     )
 
@@ -102,12 +108,13 @@ def run(config: AppConfig, debug: bool = False) -> int:
     exit_code = 0
     try:
         asyncio.run(
-            asyncio.wait_for(_run_flow_local(config), timeout=timeout)
+            asyncio.wait_for(
+                _run_flow_local(config, run_cfg),
+                timeout=timeout,
+            )
         )
     except asyncio.TimeoutError:
-        logger.error(
-            "Pipeline timed out | timeout={}s", timeout
-        )
+        logger.error("Pipeline timed out | timeout={}s", timeout)
         exit_code = 1
     except KeyboardInterrupt:
         logger.warning("Execution interrupted by user (SIGINT)")
@@ -119,19 +126,14 @@ def run(config: AppConfig, debug: bool = False) -> int:
         )
         exit_code = 1
     finally:
-        # push_metrics es SafeOps: nunca lanza excepción al caller.
-        gateway = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
         for ex in config.exchanges:
-            push_metrics(exchange=ex.name.value, gateway=gateway)
+            push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
         logger.info("Shutdown complete | exit_code={}", exit_code)
 
     return exit_code
 
 
 if __name__ == "__main__":
-    _env        = os.getenv("OCM_ENV", "development")
-    _config_dir = os.getenv("OCM_CONFIG_DIR", "config")
-    _debug      = os.getenv("OCM_DEBUG", "false").lower() in ("1", "true", "yes")
-
-    _config = load_config(env=_env, path=Path(_config_dir))
-    sys.exit(run(config=_config, debug=_debug))
+    _run_cfg = RunConfig.from_env()
+    _config  = load_config(env=_run_cfg.env, path=_run_cfg.config_path)
+    sys.exit(run(config=_config, debug=_run_cfg.debug))

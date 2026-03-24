@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional, Union
 
+from .env_resolver import resolve_env
 from .exceptions import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ def watch_config_files(
         logger.warning("Hot-reload unavailable: run pip install watchdog")
         return None
     from core.config.schema import CONFIG_PATH
-    env     = env or os.getenv("OCM_ENV") or "development"
+    env     = env or resolve_env()
     enabled = watch if watch is not None else (env in _WATCH_ENABLED_ENVS)
     if not enabled:
         logger.info("Hot-reload disabled | env=%s", env)

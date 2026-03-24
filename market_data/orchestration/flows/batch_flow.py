@@ -251,10 +251,10 @@ async def market_data_flow(
     """
     log = get_run_logger()
 
-    resolved_env = env or os.getenv("OCM_ENV", "production")
-    resolved_dir = Path(config_dir) if config_dir else Path(
-        os.getenv("OCM_CONFIG_DIR", "/app/config")
-    )
+    # env y config_dir vienen desde quien dispara el flow (RunConfig o CLI).
+    # El flow de Prefect no lee el entorno directamente — recibe valores resueltos.
+    resolved_env = env or "production"
+    resolved_dir = Path(config_dir) if config_dir else Path("/app/config")
 
     log.info("Flow starting | env=%s config_dir=%s", resolved_env, resolved_dir)
 

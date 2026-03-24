@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """core/config/loader/prefect_integration.py — Tarea Prefect opcional."""
 
-import os
 from pathlib import Path
 from typing import Optional, Union
 
@@ -26,7 +25,7 @@ if _PREFECT_AVAILABLE:
         config = load_config(env, path, use_cache, force_reload, market_type)
         prefect_log.info(
             "Config loaded | env=%s exchanges=%s",
-            env or os.getenv("OCM_ENV"),
+            env,
             getattr(config, "exchange_names", []),
         )
         return config

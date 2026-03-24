@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-"""core/config/rules.py
+"""
+core/config/rules.py
+====================
 
-Reglas de negocio para la configuracion de OrangeCashMachine.
+Reglas de negocio para la configuración de OrangeCashMachine.
 
-Cada regla es una funcion pura: (AppConfig) -> list[str]
+Cada regla es una función pura: (AppConfig) -> list[str]
 El loader las ejecuta en orden. SRP: el loader no conoce las reglas.
 """
 
@@ -15,9 +17,9 @@ if TYPE_CHECKING:
 
 
 def _rule_no_placeholder_password(config: "AppConfig") -> list[str]:
-    """Produccion no puede tener contrasenas placeholder."""
+    """Producción no puede tener contraseñas placeholder."""
     errors: list[str] = []
-    if getattr(config, "env", None) == "production":
+    if config.environment.name == "production":
         db = getattr(config, "db", None)
         if db is not None:
             password = getattr(db, "password", None)
@@ -27,21 +29,34 @@ def _rule_no_placeholder_password(config: "AppConfig") -> list[str]:
 
 
 def _rule_production_requires_real_credentials(config: "AppConfig") -> list[str]:
-    """Produccion no puede tener exchanges sin credenciales reales."""
+    """Producción no puede tener exchanges sin credenciales reales."""
     errors: list[str] = []
-    if getattr(config, "env", None) == "production":
-        exchanges = getattr(config, "exchanges", []) or []
-        for ex in exchanges:
+    if config.environment.name == "production":
+        for ex in config.exchanges:
             api_key = getattr(ex, "api_key", None)
             if not api_key or str(api_key).startswith("CHANGE_ME"):
-                errors.append(f"exchange {getattr(ex, 'name', '?')}: api_key required in production")
+                errors.append(
+                    f"exchange {ex.name.value}: api_key required in production"
+                )
     return errors
 
 
-# Registro de reglas activas — anadir aqui nuevas reglas sin tocar el loader
+def _rule_debug_not_allowed_in_production(config: "AppConfig") -> list[str]:
+    """Producción no puede tener debug=True en EnvironmentConfig."""
+    errors: list[str] = []
+    if config.environment.name == "production" and config.environment.debug:
+        errors.append(
+            "environment.debug must be False in production — "
+            "use OCM_DEBUG=false or remove debug flag from YAML"
+        )
+    return errors
+
+
+# Registro de reglas activas — agregar aquí nuevas reglas sin tocar el loader
 BUSINESS_RULES = [
     _rule_no_placeholder_password,
     _rule_production_requires_real_credentials,
+    _rule_debug_not_allowed_in_production,
 ]
 
 
