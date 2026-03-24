@@ -44,6 +44,7 @@ import asyncio
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from core.utils import get_git_hash
 from datetime import datetime, timezone
 from pathlib import Path
@@ -70,6 +71,23 @@ REQUIRED_COLUMNS: tuple[str, ...] = (
 _SILVER_SUBPATH = ("data_platform", "data_lake", "silver", "ohlcv")
 
 WriteMode = Literal["append", "overwrite"]
+
+# Write lock Redis: TTL generoso para evitar deadlocks si el proceso crashea.
+# Si el lock no se libera en _LOCK_TTL_SECONDS, Redis lo expira automáticamente.
+_LOCK_TTL_SECONDS:     int = 60
+_LOCK_RETRY_INTERVAL:  float = 0.1   # segundos entre reintentos
+_LOCK_MAX_WAIT:        float = 30.0  # máximo de espera antes de abortar
+
+# Script Lua para release atómico del write lock.
+# Definido una sola vez a nivel de módulo — Redis lo cachea por SHA1.
+# GET + DEL en un roundtrip, sin race condition entre verificar y borrar.
+_LOCK_RELEASE_LUA = """
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+else
+    return 0
+end
+"""
 
 
 # ==========================================================
@@ -109,18 +127,97 @@ class SilverStorage:
 
     def __init__(
         self,
-        base_path:   Optional[str | Path] = None,
-        exchange:    Optional[str]        = None,
-        market_type: str                  = "spot",
+        base_path:    Optional[str | Path] = None,
+        exchange:     Optional[str]        = None,
+        market_type:  str                  = "spot",
+        redis_client  = None,
     ) -> None:
         self._base_path:   Path = _resolve_base_path(base_path)
         self._exchange:    Optional[str] = exchange.lower() if exchange else None
         self._market_type: str = market_type.lower()
+        self._redis = redis_client  # opcional — sin Redis, no hay lock
+        # Registrar script Lua una sola vez por instancia.
+        # Redis lo cachea por SHA1 — register_script solo hace overhead en el primer call.
+        self._lock_release = (
+            self._redis.register_script(_LOCK_RELEASE_LUA)
+            if self._redis is not None else None
+        )
         self._base_path.mkdir(parents=True, exist_ok=True)
         logger.info(
-            "SilverStorage ready | exchange={} market_type={} path={}",
+            "SilverStorage ready | exchange={} market_type={} path={} redis={}",
             self._exchange or "shared", self._market_type, self._base_path,
+            "enabled" if self._redis else "disabled",
         )
+
+    @contextmanager
+    def _write_lock(self, symbol: str, timeframe: str):
+        """
+        Advisory write lock via Redis SET NX EX.
+
+        Protege contra dos Prefect workers escribiendo el mismo dataset
+        en paralelo. Si Redis no está disponible, procede sin lock (degraded).
+
+        El lock se identifica por exchange/symbol/timeframe para granularidad
+        máxima — locks distintos no se bloquean entre sí.
+        """
+        if self._redis is None:
+            yield  # sin Redis → sin lock, proceder
+            return
+
+        from services.observability.metrics import (
+            WRITE_LOCK_WAIT_DURATION, WRITE_LOCK_CONFLICTS,
+        )
+
+        lock_key = (
+            f"ocm:write_lock:{self._exchange or 'shared'}"
+            f":{symbol.replace('/', '_')}:{timeframe}"
+        )
+        lock_val = f"{os.getpid()}-{id(self)}"
+        waited   = 0.0
+        acquired = False
+
+        while waited < _LOCK_MAX_WAIT:
+            result = self._redis.set(
+                lock_key, lock_val,
+                nx=True, ex=_LOCK_TTL_SECONDS,
+            )
+            if result:
+                acquired = True
+                break
+            if waited == 0.0:
+                WRITE_LOCK_CONFLICTS.labels(
+                    exchange=self._exchange or "shared",
+                    symbol=symbol, timeframe=timeframe,
+                ).inc()
+                logger.debug(
+                    "Write lock contention | exchange={} symbol={} timeframe={} — waiting",
+                    self._exchange, symbol, timeframe,
+                )
+            import time as _time
+            _time.sleep(_LOCK_RETRY_INTERVAL)
+            waited += _LOCK_RETRY_INTERVAL
+
+        WRITE_LOCK_WAIT_DURATION.labels(
+            exchange=self._exchange or "shared",
+            symbol=symbol, timeframe=timeframe,
+        ).observe(waited)
+
+        if not acquired:
+            logger.error(
+                "Write lock timeout | exchange={} symbol={} timeframe={} waited={}s — proceeding without lock",
+                self._exchange, symbol, timeframe, waited,
+            )
+
+        try:
+            yield
+        finally:
+            if acquired:
+                try:
+                    # Release atómico via Lua — script pre-registrado en __init__.
+                    # Si el lock ya expiró o fue tomado por otro proceso, no-op (retorna 0).
+                    self._lock_release(keys=[lock_key], args=[lock_val])
+                except Exception as exc:
+                    logger.warning("Write lock release failed | {} | {}", lock_key, exc)
 
     # ======================================================
     # Public API
@@ -164,6 +261,20 @@ class SilverStorage:
         _validate_dataframe(df)
         df = _normalize_dataframe(df)
 
+        # Write lock: previene race conditions entre Prefect workers
+        # que procesen el mismo symbol/timeframe en paralelo.
+        with self._write_lock(symbol, timeframe):
+            return self._save_ohlcv_locked(df, symbol, timeframe, mode, run_id)
+
+    def _save_ohlcv_locked(
+        self,
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        mode: WriteMode,
+        run_id: Optional[str],
+    ) -> None:
+        """Implementación de save_ohlcv bajo write lock."""
         use_daily = (timeframe == "1m")
 
         if use_daily:
