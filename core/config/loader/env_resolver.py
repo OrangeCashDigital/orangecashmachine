@@ -12,6 +12,7 @@ import yaml
 from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
+from core.config.env_vars import OCM_ENV as _OCM_ENV_VAR
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,10 @@ def load_dotenv_for_env(env: str) -> None:
     for filename in (".env", f".env.{env}", f".env.{env}.local"):
         p = Path(filename)
         if p.exists():
-            load_dotenv(p, override=True)
+            # override=False: os.environ tiene prioridad sobre .env
+            # SSOT: el proceso (deployment/test/operador) es la fuente de mayor autoridad.
+            # .env es un convenio local que solo rellena vars ausentes, nunca las sobreescribe.
+            load_dotenv(p, override=False)
             logger.debug("Loaded dotenv: %s", filename)
 
 
@@ -86,7 +90,7 @@ def resolve_env(explicit_env: Optional[str] = None, config_dir: Optional[Path] =
     if explicit_env:
         logger.debug("Entorno resuelto desde argumento explícito: %s", explicit_env)
         return explicit_env
-    if ocm := os.getenv("OCM_ENV"):
+    if ocm := os.getenv(_OCM_ENV_VAR):
         logger.debug("Entorno resuelto desde OCM_ENV: %s", ocm)
         return ocm
     if yaml_env := read_default_env_from_settings(config_dir):

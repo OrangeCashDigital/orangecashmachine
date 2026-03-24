@@ -21,16 +21,27 @@ import logging
 import os
 from typing import Any
 
+from core.config.env_vars import (
+    OCM_BACKFILL_MODE,
+    OCM_START_DATE,
+    OCM_MAX_CONCURRENT,
+    OCM_LOG_LEVEL,
+    OCM_SNAPSHOT_INTERVAL,
+    OCM_DEBUG,
+)
+
 logger = logging.getLogger(__name__)
 
 # Mapping explícito: env var → path en el dict de config
+# Keys importados de env_vars.py — SSOT: un solo lugar define los nombres de vars
 # Ventaja sobre el recorrido dinámico: auditables, sin typos silenciosos
 _OCM_OVERRIDES: dict[str, tuple[str, ...]] = {
-    "OCM_BACKFILL_MODE": ("pipeline", "historical", "backfill_mode"),
-    "OCM_START_DATE":        ("pipeline", "historical", "start_date"),
-    "OCM_MAX_CONCURRENT":    ("pipeline", "historical", "max_concurrent_tasks"),
-    "OCM_LOG_LEVEL":         ("observability", "logging", "level"),
-    "OCM_SNAPSHOT_INTERVAL": ("pipeline", "realtime", "snapshot_interval_seconds"),
+    OCM_BACKFILL_MODE:    ("pipeline", "historical", "backfill_mode"),
+    OCM_START_DATE:       ("pipeline", "historical", "start_date"),
+    OCM_MAX_CONCURRENT:   ("pipeline", "historical", "max_concurrent_tasks"),
+    OCM_LOG_LEVEL:        ("observability", "logging", "level"),
+    OCM_SNAPSHOT_INTERVAL: ("pipeline", "realtime", "snapshot_interval_seconds"),
+    OCM_DEBUG:            ("environment", "debug"),  # debug gate — bloqueado en production por rules.py
 }
 
 
