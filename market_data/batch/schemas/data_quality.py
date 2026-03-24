@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-_TF_MS = {"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000,"1d":86400000}
+from market_data.batch.schemas.timeframe import timeframe_to_ms
+_TF_MS = {tf: timeframe_to_ms(tf) for tf in ["1m","5m","15m","1h","4h","1d"]}
 _MAD_THRESHOLD = 3.5
 _ZSCORE_WINDOW = 20
 _ZSCORE_THRESHOLD = 4.0

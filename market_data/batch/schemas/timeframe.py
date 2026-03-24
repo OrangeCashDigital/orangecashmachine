@@ -26,6 +26,8 @@ Uso
 
 from __future__ import annotations
 
+from enum import Enum
+
 # ==========================================================
 # Tabla canónica de unidades → milisegundos
 # ==========================================================
@@ -37,13 +39,34 @@ _UNIT_MS: dict[str, int] = {
     "w": 604_800_000,
 }
 
-# Timeframes válidos en el sistema — fuente de verdad única.
-# Si agregas un timeframe nuevo, agrégalo aquí primero.
-VALID_TIMEFRAMES: frozenset[str] = frozenset({
-    "1m", "5m", "15m", "30m",
-    "1h", "2h", "4h", "6h", "8h", "12h",
-    "1d", "1w",
-})
+
+# ==========================================================
+# Timeframe — tipo de dominio canónico
+# ==========================================================
+# Usar str como base permite comparar directamente con strings:
+#   Timeframe.H1 == "1h"  → True
+#   f"timeframe={Timeframe.H1}"  → "timeframe=1h"
+# Esto mantiene compatibilidad con paths de filesystem y manifests JSON
+# sin necesidad de llamar a .value en cada uso.
+# ==========================================================
+
+class Timeframe(str, Enum):
+    M1  = "1m"
+    M5  = "5m"
+    M15 = "15m"
+    M30 = "30m"
+    H1  = "1h"
+    H2  = "2h"
+    H4  = "4h"
+    H6  = "6h"
+    H8  = "8h"
+    H12 = "12h"
+    D1  = "1d"
+    W1  = "1w"
+
+
+# Frozenset de strings para validación rápida O(1) — compatible con código legacy
+VALID_TIMEFRAMES: frozenset[str] = frozenset(tf.value for tf in Timeframe)
 
 
 # ==========================================================

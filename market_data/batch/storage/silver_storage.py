@@ -49,6 +49,7 @@ from core.utils import get_git_hash
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Literal
+from market_data.batch.schemas.timeframe import Timeframe
 
 import pandas as pd
 from loguru import logger
@@ -276,7 +277,7 @@ class SilverStorage:
         _t0: float,
     ) -> None:
         """Implementación de save_ohlcv bajo write lock."""
-        use_daily = (timeframe == "1m")
+        use_daily = (timeframe == Timeframe.M1)
 
         if use_daily:
             groups = [
