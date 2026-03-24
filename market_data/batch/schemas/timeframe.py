@@ -64,6 +64,11 @@ class Timeframe(str, Enum):
     D1  = "1d"
     W1  = "1w"
 
+    def __str__(self) -> str:
+        # Python 3.11+ cambió str(StrEnum) para mostrar el nombre.
+        # Forzamos el valor para compatibilidad con f-strings y paths.
+        return self.value
+
 
 # Frozenset de strings para validación rápida O(1) — compatible con código legacy
 VALID_TIMEFRAMES: frozenset[str] = frozenset(tf.value for tf in Timeframe)
