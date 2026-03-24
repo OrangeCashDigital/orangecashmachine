@@ -8,14 +8,42 @@ route:
   repeat_interval: 4h
   receiver: "default"
 
+  routes:
+    - matchers:
+        - severity = "critical"
+      group_wait: 0s
+      repeat_interval: 1h
+      receiver: "default"
+
 receivers:
   - name: "default"
+    # ⚠️  CONFIGURAR RECEPTOR ANTES DE PRODUCCIÓN
+    # Descomentar el bloque adecuado:
+    #
+    # webhook_configs:
+    #   - url: "${ALERTMANAGER_WEBHOOK_URL}"
+    #     send_resolved: true
+    #
+    # email_configs:
+    #   - to: "${ALERT_EMAIL_TO}"
+    #     from: "${ALERT_EMAIL_FROM}"
+    #     smarthost: "${SMTP_HOST}:587"
+    #     auth_username: "${SMTP_USER}"
+    #     auth_password: "${SMTP_PASSWORD}"
+    #     send_resolved: true
+    #
+    # slack_configs:
+    #   - api_url: "${SLACK_WEBHOOK_URL}"
+    #     channel: "#ocm-alerts"
+    #     send_resolved: true
+    #     title: '{{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
 
 inhibit_rules:
-  - source_match:
-      severity: "critical"
-      alertname: "PipelineStalled"
-    target_match:
-      severity: "warning"
-      alertname: "HighPipelineErrorRate"
+  - source_matchers:
+      - severity = "critical"
+      - alertname = "PipelineStalled"
+    target_matchers:
+      - severity = "warning"
+      - alertname = "HighPipelineErrorRate"
     equal: ["exchange"]

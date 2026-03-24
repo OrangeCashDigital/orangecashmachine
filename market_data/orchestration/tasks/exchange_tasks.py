@@ -111,14 +111,42 @@ class ExchangeProbe:
 # Helpers internos (privados, sin estado)
 # ==========================================================
 
-def _calculate_max_concurrent(rate_limit_ms: Optional[int]) -> int:
+def _calculate_max_concurrent(
+    rate_limit_ms: Optional[int],
+    latency_ms:    Optional[int] = None,
+) -> int:
     """
-    Calcula concurrencia óptima basada en rateLimit del exchange.
-    Fórmula: 80% de la capacidad teórica, acotada a [1, 20].
+    Calcula concurrencia óptima combinando rateLimit y latencia observada.
+
+    Base: 80% de la capacidad teórica por rate limit, acotada a [1, 20].
+    Penalización adaptiva: latencia alta reduce concurrencia para no saturar
+    un exchange que ya está bajo presión.
+
+    Thresholds
+    ----------
+    latency > 2000ms → 25% de la base  (exchange muy lento / degradado)
+    latency > 1000ms → 50% de la base
+    latency >  500ms → 75% de la base
+    latency ≤  500ms → sin penalización
     """
     if not rate_limit_ms or rate_limit_ms <= 0:
-        return 10
-    return max(1, min(int(1000 / rate_limit_ms * 0.8), 20))
+        base = 10
+    else:
+        base = max(1, min(int(1000 / rate_limit_ms * 0.8), 20))
+
+    if not latency_ms or latency_ms <= 0:
+        return base
+
+    if latency_ms > 2000:
+        factor = 0.25
+    elif latency_ms > 1000:
+        factor = 0.5
+    elif latency_ms > 500:
+        factor = 0.75
+    else:
+        factor = 1.0
+
+    return max(1, int(base * factor))
 
 
 def _select_test_symbol(exchange: Any, preferred: Optional[str] = None) -> str:
@@ -327,7 +355,7 @@ async def validate_exchange_connection(
             exchange           = name,
             reachable          = True,
             rate_limit_ms      = rate_limit_ms,
-            max_concurrent     = _calculate_max_concurrent(rate_limit_ms),
+            max_concurrent     = _calculate_max_concurrent(rate_limit_ms, latency_ms),
             last_price         = last,
             bid                = bid,
             ask                = ask,

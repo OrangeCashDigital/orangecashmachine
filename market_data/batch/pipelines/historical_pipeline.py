@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import pandas as pd
-import yaml
 from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
@@ -51,10 +50,6 @@ from services.observability.metrics import (
 # ==========================================================
 
 DEFAULT_MAX_CONCURRENCY: int  = 6
-DEFAULT_CONFIG_PATH:     Path = Path("config/settings.yaml")
-LOG_ROTATION:            str  = "1 day"
-LOG_RETENTION:           str  = "14 days"
-LOG_LEVEL:               str  = "INFO"
 
 _TRANSIENT_ERRORS: tuple = (TimeoutError, ConnectionError, OSError)
 
@@ -125,26 +120,6 @@ class PipelineSummary:
                 logger.debug("  ↷ {}", r)
             else:
                 logger.debug("  ✓ {}", r)
-
-
-# ==========================================================
-# Carga de configuración standalone
-# ==========================================================
-
-def load_config(config_file: Path) -> Dict:
-    if not config_file.exists():
-        raise FileNotFoundError(f"Archivo de configuración no encontrado: {config_file}")
-    if not config_file.is_file():
-        raise ValueError(f"La ruta no es un archivo: {config_file}")
-    try:
-        data = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as exc:
-        logger.critical("Error al parsear YAML | file={} error={}", config_file, exc)
-        raise
-    if not isinstance(data, dict):
-        raise ValueError(f"La raíz del YAML debe ser un dict: {config_file}")
-    logger.info("Configuración cargada | file={}", config_file)
-    return data
 
 
 # ==========================================================

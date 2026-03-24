@@ -11,7 +11,8 @@
 #   • los servicios internos (Prefect, market-data) lo alcancen
 #   • el pipeline local (fuera de Docker) lo alcance vía localhost
 #
-# Prometheus y Grafana solo en ocm_public porque exponen UI.
+# Prometheus, Grafana, Alertmanager y Pushgateway en ocm_public
+# porque exponen UI o endpoints de ingesta desde el host.
 # Postgres solo en ocm_internal — nunca expuesto al exterior.
 #
 # Estado de servicios
@@ -22,42 +23,29 @@
 # ✅ prometheus      : activo — métricas
 # ✅ grafana         : activo — visualización
 # ✅ alertmanager    : activo — enrutamiento de alertas
-# ✅ pushgateway     : activo — recepción de métricas
+# ✅ pushgateway     : activo — recepción de métricas push
 # 🔕 market-data    : deshabilitado — corre en máquina local
 #                     rehabilitar para despliegue distribuido
 # ==========================================================
 
-# ----------------------------------------------------------
-# Extension: Logging centralizado con rotación
-# ----------------------------------------------------------
 x-logging: &default-logging
   driver: json-file
   options:
     max-size: "10m"
     max-file: "5"
 
-# ----------------------------------------------------------
-# Extension: Variables de entorno comunes (DRY)
-# ----------------------------------------------------------
 x-common-env: &common-env
   PYTHONUNBUFFERED: "1"
   OCM_CONFIG_DIR: /app/config
   OCM_ENV: ${OCM_ENV:-production}
 
-# ----------------------------------------------------------
-# Networks
-# ----------------------------------------------------------
 networks:
   ocm_internal:
     driver: bridge
-    internal: true   # sin acceso a internet — aislamiento de servicios
-
+    internal: true
   ocm_public:
-    driver: bridge   # acceso al host para desarrollo local y UIs
+    driver: bridge
 
-# ==========================================================
-# SERVICES
-# ==========================================================
 services:
 
   # --------------------------------------------------------
@@ -67,25 +55,21 @@ services:
     image: postgres:15.6-alpine
     container_name: ocm_postgres
     restart: unless-stopped
-
     environment:
       POSTGRES_USER: prefect
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prefect}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: prefect
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U prefect"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-
     logging: *default-logging
     networks:
-      - ocm_internal   # solo acceso interno — nunca expuesto al host
+      - ocm_internal
 
   # --------------------------------------------------------
   # PREFECT SERVER — Orquestador de pipelines
@@ -95,34 +79,27 @@ services:
     container_name: ocm_prefect_server
     init: true
     restart: unless-stopped
-
     command: >
       prefect server start
       --host 0.0.0.0
       --port 4200
-
     ports:
       - "${PREFECT_HOST_PORT:-4200}:4200"
-
     environment:
       <<: *common-env
       PREFECT_API_DATABASE_CONNECTION_URL: >-
-        postgresql+asyncpg://prefect:${POSTGRES_PASSWORD:-prefect}@postgres:5432/prefect
-
+        postgresql+asyncpg://prefect:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/prefect
     volumes:
       - prefect_data:/prefect
-
     depends_on:
       postgres:
         condition: service_healthy
-
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(\"http://localhost:4200/api/health\")"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
-
     logging: *default-logging
     networks:
       - ocm_internal
@@ -130,70 +107,60 @@ services:
 
   # --------------------------------------------------------
   # REDIS — Cursor store + cache
-  #
-  # Expuesto al host vía REDIS_HOST_PORT para que el pipeline
-  # local (fuera de Docker) pueda conectarse a localhost:6379.
-  # En producción distribuida: eliminar ports y usar solo
-  # ocm_internal con REDIS_HOST=ocm_redis.
+  # SEGURIDAD: REDIS_PASSWORD requerido
   # --------------------------------------------------------
   redis:
     image: redis:7.2-alpine
     container_name: ocm_redis
     init: true
     restart: unless-stopped
-
     command: >
       redis-server
       --appendonly yes
       --save 60 1000
       --maxmemory ${REDIS_MAX_MEMORY:-256mb}
       --maxmemory-policy allkeys-lru
-
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
     ports:
       - "${REDIS_HOST_PORT:-6379}:6379"
-
     volumes:
       - redis_data:/data
-
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 5s
-
     logging: *default-logging
     networks:
-      - ocm_internal   # acceso desde Prefect y market-data en Docker
-      - ocm_public     # acceso desde pipeline local vía localhost
+      - ocm_internal
+      - ocm_public
 
   # --------------------------------------------------------
   # PROMETHEUS — Recolección de métricas
-  #
-  # Requiere ./infra/prometheus.yml en el host.
-  # Crear con: mkdir -p infra && touch infra/prometheus.yml
   # --------------------------------------------------------
   prometheus:
     image: prom/prometheus:v2.51.2
     container_name: ocm_prometheus
     init: true
     restart: unless-stopped
-
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
-
     volumes:
       - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
-
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+      pushgateway:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 10s
-
     logging: *default-logging
     networks:
       - ocm_internal
@@ -207,95 +174,38 @@ services:
     container_name: ocm_grafana
     init: true
     restart: unless-stopped
-
     ports:
       - "${GRAFANA_HOST_PORT:-3000}:3000"
-
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/"
-
     volumes:
       - grafana_data:/var/lib/grafana
-
     depends_on:
       prometheus:
         condition: service_healthy
-
+      alertmanager:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:3000/api/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 15s
-
     logging: *default-logging
     networks:
       - ocm_internal
       - ocm_public
 
   # --------------------------------------------------------
-  # MARKET DATA PIPELINE — DESHABILITADO
-  #
-  # ⚠️  Corre actualmente en máquina local (fuera de Docker).
-  #     Conecta a Redis vía localhost:${REDIS_HOST_PORT}.
-  #     Rehabilitar SOLO para despliegue distribuido:
-  #       1. Descomentar este bloque
-  #       2. Cambiar REDIS_HOST a ocm_redis
-  #       3. Eliminar ports de redis (no necesario en cluster)
-  # --------------------------------------------------------
-  # market-data:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #
-  #   container_name: ocm_market_data
-  #   init: true
-  #   restart: on-failure
-  #
-  #   depends_on:
-  #     prefect-server:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #
-  #   environment:
-  #     <<: *common-env
-  #     PREFECT_API_URL: http://ocm_prefect_server:4200/api
-  #     REDIS_HOST: ocm_redis
-  #     REDIS_PORT: 6379
-  #     REDIS_DB: 0
-  #
-  #   volumes:
-  #     - ./config:/app/config:ro
-  #     - ./logs:/app/logs
-  #     - ./data_platform:/app/data_platform
-  #
-  #   working_dir: /app
-  #   command: python -m market_data.orchestration.entrypoint
-  #
-  #   read_only: true
-  #   tmpfs:
-  #     - /tmp
-  #
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: "1.0"
-  #         memory: 1G
-  #
-  #   logging: *default-logging
-  #   networks:
-  #     - ocm_internal
-
-  # --------------------------------------------------------
   # ALERTMANAGER — Enrutamiento y deduplicación de alertas
   # --------------------------------------------------------
-  ocm_alertmanager:
+  alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: ocm_alertmanager
+    init: true
     restart: unless-stopped
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
@@ -315,25 +225,73 @@ services:
       - ocm_internal
       - ocm_public
 
-  ocm_pushgateway:
+  # --------------------------------------------------------
+  # PUSHGATEWAY — Recepción de métricas push desde pipelines
+  # --------------------------------------------------------
+  pushgateway:
     image: prom/pushgateway:v1.8.0
     container_name: ocm_pushgateway
+    init: true
     restart: unless-stopped
     ports:
-      - "9091:9091"
+      - "${PUSHGATEWAY_HOST_PORT:-9091}:9091"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9091/-/healthy || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 5s
     logging: *default-logging
     networks:
       - ocm_internal
       - ocm_public
 
-# ==========================================================
-# VOLUMES — Estado persistente
-# ==========================================================
+  # --------------------------------------------------------
+  # MARKET DATA PIPELINE — DESHABILITADO
+  #
+  # ⚠️  Corre actualmente en máquina local (fuera de Docker).
+  #     Rehabilitar SOLO para despliegue distribuido:
+  #       1. Descomentar este bloque
+  #       2. Cambiar REDIS_HOST a redis (nombre de servicio)
+  #       3. Eliminar ports de redis
+  # --------------------------------------------------------
+  # market-data:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: ocm_market_data
+  #   init: true
+  #   restart: on-failure
+  #   depends_on:
+  #     prefect-server:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     <<: *common-env
+  #     PREFECT_API_URL: http://prefect-server:4200/api
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     REDIS_DB: 0
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
+  #   volumes:
+  #     - ./config:/app/config:ro
+  #     - ./logs:/app/logs
+  #     - ./data_platform:/app/data_platform
+  #   working_dir: /app
+  #   command: python -m market_data.orchestration.entrypoint
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "1.0"
+  #         memory: 1G
+  #   logging: *default-logging
+  #   networks:
+  #     - ocm_internal
+
 volumes:
   postgres_data:
     name: ocm_postgres_data

@@ -180,6 +180,18 @@ WRITE_LOCK_CONFLICTS = Counter(
     ["exchange", "symbol", "timeframe"],
 )
 
+WRITE_LOCK_STARVATION = Counter(
+    "ocm_write_lock_starvation_total",
+    "Escrituras que agotaron _LOCK_MAX_WAIT y procedieron sin lock",
+    ["exchange", "symbol", "timeframe"],
+)
+
+EXCHANGE_CIRCUIT_OPEN = Counter(
+    "ocm_exchange_circuit_open_total",
+    "Veces que el circuit breaker rechazó una llamada al exchange",
+    ["exchange", "operation"],
+)
+
 # ==========================================================
 # Servidor de métricas
 # ==========================================================

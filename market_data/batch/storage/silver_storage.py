@@ -43,6 +43,8 @@ import os
 import asyncio
 import hashlib
 import json
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from core.utils import get_git_hash
@@ -92,6 +94,57 @@ end
 
 
 # ==========================================================
+# Manifest Cache
+# ==========================================================
+
+class _ManifestCache:
+    """
+    Cache en memoria para manifests latest.json con TTL configurable.
+
+    Thread-safe via threading.Lock — safe en pipelines concurrentes con
+    múltiples threads accediendo al mismo SilverStorage.
+
+    Sin dependencia externa: no requiere Redis ni ningún servicio adicional.
+    Diseñado para ser instanciado una vez por SilverStorage y vivir
+    el tiempo de vida de la instancia.
+
+    Política de invalidación
+    ------------------------
+    - TTL pasivo: entradas expiradas se descartan en el próximo get().
+    - Invalidación activa: _write_version() llama a invalidate() tras
+      cada escritura, garantizando que la siguiente lectura ve el estado nuevo.
+    """
+
+    def __init__(self, ttl_seconds: float = 60.0) -> None:
+        self._ttl   = ttl_seconds
+        self._store: Dict[str, tuple] = {}  # key → (manifest, expires_at)
+        self._lock  = threading.Lock()
+
+    def get(self, key: str) -> Optional[Dict]:
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            manifest, expires_at = entry
+            if time.monotonic() > expires_at:
+                del self._store[key]
+                return None
+            return manifest
+
+    def set(self, key: str, manifest: Dict) -> None:
+        with self._lock:
+            self._store[key] = (manifest, time.monotonic() + self._ttl)
+
+    def invalidate(self, key: str) -> None:
+        with self._lock:
+            self._store.pop(key, None)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._store.clear()
+
+
+# ==========================================================
 # Exceptions
 # ==========================================================
 
@@ -137,6 +190,7 @@ class SilverStorage:
         self._exchange:    Optional[str] = exchange.lower() if exchange else None
         self._market_type: str = market_type.lower()
         self._redis = redis_client  # opcional — sin Redis, no hay lock
+        self._manifest_cache = _ManifestCache(ttl_seconds=60.0)
         # Registrar script Lua una sola vez por instancia.
         # Redis lo cachea por SHA1 — register_script solo hace overhead en el primer call.
         self._lock_release = (
@@ -166,7 +220,7 @@ class SilverStorage:
             return
 
         from services.observability.metrics import (
-            WRITE_LOCK_WAIT_DURATION, WRITE_LOCK_CONFLICTS,
+            WRITE_LOCK_WAIT_DURATION, WRITE_LOCK_CONFLICTS, WRITE_LOCK_STARVATION,
         )
 
         lock_key = (
@@ -204,6 +258,10 @@ class SilverStorage:
         ).observe(waited)
 
         if not acquired:
+            WRITE_LOCK_STARVATION.labels(
+                exchange=self._exchange or "shared",
+                symbol=symbol, timeframe=timeframe,
+            ).inc()
             logger.error(
                 "Write lock timeout | exchange={} symbol={} timeframe={} waited={}s — proceeding without lock",
                 self._exchange, symbol, timeframe, waited,
@@ -464,19 +522,48 @@ class SilverStorage:
         safe = self._safe_symbol(symbol)
         return self._partition_dir(symbol, timeframe, year, month, day) / f"{safe}_{timeframe}.parquet"
 
-    def find_partition_files(self, symbol: str, timeframe: str) -> List[Path]:
+    def find_partition_files(
+        self,
+        symbol:    str,
+        timeframe: str,
+        since:     Optional[pd.Timestamp] = None,
+        until:     Optional[pd.Timestamp] = None,
+    ) -> List[Path]:
         """
         Lista archivos de partición usando latest.json como índice primario.
 
         Evita rglob O(N archivos) — lee el manifest en O(1) y resuelve paths.
         Fallback a rglob si no existe versión (dataset nuevo o sin versión aún).
-        """
-        versions_dir = self._dataset_root(symbol, timeframe) / "_versions"
-        latest_path  = versions_dir / "latest.json"
 
-        if latest_path.exists():
+        Parameters
+        ----------
+        since : pd.Timestamp, optional
+            Excluye particiones cuyo max_ts < since (sin datos relevantes).
+        until : pd.Timestamp, optional
+            Excluye particiones cuyo min_ts > until (sin datos relevantes).
+        """
+        # Cache-first: evita I/O repetido en pipelines concurrentes.
+        # TTL=60s — balance entre frescura y rendimiento.
+        # Invalidación activa en _write_version() garantiza consistencia post-escritura.
+        _cache_key = f"{symbol}:{timeframe}"
+        manifest   = self._manifest_cache.get(_cache_key)
+
+        if manifest is None:
+            versions_dir = self._dataset_root(symbol, timeframe) / "_versions"
+            latest_path  = versions_dir / "latest.json"
+            if latest_path.exists():
+                try:
+                    manifest = json.loads(latest_path.read_text(encoding="utf-8"))
+                    self._manifest_cache.set(_cache_key, manifest)
+                except Exception as exc:
+                    logger.warning(
+                        "latest.json read failed, fallback a rglob | "
+                        "symbol={} timeframe={} error={}",
+                        symbol, timeframe, exc,
+                    )
+
+        if manifest is not None:
             try:
-                manifest   = json.loads(latest_path.read_text(encoding="utf-8"))
                 partitions = manifest.get("partitions", [])
                 files = []
                 for p in partitions:
@@ -487,32 +574,34 @@ class SilverStorage:
                             full_path,
                         )
                         continue
-                    # Validación de integridad: checksum opcional pero recomendado.
-                    # Solo si el manifest tiene checksum y el archivo es pequeño (<50MB).
-                    # En producción con archivos grandes, omitir checksum en lectura caliente.
-                    expected_checksum = p.get("checksum")
-                    if expected_checksum and full_path.stat().st_size < 50 * 1024 * 1024:
-                        try:
-                            actual = hashlib.md5(
-                                pd.util.hash_pandas_object(
-                                    pd.read_parquet(full_path)[
-                                        ["timestamp","open","high","low","close","volume"]
-                                    ],
-                                    index=False,
-                                ).values.tobytes()
-                            ).hexdigest()
-                            if actual != expected_checksum:
-                                logger.error(
-                                    "Checksum mismatch — partición corrupta | path={} "
-                                    "expected={} actual={}",
-                                    full_path, expected_checksum, actual,
-                                )
-                                continue  # excluir del resultado — no usar datos corruptos
-                        except Exception as exc:
-                            logger.warning(
-                                "Checksum validation failed (non-critical) | path={} error={}",
-                                full_path, exc,
+                    # Pruning temporal: excluir particiones fuera del rango solicitado.
+                    if since or until:
+                        part_min = p.get("min_ts")
+                        part_max = p.get("max_ts")
+                        if part_min and part_max:
+                            try:
+                                p_min = pd.Timestamp(part_min, tz="UTC")
+                                p_max = pd.Timestamp(part_max, tz="UTC")
+                                if since and p_max < since:
+                                    continue  # partición anterior al rango
+                                if until and p_min > until:
+                                    continue  # partición posterior al rango
+                            except Exception:
+                                pass  # si falla el parse, incluir partición (safe)
+
+                    # Validación O(1): file_size del manifest vs disco.
+                    # Evita pd.read_parquet en hot path — coste O(N filas) → O(1).
+                    # Para validación profunda de contenido usar verify_integrity() explícito.
+                    expected_size = p.get("file_size")
+                    if expected_size is not None:
+                        actual_size = full_path.stat().st_size
+                        if actual_size != expected_size:
+                            logger.error(
+                                "File size mismatch — partición posiblemente corrupta | "
+                                "path={} expected_bytes={} actual_bytes={}",
+                                full_path, expected_size, actual_size,
                             )
+                            continue  # excluir del resultado
                     files.append(full_path)
                 if files:
                     return sorted(files)
@@ -522,6 +611,7 @@ class SilverStorage:
                     "latest.json read failed, fallback a rglob | symbol={} timeframe={} error={}",
                     symbol, timeframe, exc,
                 )
+                self._manifest_cache.invalidate(_cache_key)
 
         # Fallback: rglob (dataset nuevo o manifest corrupto)
         return self._find_partition_files(symbol, timeframe)
@@ -679,6 +769,9 @@ class SilverStorage:
         latest_tmp.write_text(serialized, encoding="utf-8")
         latest_tmp.replace(latest_path)
 
+        # Invalidar cache — el manifest acaba de cambiar en disco
+        self._manifest_cache.invalidate(f"{symbol}:{timeframe}")
+
         logger.info(
             "Dataset version created | {}/{} {} exchange={} partitions={}",
             symbol, timeframe, version_id, self._exchange or "shared", len(partitions),
@@ -754,6 +847,9 @@ def _write_partition_meta(
             pd.util.hash_pandas_object(df[["timestamp","open","high","low","close","volume"]], index=False).values.tobytes()
         ).hexdigest()
 
+        file_path = meta_path.with_suffix(".parquet")
+        file_size = file_path.stat().st_size if file_path.exists() else None
+
         meta: Dict = {
             "symbol":     symbol,
             "timeframe":  timeframe,
@@ -761,6 +857,7 @@ def _write_partition_meta(
             "min_ts":     ts_col.min().isoformat(),
             "max_ts":     ts_col.max().isoformat(),
             "checksum":   checksum,
+            "file_size":  file_size,
             "written_at": datetime.now(timezone.utc).isoformat(),
             "layer":      "silver",
         }

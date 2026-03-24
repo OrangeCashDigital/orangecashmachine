@@ -1,4 +1,3 @@
-# alerts.yml
 groups:
 
   - name: ocm_pipeline
@@ -21,8 +20,8 @@ groups:
 
       - alert: PipelineHeartbeatDead
         expr: |
-          increase(ocm_pipeline_heartbeat_total[3h]) == 0
-        for: 5m
+          absent(rate(ocm_pipeline_heartbeat_total[15m]) > 0)
+        for: 10m
         labels:
           severity: critical
           team: data
@@ -30,8 +29,8 @@ groups:
           summary: "Heartbeat detenido | exchange={{ $labels.exchange }}"
           description: >
             El pipeline de {{ $labels.exchange }} no ha incrementado su heartbeat
-            en 3 horas. Verificar que el pipeline esté corriendo y que el
-            Pushgateway (localhost:9091) esté accesible.
+            en los últimos 15 minutos. Verificar que el pipeline esté corriendo
+            y que el Pushgateway (localhost:9091) esté accesible.
 
       - alert: HighPipelineErrorRate
         expr: |

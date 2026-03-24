@@ -34,6 +34,7 @@ import time
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import ccxt.async_support as ccxt
+import pybreaker
 from loguru import logger
 
 if TYPE_CHECKING:
@@ -56,6 +57,13 @@ _FETCH_OHLCV_TIMEOUT   = 30.0
 _FETCH_TRADES_TIMEOUT  = 15.0
 
 
+# Circuit breaker: abre tras 5 fallos consecutivos, resetea a los 60s.
+# Protege contra cascading failures cuando un exchange está degradado.
+# Compartido por instancia — un breaker por exchange+adapter.
+_CB_FAIL_MAX:       int   = 5
+_CB_RESET_TIMEOUT:  int   = 60
+
+
 # ==========================================================
 # Exceptions
 # ==========================================================
@@ -68,6 +76,9 @@ class UnsupportedExchangeError(ExchangeAdapterError):
 
 class ExchangeConnectionError(ExchangeAdapterError):
     """Fallo de conexión tras retries."""
+
+class ExchangeCircuitOpenError(ExchangeAdapterError):
+    """Circuit breaker abierto — exchange en cooldown."""
 
 
 # ==========================================================
@@ -113,6 +124,14 @@ class CCXTAdapter:
         self._init_lock:         asyncio.Lock            = asyncio.Lock()
         self._markets_cache:     Optional[Dict[str, Any]] = None
         self._markets_cached_at: float = 0.0
+        # Circuit breaker por instancia — un breaker por exchange.
+        # Si el exchange falla _CB_FAIL_MAX veces consecutivas, abre el circuito
+        # y lanza ExchangeCircuitOpenError hasta que expire _CB_RESET_TIMEOUT.
+        self._breaker = pybreaker.CircuitBreaker(
+            fail_max      = _CB_FAIL_MAX,
+            reset_timeout = _CB_RESET_TIMEOUT,
+            name          = self._exchange_id,
+        )
 
     # ----------------------------------------------------------
     # Lifecycle
@@ -190,10 +209,21 @@ class CCXTAdapter:
 
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
         client = await self._get_client()
-        return await asyncio.wait_for(
-            client.fetch_ticker(symbol),
-            timeout=_FETCH_TICKER_TIMEOUT,
-        )
+        try:
+            async def _call():
+                return await asyncio.wait_for(
+                    client.fetch_ticker(symbol),
+                    timeout=_FETCH_TICKER_TIMEOUT,
+                )
+            return await self._breaker.call_async(_call)
+        except pybreaker.CircuitBreakerError as exc:
+            from services.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+            EXCHANGE_CIRCUIT_OPEN.labels(
+                exchange=self._exchange_id, operation="fetch_ticker"
+            ).inc()
+            raise ExchangeCircuitOpenError(
+                f"Circuit open for '{self._exchange_id}' — ticker unavailable"
+            ) from exc
 
     async def fetch_ohlcv(
         self,
@@ -212,10 +242,24 @@ class CCXTAdapter:
             now_ts = int(time.time())
             if since > now_ts:
                 params["endAt"] = now_ts
-        return await asyncio.wait_for(
-            client.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params=params),
-            timeout=_FETCH_OHLCV_TIMEOUT,
-        )
+        try:
+            async def _call():
+                return await asyncio.wait_for(
+                    client.fetch_ohlcv(
+                        symbol, timeframe,
+                        since=since, limit=limit, params=params,
+                    ),
+                    timeout=_FETCH_OHLCV_TIMEOUT,
+                )
+            return await self._breaker.call_async(_call)
+        except pybreaker.CircuitBreakerError as exc:
+            from services.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+            EXCHANGE_CIRCUIT_OPEN.labels(
+                exchange=self._exchange_id, operation="fetch_ohlcv"
+            ).inc()
+            raise ExchangeCircuitOpenError(
+                f"Circuit open for '{self._exchange_id}' — ohlcv unavailable"
+            ) from exc
 
     async def fetch_trades(
         self,
@@ -223,10 +267,21 @@ class CCXTAdapter:
         limit:  int = 100,
     ) -> List[Dict[str, Any]]:
         client = await self._get_client()
-        return await asyncio.wait_for(
-            client.fetch_trades(symbol, limit=limit),
-            timeout=_FETCH_TRADES_TIMEOUT,
-        )
+        try:
+            async def _call():
+                return await asyncio.wait_for(
+                    client.fetch_trades(symbol, limit=limit),
+                    timeout=_FETCH_TRADES_TIMEOUT,
+                )
+            return await self._breaker.call_async(_call)
+        except pybreaker.CircuitBreakerError as exc:
+            from services.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+            EXCHANGE_CIRCUIT_OPEN.labels(
+                exchange=self._exchange_id, operation="fetch_trades"
+            ).inc()
+            raise ExchangeCircuitOpenError(
+                f"Circuit open for '{self._exchange_id}' — trades unavailable"
+            ) from exc
 
     async def load_markets(self) -> Dict[str, Any]:
         client = await self._get_client()
