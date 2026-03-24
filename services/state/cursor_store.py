@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import time
@@ -74,15 +75,62 @@ def _make_metrics():
 _get_latency, _update_total, _miss_total, _error_total, _active_cursors, _cursor_lag = _make_metrics()
 
 
+async def _retry_async(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS):
+    """
+    Versión async de _retry: usa asyncio.sleep en lugar de time.sleep.
+    Evita bloquear el event loop cuando Redis está caído o lento.
+    Solo reintenta en ConnectionError y TimeoutError — el resto propaga inmediato.
+    """
+    last_exc: Exception = RuntimeError("no attempts")
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
+            last_exc = exc
+            if attempt < attempts - 1:
+                wait = (base_ms * (2 ** attempt)) / 1000.0
+                logger.warning(
+                    "Redis retry {}/{} in {:.0f}ms | error={}",
+                    attempt + 1, attempts, base_ms * (2 ** attempt), exc,
+                )
+                await asyncio.sleep(wait)
+    raise last_exc
+
+
+def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS):
+    """
+    Versión síncrona — solo para contextos no-async (healthcheck, tests).
+    En pipelines async usar _retry_async.
+    """
+    last_exc: Exception = RuntimeError("no attempts")
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
+            last_exc = exc
+            if attempt < attempts - 1:
+                wait = (base_ms * (2 ** attempt)) / 1000.0
+                logger.warning(
+                    "Redis retry {}/{} in {:.0f}ms | error={}",
+                    attempt + 1, attempts, base_ms * (2 ** attempt), exc,
+                )
+                time.sleep(wait)
+    raise last_exc
+
+
 class RedisCursorStore:
     """
     Cursor store backed by Redis. Production-grade v5 (congelado).
 
     Keys individuales por cursor para TTL real por campo.
-    Trade-offs documentados en el modulo.
     list_cursors: pipeline batching (SCAN + 1 roundtrip, no N+1).
     delete_exchange: batches de 500 (no carga todo en memoria).
     cursor_lag: solo label exchange (evita explosion de cardinalidad Prometheus).
+
+    Async I/O
+    ---------
+    get() y update() usan _retry_async — no bloquean el event loop.
+    is_healthy() usa _retry síncrono — solo se llama fuera de pipelines.
     """
 
     def __init__(
@@ -106,9 +154,10 @@ class RedisCursorStore:
         )
         self._client     = redis.Redis(connection_pool=pool)
         self._cas_script = self._client.register_script(_CAS_SCRIPT)
-        logger.debug("CursorStore v5 ready | host={}:{} db={} env={} ttl_days={}", host, port, db, env, ttl_days)
-
-
+        logger.debug(
+            "CursorStore v5 ready | host={}:{} db={} env={} ttl_days={}",
+            host, port, db, env, ttl_days,
+        )
 
     def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
         return f"{self._env}:cursor:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}"
@@ -130,11 +179,11 @@ class RedisCursorStore:
         except Exception:
             return False
 
-    def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
+    async def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
         key = self._key(exchange, symbol, timeframe)
         t0  = time.monotonic()
         try:
-            raw = _retry(lambda: self._client.get(key))
+            raw = await _retry_async(lambda: self._client.get(key))
             if _get_latency:
                 _get_latency.labels(exchange=exchange).observe(time.monotonic() - t0)
             if raw is None:
@@ -147,13 +196,17 @@ class RedisCursorStore:
             return ts_ms
         except Exception as exc:
             if _error_total: _error_total.labels(operation="get").inc()
-            logger.warning("CursorStore.get failed (fallback to parquet) | key={} error={}", key, exc)
+            logger.warning(
+                "CursorStore.get failed (fallback to parquet) | key={} error={}", key, exc
+            )
             return None
 
-    def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool:
+    async def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool:
         key = self._key(exchange, symbol, timeframe)
         try:
-            result = _retry(lambda: self._cas_script(keys=[key], args=[str(timestamp_ms), str(self._ttl)]))
+            result = await _retry_async(
+                lambda: self._cas_script(keys=[key], args=[str(timestamp_ms), str(self._ttl)])
+            )
             if result == 0:
                 logger.debug("Cursor CAS skip | key={} new={}", key, timestamp_ms)
                 return False
@@ -163,7 +216,9 @@ class RedisCursorStore:
             return True
         except Exception as exc:
             if _error_total: _error_total.labels(operation="update").inc()
-            logger.warning("CursorStore.update failed (non-critical) | key={} error={}", key, exc)
+            logger.warning(
+                "CursorStore.update failed (non-critical) | key={} error={}", key, exc
+            )
             return False
 
     def delete(self, exchange: str, symbol: str, timeframe: str) -> bool:
@@ -189,7 +244,9 @@ class RedisCursorStore:
             return deleted
         except Exception as exc:
             if _error_total: _error_total.labels(operation="delete_exchange").inc()
-            logger.warning("CursorStore.delete_exchange failed | exchange={} error={}", exchange, exc)
+            logger.warning(
+                "CursorStore.delete_exchange failed | exchange={} error={}", exchange, exc
+            )
             return 0
 
     def list_cursors(self, exchange: str) -> dict[str, int]:
@@ -211,7 +268,9 @@ class RedisCursorStore:
             return result
         except Exception as exc:
             if _error_total: _error_total.labels(operation="list").inc()
-            logger.warning("CursorStore.list_cursors failed | exchange={} error={}", exchange, exc)
+            logger.warning(
+                "CursorStore.list_cursors failed | exchange={} error={}", exchange, exc
+            )
             return {}
 
     def scan_exchanges(self) -> list[str]:
@@ -257,6 +316,7 @@ class RedisCursorStore:
             if cursor == 0:
                 break
 
+
 class InMemoryCursorStore:
     """CursorStore en memoria. Uso: tests unitarios y entornos sin Redis."""
 
@@ -267,10 +327,10 @@ class InMemoryCursorStore:
     def is_healthy(self) -> bool:
         return True
 
-    def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
+    async def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
         return self._store.get(f"{exchange}:{symbol}:{timeframe}")
 
-    def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool:
+    async def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool:
         key     = f"{exchange}:{symbol}:{timeframe}"
         current = self._store.get(key)
         if current is not None and current > timestamp_ms:
@@ -285,7 +345,7 @@ class InMemoryCursorStore:
         return self._store_raw.get(key)
 
     def set_raw(self, key: str, value: str, ttl_seconds: int) -> None:
-        self._store_raw[key] = value  # TTL ignorado en memoria — solo para tests
+        self._store_raw[key] = value
 
 
 def _encode(value: str) -> str:
@@ -297,19 +357,6 @@ def _decode(value: str) -> str:
         value += "=" * padding
     return base64.urlsafe_b64decode(value).decode()
 
-def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS):
-    last_exc: Exception = RuntimeError("no attempts")
-    for attempt in range(attempts):
-        try:
-            return fn()
-        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
-            last_exc = exc
-            if attempt < attempts - 1:
-                wait = (base_ms * (2 ** attempt)) / 1000.0
-                logger.warning("Redis ConnectionError, retry {}/{} in {:.0f}ms | error={}", attempt + 1, attempts, base_ms * (2 ** attempt), exc)
-                time.sleep(wait)
-    raise last_exc
-
 def _batched(iterable: Iterator, size: int) -> Iterator[list]:
     it = iter(iterable)
     while True:
@@ -317,6 +364,7 @@ def _batched(iterable: Iterator, size: int) -> Iterator[list]:
         if not batch:
             break
         yield batch
+
 
 def build_cursor_store_from_config(config=None) -> RedisCursorStore:
     """

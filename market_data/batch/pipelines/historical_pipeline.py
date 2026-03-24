@@ -65,12 +65,6 @@ _TRANSIENT_ERRORS: tuple = (TimeoutError, ConnectionError, OSError)
 
 @dataclass
 class PairResult:
-    """
-    Resultado inmutable del procesamiento de un par símbolo/timeframe.
-
-    Diseñado para ser creado por coroutines y agregado sin estado
-    compartido mutable (SafeOps).
-    """
     symbol:      str
     timeframe:   str
     rows:        int  = 0
@@ -97,31 +91,17 @@ class PairResult:
 
 @dataclass
 class PipelineSummary:
-    """
-    Agrega y expone métricas del pipeline completo.
-
-    Métricas de observabilidad
-    --------------------------
-    • total / succeeded / skipped / failed
-    • total_rows         — volumen ingestado
-    • throughput         — filas por segundo
-    • duration_ms        — duración total
-    """
     results:     List[PairResult] = field(default_factory=list)
     duration_ms: int              = 0
 
     @property
     def total(self)     -> int: return len(self.results)
-
     @property
     def succeeded(self) -> int: return sum(1 for r in self.results if r.success)
-
     @property
     def skipped(self)   -> int: return sum(1 for r in self.results if r.skipped)
-
     @property
     def failed(self)    -> int: return sum(1 for r in self.results if r.error)
-
     @property
     def total_rows(self) -> int: return sum(r.rows for r in self.results)
 
@@ -152,29 +132,17 @@ class PipelineSummary:
 # ==========================================================
 
 def load_config(config_file: Path) -> Dict:
-    """
-    Carga configuración YAML con validaciones tempranas (fail-fast).
-
-    Raises
-    ------
-    FileNotFoundError  – archivo no encontrado
-    ValueError         – YAML vacío o estructura inválida
-    yaml.YAMLError     – YAML malformado
-    """
     if not config_file.exists():
         raise FileNotFoundError(f"Archivo de configuración no encontrado: {config_file}")
     if not config_file.is_file():
         raise ValueError(f"La ruta no es un archivo: {config_file}")
-
     try:
         data = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
         logger.critical("Error al parsear YAML | file={} error={}", config_file, exc)
         raise
-
     if not isinstance(data, dict):
         raise ValueError(f"La raíz del YAML debe ser un dict: {config_file}")
-
     logger.info("Configuración cargada | file={}", config_file)
     return data
 
@@ -186,18 +154,15 @@ def load_config(config_file: Path) -> Dict:
 def _build_cursor_store_safe() -> CursorStore:
     """
     Construye CursorStore desde config centralizada.
-    SafeOps: si Redis no esta disponible, retorna InMemoryCursorStore
-    para no bloquear el pipeline.
+    SafeOps: si Redis no está disponible, retorna InMemoryCursorStore.
     """
     try:
         store = build_cursor_store_from_config()
         if store.is_healthy():
             return store
-        from loguru import logger
         logger.warning("Redis no disponible — cursor store en memoria (fallback)")
         return InMemoryCursorStore()
     except Exception as exc:
-        from loguru import logger
         logger.warning("CursorStore init failed (fallback) | error={}", exc)
         return InMemoryCursorStore()
 
@@ -209,20 +174,14 @@ class HistoricalPipelineAsync:
     Arquitectura de concurrencia
     ----------------------------
     • Semáforo acotado controla backpressure (max_concurrency activas).
-    • El fetcher NO tiene semáforo propio → evita doble throttling.
     • asyncio.gather con return_exceptions=False propaga CancelledError
       limpiamente sin suprimir cancelaciones del sistema.
 
-    Shutdown limpio
-    ---------------
-    El bloque finally en run() garantiza cierre del fetcher ante
-    CancelledError, TimeoutError o cualquier excepción inesperada.
-
-    Observabilidad
-    --------------
-    • Progreso por par: índice, rows y duración individual.
-    • Métricas agregadas: throughput, duración total del pipeline.
-    • Clasificación de errores: transient vs fatal.
+    Cursor store
+    ------------
+    get() y update() son async — siempre se usa await.
+    El cursor se actualiza DESPUÉS de persistir en Silver (consistencia).
+    Si Redis falla, SafeOps garantiza que no interrumpe el pipeline.
     """
 
     def __init__(
@@ -252,25 +211,21 @@ class HistoricalPipelineAsync:
         self.max_concurrency = max_concurrency
         self.market_type     = market_type.lower()
 
-        # exchange_id resuelto una sola vez — DRY
         self._exchange_id    = getattr(exchange_client, "_exchange_id", "unknown")
         self._bronze_storage = BronzeStorage(exchange=self._exchange_id)
         self._silver_storage = SilverStorage(exchange=self._exchange_id, market_type=self.market_type)
         self._semaphore      = asyncio.Semaphore(max_concurrency)
-
-        # CursorStore: Redis si disponible, InMemory como fallback (SafeOps)
         self._cursor: CursorStore = cursor_store or _build_cursor_store_safe()
-
-        self._quality_pipeline = QualityPipeline()
+        self._quality_pipeline    = QualityPipeline()
 
         self._fetcher = HistoricalFetcherAsync(
-            storage            = self._silver_storage,
-            transformer        = OHLCVTransformer(),
-            exchange_client    = exchange_client,
-            cursor_store       = self._cursor,
-            market_type        = market_type,
-            config_start_date  = start_date,
-            backfill_mode      = backfill_mode,
+            storage           = self._silver_storage,
+            transformer       = OHLCVTransformer(),
+            exchange_client   = exchange_client,
+            cursor_store      = self._cursor,
+            market_type       = market_type,
+            config_start_date = start_date,
+            backfill_mode     = backfill_mode,
         )
 
     # ----------------------------------------------------------
@@ -278,20 +233,6 @@ class HistoricalPipelineAsync:
     # ----------------------------------------------------------
 
     async def run(self) -> PipelineSummary:
-        """
-        Ejecuta el pipeline completo.
-
-        Flujo
-        -----
-        1. Construir lista de pares (símbolo × timeframe)
-        2. Lanzar coroutines con backpressure via semáforo
-        3. Agregar resultados en PipelineSummary con métricas
-        4. Cerrar fetcher en finally (shutdown limpio)
-
-        Returns
-        -------
-        PipelineSummary con métricas completas.
-        """
         pairs       = [(s, tf) for s in self.symbols for tf in self.timeframes]
         total_pairs = len(pairs)
 
@@ -348,18 +289,6 @@ class HistoricalPipelineAsync:
         idx:       int,
         total:     int,
     ) -> PairResult:
-        """
-        Descarga y persiste un único par símbolo/timeframe.
-
-        Aislamiento de errores
-        ----------------------
-        Siempre retorna PairResult — nunca propaga excepciones al gather,
-        excepto CancelledError que se re-eleva para respetar el shutdown.
-
-        Observabilidad
-        --------------
-        Loggea progreso (idx/total), rows y duración por par.
-        """
         result     = PairResult(symbol=symbol, timeframe=timeframe)
         pair_start = time.monotonic()
 
@@ -385,14 +314,12 @@ class HistoricalPipelineAsync:
                     )
                     return result
 
-                # Bronze: datos crudos tal como llegan (append-only, sin merge)
                 run_id = self._bronze_storage.append(
                     df        = df,
                     symbol    = symbol,
                     timeframe = timeframe,
                 )
 
-                # Quality enforcement: evaluar antes de persistir en Silver
                 qres = self._quality_pipeline.run(
                     df        = df,
                     symbol    = symbol,
@@ -401,20 +328,22 @@ class HistoricalPipelineAsync:
                 )
 
                 QUALITY_DECISIONS.labels(
-                    exchange=self._exchange_id, market_type=self.market_type,
-                    symbol=symbol, timeframe=timeframe, decision=qres.tier.value,
+                    exchange    = self._exchange_id,
+                    market_type = self.market_type,
+                    symbol      = symbol,
+                    timeframe   = timeframe,
+                    decision    = qres.tier.value,
                 ).inc()
 
                 if not qres.accepted:
                     logger.warning(
-                        'Par rechazado por calidad [{}/{}] | exchange={} symbol={} timeframe={} score={:.1f}',
+                        "Par rechazado por calidad [{}/{}] | exchange={} symbol={} timeframe={} score={:.1f}",
                         idx, total, self._exchange_id, symbol, timeframe, qres.score,
                     )
                     result.skipped     = True
                     result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                     return result
 
-                # Silver: persistir con tier correcto (clean o flagged)
                 self._silver_storage.save_ohlcv(
                     df        = qres.df,
                     symbol    = symbol,
@@ -422,23 +351,34 @@ class HistoricalPipelineAsync:
                     run_id    = run_id,
                 )
 
-                # Cursor: actualizar DESPUES de persistir en storage (consistencia)
-                # Si Redis falla, SafeOps garantiza que no interrumpe el pipeline
+                # Cursor: await obligatorio — update es async.
+                # Se actualiza DESPUÉS de persistir en Silver (consistencia garantizada).
+                # Si Redis falla, SafeOps en cursor_store.update absorbe el error.
                 if not df.empty:
-                    tf_ms_cursor = timeframe_to_ms(timeframe)
-                    last_ts_ms = int(df["timestamp"].max().timestamp() * 1000) if hasattr(df["timestamp"].max(), "timestamp") else int(df["timestamp"].max())
-                    self._cursor.update(self._exchange_id, symbol, timeframe, last_ts_ms + tf_ms_cursor)
+                    tf_ms      = timeframe_to_ms(timeframe)
+                    last_ts_ms = (
+                        int(df["timestamp"].max().timestamp() * 1000)
+                        if hasattr(df["timestamp"].max(), "timestamp")
+                        else int(df["timestamp"].max())
+                    )
+                    await self._cursor.update(
+                        self._exchange_id, symbol, timeframe, last_ts_ms + tf_ms
+                    )
 
                 result.rows        = len(df)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                # Métricas Prometheus
-                ROWS_INGESTED.labels(exchange=self._exchange_id, symbol=symbol, timeframe=timeframe).inc(result.rows)
-                PAIR_DURATION.labels(exchange=self._exchange_id, symbol=symbol, timeframe=timeframe).observe(result.duration_ms / 1000)
+
+                ROWS_INGESTED.labels(
+                    exchange=self._exchange_id, symbol=symbol, timeframe=timeframe
+                ).inc(result.rows)
+                PAIR_DURATION.labels(
+                    exchange=self._exchange_id, symbol=symbol, timeframe=timeframe
+                ).observe(result.duration_ms / 1000)
 
                 logger.info(
                     "Par completado [{}/{}] | exchange={} market={} symbol={} timeframe={} rows={} duration={}ms",
-                    idx, total, self._exchange_id, self.market_type, symbol, timeframe,
-                    result.rows, result.duration_ms,
+                    idx, total, self._exchange_id, self.market_type,
+                    symbol, timeframe, result.rows, result.duration_ms,
                 )
 
             except asyncio.CancelledError:
@@ -448,11 +388,13 @@ class HistoricalPipelineAsync:
                 result.error       = str(exc)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 error_type = "transient" if result.is_transient_error else "fatal"
-                PIPELINE_ERRORS.labels(exchange=self._exchange_id, error_type=error_type).inc()
+                PIPELINE_ERRORS.labels(
+                    exchange=self._exchange_id, error_type=error_type
+                ).inc()
                 logger.error(
                     "Par fallido [{}/{}] | exchange={} market={} symbol={} timeframe={} error={} duration={}ms",
-                    idx, total, self._exchange_id, self.market_type, symbol, timeframe,
-                    exc, result.duration_ms,
+                    idx, total, self._exchange_id, self.market_type,
+                    symbol, timeframe, exc, result.duration_ms,
                 )
 
         return result
@@ -462,12 +404,7 @@ class HistoricalPipelineAsync:
 # Validación de inputs
 # ==========================================================
 
-def _validate_inputs(
-    symbols:    List[str],
-    timeframes: List[str],
-    start_date: str,
-) -> None:
-    """Validación temprana fail-fast de inputs del constructor."""
+def _validate_inputs(symbols: List[str], timeframes: List[str], start_date: str) -> None:
     if not symbols:
         raise ValueError("La lista de símbolos no puede estar vacía.")
     if not timeframes:
@@ -477,11 +414,6 @@ def _validate_inputs(
 
 
 def _parse_start_date(start_date: str) -> pd.Timestamp:
-    """
-    Parsea y valida start_date (fail-fast).
-
-    Raises ValueError si el formato es inválido o la fecha está en el futuro.
-    """
     try:
         ts = pd.Timestamp(start_date)
     except Exception:
@@ -489,11 +421,9 @@ def _parse_start_date(start_date: str) -> pd.Timestamp:
             f"start_date tiene formato inválido: '{start_date}'. "
             "Se esperaba ISO 8601, ej: '2022-01-01'."
         )
-
     if ts > pd.Timestamp.now(tz="UTC"):
         raise ValueError(
             f"start_date '{start_date}' está en el futuro. "
             "El pipeline histórico requiere una fecha pasada."
         )
-
     return ts

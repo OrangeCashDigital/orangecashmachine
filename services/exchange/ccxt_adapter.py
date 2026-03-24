@@ -18,6 +18,12 @@ SOLID   – SRP + DIP (adapter desacoplado, credenciales resueltas aquí)
 DRY     – init centralizado
 KISS    – API mínima y clara
 SafeOps – retries, timeouts, cierre seguro
+
+Timeouts
+--------
+Cada método de I/O tiene su propio asyncio.wait_for con timeout explícito.
+El timeout del task de Prefect es el techo máximo — estos son los límites
+operativos por llamada individual.
 """
 
 from __future__ import annotations
@@ -38,11 +44,16 @@ if TYPE_CHECKING:
 # Constants
 # ==========================================================
 
-_INIT_RETRIES        = 3
-_BACKOFF_BASE        = 2.0
-_LOAD_MARKETS_TIMEOUT = 30.0
-_DEFAULT_EXCHANGE    = "binance"
-_MARKETS_CACHE_TTL   = 60.0  # segundos — reutilizar markets en reconnect
+_INIT_RETRIES          = 3
+_BACKOFF_BASE          = 2.0
+_LOAD_MARKETS_TIMEOUT  = 30.0
+_DEFAULT_EXCHANGE      = "binance"
+_MARKETS_CACHE_TTL     = 60.0   # segundos — reutilizar markets en reconnect
+
+# Timeouts por operación (segundos)
+_FETCH_TICKER_TIMEOUT  = 10.0
+_FETCH_OHLCV_TIMEOUT   = 30.0
+_FETCH_TRADES_TIMEOUT  = 15.0
 
 
 # ==========================================================
@@ -96,7 +107,6 @@ class CCXTAdapter:
         self._api_key      = self._resolve_api_key(api_key, config)
         self._api_secret   = self._resolve_api_secret(api_secret, config)
         self._api_password = self._resolve_api_password(config)
-        # defaultType: parámetro explícito > config.markets.futures.defaultType > None (spot)
         self._default_type = default_type or self._resolve_default_type(config)
 
         self._client:            Optional[ccxt.Exchange] = None
@@ -139,10 +149,8 @@ class CCXTAdapter:
             session = getattr(self._client, "session", None)
             if session is None:
                 return True
-            # Sesión cerrada explícitamente
             if hasattr(session, "closed") and session.closed:
                 return False
-            # Sesión ligada a otro event loop (cross-task Prefect)
             session_loop = getattr(session, "_loop", None) or getattr(session, "connector", None)
             if session_loop is not None:
                 try:
@@ -177,12 +185,15 @@ class CCXTAdapter:
         await self.close()
 
     # ----------------------------------------------------------
-    # Public API
+    # Public API — todos los métodos de I/O tienen timeout explícito
     # ----------------------------------------------------------
 
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
         client = await self._get_client()
-        return await client.fetch_ticker(symbol)
+        return await asyncio.wait_for(
+            client.fetch_ticker(symbol),
+            timeout=_FETCH_TICKER_TIMEOUT,
+        )
 
     async def fetch_ohlcv(
         self,
@@ -192,18 +203,19 @@ class CCXTAdapter:
         limit:       int = 100,
         market_type: Optional[str] = None,
     ) -> List[List[Any]]:
-        import time as _time
         client = await self._get_client()
         params: Dict[str, Any] = {}
-        # defaultType: override por llamada > default del adapter > sin defaultType (spot)
         effective_type = market_type or self._default_type
         if effective_type:
             params["defaultType"] = effective_type
         if self._exchange_id == "kucoin" and since is not None and not effective_type:
-            now_ts = int(_time.time())
+            now_ts = int(time.time())
             if since > now_ts:
                 params["endAt"] = now_ts
-        return await client.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params=params)
+        return await asyncio.wait_for(
+            client.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params=params),
+            timeout=_FETCH_OHLCV_TIMEOUT,
+        )
 
     async def fetch_trades(
         self,
@@ -211,35 +223,30 @@ class CCXTAdapter:
         limit:  int = 100,
     ) -> List[Dict[str, Any]]:
         client = await self._get_client()
-        return await client.fetch_trades(symbol, limit=limit)
+        return await asyncio.wait_for(
+            client.fetch_trades(symbol, limit=limit),
+            timeout=_FETCH_TRADES_TIMEOUT,
+        )
 
     async def load_markets(self) -> Dict[str, Any]:
         client = await self._get_client()
-        return await client.load_markets()
+        return await asyncio.wait_for(
+            client.load_markets(),
+            timeout=_LOAD_MARKETS_TIMEOUT,
+        )
 
     def get_market(self, symbol: str) -> Optional[Dict[str, Any]]:
-        # Retorna metadata del simbolo desde cache (sincrono, O(1)).
-        # Requiere connect() previo. Retorna None si no hay cache.
         return (self._markets_cache or {}).get(symbol)
 
-
     def parse8601(self, date_str: str) -> int:
-        """Parsea fecha ISO 8601 a timestamp ms — no requiere cliente inicializado."""
         import ccxt as ccxt_sync
         return ccxt_sync.Exchange.parse8601(date_str)
 
     def iso8601(self, timestamp_ms: int) -> str:
-        """Convierte timestamp ms a string ISO 8601 — no requiere cliente inicializado."""
         import ccxt as ccxt_sync
         return ccxt_sync.Exchange.iso8601(timestamp_ms)
 
-
     async def inspect_required_credentials(self) -> Dict[str, Any]:
-        """
-        Devuelve los campos de credenciales requeridos por este exchange.
-        No requiere cliente inicializado — usa metadata estática de ccxt.
-        Útil para validar configuración antes de conectar.
-        """
         import ccxt as ccxt_sync
         if not hasattr(ccxt_sync, self._exchange_id):
             raise UnsupportedExchangeError(f"Exchange '{self._exchange_id}' not supported")
@@ -320,7 +327,6 @@ class CCXTAdapter:
     def _resolve_default_type(
         config: Optional["ExchangeConfig"],
     ) -> Optional[str]:
-        """Resuelve defaultType desde config. None si futures no está habilitado."""
         if config is None:
             return None
         return config.markets.futures_default_type
@@ -338,7 +344,6 @@ class CCXTAdapter:
         return self._client
 
     async def _initialize(self) -> None:
-
         if not hasattr(ccxt, self._exchange_id):
             raise UnsupportedExchangeError(
                 f"Exchange '{self._exchange_id}' not supported by ccxt"
