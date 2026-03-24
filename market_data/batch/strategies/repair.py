@@ -21,8 +21,11 @@ from market_data.batch.strategies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from market_data.batch.fetchers.fetcher import _timeframe_to_ms
-from services.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
+from market_data.batch.schemas.timeframe import timeframe_to_ms as _timeframe_to_ms
+from services.observability.metrics import (
+    ROWS_INGESTED, PIPELINE_ERRORS,
+    REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED, REPAIR_GAPS_SKIPPED,
+)
 
 
 @dataclass(frozen=True)
@@ -120,6 +123,10 @@ class RepairStrategy(StrategyMixin):
 
             gaps = scan_gaps(df_existing, timeframe, tolerance=self._tolerance)
             result.gaps_found = len(gaps)
+            if gaps:
+                REPAIR_GAPS_FOUND.labels(
+                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                ).inc(len(gaps))
 
             if not gaps:
                 result.skipped     = True
@@ -149,6 +156,9 @@ class RepairStrategy(StrategyMixin):
                         "expected={} max={}",
                         symbol, timeframe, gap.expected, _MAX_HEALABLE_GAP_CANDLES,
                     )
+                    REPAIR_GAPS_SKIPPED.labels(
+                        exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                    ).inc()
                     return False, 0
                 async with sem:
                     return await self._heal_gap(
@@ -163,6 +173,9 @@ class RepairStrategy(StrategyMixin):
                 if healed:
                     healed_count      += 1
                     total_healed_rows += rows
+                    REPAIR_GAPS_HEALED.labels(
+                        exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                    ).inc()
 
             result.gaps_healed = healed_count
             result.rows        = total_healed_rows

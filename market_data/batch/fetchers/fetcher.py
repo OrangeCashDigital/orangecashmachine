@@ -47,22 +47,17 @@ DEFAULT_OVERLAP_BARS = 3  # 3 velas = protección estándar en trading cuantitat
 
 OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
-_TIMEFRAME_UNIT_MS = {
-    "m": 60_000,
-    "h": 3_600_000,
-    "d": 86_400_000,
-    "w": 604_800_000,
-}
-
-
 # ==========================================================
 # Exceptions
 # ==========================================================
 
 class FetcherError(Exception): ...
-class InvalidTimeframeError(FetcherError): ...
 class MissingStartDateError(FetcherError): ...
 class ChunkFetchError(FetcherError): ...
+
+# InvalidTimeframeError vive en schemas/timeframe.py — importar desde ahí.
+# Re-exportada aquí para no romper imports existentes dentro de este módulo.
+from market_data.batch.schemas.timeframe import InvalidTimeframeError  # noqa: E402
 class SymbolNotFoundError(FetcherError): ...
 class InvalidMarketTypeError(FetcherError): ...
 
@@ -443,11 +438,9 @@ class HistoricalFetcherAsync:
 # Helpers
 # ==========================================================
 
-def _timeframe_to_ms(timeframe: str) -> int:
-    try:
-        return int(timeframe[:-1]) * _TIMEFRAME_UNIT_MS[timeframe[-1]]
-    except Exception as exc:
-        raise InvalidTimeframeError(timeframe) from exc
+# _timeframe_to_ms: alias interno apuntando a la implementación canónica.
+# La lógica real vive en schemas/timeframe.py
+from market_data.batch.schemas.timeframe import timeframe_to_ms as _timeframe_to_ms  # noqa: E402
 
 
 def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:
@@ -467,6 +460,5 @@ def _sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 # Public aliases
 # ----------------------------------------------------------
 
-def timeframe_to_ms(timeframe: str) -> int:
-    """Alias público de _timeframe_to_ms."""
-    return _timeframe_to_ms(timeframe)
+# timeframe_to_ms: re-exportado desde schemas/timeframe.py
+from market_data.batch.schemas.timeframe import timeframe_to_ms  # noqa: E402,F811

@@ -14,7 +14,8 @@ from typing import Optional
 import pandas as pd
 from loguru import logger
 
-from market_data.batch.fetchers.fetcher import _timeframe_to_ms, DEFAULT_CHUNK_LIMIT
+from market_data.batch.fetchers.fetcher import DEFAULT_CHUNK_LIMIT
+from market_data.batch.schemas.timeframe import timeframe_to_ms as _timeframe_to_ms
 from market_data.batch.strategies.base import (
     PairResult,
     PipelineContext,

@@ -33,7 +33,8 @@ import pandas as pd
 import yaml
 from loguru import logger
 
-from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync, _timeframe_to_ms
+from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
+from market_data.batch.schemas.timeframe import timeframe_to_ms as _timeframe_to_ms
 from services.state.cursor_store import CursorStore, InMemoryCursorStore, build_cursor_store_from_config
 from market_data.batch.storage.bronze_storage import BronzeStorage
 from market_data.batch.storage.silver_storage import SilverStorage
