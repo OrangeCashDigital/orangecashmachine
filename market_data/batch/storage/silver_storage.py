@@ -264,7 +264,7 @@ class SilverStorage:
         # Write lock: previene race conditions entre Prefect workers
         # que procesen el mismo symbol/timeframe en paralelo.
         with self._write_lock(symbol, timeframe):
-            return self._save_ohlcv_locked(df, symbol, timeframe, mode, run_id)
+            return self._save_ohlcv_locked(df, symbol, timeframe, mode, run_id, _t0)
 
     def _save_ohlcv_locked(
         self,
@@ -273,6 +273,7 @@ class SilverStorage:
         timeframe: str,
         mode: WriteMode,
         run_id: Optional[str],
+        _t0: float,
     ) -> None:
         """Implementación de save_ohlcv bajo write lock."""
         use_daily = (timeframe == "1m")
@@ -321,6 +322,7 @@ class SilverStorage:
             )
 
         # Log de resumen (no por partición individual — reduce ruido en 1m)
+        import time as _time
         _duration_ms = int((_time.monotonic() - _t0) * 1000)
         total_rows = sum(p.get("rows", 0) for p in partitions_written)
         logger.debug(
