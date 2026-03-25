@@ -95,10 +95,10 @@ def apply_env_overrides(config: dict) -> dict:
         _set_nested(config, path, coerced)
 
         applied.append(f"{env_var}={raw!r} → {'.'.join(path)}={coerced!r}")
-        logger.info("env_override_applied | var=%s path=%s value=%r", env_var, ".".join(path), coerced)
+        logger.info("env_override_applied | var={} path={} value={}", env_var, ".".join(path), coerced)
 
     if applied:
-        logger.debug("env_overrides_summary | count=%d applied=%s", len(applied), " | ".join(applied))
+        logger.debug("env_overrides_summary | count={} applied={}", len(applied), " | ".join(applied))
     else:
         logger.debug("env_overrides_summary | count=0")
 

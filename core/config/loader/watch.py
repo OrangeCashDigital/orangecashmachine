@@ -46,9 +46,9 @@ class ConfigChangeHandler(FileSystemEventHandler):
         try:
             from core.config.loader import load_config
             load_config(self.env, self.path, force_reload=True)
-            logger.info("Config hot-reloaded | file=%s", event.src_path)
+            logger.info("config_hot_reloaded | file={}", event.src_path)
         except ConfigurationError as exc:
-            logger.error("Config hot-reload failed | file=%s error=%s", event.src_path, exc)
+            logger.error("config_hot_reload_failed | file={} error={}", event.src_path, exc)
 
 
 def watch_config_files(
@@ -63,13 +63,13 @@ def watch_config_files(
     env     = env or resolve_env()
     enabled = watch if watch is not None else (env in _WATCH_ENABLED_ENVS)
     if not enabled:
-        logger.info("Hot-reload disabled | env=%s", env)
+        logger.info("hot_reload_disabled | env={}", env)
         return None
     config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
     observer   = Observer()
     observer.schedule(ConfigChangeHandler(env, path), str(config_dir), recursive=False)
     observer.start()
-    logger.info("Hot-reload started | dir=%s env=%s", config_dir, env)
+    logger.info("hot_reload_started | dir={} env={}", config_dir, env)
     return observer
 
 

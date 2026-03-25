@@ -80,7 +80,7 @@ def load_config(
             if cached:
                 CONFIG_CACHE_HITS.labels(env=env).inc()
                 CONFIG_LOAD_COUNT.labels(env=env, status="cache_hit").inc()
-                logger.debug("Config cache hit | env=%s hash=%s", env, h[:8])
+                logger.debug("config_cache_hit | env={} hash={}", env, h[:8])
                 return cached
 
         # Audit honesto: refleja todos los archivos mergeados, no solo el primero que existe
@@ -97,7 +97,7 @@ def load_config(
         CONFIG_LOAD_COUNT.labels(env=env, status="success").inc()
         CONFIG_LOAD_DURATION.labels(env=env).observe(duration)
         logger.info(
-            "config_loaded | env=%s hash=%s source=%s duration=%.3f",
+            "config_loaded | env={} hash={} source={} duration_seconds={:.3f}",
             env, h[:8], source_name, duration,
         )
         return config
@@ -109,7 +109,7 @@ def load_config(
 
     except FileNotFoundError as exc:
         CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
-        logger.error("Config file not found | env=%s error=%s", env, exc)
+        logger.error("config_file_not_found | env={} error={}", env, exc)
         raise ConfigurationError(
             f"Config file not found | env={env} path={exc.filename}"
         ) from exc
@@ -117,7 +117,7 @@ def load_config(
     except ValidationError as exc:
         # ValidationError de pydantic — error de schema, no de IO
         CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
-        logger.error("Config schema validation failed | env=%s errors=%s", env, exc.error_count())
+        logger.error("config_validation_failed | env={} errors={}", env, exc.error_count())
         raise ConfigValidationError(
             f"Config schema validation failed | env={env} errors={exc.error_count()}"
         ) from exc

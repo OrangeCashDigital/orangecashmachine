@@ -121,7 +121,7 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         # 5. Pipeline con timeout desde config
         pipeline_timeout = config.pipeline.timeouts.historical_pipeline
         bound.info(
-            "pipeline_started | timeout={} run_id={}",
+            "pipeline_started | timeout_seconds={} run_id={}",
             pipeline_timeout, run_id,
         )
         return run_pipeline(config=config, debug=run_cfg.debug)

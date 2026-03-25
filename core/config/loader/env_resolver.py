@@ -52,7 +52,7 @@ def load_dotenv_for_env(env: str) -> None:
             # SSOT: el proceso (deployment/test/operador) es la fuente de mayor autoridad.
             # .env es un convenio local que solo rellena vars ausentes, nunca las sobreescribe.
             load_dotenv(p, override=False)
-            logger.debug("dotenv_loaded | file=%s override=false", filename)
+            logger.debug("dotenv_loaded | file={} override=false", filename)
 
 
 def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optional[str]:
@@ -81,19 +81,19 @@ def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optiona
         _resolved_env_cache[cache_key] = value or ""
         return value or None
     except yaml.YAMLError as exc:
-        logger.warning("settings_yaml_read_error | error=%s", exc)
+        logger.warning("settings_yaml_read_error | error={}", exc)
         return None
 
 
 def resolve_env(explicit_env: Optional[str] = None, config_dir: Optional[Path] = None) -> str:
     if explicit_env:
-        logger.debug("env_resolved | source=cli value=%s", explicit_env)
+        logger.debug("env_resolved | source=cli value={}", explicit_env)
         return explicit_env
     if ocm := os.getenv(_OCM_ENV_VAR):
-        logger.debug("env_resolved | source=env_var value=%s", ocm)
+        logger.debug("env_resolved | source=env_var value={}", ocm)
         return ocm
     if yaml_env := read_default_env_from_settings(config_dir):
-        logger.debug("env_resolved | source=settings_yaml value=%s", yaml_env)
+        logger.debug("env_resolved | source=settings_yaml value={}", yaml_env)
         return yaml_env
     logger.debug("env_resolved | source=default value=development")
     return "development"

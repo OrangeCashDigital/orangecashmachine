@@ -26,7 +26,7 @@ class YamlLoader:
         if not path.exists():
             if required:
                 raise ConfigurationError(f"Missing config file: {path}")
-            logger.debug("yaml_load_skipped | file=%s required=false", path)
+            logger.debug("yaml_load_skipped | file={} required=false", path)
             return {}
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
