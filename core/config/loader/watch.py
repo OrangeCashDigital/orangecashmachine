@@ -57,7 +57,7 @@ def watch_config_files(
     watch: Optional[bool]            = None,
 ) -> Optional[Any]:
     if not _WATCHDOG_AVAILABLE:
-        logger.warning("Hot-reload unavailable: run pip install watchdog")
+        logger.warning("hot_reload_unavailable | reason=watchdog_not_installed action=pip_install_watchdog")
         return None
     from core.config.schema import CONFIG_PATH
     env     = env or resolve_env()
@@ -77,4 +77,4 @@ def stop_config_watcher(observer: Optional[Any]) -> None:
     if observer and observer.is_alive():
         observer.stop()
         observer.join(timeout=2.0)
-        logger.info("Hot-reload stopped")
+        logger.info("hot_reload_stopped")

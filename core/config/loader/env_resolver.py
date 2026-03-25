@@ -74,8 +74,7 @@ def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optiona
             value = str(value)
             if value not in _ALLOWED_ENVS:
                 logger.warning(
-                    "settings.yaml environment.default_env='%s' no es un entorno válido "
-                    "(permitidos: %s) — ignorado, usando 'development'",
+                    "env_invalid | source=settings_yaml value=%s allowed=%s action=fallback_development",
                     value, sorted(_ALLOWED_ENVS),
                 )
                 value = None
