@@ -228,6 +228,6 @@ def push_metrics(
         PIPELINE_LAST_RUN.labels(exchange=exchange).set(_time.time())
         PIPELINE_HEARTBEAT.labels(exchange=exchange).inc()
         push_to_gateway(gateway, job=job, registry=registry)
-        _log.debug("metrics_pushed | job={} gateway={}", job, gateway)
+        _log.bind(job=job, gateway=gateway).debug("metrics_pushed")
     except Exception as exc:
-        _log.warning("metrics_push_failed | job={} error={}", job, exc)
+        _log.bind(job=job, gateway=gateway).warning("metrics_push_failed | error={}", exc)
