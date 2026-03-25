@@ -28,6 +28,43 @@ from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
 from market_data.batch.pipelines.historical_pipeline import HistoricalPipelineAsync
 from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
 from services.exchange.ccxt_adapter import CCXTAdapter
+from services.exchange.base import ExchangeAdapter
+
+# ==========================================================
+# Lifecycle helper
+# ==========================================================
+
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
+@asynccontextmanager
+async def managed_adapter(
+    exchange_cfg,
+    market_type: str,
+    injected: "CCXTAdapter | None" = None,
+) -> AsyncIterator[CCXTAdapter]:
+    """
+    Context manager para lifecycle de CCXTAdapter en tasks.
+
+    Si el caller inyecta un adapter (ya conectado), lo usa directamente
+    y NO lo cierra — el lifecycle es responsabilidad del flow.
+
+    Si no hay adapter inyectado, crea uno, lo conecta y garantiza
+    su cierre en finally — el lifecycle es responsabilidad de esta task.
+
+    DRY: elimina el patrón _owns_client duplicado en 3 tasks.
+    SafeOps: cierre garantizado en finally cuando _owns_client=True.
+    """
+    if injected is not None:
+        yield injected
+        return
+
+    adapter = CCXTAdapter(config=exchange_cfg, default_type=market_type)
+    try:
+        yield adapter
+    finally:
+        await adapter.close()
+
 
 
 # ==========================================================
@@ -96,24 +133,17 @@ async def run_historical_pipeline(
         max_concurrency,
     )
 
-    _owns_client = exchange_client is None
-    if _owns_client:
-        exchange_client = CCXTAdapter(config=exchange_cfg, default_type=None)
-
-    try:
+    async with managed_adapter(exchange_cfg, "spot", injected=exchange_client) as client:
         pipeline = HistoricalPipelineAsync(
             symbols         = spot_symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
             max_concurrency = max_concurrency,
-            exchange_client = exchange_client,
+            exchange_client = client,
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = "spot",
         )
         summary = await pipeline.run()
-    finally:
-        if _owns_client:
-            await exchange_client.close()
 
     log.info(
         "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
@@ -349,24 +379,17 @@ async def run_backfill_pipeline(
         exchange_name, market_type, len(symbols), len(hist_cfg.timeframes),
     )
 
-    _owns_client = exchange_client is None
-    if _owns_client:
-        exchange_client = CCXTAdapter(config=exchange_cfg, default_type=market_type)
-
-    try:
+    async with managed_adapter(exchange_cfg, market_type, injected=exchange_client) as client:
         pipeline = UnifiedPipeline(
             symbols         = symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
             max_concurrency = probe.max_concurrent,
-            exchange_client = exchange_client,
+            exchange_client = client,
             market_type     = market_type,
             backfill_mode   = True,
         )
         summary = await pipeline.run(mode="backfill")
-    finally:
-        if _owns_client:
-            await exchange_client.close()
 
     log.info(
         "Backfill pipeline finished | exchange=%s market=%s ok=%s failed=%s rows=%s",
@@ -422,24 +445,17 @@ async def run_repair_pipeline(
         exchange_name, market_type, len(symbols), len(hist_cfg.timeframes),
     )
 
-    _owns_client = exchange_client is None
-    if _owns_client:
-        exchange_client = CCXTAdapter(config=exchange_cfg, default_type=market_type)
-
-    try:
+    async with managed_adapter(exchange_cfg, market_type, injected=exchange_client) as client:
         pipeline = UnifiedPipeline(
             symbols         = symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
             max_concurrency = probe.max_concurrent,
-            exchange_client = exchange_client,
+            exchange_client = client,
             market_type     = market_type,
             backfill_mode   = hist_cfg.backfill_mode,
         )
         summary = await pipeline.run(mode="repair")
-    finally:
-        if _owns_client:
-            await exchange_client.close()
 
     log.info(
         "Repair pipeline finished | exchange=%s market=%s ok=%s failed=%s "

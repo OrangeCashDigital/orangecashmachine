@@ -37,6 +37,8 @@ import ccxt.async_support as ccxt
 import pybreaker
 from loguru import logger
 
+from services.exchange.base import ExchangeAdapter
+
 if TYPE_CHECKING:
     from core.config.schema import ExchangeConfig
 
@@ -85,7 +87,7 @@ class ExchangeCircuitOpenError(ExchangeAdapterError):
 # Adapter
 # ==========================================================
 
-class CCXTAdapter:
+class CCXTAdapter(ExchangeAdapter):
     """
     Adapter asíncrono para exchanges vía ccxt.
 

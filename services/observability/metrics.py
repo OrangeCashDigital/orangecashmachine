@@ -204,6 +204,33 @@ def start_metrics_server(port: int = 8000) -> None:
 # Push hacia Pushgateway
 # ==========================================================
 
+
+
+# ==========================================================
+# Helpers de observabilidad
+# ==========================================================
+
+def record_exchange_probe_metrics(probe) -> None:
+    """
+    Registra métricas Prometheus de un ExchangeProbe.
+
+    Desacopla exchange_tasks.py de los objetos Prometheus directos —
+    las tasks llaman esta función en lugar de conocer EXCHANGE_LATENCY,
+    EXCHANGE_CLOCK_DRIFT y EXCHANGE_RATE_LIMIT individualmente.
+
+    SafeOps: nunca lanza excepción al caller.
+    """
+    try:
+        if probe.latency_ms is not None:
+            EXCHANGE_LATENCY.labels(exchange=probe.exchange).observe(probe.latency_ms)
+        if probe.clock_drift_ms is not None:
+            EXCHANGE_CLOCK_DRIFT.labels(exchange=probe.exchange).set(probe.clock_drift_ms)
+        if probe.rate_limit_ms is not None:
+            EXCHANGE_RATE_LIMIT.labels(exchange=probe.exchange).set(probe.rate_limit_ms)
+    except Exception as exc:
+        _log.warning("record_exchange_probe_metrics failed | exchange={} error={}", probe.exchange, exc)
+
+
 def push_metrics(
     exchange: str = "local",
     gateway: str = "localhost:9091",
