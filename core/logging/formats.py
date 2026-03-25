@@ -4,15 +4,15 @@ core/logging/formats.py
 Formatos de log centralizados para todos los sinks de Loguru.
 Cambia aquí, se propaga a consola, archivos y pipeline.
 
-request_id
-----------
+run_id
+------
 FILE y CONSOLE usan {extra[run_id]}.
 El default "-" se garantiza via logger.configure(patcher=...) en setup.py,
 no en el string de formato — loguru lanza KeyError si la key no existe.
 Semántica: run_id identifica una ejecución completa del proceso.
 
-PIPELINE no incluye request_id: ese sink filtra por exchange+dataset
-y logger.bind() en ese contexto no incluye request_id.
+PIPELINE no incluye run_id: ese sink filtra por exchange+dataset
+y logger.bind() en ese contexto no incluye run_id.
 """
 
 CONSOLE: str = (
