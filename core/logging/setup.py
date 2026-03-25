@@ -172,7 +172,7 @@ def setup_logging(
 
         _LOGGING_CONFIGURED = True
         logger.debug(
-            "Logging configured | level={} log_dir={} console={} file={} pipeline={}",
+            "logging_configured | level={} log_dir={} console={} file={} pipeline={}",
             _level, _log_dir, _console, _file, _pipeline,
         )
 

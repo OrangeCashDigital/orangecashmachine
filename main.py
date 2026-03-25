@@ -99,7 +99,7 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         #    Hoy coincide con run_id. Cuando haya tracing real, será independiente.
         bound = logger.bind(trace_id=run_id)
         bound.info(
-            "OrangeCashMachine starting | env={} debug={} exchanges={}",
+            "app_started | env={} debug={} exchanges={}",
             run_cfg.env,
             run_cfg.debug,
             config.exchange_names,
@@ -110,18 +110,18 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
             try:
                 start_metrics_server(port=config.observability.metrics.port)
                 bound.info(
-                    "Metrics server started | port={}",
+                    "metrics_server_started | port={}",
                     config.observability.metrics.port,
                 )
             except OSError as exc:
                 bound.warning(
-                    "Metrics server failed to start | error={}", exc
+                    "metrics_server_failed | error={}", exc
                 )
 
         # 5. Pipeline con timeout desde config
         pipeline_timeout = config.pipeline.timeouts.historical_pipeline
         bound.info(
-            "Launching pipeline | timeout={}s run_id={}",
+            "pipeline_started | timeout={} run_id={}",
             pipeline_timeout, run_id,
         )
         return run_pipeline(config=config, debug=run_cfg.debug)

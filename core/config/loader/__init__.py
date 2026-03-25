@@ -97,7 +97,7 @@ def load_config(
         CONFIG_LOAD_COUNT.labels(env=env, status="success").inc()
         CONFIG_LOAD_DURATION.labels(env=env).observe(duration)
         logger.info(
-            "Config loaded | env=%s hash=%s source=%s duration=%.3fs",
+            "config_loaded | env=%s hash=%s source=%s duration=%.3f",
             env, h[:8], source_name, duration,
         )
         return config
