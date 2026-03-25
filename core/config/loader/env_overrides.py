@@ -95,11 +95,11 @@ def apply_env_overrides(config: dict) -> dict:
         _set_nested(config, path, coerced)
 
         applied.append(f"{env_var}={raw!r} → {'.'.join(path)}={coerced!r}")
-        logger.info("OCM env override applied | %s → %s=%r", env_var, ".".join(path), coerced)
+        logger.info("env_override_applied | var=%s path=%s value=%r", env_var, ".".join(path), coerced)
 
     if applied:
-        logger.debug("Total OCM overrides applied: %d | %s", len(applied), " | ".join(applied))
+        logger.debug("env_overrides_summary | count=%d applied=%s", len(applied), " | ".join(applied))
     else:
-        logger.debug("No OCM env overrides detected.")
+        logger.debug("env_overrides_summary | count=0")
 
     return config
