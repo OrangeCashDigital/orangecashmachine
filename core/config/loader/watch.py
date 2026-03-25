@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """core/config/loader/watch.py — Hot-reload con Watchdog."""
 
-import logging
 import os
 import time
 from pathlib import Path
@@ -11,7 +10,7 @@ from typing import Any, Optional, Union
 from .env_resolver import resolve_env
 from .exceptions import ConfigurationError
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 _WATCH_ENABLED_ENVS = {"development", "test", "local"}
 _DEBOUNCE_SECONDS   = 0.5

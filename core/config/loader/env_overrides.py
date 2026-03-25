@@ -17,7 +17,6 @@ Coerción automática de tipos:
     resto             → str
 """
 
-import logging
 import os
 from typing import Any
 
@@ -30,7 +29,7 @@ from core.config.env_vars import (
     OCM_DEBUG,
 )
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # Mapping explícito: env var → path en el dict de config
 # Keys importados de env_vars.py — SSOT: un solo lugar define los nombres de vars

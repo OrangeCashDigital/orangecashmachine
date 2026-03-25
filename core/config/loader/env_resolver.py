@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """core/config/loader/env_resolver.py — Resolución de variables de entorno y entorno activo."""
 
-import logging
 import os
 import re
 from pathlib import Path
@@ -14,7 +13,7 @@ from dotenv import load_dotenv
 from .exceptions import ConfigurationError
 from core.config.env_vars import OCM_ENV as _OCM_ENV_VAR
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 _ENV_PATTERN  = re.compile(r"\$\{([^}:]+)(:-([^}]+))?\}")
 _ALLOWED_ENVS = {"development", "test", "staging", "production"}

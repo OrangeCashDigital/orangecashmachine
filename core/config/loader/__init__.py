@@ -7,7 +7,6 @@ Paquete de carga de configuración. Flujo:
   YamlLoader → EnvResolver → ConfigValidator → audit → ConfigCache
 """
 
-import logging
 import time
 from pathlib import Path
 from typing import Optional, Union
@@ -31,7 +30,7 @@ from .yaml_loader   import YamlLoader, compute_hash
 _make_cache_key      = make_cache_key
 _load_dotenv_for_env = load_dotenv_for_env
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def load_config(
@@ -126,7 +125,7 @@ def load_config(
         # Residual: errores de YAML malformado, permisos, etc.
         CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
         logger.error(
-            "Config load failed | env=%s type=%s error=%s",
+            "config_load_failed | env={} type={} error={}",
             env, type(exc).__name__, exc,
         )
         raise ConfigurationError(
