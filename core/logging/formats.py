@@ -16,7 +16,7 @@ y logger.bind() en ese contexto no incluye run_id.
 """
 
 CONSOLE: str = (
-    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+    "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
     "<level>{level:<8}</level> | "
     "<cyan>{name}</cyan>:<cyan>{line}</cyan> | "
     "<dim>{extra[run_id]}</dim> | "
@@ -24,11 +24,11 @@ CONSOLE: str = (
 )
 
 FILE: str = (
-    "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{line} | "
+    "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{line} | "
     "{extra[run_id]} | {message}"
 )
 
 PIPELINE: str = (
-    "{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{line} | "
+    "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{line} | "
     "{extra[exchange]}/{extra[dataset]} | {message}"
 )

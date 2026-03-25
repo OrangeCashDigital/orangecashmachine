@@ -67,6 +67,7 @@ def _make_patcher(run_id: Optional[str] = None):
 
     def _patch_extra(record: dict) -> None:
         record["extra"].setdefault("run_id", _run_id)
+        record["extra"].setdefault("service", "orangecashmachine")
 
     return _patch_extra
 
