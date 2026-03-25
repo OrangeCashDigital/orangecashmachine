@@ -19,7 +19,7 @@ que llegue a los sinks. Esto evita KeyError en CONSOLE y FILE cuando
 un log no proviene de un contexto con logger.bind(run_id=...).
 """
 
-import logging
+import logging as std_logging
 import sys
 from pathlib import Path
 from typing import Optional
@@ -34,7 +34,7 @@ from core.logging.filters import pipeline_filter
 _LOGGING_CONFIGURED: bool = False
 
 
-class InterceptHandler(logging.Handler):
+class InterceptHandler(std_logging.Handler):
     """Redirige stdlib logging (prefect, ccxt, asyncio) a loguru."""
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -45,9 +45,9 @@ class InterceptHandler(logging.Handler):
 
         # Sube en el call stack hasta salir del propio logging de stdlib,
         # para que loguru registre el módulo que emitió el log, no el handler.
-        frame, depth = logging.currentframe(), 0
+        frame, depth = std_logging.currentframe(), 0
         while frame and (
-            frame.f_code.co_filename == logging.__file__
+            frame.f_code.co_filename == std_logging.__file__
             or frame.f_globals.get("__name__") == __name__
         ):
             frame = frame.f_back
@@ -178,4 +178,4 @@ def setup_logging(
 
     # Siempre — instala el bridge stdlib→loguru aunque los sinks ya existan.
     # force=True garantiza que reemplaza cualquier handler previo de basicConfig.
-    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+    std_logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
