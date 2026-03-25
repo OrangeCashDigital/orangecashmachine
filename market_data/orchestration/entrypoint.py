@@ -19,7 +19,6 @@ from loguru import logger
 from core.config.runtime import RunConfig
 from core.config.loader import load_config
 from core.config.schema import AppConfig
-from core.logging import setup_logging
 from market_data.orchestration.flows.batch_flow import market_data_flow
 from market_data.batch.storage.snapshot import SnapshotManager
 from market_data.batch.storage.gold_storage import GoldStorage
@@ -96,7 +95,6 @@ def run(config: AppConfig, debug: bool = False) -> int:
     # RunConfig mínimo para pasar env al flow — sin releer el entorno
     # porque debug ya viene resuelto desde el caller.
     run_cfg = RunConfig.from_env()
-    setup_logging(cfg=config.observability.logging, debug=debug)
 
     logger.info(
         "OrangeCashMachine starting (local) | env={} exchanges={}",
@@ -134,6 +132,8 @@ def run(config: AppConfig, debug: bool = False) -> int:
 
 
 if __name__ == "__main__":
+    from core.logging import setup_logging
     _run_cfg = RunConfig.from_env()
     _config  = load_config(env=_run_cfg.env, path=_run_cfg.config_path)
+    setup_logging(cfg=_config.observability.logging, debug=_run_cfg.debug)
     sys.exit(run(config=_config, debug=_run_cfg.debug))

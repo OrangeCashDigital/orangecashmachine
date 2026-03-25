@@ -357,15 +357,7 @@ class IntegrationsConfig(StrictBaseModel):
 # Observability
 # =============================================================================
 
-class LoggingConfig(StrictBaseModel):
-    level:     str  = "INFO"
-    format:    str  = "console"
-    log_dir:   str  = "logs"
-    rotation:  str  = "1 day"
-    retention: str  = "14 days"
-    console:   bool = True
-    file:      bool = True
-    pipeline:  bool = True
+from core.logging.config import LoggingConfig  # moved: core/logging/config.py
 
 
 class MetricsConfig(StrictBaseModel):
