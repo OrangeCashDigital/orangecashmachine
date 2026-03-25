@@ -42,7 +42,20 @@ class InterceptHandler(logging.Handler):
             level = logger.level(record.levelname).name
         except ValueError:
             level = str(record.levelno)
-        logger.opt(exception=record.exc_info).log(level, record.getMessage())
+
+        # Sube en el call stack hasta salir del propio logging de stdlib,
+        # para que loguru registre el módulo que emitió el log, no el handler.
+        frame, depth = logging.currentframe(), 0
+        while frame and (
+            frame.f_code.co_filename == logging.__file__
+            or frame.f_globals.get("__name__") == __name__
+        ):
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(
+            level, record.getMessage()
+        )
 
 
 def _patch_extra(record: dict) -> None:
