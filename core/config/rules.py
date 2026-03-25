@@ -16,28 +16,26 @@ if TYPE_CHECKING:
     from core.config.schema import AppConfig
 
 
-def _rule_no_placeholder_password(config: "AppConfig") -> list[str]:
-    """Producción no puede tener contraseñas placeholder."""
-    errors: list[str] = []
-    if config.environment.name == "production":
-        db = getattr(config, "db", None)
-        if db is not None:
-            password = getattr(db, "password", None)
-            if isinstance(password, str) and password.startswith("CHANGE_ME"):
-                errors.append("db.password must not use placeholder in production")
-    return errors
+def _rule_no_placeholder_credentials(config: "AppConfig") -> list[str]:
+    """Producción no puede tener credenciales placeholder (CHANGE_ME).
 
-
-def _rule_production_requires_real_credentials(config: "AppConfig") -> list[str]:
-    """Producción no puede tener exchanges sin credenciales reales."""
+    Nota: credenciales vacías ya son rechazadas por ExchangeConfig.validate_credentials
+    (Pydantic model_validator). Esta regla cubre el caso específico de placeholders
+    que pasan la validación de 'no vacío' pero son valores falsos.
+    """
     errors: list[str] = []
     if config.environment.name == "production":
         for ex in config.exchanges:
-            api_key = getattr(ex, "api_key", None)
-            if not api_key or str(api_key).startswith("CHANGE_ME"):
+            key = ex.api_key.get_secret_value()
+            secret = ex.api_secret.get_secret_value()
+            if key.startswith("CHANGE_ME") or secret.startswith("CHANGE_ME"):
                 errors.append(
-                    f"exchange {ex.name.value}: api_key required in production"
+                    f"exchange {ex.name.value}: api_key/secret must not use "
+                    "CHANGE_ME placeholder in production"
                 )
+        pg = config.integrations.postgres
+        if pg.enabled and pg.password and str(pg.password).startswith("CHANGE_ME"):
+            errors.append("integrations.postgres.password must not use placeholder in production")
     return errors
 
 
@@ -54,8 +52,7 @@ def _rule_debug_not_allowed_in_production(config: "AppConfig") -> list[str]:
 
 # Registro de reglas activas — agregar aquí nuevas reglas sin tocar el loader
 BUSINESS_RULES = [
-    _rule_no_placeholder_password,
-    _rule_production_requires_real_credentials,
+    _rule_no_placeholder_credentials,
     _rule_debug_not_allowed_in_production,
 ]
 

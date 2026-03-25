@@ -5,7 +5,6 @@ import asyncio
 import base64
 import os
 
-from core.config.env_vars import OCM_ENV
 import time
 from itertools import islice
 from typing import Iterator, Optional, Protocol, runtime_checkable
@@ -388,11 +387,21 @@ def build_cursor_store_from_config(config=None) -> RedisCursorStore:
     )
 
 
-def build_cursor_store_from_env() -> RedisCursorStore:
+def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
+    """
+    Construye un RedisCursorStore desde variables de entorno.
+
+    Parameters
+    ----------
+    env : str | None
+        Entorno explícito (ej: run_cfg.env). Si no se pasa,
+        se resuelve via resolve_env() respetando OCM_ENV → settings.yaml → 'development'.
+    """
+    from core.config.loader.env_resolver import resolve_env
     return RedisCursorStore(
         host=os.getenv("REDIS_HOST", _DEFAULT_HOST),
         port=int(os.getenv("REDIS_PORT", str(_DEFAULT_PORT))),
         db=int(os.getenv("REDIS_DB", str(_DEFAULT_DB))),
-        env=os.getenv(OCM_ENV, _DEFAULT_ENV),
+        env=env or resolve_env(),
         ttl_days=int(os.getenv("CURSOR_TTL_DAYS", str(_DEFAULT_TTL_DAYS))),
     )

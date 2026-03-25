@@ -60,8 +60,17 @@ def load_config(
     start = time.monotonic()
     try:
         merged = YamlLoader.load(base, required=True)
-        merged = YamlLoader.merge(merged, YamlLoader.load(env_file, required=False))
+        env_data = YamlLoader.load(env_file, required=False)
+        merged = YamlLoader.merge(merged, env_data)
         merged = YamlLoader.merge(merged, YamlLoader.load(settings, required=False))
+        # environment.name y environment.debug son campos de identidad del entorno.
+        # settings.yaml puede overridear parámetros operacionales pero no puede
+        # cambiar quién es el entorno — eso lo fija <env>.yaml con precedencia absoluta.
+        if "environment" in env_data:
+            merged.setdefault("environment", {})
+            for field in ("name", "debug"):
+                if field in env_data["environment"]:
+                    merged["environment"][field] = env_data["environment"][field]
         merged = EnvResolver.resolve(merged)
         merged = apply_env_overrides(merged)
         h      = compute_hash(merged)
@@ -74,9 +83,10 @@ def load_config(
                 logger.debug("Config cache hit | env=%s hash=%s", env, h[:8])
                 return cached
 
-        source_name = next(
-            (p.name for p in (settings, env_file, base) if p.exists()), base.name
-        )
+        # Audit honesto: refleja todos los archivos mergeados, no solo el primero que existe
+        source_name = "+".join(
+            p.name for p in (base, env_file, settings) if p.exists()
+        ) or base.name
         config = ConfigValidator.validate(merged, source_name)
         config = _audit(config, cache_key, h, source_name)
 

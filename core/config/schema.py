@@ -434,7 +434,6 @@ class AppConfig(StrictBaseModel):
     integrations:  IntegrationsConfig  = Field(default_factory=IntegrationsConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     environment:   EnvironmentConfig   = Field(default_factory=EnvironmentConfig)
-    feature_store: FeatureStoreConfig  = Field(default_factory=FeatureStoreConfig)
     healthchecks:  HealthChecksConfig  = Field(default_factory=HealthChecksConfig)
     safety:        SafetyConfig        = Field(default_factory=SafetyConfig)
     features:      FeaturesConfig      = Field(default_factory=FeaturesConfig)

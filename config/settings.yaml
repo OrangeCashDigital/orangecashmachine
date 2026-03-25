@@ -72,8 +72,6 @@ storage:
     # Path aislado para no contaminar producción
     path: ${LOCAL_DATA_LAKE_PATH:-data_platform/local_data_lake}
 
-  feature_store:
-    path: ${LOCAL_FEATURE_STORE_PATH:-data_platform/local_features}
 
 # ==============================================================================
 # FEATURE FLAGS (Experimental control)

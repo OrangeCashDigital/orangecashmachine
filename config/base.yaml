@@ -142,10 +142,6 @@ storage:
 # ==============================================================================
 # FEATURE STORE
 # ==============================================================================
-feature_store:
-  enabled: true
-  path: ${FEATURE_STORE_PATH:-data_platform/features}
-  format: parquet
 
 # ==============================================================================
 # OBSERVABILITY
@@ -195,8 +191,8 @@ integrations:
     enabled: false
     host: ${POSTGRES_HOST:-localhost}
     port: ${POSTGRES_PORT:-5432}
-    user: ${POSTGRES_USER}
-    password: ${POSTGRES_PASSWORD}
+    user: ${POSTGRES_USER:-}
+    password: ${POSTGRES_PASSWORD:-}
 
 # ==============================================================================
 # HEALTH CHECKS

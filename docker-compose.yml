@@ -28,6 +28,11 @@
 #                     rehabilitar para despliegue distribuido
 # ==========================================================
 
+# ==========================================================
+# EXTENSIONS (Librería Pro)
+# ==========================================================
+
+# Reutilización de configuración común para logging y variables de entorno
 x-logging: &default-logging
   driver: json-file
   options:
@@ -38,6 +43,7 @@ x-common-env: &common-env
   PYTHONUNBUFFERED: "1"
   OCM_CONFIG_DIR: /app/config
   OCM_ENV: ${OCM_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-debug}
 
 networks:
   ocm_internal:
