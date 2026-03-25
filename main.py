@@ -13,7 +13,7 @@ Orden de arranque
 2. Logging    — setup_logging(debug) con defaults, ANTES de load_config
 3. Config     — load_config() con loguru ya activo, sin logs perdidos
 4. Logging    — setup_logging(cfg, debug) re-llamada idempotente desde YAML
-5. request_id — logger.bind() propaga correlation ID a todos los sinks
+5. run_id     — logger.bind() propaga run_id a todos los sinks (ya en patcher)
 6. Métricas   — start_metrics_server si config.observability.metrics.enabled
 7. Pipeline   — run_pipeline(config, debug) con timeout desde config
 
@@ -76,15 +76,18 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
     # request_id generado una sola vez por ejecución.
     # Se propaga a todos los sinks vía logger.bind() para correlacionar
     # todos los logs de un run sin depender de threading o contextvars.
-    request_id = uuid.uuid4().hex[:12]
+    # run_id generado antes de setup_logging para que aparezca
+    # en TODOS los logs desde el primer momento, incluidos los de
+    # core/config/loader durante el arranque.
+    # Semántica: identifica una ejecución completa del proceso,
+    # no una request HTTP — por eso run_id y no request_id.
+    run_id = uuid.uuid4().hex[:12]
 
     try:
         # 1. Logging con defaults ANTES de load_config.
-        #    Garantiza que core/config/loader/* (yaml_loader, env_resolver,
-        #    env_overrides, __init__) emitan a loguru desde el primer momento.
-        #    setup_logging es idempotente: la segunda llamada (paso 3) solo
-        #    instala el InterceptHandler, no resetea sinks.
-        setup_logging(debug=run_cfg.debug)
+        #    run_id se inyecta vía patcher para que fluya a todos los sinks
+        #    desde el primer log, sin necesidad de logger.bind().
+        setup_logging(debug=run_cfg.debug, run_id=run_id)
 
         # 2. Config — loguru ya activo, ningún log de loader se pierde.
         config = initialize_config(run_cfg)
@@ -92,8 +95,8 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         # 3. Logging completo desde YAML — re-llamada idempotente.
         setup_logging(cfg=config.observability.logging, debug=run_cfg.debug)
 
-        # 4. Bind request_id — fluye a CONSOLE y FILE automáticamente.
-        bound = logger.bind(request_id=request_id)
+        # 5. bind run_id ya está en patcher — bound solo para consistencia API.
+        bound = logger.bind(run_id=run_id)
         bound.info(
             "OrangeCashMachine starting | env={} debug={} exchanges={}",
             run_cfg.env,
@@ -117,29 +120,29 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         # 5. Pipeline con timeout desde config
         pipeline_timeout = config.pipeline.timeouts.historical_pipeline
         bound.info(
-            "Launching pipeline | timeout={}s request_id={}",
-            pipeline_timeout, request_id,
+            "Launching pipeline | timeout={}s run_id={}",
+            pipeline_timeout, run_id,
         )
         return run_pipeline(config=config, debug=run_cfg.debug)
 
     except KeyboardInterrupt:
         logger.warning(
-            "Execution interrupted by user (SIGINT) | request_id={}", request_id
+            "Execution interrupted by user (SIGINT) | run_id={}", run_id
         )
         return 130
 
     except (ConfigurationError, ConfigValidationError) as exc:
         logging.critical(
-            "Config failure | type=%s error=%s request_id=%s",
-            type(exc).__name__, exc, request_id,
+            "Config failure | type=%s error=%s run_id=%s",
+            type(exc).__name__, exc, run_id,
             exc_info=True,
         )
         return 1
 
     except Exception as exc:
         logger.exception(
-            "Critical startup failure | type={} error={} request_id={}",
-            type(exc).__name__, exc, request_id,
+            "Critical startup failure | type={} error={} run_id={}",
+            type(exc).__name__, exc, run_id,
         )
         return 1
 

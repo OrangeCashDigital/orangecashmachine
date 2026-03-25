@@ -58,18 +58,24 @@ class InterceptHandler(logging.Handler):
         )
 
 
-def _patch_extra(record: dict) -> None:
+def _make_patcher(run_id: Optional[str] = None):
     """
-    Inyecta defaults en extra antes de que el record llegue a los sinks.
-    Evita KeyError en CONSOLE y FILE cuando el log no tiene request_id.
+    Retorna un patcher que inyecta defaults en extra antes de los sinks.
+    Si run_id está disponible, lo inyecta globalmente desde el primer log.
     """
-    record["extra"].setdefault("request_id", "-")
+    _run_id = run_id or "-"
+
+    def _patch_extra(record: dict) -> None:
+        record["extra"].setdefault("request_id", _run_id)
+
+    return _patch_extra
 
 
 def setup_logging(
     cfg: Optional[object] = None,
     debug: bool = False,
     log_dir: Optional[Path] = None,
+    run_id: Optional[str] = None,
 ) -> None:
     """
     Inicializa Loguru consumiendo LoggingConfig desde el sistema de configuración.
@@ -86,6 +92,9 @@ def setup_logging(
         Si True fuerza nivel DEBUG independientemente de cfg.level.
     log_dir : Path | None
         Override de directorio (legacy). Ignorado si cfg está presente.
+    run_id : str | None
+        Identificador de ejecución. Si se provee, se inyecta globalmente
+        en todos los records vía patcher desde el primer log.
     """
     global _LOGGING_CONFIGURED
 
@@ -109,9 +118,10 @@ def setup_logging(
     if not _LOGGING_CONFIGURED:
         logger.remove()
 
-        # Patcher global: garantiza defaults en extra para todos los sinks.
-        # Se configura una sola vez junto con los sinks.
-        logger.configure(patcher=_patch_extra)
+        # Patcher global: inyecta run_id en todos los records desde el inicio.
+        # Si run_id está disponible, aparece en logs de arranque (config/loader).
+        # Si no, usa "-" como fallback seguro.
+        logger.configure(patcher=_make_patcher(run_id))
 
         if _console:
             logger.add(
