@@ -52,7 +52,6 @@ observability:
 
   logging:
     level: DEBUG
-    format: console
     log_dir: logs
     rotation: 1 day
     retention: 7 days

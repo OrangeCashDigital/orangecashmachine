@@ -149,7 +149,6 @@ storage:
 observability:
   logging:
     level: ${LOG_LEVEL:-INFO}
-    format: json
 
   metrics:
     enabled: true
