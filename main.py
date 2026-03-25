@@ -92,7 +92,7 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         # 3. Logging completo desde YAML — re-llamada idempotente.
         setup_logging(cfg=config.observability.logging, debug=run_cfg.debug)
 
-        # 3. Bind request_id — fluye a CONSOLE y FILE automáticamente.
+        # 4. Bind request_id — fluye a CONSOLE y FILE automáticamente.
         bound = logger.bind(request_id=request_id)
         bound.info(
             "OrangeCashMachine starting | env={} debug={} exchanges={}",
