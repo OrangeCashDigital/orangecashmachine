@@ -13,11 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Protocol, runtime_checkable
 
-try:
-    from loguru import logger
-except ImportError:
-    import logging
-    logger = logging.getLogger(__name__)
+from loguru import logger
 
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
 from market_data.batch.storage.silver_storage import SilverStorage

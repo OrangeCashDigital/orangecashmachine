@@ -27,7 +27,7 @@ Notas de diseño
 
 from __future__ import annotations
 
-import logging as _logging
+from loguru import logger as _log
 import time as _time
 
 from prometheus_client import (
@@ -40,7 +40,6 @@ from prometheus_client import (
     REGISTRY,
 )
 
-_log = _logging.getLogger(__name__)
 
 # ==========================================================
 # Métricas de pipeline

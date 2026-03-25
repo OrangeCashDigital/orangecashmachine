@@ -20,7 +20,6 @@ Orden de arranque
 Principios: SOLID · KISS · DRY · SafeOps
 """
 
-import logging
 import os
 import sys
 import uuid
@@ -51,7 +50,7 @@ def initialize_config(run_cfg: RunConfig) -> AppConfig:
     except (ConfigurationError, ConfigValidationError):
         raise
     except Exception:
-        logging.critical("Unexpected error loading config", exc_info=True)
+        logger.opt(exception=True).critical("unexpected_config_error")
         raise
 
 
@@ -133,10 +132,9 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         return 130
 
     except (ConfigurationError, ConfigValidationError) as exc:
-        logging.critical(
-            "Config failure | type=%s error=%s run_id=%s",
+        logger.opt(exception=True).critical(
+            "config_failure | type={} error={} run_id={}",
             type(exc).__name__, exc, run_id,
-            exc_info=True,
         )
         return 1
 
