@@ -10,11 +10,12 @@ No contiene lógica de negocio. main() retorna int, nunca llama sys.exit().
 Orden de arranque
 -----------------
 1. RunConfig  — lee OCM_DEBUG, OCM_ENV, OCM_CONFIG_PATH una sola vez
-2. Config     — load_config() con stdlib logging de fallback pre-loguru
-3. Logging    — setup_logging(config.observability.logging, debug) una sola vez
-4. request_id — logger.bind() propaga correlation ID a todos los sinks
-5. Métricas   — start_metrics_server si config.observability.metrics.enabled
-6. Pipeline   — run_pipeline(config, debug) con timeout desde config
+2. Logging    — setup_logging(debug) con defaults, ANTES de load_config
+3. Config     — load_config() con loguru ya activo, sin logs perdidos
+4. Logging    — setup_logging(cfg, debug) re-llamada idempotente desde YAML
+5. request_id — logger.bind() propaga correlation ID a todos los sinks
+6. Métricas   — start_metrics_server si config.observability.metrics.enabled
+7. Pipeline   — run_pipeline(config, debug) con timeout desde config
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
@@ -35,9 +36,6 @@ from core.logging import setup_logging
 from market_data.orchestration.entrypoint import run as run_pipeline
 from services.observability.metrics import start_metrics_server
 
-# Fallback mínimo de stdlib: captura errores ANTES de que loguru esté listo.
-# setup_logging() lo reemplaza con InterceptHandler en el paso 3.
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
 
 def initialize_config(run_cfg: RunConfig) -> AppConfig:
@@ -81,12 +79,17 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
     request_id = uuid.uuid4().hex[:12]
 
     try:
-        # 1. Config — stdlib logging activo como fallback hasta el paso 3
+        # 1. Logging con defaults ANTES de load_config.
+        #    Garantiza que core/config/loader/* (yaml_loader, env_resolver,
+        #    env_overrides, __init__) emitan a loguru desde el primer momento.
+        #    setup_logging es idempotente: la segunda llamada (paso 3) solo
+        #    instala el InterceptHandler, no resetea sinks.
+        setup_logging(debug=run_cfg.debug)
+
+        # 2. Config — loguru ya activo, ningún log de loader se pierde.
         config = initialize_config(run_cfg)
 
-        # 2. Logging completo desde YAML — una sola inicialización.
-        #    setup_logging instala InterceptHandler: a partir de aquí
-        #    stdlib logging queda redirigido a loguru (prefect, ccxt, asyncio).
+        # 3. Logging completo desde YAML — re-llamada idempotente.
         setup_logging(cfg=config.observability.logging, debug=run_cfg.debug)
 
         # 3. Bind request_id — fluye a CONSOLE y FILE automáticamente.
