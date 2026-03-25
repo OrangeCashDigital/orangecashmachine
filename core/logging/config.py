@@ -16,10 +16,9 @@ from pydantic import BaseModel, ConfigDict
 
 
 class LoggingConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", validate_assignment=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     level:     str  = "INFO"
-    format:    str  = "console"
     log_dir:   str  = "logs"
     rotation:  str  = "1 day"
     retention: str  = "14 days"

@@ -25,9 +25,26 @@ from core.logging.formats import CONSOLE, FILE, PIPELINE
 from core.logging.filters import pipeline_filter
 
 # ---------------------------------------------------------------------
-# Estado global (idempotencia controlada)
+# Estado global (fast-path, la guardia real es _has_active_sinks)
 # ---------------------------------------------------------------------
 _LOGGING_CONFIGURED: bool = False
+
+
+# ---------------------------------------------------------------------
+# Helpers de idempotencia
+# ---------------------------------------------------------------------
+def _has_active_sinks() -> bool:
+    """
+    Devuelve True si loguru ya tiene sinks registrados.
+
+    Usa logger._core.handlers — API privada pero estable desde loguru 0.5.
+    Preferible al flag de módulo porque sobrevive a reloads y a llamadas
+    externas a logger.remove().
+    """
+    try:
+        return bool(logger._core.handlers)  # type: ignore[attr-defined]
+    except AttributeError:
+        return False
 
 
 # ---------------------------------------------------------------------
@@ -42,7 +59,7 @@ class InterceptHandler(std_logging.Handler):
         except ValueError:
             level = str(record.levelno)
 
-        frame, depth = std_logging.currentframe(), 0
+        frame, depth = std_logging.currentframe(), 2
         while frame and (
             frame.f_code.co_filename == std_logging.__file__
             or frame.f_globals.get("__name__") == __name__
@@ -179,7 +196,7 @@ def setup_logging(
 
     resolved = _resolve_config(cfg, debug, log_dir)
 
-    if not _LOGGING_CONFIGURED:
+    if not _LOGGING_CONFIGURED and not _has_active_sinks():
         logger.remove()
         logger.configure(patcher=_make_patcher(run_id))
 
@@ -195,9 +212,13 @@ def setup_logging(
         _LOGGING_CONFIGURED = True
 
         logger.bind(event="logging_configured").debug(
-            "Logging system initialized | level={} log_dir={} console={} file={} pipeline={}",
-            resolved["level"], resolved["log_dir"],
-            resolved["console"], resolved["file"], resolved["pipeline"],
+            "Logging system initialized | level={level} log_dir={log_dir}"
+            " console={console} file={file} pipeline={pipeline}",
+            level=resolved["level"],
+            log_dir=resolved["log_dir"],
+            console=resolved["console"],
+            file=resolved["file"],
+            pipeline=resolved["pipeline"],
         )
 
     # Bridge stdlib → loguru — siempre, aunque sinks ya existan

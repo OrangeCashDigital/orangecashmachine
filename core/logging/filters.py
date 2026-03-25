@@ -19,4 +19,5 @@ def pipeline_filter(record: dict[str, Any]) -> bool:
             "services.state.",
         ))
         and bool(record["extra"].get("exchange"))
+        and bool(record["extra"].get("dataset"))
     )
