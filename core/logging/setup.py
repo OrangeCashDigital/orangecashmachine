@@ -196,7 +196,7 @@ def setup_logging(
 
     resolved = _resolve_config(cfg, debug, log_dir)
 
-    if not _LOGGING_CONFIGURED and not _has_active_sinks():
+    if not _LOGGING_CONFIGURED:
         logger.remove()
         logger.configure(patcher=_make_patcher(run_id))
 
