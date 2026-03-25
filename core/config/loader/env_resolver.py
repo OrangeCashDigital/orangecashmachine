@@ -82,19 +82,19 @@ def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optiona
         _resolved_env_cache[cache_key] = value or ""
         return value or None
     except yaml.YAMLError as exc:
-        logger.warning("No se pudo leer default_env de settings.yaml: %s", exc)
+        logger.warning("settings_yaml_read_error | error=%s", exc)
         return None
 
 
 def resolve_env(explicit_env: Optional[str] = None, config_dir: Optional[Path] = None) -> str:
     if explicit_env:
-        logger.debug("Entorno resuelto desde argumento explícito: %s", explicit_env)
+        logger.debug("env_resolved | source=cli value=%s", explicit_env)
         return explicit_env
     if ocm := os.getenv(_OCM_ENV_VAR):
-        logger.debug("Entorno resuelto desde OCM_ENV: %s", ocm)
+        logger.debug("env_resolved | source=env_var value=%s", ocm)
         return ocm
     if yaml_env := read_default_env_from_settings(config_dir):
-        logger.debug("Entorno resuelto desde settings.yaml (default_env): %s", yaml_env)
+        logger.debug("env_resolved | source=settings_yaml value=%s", yaml_env)
         return yaml_env
-    logger.debug("Entorno resuelto por fallback: development")
+    logger.debug("env_resolved | source=default value=development")
     return "development"
