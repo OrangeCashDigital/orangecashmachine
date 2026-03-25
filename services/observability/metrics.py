@@ -210,6 +210,52 @@ def start_metrics_server(port: int = 8000) -> None:
 # Helpers de observabilidad
 # ==========================================================
 
+
+def record_pipeline_pair_metrics(
+    exchange:    str,
+    symbol:      str,
+    timeframe:   str,
+    market_type: str,
+    rows:        int,
+    duration_ms: int,
+    error_type:  str = "",
+    quality_decision: str = "",
+) -> None:
+    """
+    Registra métricas Prometheus de un par procesado por el pipeline.
+
+    Desacopla historical_pipeline.py de los objetos Prometheus directos.
+    SafeOps: nunca lanza excepción al caller.
+    """
+    try:
+        if error_type:
+            PIPELINE_ERRORS.labels(
+                exchange=exchange, error_type=error_type
+            ).inc()
+            return
+        if quality_decision:
+            QUALITY_DECISIONS.labels(
+                exchange=exchange,
+                market_type=market_type,
+                symbol=symbol,
+                timeframe=timeframe,
+                decision=quality_decision,
+            ).inc()
+        if rows:
+            ROWS_INGESTED.labels(
+                exchange=exchange, symbol=symbol, timeframe=timeframe
+            ).inc(rows)
+        if duration_ms:
+            PAIR_DURATION.labels(
+                exchange=exchange, symbol=symbol, timeframe=timeframe
+            ).observe(duration_ms / 1000)
+    except Exception as exc:
+        _log.warning(
+            "record_pipeline_pair_metrics failed | exchange={} symbol={} error={}",
+            exchange, symbol, exc,
+        )
+
+
 def record_exchange_probe_metrics(probe) -> None:
     """
     Registra métricas Prometheus de un ExchangeProbe.

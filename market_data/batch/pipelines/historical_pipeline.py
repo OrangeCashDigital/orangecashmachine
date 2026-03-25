@@ -39,10 +39,8 @@ from market_data.batch.storage.bronze_storage import BronzeStorage
 from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from market_data.batch.pipelines.quality_pipeline import QualityPipeline
-from services.exchange.ccxt_adapter import CCXTAdapter
-from services.observability.metrics import (
-    ROWS_INGESTED, PAIR_DURATION, PIPELINE_ERRORS, ACTIVE_PAIRS, QUALITY_DECISIONS
-)
+from services.exchange.base import ExchangeAdapter
+from services.observability.metrics import record_pipeline_pair_metrics
 
 
 # ==========================================================
@@ -165,7 +163,7 @@ class HistoricalPipelineAsync:
         timeframes:        List[str],
         start_date:        str,
         max_concurrency:   int                   = DEFAULT_MAX_CONCURRENCY,
-        exchange_client:   Optional[CCXTAdapter] = None,
+        exchange_client:   Optional[ExchangeAdapter] = None,
         cursor_store:      Optional[CursorStore] = None,
         fetch_all_history: bool                  = False,
         market_type:       str                   = "spot",
@@ -302,13 +300,15 @@ class HistoricalPipelineAsync:
                     exchange  = self._exchange_id,
                 )
 
-                QUALITY_DECISIONS.labels(
-                    exchange    = self._exchange_id,
-                    market_type = self.market_type,
-                    symbol      = symbol,
-                    timeframe   = timeframe,
-                    decision    = qres.tier.value,
-                ).inc()
+                record_pipeline_pair_metrics(
+                    exchange         = self._exchange_id,
+                    symbol           = symbol,
+                    timeframe        = timeframe,
+                    market_type      = self.market_type,
+                    rows             = 0,
+                    duration_ms      = 0,
+                    quality_decision = qres.tier.value,
+                )
 
                 if not qres.accepted:
                     logger.warning(
@@ -343,12 +343,14 @@ class HistoricalPipelineAsync:
                 result.rows        = len(df)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
 
-                ROWS_INGESTED.labels(
-                    exchange=self._exchange_id, symbol=symbol, timeframe=timeframe
-                ).inc(result.rows)
-                PAIR_DURATION.labels(
-                    exchange=self._exchange_id, symbol=symbol, timeframe=timeframe
-                ).observe(result.duration_ms / 1000)
+                record_pipeline_pair_metrics(
+                    exchange    = self._exchange_id,
+                    symbol      = symbol,
+                    timeframe   = timeframe,
+                    market_type = self.market_type,
+                    rows        = result.rows,
+                    duration_ms = result.duration_ms,
+                )
 
                 logger.info(
                     "Par completado [{}/{}] | exchange={} market={} symbol={} timeframe={} rows={} duration={}ms",
@@ -363,9 +365,15 @@ class HistoricalPipelineAsync:
                 result.error       = str(exc)
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 error_type = "transient" if result.is_transient_error else "fatal"
-                PIPELINE_ERRORS.labels(
-                    exchange=self._exchange_id, error_type=error_type
-                ).inc()
+                record_pipeline_pair_metrics(
+                    exchange    = self._exchange_id,
+                    symbol      = symbol,
+                    timeframe   = timeframe,
+                    market_type = self.market_type,
+                    rows        = 0,
+                    duration_ms = result.duration_ms,
+                    error_type  = error_type,
+                )
                 logger.error(
                     "Par fallido [{}/{}] | exchange={} market={} symbol={} timeframe={} error={} duration={}ms",
                     idx, total, self._exchange_id, self.market_type,
