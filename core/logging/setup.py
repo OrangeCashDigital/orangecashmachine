@@ -16,7 +16,7 @@ Extra defaults
 --------------
 logger.configure(patcher=...) inyecta defaults en cada record ANTES de
 que llegue a los sinks. Esto evita KeyError en CONSOLE y FILE cuando
-un log no proviene de un contexto con logger.bind(request_id=...).
+un log no proviene de un contexto con logger.bind(run_id=...).
 """
 
 import logging
@@ -66,7 +66,7 @@ def _make_patcher(run_id: Optional[str] = None):
     _run_id = run_id or "-"
 
     def _patch_extra(record: dict) -> None:
-        record["extra"].setdefault("request_id", _run_id)
+        record["extra"].setdefault("run_id", _run_id)
 
     return _patch_extra
 
