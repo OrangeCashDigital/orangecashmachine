@@ -67,6 +67,7 @@ def _make_patcher(run_id: Optional[str] = None):
 
     def _patch_extra(record: dict) -> None:
         record["extra"].setdefault("run_id", _run_id)
+        record["extra"].setdefault("trace_id", _run_id)  # hoy = run_id, futuro: OTel span
 
     return _patch_extra
 

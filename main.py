@@ -95,8 +95,9 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         # 3. Logging completo desde YAML — re-llamada idempotente.
         setup_logging(cfg=config.observability.logging, debug=run_cfg.debug)
 
-        # 5. bind run_id ya está en patcher — bound solo para consistencia API.
-        bound = logger.bind(run_id=run_id)
+        # 5. trace_id para distributed tracing futuro (Prefect tasks, exchanges).
+        #    Hoy coincide con run_id. Cuando haya tracing real, será independiente.
+        bound = logger.bind(trace_id=run_id)
         bound.info(
             "OrangeCashMachine starting | env={} debug={} exchanges={}",
             run_cfg.env,
