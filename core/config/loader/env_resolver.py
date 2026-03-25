@@ -52,7 +52,7 @@ def load_dotenv_for_env(env: str) -> None:
             # SSOT: el proceso (deployment/test/operador) es la fuente de mayor autoridad.
             # .env es un convenio local que solo rellena vars ausentes, nunca las sobreescribe.
             load_dotenv(p, override=False)
-            logger.debug("Loaded dotenv: %s", filename)
+            logger.debug("dotenv_loaded | file=%s override=false", filename)
 
 
 def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optional[str]:
