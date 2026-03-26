@@ -45,6 +45,19 @@ DEFAULT_MAX_CONCURRENCY: int = 6
 PipelineModeStr = Literal["incremental", "backfill", "repair"]
 
 
+class _ExchangeAbortError(Exception):
+    """
+    Señal interna: abortar todos los pares de este exchange.
+    No es CancelledError — no mata el pipeline global.
+    Seguro para uso futuro con múltiples exchanges en paralelo.
+    """
+    __slots__ = ("exchange_id",)
+
+    def __init__(self, exchange_id: str) -> None:
+        self.exchange_id = exchange_id
+        super().__init__(f"Circuit open — aborting exchange={exchange_id}")
+
+
 def _build_cursor_store_safe() -> CursorStore:
     try:
         store = build_cursor_store_from_config()
@@ -220,6 +233,22 @@ class UnifiedPipeline:
                     idx, symbol, tf = item
                     result = await self._execute_pair(strategy, symbol, tf, idx, total, mode)
                     results.append(result)
+                except _ExchangeAbortError as exc:
+                    # Circuit open — drenar queue de este exchange sin matar el pipeline.
+                    # task_done() ya fue llamado en el bloque finally de abajo.
+                    drained = 0
+                    while not queue.empty():
+                        try:
+                            queue.get_nowait()
+                            queue.task_done()
+                            drained += 1
+                        except asyncio.QueueEmpty:
+                            break
+                    logger.warning(
+                        "Exchange aborted — {} pares drenados | exchange={}",
+                        drained, exc.exchange_id,
+                    )
+                    return
                 finally:
                     queue.task_done()
 
@@ -289,13 +318,13 @@ class UnifiedPipeline:
         except asyncio.CancelledError:
             raise
         except ExchangeCircuitOpenError as exc:
-            # Breaker abierto — cancelar todos los workers restantes.
-            # No tiene sentido seguir procesando pares si el exchange está en cooldown.
+            # Breaker abierto — señal scopeada al worker para que drene su queue.
+            # _ExchangeAbortError no propaga CancelledError al pipeline global.
             logger.warning(
-                "Circuit open — cancelling worker pool | exchange={} symbol={} tf={}",
+                "Circuit open — aborting exchange | exchange={} symbol={} tf={}",
                 self._exchange_id, symbol, timeframe,
             )
-            raise asyncio.CancelledError() from exc
+            raise _ExchangeAbortError(self._exchange_id) from exc
         except Exception as exc:
             logger.error(
                 "execute_pair unhandled | exchange={} symbol={} tf={} "

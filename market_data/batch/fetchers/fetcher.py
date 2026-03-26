@@ -30,6 +30,7 @@ from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
 from services.observability.metrics import FETCH_CHUNK_DURATION, FETCH_CHUNKS_TOTAL
+import time
 
 
 # ==========================================================
@@ -179,24 +180,38 @@ class HistoricalFetcherAsync:
 
             exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
             _t0 = time.perf_counter()
+            _status = "success"
             try:
                 raw = await self._fetch_chunk_with_retry(symbol, timeframe, since_ts, limit)
             except ExchangeCircuitOpenError:
-                # Breaker abierto — exchange en cooldown, no tiene sentido seguir
+                _status = "circuit_open"
                 logger.warning(
                     "Circuit open — aborting chunked download | {} {} chunk={}",
                     symbol, timeframe, chunk_idx,
                 )
+                FETCH_CHUNKS_TOTAL.labels(
+                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                    status=_status,
+                ).inc()
                 break
+            except Exception:
+                _status = "error"
+                raise
             finally:
                 FETCH_CHUNK_DURATION.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
                 ).observe(time.perf_counter() - _t0)
-                FETCH_CHUNKS_TOTAL.labels(
-                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                ).inc()
+                if _status not in ("circuit_open",):
+                    FETCH_CHUNKS_TOTAL.labels(
+                        exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                        status=_status,
+                    ).inc()
 
             if not raw:
+                FETCH_CHUNKS_TOTAL.labels(
+                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                    status="empty",
+                ).inc()
                 break
 
             df = _raw_to_dataframe(raw)
@@ -215,8 +230,15 @@ class HistoricalFetcherAsync:
 
             last_ts = int(df["timestamp"].max().timestamp() * 1000)
 
-            if last_seen_ts == last_ts and len(raw) >= limit:
-                logger.warning("Loop detected | {} {}", symbol, timeframe)
+            if last_ts <= since_ts:
+                logger.warning(
+                    "Stale window — aborting | {} {} last_ts={} since_ts={}",
+                    symbol, timeframe, last_ts, since_ts,
+                )
+                FETCH_CHUNKS_TOTAL.labels(
+                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                    status="stale",
+                ).inc()
                 break
 
             last_seen_ts = last_ts

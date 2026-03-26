@@ -125,7 +125,8 @@ FETCH_CHUNK_DURATION = Histogram(
 FETCH_CHUNKS_TOTAL = Counter(
     "ocm_fetch_chunks_total",
     "Total de chunks fetched del exchange",
-    ["exchange", "symbol", "timeframe"],
+    ["exchange", "symbol", "timeframe", "status"],
+    # status: success | empty | error | circuit_open | stale
 )
 
 STORAGE_WRITE_DURATION = Histogram(
