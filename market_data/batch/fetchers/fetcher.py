@@ -102,7 +102,9 @@ class HistoricalFetcherAsync:
         config_start_date:  Optional[str]               = None,
     ) -> None:
         self._exchange          = exchange_client
-        self._storage           = storage or SilverStorage()
+        self._storage           = storage or SilverStorage(
+            redis_client=getattr(cursor_store, '_client', None),
+        )
         self._transformer       = transformer or OHLCVTransformer()
         self._overlap           = overlap_bars
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()

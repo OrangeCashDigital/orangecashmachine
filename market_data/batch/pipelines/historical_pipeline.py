@@ -186,9 +186,13 @@ class HistoricalPipelineAsync:
 
         self._exchange_id    = getattr(exchange_client, "_exchange_id", "unknown")
         self._bronze_storage = BronzeStorage(exchange=self._exchange_id)
-        self._silver_storage = SilverStorage(exchange=self._exchange_id, market_type=self.market_type)
         self._semaphore      = asyncio.Semaphore(max_concurrency)
         self._cursor: CursorStore = cursor_store or _build_cursor_store_safe()
+        self._silver_storage = SilverStorage(
+            exchange=self._exchange_id,
+            market_type=self.market_type,
+            redis_client=getattr(self._cursor, '_client', None),
+        )
         self._quality_pipeline    = QualityPipeline()
 
         self._fetcher = HistoricalFetcherAsync(

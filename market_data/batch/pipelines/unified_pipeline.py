@@ -106,7 +106,11 @@ class UnifiedPipeline:
 
         cursor  = cursor_store or _build_cursor_store_safe()
         bronze  = BronzeStorage(exchange=self._exchange_id)
-        silver  = SilverStorage(exchange=self._exchange_id, market_type=self.market_type)
+        silver  = SilverStorage(
+            exchange=self._exchange_id,
+            market_type=self.market_type,
+            redis_client=getattr(cursor, '_client', None),
+        )
         quality = QualityPipeline()
 
         from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
