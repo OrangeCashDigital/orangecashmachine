@@ -38,8 +38,8 @@ def _has_active_sinks() -> bool:
     Devuelve True si loguru ya tiene sinks registrados.
 
     Usa logger._core.handlers — API privada pero estable desde loguru 0.5.
-    Preferible al flag de módulo porque sobrevive a reloads y a llamadas
-    externas a logger.remove().
+    Si loguru cambia esta API en el futuro, el except AttributeError
+    actúa como fallback seguro devolviendo False.
     """
     try:
         return bool(logger._core.handlers)  # type: ignore[attr-defined]
@@ -189,6 +189,9 @@ def setup_logging(
     Inicializa el sistema de logging.
 
     - Idempotente: segunda llamada instala bridge stdlib pero no resetea sinks
+    - Si se llama dos veces con distintos parámetros (debug, cfg), solo
+      la primera llamada configura sinks — las siguientes son no-op excepto
+      por el bridge stdlib, que se reinstala siempre.
     - Tipado explícito: cfg es LoggingConfig, no object genérico
     - Preparado para producción
     """

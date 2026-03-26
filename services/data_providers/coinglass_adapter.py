@@ -1,7 +1,9 @@
 import aiohttp
 
+from services.data_providers.base import DataProviderAdapter
 
-class CoinglassAdapter:
+
+class CoinglassAdapter(DataProviderAdapter):
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://open-api.coinglass.com/api"

@@ -25,10 +25,8 @@ from prefect import task, get_run_logger
 
 from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
-from market_data.batch.pipelines.historical_pipeline import HistoricalPipelineAsync
 from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
 from services.exchange.ccxt_adapter import CCXTAdapter
-from services.exchange.base import ExchangeAdapter
 
 # ==========================================================
 # Lifecycle helper
@@ -134,7 +132,7 @@ async def run_historical_pipeline(
     )
 
     async with managed_adapter(exchange_cfg, "spot", injected=exchange_client) as client:
-        pipeline = HistoricalPipelineAsync(
+        pipeline = UnifiedPipeline(
             symbols         = spot_symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
@@ -143,7 +141,7 @@ async def run_historical_pipeline(
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = "spot",
         )
-        summary = await pipeline.run()
+        summary = await pipeline.run(mode="incremental")
 
     log.info(
         "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
@@ -217,10 +215,8 @@ async def run_futures_pipeline(
         len(futures_symbols), len(hist_cfg.timeframes), probe.max_concurrent,
     )
 
-    futures_client = CCXTAdapter(config=exchange_cfg, default_type=futures_market_type)
-
-    try:
-        pipeline = HistoricalPipelineAsync(
+    async with managed_adapter(exchange_cfg, futures_market_type) as futures_client:
+        pipeline = UnifiedPipeline(
             symbols         = futures_symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
@@ -229,9 +225,7 @@ async def run_futures_pipeline(
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = futures_market_type,
         )
-        summary = await pipeline.run()
-    finally:
-        await futures_client.close()
+        summary = await pipeline.run(mode="incremental")
 
     log.info(
         "Futures pipeline finished | exchange=%s market=%s ok=%s failed=%s skipped=%s rows=%s",

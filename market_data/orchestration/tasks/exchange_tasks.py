@@ -328,19 +328,26 @@ async def validate_exchange_connection(
             else None
         )
 
-        # --- Fees y clock (fallos parciales tolerados) ---
-        maker_fee, taker_fee  = await _fetch_trading_fees(exchange, symbol, log)
-        server_time_ok, drift = await _check_clock_sync(exchange, log)
-
-        # --- Capacidades ---
+        # --- Fees, clock y datasets en paralelo (1 RTT efectivo) ---
         try:
-            supported_datasets = await asyncio.wait_for(
-                _detect_supported_datasets(exchange, symbol, log),
-                timeout=_DATASET_PROBE_TIMEOUT,
+            (maker_fee, taker_fee), (server_time_ok, drift), supported_datasets = (
+                await asyncio.gather(
+                    _fetch_trading_fees(exchange, symbol, log),
+                    _check_clock_sync(exchange, log),
+                    _detect_supported_datasets(exchange, symbol, log),
+                    return_exceptions=False,
+                )
             )
         except asyncio.TimeoutError:
-            log.warning("Dataset detection timed out | name=%s — usando lista vacía", name)
-            supported_datasets = []
+            log.warning("Parallel probe timed out | name=%s — usando defaults", name)
+            maker_fee, taker_fee  = None, None
+            server_time_ok, drift = True, None
+            supported_datasets    = []
+        except Exception as exc:
+            log.warning("Parallel probe failed | name=%s error=%s — usando defaults", name, exc)
+            maker_fee, taker_fee  = None, None
+            server_time_ok, drift = True, None
+            supported_datasets    = []
 
         available_markets = _detect_available_markets(has)
 

@@ -83,7 +83,7 @@ class IncrementalStrategy(StrategyMixin):
         # _normalize_dataframe garantiza que timestamp es datetime64[ns, UTC]
         # .timestamp() es siempre válido aquí — sin necesidad de hasattr
         last_ts_ms = int(df["timestamp"].max().timestamp() * 1000)
-        ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)
+        await ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)
 
         result.rows = len(df)
 
