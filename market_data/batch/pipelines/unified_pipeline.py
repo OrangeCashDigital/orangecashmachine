@@ -371,9 +371,10 @@ class UnifiedPipeline:
                 type(exc).__name__, exc,
             )
             return PairResult(
-                symbol     = symbol,
-                timeframe  = timeframe,
-                mode       = mode,
-                error      = str(exc),
-                error_type = type(exc).__name__,
+                symbol      = symbol,
+                timeframe   = timeframe,
+                mode        = mode,
+                exchange_id = self._exchange_id,
+                error       = str(exc),
+                error_type  = type(exc).__name__,
             )

@@ -63,6 +63,7 @@ class PairResult:
     symbol:      str
     timeframe:   str
     mode:        PipelineMode
+    exchange_id: str  = ""
     rows:        int  = 0
     skipped:     bool = False
     error:       str  = ""
@@ -123,10 +124,19 @@ class PipelineSummary:
     degraded_exchanges:  List[str]        = field(default_factory=list)
 
     @property
+    def failed_exchanges(self) -> List[str]:
+        seen = []
+        for r in self.results:
+            if r.error and r.exchange_id and r.exchange_id not in seen:
+                seen.append(r.exchange_id)
+        return seen
+
+    @property
     def status(self) -> str:
-        if self.failed == 0 and not self.degraded_exchanges:
+        all_degraded = set(self.degraded_exchanges) | set(self.failed_exchanges)
+        if self.failed == 0 and not all_degraded:
             return "ok"
-        if self.degraded_exchanges and self.succeeded > 0:
+        if all_degraded and self.succeeded > 0:
             return "degraded"
         return "failed" 
 
@@ -164,7 +174,7 @@ class PipelineSummary:
             self.mode.value, self.status,
             self.total, self.succeeded, self.skipped, self.failed,
             self.total_rows, self.throughput_rows_per_sec, self.duration_ms,
-            self.degraded_exchanges or "none",
+            (self.degraded_exchanges + [f"{e}(errors)" for e in self.failed_exchanges if e not in self.degraded_exchanges]) or "none",
         )
         if self.mode == PipelineMode.REPAIR:
             logger.info(
@@ -210,7 +220,7 @@ class StrategyMixin:
     ) -> "PairResult":
         from services.observability.metrics import PIPELINE_ERRORS  # evita circular
 
-        result     = PairResult(symbol=symbol, timeframe=timeframe, mode=self._mode)
+        result     = PairResult(symbol=symbol, timeframe=timeframe, mode=self._mode, exchange_id=ctx.exchange_id)
         pair_start = time.monotonic()
 
         try:
