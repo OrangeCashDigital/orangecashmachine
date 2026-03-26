@@ -117,9 +117,18 @@ class PairResult:
 
 @dataclass
 class PipelineSummary:
-    results:     List[PairResult] = field(default_factory=list)
-    duration_ms: int              = 0
-    mode:        PipelineMode     = PipelineMode.INCREMENTAL
+    results:             List[PairResult] = field(default_factory=list)
+    duration_ms:         int              = 0
+    mode:                PipelineMode     = PipelineMode.INCREMENTAL
+    degraded_exchanges:  List[str]        = field(default_factory=list)
+
+    @property
+    def status(self) -> str:
+        if self.failed == 0 and not self.degraded_exchanges:
+            return "ok"
+        if self.degraded_exchanges and self.succeeded > 0:
+            return "degraded"
+        return "failed" 
 
     @property
     def total(self)     -> int: return len(self.results)
@@ -150,11 +159,12 @@ class PipelineSummary:
 
     def log(self, logger) -> None:
         logger.info(
-            "Pipeline summary | mode={} total={} ok={} skipped={} failed={} "
-            "rows={} throughput={} rows/s duration={}ms",
-            self.mode.value,
+            "Pipeline summary | mode={} status={} total={} ok={} skipped={} failed={} "
+            "rows={} throughput={} rows/s duration={}ms degraded={}",
+            self.mode.value, self.status,
             self.total, self.succeeded, self.skipped, self.failed,
             self.total_rows, self.throughput_rows_per_sec, self.duration_ms,
+            self.degraded_exchanges or "none",
         )
         if self.mode == PipelineMode.REPAIR:
             logger.info(

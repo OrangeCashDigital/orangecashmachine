@@ -194,6 +194,12 @@ WRITE_LOCK_STARVATION = Counter(
     ["exchange", "symbol", "timeframe"],
 )
 
+FETCH_ABORTS_TOTAL = Counter(
+    "ocm_fetch_aborts_total",
+    "Veces que el circuit breaker aborto el pipeline por exchange",
+    ["exchange"],
+)
+
 EXCHANGE_CIRCUIT_OPEN = Counter(
     "ocm_exchange_circuit_open_total",
     "Veces que el circuit breaker rechazó una llamada al exchange",

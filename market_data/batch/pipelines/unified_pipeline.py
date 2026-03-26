@@ -35,6 +35,7 @@ from market_data.batch.strategies.incremental import IncrementalStrategy
 from market_data.batch.strategies.repair import RepairStrategy
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError, get_breaker_state
+from services.observability.metrics import FETCH_ABORTS_TOTAL
 from services.state.cursor_store import (
     CursorStore,
     InMemoryCursorStore,
@@ -175,25 +176,32 @@ class UnifiedPipeline:
         )
 
         pipeline_start = time.monotonic()
-        results        = await self._run_worker_pool(strategy, pairs, pipeline_mode)
+        results, degraded_exchanges = await self._run_worker_pool(strategy, pairs, pipeline_mode)
         duration_ms    = int((time.monotonic() - pipeline_start) * 1000)
 
         summary = PipelineSummary(
-            results     = results,
-            duration_ms = duration_ms,
-            mode        = pipeline_mode,
+            results             = results,
+            duration_ms         = duration_ms,
+            mode                = pipeline_mode,
+            degraded_exchanges  = degraded_exchanges,
         )
         summary.log(logger)
 
-        if summary.failed:
+        if summary.status == "degraded":
             logger.warning(
-                "Pipeline con errores | mode={} fallidos={}/{} transient={}",
+                "Pipeline DEGRADED | mode={} degraded_exchanges={} fallidos={}/{} transient={}",
+                mode, summary.degraded_exchanges, summary.failed, summary.total,
+                sum(1 for r in summary.results if r.is_transient_error),
+            )
+        elif summary.status == "failed":
+            logger.error(
+                "Pipeline FAILED | mode={} fallidos={}/{} transient={}",
                 mode, summary.failed, summary.total,
                 sum(1 for r in summary.results if r.is_transient_error),
             )
         else:
             logger.success(
-                "Pipeline completado | mode={} rows={} pares={} "
+                "Pipeline OK | mode={} rows={} pares={} "
                 "throughput={} rows/s duration={}ms",
                 mode, summary.total_rows, summary.total,
                 summary.throughput_rows_per_sec, duration_ms,
@@ -219,7 +227,8 @@ class UnifiedPipeline:
         nunca supera max_concurrency.
         """
         queue:   asyncio.Queue = asyncio.Queue()
-        results: List[PairResult] = []
+        results:  List[PairResult] = []
+        degraded: List[str]        = []
         total   = len(pairs)
 
         # Encolar todos los trabajos
@@ -244,6 +253,8 @@ class UnifiedPipeline:
                             drained += 1
                         except asyncio.QueueEmpty:
                             break
+                    if exc.exchange_id not in degraded:
+                        degraded.append(exc.exchange_id)
                     logger.warning(
                         "Exchange aborted — {} pares drenados | exchange={}",
                         drained, exc.exchange_id,
@@ -284,7 +295,7 @@ class UnifiedPipeline:
                 if not w.done():
                     w.cancel()
 
-        return results
+        return results, degraded
 
     # ======================================================
     # Single pair execution (barrera de seguridad)
@@ -321,6 +332,7 @@ class UnifiedPipeline:
             # Breaker abierto — señal scopeada al worker para que drene su queue.
             # _ExchangeAbortError no propaga CancelledError al pipeline global.
             _bs = get_breaker_state(self._exchange_id)
+            FETCH_ABORTS_TOTAL.labels(exchange=self._exchange_id).inc()
             logger.warning(
                 "Circuit open — aborting exchange | exchange={} symbol={} tf={} "
                 "failures={} cooldown_remaining={}ms",
