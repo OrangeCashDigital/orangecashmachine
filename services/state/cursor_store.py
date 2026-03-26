@@ -146,12 +146,13 @@ class RedisCursorStore:
         db:       int = _DEFAULT_DB,
         env:      str = _DEFAULT_ENV,
         ttl_days: int = _DEFAULT_TTL_DAYS,
+        password: str | None = None,
     ) -> None:
         self._env_raw = env.lower()
         self._env     = _encode(self._env_raw)
         self._ttl     = ttl_days * 86_400
         pool = ConnectionPool(
-            host=host, port=port, db=db,
+            host=host, port=port, db=db, password=password or None,
             max_connections=_POOL_MAX_CONN,
             socket_timeout=_SOCKET_TIMEOUT,
             socket_connect_timeout=_CONNECT_TIMEOUT,
@@ -386,6 +387,7 @@ def build_cursor_store_from_config(config=None) -> RedisCursorStore:
         host=redis_cfg.host,
         port=redis_cfg.port,
         db=redis_cfg.db,
+        password=getattr(redis_cfg, "password", None) or None,
         env=getattr(config, "environment", type("E", (), {"name": "development"})()).name
              if hasattr(config, "environment") else "development",
         ttl_days=int(os.getenv("CURSOR_TTL_DAYS", str(_DEFAULT_TTL_DAYS))),
@@ -407,6 +409,7 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
         host=os.getenv("REDIS_HOST", _DEFAULT_HOST),
         port=int(os.getenv("REDIS_PORT", str(_DEFAULT_PORT))),
         db=int(os.getenv("REDIS_DB", str(_DEFAULT_DB))),
+        password=os.getenv("REDIS_PASSWORD") or None,
         env=env or resolve_env(),
         ttl_days=int(os.getenv("CURSOR_TTL_DAYS", str(_DEFAULT_TTL_DAYS))),
     )

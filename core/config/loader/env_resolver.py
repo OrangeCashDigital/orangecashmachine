@@ -15,7 +15,7 @@ from core.config.env_vars import OCM_ENV as _OCM_ENV_VAR
 
 from loguru import logger
 
-_ENV_PATTERN  = re.compile(r"\$\{([^}:]+)(:-([^}]+))?\}")
+_ENV_PATTERN  = re.compile(r"\$\{([^}:]+)(:-([^}]*))?\}")
 _ALLOWED_ENVS = {"development", "test", "staging", "production"}
 
 _resolved_env_cache: dict[str, str] = {}
