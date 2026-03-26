@@ -329,17 +329,40 @@ class UnifiedPipeline:
         except asyncio.CancelledError:
             raise
         except ExchangeCircuitOpenError as exc:
-            # Breaker abierto — señal scopeada al worker para que drene su queue.
-            # _ExchangeAbortError no propaga CancelledError al pipeline global.
+            # Breaker abierto — intentar un cooldown+retry antes de abortar.
+            # Si el retry también falla, se aborta el exchange (no el pipeline global).
             _bs = get_breaker_state(self._exchange_id)
-            FETCH_ABORTS_TOTAL.labels(exchange=self._exchange_id).inc()
+            _cooldown_s = max(1.0, _bs["cooldown_remaining_ms"] / 1000)
             logger.warning(
-                "Circuit open — aborting exchange | exchange={} symbol={} tf={} "
-                "failures={} cooldown_remaining={}ms",
+                "Circuit open — sleeping cooldown | exchange={} symbol={} tf={} "
+                "failures={} cooldown={}s",
                 self._exchange_id, symbol, timeframe,
-                _bs["fail_counter"], _bs["cooldown_remaining_ms"],
+                _bs["fail_counter"], round(_cooldown_s, 1),
             )
-            raise _ExchangeAbortError(self._exchange_id) from exc
+            await asyncio.sleep(_cooldown_s)
+            try:
+                logger.info(
+                    "Circuit cooldown retry | exchange={} symbol={} tf={}",
+                    self._exchange_id, symbol, timeframe,
+                )
+                return await strategy.execute_pair(
+                    symbol    = symbol,
+                    timeframe = timeframe,
+                    idx       = idx,
+                    total     = total,
+                    ctx       = self._ctx,
+                )
+            except ExchangeCircuitOpenError:
+                # Breaker todavia abierto — abortar exchange, no el pipeline.
+                _bs2 = get_breaker_state(self._exchange_id)
+                FETCH_ABORTS_TOTAL.labels(exchange=self._exchange_id).inc()
+                logger.warning(
+                    "Circuit open after retry — aborting exchange | exchange={} "
+                    "symbol={} tf={} failures={} cooldown_remaining={}ms",
+                    self._exchange_id, symbol, timeframe,
+                    _bs2["fail_counter"], _bs2["cooldown_remaining_ms"],
+                )
+                raise _ExchangeAbortError(self._exchange_id) from exc
         except Exception as exc:
             logger.error(
                 "execute_pair unhandled | exchange={} symbol={} tf={} "
