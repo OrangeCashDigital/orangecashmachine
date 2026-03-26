@@ -29,7 +29,11 @@ from loguru import logger
 from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
-from services.observability.metrics import FETCH_CHUNK_DURATION, FETCH_CHUNKS_TOTAL
+from services.observability.metrics import (
+    FETCH_CHUNK_DURATION,
+    FETCH_CHUNKS_TOTAL,
+    FETCH_CHUNK_ERRORS_TOTAL,
+)
 import time
 
 
@@ -194,14 +198,20 @@ class HistoricalFetcherAsync:
                     status=_status,
                 ).inc()
                 break
-            except Exception:
+            except Exception as _chunk_exc:
                 _status = "error"
+                FETCH_CHUNK_ERRORS_TOTAL.labels(
+                    exchange=exchange_name,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    error_type=type(_chunk_exc).__name__,
+                ).inc()
                 raise
             finally:
                 FETCH_CHUNK_DURATION.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
                 ).observe(time.perf_counter() - _t0)
-                if _status not in ("circuit_open",):
+                if _status not in ("circuit_open", "error"):
                     FETCH_CHUNKS_TOTAL.labels(
                         exchange=exchange_name, symbol=symbol, timeframe=timeframe,
                         status=_status,
@@ -231,13 +241,14 @@ class HistoricalFetcherAsync:
             last_ts = int(df["timestamp"].max().timestamp() * 1000)
 
             if last_ts <= since_ts:
+                _stale_severity = "regression" if last_ts < since_ts else "stale"
                 logger.warning(
-                    "Stale window — aborting | {} {} last_ts={} since_ts={}",
-                    symbol, timeframe, last_ts, since_ts,
+                    "Stale window — aborting | {} {} severity={} last_ts={} since_ts={}",
+                    symbol, timeframe, _stale_severity, last_ts, since_ts,
                 )
                 FETCH_CHUNKS_TOTAL.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                    status="stale",
+                    status=_stale_severity,
                 ).inc()
                 break
 

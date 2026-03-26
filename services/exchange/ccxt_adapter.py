@@ -100,6 +100,62 @@ class ExchangeCircuitOpenError(ExchangeAdapterError):
 
 
 # ==========================================================
+# Breaker introspection
+# ==========================================================
+
+def get_breaker_state(exchange_id: str) -> dict:
+    """
+    Estado observable del circuit breaker para un exchange.
+
+    Returns
+    -------
+    {
+        "exchange":              str,
+        "state":                 "closed" | "open" | "half-open",
+        "fail_counter":          int,
+        "cooldown_remaining_ms": int,  # 0 si estado != open
+    }
+
+    SafeOps: nunca lanza excepcion al caller.
+    """
+    try:
+        breaker = _BREAKERS.get(exchange_id)
+        if breaker is None:
+            return {
+                "exchange":              exchange_id,
+                "state":                 "closed",
+                "fail_counter":          0,
+                "cooldown_remaining_ms": 0,
+            }
+
+        state_name  = breaker.current_state
+        cooldown_ms = 0
+
+        if state_name == "open":
+            # pybreaker guarda el timestamp de apertura en el state object.
+            # _state.opened_at es el atributo correcto en pybreaker >= 0.6.
+            opened_at = getattr(breaker._state, "opened_at", None)
+            if opened_at is not None:
+                elapsed_s   = time.time() - opened_at
+                remaining_s = max(0.0, _CB_RESET_TIMEOUT - elapsed_s)
+                cooldown_ms = int(remaining_s * 1000)
+
+        return {
+            "exchange":              exchange_id,
+            "state":                 state_name,
+            "fail_counter":          breaker.fail_counter,
+            "cooldown_remaining_ms": cooldown_ms,
+        }
+    except Exception:
+        return {
+            "exchange":              exchange_id,
+            "state":                 "unknown",
+            "fail_counter":          0,
+            "cooldown_remaining_ms": 0,
+        }
+
+
+# ==========================================================
 # Adapter
 # ==========================================================
 

@@ -126,7 +126,15 @@ FETCH_CHUNKS_TOTAL = Counter(
     "ocm_fetch_chunks_total",
     "Total de chunks fetched del exchange",
     ["exchange", "symbol", "timeframe", "status"],
-    # status: success | empty | error | circuit_open | stale
+    # status: success | empty | circuit_open | stale
+    # Para errores usar FETCH_CHUNK_ERRORS_TOTAL (PromQL más limpio)
+)
+
+FETCH_CHUNK_ERRORS_TOTAL = Counter(
+    "ocm_fetch_chunk_errors_total",
+    "Chunks que terminaron en error (excepción no recuperada)",
+    ["exchange", "symbol", "timeframe", "error_type"],
+    # error_type: ChunkFetchError | ExchangeCircuitOpenError | Exception
 )
 
 STORAGE_WRITE_DURATION = Histogram(

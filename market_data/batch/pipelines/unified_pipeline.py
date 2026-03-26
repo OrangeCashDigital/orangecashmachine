@@ -34,7 +34,7 @@ from market_data.batch.strategies.backfill import BackfillStrategy
 from market_data.batch.strategies.incremental import IncrementalStrategy
 from market_data.batch.strategies.repair import RepairStrategy
 from market_data.batch.transformers.transformer import OHLCVTransformer
-from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
+from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError, get_breaker_state
 from services.state.cursor_store import (
     CursorStore,
     InMemoryCursorStore,
@@ -320,9 +320,12 @@ class UnifiedPipeline:
         except ExchangeCircuitOpenError as exc:
             # Breaker abierto — señal scopeada al worker para que drene su queue.
             # _ExchangeAbortError no propaga CancelledError al pipeline global.
+            _bs = get_breaker_state(self._exchange_id)
             logger.warning(
-                "Circuit open — aborting exchange | exchange={} symbol={} tf={}",
+                "Circuit open — aborting exchange | exchange={} symbol={} tf={} "
+                "failures={} cooldown_remaining={}ms",
                 self._exchange_id, symbol, timeframe,
+                _bs["fail_counter"], _bs["cooldown_remaining_ms"],
             )
             raise _ExchangeAbortError(self._exchange_id) from exc
         except Exception as exc:
