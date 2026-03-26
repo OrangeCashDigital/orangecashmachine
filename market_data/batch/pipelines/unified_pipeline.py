@@ -34,7 +34,7 @@ from market_data.batch.strategies.backfill import BackfillStrategy
 from market_data.batch.strategies.incremental import IncrementalStrategy
 from market_data.batch.strategies.repair import RepairStrategy
 from market_data.batch.transformers.transformer import OHLCVTransformer
-from services.exchange.ccxt_adapter import CCXTAdapter
+from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
 from services.state.cursor_store import (
     CursorStore,
     InMemoryCursorStore,
@@ -229,9 +229,21 @@ class UnifiedPipeline:
         ]
 
         try:
-            # queue.join() bloquea hasta que todos los items fueron procesados.
-            # Es más limpio que sentinels: no hay riesgo de contar mal los None.
-            await queue.join()
+            # queue.join() con timeout — evita deadlock si un worker muere
+            # silenciosamente antes de llamar task_done().
+            # Timeout = 1h, suficiente para cualquier pipeline histórico real.
+            await asyncio.wait_for(queue.join(), timeout=3600)
+        except asyncio.TimeoutError:
+            logger.error(
+                "Worker pool timed out (3600s) | exchange={} — forzando shutdown",
+                self._exchange_id,
+            )
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+            raise RuntimeError(
+                f"Worker pool timed out after 3600s | exchange={self._exchange_id}"
+            )
         except asyncio.CancelledError:
             for w in workers:
                 w.cancel()
@@ -276,6 +288,14 @@ class UnifiedPipeline:
             )
         except asyncio.CancelledError:
             raise
+        except ExchangeCircuitOpenError as exc:
+            # Breaker abierto — cancelar todos los workers restantes.
+            # No tiene sentido seguir procesando pares si el exchange está en cooldown.
+            logger.warning(
+                "Circuit open — cancelling worker pool | exchange={} symbol={} tf={}",
+                self._exchange_id, symbol, timeframe,
+            )
+            raise asyncio.CancelledError() from exc
         except Exception as exc:
             logger.error(
                 "execute_pair unhandled | exchange={} symbol={} tf={} "

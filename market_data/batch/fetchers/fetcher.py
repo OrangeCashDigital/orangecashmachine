@@ -23,11 +23,13 @@ from typing import List, Optional
 
 import pandas as pd
 import pybreaker
+import ccxt.async_support as _ccxt_async
 from loguru import logger
 
 from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
-from services.exchange.ccxt_adapter import CCXTAdapter
+from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
+from services.observability.metrics import FETCH_CHUNK_DURATION, FETCH_CHUNKS_TOTAL
 
 
 # ==========================================================
@@ -112,10 +114,8 @@ class HistoricalFetcherAsync:
         self._market_type       = market_type
         self._config_start_date = config_start_date
 
-        self._breaker = pybreaker.CircuitBreaker(
-            fail_max=5,
-            reset_timeout=60,
-        )
+        # Circuit breaker eliminado — vive en CCXTAdapter._get_breaker(),
+        # compartido por exchange_id. No se duplica aquí.
 
     # ======================================================
     # Public API
@@ -177,7 +177,24 @@ class HistoricalFetcherAsync:
 
         for chunk_idx in range(MAX_CHUNKS_PER_RUN):
 
-            raw = await self._fetch_chunk_with_retry(symbol, timeframe, since_ts, limit)
+            exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
+            _t0 = time.perf_counter()
+            try:
+                raw = await self._fetch_chunk_with_retry(symbol, timeframe, since_ts, limit)
+            except ExchangeCircuitOpenError:
+                # Breaker abierto — exchange en cooldown, no tiene sentido seguir
+                logger.warning(
+                    "Circuit open — aborting chunked download | {} {} chunk={}",
+                    symbol, timeframe, chunk_idx,
+                )
+                break
+            finally:
+                FETCH_CHUNK_DURATION.labels(
+                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                ).observe(time.perf_counter() - _t0)
+                FETCH_CHUNKS_TOTAL.labels(
+                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                ).inc()
 
             if not raw:
                 break
@@ -326,8 +343,22 @@ class HistoricalFetcherAsync:
 
                 is_session_error   = any(m in err_str for m in self._SESSION_ERRORS)
                 is_transient_error = any(m in err_str.lower() for m in self._TRANSIENT_ERRORS)
+                is_rate_limit      = isinstance(exc, _ccxt_async.RateLimitExceeded)
 
-                if is_session_error and not session_reconnected:
+                if is_rate_limit:
+                    # 429 notifica al circuit breaker del adapter — acumula estado
+                    # de degradación. Tras _CB_FAIL_MAX seguidos el circuito abre.
+                    try:
+                        breaker = getattr(self._exchange, "_breaker", None)
+                        if breaker is not None:
+                            breaker.call(lambda: (_ for _ in ()).throw(exc))
+                    except Exception:
+                        pass
+                    logger.warning(
+                        "Rate limit (429) — notified breaker | {} {} attempt={} wait={:.2f}s",
+                        symbol, timeframe, attempt, wait,
+                    )
+                elif is_session_error and not session_reconnected:
                     logger.warning(
                         "Session dead — reconnecting | {} {} attempt={} err={}",
                         symbol, timeframe, attempt, exc,

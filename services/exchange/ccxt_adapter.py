@@ -60,10 +60,26 @@ _FETCH_TRADES_TIMEOUT  = 15.0
 
 
 # Circuit breaker: abre tras 5 fallos consecutivos, resetea a los 60s.
-# Protege contra cascading failures cuando un exchange está degradado.
-# Compartido por instancia — un breaker por exchange+adapter.
+# Compartido por exchange_id — un breaker global por exchange, no por instancia.
+# Evita que spot y futures del mismo exchange tengan breakers independientes
+# que se disparan en cascada cuando el exchange está bajo presión.
 _CB_FAIL_MAX:       int   = 5
 _CB_RESET_TIMEOUT:  int   = 60
+
+_BREAKERS: dict[str, "pybreaker.CircuitBreaker"] = {}
+
+
+def _get_breaker(exchange_id: str) -> "pybreaker.CircuitBreaker":
+    # setdefault es atómico en CPython — elimina race condition del if/else.
+    # En worst case se construye un CircuitBreaker extra que se descarta (GC).
+    return _BREAKERS.setdefault(
+        exchange_id,
+        pybreaker.CircuitBreaker(
+            fail_max      = _CB_FAIL_MAX,
+            reset_timeout = _CB_RESET_TIMEOUT,
+            name          = exchange_id,
+        ),
+    )
 
 
 # ==========================================================
@@ -126,14 +142,10 @@ class CCXTAdapter(ExchangeAdapter):
         self._init_lock:         asyncio.Lock            = asyncio.Lock()
         self._markets_cache:     Optional[Dict[str, Any]] = None
         self._markets_cached_at: float = 0.0
-        # Circuit breaker por instancia — un breaker por exchange.
-        # Si el exchange falla _CB_FAIL_MAX veces consecutivas, abre el circuito
-        # y lanza ExchangeCircuitOpenError hasta que expire _CB_RESET_TIMEOUT.
-        self._breaker = pybreaker.CircuitBreaker(
-            fail_max      = _CB_FAIL_MAX,
-            reset_timeout = _CB_RESET_TIMEOUT,
-            name          = self._exchange_id,
-        )
+        # Circuit breaker compartido por exchange_id (singleton global).
+        # Spot y futures del mismo exchange comparten el mismo breaker —
+        # si bybit está degradado, ambos pipelines lo detectan juntos.
+        self._breaker = _get_breaker(self._exchange_id)
 
     # ----------------------------------------------------------
     # Lifecycle
