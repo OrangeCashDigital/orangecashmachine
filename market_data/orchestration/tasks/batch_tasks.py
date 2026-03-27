@@ -159,7 +159,7 @@ async def run_historical_pipeline(
         else:
             throttle.record_success()
 
-    ts = get_throttle_state(exchange_name)
+    ts = get_throttle_state(exchange_name, market_type="spot", dataset="ohlcv")
     log.info(
         "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
         exchange_name,
@@ -178,8 +178,8 @@ async def run_historical_pipeline(
             status, r.symbol, r.timeframe, r.rows, r.duration_ms, r.error or "-",
         )
     log.info(
-        "── Throttle state | exchange=%s concurrent=%s/%s error_rate=%.0f%% ──",
-        exchange_name, ts["concurrent"], ts["maximum"], ts["error_rate"] * 100,
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        ts["key"], ts["concurrent"], ts["maximum"], ts["error_rate"] * 100, int(ts["p95_ms"]),
     )
 
     if summary.total > 0 and summary.failed == summary.total:
@@ -273,7 +273,7 @@ async def run_futures_pipeline(
         else:
             throttle.record_success()
 
-    ts = get_throttle_state(exchange_name)
+    ts = get_throttle_state(exchange_name, market_type=futures_market_type, dataset="ohlcv")
     log.info(
         "Futures pipeline finished | exchange=%s market=%s ok=%s failed=%s skipped=%s rows=%s",
         exchange_name, futures_market_type,
@@ -290,8 +290,8 @@ async def run_futures_pipeline(
             r.rows, r.duration_ms, r.error or "-",
         )
     log.info(
-        "── Throttle state | exchange=%s concurrent=%s/%s error_rate=%.0f%% ──",
-        exchange_name, ts["concurrent"], ts["maximum"], ts["error_rate"] * 100,
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        ts["key"], ts["concurrent"], ts["maximum"], ts["error_rate"] * 100, int(ts["p95_ms"]),
     )
 
     if summary.total > 0 and summary.failed == summary.total:
