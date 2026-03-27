@@ -30,6 +30,7 @@ from loguru import logger
 
 from core.config.runtime import RunConfig
 from core.config.loader import load_config, ConfigurationError, ConfigValidationError
+from core.config.loader.env_resolver import bootstrap_dotenv
 from core.config.schema import AppConfig
 from core.logging import setup_logging
 from market_data.orchestration.entrypoint import run as run_pipeline
@@ -70,6 +71,7 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         0 → éxito, 1 → error crítico, 130 → interrumpido (SIGINT).
     """
     if run_cfg is None:
+        bootstrap_dotenv()
         run_cfg = RunConfig.from_env()
 
     # request_id generado una sola vez por ejecución.
@@ -87,6 +89,19 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         #    run_id se inyecta vía patcher para que fluya a todos los sinks
         #    desde el primer log, sin necesidad de logger.bind().
         setup_logging(debug=run_cfg.debug, run_id=run_id)
+
+        # Transparencia de resolución — elimina ambigüedad en debugging.
+        # Prioridad real: explicit > env_var > dotenv > settings_yaml > default
+        logger.debug(
+            "config_source_priority | 1=explicit 2=env_var 3=dotenv 4=settings_yaml 5=default"
+        )
+        logger.debug(
+            "run_config_resolved | env={} debug={} config_path={} pushgateway={}",
+            run_cfg.env,
+            run_cfg.debug,
+            run_cfg.config_path,
+            run_cfg.pushgateway,
+        )
 
         # 2. Config — loguru ya activo, ningún log de loader se pierde.
         config = initialize_config(run_cfg)
@@ -147,4 +162,4 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(run_cfg=RunConfig.from_env()))
+    sys.exit(main())

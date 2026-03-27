@@ -20,6 +20,10 @@ _ALLOWED_ENVS = {"development", "test", "staging", "production"}
 
 _resolved_env_cache: dict[str, str] = {}
 
+# Valores de OCM_ENV inyectados por .env (no presentes antes de load_dotenv).
+# Permite distinguir source=env_var (proceso) vs source=dotenv (archivo).
+_DOTENV_INJECTED: set[str] = set()
+
 
 class EnvResolver:
     @staticmethod
@@ -43,6 +47,17 @@ class EnvResolver:
         return data
 
 
+def bootstrap_dotenv() -> None:
+    """Carga .env base antes de RunConfig para que resolve_env vea source=dotenv."""
+    p = Path(".env")
+    if p.exists():
+        before = os.environ.get(_OCM_ENV_VAR)
+        load_dotenv(p, override=False)
+        after = os.environ.get(_OCM_ENV_VAR)
+        if before is None and after is not None:
+            _DOTENV_INJECTED.add(after)
+
+
 def load_dotenv_for_env(env: str) -> None:
     for filename in (".env", f".env.{env}", f".env.{env}.local"):
         p = Path(filename)
@@ -50,7 +65,12 @@ def load_dotenv_for_env(env: str) -> None:
             # override=False: os.environ tiene prioridad sobre .env
             # SSOT: el proceso (deployment/test/operador) es la fuente de mayor autoridad.
             # .env es un convenio local que solo rellena vars ausentes, nunca las sobreescribe.
+            before = os.environ.get(_OCM_ENV_VAR)
             load_dotenv(p, override=False)
+            after = os.environ.get(_OCM_ENV_VAR)
+            # Si OCM_ENV no existía antes y ahora existe, fue inyectada por .env
+            if before is None and after is not None:
+                _DOTENV_INJECTED.add(after)
             logger.debug("dotenv_loaded | file={} override=false", filename)
 
 
@@ -85,11 +105,22 @@ def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optiona
 
 
 def resolve_env(explicit_env: Optional[str] = None, config_dir: Optional[Path] = None) -> str:
+    """
+    Cascada de resolución de entorno activo.
+
+    Prioridad (mayor → menor):
+    1. explicit      — argumento directo (tests, bootstrap interno con env conocido)
+    2. env_var       — OCM_ENV presente en el proceso ANTES de cargar .env
+    3. dotenv        — OCM_ENV inyectada por archivo .env
+    4. settings_yaml — environment.default_env en settings.yaml
+    5. default       — "development"
+    """
     if explicit_env:
-        logger.debug("env_resolved | source=cli value={}", explicit_env)
+        logger.debug("env_resolved | source=explicit value={}", explicit_env)
         return explicit_env
     if ocm := os.getenv(_OCM_ENV_VAR):
-        logger.debug("env_resolved | source=env_var value={}", ocm)
+        source = "dotenv" if ocm in _DOTENV_INJECTED else "env_var"
+        logger.debug("env_resolved | source={} value={}", source, ocm)
         return ocm
     if yaml_env := read_default_env_from_settings(config_dir):
         logger.debug("env_resolved | source=settings_yaml value={}", yaml_env)
