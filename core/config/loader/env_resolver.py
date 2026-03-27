@@ -24,6 +24,9 @@ _resolved_env_cache: dict[str, str] = {}
 # Valores de OCM_ENV inyectados por .env
 _DOTENV_INJECTED: set[str] = set()
 
+# Guard de idempotencia: archivos .env ya cargados (evita duplicación en re-runs)
+_DOTENV_LOADED_FILES: set[str] = set()
+
 
 # --------------------------------------------------
 # ENV RESOLUTION ENGINE
@@ -71,10 +74,15 @@ def bootstrap_dotenv() -> None:
 
 
 def load_dotenv_for_env(env: str) -> None:
-    """Carga archivos .env específicos del entorno."""
+    """Carga archivos .env específicos del entorno. Idempotente por diseño."""
     for filename in (".env", f".env.{env}", f".env.{env}.local"):
         p = Path(filename)
         if not p.exists():
+            continue
+
+        canon = str(p.resolve())
+        if canon in _DOTENV_LOADED_FILES:
+            logger.debug("dotenv_skip | file={} reason=already_loaded", filename)
             continue
 
         before = os.environ.get(_OCM_ENV_VAR)
@@ -84,6 +92,7 @@ def load_dotenv_for_env(env: str) -> None:
         if before is None and after is not None:
             _DOTENV_INJECTED.add(after)
 
+        _DOTENV_LOADED_FILES.add(canon)
         logger.debug("dotenv_loaded | file={} override=false", filename)
 
 
