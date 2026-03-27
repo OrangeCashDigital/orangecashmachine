@@ -26,7 +26,7 @@ from prefect import task, get_run_logger
 from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
 from market_data.batch.pipelines.unified_pipeline import UnifiedPipeline
-from services.exchange.ccxt_adapter import CCXTAdapter
+from services.exchange.ccxt_adapter import CCXTAdapter, get_or_create_throttle, get_throttle_state
 
 # ==========================================================
 # Lifecycle helper
@@ -123,12 +123,21 @@ async def run_historical_pipeline(
     max_concurrency = probe.max_concurrent
     spot_symbols    = exchange_cfg.markets.spot_symbols
 
+    # Throttle adaptivo: usa probe.max_concurrent como initial/maximum.
+    # El throttle ajusta concurrencia en tiempo real según error rate.
+    throttle = get_or_create_throttle(
+        exchange_id = exchange_name,
+        initial     = max_concurrency,
+        maximum     = max_concurrency,
+    )
+    effective_concurrency = throttle.current
+
     log.info(
         "Historical pipeline starting | exchange=%s market=spot symbols=%s timeframes=%s workers=%s",
         exchange_name,
         len(spot_symbols),
         len(hist_cfg.timeframes),
-        max_concurrency,
+        effective_concurrency,
     )
 
     async with managed_adapter(exchange_cfg, "spot", injected=exchange_client) as client:
@@ -136,13 +145,21 @@ async def run_historical_pipeline(
             symbols         = spot_symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
-            max_concurrency = max_concurrency,
+            max_concurrency = effective_concurrency,
             exchange_client = client,
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = "spot",
         )
         summary = await pipeline.run(mode="incremental")
 
+    # Actualizar throttle según resultado del pipeline
+    for r in summary.results:
+        if r.error:
+            throttle.record_error()
+        else:
+            throttle.record_success()
+
+    ts = get_throttle_state(exchange_name)
     log.info(
         "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
         exchange_name,
@@ -150,6 +167,19 @@ async def run_historical_pipeline(
         summary.failed,
         summary.skipped,
         summary.total_rows,
+    )
+
+    # ── Métricas por timeframe ────────────────────────────────────────────────
+    log.info("── Pipeline metrics | exchange=%s ──────────────────────────", exchange_name)
+    for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
+        status = "✓" if r.success else ("↷" if r.skipped else "✗")
+        log.info(
+            "  %s spot/%s/%s | rows=%s duration=%sms error=%s",
+            status, r.symbol, r.timeframe, r.rows, r.duration_ms, r.error or "-",
+        )
+    log.info(
+        "── Throttle state | exchange=%s concurrent=%s/%s error_rate=%.0f%% ──",
+        exchange_name, ts["concurrent"], ts["maximum"], ts["error_rate"] * 100,
     )
 
     if summary.total > 0 and summary.failed == summary.total:
@@ -209,10 +239,19 @@ async def run_futures_pipeline(
     hist_cfg            = config.pipeline.historical
     exchange_name       = exchange_cfg.name.value
 
+    # Throttle compartido con spot del mismo exchange — si spot ya redujo
+    # concurrencia por errores, futures hereda ese estado de presión.
+    throttle = get_or_create_throttle(
+        exchange_id = exchange_name,
+        initial     = probe.max_concurrent,
+        maximum     = probe.max_concurrent,
+    )
+    effective_concurrency = throttle.current
+
     log.info(
         "Futures pipeline starting | exchange=%s market=%s symbols=%s timeframes=%s workers=%s",
         exchange_name, futures_market_type,
-        len(futures_symbols), len(hist_cfg.timeframes), probe.max_concurrent,
+        len(futures_symbols), len(hist_cfg.timeframes), effective_concurrency,
     )
 
     async with managed_adapter(exchange_cfg, futures_market_type) as futures_client:
@@ -220,17 +259,39 @@ async def run_futures_pipeline(
             symbols         = futures_symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
-            max_concurrency = probe.max_concurrent,
+            max_concurrency = effective_concurrency,
             exchange_client = futures_client,
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = futures_market_type,
         )
         summary = await pipeline.run(mode="incremental")
 
+    # Actualizar throttle según resultado
+    for r in summary.results:
+        if r.error:
+            throttle.record_error()
+        else:
+            throttle.record_success()
+
+    ts = get_throttle_state(exchange_name)
     log.info(
         "Futures pipeline finished | exchange=%s market=%s ok=%s failed=%s skipped=%s rows=%s",
         exchange_name, futures_market_type,
         summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
+    )
+
+    # ── Métricas por timeframe ────────────────────────────────────────────────
+    log.info("── Pipeline metrics | exchange=%s market=%s ──────────────────", exchange_name, futures_market_type)
+    for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
+        status = "✓" if r.success else ("↷" if r.skipped else "✗")
+        log.info(
+            "  %s %s/%s/%s | rows=%s duration=%sms error=%s",
+            status, futures_market_type, r.symbol, r.timeframe,
+            r.rows, r.duration_ms, r.error or "-",
+        )
+    log.info(
+        "── Throttle state | exchange=%s concurrent=%s/%s error_rate=%.0f%% ──",
+        exchange_name, ts["concurrent"], ts["maximum"], ts["error_rate"] * 100,
     )
 
     if summary.total > 0 and summary.failed == summary.total:

@@ -155,6 +155,126 @@ def get_breaker_state(exchange_id: str) -> dict:
         }
 
 
+
+# ==========================================================
+# Adaptive Throttle — concurrencia dinámica por exchange
+# ==========================================================
+
+from collections import deque as _deque
+
+class AdaptiveThrottle:
+    """
+    Controla la concurrencia activa por exchange y la ajusta en tiempo real.
+
+    Algoritmo
+    ---------
+    Mantiene una ventana deslizante de los últimos N resultados (ok/error).
+    Si la tasa de error supera el umbral alto  → reduce slots (-1, mínimo 1).
+    Si la tasa de error cae bajo el umbral bajo → aumenta slots (+1, hasta max).
+    Los ajustes solo ocurren cada MIN_CALLS llamadas para evitar oscilación.
+
+    Thread-safety
+    -------------
+    Asyncio single-thread: no necesita Lock. Solo se llama desde coroutines
+    dentro del mismo event loop.
+    """
+
+    _WINDOW        = 20    # tamaño de la ventana de observación
+    _HIGH_ERR      = 0.30  # >30% errores → bajar concurrencia
+    _LOW_ERR       = 0.05  # <5%  errores → subir concurrencia
+    _MIN_CALLS     = 5     # mínimo de llamadas antes de ajustar
+
+    def __init__(self, exchange_id: str, initial: int, maximum: int) -> None:
+        self.exchange_id = exchange_id
+        self._current    = max(1, min(initial, maximum))
+        self._maximum    = maximum
+        self._window: "_deque[bool]" = _deque(maxlen=self._WINDOW)
+        self._calls_since_adjust = 0
+
+    @property
+    def current(self) -> int:
+        return self._current
+
+    def record_success(self) -> None:
+        self._window.append(True)
+        self._calls_since_adjust += 1
+        self._maybe_scale_up()
+
+    def record_error(self) -> None:
+        self._window.append(False)
+        self._calls_since_adjust += 1
+        self._maybe_scale_down()
+
+    def _error_rate(self) -> float:
+        if not self._window:
+            return 0.0
+        return sum(1 for ok in self._window if not ok) / len(self._window)
+
+    def _maybe_scale_down(self) -> None:
+        if self._calls_since_adjust < self._MIN_CALLS:
+            return
+        if self._error_rate() > self._HIGH_ERR and self._current > 1:
+            self._current = max(1, int(self._current * 0.75))
+            self._calls_since_adjust = 0
+            from loguru import logger as _log
+            _log.warning(
+                "AdaptiveThrottle scale DOWN | exchange={} concurrent={} error_rate={:.0%}",
+                self.exchange_id, self._current, self._error_rate(),
+            )
+
+    def _maybe_scale_up(self) -> None:
+        if self._calls_since_adjust < self._MIN_CALLS:
+            return
+        if self._error_rate() < self._LOW_ERR and self._current < self._maximum:
+            self._current = min(self._maximum, self._current + 1)
+            self._calls_since_adjust = 0
+            from loguru import logger as _log
+            _log.debug(
+                "AdaptiveThrottle scale UP | exchange={} concurrent={}",
+                self.exchange_id, self._current,
+            )
+
+
+_THROTTLES: dict[str, "AdaptiveThrottle"] = {}
+
+
+def get_or_create_throttle(
+    exchange_id: str,
+    initial:     int,
+    maximum:     int,
+) -> "AdaptiveThrottle":
+    """
+    Singleton de AdaptiveThrottle por exchange_id.
+
+    Si ya existe un throttle para el exchange, lo devuelve sin modificar
+    sus contadores internos — permite que el estado persista entre tasks
+    del mismo run. Si no existe, lo crea con initial/maximum del probe.
+    """
+    if exchange_id not in _THROTTLES:
+        _THROTTLES[exchange_id] = AdaptiveThrottle(
+            exchange_id=exchange_id,
+            initial=initial,
+            maximum=maximum,
+        )
+    return _THROTTLES[exchange_id]
+
+
+def get_throttle_state(exchange_id: str) -> dict:
+    """Estado observable del throttle. SafeOps: nunca lanza excepción."""
+    try:
+        t = _THROTTLES.get(exchange_id)
+        if t is None:
+            return {"exchange": exchange_id, "concurrent": 0, "error_rate": 0.0}
+        return {
+            "exchange":    exchange_id,
+            "concurrent":  t.current,
+            "error_rate":  t._error_rate(),
+            "maximum":     t._maximum,
+        }
+    except Exception:
+        return {"exchange": exchange_id, "concurrent": 0, "error_rate": 0.0}
+
+
 # ==========================================================
 # Adapter
 # ==========================================================

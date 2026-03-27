@@ -381,7 +381,7 @@ class HistoricalFetcherAsync:
                 last_exc = exc
                 err_str  = str(exc)
                 wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
-                wait    += random.uniform(0, 0.5)
+                wait    *= random.uniform(0.5, 1.5)  # jitter multiplicativo — evita thundering herd
 
                 is_session_error   = any(m in err_str for m in self._SESSION_ERRORS)
                 is_transient_error = any(m in err_str.lower() for m in self._TRANSIENT_ERRORS)
