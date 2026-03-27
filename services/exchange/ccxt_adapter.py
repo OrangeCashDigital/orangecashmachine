@@ -341,7 +341,7 @@ def get_or_create_throttle(
     key = f"{exchange_id}:{market_type}:{dataset}"
     if key not in _THROTTLES:
         _THROTTLES[key] = AdaptiveThrottle(
-            key               = key,
+            exchange_id       = key,
             initial           = initial,
             maximum           = maximum,
             latency_target_ms = latency_target_ms,
