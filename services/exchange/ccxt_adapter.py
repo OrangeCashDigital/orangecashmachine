@@ -8,24 +8,15 @@ Responsabilidad
 ---------------
 • Construir y gestionar lifecycle del cliente ccxt async
 • Resolver credenciales desde ExchangeConfig o parámetros explícitos
-• Exponer interfaz limpia para consumo por fetchers y pipelines
-• NO contiene lógica de negocio
-• NO depende de AppConfig global
+• Exponer interfaz limpia para fetchers y pipelines
+• NO contiene lógica de negocio  •  NO depende de AppConfig global
 
-Principios
-----------
-SOLID   – SRP + DIP (adapter desacoplado, credenciales resueltas aquí)
-DRY     – init centralizado
-KISS    – API mínima y clara
-SafeOps – retries, timeouts, cierre seguro
-
-Timeouts
---------
-Cada método de I/O tiene su propio asyncio.wait_for con timeout explícito.
-El timeout del task de Prefect es el techo máximo — estos son los límites
-operativos por llamada individual.
+Módulos relacionados
+--------------------
+errors.py          — clases de excepción
+circuit_breaker.py — circuit breaker compartido por exchange
+throttle.py        — concurrencia adaptiva por pipeline
 """
-
 from __future__ import annotations
 
 import asyncio
@@ -38,9 +29,35 @@ import pybreaker
 from loguru import logger
 
 from services.exchange.base import ExchangeAdapter
+from services.exchange.errors import (
+    ExchangeAdapterError,
+    UnsupportedExchangeError,
+    ExchangeConnectionError,
+    ExchangeCircuitOpenError,
+)
+from services.exchange.circuit_breaker import _get_breaker, get_breaker_state
+from services.exchange.throttle import (
+    AdaptiveThrottle,
+    _THROTTLES,
+    get_or_create_throttle,
+    get_throttle_state,
+)
 
 if TYPE_CHECKING:
     from core.config.schema import ExchangeConfig
+
+# Backward-compat re-exports — los importadores existentes no necesitan cambios
+__all__ = [
+    "CCXTAdapter",
+    "ExchangeAdapterError",
+    "UnsupportedExchangeError",
+    "ExchangeConnectionError",
+    "ExchangeCircuitOpenError",
+    "get_breaker_state",
+    "AdaptiveThrottle",
+    "get_or_create_throttle",
+    "get_throttle_state",
+]
 
 
 # ==========================================================
@@ -58,322 +75,6 @@ _FETCH_TICKER_TIMEOUT  = 10.0
 _FETCH_OHLCV_TIMEOUT   = 30.0
 _FETCH_TRADES_TIMEOUT  = 15.0
 
-
-# Circuit breaker: abre tras 5 fallos consecutivos, resetea a los 60s.
-# Compartido por exchange_id — un breaker global por exchange, no por instancia.
-# Evita que spot y futures del mismo exchange tengan breakers independientes
-# que se disparan en cascada cuando el exchange está bajo presión.
-_CB_FAIL_MAX:       int   = 10
-_CB_RESET_TIMEOUT:  int   = 120
-
-_BREAKERS: dict[str, "pybreaker.CircuitBreaker"] = {}
-
-
-def _get_breaker(exchange_id: str) -> "pybreaker.CircuitBreaker":
-    # setdefault es atómico en CPython — elimina race condition del if/else.
-    # En worst case se construye un CircuitBreaker extra que se descarta (GC).
-    return _BREAKERS.setdefault(
-        exchange_id,
-        pybreaker.CircuitBreaker(
-            fail_max      = _CB_FAIL_MAX,
-            reset_timeout = _CB_RESET_TIMEOUT,
-            name          = exchange_id,
-        ),
-    )
-
-
-# ==========================================================
-# Exceptions
-# ==========================================================
-
-class ExchangeAdapterError(Exception):
-    """Base adapter error."""
-
-class UnsupportedExchangeError(ExchangeAdapterError):
-    """Exchange no soportado por ccxt."""
-
-class ExchangeConnectionError(ExchangeAdapterError):
-    """Fallo de conexión tras retries."""
-
-class ExchangeCircuitOpenError(ExchangeAdapterError):
-    """Circuit breaker abierto — exchange en cooldown."""
-
-
-# ==========================================================
-# Breaker introspection
-# ==========================================================
-
-def get_breaker_state(exchange_id: str) -> dict:
-    """
-    Estado observable del circuit breaker para un exchange.
-
-    Returns
-    -------
-    {
-        "exchange":              str,
-        "state":                 "closed" | "open" | "half-open",
-        "fail_counter":          int,
-        "cooldown_remaining_ms": int,  # 0 si estado != open
-    }
-
-    SafeOps: nunca lanza excepcion al caller.
-    """
-    try:
-        breaker = _BREAKERS.get(exchange_id)
-        if breaker is None:
-            return {
-                "exchange":              exchange_id,
-                "state":                 "closed",
-                "fail_counter":          0,
-                "cooldown_remaining_ms": 0,
-            }
-
-        state_name  = breaker.current_state
-        cooldown_ms = 0
-
-        if state_name == "open":
-            # pybreaker guarda el timestamp de apertura en el state object.
-            # _state.opened_at es el atributo correcto en pybreaker >= 0.6.
-            opened_at = getattr(breaker._state, "opened_at", None)
-            if opened_at is not None:
-                elapsed_s   = time.time() - opened_at
-                remaining_s = max(0.0, _CB_RESET_TIMEOUT - elapsed_s)
-                cooldown_ms = int(remaining_s * 1000)
-
-        return {
-            "exchange":              exchange_id,
-            "state":                 state_name,
-            "fail_counter":          breaker.fail_counter,
-            "cooldown_remaining_ms": cooldown_ms,
-        }
-    except Exception:
-        return {
-            "exchange":              exchange_id,
-            "state":                 "unknown",
-            "fail_counter":          0,
-            "cooldown_remaining_ms": 0,
-        }
-
-
-
-# ==========================================================
-# Adaptive Throttle — concurrencia dinámica por pipeline
-# ==========================================================
-#
-# Arquitectura de keys
-# --------------------
-# Key = "exchange_id:market_type:dataset"
-# Ejemplos:
-#   "bybit:spot:ohlcv"
-#   "bybit:swap:ohlcv"
-#   "kucoin:spot:trades"
-#
-# Rationale: spot y futures del mismo exchange tienen rate limits
-# y patrones de degradación distintos. Un pipeline lento de futures
-# no debe penalizar la concurrencia del spot y viceversa.
-# El probe define el starting point; el throttle ajusta en runtime.
-
-from collections import deque as _deque
-import statistics as _statistics
-
-class AdaptiveThrottle:
-    """
-    Throttle adaptivo por pipeline (exchange:market_type:dataset).
-
-    Señales de scale_down (cualquiera dispara):
-    - error_rate  > error_threshold  (429 pesa doble, timeout normal, network leve)
-    - p95_latency > latency_target_ms
-
-    Señales de scale_up:
-    - error_rate  < error_threshold / 2
-    - p95_latency < latency_target_ms * 0.7
-    - (ambas condiciones)
-
-    Cooldown: no escala más de una vez cada cooldown_seconds.
-    """
-
-    _RATE_LIMIT_WEIGHT = 2.0   # 429 cuenta doble en error_rate
-    _TIMEOUT_WEIGHT    = 1.0
-    _NETWORK_WEIGHT    = 0.5   # glitch transitorio — pesa menos
-
-    def __init__(
-        self,
-        exchange_id:        str,
-        initial:            int   = 5,
-        maximum:            int   = 20,
-        minimum:            int   = 1,
-        error_threshold:    float = 0.2,
-        latency_target_ms:  int   = 500,
-        cooldown_seconds:   float = 10.0,
-        window:             int   = 20,
-    ) -> None:
-        self._exchange_id       = exchange_id
-        self.current            = max(minimum, min(initial, maximum))
-        self._maximum           = maximum
-        self._minimum           = minimum
-        self._error_threshold   = error_threshold
-        self._latency_target_ms = latency_target_ms
-        self._cooldown_seconds  = cooldown_seconds
-        self._window            = window
-
-        # ventana deslizante: almacena pesos de error (0 = éxito, >0 = error)
-        self._results:    list[float] = []
-        # ventana deslizante de latencias observadas
-        self._latencies:  list[float] = []
-        self._last_scale: float       = 0.0  # timestamp último scale
-
-    # ── registro ──────────────────────────────────────────────────────────────
-
-    def record_success(self, latency_ms: float | None = None) -> None:
-        self._results.append(0.0)
-        if latency_ms is not None:
-            self._latencies.append(latency_ms)
-        self._trim()
-        self._maybe_scale()
-
-    def record_error(
-        self,
-        error_type: str = "network",
-        latency_ms: float | None = None,
-    ) -> None:
-        """
-        error_type: "rate_limit" | "timeout" | "network"
-        rate_limit pesa doble → scale_down agresivo ante 429s.
-        """
-        weight = {
-            "rate_limit": self._RATE_LIMIT_WEIGHT,
-            "timeout":    self._TIMEOUT_WEIGHT,
-            "network":    self._NETWORK_WEIGHT,
-        }.get(error_type, self._TIMEOUT_WEIGHT)
-
-        self._results.append(weight)
-        if latency_ms is not None:
-            self._latencies.append(latency_ms)
-        self._trim()
-        self._maybe_scale()
-
-    # ── métricas ──────────────────────────────────────────────────────────────
-
-    def _error_rate(self) -> float:
-        if not self._results:
-            return 0.0
-        # normaliza pesos al rango [0, 1] usando peso máximo posible
-        total_weight = sum(self._results)
-        max_possible = len(self._results) * self._RATE_LIMIT_WEIGHT
-        return total_weight / max_possible if max_possible else 0.0
-
-    def _p95_latency(self) -> float:
-        if not self._latencies:
-            return 0.0
-        sorted_lats = sorted(self._latencies)
-        idx = max(0, int(len(sorted_lats) * 0.95) - 1)
-        return sorted_lats[idx]
-
-    # ── lógica de escala ──────────────────────────────────────────────────────
-
-    def _maybe_scale(self) -> None:
-        import time
-        now = time.monotonic()
-        if now - self._last_scale < self._cooldown_seconds:
-            return  # cooldown activo — evita thrashing
-
-        error_rate  = self._error_rate()
-        p95         = self._p95_latency()
-        should_down = (
-            error_rate > self._error_threshold
-            or (p95 > 0 and p95 > self._latency_target_ms)
-        )
-        should_up = (
-            error_rate < self._error_threshold / 2
-            and (p95 == 0 or p95 < self._latency_target_ms * 0.7)
-            and self.current < self._maximum
-        )
-
-        if should_down and self.current > self._minimum:
-            # 429 → bajar más agresivo (50%), latencia/timeout → menos (70%)
-            factor = 0.5 if error_rate > self._error_threshold else 0.7
-            self.current = max(self._minimum, int(self.current * factor))
-            self._last_scale = now
-            import logging
-            logging.getLogger(__name__).debug(
-                "AdaptiveThrottle DOWN | exchange=%s current=%s "
-                "error_rate=%.0f%% p95=%.0fms",
-                self._exchange_id, self.current,
-                error_rate * 100, p95,
-            )
-        elif should_up:
-            self.current = min(self._maximum, self.current + 1)
-            self._last_scale = now
-            import logging
-            logging.getLogger(__name__).debug(
-                "AdaptiveThrottle UP | exchange=%s current=%s",
-                self._exchange_id, self.current,
-            )
-
-    def _trim(self) -> None:
-        if len(self._results) > self._window:
-            self._results = self._results[-self._window:]
-        if len(self._latencies) > self._window:
-            self._latencies = self._latencies[-self._window:]
-
-
-_THROTTLES: dict[str, "AdaptiveThrottle"] = {}
-
-
-def get_or_create_throttle(
-    exchange_id:       str,
-    market_type:       str,
-    dataset:           str,
-    initial:           int,
-    maximum:           int,
-    latency_target_ms: int = 500,
-) -> "AdaptiveThrottle":
-    """
-    Singleton de AdaptiveThrottle por key "exchange:market:dataset".
-
-    El probe (initial/maximum) define el starting point la primera vez.
-    En runs subsiguientes del mismo proceso el estado persiste —
-    el throttle recuerda la presión acumulada del exchange.
-
-    Keys separadas por market_type evitan que futures degradado
-    penalice la concurrencia del spot y viceversa.
-    """
-    key = f"{exchange_id}:{market_type}:{dataset}"
-    if key not in _THROTTLES:
-        _THROTTLES[key] = AdaptiveThrottle(
-            exchange_id       = key,
-            initial           = initial,
-            maximum           = maximum,
-            latency_target_ms = latency_target_ms,
-        )
-    return _THROTTLES[key]
-
-
-def get_throttle_state(
-    exchange_id: str,
-    market_type: str = "spot",
-    dataset:     str = "ohlcv",
-) -> dict:
-    """Estado observable del throttle. SafeOps: nunca lanza excepción."""
-    try:
-        key = f"{exchange_id}:{market_type}:{dataset}"
-        t   = _THROTTLES.get(key)
-        if t is None:
-            return {"key": key, "concurrent": 0, "error_rate": 0.0, "p95_ms": 0.0}
-        return {
-            "key":        key,
-            "concurrent": t.current,
-            "maximum":    t._maximum,
-            "error_rate": t._error_rate(),
-            "p95_ms":     t._p95_latency(),
-        }
-    except Exception:
-        return {"key": f"{exchange_id}:{market_type}:{dataset}", "concurrent": 0, "error_rate": 0.0, "p95_ms": 0.0}
-
-
-# ==========================================================
-# Adapter
-# ==========================================================
 
 class CCXTAdapter(ExchangeAdapter):
     """

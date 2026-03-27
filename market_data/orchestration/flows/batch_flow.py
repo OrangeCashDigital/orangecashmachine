@@ -30,15 +30,17 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from prefect import flow, get_run_logger
 
 from core.config.schema import AppConfig
 from core.config.loader import load_config
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe, validate_exchange_connection
-from services.exchange.ccxt_adapter import CCXTAdapter
+if TYPE_CHECKING:
+    from services.exchange.ccxt_adapter import CCXTAdapter
 from market_data.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
     run_futures_pipeline,
@@ -205,21 +207,25 @@ async def _validate_exchanges(
     return probes, adapters
 
 
-async def _consolidate_results(futures: List[asyncio.Future], log) -> None:
-    results   = await asyncio.gather(*futures, return_exceptions=True)
-    failures  = [r for r in results if isinstance(r, Exception)]
-    successes = len(results) - len(failures)
+async def _consolidate_results(
+    futures: List[asyncio.Future],
+    log,
+) -> tuple[int, int]:
+    """Consolida resultados de pipeline tasks. Retorna (ok, failed)."""
+    results  = await asyncio.gather(*futures, return_exceptions=True)
+    failures = [r for r in results if isinstance(r, Exception)]
+    ok       = len(results) - len(failures)
 
     for f in failures:
         log.error("Pipeline task failed | error=%s", f)
 
-    if failures and successes == 0:
-        raise RuntimeError(f"All {len(failures)} pipelines failed.")
     if failures:
         log.warning(
             "Flow completed with partial failures | ok=%s failed=%s",
-            successes, len(failures),
+            ok, len(failures),
         )
+
+    return ok, len(failures)
 
 
 # ==================================================================
@@ -283,19 +289,35 @@ async def market_data_flow(
         log.warning("No pipelines launched. Check config and exchange capabilities.")
         return
 
+    flow_start = time.monotonic()
+    ok = failed = 0
     try:
-        await _consolidate_results(pipeline_futures, log)
+        ok, failed = await _consolidate_results(pipeline_futures, log)
+        if failed > 0 and ok == 0:
+            raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
     finally:
-        # Cerrar adapters
+        # ── Cerrar adapters ───────────────────────────────────────────────────
         for name, adapter in adapters.items():
             try:
                 await adapter.close()
             except Exception as exc:
                 log.warning("Adapter close failed | exchange=%s error=%s", name, exc)
 
-        # Push por exchange — evita last-write-wins collision en Pushgateway.
+        # ── Push métricas por exchange ────────────────────────────────────────
         for probe in probes:
             push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
             log.info("Metrics pushed | exchange=%s", probe.exchange)
 
-    log.info("Market data flow completed successfully.")
+        # ── Flow summary ──────────────────────────────────────────────────────
+        duration_s  = time.monotonic() - flow_start
+        flow_status = "OK" if failed == 0 else ("PARTIAL" if ok > 0 else "FAILED")
+        log.info(
+            "══ FLOW SUMMARY | %s | env=%s exchanges=%s/%s "
+            "pipelines=%s/%s duration=%.1fs ══",
+            flow_status, resolved_env,
+            len(probes), len(config.exchanges),
+            ok, len(pipeline_futures), duration_s,
+        )
+
+    if failed == 0:
+        log.info("Market data flow completed successfully.")
