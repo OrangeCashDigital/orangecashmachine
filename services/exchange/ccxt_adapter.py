@@ -157,122 +157,218 @@ def get_breaker_state(exchange_id: str) -> dict:
 
 
 # ==========================================================
-# Adaptive Throttle — concurrencia dinámica por exchange
+# Adaptive Throttle — concurrencia dinámica por pipeline
 # ==========================================================
+#
+# Arquitectura de keys
+# --------------------
+# Key = "exchange_id:market_type:dataset"
+# Ejemplos:
+#   "bybit:spot:ohlcv"
+#   "bybit:swap:ohlcv"
+#   "kucoin:spot:trades"
+#
+# Rationale: spot y futures del mismo exchange tienen rate limits
+# y patrones de degradación distintos. Un pipeline lento de futures
+# no debe penalizar la concurrencia del spot y viceversa.
+# El probe define el starting point; el throttle ajusta en runtime.
 
 from collections import deque as _deque
+import statistics as _statistics
 
 class AdaptiveThrottle:
     """
-    Controla la concurrencia activa por exchange y la ajusta en tiempo real.
+    Throttle adaptivo por pipeline (exchange:market_type:dataset).
 
-    Algoritmo
-    ---------
-    Mantiene una ventana deslizante de los últimos N resultados (ok/error).
-    Si la tasa de error supera el umbral alto  → reduce slots (-1, mínimo 1).
-    Si la tasa de error cae bajo el umbral bajo → aumenta slots (+1, hasta max).
-    Los ajustes solo ocurren cada MIN_CALLS llamadas para evitar oscilación.
+    Señales de scale_down (cualquiera dispara):
+    - error_rate  > error_threshold  (429 pesa doble, timeout normal, network leve)
+    - p95_latency > latency_target_ms
 
-    Thread-safety
-    -------------
-    Asyncio single-thread: no necesita Lock. Solo se llama desde coroutines
-    dentro del mismo event loop.
+    Señales de scale_up:
+    - error_rate  < error_threshold / 2
+    - p95_latency < latency_target_ms * 0.7
+    - (ambas condiciones)
+
+    Cooldown: no escala más de una vez cada cooldown_seconds.
     """
 
-    _WINDOW        = 20    # tamaño de la ventana de observación
-    _HIGH_ERR      = 0.30  # >30% errores → bajar concurrencia
-    _LOW_ERR       = 0.05  # <5%  errores → subir concurrencia
-    _MIN_CALLS     = 5     # mínimo de llamadas antes de ajustar
+    _RATE_LIMIT_WEIGHT = 2.0   # 429 cuenta doble en error_rate
+    _TIMEOUT_WEIGHT    = 1.0
+    _NETWORK_WEIGHT    = 0.5   # glitch transitorio — pesa menos
 
-    def __init__(self, exchange_id: str, initial: int, maximum: int) -> None:
-        self.exchange_id = exchange_id
-        self._current    = max(1, min(initial, maximum))
-        self._maximum    = maximum
-        self._window: "_deque[bool]" = _deque(maxlen=self._WINDOW)
-        self._calls_since_adjust = 0
+    def __init__(
+        self,
+        exchange_id:        str,
+        initial:            int   = 5,
+        maximum:            int   = 20,
+        minimum:            int   = 1,
+        error_threshold:    float = 0.2,
+        latency_target_ms:  int   = 500,
+        cooldown_seconds:   float = 10.0,
+        window:             int   = 20,
+    ) -> None:
+        self._exchange_id       = exchange_id
+        self.current            = max(minimum, min(initial, maximum))
+        self._maximum           = maximum
+        self._minimum           = minimum
+        self._error_threshold   = error_threshold
+        self._latency_target_ms = latency_target_ms
+        self._cooldown_seconds  = cooldown_seconds
+        self._window            = window
 
-    @property
-    def current(self) -> int:
-        return self._current
+        # ventana deslizante: almacena pesos de error (0 = éxito, >0 = error)
+        self._results:    list[float] = []
+        # ventana deslizante de latencias observadas
+        self._latencies:  list[float] = []
+        self._last_scale: float       = 0.0  # timestamp último scale
 
-    def record_success(self) -> None:
-        self._window.append(True)
-        self._calls_since_adjust += 1
-        self._maybe_scale_up()
+    # ── registro ──────────────────────────────────────────────────────────────
 
-    def record_error(self) -> None:
-        self._window.append(False)
-        self._calls_since_adjust += 1
-        self._maybe_scale_down()
+    def record_success(self, latency_ms: float | None = None) -> None:
+        self._results.append(0.0)
+        if latency_ms is not None:
+            self._latencies.append(latency_ms)
+        self._trim()
+        self._maybe_scale()
+
+    def record_error(
+        self,
+        error_type: str = "network",
+        latency_ms: float | None = None,
+    ) -> None:
+        """
+        error_type: "rate_limit" | "timeout" | "network"
+        rate_limit pesa doble → scale_down agresivo ante 429s.
+        """
+        weight = {
+            "rate_limit": self._RATE_LIMIT_WEIGHT,
+            "timeout":    self._TIMEOUT_WEIGHT,
+            "network":    self._NETWORK_WEIGHT,
+        }.get(error_type, self._TIMEOUT_WEIGHT)
+
+        self._results.append(weight)
+        if latency_ms is not None:
+            self._latencies.append(latency_ms)
+        self._trim()
+        self._maybe_scale()
+
+    # ── métricas ──────────────────────────────────────────────────────────────
 
     def _error_rate(self) -> float:
-        if not self._window:
+        if not self._results:
             return 0.0
-        return sum(1 for ok in self._window if not ok) / len(self._window)
+        # normaliza pesos al rango [0, 1] usando peso máximo posible
+        total_weight = sum(self._results)
+        max_possible = len(self._results) * self._RATE_LIMIT_WEIGHT
+        return total_weight / max_possible if max_possible else 0.0
 
-    def _maybe_scale_down(self) -> None:
-        if self._calls_since_adjust < self._MIN_CALLS:
-            return
-        if self._error_rate() > self._HIGH_ERR and self._current > 1:
-            self._current = max(1, int(self._current * 0.75))
-            self._calls_since_adjust = 0
-            from loguru import logger as _log
-            _log.warning(
-                "AdaptiveThrottle scale DOWN | exchange={} concurrent={} error_rate={:.0%}",
-                self.exchange_id, self._current, self._error_rate(),
+    def _p95_latency(self) -> float:
+        if not self._latencies:
+            return 0.0
+        sorted_lats = sorted(self._latencies)
+        idx = max(0, int(len(sorted_lats) * 0.95) - 1)
+        return sorted_lats[idx]
+
+    # ── lógica de escala ──────────────────────────────────────────────────────
+
+    def _maybe_scale(self) -> None:
+        import time
+        now = time.monotonic()
+        if now - self._last_scale < self._cooldown_seconds:
+            return  # cooldown activo — evita thrashing
+
+        error_rate  = self._error_rate()
+        p95         = self._p95_latency()
+        should_down = (
+            error_rate > self._error_threshold
+            or (p95 > 0 and p95 > self._latency_target_ms)
+        )
+        should_up = (
+            error_rate < self._error_threshold / 2
+            and (p95 == 0 or p95 < self._latency_target_ms * 0.7)
+            and self.current < self._maximum
+        )
+
+        if should_down and self.current > self._minimum:
+            # 429 → bajar más agresivo (50%), latencia/timeout → menos (70%)
+            factor = 0.5 if error_rate > self._error_threshold else 0.7
+            self.current = max(self._minimum, int(self.current * factor))
+            self._last_scale = now
+            import logging
+            logging.getLogger(__name__).debug(
+                "AdaptiveThrottle DOWN | exchange=%s current=%s "
+                "error_rate=%.0f%% p95=%.0fms",
+                self._exchange_id, self.current,
+                error_rate * 100, p95,
+            )
+        elif should_up:
+            self.current = min(self._maximum, self.current + 1)
+            self._last_scale = now
+            import logging
+            logging.getLogger(__name__).debug(
+                "AdaptiveThrottle UP | exchange=%s current=%s",
+                self._exchange_id, self.current,
             )
 
-    def _maybe_scale_up(self) -> None:
-        if self._calls_since_adjust < self._MIN_CALLS:
-            return
-        if self._error_rate() < self._LOW_ERR and self._current < self._maximum:
-            self._current = min(self._maximum, self._current + 1)
-            self._calls_since_adjust = 0
-            from loguru import logger as _log
-            _log.debug(
-                "AdaptiveThrottle scale UP | exchange={} concurrent={}",
-                self.exchange_id, self._current,
-            )
+    def _trim(self) -> None:
+        if len(self._results) > self._window:
+            self._results = self._results[-self._window:]
+        if len(self._latencies) > self._window:
+            self._latencies = self._latencies[-self._window:]
 
 
 _THROTTLES: dict[str, "AdaptiveThrottle"] = {}
 
 
 def get_or_create_throttle(
-    exchange_id: str,
-    initial:     int,
-    maximum:     int,
+    exchange_id:       str,
+    market_type:       str,
+    dataset:           str,
+    initial:           int,
+    maximum:           int,
+    latency_target_ms: int = 500,
 ) -> "AdaptiveThrottle":
     """
-    Singleton de AdaptiveThrottle por exchange_id.
+    Singleton de AdaptiveThrottle por key "exchange:market:dataset".
 
-    Si ya existe un throttle para el exchange, lo devuelve sin modificar
-    sus contadores internos — permite que el estado persista entre tasks
-    del mismo run. Si no existe, lo crea con initial/maximum del probe.
+    El probe (initial/maximum) define el starting point la primera vez.
+    En runs subsiguientes del mismo proceso el estado persiste —
+    el throttle recuerda la presión acumulada del exchange.
+
+    Keys separadas por market_type evitan que futures degradado
+    penalice la concurrencia del spot y viceversa.
     """
-    if exchange_id not in _THROTTLES:
-        _THROTTLES[exchange_id] = AdaptiveThrottle(
-            exchange_id=exchange_id,
-            initial=initial,
-            maximum=maximum,
+    key = f"{exchange_id}:{market_type}:{dataset}"
+    if key not in _THROTTLES:
+        _THROTTLES[key] = AdaptiveThrottle(
+            key               = key,
+            initial           = initial,
+            maximum           = maximum,
+            latency_target_ms = latency_target_ms,
         )
-    return _THROTTLES[exchange_id]
+    return _THROTTLES[key]
 
 
-def get_throttle_state(exchange_id: str) -> dict:
+def get_throttle_state(
+    exchange_id: str,
+    market_type: str = "spot",
+    dataset:     str = "ohlcv",
+) -> dict:
     """Estado observable del throttle. SafeOps: nunca lanza excepción."""
     try:
-        t = _THROTTLES.get(exchange_id)
+        key = f"{exchange_id}:{market_type}:{dataset}"
+        t   = _THROTTLES.get(key)
         if t is None:
-            return {"exchange": exchange_id, "concurrent": 0, "error_rate": 0.0}
+            return {"key": key, "concurrent": 0, "error_rate": 0.0, "p95_ms": 0.0}
         return {
-            "exchange":    exchange_id,
-            "concurrent":  t.current,
-            "error_rate":  t._error_rate(),
-            "maximum":     t._maximum,
+            "key":        key,
+            "concurrent": t.current,
+            "maximum":    t._maximum,
+            "error_rate": t._error_rate(),
+            "p95_ms":     t._p95_latency(),
         }
     except Exception:
-        return {"exchange": exchange_id, "concurrent": 0, "error_rate": 0.0}
+        return {"key": f"{exchange_id}:{market_type}:{dataset}", "concurrent": 0, "error_rate": 0.0, "p95_ms": 0.0}
 
 
 # ==========================================================

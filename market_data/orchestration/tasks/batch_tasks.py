@@ -126,9 +126,12 @@ async def run_historical_pipeline(
     # Throttle adaptivo: usa probe.max_concurrent como initial/maximum.
     # El throttle ajusta concurrencia en tiempo real según error rate.
     throttle = get_or_create_throttle(
-        exchange_id = exchange_name,
-        initial     = max_concurrency,
-        maximum     = max_concurrency,
+        exchange_id       = exchange_name,
+        market_type       = "spot",
+        dataset           = "ohlcv",
+        initial           = max_concurrency,
+        maximum           = max_concurrency,
+        latency_target_ms = probe.latency_ms or 500,
     )
     effective_concurrency = throttle.current
 
@@ -155,9 +158,14 @@ async def run_historical_pipeline(
     # Actualizar throttle según resultado del pipeline
     for r in summary.results:
         if r.error:
-            throttle.record_error()
+            etype = (
+                "rate_limit" if "429" in str(r.error) or "rate limit" in str(r.error).lower()
+                else "timeout" if "timeout" in str(r.error).lower()
+                else "network"
+            )
+            throttle.record_error(error_type=etype, latency_ms=r.duration_ms)
         else:
-            throttle.record_success()
+            throttle.record_success(latency_ms=r.duration_ms)
 
     ts = get_throttle_state(exchange_name, market_type="spot", dataset="ohlcv")
     log.info(
@@ -242,9 +250,12 @@ async def run_futures_pipeline(
     # Throttle compartido con spot del mismo exchange — si spot ya redujo
     # concurrencia por errores, futures hereda ese estado de presión.
     throttle = get_or_create_throttle(
-        exchange_id = exchange_name,
-        initial     = probe.max_concurrent,
-        maximum     = probe.max_concurrent,
+        exchange_id       = exchange_name,
+        market_type       = futures_market_type,
+        dataset           = "ohlcv",
+        initial           = probe.max_concurrent,
+        maximum           = probe.max_concurrent,
+        latency_target_ms = probe.latency_ms or 500,
     )
     effective_concurrency = throttle.current
 
@@ -269,9 +280,14 @@ async def run_futures_pipeline(
     # Actualizar throttle según resultado
     for r in summary.results:
         if r.error:
-            throttle.record_error()
+            etype = (
+                "rate_limit" if "429" in str(r.error) or "rate limit" in str(r.error).lower()
+                else "timeout" if "timeout" in str(r.error).lower()
+                else "network"
+            )
+            throttle.record_error(error_type=etype, latency_ms=r.duration_ms)
         else:
-            throttle.record_success()
+            throttle.record_success(latency_ms=r.duration_ms)
 
     ts = get_throttle_state(exchange_name, market_type=futures_market_type, dataset="ohlcv")
     log.info(
