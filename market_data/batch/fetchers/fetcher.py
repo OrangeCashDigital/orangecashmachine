@@ -197,6 +197,10 @@ class HistoricalFetcherAsync:
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
                     status=_status,
                 ).inc()
+                if not collected:
+                    # Sin datos — propagar para que el pipeline aborte el exchange.
+                    raise
+                # Datos parciales — devolver lo que hay.
                 break
             except Exception as _chunk_exc:
                 _status = "error"
@@ -368,6 +372,11 @@ class HistoricalFetcherAsync:
                 return await self._exchange.fetch_ohlcv(
                     symbol, timeframe, since, limit,
                 )
+            except ExchangeCircuitOpenError:
+                # Circuit abierto — reintentar es inútil, el breaker no se cierra
+                # en el tiempo de backoff. Re-raise inmediato para que
+                # _download_chunked y _execute_pair lo manejen correctamente.
+                raise
             except Exception as exc:
                 last_exc = exc
                 err_str  = str(exc)

@@ -226,10 +226,13 @@ class UnifiedPipeline:
         lo procesa, y deposita el resultado. El número de workers activos
         nunca supera max_concurrency.
         """
-        queue:   asyncio.Queue = asyncio.Queue()
-        results:  List[PairResult] = []
-        degraded: List[str]        = []
-        total   = len(pairs)
+        queue:        asyncio.Queue  = asyncio.Queue()
+        results:      List[PairResult] = []
+        degraded:     List[str]        = []
+        total       = len(pairs)
+        # Señal compartida: cuando un worker detecta circuit open, todos los
+        # demás salen limpiamente sin cooldown duplicado ni reintentos inútiles.
+        abort_event: asyncio.Event = asyncio.Event()
 
         # Encolar todos los trabajos
         for idx, (symbol, tf) in enumerate(pairs, 1):
@@ -237,14 +240,29 @@ class UnifiedPipeline:
 
         async def worker() -> None:
             while True:
-                item = await queue.get()
+                # Si el exchange fue abortado por otro worker, salir sin tomar más trabajo.
+                if abort_event.is_set():
+                    try:
+                        queue.get_nowait()
+                        queue.task_done()
+                    except asyncio.QueueEmpty:
+                        pass
+                    return
+
+                try:
+                    item = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+
                 try:
                     idx, symbol, tf = item
-                    result = await self._execute_pair(strategy, symbol, tf, idx, total, mode)
+                    result = await self._execute_pair(
+                        strategy, symbol, tf, idx, total, mode, abort_event
+                    )
                     results.append(result)
                 except _ExchangeAbortError as exc:
-                    # Circuit open — drenar queue de este exchange sin matar el pipeline.
-                    # task_done() ya fue llamado en el bloque finally de abajo.
+                    # Señalizar a todos los workers antes de drenar.
+                    abort_event.set()
                     drained = 0
                     while not queue.empty():
                         try:
@@ -303,12 +321,13 @@ class UnifiedPipeline:
 
     async def _execute_pair(
         self,
-        strategy:  PipelineStrategy,
-        symbol:    str,
-        timeframe: str,
-        idx:       int,
-        total:     int,
-        mode:      PipelineMode,
+        strategy:    PipelineStrategy,
+        symbol:      str,
+        timeframe:   str,
+        idx:         int,
+        total:       int,
+        mode:        PipelineMode,
+        abort_event: asyncio.Event,
     ) -> PairResult:
         """
         Barrera de seguridad alrededor de strategy.execute_pair.
@@ -329,8 +348,12 @@ class UnifiedPipeline:
         except asyncio.CancelledError:
             raise
         except ExchangeCircuitOpenError as exc:
-            # Breaker abierto — intentar un cooldown+retry antes de abortar.
-            # Si el retry también falla, se aborta el exchange (no el pipeline global).
+            # Si otro worker ya disparó el abort, salir sin duplicar cooldown.
+            if abort_event.is_set():
+                raise _ExchangeAbortError(self._exchange_id) from exc
+
+            # Primer worker en detectar circuit open: cooldown coordinado.
+            # Los demás workers detectarán abort_event y saltarán esto.
             _bs = get_breaker_state(self._exchange_id)
             _cooldown_s = max(1.0, _bs["cooldown_remaining_ms"] / 1000)
             logger.warning(
@@ -340,6 +363,11 @@ class UnifiedPipeline:
                 _bs["fail_counter"], round(_cooldown_s, 1),
             )
             await asyncio.sleep(_cooldown_s)
+
+            # Verificar si otro worker abortó durante el sleep.
+            if abort_event.is_set():
+                raise _ExchangeAbortError(self._exchange_id) from exc
+
             try:
                 logger.info(
                     "Circuit cooldown retry | exchange={} symbol={} tf={}",

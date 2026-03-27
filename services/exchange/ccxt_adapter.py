@@ -63,8 +63,8 @@ _FETCH_TRADES_TIMEOUT  = 15.0
 # Compartido por exchange_id — un breaker global por exchange, no por instancia.
 # Evita que spot y futures del mismo exchange tengan breakers independientes
 # que se disparan en cascada cuando el exchange está bajo presión.
-_CB_FAIL_MAX:       int   = 5
-_CB_RESET_TIMEOUT:  int   = 60
+_CB_FAIL_MAX:       int   = 10
+_CB_RESET_TIMEOUT:  int   = 120
 
 _BREAKERS: dict[str, "pybreaker.CircuitBreaker"] = {}
 
@@ -321,7 +321,12 @@ class CCXTAdapter(ExchangeAdapter):
                     ),
                     timeout=_FETCH_OHLCV_TIMEOUT,
                 )
-            return await self._breaker.call_async(_call)
+            try:
+                return await self._breaker.call_async(_call)
+            except asyncio.TimeoutError:
+                # Timeout de red — NO cuenta como fallo de breaker.
+                # Re-raise para que el fetcher lo trate como error transitorio.
+                raise
         except pybreaker.CircuitBreakerError as exc:
             from services.observability.metrics import EXCHANGE_CIRCUIT_OPEN
             EXCHANGE_CIRCUIT_OPEN.labels(
