@@ -42,7 +42,9 @@ def load_config(
 ):
     from core.config.schema import CONFIG_PATH
 
-    env = resolve_env(env, Path(path).resolve() if path else None)
+    # env ya puede venir resuelto desde RunConfig — solo resolver si es None
+    if env is None:
+        env = resolve_env(None, Path(path).resolve() if path else None)
     if env not in _ALLOWED_ENVS:
         raise ConfigurationError(
             f"Invalid environment: '{env}'. Allowed: {sorted(_ALLOWED_ENVS)}"
