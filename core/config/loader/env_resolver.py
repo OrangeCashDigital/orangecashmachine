@@ -12,19 +12,22 @@ from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
 from core.config.env_vars import OCM_ENV as _OCM_ENV_VAR
+from core.logging.bootstrap import pre_log
 
 from loguru import logger
 
-_ENV_PATTERN  = re.compile(r"\$\{([^}:]+)(:-([^}]*))?\}")
+_ENV_PATTERN = re.compile(r"\$\{([^}:]+)(:-([^}]*))?\}")
 _ALLOWED_ENVS = {"development", "test", "staging", "production"}
 
 _resolved_env_cache: dict[str, str] = {}
 
-# Valores de OCM_ENV inyectados por .env (no presentes antes de load_dotenv).
-# Permite distinguir source=env_var (proceso) vs source=dotenv (archivo).
+# Valores de OCM_ENV inyectados por .env
 _DOTENV_INJECTED: set[str] = set()
 
 
+# --------------------------------------------------
+# ENV RESOLUTION ENGINE
+# --------------------------------------------------
 class EnvResolver:
     @staticmethod
     def _replace(match: re.Match) -> str:
@@ -47,35 +50,49 @@ class EnvResolver:
         return data
 
 
+# --------------------------------------------------
+# DOTENV BOOTSTRAP (CRÍTICO)
+# --------------------------------------------------
 def bootstrap_dotenv() -> None:
-    """Carga .env base antes de RunConfig para que resolve_env vea source=dotenv."""
+    """Carga .env antes de construir RunConfig."""
     p = Path(".env")
-    if p.exists():
-        before = os.environ.get(_OCM_ENV_VAR)
-        load_dotenv(p, override=False)
-        after = os.environ.get(_OCM_ENV_VAR)
-        if before is None and after is not None:
-            _DOTENV_INJECTED.add(after)
+    if not p.exists():
+        return
+
+    before = os.environ.get(_OCM_ENV_VAR)
+    load_dotenv(p, override=False)
+    after = os.environ.get(_OCM_ENV_VAR)
+
+    if before is None and after is not None:
+        _DOTENV_INJECTED.add(after)
+
+    # pre_log: loguru no tiene sinks aún — va a stderr + buffer para replay
+    pre_log("config.dotenv_bootstrap", file=str(p), override=False)
 
 
 def load_dotenv_for_env(env: str) -> None:
+    """Carga archivos .env específicos del entorno."""
     for filename in (".env", f".env.{env}", f".env.{env}.local"):
         p = Path(filename)
-        if p.exists():
-            # override=False: os.environ tiene prioridad sobre .env
-            # SSOT: el proceso (deployment/test/operador) es la fuente de mayor autoridad.
-            # .env es un convenio local que solo rellena vars ausentes, nunca las sobreescribe.
-            before = os.environ.get(_OCM_ENV_VAR)
-            load_dotenv(p, override=False)
-            after = os.environ.get(_OCM_ENV_VAR)
-            # Si OCM_ENV no existía antes y ahora existe, fue inyectada por .env
-            if before is None and after is not None:
-                _DOTENV_INJECTED.add(after)
-            logger.debug("dotenv_loaded | file={} override=false", filename)
+        if not p.exists():
+            continue
+
+        before = os.environ.get(_OCM_ENV_VAR)
+        load_dotenv(p, override=False)
+        after = os.environ.get(_OCM_ENV_VAR)
+
+        if before is None and after is not None:
+            _DOTENV_INJECTED.add(after)
+
+        logger.debug("dotenv_loaded | file={} override=false", filename)
 
 
+# --------------------------------------------------
+# SETTINGS FALLBACK
+# --------------------------------------------------
 def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optional[str]:
     from core.config.schema import CONFIG_PATH
+
     settings_path = (config_dir or CONFIG_PATH.parent) / "settings.yaml"
     cache_key = str(settings_path.resolve())
 
@@ -88,42 +105,53 @@ def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optiona
     try:
         data = yaml.safe_load(settings_path.read_text(encoding="utf-8")) or {}
         env_section = data.get("environment", {})
+
         value = env_section.get("default_env") if isinstance(env_section, dict) else None
+
         if value:
             value = str(value)
             if value not in _ALLOWED_ENVS:
                 logger.warning(
-                    "env_invalid | source=settings_yaml value=%s allowed=%s action=fallback_development",
-                    value, sorted(_ALLOWED_ENVS),
+                    "env_invalid | source=settings_yaml value={} allowed={} action=fallback_development",
+                    value,
+                    sorted(_ALLOWED_ENVS),
                 )
                 value = None
+
         _resolved_env_cache[cache_key] = value or ""
         return value or None
+
     except yaml.YAMLError as exc:
         logger.warning("settings_yaml_read_error | error={}", exc)
         return None
 
 
+# --------------------------------------------------
+# MAIN RESOLVER
+# --------------------------------------------------
 def resolve_env(explicit_env: Optional[str] = None, config_dir: Optional[Path] = None) -> str:
     """
     Cascada de resolución de entorno activo.
 
-    Prioridad (mayor → menor):
-    1. explicit      — argumento directo (tests, bootstrap interno con env conocido)
-    2. env_var       — OCM_ENV presente en el proceso ANTES de cargar .env
-    3. dotenv        — OCM_ENV inyectada por archivo .env
-    4. settings_yaml — environment.default_env en settings.yaml
-    5. default       — "development"
+    Prioridad:
+    1. explicit
+    2. env_var
+    3. dotenv
+    4. settings_yaml
+    5. default
     """
     if explicit_env:
-        logger.debug("env_resolved | source=explicit value={}", explicit_env)
+        pre_log("config.env_resolved", source="explicit", value=explicit_env)
         return explicit_env
+
     if ocm := os.getenv(_OCM_ENV_VAR):
         source = "dotenv" if ocm in _DOTENV_INJECTED else "env_var"
-        logger.debug("env_resolved | source={} value={}", source, ocm)
+        pre_log("config.env_resolved", source=source, value=ocm)
         return ocm
+
     if yaml_env := read_default_env_from_settings(config_dir):
-        logger.debug("env_resolved | source=settings_yaml value={}", yaml_env)
+        pre_log("config.env_resolved", source="settings_yaml", value=yaml_env)
         return yaml_env
-    logger.debug("env_resolved | source=default value=development")
+
+    pre_log("config.env_resolved", source="default", value="development")
     return "development"

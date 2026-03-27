@@ -11,6 +11,11 @@ Principios aplicados:
 - DRY: eliminación de duplicación en creación de sinks
 - KISS: lógica clara y predecible
 - SafeOps: defaults seguros + tolerancia a fallos
+
+Ciclo de vida del logging:
+  Fase 0  — bootstrap.pre_log()   → stderr + buffer (antes de setup_logging)
+  Fase 1  — setup_logging()       → sinks loguru + drene del buffer de Fase 0
+  Fase 2  — setup_logging(cfg=..) → no-op (idempotente), sinks ya activos
 """
 
 import logging as std_logging
@@ -20,6 +25,7 @@ from typing import Optional, Dict, Any
 
 from loguru import logger
 
+from core.logging.bootstrap import drain as _drain_bootstrap
 from core.logging.config import LoggingConfig
 from core.logging.formats import CONSOLE, FILE, PIPELINE
 from core.logging.filters import pipeline_filter
@@ -177,6 +183,35 @@ def _add_pipeline_sink(cfg: Dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------
+# Drene del buffer de Fase 0
+# ---------------------------------------------------------------------
+def _replay_bootstrap_buffer() -> None:
+    """
+    Drena los eventos pre-init al archivo ahora que los sinks existen.
+    Cada evento se reproduce con su timestamp original para trazabilidad.
+
+    Binding:
+      stage="bootstrap"  → permite filtrar en Loki / Datadog / grep
+      pre_init_ts        → timestamp real del evento antes del setup
+    """
+    entries = _drain_bootstrap()
+    if not entries:
+        return
+
+    for entry in entries:
+        ts    = entry.get("ts", "?")
+        event = entry.get("event", "?")
+        rest  = {k: v for k, v in entry.items() if k not in ("ts", "event")}
+        parts = " | ".join(f"{k}={v}" for k, v in rest.items())
+        msg   = f"{event}" + (f" | {parts}" if parts else "")
+        logger.bind(stage="bootstrap", pre_init_ts=ts).debug(msg)
+
+    logger.bind(stage="bootstrap").debug(
+        "logging.bootstrap_drained | events={}", len(entries)
+    )
+
+
+# ---------------------------------------------------------------------
 # Setup principal
 # ---------------------------------------------------------------------
 def setup_logging(
@@ -188,10 +223,14 @@ def setup_logging(
     """
     Inicializa el sistema de logging.
 
-    - Idempotente: segunda llamada instala bridge stdlib pero no resetea sinks
-    - Si se llama dos veces con distintos parámetros (debug, cfg), solo
-      la primera llamada configura sinks — las siguientes son no-op excepto
-      por el bridge stdlib, que se reinstala siempre.
+    Fase 1 (primera llamada, sin cfg):
+      - Registra sinks (consola + archivo + pipeline).
+      - Drena el buffer de Fase 0 (eventos pre-init) al archivo.
+
+    Fase 2 (segunda llamada, con cfg desde YAML):
+      - No-op para sinks (idempotente).
+      - Reinstala bridge stdlib→loguru.
+
     - Tipado explícito: cfg es LoggingConfig, no object genérico
     - Preparado para producción
     """
@@ -223,6 +262,9 @@ def setup_logging(
             file=resolved["file"],
             pipeline=resolved["pipeline"],
         )
+
+        # Drena eventos de Fase 0 → ahora sí llegan al archivo
+        _replay_bootstrap_buffer()
 
     # Bridge stdlib → loguru — siempre, aunque sinks ya existan
     std_logging.basicConfig(
