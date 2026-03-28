@@ -33,8 +33,9 @@ from core.logging.filters import pipeline_filter
 # ---------------------------------------------------------------------
 # Estado global
 # ---------------------------------------------------------------------
-_BOOTSTRAP_DONE:    bool = False  # True tras bootstrap_logging()
-_YAML_CONFIGURED:   bool = False  # True tras configure_logging()
+_BOOTSTRAP_DONE:    bool = False        # True tras bootstrap_logging()
+_CONFIG_HASH:       Optional[str] = None  # hash de la última config aplicada
+_ACTIVE_SINK_IDS:   list = []             # IDs propios — sin tocar _core de loguru
 
 from threading import Lock as _Lock
 _CONFIG_LOCK = _Lock()  # protege configure_logging() en multi-thread
@@ -213,13 +214,55 @@ def _install_stdlib_bridge() -> None:
 # Helper interno: instala sinks según config resuelta
 # Requiere logger.remove() previo para evitar duplicación.
 # ---------------------------------------------------------------------
-def _install_sinks(resolved: Dict[str, Any], debug: bool) -> None:
+def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
+    """Instala sinks y retorna lista de handler IDs creados."""
+    ids: list = []
     if resolved["console"]:
-        _add_console_sink(resolved["level"], debug)
+        ids.append(logger.add(
+            __import__("sys").stderr,
+            level=resolved["level"],
+            format=CONSOLE,
+            backtrace=True,
+            diagnose=debug,
+            colorize=True,
+        ))
     if resolved["log_dir"] and resolved["file"]:
-        _add_file_sinks(resolved)
+        log_dir = resolved["log_dir"]
+        log_dir.mkdir(parents=True, exist_ok=True)
+        ids.append(logger.add(
+            log_dir / "orangecashmachine_{time:YYYY-MM-DD}.log",
+            rotation=resolved["rotation"],
+            retention=resolved["retention"],
+            compression="gz",
+            level="DEBUG",
+            format=FILE,
+            backtrace=True,
+            diagnose=False,
+        ))
+        ids.append(logger.add(
+            log_dir / "errors_{time:YYYY-MM-DD}.log",
+            rotation=resolved["rotation"],
+            retention="30 days",
+            compression="gz",
+            level="WARNING",
+            format=FILE,
+            backtrace=True,
+            diagnose=False,
+        ))
     if resolved["log_dir"] and resolved["pipeline"]:
-        _add_pipeline_sink(resolved)
+        log_dir = resolved["log_dir"]
+        log_dir.mkdir(parents=True, exist_ok=True)
+        ids.append(logger.add(
+            log_dir / "pipeline_{time:YYYY-MM-DD}.log",
+            rotation=resolved["rotation"],
+            retention=resolved["retention"],
+            compression="gz",
+            level="DEBUG",
+            format=PIPELINE,
+            filter=pipeline_filter,
+        ))
+    _ACTIVE_SINK_IDS.extend(ids)
+    return ids
 
 
 # ---------------------------------------------------------------------
@@ -283,24 +326,39 @@ def configure_logging(
     env es obligatorio — sin default para forzar consistencia.
     Debe llamarse después de bootstrap_logging() y load_config().
     """
-    with _CONFIG_LOCK:
-        global _YAML_CONFIGURED
-        if _YAML_CONFIGURED:
-            logger.debug("configure_logging called again — idempotent, skipping")
-            return
-        _YAML_CONFIGURED = True
-
     resolved = _resolve_config(cfg, debug, None)
 
-    # Capturar IDs de sinks existentes — acceso defensivo a API privada de loguru
-    _core = getattr(logger, "_core", None)
-    _handlers = getattr(_core, "handlers", {})
-    old_ids = list(_handlers.keys()) if isinstance(_handlers, dict) else []
+    # Idempotencia por contenido: salta si la config no cambió
+    import hashlib as _hashlib, json as _json
+
+    def _stable_serialize(obj):
+        if isinstance(obj, dict):
+            return {k: _stable_serialize(v) for k, v in sorted(obj.items())}
+        if isinstance(obj, (list, tuple)):
+            return [_stable_serialize(v) for v in obj]
+        if isinstance(obj, Path):
+            return str(obj)
+        return obj
+
+    new_hash = _hashlib.md5(
+        _json.dumps(_stable_serialize(resolved), sort_keys=True).encode()
+    ).hexdigest()
+
+    with _CONFIG_LOCK:
+        global _CONFIG_HASH
+        if _CONFIG_HASH == new_hash:
+            logger.debug("configure_logging | same hash={} — skipping", new_hash[:8])
+            return
+        _CONFIG_HASH = new_hash
+
+    # IDs de sinks anteriores — propios, sin tocar internals de loguru
+    old_ids = list(_ACTIVE_SINK_IDS)
 
     # Reconfigurar patcher con env real
     logger.configure(patcher=_make_patcher(run_id, env))
 
     # Añadir nuevos sinks primero — ventana sin sinks = cero
+    _ACTIVE_SINK_IDS.clear()
     _install_sinks(resolved, debug)
 
     # Bridge stdlib antes de eliminar antiguos — sin gaps para logs de stdlib
@@ -329,7 +387,7 @@ def configure_logging(
 # ---------------------------------------------------------------------
 def is_logging_configured() -> bool:
     """Retorna True si bootstrap_logging() Y configure_logging() han sido llamados."""
-    return _BOOTSTRAP_DONE and _YAML_CONFIGURED
+    return _BOOTSTRAP_DONE and _CONFIG_HASH is not None
 
 
 # ---------------------------------------------------------------------
