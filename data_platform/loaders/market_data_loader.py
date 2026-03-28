@@ -43,6 +43,9 @@ from typing import Dict, List, Optional
 import pandas as pd
 from loguru import logger
 
+from core.utils import silver_ohlcv_root
+from data_platform.ohlcv_utils import safe_symbol, normalize_ohlcv_df
+
 
 # ==========================================================
 # Constants
@@ -52,9 +55,6 @@ OHLCV_COLUMNS: tuple[str, ...] = (
     "timestamp", "open", "high", "low", "close", "volume"
 )
 
-_DEFAULT_SILVER_PATH: tuple[str, ...] = (
-    "data_platform", "data_lake", "silver", "ohlcv"
-)
 
 
 # ==========================================================
@@ -205,7 +205,7 @@ class MarketDataLoader:
             )
 
         df = _read_parquet_files(files, columns=columns)
-        df = df.sort_values("timestamp").drop_duplicates(subset="timestamp", keep="last").reset_index(drop=True)
+        df = normalize_ohlcv_df(df)
 
         logger.info(
             "OHLCV loaded | {}/{} exchange={} version={} rows={}",
@@ -242,7 +242,7 @@ class MarketDataLoader:
 
         filters = _build_parquet_filters(start_ts, end_ts)
         df = _read_parquet_files(files, columns=columns, filters=filters)
-        df = df.sort_values("timestamp").drop_duplicates(subset="timestamp", keep="last").reset_index(drop=True)
+        df = normalize_ohlcv_df(df)
 
         logger.info(
             "OHLCV range loaded | {}/{} start={} end={} rows={}",
@@ -392,7 +392,7 @@ class MarketDataLoader:
 
     @staticmethod
     def _safe_symbol(symbol: str) -> str:
-        return symbol.replace("/", "_")
+        return safe_symbol(symbol)
 
     def _dataset_root(self, symbol: str, timeframe: str) -> Path:
         if self._exchange:
@@ -441,11 +441,8 @@ class MarketDataLoader:
 # ==========================================================
 
 def _resolve_base_path(data_lake_path: Optional[str | Path]) -> Path:
-    if data_lake_path:
-        base = Path(data_lake_path).resolve()
-    else:
-        base = Path(__file__).resolve().parents[2].joinpath(*_DEFAULT_SILVER_PATH)
-
+    """Resuelve el path base del Data Lake Silver. Usa silver_ohlcv_root() como default.""""
+    base = Path(data_lake_path).resolve() if data_lake_path else silver_ohlcv_root()
     if not base.exists():
         raise MarketDataLoaderError(
             f"Silver Data Lake not found → {base}\n"

@@ -27,61 +27,11 @@ from typing import Optional, List
 import pandas as pd
 from loguru import logger
 
+from core.utils import silver_ohlcv_root, gold_features_root
+from data_platform.ohlcv_utils import safe_symbol
 from market_data.batch.storage.feature_engineer import FeatureEngineer
+from market_data.batch.storage.silver_storage import SilverStorage
 
-
-# ==========================================================
-# Path resolution — absoluta, nunca relativa
-# ==========================================================
-
-_LAKE_SUBPATH   = ("data_platform", "data_lake")
-_SILVER_SUBPATH = _LAKE_SUBPATH + ("silver", "ohlcv")
-_GOLD_SUBPATH   = _LAKE_SUBPATH + ("gold", "features", "ohlcv")
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-def _default_silver() -> Path:
-    return _repo_root().joinpath(*_SILVER_SUBPATH)
-
-def _default_gold() -> Path:
-    return _repo_root().joinpath(*_GOLD_SUBPATH)
-
-
-# ==========================================================
-# Partition resolver
-# ==========================================================
-
-def _resolve_partitions(
-    base_dir: Path,
-    start: Optional[pd.Timestamp],
-    end: Optional[pd.Timestamp],
-) -> list:
-    parquets = sorted(base_dir.rglob("*.parquet"))
-    if start is None and end is None:
-        return parquets
-    result = []
-    for p in parquets:
-        parts = p.parts
-        try:
-            year_idx = next(i for i, x in enumerate(parts) if x.isdigit() and len(x) == 4)
-            year  = int(parts[year_idx])
-            month = int(parts[year_idx + 1]) if year_idx + 1 < len(parts) and parts[year_idx + 1].isdigit() else 1
-            day   = int(parts[year_idx + 2]) if year_idx + 2 < len(parts) and parts[year_idx + 2].isdigit() else 1
-            partition_start = pd.Timestamp(year=year, month=month, day=day, tz="UTC")
-            partition_end   = (
-                partition_start + pd.offsets.MonthEnd(1)
-                if day == 1
-                else partition_start + pd.Timedelta(days=1)
-            )
-            if start and partition_end < start:
-                continue
-            if end and partition_start > end:
-                continue
-        except (StopIteration, ValueError, IndexError):
-            pass
-        result.append(p)
-    return result
 
 
 # ==========================================================
@@ -103,8 +53,8 @@ class GoldStorage:
         silver_path: Optional[Path] = None,
         gold_path:   Optional[Path] = None,
     ) -> None:
-        self._silver   = Path(silver_path) if silver_path else _default_silver()
-        self._gold     = Path(gold_path)   if gold_path   else _default_gold()
+        self._silver   = Path(silver_path) if silver_path else silver_ohlcv_root()
+        self._gold     = Path(gold_path)   if gold_path   else gold_features_root()
         self._gold.mkdir(parents=True, exist_ok=True)
         self._engineer = FeatureEngineer()
         logger.info("GoldStorage ready | silver={} gold={}", self._silver, self._gold)
@@ -129,46 +79,33 @@ class GoldStorage:
         timeframe   : e.g. "1h"
         start / end : filtro de tiempo opcional
         """
-        symbol_safe = symbol.replace("/", "_")
-        silver_dir = (
-            self._silver
-            / f"exchange={exchange}"
-            / f"symbol={symbol_safe}"
-            / f"market_type={market_type}"
-            / f"timeframe={timeframe}"
+        symbol_safe = safe_symbol(symbol)
+        silver = SilverStorage(
+            base_path=self._silver,
+            exchange=exchange,
+            market_type=market_type,
         )
-
-        if not silver_dir.exists():
+        try:
+            df = silver.load_ohlcv(
+                symbol=symbol,
+                timeframe=timeframe,
+                start=start,
+                end=end,
+            )
+        except Exception as exc:
             logger.warning(
-                "Gold build: Silver no existe | {}/{}/{}/{}",
+                "Gold build: Silver load failed | {}/{}/{}/{} err={}",
+                exchange, symbol, market_type, timeframe, exc,
+            )
+            return None
+
+        if df is None or df.empty:
+            logger.warning(
+                "Gold build: sin datos en Silver | {}/{}/{}/{}",
                 exchange, symbol, market_type, timeframe,
             )
             return None
 
-        parquets = _resolve_partitions(silver_dir, start, end)
-        if not parquets:
-            logger.warning(
-                "Gold build: sin parquets | {}/{}/{}/{}",
-                exchange, symbol, market_type, timeframe,
-            )
-            return None
-
-        frames = []
-        for p in parquets:
-            try:
-                frames.append(pd.read_parquet(p))
-            except Exception as exc:
-                logger.warning("Gold build: error leyendo parquet | {} err={}", p, exc)
-
-        if not frames:
-            return None
-
-        df = (
-            pd.concat(frames, ignore_index=True)
-            .drop_duplicates(subset="timestamp")
-            .sort_values("timestamp")
-            .reset_index(drop=True)
-        )
 
         df = self._engineer.compute(df, symbol=symbol, timeframe=timeframe)
 
