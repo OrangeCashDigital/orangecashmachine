@@ -33,3 +33,4 @@ Thumbs.db
 *.swpdata_platform/data_lake/
 data_platform/data_lake/
 requirements.txt.bak
+.envrc
