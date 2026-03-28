@@ -31,26 +31,9 @@ from core.logging.formats import CONSOLE, FILE, PIPELINE
 from core.logging.filters import pipeline_filter
 
 # ---------------------------------------------------------------------
-# Estado global (fast-path, la guardia real es _has_active_sinks)
+# Estado global
 # ---------------------------------------------------------------------
-_LOGGING_CONFIGURED: bool = False
-
-
-# ---------------------------------------------------------------------
-# Helpers de idempotencia
-# ---------------------------------------------------------------------
-def _has_active_sinks() -> bool:
-    """
-    Devuelve True si loguru ya tiene sinks registrados.
-
-    Usa logger._core.handlers — API privada pero estable desde loguru 0.5.
-    Si loguru cambia esta API en el futuro, el except AttributeError
-    actúa como fallback seguro devolviendo False.
-    """
-    try:
-        return bool(logger._core.handlers)  # type: ignore[attr-defined]
-    except AttributeError:
-        return False
+_BOOTSTRAP_DONE: bool = False
 
 
 # ---------------------------------------------------------------------
@@ -113,7 +96,7 @@ def _resolve_config(
 # ---------------------------------------------------------------------
 # Patcher (inyección global de contexto)
 # ---------------------------------------------------------------------
-def _make_patcher(run_id: Optional[str]):
+def _make_patcher(run_id: Optional[str], env: str = "development"):
 
     _run_id = run_id or "-"
 
@@ -121,7 +104,7 @@ def _make_patcher(run_id: Optional[str]):
         extra = record["extra"]
         extra.setdefault("run_id", _run_id)
         extra.setdefault("service", "orangecashmachine")
-        extra.setdefault("env", "dev")
+        extra.setdefault("env", env)
 
     return _patch
 
@@ -212,7 +195,126 @@ def _replay_bootstrap_buffer() -> None:
 
 
 # ---------------------------------------------------------------------
-# Setup principal
+# Helper interno: instala bridge stdlib → loguru
+# ---------------------------------------------------------------------
+def _install_stdlib_bridge() -> None:
+    std_logging.basicConfig(
+        handlers=[InterceptHandler()],
+        level=0,
+        force=True,
+    )
+
+
+# ---------------------------------------------------------------------
+# Helper interno: instala sinks según config resuelta
+# Requiere logger.remove() previo para evitar duplicación.
+# ---------------------------------------------------------------------
+def _install_sinks(resolved: Dict[str, Any], debug: bool) -> None:
+    if resolved["console"]:
+        _add_console_sink(resolved["level"], debug)
+    if resolved["log_dir"] and resolved["file"]:
+        _add_file_sinks(resolved)
+    if resolved["log_dir"] and resolved["pipeline"]:
+        _add_pipeline_sink(resolved)
+
+
+# ---------------------------------------------------------------------
+# Fase 1 — bootstrap con defaults seguros
+# ---------------------------------------------------------------------
+def bootstrap_logging(
+    debug: bool = False,
+    run_id: Optional[str] = None,
+    env: str = "development",
+) -> None:
+    """
+    Fase 1: inicializa logging con defaults seguros antes de tener AppConfig.
+
+    - Registra sinks (consola + archivo + pipeline) con valores hardcoded.
+    - Drena el buffer de Fase 0 (eventos pre-init) hacia los sinks.
+    - Instala bridge stdlib → loguru.
+
+    Idempotente: segunda llamada es no-op.
+    """
+    global _BOOTSTRAP_DONE
+    if _BOOTSTRAP_DONE:
+        return
+
+    resolved = _resolve_config(None, debug, None)
+    logger.remove()
+    logger.configure(patcher=_make_patcher(run_id, env))
+    _install_sinks(resolved, debug)
+    _BOOTSTRAP_DONE = True
+
+    logger.bind(event="logging_configured").debug(
+        "Logging system initialized | level={level} log_dir={log_dir}"
+        " console={console} file={file} pipeline={pipeline}",
+        level=resolved["level"],
+        log_dir=resolved["log_dir"],
+        console=resolved["console"],
+        file=resolved["file"],
+        pipeline=resolved["pipeline"],
+    )
+
+    _replay_bootstrap_buffer()
+    _install_stdlib_bridge()
+
+
+# ---------------------------------------------------------------------
+# Fase 2 — reconfiguración desde AppConfig YAML
+# ---------------------------------------------------------------------
+def configure_logging(
+    cfg: LoggingConfig,
+    env: str,
+    debug: bool = False,
+    run_id: Optional[str] = None,
+) -> None:
+    """
+    Fase 2: reemplaza sinks de Fase 1 con configuración real del YAML.
+
+    - Reconfigura patcher con env real.
+    - Añade nuevos sinks ANTES de eliminar los antiguos (ventana cero sin sinks).
+    - Reinstala bridge stdlib → loguru.
+    - No toca el buffer de Fase 0 (ya drenado en Fase 1).
+
+    env es obligatorio — sin default para forzar consistencia.
+    Debe llamarse después de bootstrap_logging() y load_config().
+    """
+    resolved = _resolve_config(cfg, debug, None)
+
+    # Capturar IDs de sinks existentes ANTES de añadir los nuevos
+    try:
+        old_ids = list(logger._core.handlers.keys())  # type: ignore[attr-defined]
+    except AttributeError:
+        old_ids = []
+
+    # Reconfigurar patcher con env real
+    logger.configure(patcher=_make_patcher(run_id, env))
+
+    # Añadir nuevos sinks primero — ventana sin sinks = cero
+    _install_sinks(resolved, debug)
+
+    # Eliminar sinks antiguos
+    for h_id in old_ids:
+        try:
+            logger.remove(h_id)
+        except Exception:
+            pass
+
+    _install_stdlib_bridge()
+
+    logger.bind(event="logging_reconfigured").debug(
+        "Logging reconfigured from YAML | level={level} log_dir={log_dir}"
+        " console={console} file={file} pipeline={pipeline}",
+        level=resolved["level"],
+        log_dir=resolved["log_dir"],
+        console=resolved["console"],
+        file=resolved["file"],
+        pipeline=resolved["pipeline"],
+    )
+
+
+# ---------------------------------------------------------------------
+# Alias de compatibilidad — deprecado, usar bootstrap_logging()
 # ---------------------------------------------------------------------
 def setup_logging(
     cfg: Optional[LoggingConfig] = None,
@@ -220,55 +322,8 @@ def setup_logging(
     log_dir: Optional[Path] = None,
     run_id: Optional[str] = None,
 ) -> None:
-    """
-    Inicializa el sistema de logging.
-
-    Fase 1 (primera llamada, sin cfg):
-      - Registra sinks (consola + archivo + pipeline).
-      - Drena el buffer de Fase 0 (eventos pre-init) al archivo.
-
-    Fase 2 (segunda llamada, con cfg desde YAML):
-      - No-op para sinks (idempotente).
-      - Reinstala bridge stdlib→loguru.
-
-    - Tipado explícito: cfg es LoggingConfig, no object genérico
-    - Preparado para producción
-    """
-    global _LOGGING_CONFIGURED
-
-    resolved = _resolve_config(cfg, debug, log_dir)
-
-    if not _LOGGING_CONFIGURED:
-        logger.remove()
-        logger.configure(patcher=_make_patcher(run_id))
-
-        if resolved["console"]:
-            _add_console_sink(resolved["level"], debug)
-
-        if resolved["log_dir"] and resolved["file"]:
-            _add_file_sinks(resolved)
-
-        if resolved["log_dir"] and resolved["pipeline"]:
-            _add_pipeline_sink(resolved)
-
-        _LOGGING_CONFIGURED = True
-
-        logger.bind(event="logging_configured").debug(
-            "Logging system initialized | level={level} log_dir={log_dir}"
-            " console={console} file={file} pipeline={pipeline}",
-            level=resolved["level"],
-            log_dir=resolved["log_dir"],
-            console=resolved["console"],
-            file=resolved["file"],
-            pipeline=resolved["pipeline"],
-        )
-
-        # Drena eventos de Fase 0 → ahora sí llegan al archivo
-        _replay_bootstrap_buffer()
-
-    # Bridge stdlib → loguru — siempre, aunque sinks ya existan
-    std_logging.basicConfig(
-        handlers=[InterceptHandler()],
-        level=0,
-        force=True,
-    )
+    """Deprecado. Usar bootstrap_logging() o configure_logging() directamente."""
+    if cfg is None:
+        bootstrap_logging(debug=debug, run_id=run_id)
+    else:
+        configure_logging(cfg=cfg, debug=debug, run_id=run_id)

@@ -69,6 +69,9 @@ def bootstrap_dotenv() -> None:
     if before is None and after is not None:
         _DOTENV_INJECTED.add(after)
 
+    # Registrar en guard de idempotencia para que load_dotenv_for_env lo salte
+    _DOTENV_LOADED_FILES.add(str(p.resolve()))
+
     # pre_log: loguru no tiene sinks aún — va a stderr + buffer para replay
     pre_log("config.dotenv_bootstrap", file=str(p), override=False)
 

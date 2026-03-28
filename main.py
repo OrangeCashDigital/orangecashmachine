@@ -23,7 +23,7 @@ from core.config.loader import (
 )
 from core.config.loader.env_resolver import bootstrap_dotenv
 from core.config.schema import AppConfig
-from core.logging import setup_logging
+from core.logging import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as run_pipeline
 from services.observability.metrics import start_metrics_server
 
@@ -110,7 +110,7 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
 
     try:
         # 1. Logging base (antes de TODO)
-        setup_logging(debug=run_cfg.debug, run_id=run_id)
+        bootstrap_logging(debug=run_cfg.debug, run_id=run_id, env=run_cfg.env)
 
         # 2. Contexto de runtime (debug crítico)
         log_runtime_context(run_cfg)
@@ -118,8 +118,8 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         # 3. Configuración
         config = initialize_config(run_cfg)
 
-        # 4. Logging final desde YAML
-        setup_logging(cfg=config.observability.logging, debug=run_cfg.debug)
+        # 4. Logging final desde YAML (reemplaza sinks de Fase 1)
+        configure_logging(cfg=config.observability.logging, env=run_cfg.env, debug=run_cfg.debug, run_id=run_id)
 
         # 5. Logger contextual
         log = logger.bind(trace_id=run_id)
