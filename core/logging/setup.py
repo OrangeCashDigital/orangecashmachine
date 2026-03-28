@@ -36,6 +36,9 @@ from core.logging.filters import pipeline_filter
 _BOOTSTRAP_DONE:    bool = False  # True tras bootstrap_logging()
 _YAML_CONFIGURED:   bool = False  # True tras configure_logging()
 
+from threading import Lock as _Lock
+_CONFIG_LOCK = _Lock()  # protege configure_logging() en multi-thread
+
 
 # ---------------------------------------------------------------------
 # Intercept handler (stdlib → loguru)
@@ -280,19 +283,19 @@ def configure_logging(
     env es obligatorio — sin default para forzar consistencia.
     Debe llamarse después de bootstrap_logging() y load_config().
     """
-    global _YAML_CONFIGURED
-    if _YAML_CONFIGURED:
-        logger.debug("configure_logging called again — idempotent, skipping")
-        return
-    _YAML_CONFIGURED = True
+    with _CONFIG_LOCK:
+        global _YAML_CONFIGURED
+        if _YAML_CONFIGURED:
+            logger.debug("configure_logging called again — idempotent, skipping")
+            return
+        _YAML_CONFIGURED = True
 
     resolved = _resolve_config(cfg, debug, None)
 
-    # Capturar IDs de sinks existentes ANTES de añadir los nuevos
-    try:
-        old_ids = list(logger._core.handlers.keys())  # type: ignore[attr-defined]
-    except AttributeError:
-        old_ids = []
+    # Capturar IDs de sinks existentes — acceso defensivo a API privada de loguru
+    _core = getattr(logger, "_core", None)
+    _handlers = getattr(_core, "handlers", {})
+    old_ids = list(_handlers.keys()) if isinstance(_handlers, dict) else []
 
     # Reconfigurar patcher con env real
     logger.configure(patcher=_make_patcher(run_id, env))
@@ -300,14 +303,15 @@ def configure_logging(
     # Añadir nuevos sinks primero — ventana sin sinks = cero
     _install_sinks(resolved, debug)
 
-    # Eliminar sinks antiguos
+    # Bridge stdlib antes de eliminar antiguos — sin gaps para logs de stdlib
+    _install_stdlib_bridge()
+
+    # Eliminar sinks antiguos DESPUÉS de instalar nuevos y bridge
     for h_id in old_ids:
         try:
             logger.remove(h_id)
         except Exception:
             pass
-
-    _install_stdlib_bridge()
 
     logger.bind(event="logging_reconfigured").debug(
         "Logging reconfigured from YAML | level={level} log_dir={log_dir}"
@@ -318,6 +322,14 @@ def configure_logging(
         file=resolved["file"],
         pipeline=resolved["pipeline"],
     )
+
+
+# ---------------------------------------------------------------------
+# Helpers de introspección
+# ---------------------------------------------------------------------
+def is_logging_configured() -> bool:
+    """Retorna True si bootstrap_logging() Y configure_logging() han sido llamados."""
+    return _BOOTSTRAP_DONE and _YAML_CONFIGURED
 
 
 # ---------------------------------------------------------------------
@@ -339,4 +351,7 @@ def setup_logging(
     if cfg is None:
         bootstrap_logging(debug=debug, run_id=run_id)
     else:
-        configure_logging(cfg=cfg, env="development", debug=debug, run_id=run_id)
+        raise RuntimeError(
+            "setup_logging() is deprecated and cannot proxy configure_logging() safely "
+            "because env is unknown. Use configure_logging(cfg=..., env=run_cfg.env) directly."
+        )
