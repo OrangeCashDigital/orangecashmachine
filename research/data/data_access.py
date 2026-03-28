@@ -146,6 +146,7 @@ def get_ohlcv(
     end:       Optional[str] = None,
     columns:   Optional[List[str]] = None,
     version:   str = "latest",
+    as_of:     Optional[str] = None,
     exchange:  Optional[str] = None,
 ) -> pd.DataFrame:
     """
@@ -167,6 +168,10 @@ def get_ohlcv(
         e.g. ["timestamp", "close"] para cálculos de precio.
     version : str
         "latest" (default) o versión específica como "v000003".
+    as_of : str, optional
+        ISO 8601 timestamp. Resuelve la versión vigente en ese momento.
+        Permite reproducibilidad temporal: get_ohlcv("BTC/USDT", "1h",
+        start="2026-01-01", as_of="2026-03-01T00:00:00Z")
     exchange : str, optional
         Exchange explícito. Si None, usa OCM_EXCHANGE o "kucoin".
 
@@ -191,12 +196,13 @@ def get_ohlcv(
         end_date=end,
         columns=columns,
         version=version,
+        as_of=as_of,
     )
 
     logger.info(
-        "Research OHLCV loaded | symbol={} timeframe={} version={} "
+        "Research OHLCV loaded | symbol={} timeframe={} version={} as_of={} "
         "exchange={} start={} end={} rows={}",
-        symbol, timeframe, version,
+        symbol, timeframe, version, as_of or "-",
         exchange or _DEFAULT_EXCHANGE,
         start, end, len(df),
     )
@@ -209,6 +215,8 @@ def get_multiple_ohlcv(
     timeframe: str,
     start:     Optional[str] = None,
     end:       Optional[str] = None,
+    version:   str = "latest",
+    as_of:     Optional[str] = None,
     exchange:  Optional[str] = None,
 ) -> MultiSymbolResult:
     """
@@ -254,6 +262,8 @@ def get_multiple_ohlcv(
         timeframe=timeframe,
         start_date=start,
         end_date=end,
+        version=version,
+        as_of=as_of,
     )
 
     logger.info(
@@ -276,6 +286,8 @@ def get_ohlcv_dict(
     timeframe: str,
     start:     Optional[str] = None,
     end:       Optional[str] = None,
+    version:   str = "latest",
+    as_of:     Optional[str] = None,
     exchange:  Optional[str] = None,
 ) -> Dict[str, pd.DataFrame]:
     """
@@ -302,5 +314,7 @@ def get_ohlcv_dict(
         timeframe=timeframe,
         start=start,
         end=end,
+        version=version,
+        as_of=as_of,
         exchange=exchange,
     ).data

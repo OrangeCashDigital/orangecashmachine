@@ -222,18 +222,29 @@ class MarketDataLoader:
         start_date: Optional[str] = None,
         end_date:   Optional[str] = None,
         version:    str = "latest",
+        as_of:      Optional[str] = None,
         columns:    Optional[List[str]] = None,
     ) -> pd.DataFrame:
         """
         Carga OHLCV filtrando por rango de fechas.
 
         Combina versionado con pushdown de filtros para eficiencia.
+
+        Parameters
+        ----------
+        as_of : str, optional
+            ISO 8601 timestamp. Resuelve la versión vigente en ese momento.
+            Permite reproducibilidad temporal completa en backtests con rango:
+            load_ohlcv_range("BTC/USDT", "1h",
+                             start_date="2026-01-01",
+                             as_of="2026-03-01T00:00:00Z")
+            Si se pasa junto con version != "latest", as_of tiene precedencia.
         """
         start_ts = _parse_optional_timestamp(start_date, "start_date")
         end_ts   = _parse_optional_timestamp(end_date, "end_date")
         _validate_date_range(start_ts, end_ts)
 
-        manifest = self._resolve_version(symbol, timeframe, version, None)
+        manifest = self._resolve_version(symbol, timeframe, version, as_of)
 
         if manifest:
             files = self._files_from_manifest(manifest)
@@ -245,8 +256,10 @@ class MarketDataLoader:
         df = normalize_ohlcv_df(df)
 
         logger.info(
-            "OHLCV range loaded | {}/{} start={} end={} rows={}",
-            symbol, timeframe, start_date, end_date, len(df),
+            "OHLCV range loaded | {}/{} version={} as_of={} start={} end={} rows={}",
+            symbol, timeframe,
+            manifest.get("version_id", "filesystem") if manifest else "filesystem",
+            as_of or "-", start_date, end_date, len(df),
         )
         return df
 
@@ -257,8 +270,9 @@ class MarketDataLoader:
         start_date: Optional[str] = None,
         end_date:   Optional[str] = None,
         version:    str = "latest",
+        as_of:      Optional[str] = None,
     ) -> MultiSymbolResult:
-        """Carga varios símbolos con la misma versión."""
+        """Carga varios símbolos con la misma versión y punto temporal."""
         result = MultiSymbolResult()
         for symbol in symbols:
             try:
@@ -268,6 +282,7 @@ class MarketDataLoader:
                     start_date=start_date,
                     end_date=end_date,
                     version=version,
+                    as_of=as_of,
                 )
                 result.data[symbol] = df
             except MarketDataLoaderError as exc:
