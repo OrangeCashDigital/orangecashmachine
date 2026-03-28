@@ -84,6 +84,45 @@ def _validate_derivatives_datasets(datasets: Sequence[str]) -> None:
 
 
 # ==========================================================
+# Internal helpers (DRY)
+# ==========================================================
+
+def _update_throttle_from_summary(throttle, summary) -> None:
+    """Actualiza el throttle adaptivo según resultados del pipeline."""
+    for r in summary.results:
+        if r.error:
+            error_str = str(r.error).lower()
+            if "429" in error_str or "rate limit" in error_str:
+                etype = "rate_limit"
+            elif "timeout" in error_str:
+                etype = "timeout"
+            else:
+                etype = "network"
+            throttle.record_error(error_type=etype, latency_ms=r.duration_ms)
+        else:
+            throttle.record_success(latency_ms=r.duration_ms)
+
+
+def _log_pipeline_metrics(summary, market_type: str, log) -> None:
+    """Emite métricas por par/timeframe en formato estructurado."""
+    for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
+        status = "✓" if r.success else ("↷" if r.skipped else "✗")
+        log.info(
+            "  %s %s/%s/%s | rows=%s duration=%sms error=%s",
+            status, market_type, r.symbol, r.timeframe,
+            r.rows, r.duration_ms, r.error or "-",
+        )
+
+
+def _raise_if_total_failure(summary, pipeline_name: str, exchange_name: str) -> None:
+    """Lanza RuntimeError si el 100% de los símbolos fallaron."""
+    if summary.total > 0 and summary.failed == summary.total:
+        raise RuntimeError(
+            f"{pipeline_name} failed for all {summary.total} symbols on '{exchange_name}'."
+        )
+
+
+# ==========================================================
 # Historical Pipeline
 # ==========================================================
 
@@ -155,45 +194,22 @@ async def run_historical_pipeline(
         )
         summary = await pipeline.run(mode="incremental")
 
-    # Actualizar throttle según resultado del pipeline
-    for r in summary.results:
-        if r.error:
-            etype = (
-                "rate_limit" if "429" in str(r.error) or "rate limit" in str(r.error).lower()
-                else "timeout" if "timeout" in str(r.error).lower()
-                else "network"
-            )
-            throttle.record_error(error_type=etype, latency_ms=r.duration_ms)
-        else:
-            throttle.record_success(latency_ms=r.duration_ms)
+    _update_throttle_from_summary(throttle, summary)
 
     ts = get_throttle_state(exchange_name, market_type="spot", dataset="ohlcv")
     log.info(
         "Historical pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
-        exchange_name,
-        summary.succeeded,
-        summary.failed,
-        summary.skipped,
-        summary.total_rows,
+        exchange_name, summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
     )
 
-    # ── Métricas por timeframe ────────────────────────────────────────────────
     log.info("── Pipeline metrics | exchange=%s ──────────────────────────", exchange_name)
-    for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
-        status = "✓" if r.success else ("↷" if r.skipped else "✗")
-        log.info(
-            "  %s spot/%s/%s | rows=%s duration=%sms error=%s",
-            status, r.symbol, r.timeframe, r.rows, r.duration_ms, r.error or "-",
-        )
+    _log_pipeline_metrics(summary, "spot", log)
     log.info(
         "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
         ts["key"], ts["concurrent"], ts["maximum"], ts["error_rate"] * 100, int(ts["p95_ms"]),
     )
 
-    if summary.total > 0 and summary.failed == summary.total:
-        raise RuntimeError(
-            f"Historical pipeline failed for all {summary.total} symbols on '{exchange_name}'."
-        )
+    _raise_if_total_failure(summary, "Historical pipeline", exchange_name)
 
     if summary.failed > 0:
         log.warning(
@@ -277,17 +293,7 @@ async def run_futures_pipeline(
         )
         summary = await pipeline.run(mode="incremental")
 
-    # Actualizar throttle según resultado
-    for r in summary.results:
-        if r.error:
-            etype = (
-                "rate_limit" if "429" in str(r.error) or "rate limit" in str(r.error).lower()
-                else "timeout" if "timeout" in str(r.error).lower()
-                else "network"
-            )
-            throttle.record_error(error_type=etype, latency_ms=r.duration_ms)
-        else:
-            throttle.record_success(latency_ms=r.duration_ms)
+    _update_throttle_from_summary(throttle, summary)
 
     ts = get_throttle_state(exchange_name, market_type=futures_market_type, dataset="ohlcv")
     log.info(
@@ -296,24 +302,14 @@ async def run_futures_pipeline(
         summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
     )
 
-    # ── Métricas por timeframe ────────────────────────────────────────────────
     log.info("── Pipeline metrics | exchange=%s market=%s ──────────────────", exchange_name, futures_market_type)
-    for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
-        status = "✓" if r.success else ("↷" if r.skipped else "✗")
-        log.info(
-            "  %s %s/%s/%s | rows=%s duration=%sms error=%s",
-            status, futures_market_type, r.symbol, r.timeframe,
-            r.rows, r.duration_ms, r.error or "-",
-        )
+    _log_pipeline_metrics(summary, futures_market_type, log)
     log.info(
         "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
         ts["key"], ts["concurrent"], ts["maximum"], ts["error_rate"] * 100, int(ts["p95_ms"]),
     )
 
-    if summary.total > 0 and summary.failed == summary.total:
-        raise RuntimeError(
-            f"Futures pipeline failed for all {summary.total} symbols on '{exchange_name}'."
-        )
+    _raise_if_total_failure(summary, "Futures pipeline", exchange_name)
 
 
 # ==========================================================
@@ -468,10 +464,7 @@ async def run_backfill_pipeline(
         summary.succeeded, summary.failed, summary.total_rows,
     )
 
-    if summary.total > 0 and summary.failed == summary.total:
-        raise RuntimeError(
-            f"Backfill failed for all {summary.total} symbols on '{exchange_name}'."
-        )
+    _raise_if_total_failure(summary, "Backfill", exchange_name)
 
 
 # ==========================================================
@@ -537,7 +530,4 @@ async def run_repair_pipeline(
         summary.total_rows,
     )
 
-    if summary.total > 0 and summary.failed == summary.total:
-        raise RuntimeError(
-            f"Repair failed for all {summary.total} symbols on '{exchange_name}'."
-        )
+    _raise_if_total_failure(summary, "Repair", exchange_name)

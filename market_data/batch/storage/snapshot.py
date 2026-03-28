@@ -77,7 +77,8 @@ class SnapshotManager:
 
     def __init__(
         self,
-        base_path: Optional[str | Path] = None,
+        base_path:  Optional[str | Path] = None,
+        keep_last:  int                  = 30,
     ) -> None:
         if base_path:
             self._base = Path(base_path).resolve()
@@ -86,6 +87,7 @@ class SnapshotManager:
 
         self._manifests_dir = self._base / _MANIFESTS_DIR
         self._silver_root   = self._base / _SILVER_ROOT
+        self._keep_last     = max(1, keep_last)  # mínimo 1 snapshot siempre
         self._manifests_dir.mkdir(parents=True, exist_ok=True)
 
     # ======================================================
@@ -156,6 +158,7 @@ class SnapshotManager:
             snapshot["git_hash"],
         )
 
+        self.purge_old_snapshots()
         return snapshot_id
 
     def load_snapshot(self, snapshot_id: str = "latest") -> Optional[Dict]:
@@ -192,6 +195,39 @@ class SnapshotManager:
             p.stem.replace("snapshot_", "")
             for p in self._manifests_dir.glob("snapshot_*.json")
         )
+
+    def purge_old_snapshots(self, keep_last: Optional[int] = None) -> int:
+        """
+        Elimina snapshots antiguos manteniendo solo los más recientes.
+
+        Parameters
+        ----------
+        keep_last : int | None
+            Cuántos snapshots conservar. Si None, usa self._keep_last.
+            No toca latest.json.
+
+        Returns
+        -------
+        int
+            Número de snapshots eliminados.
+        """
+        keep = keep_last if keep_last is not None else self._keep_last
+        all_ids = self.list_snapshots()  # ya ordenados ASC
+        to_delete = all_ids[:-keep] if len(all_ids) > keep else []
+        deleted = 0
+        for sid in to_delete:
+            path = self._manifests_dir / f"snapshot_{sid}.json"
+            try:
+                path.unlink()
+                deleted += 1
+            except Exception as exc:
+                logger.warning("Snapshot purge failed | id={} error={}", sid, exc)
+        if deleted:
+            logger.info(
+                "Snapshot purge | deleted={} kept={} total_before={}",
+                deleted, len(all_ids) - deleted, len(all_ids),
+            )
+        return deleted
 
     # ======================================================
     # Internal

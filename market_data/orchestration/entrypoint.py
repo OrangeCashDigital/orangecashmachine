@@ -88,9 +88,9 @@ def run(config: AppConfig, debug: bool = False) -> int:
 
     Notes
     -----
-    setup_logging es idempotente: si ya fue llamado desde main.py no
-    reconfigura sinks. El flag _LOGGING_CONFIGURED en core.logging.setup
-    garantiza una sola inicialización aunque run() se llame directamente.
+    bootstrap_logging es idempotente: si ya fue llamado desde main.py
+    no reconfigura sinks. _BOOTSTRAP_DONE garantiza una sola inicialización
+    aunque run() se llame directamente.
     """
     # RunConfig mínimo para pasar env al flow — sin releer el entorno
     # porque debug ya viene resuelto desde el caller.
@@ -132,8 +132,9 @@ def run(config: AppConfig, debug: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    from core.logging import setup_logging
+    from core.logging import bootstrap_logging, configure_logging
     _run_cfg = RunConfig.from_env()
     _config  = load_config(env=_run_cfg.env, path=_run_cfg.config_path)
-    setup_logging(cfg=_config.observability.logging, debug=_run_cfg.debug)
+    bootstrap_logging(debug=_run_cfg.debug, env=_run_cfg.env)
+    configure_logging(cfg=_config.observability.logging, env=_run_cfg.env, debug=_run_cfg.debug)
     sys.exit(run(config=_config, debug=_run_cfg.debug))

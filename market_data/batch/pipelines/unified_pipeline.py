@@ -218,7 +218,7 @@ class UnifiedPipeline:
         strategy:     PipelineStrategy,
         pairs:        List[tuple[str, str]],
         mode:         PipelineMode,
-    ) -> List[PairResult]:
+    ) -> tuple[List[PairResult], List[str]]:
         """
         Producer/consumer pool: evita crear todas las coroutines a la vez.
 

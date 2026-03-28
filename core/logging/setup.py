@@ -18,6 +18,8 @@ Ciclo de vida del logging:
   Fase 2  — configure_logging()    → remove() atomico + sinks desde YAML
 """
 
+import hashlib
+import json
 import logging as std_logging
 import sys
 from pathlib import Path
@@ -115,62 +117,6 @@ def _make_patcher(run_id: Optional[str], env: str = "development"):
 
 
 # ---------------------------------------------------------------------
-# Sinks
-# ---------------------------------------------------------------------
-def _add_console_sink(level: str, debug: bool) -> None:
-    logger.add(
-        sys.stderr,
-        level=level,
-        format=CONSOLE,
-        backtrace=True,
-        diagnose=debug,
-        colorize=True,
-    )
-
-
-def _add_file_sinks(cfg: Dict[str, Any]) -> None:
-    log_dir: Path = cfg["log_dir"]
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.add(
-        log_dir / "orangecashmachine_{time:YYYY-MM-DD}.log",
-        rotation=cfg["rotation"],
-        retention=cfg["retention"],
-        compression="gz",
-        level="DEBUG",
-        format=FILE,
-        backtrace=True,
-        diagnose=False,
-    )
-
-    logger.add(
-        log_dir / "errors_{time:YYYY-MM-DD}.log",
-        rotation=cfg["rotation"],
-        retention="30 days",
-        compression="gz",
-        level="WARNING",
-        format=FILE,
-        backtrace=True,
-        diagnose=False,
-    )
-
-
-def _add_pipeline_sink(cfg: Dict[str, Any]) -> None:
-    log_dir: Path = cfg["log_dir"]
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.add(
-        log_dir / "pipeline_{time:YYYY-MM-DD}.log",
-        rotation=cfg["rotation"],
-        retention=cfg["retention"],
-        compression="gz",
-        level="DEBUG",
-        format=PIPELINE,
-        filter=pipeline_filter,
-    )
-
-
-# ---------------------------------------------------------------------
 # Drene del buffer de Fase 0
 # ---------------------------------------------------------------------
 def _replay_bootstrap_buffer() -> None:
@@ -219,7 +165,7 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
     ids: list = []
     if resolved["console"]:
         ids.append(logger.add(
-            __import__("sys").stderr,
+            sys.stderr,
             level=resolved["level"],
             format=CONSOLE,
             backtrace=True,
@@ -329,8 +275,6 @@ def configure_logging(
     resolved = _resolve_config(cfg, debug, None)
 
     # Idempotencia por contenido: salta si la config no cambió
-    import hashlib as _hashlib, json as _json
-
     def _stable_serialize(obj):
         if isinstance(obj, dict):
             return {k: _stable_serialize(v) for k, v in sorted(obj.items())}
@@ -340,8 +284,8 @@ def configure_logging(
             return str(obj)
         return obj
 
-    new_hash = _hashlib.md5(
-        _json.dumps(_stable_serialize(resolved), sort_keys=True).encode()
+    new_hash = hashlib.md5(
+        json.dumps(_stable_serialize(resolved), sort_keys=True).encode()
     ).hexdigest()
 
     with _CONFIG_LOCK:

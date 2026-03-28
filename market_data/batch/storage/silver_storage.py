@@ -248,8 +248,8 @@ class SilverStorage:
                     "Write lock contention | exchange={} symbol={} timeframe={} — waiting",
                     self._exchange, symbol, timeframe,
                 )
-            import time as _time
-            _time.sleep(_LOCK_RETRY_INTERVAL)
+
+            time.sleep(_LOCK_RETRY_INTERVAL)
             waited += _LOCK_RETRY_INTERVAL
 
         WRITE_LOCK_WAIT_DURATION.labels(
@@ -314,9 +314,7 @@ class SilverStorage:
         run_id : str, optional
             ID del run de ingestión para correlación con bronze.
         """
-        import time as _time
-        _t0 = _time.monotonic()
-
+        _t0 = time.monotonic()
         _validate_dataframe(df)
         df = _normalize_dataframe(df)
 
@@ -381,8 +379,7 @@ class SilverStorage:
             )
 
         # Log de resumen (no por partición individual — reduce ruido en 1m)
-        import time as _time
-        _duration_ms = int((_time.monotonic() - _t0) * 1000)
+        _duration_ms = int((time.monotonic() - _t0) * 1000)
         total_rows = sum(p.get("rows", 0) for p in partitions_written)
         logger.debug(
             "Silver written | {}/{} exchange={} partitions={} rows={} duration={}ms",
