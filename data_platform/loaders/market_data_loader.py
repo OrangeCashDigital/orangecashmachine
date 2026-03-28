@@ -471,13 +471,27 @@ def _read_parquet_files(
     columns: Optional[List[str]] = None,
     filters: Optional[list]      = None,
 ) -> pd.DataFrame:
+    """
+    Lee y concatena archivos Parquet con trazabilidad de origen.
+
+    Añade columna temporal '_source_file' para deduplicación trazable:
+    si hay solapamiento entre particiones, keep="last" preserva el dato
+    de la partición más reciente según el orden de files (manifest order).
+    La columna se elimina antes de retornar — no contamina el DataFrame.
+
+    Raises
+    ------
+    DataReadError
+        Si ningún archivo pudo leerse.
+    """
     dfs: List[pd.DataFrame] = []
     errors: List[str] = []
 
     for file in files:
         try:
-            df = pd.read_parquet(file, columns=columns, filters=filters)
+            df = pd.read_parquet(file, engine="pyarrow", columns=columns, filters=filters)
             if not df.empty:
+                df["_source_file"] = file.name
                 dfs.append(df)
         except Exception as exc:
             errors.append(f"{file.name}: {exc}")
@@ -488,7 +502,23 @@ def _read_parquet_files(
             f"All {len(files)} files failed. "
             f"First: {errors[0] if errors else 'unknown'}"
         )
-    return pd.concat(dfs, ignore_index=True)
+
+    combined = pd.concat(dfs, ignore_index=True)
+
+    # Deduplicación explícita con trazabilidad de origen.
+    # keep="last" → la partición más tarde en el manifest gana.
+    # Solapamientos reales se logean como warning para auditoría.
+    dup_mask = combined.duplicated(subset=["timestamp"], keep=False)
+    if dup_mask.any():
+        n_dups   = dup_mask.sum()
+        sources  = combined.loc[dup_mask, "_source_file"].unique().tolist()
+        logger.warning(
+            "Timestamp overlap detected | {} duplicate rows across partitions={} — keeping last",
+            n_dups, sources,
+        )
+        combined = combined.drop_duplicates(subset=["timestamp"], keep="last")
+
+    return combined.drop(columns=["_source_file"])
 
 
 def _parse_optional_timestamp(value: Optional[str], param: str) -> Optional[pd.Timestamp]:

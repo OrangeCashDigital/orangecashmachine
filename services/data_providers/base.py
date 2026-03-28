@@ -38,7 +38,14 @@ class DataProviderAdapter:
     """
 
     async def close(self) -> None:
-        """Cierra la sesión HTTP. Idempotente, nunca lanza excepción."""
+        """
+        Cierra la sesión HTTP. Idempotente, nunca lanza excepción.
+
+        Las subclases deben sobreescribir este método para cerrar
+        self._session u otros recursos, capturando todas las excepciones
+        internamente — el contrato garantiza que close() nunca propaga.
+        """
+        # Base no-op: subclases con sesión deben sobreescribir
 
     async def __aenter__(self) -> "DataProviderAdapter":
         return self

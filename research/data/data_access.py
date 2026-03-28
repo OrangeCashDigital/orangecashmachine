@@ -61,6 +61,7 @@ from data_platform.loaders.market_data_loader import (
     MarketDataLoaderError,
     MultiSymbolResult,
 )
+from data_platform.loaders.gold_loader import GoldLoader
 
 
 # ==========================================================
@@ -318,3 +319,174 @@ def get_ohlcv_dict(
         as_of=as_of,
         exchange=exchange,
     ).data
+
+
+# ==========================================================
+# Gold / Feature Store cache — keyed por exchange
+# ==========================================================
+
+_gold_loader_cache: Dict[str, GoldLoader] = {}
+
+_GOLD_PATH: Optional[Path] = (
+    Path(os.environ["OCM_GOLD_PATH"])
+    if "OCM_GOLD_PATH" in os.environ
+    else None
+)
+
+
+def _get_gold_loader(exchange: Optional[str] = None) -> GoldLoader:
+    """
+    Devuelve el GoldLoader para el exchange dado, creándolo de forma lazy.
+
+    Mismo patrón de cache keyed-by-exchange que _get_loader().
+    """
+    key = (exchange or _DEFAULT_EXCHANGE).lower()
+    if key not in _gold_loader_cache:
+        _gold_loader_cache[key] = GoldLoader(
+            gold_path=_GOLD_PATH,
+            exchange=key,
+        )
+        logger.debug(
+            "GoldLoader initialized | path={} exchange={}",
+            _GOLD_PATH or "default", key,
+        )
+    return _gold_loader_cache[key]
+
+
+def _reset_gold_loader(exchange: Optional[str] = None) -> None:
+    """Resetea el GoldLoader cache. Uso exclusivo en tests."""
+    if exchange is None:
+        _gold_loader_cache.clear()
+    else:
+        _gold_loader_cache.pop(exchange.lower(), None)
+
+
+# ==========================================================
+# Feature Store Public API
+# ==========================================================
+
+def get_features(
+    symbol:      str,
+    market_type: str,
+    timeframe:   str,
+    version:     str = "latest",
+    as_of:       Optional[str] = None,
+    columns:     Optional[List[str]] = None,
+    exchange:    Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Carga el dataset Gold de features (OHLCV + indicadores técnicos).
+
+    Punto de entrada unificado para research que necesita features
+    precalculados — evita recalcular en cada notebook o estrategia.
+
+    Parameters
+    ----------
+    symbol      : Par de trading, e.g. "BTC/USDT".
+    market_type : "spot" | "swap".
+    timeframe   : Intervalo, e.g. "1h".
+    version     : "latest" (default) o versión exacta "v000003".
+    as_of       : ISO 8601 timestamp para reproducibilidad temporal.
+    columns     : Subconjunto de columnas para reducir memoria.
+    exchange    : Exchange explícito. Si None, usa OCM_EXCHANGE.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame con OHLCV + features (return_1, log_return,
+        volatility_20, high_low_spread, vwap), ordenado por timestamp.
+
+    Raises
+    ------
+    DataNotFoundError
+        Si no hay datos Gold para el símbolo/timeframe dado.
+    VersionNotFoundError
+        Si la versión solicitada no existe.
+    DataReadError
+        Si el archivo Parquet no puede leerse.
+
+    Examples
+    --------
+    # Carga completa de features
+    df = get_features("BTC/USDT", "spot", "1h")
+
+    # Reproducibilidad temporal en backtest
+    df = get_features("BTC/USDT", "spot", "1h", as_of="2026-03-01T00:00:00Z")
+
+    # Solo columnas de precio + volatilidad
+    df = get_features("BTC/USDT", "spot", "1h", columns=["timestamp", "close", "volatility_20"])
+    """
+    loader = _get_gold_loader(exchange)
+    df = loader.load_features(
+        symbol=symbol,
+        market_type=market_type,
+        timeframe=timeframe,
+        version=version,
+        as_of=as_of,
+        columns=columns,
+        exchange=exchange,
+    )
+
+    logger.info(
+        "Research features loaded | symbol={} market={} timeframe={} "
+        "version={} as_of={} exchange={} rows={} cols={}",
+        symbol, market_type, timeframe,
+        version, as_of or "-",
+        exchange or _DEFAULT_EXCHANGE,
+        len(df), len(df.columns),
+    )
+    return df
+
+
+def get_features_dict(
+    symbols:     List[str],
+    market_type: str,
+    timeframe:   str,
+    version:     str = "latest",
+    as_of:       Optional[str] = None,
+    exchange:    Optional[str] = None,
+) -> Dict[str, pd.DataFrame]:
+    """
+    Carga features Gold para múltiples símbolos. Devuelve solo los exitosos.
+
+    Los fallos se logean como warnings pero nunca propagan (SafeOps):
+    el caller recibe un dict parcial si algún símbolo no tiene datos Gold.
+
+    Returns
+    -------
+    Dict[str, pd.DataFrame]
+        Mapa símbolo → DataFrame de features.
+        Dict vacío si todos fallaron.
+
+    Examples
+    --------
+    dfs = get_features_dict(["BTC/USDT", "ETH/USDT"], "spot", "1h")
+    for symbol, df in dfs.items():
+        run_strategy(df)
+    """
+    loader  = _get_gold_loader(exchange)
+    result  = {}
+
+    for symbol in symbols:
+        try:
+            result[symbol] = loader.load_features(
+                symbol=symbol,
+                market_type=market_type,
+                timeframe=timeframe,
+                version=version,
+                as_of=as_of,
+                exchange=exchange,
+            )
+        except Exception as exc:
+            logger.warning(
+                "get_features_dict: failed loading {} | err={}", symbol, exc
+            )
+
+    logger.info(
+        "Research features dict | market={} timeframe={} exchange={} "
+        "loaded={} failed={}",
+        market_type, timeframe,
+        exchange or _DEFAULT_EXCHANGE,
+        len(result), len(symbols) - len(result),
+    )
+    return result

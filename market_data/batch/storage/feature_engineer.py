@@ -6,6 +6,11 @@ from loguru import logger
 FEATURE_COLUMNS = ["return_1","log_return","volatility_20","high_low_spread","vwap"]
 
 class FeatureEngineer:
+    # Versión semántica del set de features.
+    # Incrementar cuando cambien los indicadores o su cálculo — permite
+    # detectar en el manifest de Gold qué versión de features produjo cada dataset.
+    VERSION = "1.0.0"  # return_1, log_return, volatility_20, high_low_spread, vwap
+
     def compute(self, df: pd.DataFrame, symbol: str = "", timeframe: str = "") -> pd.DataFrame:
         if df is None or df.empty or len(df) < 2:
             logger.warning("FeatureEngineer: DataFrame vacio o insuficiente | {}/{}", symbol, timeframe)
