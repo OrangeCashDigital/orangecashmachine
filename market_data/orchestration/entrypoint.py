@@ -124,8 +124,14 @@ def run(config: AppConfig, debug: bool = False) -> int:
         )
         exit_code = 1
     finally:
-        for ex in config.exchanges:
-            push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
+        # No pushear métricas si el usuario interrumpió (SIGINT):
+        # el run estaba incompleto y las métricas parciales contaminarían
+        # el Pushgateway con datos de un ciclo que no terminó.
+        if exit_code != 130:
+            for ex in config.exchanges:
+                push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
+        else:
+            logger.debug("Shutdown by SIGINT — metrics push skipped")
         logger.info("Shutdown complete | exit_code={}", exit_code)
 
     return exit_code

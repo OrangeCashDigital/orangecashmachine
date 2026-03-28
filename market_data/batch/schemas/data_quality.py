@@ -1,4 +1,5 @@
 from __future__ import annotations
+import functools
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -111,12 +112,17 @@ class DataQualityChecker:
         if "close" not in df.columns or len(df) < 5: return
         p = df["close"].dropna()
         if len(p) < 5: return
-        med = p.median()
-        mad = (p - med).abs().median()
-        if mad == 0: return
-        mz = 0.6745 * (p - med).abs() / mad
+        # Rolling MAD (window adaptativo) en lugar de MAD global.
+        # El MAD global detecta movimientos históricos legítimos de mercado
+        # (e.g. BTC $3k→$69k) como outliers — falsos positivos masivos.
+        # Rolling MAD evalúa cada vela en su contexto local.
+        window = min(100, max(10, len(p) // 5))
+        med = p.rolling(window, min_periods=10, center=True).median()
+        mad = (p - med).abs().rolling(window, min_periods=10, center=True).median()
+        mad = mad.replace(0, np.nan)  # evitar división por cero en baja volatilidad
+        mz  = (0.6745 * (p - med).abs() / mad).fillna(0)
         n = int((mz > _MAD_THRESHOLD).sum())
-        if n > 0: report.issues.append(QualityIssue(check="price_outliers_mad",severity="warning",description=f"{n} outliers via MAD",affected_rows=n,details={"method":"MAD","threshold":_MAD_THRESHOLD,"median_price":round(float(med),4),"mad":round(float(mad),4),"max_zscore":round(float(mz.max()),2)}))
+        if n > 0: report.issues.append(QualityIssue(check="price_outliers_mad",severity="warning",description=f"{n} outliers via MAD",affected_rows=n,details={"method":"rolling_MAD","window":window,"threshold":_MAD_THRESHOLD,"max_zscore":round(float(mz.max()),2)}))
 
     @staticmethod
     def _check_outliers_rolling_zscore(df, report):
@@ -134,8 +140,18 @@ class DataQualityChecker:
         n = int(((df["high"]-df["low"]) < df["close"]*self._flatline_threshold).sum())
         if n > 0: report.issues.append(QualityIssue(check="flatline_candles",severity="warning",description=f"{n} velas congeladas (high~=low)",affected_rows=n,details={"threshold_pct":self._flatline_threshold*100,"timeframe":self._timeframe,"adaptive":True}))
 
-def _get_git_hash():
+@functools.lru_cache(maxsize=1)
+def _get_git_hash() -> str:
+    """
+    Hash del commit actual. Cacheado — solo ejecuta git una vez por proceso.
+    Sin lru_cache se lanzaba un subprocess por cada DataFrame procesado
+    (180+ subprocesos en un run con 30 pares × 6 timeframes).
+    """
     try:
-        r = subprocess.run(["git","rev-parse","--short","HEAD"],capture_output=True,text=True,timeout=2)
+        r = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=2,
+        )
         return r.stdout.strip() or "unknown"
-    except: return "unknown"
+    except:
+        return "unknown"

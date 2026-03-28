@@ -37,7 +37,12 @@ _SCORE_WEIGHTS: Dict[str, float] = {
 }
 
 _REJECT_THRESHOLD  = 40.0
-_FLAG_THRESHOLD    = 75.0
+# FLAG_THRESHOLD calibrado al scoring proporcional:
+# - 1 flatline / 500 velas → penalty=0.002% → score=99.998 → ACCEPT (correcto)
+# - 84 outliers MAD / 500 velas → penalty~=5% → score~=95 → FLAG (correcto)
+# - Antes (75.0 + "or warnings"): cualquier issue, por mínimo, activaba FLAG
+#   produciendo score=100.0 con ACCEPT_WITH_FLAGS — semánticamente incoherente.
+_FLAG_THRESHOLD    = 99.0
 _MAX_CRITICAL_ROWS_PCT = 0.10
 
 class DataQualityPolicy:
@@ -50,7 +55,10 @@ class DataQualityPolicy:
 
         if self._should_reject(report, score):
             decision = QualityDecision.REJECT
-        elif score < _FLAG_THRESHOLD or report.warnings:
+        elif score < _FLAG_THRESHOLD:
+            # El score ya penaliza proporcionalmente cada issue por peso y
+            # row_pct — no hace falta "or report.warnings" que causaba
+            # ACCEPT_WITH_FLAGS con score=100.0 (semánticamente incoherente).
             decision = QualityDecision.ACCEPT_WITH_FLAGS
         else:
             decision = QualityDecision.ACCEPT
