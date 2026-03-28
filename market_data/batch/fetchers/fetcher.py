@@ -354,8 +354,8 @@ class HistoricalFetcherAsync:
     # Fetch with retry + breaker
     # ======================================================
 
-    _SESSION_ERRORS   = ("Session is closed", "Connection closed", "aiohttp")
-    _TRANSIENT_ERRORS = ("rate limit", "timeout", "timed out", "429", "503")
+    # _SESSION_ERRORS y _TRANSIENT_ERRORS eliminados — reemplazados por
+    # clasificación tipada via jerarquía ccxt en _fetch_chunk_with_retry.
 
     async def _fetch_chunk_with_retry(
         self,
@@ -364,6 +364,17 @@ class HistoricalFetcherAsync:
         since:     int,
         limit:     int,
     ) -> List[list]:
+        """
+        Retry con clasificación tipada de errores ccxt.
+
+        Jerarquía ccxt 4.x relevante:
+          BaseError
+          ├── NetworkError          — transitorios: timeout, conn reset, etc.
+          │   ├── RequestTimeout    — timeout de red
+          │   └── RateLimitExceeded — 429 (pesa doble en AdaptiveThrottle)
+          └── ExchangeError
+              └── AuthenticationError — fatal, no reintentar jamás
+        """
         last_exc:           Optional[Exception] = None
         session_reconnected: bool               = False
 
@@ -373,34 +384,50 @@ class HistoricalFetcherAsync:
                     symbol, timeframe, since, limit,
                 )
             except ExchangeCircuitOpenError:
-                # Circuit abierto — reintentar es inútil, el breaker no se cierra
-                # en el tiempo de backoff. Re-raise inmediato para que
-                # _download_chunked y _execute_pair lo manejen correctamente.
+                # Circuit abierto — reintentar es inútil. Re-raise inmediato.
                 raise
-            except Exception as exc:
+            except _ccxt_async.AuthenticationError as exc:
+                # Fatal — credenciales inválidas o IP ban. No reintentar jamás.
+                logger.error(
+                    "Auth error — aborting | {} {} attempt={} err={}",
+                    symbol, timeframe, attempt, exc,
+                )
+                raise ChunkFetchError(f"{symbol}/{timeframe} auth failed") from exc
+            except _ccxt_async.RateLimitExceeded as exc:
                 last_exc = exc
-                err_str  = str(exc)
                 wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
-                wait    *= random.uniform(0.5, 1.5)  # jitter multiplicativo — evita thundering herd
-
-                is_session_error   = any(m in err_str for m in self._SESSION_ERRORS)
-                is_transient_error = any(m in err_str.lower() for m in self._TRANSIENT_ERRORS)
-                is_rate_limit      = isinstance(exc, _ccxt_async.RateLimitExceeded)
-
-                if is_rate_limit:
-                    # 429 notifica al circuit breaker del adapter — acumula estado
-                    # de degradación. Tras _CB_FAIL_MAX seguidos el circuito abre.
-                    try:
-                        breaker = getattr(self._exchange, "_breaker", None)
-                        if breaker is not None:
-                            breaker.call(lambda: (_ for _ in ()).throw(exc))
-                    except Exception:
-                        pass
-                    logger.warning(
-                        "Rate limit (429) — notified breaker | {} {} attempt={} wait={:.2f}s",
-                        symbol, timeframe, attempt, wait,
-                    )
-                elif is_session_error and not session_reconnected:
+                wait    *= random.uniform(0.5, 1.5)
+                try:
+                    breaker = getattr(self._exchange, "_breaker", None)
+                    if breaker is not None:
+                        breaker.call(lambda: (_ for _ in ()).throw(exc))
+                except Exception:
+                    pass
+                logger.warning(
+                    "Rate limit (429) — notified breaker | {} {} attempt={} wait={:.2f}s",
+                    symbol, timeframe, attempt, wait,
+                )
+                await asyncio.sleep(wait)
+            except (_ccxt_async.RequestTimeout, asyncio.TimeoutError) as exc:
+                # Timeout de red — NO cuenta como fallo de breaker.
+                last_exc = exc
+                wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
+                wait    *= random.uniform(0.5, 1.5)
+                logger.warning(
+                    "Timeout — retrying | {} {} attempt={} wait={:.2f}s err={}",
+                    symbol, timeframe, attempt, wait, exc,
+                )
+                await asyncio.sleep(wait)
+            except _ccxt_async.NetworkError as exc:
+                # Errores de red transitorios — conn reset, DNS, session muerta.
+                last_exc = exc
+                wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
+                wait    *= random.uniform(0.5, 1.5)
+                err_str  = str(exc)
+                is_session_dead = any(
+                    m in err_str for m in ("Session is closed", "Connection closed")
+                )
+                if is_session_dead and not session_reconnected:
                     logger.warning(
                         "Session dead — reconnecting | {} {} attempt={} err={}",
                         symbol, timeframe, attempt, exc,
@@ -408,17 +435,21 @@ class HistoricalFetcherAsync:
                     await self._exchange.reconnect()
                     session_reconnected = True
                     continue
-                elif is_transient_error:
-                    logger.warning(
-                        "Transient error — retrying | {} {} attempt={} wait={:.2f}s err={}",
-                        symbol, timeframe, attempt, wait, exc,
-                    )
-                else:
-                    logger.warning(
-                        "Fetch failed | {} {} attempt={} wait={:.2f}s err={}",
-                        symbol, timeframe, attempt, wait, exc,
-                    )
-
+                logger.warning(
+                    "Network error — retrying | {} {} attempt={} wait={:.2f}s err={}",
+                    symbol, timeframe, attempt, wait, exc,
+                )
+                await asyncio.sleep(wait)
+            except Exception as exc:
+                # Fallback: error desconocido — loguear tipo completo.
+                last_exc = exc
+                wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
+                wait    *= random.uniform(0.5, 1.5)
+                logger.warning(
+                    "Fetch failed (unknown) | {} {} attempt={} wait={:.2f}s "
+                    "error_type={} err={}",
+                    symbol, timeframe, attempt, wait, type(exc).__name__, exc,
+                )
                 await asyncio.sleep(wait)
 
         raise ChunkFetchError(f"{symbol}/{timeframe} failed") from last_exc
