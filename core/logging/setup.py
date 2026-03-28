@@ -13,9 +13,9 @@ Principios aplicados:
 - SafeOps: defaults seguros + tolerancia a fallos
 
 Ciclo de vida del logging:
-  Fase 0  — bootstrap.pre_log()   → stderr + buffer (antes de setup_logging)
-  Fase 1  — setup_logging()       → sinks loguru + drene del buffer de Fase 0
-  Fase 2  — setup_logging(cfg=..) → no-op (idempotente), sinks ya activos
+  Fase 0  — bootstrap.pre_log()    → stderr + buffer (antes de cualquier sink)
+  Fase 1  — bootstrap_logging()    → sinks con defaults + drene del buffer
+  Fase 2  — configure_logging()    → remove() atomico + sinks desde YAML
 """
 
 import logging as std_logging
@@ -33,7 +33,8 @@ from core.logging.filters import pipeline_filter
 # ---------------------------------------------------------------------
 # Estado global
 # ---------------------------------------------------------------------
-_BOOTSTRAP_DONE: bool = False
+_BOOTSTRAP_DONE:    bool = False  # True tras bootstrap_logging()
+_YAML_CONFIGURED:   bool = False  # True tras configure_logging()
 
 
 # ---------------------------------------------------------------------
@@ -279,6 +280,12 @@ def configure_logging(
     env es obligatorio — sin default para forzar consistencia.
     Debe llamarse después de bootstrap_logging() y load_config().
     """
+    global _YAML_CONFIGURED
+    if _YAML_CONFIGURED:
+        logger.debug("configure_logging called again — idempotent, skipping")
+        return
+    _YAML_CONFIGURED = True
+
     resolved = _resolve_config(cfg, debug, None)
 
     # Capturar IDs de sinks existentes ANTES de añadir los nuevos
@@ -323,7 +330,13 @@ def setup_logging(
     run_id: Optional[str] = None,
 ) -> None:
     """Deprecado. Usar bootstrap_logging() o configure_logging() directamente."""
+    import warnings
+    warnings.warn(
+        "setup_logging() is deprecated. Use bootstrap_logging() or configure_logging().",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if cfg is None:
         bootstrap_logging(debug=debug, run_id=run_id)
     else:
-        configure_logging(cfg=cfg, debug=debug, run_id=run_id)
+        configure_logging(cfg=cfg, env="development", debug=debug, run_id=run_id)
