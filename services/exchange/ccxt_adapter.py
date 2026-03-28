@@ -183,13 +183,6 @@ class CCXTAdapter(ExchangeAdapter):
             finally:
                 self._client = None
 
-    async def __aenter__(self) -> "CCXTAdapter":
-        await self.connect()
-        return self
-
-    async def __aexit__(self, *_) -> None:
-        await self.close()
-
     # ----------------------------------------------------------
     # Public API — todos los métodos de I/O tienen timeout explícito
     # ----------------------------------------------------------
