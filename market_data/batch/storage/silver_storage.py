@@ -780,7 +780,7 @@ class SilverStorage:
 # ==========================================================
 
 def _resolve_base_path(base_path: Optional[str | Path]) -> Path:
-    """Resuelve el path base de Silver. Usa silver_ohlcv_root() como default.""""
+    """Resuelve el path base de Silver. Usa silver_ohlcv_root() como default."""
     if base_path:
         return Path(base_path).resolve()
     return silver_ohlcv_root()

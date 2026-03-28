@@ -13,7 +13,7 @@ Desacopla la capa de research de la implementación del loader:
 
     Research Layer
           ↓
-    data_access.py   ← esta capa de anticorrupción
+    data_access.py   ← capa de anticorrupción
           ↓
     Data Platform (MarketDataLoader)
 
@@ -27,9 +27,9 @@ Principios aplicados
            OCP: el loader es inyectable para testing y extensión
 • DRY    – _get_loader() centraliza la inicialización lazy
 • KISS   – funciones simples con responsabilidad única
-• SafeOps – loader inicializado de forma lazy (no en import time),
-            tipo de retorno correcto para MultiSymbolResult,
-            logging estructurado consistente con el resto del proyecto
+• SafeOps – loader inicializado lazy (no en import time),
+            cache keyed por exchange — nunca devuelve el exchange
+            incorrecto si se llama con exchanges distintos
 
 Ejemplo de uso
 --------------
@@ -38,8 +38,8 @@ from research.data.data_access import get_ohlcv, get_multiple_ohlcv
 # Carga completa
 df = get_ohlcv("BTC/USDT", "1h")
 
-# Carga con rango de fechas
-df = get_ohlcv("BTC/USDT", "1h", start="2023-01-01", end="2023-06-30")
+# Exchange explícito
+df = get_ohlcv("BTC/USDT", "1h", exchange="binance")
 
 # Multi-símbolo con resultado tipado
 result = get_multiple_ohlcv(["BTC/USDT", "ETH/USDT"], "1h")
@@ -49,6 +49,7 @@ if not result.all_succeeded:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -68,59 +69,70 @@ from data_platform.loaders.market_data_loader import (
 
 # Permite sobreescribir el path del Data Lake via variable de entorno
 # sin modificar código — útil en distintos entornos (dev, staging, prod)
-import os as _os
 _DATA_LAKE_PATH: Optional[Path] = (
-    Path(_os.environ["OCM_DATA_LAKE_PATH"])
-    if "OCM_DATA_LAKE_PATH" in _os.environ
+    Path(os.environ["OCM_DATA_LAKE_PATH"])
+    if "OCM_DATA_LAKE_PATH" in os.environ
     else None
 )
 
 # Exchange por defecto para research
-_DEFAULT_EXCHANGE: str = _os.environ.get("OCM_EXCHANGE", "kucoin")
+_DEFAULT_EXCHANGE: str = os.environ.get("OCM_EXCHANGE", "kucoin")
 
 
 # ==========================================================
-# Lazy Loader
+# Loader cache — keyed por exchange
 # ==========================================================
 
-_loader_instance: Optional[MarketDataLoader] = None
+# Dict[exchange_key, MarketDataLoader] — evita devolver el exchange
+# incorrecto cuando se llama con exchanges distintos en la misma sesión.
+# exchange_key = exchange.lower() o "_any_" si exchange=None.
+_loader_cache: Dict[str, MarketDataLoader] = {}
 
 
 def _get_loader(exchange: Optional[str] = None) -> MarketDataLoader:
     """
-    Devuelve el loader singleton, inicializándolo de forma lazy.
+    Devuelve el loader para el exchange dado, creándolo de forma lazy.
 
-    El loader ahora soporta versionado: carga desde silver/_versions/
-    en lugar de leer directamente el filesystem.
+    Cache keyed por exchange — cada exchange tiene su propia instancia.
+    Esto evita el bug donde _get_loader("binance") devuelve silenciosamente
+    el loader de "kucoin" si este fue inicializado primero.
+
+    Parameters
+    ----------
+    exchange : str, optional
+        Exchange explícito. Si None, usa _DEFAULT_EXCHANGE.
     """
-    global _loader_instance
+    key = (exchange or _DEFAULT_EXCHANGE).lower()
 
-    if _loader_instance is None:
-        _loader_instance = MarketDataLoader(
+    if key not in _loader_cache:
+        _loader_cache[key] = MarketDataLoader(
             data_lake_path=_DATA_LAKE_PATH,
-            exchange=exchange or _DEFAULT_EXCHANGE,
+            exchange=key,
         )
         logger.debug(
             "MarketDataLoader initialized | path={} exchange={}",
             _DATA_LAKE_PATH or "default",
-            exchange or _DEFAULT_EXCHANGE,
+            key,
         )
 
-    return _loader_instance
+    return _loader_cache[key]
 
 
-def _reset_loader() -> None:
+def _reset_loader(exchange: Optional[str] = None) -> None:
     """
-    Resetea el singleton del loader.
+    Resetea el loader del exchange dado, o toda la cache si exchange=None.
 
     Uso exclusivo en tests para inyectar un loader mock:
 
-        data_access._loader_instance = MockLoader()
-        # o bien:
-        data_access._reset_loader()
+        import research.data.data_access as da
+        da._loader_cache["kucoin"] = MockLoader()
+        # o bien limpiar todo:
+        da._reset_loader()
     """
-    global _loader_instance
-    _loader_instance = None
+    if exchange is None:
+        _loader_cache.clear()
+    else:
+        _loader_cache.pop(exchange.lower(), None)
 
 
 # ==========================================================
@@ -153,6 +165,10 @@ def get_ohlcv(
     columns : list[str], optional
         Subconjunto de columnas. Útil para optimizar memoria:
         e.g. ["timestamp", "close"] para cálculos de precio.
+    version : str
+        "latest" (default) o versión específica como "v000003".
+    exchange : str, optional
+        Exchange explícito. Si None, usa OCM_EXCHANGE o "kucoin".
 
     Returns
     -------
@@ -178,18 +194,22 @@ def get_ohlcv(
     )
 
     logger.info(
-        "Research OHLCV loaded | symbol={} timeframe={} version={} start={} end={} rows={}",
-        symbol, timeframe, version, start, end, len(df),
+        "Research OHLCV loaded | symbol={} timeframe={} version={} "
+        "exchange={} start={} end={} rows={}",
+        symbol, timeframe, version,
+        exchange or _DEFAULT_EXCHANGE,
+        start, end, len(df),
     )
 
     return df
 
 
 def get_multiple_ohlcv(
-    symbols:    List[str],
-    timeframe:  str,
-    start:      Optional[str] = None,
-    end:        Optional[str] = None,
+    symbols:   List[str],
+    timeframe: str,
+    start:     Optional[str] = None,
+    end:       Optional[str] = None,
+    exchange:  Optional[str] = None,
 ) -> MultiSymbolResult:
     """
     Carga múltiples símbolos para el mismo timeframe.
@@ -217,6 +237,8 @@ def get_multiple_ohlcv(
         Fecha inicio ISO 8601.
     end : str, optional
         Fecha fin ISO 8601.
+    exchange : str, optional
+        Exchange explícito. Si None, usa OCM_EXCHANGE o "kucoin".
 
     Returns
     -------
@@ -225,7 +247,7 @@ def get_multiple_ohlcv(
         Nunca lanza aunque algunos símbolos fallen — los fallos
         quedan registrados en .errors (SafeOps).
     """
-    loader = _get_loader()
+    loader = _get_loader(exchange)
 
     result = loader.load_multiple_symbols(
         symbols=symbols,
@@ -235,8 +257,9 @@ def get_multiple_ohlcv(
     )
 
     logger.info(
-        "Research multi-symbol load | timeframe={} loaded={} failed={}",
-        timeframe, len(result.loaded), len(result.failed),
+        "Research multi-symbol load | timeframe={} exchange={} loaded={} failed={}",
+        timeframe, exchange or _DEFAULT_EXCHANGE,
+        len(result.loaded), len(result.failed),
     )
 
     if result.failed:
@@ -253,6 +276,7 @@ def get_ohlcv_dict(
     timeframe: str,
     start:     Optional[str] = None,
     end:       Optional[str] = None,
+    exchange:  Optional[str] = None,
 ) -> Dict[str, pd.DataFrame]:
     """
     Carga múltiples símbolos y devuelve solo los exitosos como dict.
@@ -273,10 +297,10 @@ def get_ohlcv_dict(
         Solo los símbolos que cargaron correctamente.
         Dict vacío si todos fallaron.
     """
-    result = get_multiple_ohlcv(
+    return get_multiple_ohlcv(
         symbols=symbols,
         timeframe=timeframe,
         start=start,
         end=end,
-    )
-    return result.data
+        exchange=exchange,
+    ).data

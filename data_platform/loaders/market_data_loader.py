@@ -441,7 +441,7 @@ class MarketDataLoader:
 # ==========================================================
 
 def _resolve_base_path(data_lake_path: Optional[str | Path]) -> Path:
-    """Resuelve el path base del Data Lake Silver. Usa silver_ohlcv_root() como default.""""
+    """Resuelve el path base del Data Lake Silver. Usa silver_ohlcv_root() como default."""
     base = Path(data_lake_path).resolve() if data_lake_path else silver_ohlcv_root()
     if not base.exists():
         raise MarketDataLoaderError(
