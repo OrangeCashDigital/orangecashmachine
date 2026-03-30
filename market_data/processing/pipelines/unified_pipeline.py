@@ -35,7 +35,7 @@ from market_data.processing.strategies.base import (
 from market_data.processing.strategies.backfill import BackfillStrategy
 from market_data.processing.strategies.incremental import IncrementalStrategy
 from market_data.processing.strategies.repair import RepairStrategy
-from market_data.processing.transformers.transformer import OHLCVTransformer
+from market_data.core.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError, get_breaker_state
 from services.observability.metrics import FETCH_ABORTS_TOTAL
 from services.state.cursor_store import (

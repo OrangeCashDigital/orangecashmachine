@@ -29,7 +29,7 @@ from loguru import logger
 from core.logging.setup import bind_pipeline
 
 from market_data.storage.silver.silver_storage import SilverStorage
-from market_data.processing.transformers.transformer import OHLCVTransformer
+from market_data.core.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
 from services.observability.metrics import (
     FETCH_CHUNK_DURATION,
