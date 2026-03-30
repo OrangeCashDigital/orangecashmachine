@@ -25,7 +25,7 @@ from core.config.loader import load_config
 from core.config.schema import AppConfig
 from market_data.orchestration.flows.batch_flow import market_data_flow
 from market_data.orchestration.post_processing import PostProcessingService
-from services.observability.metrics import push_metrics
+from infra.observability.server import push_metrics
 
 _log = bind_pipeline("entrypoint")
 

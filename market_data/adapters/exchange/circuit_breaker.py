@@ -14,7 +14,7 @@ from typing import Dict
 
 import pybreaker
 
-from services.exchange.errors import ExchangeCircuitOpenError  # noqa: F401 re-export
+from market_data.adapters.exchange.errors import ExchangeCircuitOpenError  # noqa: F401 re-export
 
 __all__ = [
     "ExchangeCircuitOpenError",

@@ -26,7 +26,7 @@ from prefect import task, get_run_logger
 from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
 from market_data.processing.pipelines.unified_pipeline import UnifiedPipeline
-from services.exchange.ccxt_adapter import CCXTAdapter, get_or_create_throttle, get_throttle_state
+from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter, get_or_create_throttle, get_throttle_state
 
 # ==========================================================
 # Lifecycle helper

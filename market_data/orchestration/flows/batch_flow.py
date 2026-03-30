@@ -40,14 +40,14 @@ from core.config.schema import AppConfig
 from core.config.loader import load_config
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe, validate_exchange_connection
 if TYPE_CHECKING:
-    from services.exchange.ccxt_adapter import CCXTAdapter
+    from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
 from market_data.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
     run_futures_pipeline,
     run_trades_pipeline,
     run_derivatives_pipeline,
 )
-from services.observability.metrics import push_metrics
+from infra.observability.server import push_metrics
 
 _PUSHGATEWAY = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 

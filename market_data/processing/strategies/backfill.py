@@ -21,7 +21,7 @@ from market_data.processing.strategies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from services.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
+from market_data.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
 
 _log = bind_pipeline("backfill")
 
@@ -331,11 +331,11 @@ class BackfillStrategy(StrategyMixin):
     # ----------------------------------------------------------
 
     def _origin_key(self, ctx: PipelineContext, symbol: str, timeframe: str) -> str:
-        from services.state.cursor_store import _encode
+        from infra.state.cursor_store import _encode
         env = getattr(ctx.cursor, "_env", "development")
         return f"{env}:{_ORIGIN_KEY_PREFIX}:{_encode(ctx.exchange_id)}:{_encode(symbol)}:{_encode(timeframe)}"
 
     def _backfill_key(self, ctx: PipelineContext, symbol: str, timeframe: str) -> str:
-        from services.state.cursor_store import _encode
+        from infra.state.cursor_store import _encode
         env = getattr(ctx.cursor, "_env", "development")
         return f"{env}:{_BACKFILL_KEY_PREFIX}:{_encode(ctx.exchange_id)}:{_encode(symbol)}:{_encode(timeframe)}"

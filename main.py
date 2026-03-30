@@ -68,7 +68,7 @@ from core.config.loader.env_resolver import bootstrap_dotenv
 from core.config.schema import AppConfig
 from core.logging import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner
-from services.observability.metrics import start_metrics_server
+from infra.observability.server import start_metrics_server
 
 
 # ---------------------------------------------------------------------

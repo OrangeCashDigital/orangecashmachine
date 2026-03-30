@@ -30,8 +30,8 @@ from core.logging.setup import bind_pipeline
 
 from market_data.storage.silver.silver_storage import SilverStorage
 from market_data.core.transformers.transformer import OHLCVTransformer
-from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
-from services.observability.metrics import (
+from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
+from market_data.observability.metrics import (
     FETCH_CHUNK_DURATION,
     FETCH_CHUNKS_TOTAL,
     FETCH_CHUNK_ERRORS_TOTAL,
@@ -85,7 +85,7 @@ class DownloadResult:
 # CursorStore import (aqui para evitar circular import)
 # ==========================================================
 
-from services.state.cursor_store import CursorStore, InMemoryCursorStore
+from infra.state.cursor_store import CursorStore, InMemoryCursorStore
 
 
 # ==========================================================

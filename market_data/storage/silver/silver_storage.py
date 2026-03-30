@@ -219,7 +219,7 @@ class SilverStorage:
             yield  # sin Redis → sin lock, proceder
             return
 
-        from services.observability.metrics import (
+        from market_data.observability.metrics import (
             WRITE_LOCK_WAIT_DURATION, WRITE_LOCK_CONFLICTS, WRITE_LOCK_STARVATION,
         )
 

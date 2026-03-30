@@ -18,7 +18,7 @@ from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync
 from market_data.storage.silver.silver_storage import SilverStorage
 from market_data.storage.bronze.bronze_storage import BronzeStorage
 from market_data.quality.pipeline import QualityPipeline
-from services.state.cursor_store import CursorStore
+from infra.state.cursor_store import CursorStore
 
 _log = bind_pipeline("base")
 
@@ -227,7 +227,7 @@ class StrategyMixin:
         total:     int,
         ctx:       "PipelineContext",
     ) -> "PairResult":
-        from services.observability.metrics import PIPELINE_ERRORS  # evita circular
+        from market_data.observability.metrics import PIPELINE_ERRORS  # evita circular
 
         result     = PairResult(symbol=symbol, timeframe=timeframe, mode=self._mode, exchange_id=ctx.exchange_id)
         pair_start = time.monotonic()

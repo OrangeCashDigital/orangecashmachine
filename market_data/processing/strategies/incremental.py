@@ -18,7 +18,7 @@ from market_data.processing.strategies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from services.observability.metrics import (
+from market_data.observability.metrics import (
     PAIR_DURATION,
     QUALITY_DECISIONS,
     ROWS_INGESTED,

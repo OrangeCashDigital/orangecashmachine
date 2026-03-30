@@ -1,50 +1,43 @@
 from __future__ import annotations
 
 """
-services/data_providers/coinglass_adapter.py
-=============================================
+services/data_providers/coinmarketcap_adapter.py
+================================================
 
-Adapter para la API de Coinglass (funding rates, open interest, liquidaciones).
+Adapter para la API de CoinMarketCap (métricas globales de mercado).
 
 Uso
 ---
-    async with CoinglassAdapter(api_key="...") as adapter:
-        data = await adapter.fetch_funding_rates()
+    async with CoinMarketCapAdapter(api_key="...") as adapter:
+        metrics = await adapter.fetch_global_metrics()
 """
 
 from typing import Any, Dict, Optional
 
 import aiohttp
 
-from services.data_providers.base import DataProviderAdapter
+from market_data.adapters.data_providers.base import DataProviderAdapter
 
 # Timeouts por operación (segundos)
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30.0, connect=10.0)
 
 
-class CoinglassAdapter(DataProviderAdapter):
+class CoinMarketCapAdapter(DataProviderAdapter):
     """
-    Adapter para Coinglass Open API.
+    Adapter para CoinMarketCap Pro API.
 
     Gestiona una ClientSession compartida por instancia — no crea
     una sesión nueva por request (evita overhead de TCP y agotamiento
     de file descriptors en uso intensivo).
 
     Uso como context manager (recomendado):
-        async with CoinglassAdapter(api_key=...) as adapter:
-            rates = await adapter.fetch_funding_rates()
-
-    Uso manual:
-        adapter = CoinglassAdapter(api_key=...)
-        try:
-            rates = await adapter.fetch_funding_rates()
-        finally:
-            await adapter.close()
+        async with CoinMarketCapAdapter(api_key=...) as adapter:
+            metrics = await adapter.fetch_global_metrics()
     """
 
     def __init__(self, api_key: str) -> None:
         self.api_key  = api_key
-        self.base_url = "https://open-api.coinglass.com/api"
+        self.base_url = "https://pro-api.coinmarketcap.com"
         self._session: Optional[aiohttp.ClientSession] = None
 
     def _get_session(self) -> aiohttp.ClientSession:
@@ -52,7 +45,7 @@ class CoinglassAdapter(DataProviderAdapter):
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 timeout=_REQUEST_TIMEOUT,
-                headers={"CG-API-KEY": self.api_key},
+                headers={"X-CMC_PRO_API_KEY": self.api_key},
             )
         return self._session
 
@@ -65,14 +58,8 @@ class CoinglassAdapter(DataProviderAdapter):
                 pass
         self._session = None
 
-    async def fetch_funding_rates(self) -> Dict[str, Any]:
-        url = f"{self.base_url}/futures/funding_rates"
-        async with self._get_session().get(url) as resp:
-            resp.raise_for_status()
-            return await resp.json()
-
-    async def fetch_open_interest(self) -> Dict[str, Any]:
-        url = f"{self.base_url}/futures/open_interest"
+    async def fetch_global_metrics(self) -> Dict[str, Any]:
+        url = f"{self.base_url}/v1/global-metrics/quotes/latest"
         async with self._get_session().get(url) as resp:
             resp.raise_for_status()
             return await resp.json()

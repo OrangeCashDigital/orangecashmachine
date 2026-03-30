@@ -28,15 +28,15 @@ import ccxt.async_support as ccxt
 import pybreaker
 from loguru import logger
 
-from services.exchange.base import ExchangeAdapter
-from services.exchange.errors import (
+from market_data.adapters.exchange.base import ExchangeAdapter
+from market_data.adapters.exchange.errors import (
     ExchangeAdapterError,
     UnsupportedExchangeError,
     ExchangeConnectionError,
     ExchangeCircuitOpenError,
 )
-from services.exchange.circuit_breaker import _get_breaker, get_breaker_state
-from services.exchange.throttle import (
+from market_data.adapters.exchange.circuit_breaker import _get_breaker, get_breaker_state
+from market_data.adapters.exchange.throttle import (
     AdaptiveThrottle,
     _THROTTLES,
     get_or_create_throttle,
@@ -197,7 +197,7 @@ class CCXTAdapter(ExchangeAdapter):
                 )
             return await self._breaker.call_async(_call)
         except pybreaker.CircuitBreakerError as exc:
-            from services.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+            from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
             EXCHANGE_CIRCUIT_OPEN.labels(
                 exchange=self._exchange_id, operation="fetch_ticker"
             ).inc()
@@ -238,7 +238,7 @@ class CCXTAdapter(ExchangeAdapter):
                 # Re-raise para que el fetcher lo trate como error transitorio.
                 raise
         except pybreaker.CircuitBreakerError as exc:
-            from services.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+            from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
             EXCHANGE_CIRCUIT_OPEN.labels(
                 exchange=self._exchange_id, operation="fetch_ohlcv"
             ).inc()
@@ -260,7 +260,7 @@ class CCXTAdapter(ExchangeAdapter):
                 )
             return await self._breaker.call_async(_call)
         except pybreaker.CircuitBreakerError as exc:
-            from services.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+            from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
             EXCHANGE_CIRCUIT_OPEN.labels(
                 exchange=self._exchange_id, operation="fetch_trades"
             ).inc()
