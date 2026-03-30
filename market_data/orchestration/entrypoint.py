@@ -8,6 +8,11 @@ Entrypoint LOCAL — solo para desarrollo y debug.
 
 En producción el flow es disparado por Prefect Server/Worker
 via deployment. Este archivo NO forma parte del path de producción.
+
+Responsabilidad
+---------------
+Orquestar arranque del flow local + post-procesado.
+No conoce detalles de storage ni de features.
 """
 
 import asyncio
@@ -19,8 +24,7 @@ from core.config.runtime import RunConfig
 from core.config.loader import load_config
 from core.config.schema import AppConfig
 from market_data.orchestration.flows.batch_flow import market_data_flow
-from market_data.storage.gold.snapshot import SnapshotManager
-from market_data.storage.gold.gold_storage import GoldStorage
+from market_data.orchestration.post_processing import PostProcessingService
 from services.observability.metrics import push_metrics
 
 _log = bind_pipeline("entrypoint")
@@ -34,60 +38,28 @@ async def _run_flow_local(config: AppConfig, run_cfg: RunConfig) -> None:
     await market_data_flow(env=run_cfg.env, config_dir=config_dir)
     log.info("flow_completed", flow="market_data_flow")
 
-    try:
-        snapshot_id = SnapshotManager().create_snapshot()
-        log.info("snapshot_created", snapshot_id=snapshot_id)
-    except Exception as exc:
-        log.warning(
-            "snapshot_failed",
-            error_type=type(exc).__name__,
-            error=str(exc),
-        )
-
-    try:
-        gold = GoldStorage()
-        for ex in config.exchanges:
-            if ex.has_spot and ex.markets.spot_symbols:
-                gold.build_all(
-                    exchange=ex.name.value,
-                    symbols=ex.markets.spot_symbols,
-                    market_type="spot",
-                    timeframes=config.pipeline.historical.timeframes,
-                )
-            if ex.has_futures and ex.markets.futures_symbols:
-                gold.build_all(
-                    exchange=ex.name.value,
-                    symbols=ex.markets.futures_symbols,
-                    market_type="swap",
-                    timeframes=config.pipeline.historical.timeframes,
-                )
-        log.info("gold_build_completed")
-    except Exception as exc:
-        log.warning(
-            "gold_build_failed",
-            error_type=type(exc).__name__,
-            error=str(exc),
-        )
+    PostProcessingService(config).execute()
 
 
-def run(config: AppConfig, debug: bool = False) -> int:
+def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     """
     Ejecuta el pipeline en modo local.
 
     Parameters
     ----------
-    config : AppConfig
+    config  : AppConfig
         Configuración de aplicación ya cargada y validada.
-    debug : bool
-        Flag de debug resuelto por RunConfig — no leer OCM_DEBUG aquí.
+    run_cfg : RunConfig
+        Runtime ya resuelto por main.py — no se recrea aquí.
+    debug   : bool
+        Flag de debug resuelto por RunConfig.
 
     Returns
     -------
     int
         0 → éxito, 1 → error crítico, 130 → interrumpido (SIGINT).
     """
-    run_cfg = RunConfig.from_env()
-    log     = _log.bind(mode="local", env=run_cfg.env)
+    log = _log.bind(mode="local", env=run_cfg.env)
 
     log.info(
         "pipeline_starting",
@@ -133,4 +105,4 @@ if __name__ == "__main__":
     _config  = load_config(env=_run_cfg.env, path=_run_cfg.config_path)
     bootstrap_logging(debug=_run_cfg.debug, env=_run_cfg.env)
     configure_logging(cfg=_config.observability.logging, env=_run_cfg.env, debug=_run_cfg.debug)
-    sys.exit(run(config=_config, debug=_run_cfg.debug))
+    sys.exit(run(config=_config, run_cfg=_run_cfg, debug=_run_cfg.debug))

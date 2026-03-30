@@ -15,12 +15,8 @@ from typing import Optional
 
 from loguru import logger
 
-from core.config.runtime import RunConfig
-from core.config.loader import (
-    load_config,
-    ConfigurationError,
-    ConfigValidationError,
-)
+import core.config.runtime
+import core.config.loader
 from core.config.loader.env_resolver import bootstrap_dotenv
 from core.config.schema import AppConfig
 from core.logging import bootstrap_logging, configure_logging
@@ -31,14 +27,14 @@ from services.observability.metrics import start_metrics_server
 # ---------------------------------------------------------------------
 # Bootstrap helpers
 # ---------------------------------------------------------------------
-def build_run_config(explicit: Optional[RunConfig] = None) -> RunConfig:
+def build_run_config(explicit: Optional[core.config.runtime.RunConfig] = None) -> core.config.runtime.RunConfig:
     if explicit:
         return explicit
     bootstrap_dotenv()
-    return RunConfig.from_env()
+    return core.config.runtime.RunConfig.from_env()
 
 
-def log_runtime_context(run_cfg: RunConfig) -> None:
+def log_runtime_context(run_cfg: core.config.runtime.RunConfig) -> None:
     logger.debug(
         "run_config_resolved",
         env=run_cfg.env,
@@ -49,10 +45,10 @@ def log_runtime_context(run_cfg: RunConfig) -> None:
     )
 
 
-def initialize_config(run_cfg: RunConfig) -> AppConfig:
+def initialize_config(run_cfg: core.config.runtime.RunConfig) -> AppConfig:
     try:
-        return load_config(env=run_cfg.env, path=run_cfg.config_path)
-    except (ConfigurationError, ConfigValidationError):
+        return core.config.loader.load_config(env=run_cfg.env, path=run_cfg.config_path)
+    except (core.config.loader.ConfigurationError, core.config.loader.ConfigValidationError):
         raise
     except Exception:
         logger.opt(exception=True).critical("unexpected_config_error")
@@ -72,7 +68,7 @@ def setup_observability(config: AppConfig, bound_logger) -> None:
 # ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
-def main(run_cfg: Optional[RunConfig] = None) -> int:
+def main(run_cfg: Optional[core.config.runtime.RunConfig] = None) -> int:
     """
     Punto de entrada principal.
 
@@ -121,13 +117,13 @@ def main(run_cfg: Optional[RunConfig] = None) -> int:
         timeout = config.pipeline.timeouts.historical_pipeline
         log.info("pipeline_started", timeout_s=timeout, run_id=run_id)
 
-        return run_pipeline(config=config, debug=run_cfg.debug)
+        return run_pipeline(config=config, run_cfg=run_cfg, debug=run_cfg.debug)
 
     except KeyboardInterrupt:
         logger.warning("execution_interrupted", run_id=run_id)
         return 130
 
-    except (ConfigurationError, ConfigValidationError) as exc:
+    except (core.config.loader.ConfigurationError, core.config.loader.ConfigValidationError) as exc:
         logger.opt(exception=True).critical(
             "config_failure",
             error_type=type(exc).__name__,
