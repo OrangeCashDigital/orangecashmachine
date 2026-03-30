@@ -291,7 +291,8 @@ async def run_futures_pipeline(
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = futures_market_type,
         )
-        summary = await pipeline.run(mode="incremental")
+        pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
+        summary = await pipeline.run(mode=pipeline_mode)
 
     _update_throttle_from_summary(throttle, summary)
 
