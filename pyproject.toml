@@ -28,13 +28,14 @@ dependencies = [
     "python-dotenv",
     # Resiliencia
     "pybreaker==1.4.1",
+    "redis>=7.4.0",
 ]
 
 [project.scripts]
 ocm = "main:main"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",

@@ -31,7 +31,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY --from=builder /install /usr/local
+COPY --from=builder /usr/local /usr/local
 COPY . .
 
 RUN useradd --create-home appuser
