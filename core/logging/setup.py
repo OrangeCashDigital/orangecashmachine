@@ -4,18 +4,16 @@ from __future__ import annotations
 core/logging/setup.py
 =====================
 
-Configuración centralizada de logging basada en Loguru.
+Sistema de logging centralizado basado en Loguru.
 
-Principios aplicados:
-- SOLID: separación de responsabilidades (config, sinks, patcher)
-- DRY: eliminación de duplicación en creación de sinks
-- KISS: lógica clara y predecible
-- SafeOps: defaults seguros + tolerancia a fallos
+Arquitectura:
+- system.log     → JSON global (source of truth, máquinas)
+- pipeline.log   → JSON filtrado (pipeline)
+- orangecashmachine.log → texto (humanos)
+- errors.log     → errores (WARNING+)
 
-Ciclo de vida del logging:
-  Fase 0  — bootstrap.pre_log()    → stderr + buffer (antes de cualquier sink)
-  Fase 1  — bootstrap_logging()    → sinks con defaults + drene del buffer
-  Fase 2  — configure_logging()    → remove() atomico + sinks desde YAML
+Principios:
+- SOLID · DRY · KISS · SafeOps
 """
 
 import hashlib
@@ -23,7 +21,8 @@ import json
 import logging as std_logging
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from threading import Lock
 
 from loguru import logger
 
@@ -32,19 +31,18 @@ from core.logging.config import LoggingConfig
 from core.logging.formats import CONSOLE, FILE
 from core.logging.filters import pipeline_filter
 
+
 # ---------------------------------------------------------------------
 # Estado global
 # ---------------------------------------------------------------------
-_BOOTSTRAP_DONE:    bool = False
-_CONFIG_HASH:       Optional[str] = None
-_ACTIVE_SINK_IDS:   list = []
-
-from threading import Lock as _Lock
-_CONFIG_LOCK = _Lock()
+_BOOTSTRAP_DONE: bool = False
+_CONFIG_HASH: Optional[str] = None
+_ACTIVE_SINK_IDS: List[int] = []
+_CONFIG_LOCK = Lock()
 
 
 # ---------------------------------------------------------------------
-# Intercept handler (stdlib → loguru)
+# Bridge stdlib → loguru
 # ---------------------------------------------------------------------
 class InterceptHandler(std_logging.Handler):
     """Redirige logging estándar hacia Loguru."""
@@ -69,38 +67,42 @@ class InterceptHandler(std_logging.Handler):
 
 
 # ---------------------------------------------------------------------
-# Configuración base
+# Config resolver
 # ---------------------------------------------------------------------
 def _resolve_config(
     cfg: Optional[LoggingConfig],
     debug: bool,
     log_dir: Optional[Path],
 ) -> Dict[str, Any]:
+    """Normaliza config externa a estructura interna consistente."""
+
     if cfg:
         return {
-            "level":     "DEBUG" if debug else cfg.level.upper(),
-            "log_dir":   Path(cfg.log_dir) if (cfg.file or cfg.pipeline) else None,
-            "rotation":  cfg.rotation,
+            "level": "DEBUG" if debug else cfg.level.upper(),
+            "log_dir": Path(cfg.log_dir) if (cfg.file or cfg.pipeline) else None,
+            "rotation": cfg.rotation,
             "retention": cfg.retention,
-            "console":   cfg.console,
-            "file":      cfg.file,
-            "pipeline":  cfg.pipeline,
+            "console": cfg.console,
+            "file": cfg.file,
+            "pipeline": cfg.pipeline,
         }
+
     return {
-        "level":     "DEBUG" if debug else "INFO",
-        "log_dir":   log_dir or Path("logs"),
-        "rotation":  "1 day",
+        "level": "DEBUG" if debug else "INFO",
+        "log_dir": log_dir or Path("logs"),
+        "rotation": "1 day",
         "retention": "14 days",
-        "console":   True,
-        "file":      True,
-        "pipeline":  True,
+        "console": True,
+        "file": True,
+        "pipeline": True,
     }
 
 
 # ---------------------------------------------------------------------
-# Patcher (inyección global de contexto)
+# Context injection
 # ---------------------------------------------------------------------
-def _make_patcher(run_id: Optional[str], env: str = "development"):
+def _make_patcher(run_id: Optional[str], env: str):
+    """Inyecta contexto global en todos los logs."""
     _run_id = run_id or "-"
 
     def _patch(record: dict) -> None:
@@ -113,32 +115,42 @@ def _make_patcher(run_id: Optional[str], env: str = "development"):
 
 
 # ---------------------------------------------------------------------
-# Drene del buffer de Fase 0
+# Bootstrap replay
 # ---------------------------------------------------------------------
 def _replay_bootstrap_buffer() -> None:
-    """
-    Drena los eventos pre-init al archivo ahora que los sinks existen.
-    Cada evento se reproduce con phase="pre_init" para distinguirlos
-    claramente de los eventos post-inicialización en consola y Loki.
-    """
+    """Reproduce eventos pre-init con trazabilidad."""
     entries = _drain_bootstrap()
     if not entries:
         return
 
     for entry in entries:
-        ts    = entry.get("ts", "?")
+        ts = entry.get("ts", "?")
         event = entry.get("event", "?")
-        rest  = {k: v for k, v in entry.items() if k not in ("ts", "event")}
-        logger.bind(phase="pre_init", pre_init_ts=ts, **rest).debug(event)
+        rest = {k: v for k, v in entry.items() if k not in ("ts", "event")}
+
+        logger.bind(
+            phase="pre_init",
+            pre_init_ts=ts,
+            **rest
+        ).debug(event)
 
     logger.bind(phase="pre_init").debug(
-        "logging.bootstrap_drained", events=len(entries)
+        "logging.bootstrap_drained",
+        events=len(entries),
     )
 
 
 # ---------------------------------------------------------------------
-# Helper interno: instala bridge stdlib → loguru
+# Helpers internos
 # ---------------------------------------------------------------------
+def _ensure_log_dir(log_dir: Path) -> None:
+    """Crea directorio de logs si no existe."""
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        logger.warning("log_dir_creation_failed", error=str(exc))
+
+
 def _install_stdlib_bridge() -> None:
     std_logging.basicConfig(
         handlers=[InterceptHandler()],
@@ -148,10 +160,16 @@ def _install_stdlib_bridge() -> None:
 
 
 # ---------------------------------------------------------------------
-# Helper interno: instala sinks según config resuelta
+# Sinks
 # ---------------------------------------------------------------------
-def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
-    ids: list = []
+def _install_sinks(resolved: Dict[str, Any], debug: bool) -> List[int]:
+    """Instala sinks de logging según configuración."""
+    ids: List[int] = []
+    log_dir: Optional[Path] = resolved.get("log_dir")
+
+    # ---------------------------
+    # Console (humanos)
+    # ---------------------------
     if resolved["console"]:
         ids.append(logger.add(
             sys.stderr,
@@ -161,9 +179,28 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
             diagnose=debug,
             colorize=True,
         ))
-    if resolved["log_dir"] and resolved["file"]:
-        log_dir = resolved["log_dir"]
-        log_dir.mkdir(parents=True, exist_ok=True)
+
+    if not log_dir:
+        return ids
+
+    _ensure_log_dir(log_dir)
+
+    # ---------------------------
+    # 🔥 SYSTEM LOG (JSON GLOBAL)
+    # ---------------------------
+    ids.append(logger.add(
+        log_dir / "system_{time:YYYY-MM-DD}.log",
+        rotation=resolved["rotation"],
+        retention=resolved["retention"],
+        compression="gz",
+        level="DEBUG",
+        serialize=True,
+    ))
+
+    # ---------------------------
+    # Human logs
+    # ---------------------------
+    if resolved["file"]:
         ids.append(logger.add(
             log_dir / "orangecashmachine_{time:YYYY-MM-DD}.log",
             rotation=resolved["rotation"],
@@ -174,6 +211,7 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
             backtrace=True,
             diagnose=False,
         ))
+
         ids.append(logger.add(
             log_dir / "errors_{time:YYYY-MM-DD}.log",
             rotation=resolved["rotation"],
@@ -184,46 +222,44 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
             backtrace=True,
             diagnose=False,
         ))
-    if resolved["log_dir"] and resolved["pipeline"]:
-        log_dir = resolved["log_dir"]
-        log_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---------------------------
+    # Pipeline (JSON filtrado)
+    # ---------------------------
+    if resolved["pipeline"]:
         ids.append(logger.add(
             log_dir / "pipeline_{time:YYYY-MM-DD}.log",
             rotation=resolved["rotation"],
             retention=resolved["retention"],
             compression="gz",
             level="DEBUG",
-            serialize=True,       # JSON puro para Loki/ELK
+            serialize=True,
             filter=pipeline_filter,
         ))
+
     _ACTIVE_SINK_IDS.extend(ids)
     return ids
 
 
 # ---------------------------------------------------------------------
-# Fase 1 — bootstrap con defaults seguros
+# Bootstrap
 # ---------------------------------------------------------------------
 def bootstrap_logging(
     debug: bool = False,
     run_id: Optional[str] = None,
     env: str = "development",
 ) -> None:
-    """
-    Fase 1: inicializa logging con defaults seguros antes de tener AppConfig.
-
-    - Registra sinks (consola + archivo + pipeline) con valores hardcoded.
-    - Drena el buffer de Fase 0 (eventos pre-init) hacia los sinks.
-    - Instala bridge stdlib → loguru.
-
-    Idempotente: segunda llamada es no-op.
-    """
+    """Inicializa logging con defaults seguros."""
     global _BOOTSTRAP_DONE
+
     if _BOOTSTRAP_DONE:
         return
 
     resolved = _resolve_config(None, debug, None)
+
     logger.remove()
     logger.configure(patcher=_make_patcher(run_id, env))
+
     _install_sinks(resolved, debug)
     _BOOTSTRAP_DONE = True
 
@@ -231,9 +267,6 @@ def bootstrap_logging(
         "logging_initialized",
         level=resolved["level"],
         log_dir=str(resolved["log_dir"]),
-        console=resolved["console"],
-        file=resolved["file"],
-        pipeline=resolved["pipeline"],
     )
 
     _replay_bootstrap_buffer()
@@ -241,7 +274,7 @@ def bootstrap_logging(
 
 
 # ---------------------------------------------------------------------
-# Fase 2 — reconfiguración desde AppConfig YAML
+# Reconfiguración
 # ---------------------------------------------------------------------
 def configure_logging(
     cfg: LoggingConfig,
@@ -249,25 +282,21 @@ def configure_logging(
     debug: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
-    """
-    Fase 2: reemplaza sinks de Fase 1 con configuración real del YAML.
+    """Reconfigura logging desde YAML."""
 
-    env es obligatorio — sin default para forzar consistencia.
-    Debe llamarse después de bootstrap_logging() y load_config().
-    """
     resolved = _resolve_config(cfg, debug, None)
 
-    def _stable_serialize(obj):
+    def _stable(obj):
         if isinstance(obj, dict):
-            return {k: _stable_serialize(v) for k, v in sorted(obj.items())}
+            return {k: _stable(v) for k, v in sorted(obj.items())}
         if isinstance(obj, (list, tuple)):
-            return [_stable_serialize(v) for v in obj]
+            return [_stable(v) for v in obj]
         if isinstance(obj, Path):
             return str(obj)
         return obj
 
     new_hash = hashlib.md5(
-        json.dumps(_stable_serialize(resolved), sort_keys=True).encode()
+        json.dumps(_stable(resolved), sort_keys=True).encode()
     ).hexdigest()
 
     with _CONFIG_LOCK:
@@ -278,9 +307,12 @@ def configure_logging(
         _CONFIG_HASH = new_hash
 
     old_ids = list(_ACTIVE_SINK_IDS)
+
     logger.configure(patcher=_make_patcher(run_id, env))
+
     _ACTIVE_SINK_IDS.clear()
     _install_sinks(resolved, debug)
+
     _install_stdlib_bridge()
 
     for h_id in old_ids:
@@ -292,15 +324,11 @@ def configure_logging(
     logger.bind(phase="reconfigure").debug(
         "logging_reconfigured",
         level=resolved["level"],
-        log_dir=str(resolved["log_dir"]),
-        console=resolved["console"],
-        file=resolved["file"],
-        pipeline=resolved["pipeline"],
     )
 
 
 # ---------------------------------------------------------------------
-# Helpers de trazabilidad del pipeline
+# Helpers públicos
 # ---------------------------------------------------------------------
 def bind_pipeline(
     component: str,
@@ -308,47 +336,22 @@ def bind_pipeline(
     dataset: Optional[str] = None,
     **extra: Any,
 ):
-    """
-    Retorna un logger enriquecido con contexto del pipeline.
-
-    component es obligatorio. exchange y dataset son opcionales pero
-    recomendados para trazabilidad completa en pipeline_*.log (JSON → Loki/ELK).
-    """
     ctx: Dict[str, Any] = {"component": component, **extra}
+
     if exchange is not None:
         ctx["exchange"] = exchange
+
     if dataset is not None:
         ctx["dataset"] = dataset
+
     return logger.bind(**ctx)
 
 
-# ---------------------------------------------------------------------
-# Helpers de introspección
-# ---------------------------------------------------------------------
 def is_logging_configured() -> bool:
     return _BOOTSTRAP_DONE and _CONFIG_HASH is not None
 
 
-# ---------------------------------------------------------------------
-# Alias deprecado
-# ---------------------------------------------------------------------
-def setup_logging(
-    cfg: Optional[LoggingConfig] = None,
-    debug: bool = False,
-    log_dir: Optional[Path] = None,
-    run_id: Optional[str] = None,
-) -> None:
-    """Deprecado. Usar bootstrap_logging() o configure_logging() directamente."""
-    import warnings
-    warnings.warn(
-        "setup_logging() is deprecated. Use bootstrap_logging() or configure_logging().",
-        DeprecationWarning,
-        stacklevel=2,
+def setup_logging(*args, **kwargs):
+    raise RuntimeError(
+        "setup_logging() is deprecated. Use bootstrap_logging() or configure_logging()."
     )
-    if cfg is None:
-        bootstrap_logging(debug=debug, run_id=run_id)
-    else:
-        raise RuntimeError(
-            "setup_logging() is deprecated and cannot proxy configure_logging() safely "
-            "because env is unknown. Use configure_logging(cfg=..., env=run_cfg.env) directly."
-        )
