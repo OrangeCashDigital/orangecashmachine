@@ -317,7 +317,7 @@ class RepairStrategy(StrategyMixin):
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            from market_data.processing.fetchers.fetcher import ChunkFetchError
+            from market_data.processing.exceptions import ChunkFetchError
             if isinstance(exc, ChunkFetchError):
                 log.warning("Gap heal: fetch transitorio", error=str(exc))
             else:

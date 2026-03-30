@@ -129,7 +129,7 @@ class UnifiedPipeline:
         )
         quality = QualityPipeline()
 
-        from market_data.processing.fetchers.fetcher import HistoricalFetcherAsync
+        from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync
         fetcher = HistoricalFetcherAsync(
             storage           = silver,
             transformer       = OHLCVTransformer(),

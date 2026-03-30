@@ -13,7 +13,7 @@ from typing import Optional
 
 import pandas as pd
 from core.logging.setup import bind_pipeline
-from market_data.processing.fetchers.fetcher import DEFAULT_CHUNK_LIMIT
+from market_data.ingestion.rest.ohlcv_fetcher import DEFAULT_CHUNK_LIMIT
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.processing.strategies.base import (
     PairResult,
@@ -137,7 +137,7 @@ class BackfillStrategy(StrategyMixin):
             pass
 
         try:
-            raw_data = await ctx.fetcher._fetch_chunk_with_retry(
+            raw_data = await ctx.fetcher.fetch_chunk(
                 symbol=symbol, timeframe=timeframe, since=0, limit=1,
             )
             if not raw_data:
@@ -265,7 +265,7 @@ class BackfillStrategy(StrategyMixin):
             )
 
             try:
-                raw = await ctx.fetcher._fetch_chunk_with_retry(
+                raw = await ctx.fetcher.fetch_chunk(
                     symbol=symbol, timeframe=timeframe,
                     since=chunk_start, limit=chunk_limit,
                 )
