@@ -13,8 +13,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import pandas as pd
-from loguru import logger
-
+from core.logging.setup import bind_pipeline
 from market_data.batch.strategies.base import (
     PairResult,
     PipelineContext,
@@ -26,6 +25,8 @@ from services.observability.metrics import (
     ROWS_INGESTED, PIPELINE_ERRORS,
     REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED, REPAIR_GAPS_SKIPPED,
 )
+
+_log = bind_pipeline("repair")
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,6 @@ def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapR
     threshold = tf_ms * (tolerance + 2)
 
     df_sorted = df.sort_values("timestamp").reset_index(drop=True)
-    # Vectorizado: evita .apply(lambda) en loops críticos con millones de filas
     ts_col = df_sorted["timestamp"]
     if hasattr(ts_col.dtype, "tz"):
         ts_ms = (ts_col.astype("int64") // 1_000_000).values
@@ -71,9 +71,10 @@ def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapR
             ))
 
     if gaps:
-        logger.debug(
-            "Gaps detected | timeframe={} total_gaps={} missing_candles={}",
-            timeframe, len(gaps), sum(g.expected for g in gaps),
+        _log.bind(timeframe=timeframe).debug(
+            "Gaps detected",
+            total_gaps=len(gaps),
+            missing_candles=sum(g.expected for g in gaps),
         )
 
     return gaps
@@ -103,22 +104,17 @@ class RepairStrategy(StrategyMixin):
 
         result     = PairResult(symbol=symbol, timeframe=timeframe, mode=PipelineMode.REPAIR)
         pair_start = time.monotonic()
+        log        = _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, mode="repair")
 
         try:
-            logger.debug(
-                "Repair scan [{}/{}] | exchange={} symbol={} timeframe={}",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-            )
+            log.debug("Repair scan", idx=idx, total=total)
 
             df_existing = self._read_silver(ctx, symbol, timeframe, columns_only=["timestamp"])
 
             if df_existing is None or df_existing.empty:
                 result.skipped     = True
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                logger.debug(
-                    "Repair skip — sin datos en Silver | symbol={} timeframe={}",
-                    symbol, timeframe,
-                )
+                log.debug("Repair skip — sin datos en Silver")
                 return result
 
             gaps = scan_gaps(df_existing, timeframe, tolerance=self._tolerance)
@@ -131,17 +127,13 @@ class RepairStrategy(StrategyMixin):
             if not gaps:
                 result.skipped     = True
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                logger.debug(
-                    "Repair OK — sin huecos | symbol={} timeframe={} rows={}",
-                    symbol, timeframe, len(df_existing),
-                )
+                log.debug("Repair OK — sin huecos", rows=len(df_existing))
                 return result
 
-            logger.info(
-                "Repair [{}/{}] | exchange={} symbol={} timeframe={} "
-                "gaps={} missing_candles={}",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-                len(gaps), sum(g.expected for g in gaps),
+            log.info("Repair iniciando",
+                idx=idx, total=total,
+                gaps=len(gaps),
+                missing_candles=sum(g.expected for g in gaps),
             )
 
             total_healed_rows = 0
@@ -149,12 +141,9 @@ class RepairStrategy(StrategyMixin):
             sem = asyncio.Semaphore(_GAP_CONCURRENCY)
 
             async def _heal_with_sem(gap: GapRange) -> tuple[bool, int]:
-                # Guardrail: gaps imposibles se skipean sin llamar al exchange.
                 if gap.expected > _MAX_HEALABLE_GAP_CANDLES:
-                    logger.warning(
-                        "Gap demasiado grande — skip | symbol={} timeframe={} "
-                        "expected={} max={}",
-                        symbol, timeframe, gap.expected, _MAX_HEALABLE_GAP_CANDLES,
+                    log.warning("Gap demasiado grande — skip",
+                        expected=gap.expected, max=_MAX_HEALABLE_GAP_CANDLES,
                     )
                     REPAIR_GAPS_SKIPPED.labels(
                         exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
@@ -181,12 +170,10 @@ class RepairStrategy(StrategyMixin):
             result.rows        = total_healed_rows
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
 
-            logger.info(
-                "Repair completado [{}/{}] | exchange={} symbol={} timeframe={} "
-                "gaps_found={} gaps_healed={} rows={} duration={}ms",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-                result.gaps_found, result.gaps_healed,
-                result.rows, result.duration_ms,
+            log.info("Repair completado",
+                idx=idx, total=total,
+                gaps_found=result.gaps_found, gaps_healed=result.gaps_healed,
+                rows=result.rows, duration_ms=result.duration_ms,
             )
 
             if total_healed_rows > 0:
@@ -202,11 +189,9 @@ class RepairStrategy(StrategyMixin):
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             error_type = "transient" if result.is_transient_error else "fatal"
             PIPELINE_ERRORS.labels(exchange=ctx.exchange_id, error_type=error_type).inc()
-            logger.error(
-                "Repair fallido [{}/{}] | exchange={} symbol={} timeframe={} "
-                "error={} duration={}ms",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-                exc, result.duration_ms,
+            log.error("Repair fallido",
+                idx=idx, total=total,
+                error=str(exc), duration_ms=result.duration_ms,
             )
 
         return result
@@ -238,7 +223,9 @@ class RepairStrategy(StrategyMixin):
                     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
                     parts.append(df)
                 except Exception as exc:
-                    logger.warning("Repair: parquet read failed | file={} error={}", f, exc)
+                    _log.bind(symbol=symbol, timeframe=timeframe).warning(
+                        "Repair: parquet read failed", file=str(f), error=str(exc),
+                    )
 
             if not parts:
                 return None
@@ -251,9 +238,8 @@ class RepairStrategy(StrategyMixin):
             )
 
         except Exception as exc:
-            logger.warning(
-                "Repair: silver read failed | symbol={} timeframe={} error={}",
-                symbol, timeframe, exc,
+            _log.bind(symbol=symbol, timeframe=timeframe).warning(
+                "Repair: silver read failed", error=str(exc),
             )
             return None
 
@@ -265,11 +251,12 @@ class RepairStrategy(StrategyMixin):
         ctx:       PipelineContext,
     ) -> tuple[bool, int]:
         try:
-            logger.debug("Healing gap | symbol={} timeframe={} {}", symbol, timeframe, gap)
+            log = _log.bind(
+                exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                gap_start=gap.start_ms, gap_end=gap.end_ms, expected=gap.expected,
+            )
+            log.debug("Healing gap")
 
-            # Fetch quirúrgico con paginación completa.
-            # Gaps pequeños (<= 1000 velas): un solo fetch.
-            # Gaps grandes (> 1000 velas): paginar igual que backfill.
             tf_ms     = timeframe_to_ms(timeframe)
             gap_start = pd.Timestamp(gap.start_ms, unit="ms", tz="UTC")
             gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
@@ -295,9 +282,7 @@ class RepairStrategy(StrategyMixin):
                 since = last_ts  # avanzar sin overlap — estamos en rango exacto
 
             if not collected_raw:
-                logger.warning(
-                    "Gap heal: no data | symbol={} timeframe={} {}", symbol, timeframe, gap,
-                )
+                log.warning("Gap heal: no data", gap=str(gap))
                 return False, 0
 
             df = pd.DataFrame(
@@ -312,10 +297,8 @@ class RepairStrategy(StrategyMixin):
                 return False, 0
 
             if gap.expected > 1000:
-                logger.info(
-                    "Gap heal: gap grande paginado | symbol={} timeframe={} "
-                    "expected={} fetched={} chunks={}",
-                    symbol, timeframe, gap.expected, len(df), _chunk_idx + 1,
+                log.info("Gap heal: gap grande paginado",
+                    expected=gap.expected, fetched=len(df), chunks=_chunk_idx + 1,
                 )
 
             qres = ctx.quality.run(
@@ -323,18 +306,12 @@ class RepairStrategy(StrategyMixin):
             )
 
             if not qres.accepted:
-                logger.warning(
-                    "Gap heal rechazado por calidad | symbol={} timeframe={} score={:.1f}",
-                    symbol, timeframe, qres.score,
-                )
+                log.warning("Gap heal rechazado por calidad", score=round(qres.score, 1))
                 return False, 0
 
             ctx.storage.save_ohlcv(df=qres.df, symbol=symbol, timeframe=timeframe)
 
-            logger.info(
-                "Gap healed | symbol={} timeframe={} {} rows={}",
-                symbol, timeframe, gap, len(qres.df),
-            )
+            log.info("Gap healed", rows=len(qres.df))
             return True, len(qres.df)
 
         except asyncio.CancelledError:
@@ -342,14 +319,7 @@ class RepairStrategy(StrategyMixin):
         except Exception as exc:
             from market_data.batch.fetchers.fetcher import ChunkFetchError
             if isinstance(exc, ChunkFetchError):
-                logger.warning(
-                    "Gap heal: fetch transitorio | symbol={} timeframe={} {} error={}",
-                    symbol, timeframe, gap, exc,
-                )
+                log.warning("Gap heal: fetch transitorio", error=str(exc))
             else:
-                logger.error(
-                    "Gap heal: error inesperado | symbol={} timeframe={} {} "
-                    "error_type={} error={}",
-                    symbol, timeframe, gap, type(exc).__name__, exc,
-                )
+                log.error("Gap heal: error inesperado", error_type=type(exc).__name__, error=str(exc))
             return False, 0

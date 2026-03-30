@@ -13,13 +13,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Protocol, runtime_checkable
 
-from loguru import logger
-
+from core.logging.setup import bind_pipeline
 from market_data.batch.fetchers.fetcher import HistoricalFetcherAsync
 from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.storage.bronze_storage import BronzeStorage
 from market_data.batch.pipelines.quality_pipeline import QualityPipeline
 from services.state.cursor_store import CursorStore
+
+_log = bind_pipeline("base")
 
 
 class PipelineMode(str, Enum):
@@ -138,7 +139,7 @@ class PipelineSummary:
             return "ok"
         if all_degraded and self.succeeded > 0:
             return "degraded"
-        return "failed" 
+        return "failed"
 
     @property
     def total(self)     -> int: return len(self.results)
@@ -167,28 +168,36 @@ class PipelineSummary:
             return 0.0
         return round(self.total_rows / (self.duration_ms / 1000), 2)
 
-    def log(self, logger) -> None:
-        logger.info(
-            "Pipeline summary | mode={} status={} total={} ok={} skipped={} failed={} "
-            "rows={} throughput={} rows/s duration={}ms degraded={}",
-            self.mode.value, self.status,
-            self.total, self.succeeded, self.skipped, self.failed,
-            self.total_rows, self.throughput_rows_per_sec, self.duration_ms,
-            (self.degraded_exchanges + [f"{e}(errors)" for e in self.failed_exchanges if e not in self.degraded_exchanges]) or "none",
+    def log(self, log) -> None:
+        """Emite el resumen usando el logger inyectado (DI — no usa _log de módulo)."""
+        all_degraded = (
+            self.degraded_exchanges
+            + [f"{e}(errors)" for e in self.failed_exchanges
+               if e not in self.degraded_exchanges]
+        ) or ["none"]
+        log.info(
+            "Pipeline summary",
+            mode=self.mode.value, status=self.status,
+            total=self.total, ok=self.succeeded,
+            skipped=self.skipped, failed=self.failed,
+            rows=self.total_rows,
+            throughput_rows_per_sec=self.throughput_rows_per_sec,
+            duration_ms=self.duration_ms,
+            degraded=all_degraded,
         )
         if self.mode == PipelineMode.REPAIR:
-            logger.info(
-                "Repair summary | gaps_found={} gaps_healed={}",
-                self.total_gaps_found, self.total_gaps_healed,
+            log.info(
+                "Repair summary",
+                gaps_found=self.total_gaps_found,
+                gaps_healed=self.total_gaps_healed,
             )
         for r in self.results:
             if r.error:
-                logger.warning("  ✗ {}", r)
+                log.warning("Pair result", status="error", pair=str(r))
             elif r.skipped:
-                logger.debug("  ↷ {}", r)
+                log.debug("Pair result", status="skipped", pair=str(r))
             else:
-                logger.debug("  ✓ {}", r)
-
+                log.debug("Pair result", status="ok", pair=str(r))
 
 
 # ==========================================================
@@ -229,18 +238,19 @@ class StrategyMixin:
             raise
         except Exception as exc:
             result.error       = str(exc)
-            result.error_type  = type(exc).__name__          # ← fix bug #5
+            result.error_type  = type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             error_label = "transient" if result.is_transient_error else "fatal"
             PIPELINE_ERRORS.labels(
                 exchange=ctx.exchange_id, error_type=error_label,
             ).inc()
-            logger.error(
-                "{} fallido [{}/{}] | exchange={} symbol={} timeframe={} "
-                "error_type={} error={} duration={}ms",
-                self._mode.value, idx, total, ctx.exchange_id,
-                symbol, timeframe, result.error_type, exc, result.duration_ms,
-            )
+            _log.bind(
+                mode=self._mode.value, exchange=ctx.exchange_id,
+                symbol=symbol, timeframe=timeframe,
+                idx=idx, total=total,
+                error_type=result.error_type, error=str(exc),
+                duration_ms=result.duration_ms,
+            ).error("Strategy fallida")
         finally:
             if not result.duration_ms:
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)

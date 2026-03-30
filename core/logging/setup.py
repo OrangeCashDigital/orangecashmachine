@@ -29,7 +29,7 @@ from loguru import logger
 
 from core.logging.bootstrap import drain as _drain_bootstrap
 from core.logging.config import LoggingConfig
-from core.logging.formats import CONSOLE, FILE, PIPELINE
+from core.logging.formats import CONSOLE, FILE
 from core.logging.filters import pipeline_filter
 
 # ---------------------------------------------------------------------
@@ -180,7 +180,7 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
             rotation=resolved["rotation"],
             retention=resolved["retention"],
             compression="gz",
-            level="DEBUG",
+            level=resolved["level"],   # respeta config YAML — antes era "DEBUG" hardcoded
             format=FILE,
             backtrace=True,
             diagnose=False,
@@ -204,7 +204,7 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
             retention=resolved["retention"],
             compression="gz",
             level="DEBUG",
-            format=PIPELINE,
+            serialize=True,            # JSON puro para Loki/ELK — format= ignorado con serialize=True
             filter=pipeline_filter,
         ))
     _ACTIVE_SINK_IDS.extend(ids)
@@ -324,6 +324,33 @@ def configure_logging(
         file=resolved["file"],
         pipeline=resolved["pipeline"],
     )
+
+
+# ---------------------------------------------------------------------
+# Helpers de trazabilidad del pipeline — contrato explícito para callers
+# ---------------------------------------------------------------------
+def bind_pipeline(
+    component: str,
+    exchange: Optional[str] = None,
+    dataset: Optional[str] = None,
+    **extra: Any,
+):
+    """
+    Retorna un logger enriquecido con contexto del pipeline.
+
+    Uso:
+        log = bind_pipeline("ingestion", exchange="bybit", dataset="BTC/USDT:USDT_1m")
+        log.info("fetch_complete | rows={}", n)
+
+    component es obligatorio. exchange y dataset son opcionales pero
+    recomendados para trazabilidad completa en pipeline_*.log (JSON → Loki/ELK).
+    """
+    ctx: Dict[str, Any] = {"component": component, **extra}
+    if exchange is not None:
+        ctx["exchange"] = exchange
+    if dataset is not None:
+        ctx["dataset"] = dataset
+    return logger.bind(**ctx)
 
 
 # ---------------------------------------------------------------------

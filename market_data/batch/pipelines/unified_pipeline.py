@@ -18,7 +18,9 @@ import asyncio
 import time
 from typing import List, Literal, Optional
 
-from loguru import logger
+from core.logging.setup import bind_pipeline
+
+_log = bind_pipeline("pipeline")
 
 from market_data.batch.pipelines.quality_pipeline import QualityPipeline
 from market_data.batch.storage.bronze_storage import BronzeStorage
@@ -64,10 +66,10 @@ def _build_cursor_store_safe() -> CursorStore:
         store = build_cursor_store_from_config()
         if store.is_healthy():
             return store
-        logger.warning("Redis no disponible -- cursor store en memoria (fallback)")
+        _log.warning("Redis no disponible — cursor store en memoria (fallback)")
         return InMemoryCursorStore()
     except Exception as exc:
-        logger.warning("CursorStore init failed (fallback) | error={}", exc)
+        _log.bind(error=str(exc)).warning("CursorStore init failed — fallback")
         return InMemoryCursorStore()
 
 
@@ -154,6 +156,7 @@ class UnifiedPipeline:
             PipelineMode.BACKFILL:    BackfillStrategy(),
             PipelineMode.REPAIR:      RepairStrategy(),
         }
+        self._log = bind_pipeline("pipeline", exchange=self._exchange_id)
 
     # ======================================================
     # Public
@@ -167,13 +170,11 @@ class UnifiedPipeline:
 
         await self._ctx.fetcher.ensure_exchange()
 
-        logger.info(
-            "UnifiedPipeline iniciando | mode={} exchange={} market={} "
-            "simbolos={} timeframes={} pares={} concurrencia_max={}",
-            mode, self._exchange_id, self.market_type,
-            len(self.symbols), len(self.timeframes),
-            total_pairs, self.max_concurrency,
-        )
+        self._log.bind(
+            mode=mode, market=self.market_type,
+            symbols=len(self.symbols), timeframes=len(self.timeframes),
+            pairs=total_pairs, concurrency=self.max_concurrency,
+        ).info("UnifiedPipeline iniciando")
 
         pipeline_start = time.monotonic()
         results, degraded_exchanges = await self._run_worker_pool(strategy, pairs, pipeline_mode)
@@ -185,27 +186,25 @@ class UnifiedPipeline:
             mode                = pipeline_mode,
             degraded_exchanges  = degraded_exchanges,
         )
-        summary.log(logger)
+        summary.log(self._log)
 
         if summary.status == "degraded":
-            logger.warning(
-                "Pipeline DEGRADED | mode={} degraded_exchanges={} fallidos={}/{} transient={}",
-                mode, summary.degraded_exchanges, summary.failed, summary.total,
-                sum(1 for r in summary.results if r.is_transient_error),
-            )
+            self._log.bind(
+                mode=mode, degraded_exchanges=summary.degraded_exchanges,
+                failed=summary.failed, total=summary.total,
+                transient=sum(1 for r in summary.results if r.is_transient_error),
+            ).warning("Pipeline DEGRADED")
         elif summary.status == "failed":
-            logger.error(
-                "Pipeline FAILED | mode={} fallidos={}/{} transient={}",
-                mode, summary.failed, summary.total,
-                sum(1 for r in summary.results if r.is_transient_error),
-            )
+            self._log.bind(
+                mode=mode, failed=summary.failed, total=summary.total,
+                transient=sum(1 for r in summary.results if r.is_transient_error),
+            ).error("Pipeline FAILED")
         else:
-            logger.success(
-                "Pipeline OK | mode={} rows={} pares={} "
-                "throughput={} rows/s duration={}ms",
-                mode, summary.total_rows, summary.total,
-                summary.throughput_rows_per_sec, duration_ms,
-            )
+            self._log.bind(
+                mode=mode, rows=summary.total_rows, pairs=summary.total,
+                throughput_rows_per_sec=summary.throughput_rows_per_sec,
+                duration_ms=duration_ms,
+            ).success("Pipeline OK")
 
         return summary
 
@@ -273,10 +272,7 @@ class UnifiedPipeline:
                             break
                     if exc.exchange_id not in degraded:
                         degraded.append(exc.exchange_id)
-                    logger.warning(
-                        "Exchange aborted — {} pares drenados | exchange={}",
-                        drained, exc.exchange_id,
-                    )
+                    self._log.bind(drained=drained, aborted_exchange=exc.exchange_id).warning("Exchange aborted — pares drenados")
                     return
                 finally:
                     queue.task_done()
@@ -292,10 +288,7 @@ class UnifiedPipeline:
             # Timeout = 1h, suficiente para cualquier pipeline histórico real.
             await asyncio.wait_for(queue.join(), timeout=3600)
         except asyncio.TimeoutError:
-            logger.error(
-                "Worker pool timed out (3600s) | exchange={} — forzando shutdown",
-                self._exchange_id,
-            )
+            self._log.bind(timeout_s=3600).error("Worker pool timed out — forzando shutdown")
             for w in workers:
                 w.cancel()
             await asyncio.gather(*workers, return_exceptions=True)
@@ -306,7 +299,7 @@ class UnifiedPipeline:
             for w in workers:
                 w.cancel()
             await asyncio.gather(*workers, return_exceptions=True)
-            logger.warning("Pipeline cancelado — {} workers detenidos", len(workers))
+            self._log.bind(workers=len(workers)).warning("Pipeline cancelado — workers detenidos")
             raise
         finally:
             for w in workers:
@@ -356,12 +349,10 @@ class UnifiedPipeline:
             # Los demás workers detectarán abort_event y saltarán esto.
             _bs = get_breaker_state(self._exchange_id)
             _cooldown_s = max(1.0, _bs["cooldown_remaining_ms"] / 1000)
-            logger.warning(
-                "Circuit open — sleeping cooldown | exchange={} symbol={} tf={} "
-                "failures={} cooldown={}s",
-                self._exchange_id, symbol, timeframe,
-                _bs["fail_counter"], round(_cooldown_s, 1),
-            )
+            self._log.bind(
+                symbol=symbol, timeframe=timeframe,
+                failures=_bs["fail_counter"], cooldown_s=round(_cooldown_s, 1),
+            ).warning("Circuit open — sleeping cooldown")
             await asyncio.sleep(_cooldown_s)
 
             # Verificar si otro worker abortó durante el sleep.
@@ -369,10 +360,7 @@ class UnifiedPipeline:
                 raise _ExchangeAbortError(self._exchange_id) from exc
 
             try:
-                logger.info(
-                    "Circuit cooldown retry | exchange={} symbol={} tf={}",
-                    self._exchange_id, symbol, timeframe,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe).info("Circuit cooldown retry")
                 return await strategy.execute_pair(
                     symbol    = symbol,
                     timeframe = timeframe,
@@ -384,20 +372,17 @@ class UnifiedPipeline:
                 # Breaker todavia abierto — abortar exchange, no el pipeline.
                 _bs2 = get_breaker_state(self._exchange_id)
                 FETCH_ABORTS_TOTAL.labels(exchange=self._exchange_id).inc()
-                logger.warning(
-                    "Circuit open after retry — aborting exchange | exchange={} "
-                    "symbol={} tf={} failures={} cooldown_remaining={}ms",
-                    self._exchange_id, symbol, timeframe,
-                    _bs2["fail_counter"], _bs2["cooldown_remaining_ms"],
-                )
+                self._log.bind(
+                    symbol=symbol, timeframe=timeframe,
+                    failures=_bs2["fail_counter"],
+                    cooldown_remaining_ms=_bs2["cooldown_remaining_ms"],
+                ).warning("Circuit open after retry — aborting exchange")
                 raise _ExchangeAbortError(self._exchange_id) from exc
         except Exception as exc:
-            logger.error(
-                "execute_pair unhandled | exchange={} symbol={} tf={} "
-                "error_type={} error={}",
-                self._exchange_id, symbol, timeframe,
-                type(exc).__name__, exc,
-            )
+            self._log.bind(
+                symbol=symbol, timeframe=timeframe,
+                error_type=type(exc).__name__, error=str(exc),
+            ).error("execute_pair unhandled")
             return PairResult(
                 symbol      = symbol,
                 timeframe   = timeframe,

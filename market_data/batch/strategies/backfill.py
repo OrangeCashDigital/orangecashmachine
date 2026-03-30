@@ -12,8 +12,7 @@ import time
 from typing import Optional
 
 import pandas as pd
-from loguru import logger
-
+from core.logging.setup import bind_pipeline
 from market_data.batch.fetchers.fetcher import DEFAULT_CHUNK_LIMIT
 from market_data.batch.schemas.timeframe import timeframe_to_ms
 from market_data.batch.strategies.base import (
@@ -23,6 +22,8 @@ from market_data.batch.strategies.base import (
     StrategyMixin,
 )
 from services.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
+
+_log = bind_pipeline("backfill")
 
 _BACKFILL_TTL_SECONDS: int = 30 * 86_400
 _ORIGIN_KEY_PREFIX:    str = "origin"
@@ -44,47 +45,32 @@ class BackfillStrategy(StrategyMixin):
 
         result     = PairResult(symbol=symbol, timeframe=timeframe, mode=PipelineMode.BACKFILL)
         pair_start = time.monotonic()
+        log        = _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, mode="backfill")
 
         try:
-            logger.info(
-                "Backfill iniciando [{}/{}] | exchange={} symbol={} timeframe={}",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-            )
+            log.info("Backfill iniciando", idx=idx, total=total)
 
             origin_ms = await self._discover_origin(symbol, timeframe, ctx)
             if origin_ms is None:
-                logger.warning(
-                    "Backfill skip — no se pudo determinar origen | symbol={} timeframe={}",
-                    symbol, timeframe,
-                )
+                log.warning("Backfill skip — no se pudo determinar origen")
                 result.skipped     = True
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 return result
 
-            logger.info(
-                "Backfill origin | exchange={} symbol={} timeframe={} origin={}",
-                ctx.exchange_id, symbol, timeframe,
-                pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
-            )
+            log.info("Backfill origin", origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat())
 
             start_ms = self._resolve_backfill_start(symbol, timeframe, ctx)
 
             if start_ms is None:
-                logger.info(
-                    "Backfill skip — sin datos en Silver | symbol={} timeframe={}",
-                    symbol, timeframe,
-                )
+                log.info("Backfill skip — sin datos en Silver")
                 result.skipped     = True
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 return result
 
             if start_ms <= origin_ms:
-                logger.info(
-                    "Backfill completo — ya se alcanzó el origen | "
-                    "symbol={} timeframe={} oldest={} origin={}",
-                    symbol, timeframe,
-                    pd.Timestamp(start_ms,  unit="ms", tz="UTC").isoformat(),
-                    pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
+                log.info("Backfill completo — ya se alcanzó el origen",
+                    oldest=pd.Timestamp(start_ms,  unit="ms", tz="UTC").isoformat(),
+                    origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
                 )
                 result.skipped     = True
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
@@ -107,11 +93,9 @@ class BackfillStrategy(StrategyMixin):
                     exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
                 ).inc(total_rows)
 
-            logger.success(
-                "Backfill completado [{}/{}] | exchange={} symbol={} timeframe={} "
-                "chunks={} rows={} duration={}ms",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-                chunks, total_rows, result.duration_ms,
+            log.success("Backfill completado",
+                idx=idx, total=total, chunks=chunks,
+                rows=total_rows, duration_ms=result.duration_ms,
             )
 
         except asyncio.CancelledError:
@@ -122,11 +106,9 @@ class BackfillStrategy(StrategyMixin):
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             error_type = "transient" if result.is_transient_error else "fatal"
             PIPELINE_ERRORS.labels(exchange=ctx.exchange_id, error_type=error_type).inc()
-            logger.error(
-                "Backfill fallido [{}/{}] | exchange={} symbol={} timeframe={} "
-                "error={} duration={}ms",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-                exc, result.duration_ms,
+            log.error("Backfill fallido",
+                idx=idx, total=total,
+                error=str(exc), duration_ms=result.duration_ms,
             )
 
         return result
@@ -147,10 +129,8 @@ class BackfillStrategy(StrategyMixin):
             raw = ctx.cursor.get_raw(cache_key)
             if raw:
                 ts_ms = int(raw)
-                logger.debug(
-                    "Origin cache hit | exchange={} symbol={} timeframe={} origin={}",
-                    ctx.exchange_id, symbol, timeframe,
-                    pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
+                _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
+                    "Origin cache hit", origin=pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
                 )
                 return ts_ms
         except Exception:
@@ -167,10 +147,8 @@ class BackfillStrategy(StrategyMixin):
 
             try:
                 ctx.cursor.set_raw(cache_key, str(origin_ms), _BACKFILL_TTL_SECONDS)
-                logger.debug(
-                    "Origin cached | exchange={} symbol={} timeframe={} origin={}",
-                    ctx.exchange_id, symbol, timeframe,
-                    pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
+                _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
+                    "Origin cached", origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
                 )
             except Exception:
                 pass
@@ -178,9 +156,8 @@ class BackfillStrategy(StrategyMixin):
             return origin_ms
 
         except Exception as exc:
-            logger.warning(
-                "Origin discovery failed | exchange={} symbol={} timeframe={} error={}",
-                ctx.exchange_id, symbol, timeframe, exc,
+            _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).warning(
+                "Origin discovery failed", error=str(exc),
             )
             return None
 
@@ -199,16 +176,13 @@ class BackfillStrategy(StrategyMixin):
             raw = ctx.cursor.get_raw(bk_key)
             if raw:
                 ts_ms = int(raw)
-                logger.debug(
-                    "Backfill cursor hit | exchange={} symbol={} timeframe={} ts={}",
-                    ctx.exchange_id, symbol, timeframe,
-                    pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
+                _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
+                    "Backfill cursor hit", ts=pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
                 )
                 return ts_ms
         except Exception as exc:
-            logger.debug(
-                "Backfill cursor read failed (non-critical) | exchange={} symbol={} timeframe={} error={}",
-                ctx.exchange_id, symbol, timeframe, exc,
+            _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
+                "Backfill cursor read failed (non-critical)", error=str(exc),
             )
 
         oldest = self._get_oldest_silver_ts(ctx, symbol, timeframe)
@@ -230,9 +204,8 @@ class BackfillStrategy(StrategyMixin):
             if raw is None or ts_ms < int(raw):
                 ctx.cursor.set_raw(bk_key, str(ts_ms), _BACKFILL_TTL_SECONDS)
         except Exception as exc:
-            logger.debug(
-                "Backfill cursor write failed (non-critical) | exchange={} symbol={} timeframe={} error={}",
-                ctx.exchange_id, symbol, timeframe, exc,
+            _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
+                "Backfill cursor write failed (non-critical)", error=str(exc),
             )
 
     def _get_oldest_silver_ts(
@@ -255,9 +228,8 @@ class BackfillStrategy(StrategyMixin):
                     continue
             return min(timestamps) if timestamps else None
         except Exception as exc:
-            logger.warning(
-                "Oldest silver ts failed | symbol={} timeframe={} error={}",
-                symbol, timeframe, exc,
+            _log.bind(symbol=symbol, timeframe=timeframe).warning(
+                "Oldest silver ts failed", error=str(exc),
             )
             return None
 
@@ -280,16 +252,16 @@ class BackfillStrategy(StrategyMixin):
         total_rows  = 0
         chunks      = 0
         last_end    = None
+        log         = _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, mode="backfill")
 
         for _ in range(_MAX_BACKFILL_CHUNKS):
 
             chunk_start = max(current_end - (chunk_limit * tf_ms), origin_ms)
 
-            logger.debug(
-                "Backfill chunk {} | symbol={} timeframe={} range=[{} → {}]",
-                chunks + 1, symbol, timeframe,
-                pd.Timestamp(chunk_start, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
-                pd.Timestamp(current_end, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
+            log.debug("Backfill chunk",
+                chunk=chunks + 1,
+                range_start=pd.Timestamp(chunk_start, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
+                range_end=pd.Timestamp(current_end,   unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
             )
 
             try:
@@ -298,10 +270,7 @@ class BackfillStrategy(StrategyMixin):
                     since=chunk_start, limit=chunk_limit,
                 )
             except Exception as exc:
-                logger.warning(
-                    "Backfill chunk fetch failed | symbol={} timeframe={} error={}",
-                    symbol, timeframe, exc,
-                )
+                log.warning("Backfill chunk fetch failed", error=str(exc))
                 break
 
             if not raw:
@@ -321,10 +290,8 @@ class BackfillStrategy(StrategyMixin):
             # que no retroceden (oldest_in_chunk >= last_end) O si el chunk
             # actual es idéntico al anterior (exchange repite misma ventana).
             if last_end is not None and oldest_in_chunk >= last_end:
-                logger.warning(
-                    "Backfill anti-loop detectado | symbol={} timeframe={} "
-                    "oldest_in_chunk={} last_end={} — abortando paginación",
-                    symbol, timeframe, oldest_in_chunk, last_end,
+                log.warning("Backfill anti-loop detectado — abortando paginación",
+                    oldest_in_chunk=oldest_in_chunk, last_end=last_end,
                 )
                 break
 
@@ -336,10 +303,7 @@ class BackfillStrategy(StrategyMixin):
                 ctx.storage.save_ohlcv(df=qres.df, symbol=symbol, timeframe=timeframe)
                 total_rows += len(qres.df)
             else:
-                logger.warning(
-                    "Backfill chunk rechazado por calidad | symbol={} timeframe={} score={:.1f}",
-                    symbol, timeframe, qres.score,
-                )
+                log.warning("Backfill chunk rechazado por calidad", score=round(qres.score, 1))
 
             chunks  += 1
             last_end = oldest_in_chunk
@@ -348,18 +312,13 @@ class BackfillStrategy(StrategyMixin):
 
             current_end = oldest_in_chunk
 
-            logger.debug(
-                "Backfill progress | symbol={} timeframe={} chunk={} "
-                "rows_chunk={} total_rows={} oldest={}",
-                symbol, timeframe, chunks, len(df), total_rows,
-                pd.Timestamp(current_end, unit="ms", tz="UTC").strftime("%Y-%m-%d"),
+            log.debug("Backfill progress",
+                chunk=chunks, rows_chunk=len(df), total_rows=total_rows,
+                oldest=pd.Timestamp(current_end, unit="ms", tz="UTC").strftime("%Y-%m-%d"),
             )
 
             if current_end <= origin_ms:
-                logger.info(
-                    "Backfill alcanzó el origen | symbol={} timeframe={}",
-                    symbol, timeframe,
-                )
+                log.info("Backfill alcanzó el origen")
                 break
 
         return total_rows, chunks

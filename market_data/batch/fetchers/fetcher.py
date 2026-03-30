@@ -26,6 +26,8 @@ import pybreaker
 import ccxt.async_support as _ccxt_async
 from loguru import logger
 
+from core.logging.setup import bind_pipeline
+
 from market_data.batch.storage.silver_storage import SilverStorage
 from market_data.batch.transformers.transformer import OHLCVTransformer
 from services.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
@@ -118,6 +120,10 @@ class HistoricalFetcherAsync:
         self._backfill_mode     = backfill_mode
         self._market_type       = market_type
         self._config_start_date = config_start_date
+        self._log = bind_pipeline(
+            "fetcher",
+            exchange=getattr(exchange_client, "_exchange_id", "unknown"),
+        )
 
         # Circuit breaker eliminado — vive en CCXTAdapter._get_breaker(),
         # compartido por exchange_id. No se duplica aquí.
@@ -140,13 +146,10 @@ class HistoricalFetcherAsync:
         result = await self._download_chunked(symbol, timeframe, start_date, limit)
 
         if not result.has_data:
-            logger.info("No new data | {} {}", symbol, timeframe)
+            self._log.bind(symbol=symbol, timeframe=timeframe).info("No new data")
             return pd.DataFrame(columns=list(OHLCV_COLUMNS))
 
-        logger.info(
-            "Download complete | {} {} chunks={} rows={}",
-            symbol, timeframe, result.chunks, result.total_rows,
-        )
+        self._log.bind(symbol=symbol, timeframe=timeframe, chunks=result.chunks, rows=result.total_rows).info("Download complete")
         return result.df
 
     async def fetch_chunk(
@@ -189,10 +192,7 @@ class HistoricalFetcherAsync:
                 raw = await self._fetch_chunk_with_retry(symbol, timeframe, since_ts, limit)
             except ExchangeCircuitOpenError:
                 _status = "circuit_open"
-                logger.warning(
-                    "Circuit open — aborting chunked download | {} {} chunk={}",
-                    symbol, timeframe, chunk_idx,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, chunk=chunk_idx).warning("Circuit open — aborting chunked download")
                 FETCH_CHUNKS_TOTAL.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
                     status=_status,
@@ -246,10 +246,7 @@ class HistoricalFetcherAsync:
 
             if last_ts <= since_ts:
                 _stale_severity = "regression" if last_ts < since_ts else "stale"
-                logger.warning(
-                    "Stale window — aborting | {} {} severity={} last_ts={} since_ts={}",
-                    symbol, timeframe, _stale_severity, last_ts, since_ts,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, severity=_stale_severity, last_ts=last_ts, since_ts=since_ts).warning("Stale window — aborting")
                 FETCH_CHUNKS_TOTAL.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
                     status=_stale_severity,
@@ -312,37 +309,25 @@ class HistoricalFetcherAsync:
                 raise MissingStartDateError(
                     f"backfill_mode=True requiere config_start_date | {symbol}/{timeframe}"
                 )
-            logger.info(
-                "Backfill mode | {}/{}/{} desde={}",
-                exchange_name, symbol, timeframe, candidate,
-            )
+            self._log.bind(symbol=symbol, timeframe=timeframe, desde=candidate).info("Backfill mode")
             return self._exchange.parse8601(candidate)
 
         # A. Cursor async — await obligatorio
         cursor_ts = await self._cursor.get(exchange_name, symbol, timeframe)
         if cursor_ts is not None:
-            logger.debug(
-                "Cursor hit | {}/{}/{} ts_ms={}",
-                exchange_name, symbol, timeframe, cursor_ts,
-            )
+            self._log.bind(symbol=symbol, timeframe=timeframe, ts_ms=cursor_ts).debug("Cursor hit")
             return cursor_ts - (self._overlap * tf_ms)
 
         # B. Fallback parquet
         last_ts = self._storage.get_last_timestamp(symbol, timeframe)
         if last_ts is not None:
-            logger.debug(
-                "Cursor miss — fallback parquet | {}/{}/{}",
-                exchange_name, symbol, timeframe,
-            )
+            self._log.bind(symbol=symbol, timeframe=timeframe).debug("Cursor miss — fallback parquet")
             return int(last_ts.timestamp() * 1000) - (self._overlap * tf_ms)
 
         # C. Primer inicio desde arg o config
         for candidate in [start_date, self._config_start_date]:
             if candidate:
-                logger.info(
-                    "Primer inicio | {}/{}/{} desde={}",
-                    exchange_name, symbol, timeframe, candidate,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, desde=candidate).info("Primer inicio")
                 return self._exchange.parse8601(candidate)
 
         raise MissingStartDateError(
@@ -388,10 +373,7 @@ class HistoricalFetcherAsync:
                 raise
             except _ccxt_async.AuthenticationError as exc:
                 # Fatal — credenciales inválidas o IP ban. No reintentar jamás.
-                logger.error(
-                    "Auth error — aborting | {} {} attempt={} err={}",
-                    symbol, timeframe, attempt, exc,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, err=str(exc)).error("Auth error — aborting")
                 raise ChunkFetchError(f"{symbol}/{timeframe} auth failed") from exc
             except _ccxt_async.RateLimitExceeded as exc:
                 last_exc = exc
@@ -403,20 +385,14 @@ class HistoricalFetcherAsync:
                         breaker.call(lambda: (_ for _ in ()).throw(exc))
                 except Exception:
                     pass
-                logger.warning(
-                    "Rate limit (429) — notified breaker | {} {} attempt={} wait={:.2f}s",
-                    symbol, timeframe, attempt, wait,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2)).warning("Rate limit (429) — notified breaker")
                 await asyncio.sleep(wait)
             except (_ccxt_async.RequestTimeout, asyncio.TimeoutError) as exc:
                 # Timeout de red — NO cuenta como fallo de breaker.
                 last_exc = exc
                 wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
                 wait    *= random.uniform(0.5, 1.5)
-                logger.warning(
-                    "Timeout — retrying | {} {} attempt={} wait={:.2f}s err={}",
-                    symbol, timeframe, attempt, wait, exc,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), err=str(exc)).warning("Timeout — retrying")
                 await asyncio.sleep(wait)
             except _ccxt_async.NetworkError as exc:
                 # Errores de red transitorios — conn reset, DNS, session muerta.
@@ -428,28 +404,18 @@ class HistoricalFetcherAsync:
                     m in err_str for m in ("Session is closed", "Connection closed")
                 )
                 if is_session_dead and not session_reconnected:
-                    logger.warning(
-                        "Session dead — reconnecting | {} {} attempt={} err={}",
-                        symbol, timeframe, attempt, exc,
-                    )
+                    self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, err=str(exc)).warning("Session dead — reconnecting")
                     await self._exchange.reconnect()
                     session_reconnected = True
                     continue
-                logger.warning(
-                    "Network error — retrying | {} {} attempt={} wait={:.2f}s err={}",
-                    symbol, timeframe, attempt, wait, exc,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), err=str(exc)).warning("Network error — retrying")
                 await asyncio.sleep(wait)
             except Exception as exc:
                 # Fallback: error desconocido — loguear tipo completo.
                 last_exc = exc
                 wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
                 wait    *= random.uniform(0.5, 1.5)
-                logger.warning(
-                    "Fetch failed (unknown) | {} {} attempt={} wait={:.2f}s "
-                    "error_type={} err={}",
-                    symbol, timeframe, attempt, wait, type(exc).__name__, exc,
-                )
+                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), error_type=type(exc).__name__, err=str(exc)).warning("Fetch failed (unknown)")
                 await asyncio.sleep(wait)
 
         raise ChunkFetchError(f"{symbol}/{timeframe} failed") from last_exc
