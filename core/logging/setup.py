@@ -5,15 +5,6 @@ core/logging/setup.py
 =====================
 
 Sistema de logging centralizado basado en Loguru.
-
-Arquitectura:
-- system.log     → JSON global (source of truth, máquinas)
-- pipeline.log   → JSON filtrado (pipeline)
-- orangecashmachine.log → texto (humanos)
-- errors.log     → errores (WARNING+)
-
-Principios:
-- SOLID · DRY · KISS · SafeOps
 """
 
 import hashlib
@@ -45,8 +36,6 @@ _CONFIG_LOCK = Lock()
 # Bridge stdlib → loguru
 # ---------------------------------------------------------------------
 class InterceptHandler(std_logging.Handler):
-    """Redirige logging estándar hacia Loguru."""
-
     def emit(self, record: std_logging.LogRecord) -> None:
         try:
             level = logger.level(record.levelname).name
@@ -74,12 +63,17 @@ def _resolve_config(
     debug: bool,
     log_dir: Optional[Path],
 ) -> Dict[str, Any]:
-    """Normaliza config externa a estructura interna consistente."""
 
     if cfg:
+        resolved_log_dir = (
+            Path(cfg.log_dir)
+            if (cfg.file or cfg.pipeline) and cfg.log_dir
+            else None
+        )
+
         return {
             "level": "DEBUG" if debug else cfg.level.upper(),
-            "log_dir": Path(cfg.log_dir) if (cfg.file or cfg.pipeline) else None,
+            "log_dir": resolved_log_dir,
             "rotation": cfg.rotation,
             "retention": cfg.retention,
             "console": cfg.console,
@@ -102,7 +96,6 @@ def _resolve_config(
 # Context injection
 # ---------------------------------------------------------------------
 def _make_patcher(run_id: Optional[str], env: str):
-    """Inyecta contexto global en todos los logs."""
     _run_id = run_id or "-"
 
     def _patch(record: dict) -> None:
@@ -118,7 +111,6 @@ def _make_patcher(run_id: Optional[str], env: str):
 # Bootstrap replay
 # ---------------------------------------------------------------------
 def _replay_bootstrap_buffer() -> None:
-    """Reproduce eventos pre-init con trazabilidad."""
     entries = _drain_bootstrap()
     if not entries:
         return
@@ -141,10 +133,9 @@ def _replay_bootstrap_buffer() -> None:
 
 
 # ---------------------------------------------------------------------
-# Helpers internos
+# Helpers
 # ---------------------------------------------------------------------
 def _ensure_log_dir(log_dir: Path) -> None:
-    """Crea directorio de logs si no existe."""
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
@@ -163,13 +154,9 @@ def _install_stdlib_bridge() -> None:
 # Sinks
 # ---------------------------------------------------------------------
 def _install_sinks(resolved: Dict[str, Any], debug: bool) -> List[int]:
-    """Instala sinks de logging según configuración."""
     ids: List[int] = []
     log_dir: Optional[Path] = resolved.get("log_dir")
 
-    # ---------------------------
-    # Console (humanos)
-    # ---------------------------
     if resolved["console"]:
         ids.append(logger.add(
             sys.stderr,
@@ -185,9 +172,6 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> List[int]:
 
     _ensure_log_dir(log_dir)
 
-    # ---------------------------
-    # 🔥 SYSTEM LOG (JSON GLOBAL)
-    # ---------------------------
     ids.append(logger.add(
         log_dir / "system_{time:YYYY-MM-DD}.log",
         rotation=resolved["rotation"],
@@ -197,9 +181,6 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> List[int]:
         serialize=True,
     ))
 
-    # ---------------------------
-    # Human logs
-    # ---------------------------
     if resolved["file"]:
         ids.append(logger.add(
             log_dir / "orangecashmachine_{time:YYYY-MM-DD}.log",
@@ -208,8 +189,6 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> List[int]:
             compression="gz",
             level=resolved["level"],
             format=FILE,
-            backtrace=True,
-            diagnose=False,
         ))
 
         ids.append(logger.add(
@@ -219,13 +198,8 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> List[int]:
             compression="gz",
             level="WARNING",
             format=FILE,
-            backtrace=True,
-            diagnose=False,
         ))
 
-    # ---------------------------
-    # Pipeline (JSON filtrado)
-    # ---------------------------
     if resolved["pipeline"]:
         ids.append(logger.add(
             log_dir / "pipeline_{time:YYYY-MM-DD}.log",
@@ -237,7 +211,6 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> List[int]:
             filter=pipeline_filter,
         ))
 
-    _ACTIVE_SINK_IDS.extend(ids)
     return ids
 
 
@@ -249,8 +222,7 @@ def bootstrap_logging(
     run_id: Optional[str] = None,
     env: str = "development",
 ) -> None:
-    """Inicializa logging con defaults seguros."""
-    global _BOOTSTRAP_DONE
+    global _BOOTSTRAP_DONE, _ACTIVE_SINK_IDS
 
     if _BOOTSTRAP_DONE:
         return
@@ -260,13 +232,13 @@ def bootstrap_logging(
     logger.remove()
     logger.configure(patcher=_make_patcher(run_id, env))
 
-    _install_sinks(resolved, debug)
+    _ACTIVE_SINK_IDS = _install_sinks(resolved, debug)
+
     _BOOTSTRAP_DONE = True
 
     logger.bind(phase="init").debug(
         "logging_initialized",
         level=resolved["level"],
-        log_dir=str(resolved["log_dir"]),
     )
 
     _replay_bootstrap_buffer()
@@ -282,7 +254,7 @@ def configure_logging(
     debug: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
-    """Reconfigura logging desde YAML."""
+    global _CONFIG_HASH, _ACTIVE_SINK_IDS
 
     resolved = _resolve_config(cfg, debug, None)
 
@@ -300,26 +272,21 @@ def configure_logging(
     ).hexdigest()
 
     with _CONFIG_LOCK:
-        global _CONFIG_HASH
         if _CONFIG_HASH == new_hash:
             logger.debug("logging_reconfigure_skipped", hash=new_hash[:8])
             return
+
         _CONFIG_HASH = new_hash
 
-    old_ids = list(_ACTIVE_SINK_IDS)
+        # 🔥 Limpieza TOTAL antes de reconfigurar
+        logger.remove()
+        _ACTIVE_SINK_IDS.clear()
 
-    logger.configure(patcher=_make_patcher(run_id, env))
+        logger.configure(patcher=_make_patcher(run_id, env))
 
-    _ACTIVE_SINK_IDS.clear()
-    _install_sinks(resolved, debug)
+        _ACTIVE_SINK_IDS = _install_sinks(resolved, debug)
 
-    _install_stdlib_bridge()
-
-    for h_id in old_ids:
-        try:
-            logger.remove(h_id)
-        except Exception:
-            pass
+        _install_stdlib_bridge()
 
     logger.bind(phase="reconfigure").debug(
         "logging_reconfigured",
