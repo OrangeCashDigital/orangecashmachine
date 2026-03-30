@@ -19,8 +19,8 @@ from core.config.runtime import RunConfig
 from core.config.loader import load_config
 from core.config.schema import AppConfig
 from market_data.orchestration.flows.batch_flow import market_data_flow
-from market_data.storage.snapshot import SnapshotManager
-from market_data.storage.gold_storage import GoldStorage
+from market_data.storage.gold.snapshot import SnapshotManager
+from market_data.storage.gold.gold_storage import GoldStorage
 from services.observability.metrics import push_metrics
 
 _log = bind_pipeline("entrypoint")

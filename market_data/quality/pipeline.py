@@ -9,7 +9,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.quality.validators.data_quality import DataQualityChecker, DataQualityReport
-from market_data.quality.validators.data_quality_policy import (
+from market_data.quality.policies.data_quality_policy import (
     DataQualityPolicy, PolicyResult, QualityDecision, default_policy,
 )
 
