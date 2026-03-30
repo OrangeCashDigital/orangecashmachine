@@ -2,7 +2,6 @@
 market_data/processing/strategies
 ==================================
 Estrategias de pipeline OHLCV: incremental, backfill, repair.
-Cada estrategia implementa StrategyMixin y opera sobre PipelineContext.
 """
 from market_data.processing.strategies.base import (
     PipelineContext, PipelineMode, PairResult, PipelineSummary, StrategyMixin,
