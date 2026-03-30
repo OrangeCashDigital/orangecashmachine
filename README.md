@@ -1,0 +1,128 @@
+# OrangeCashMachine 🟢
+
+Pipeline profesional de ingestión y procesamiento de datos de mercado para trading algorítmico de criptoactivos.
+
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![Prefect](https://img.shields.io/badge/prefect-2.19-blue.svg)](https://www.prefect.io/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+---
+
+## ¿Qué hace?
+
+Descarga, procesa y almacena datos OHLCV históricos y en tiempo real desde múltiples exchanges (Bybit, KuCoin, KuCoin Futures) en un data lake por capas (Bronze → Silver → Gold), listo para estrategias de trading e investigación.
+
+## Arquitectura
+
+```
+core/               → Infraestructura base: config, logging
+infra/
+    monitoring/     → Prometheus, Grafana, Alertmanager
+    observability/  → Servidor de métricas Prometheus
+    state/          → Cursor store Redis
+market_data/
+    adapters/       → Clientes de exchanges y data providers
+    ingestion/      → Fetchers REST y WebSocket
+    processing/     → Pipelines: backfill, incremental, repair
+    quality/        → Validación y políticas de calidad de datos
+    storage/        → Bronze / Silver / Gold
+    observability/  → Métricas de dominio
+    orchestration/  → Flows y tasks Prefect
+config/             → YAML por entorno: base, development, production
+trading/            → Estrategias y ejecución (en desarrollo)
+backtesting/        → Motor de backtesting (en desarrollo)
+research/           → Notebooks y acceso a datos
+```
+
+---
+
+## Requisitos
+
+- Python 3.11+
+- Redis 6+
+- [uv](https://github.com/astral-sh/uv) (recomendado) o pip
+
+---
+
+## Setup rápido
+
+```bash
+# 1. Clonar
+git clone https://github.com/OrangeCashDigital/orangecashmachine.git
+cd orangecashmachine
+
+# 2. Instalar dependencias
+uv sync
+# pip install -r requirements.txt   # alternativa
+
+# 3. Configurar entorno
+cp .env.example .env
+# Editar .env con tus API keys
+
+# 4. Levantar servicios
+docker compose up -d redis prefect-server pushgateway
+
+# 5. Ejecutar
+uv run python main.py
+```
+
+---
+
+## Modos de ejecución
+
+| Modo | Descripción | Comando |
+|---|---|---|
+| Normal | Ingesción incremental + backfill | `uv run python main.py` |
+| Validación | Verifica config sin ejecutar pipeline | `VALIDATE_ONLY=1 uv run python main.py` |
+| Docker | Stack completo | `docker compose up` |
+
+### Variables de entorno clave
+
+| Variable | Descripción | Default |
+|---|---|---|
+| `OCM_ENV` | Entorno activo | `development` |
+| `REDIS_HOST` | Host Redis | `localhost` |
+| `REDIS_PORT` | Puerto Redis | `6379` |
+| `VALIDATE_ONLY` | Solo validar config | `false` |
+
+Ver `.env.example` para la lista completa.
+
+---
+
+## Stack de observabilidad
+
+Con `docker compose up` se levantan:
+
+- **Prefect UI** → http://localhost:4200
+- **Prometheus** → http://localhost:9090
+- **Grafana** → http://localhost:3000
+- **Pushgateway** → http://localhost:9091
+- **Alertmanager** → http://localhost:9093
+
+---
+
+## Tests
+
+```bash
+pytest tests/
+```
+
+---
+
+## Entornos de configuración
+
+El sistema carga configuración en capas:
+
+```
+config/base.yaml → config/<env>.yaml → config/settings.yaml
+```
+
+Entornos disponibles: `development`, `production`, `test`.
+
+---
+
+## Contribuir
+
+1. Crear rama desde `main`
+2. Commits en formato [Conventional Commits](https://www.conventionalcommits.org/)
+3. Pull request con descripción del cambio
