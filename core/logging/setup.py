@@ -35,12 +35,12 @@ from core.logging.filters import pipeline_filter
 # ---------------------------------------------------------------------
 # Estado global
 # ---------------------------------------------------------------------
-_BOOTSTRAP_DONE:    bool = False        # True tras bootstrap_logging()
-_CONFIG_HASH:       Optional[str] = None  # hash de la última config aplicada
-_ACTIVE_SINK_IDS:   list = []             # IDs propios — sin tocar _core de loguru
+_BOOTSTRAP_DONE:    bool = False
+_CONFIG_HASH:       Optional[str] = None
+_ACTIVE_SINK_IDS:   list = []
 
 from threading import Lock as _Lock
-_CONFIG_LOCK = _Lock()  # protege configure_logging() en multi-thread
+_CONFIG_LOCK = _Lock()
 
 
 # ---------------------------------------------------------------------
@@ -76,8 +76,6 @@ def _resolve_config(
     debug: bool,
     log_dir: Optional[Path],
 ) -> Dict[str, Any]:
-    """Normaliza LoggingConfig externa a un dict interno consistente."""
-
     if cfg:
         return {
             "level":     "DEBUG" if debug else cfg.level.upper(),
@@ -88,7 +86,6 @@ def _resolve_config(
             "file":      cfg.file,
             "pipeline":  cfg.pipeline,
         }
-
     return {
         "level":     "DEBUG" if debug else "INFO",
         "log_dir":   log_dir or Path("logs"),
@@ -104,7 +101,6 @@ def _resolve_config(
 # Patcher (inyección global de contexto)
 # ---------------------------------------------------------------------
 def _make_patcher(run_id: Optional[str], env: str = "development"):
-
     _run_id = run_id or "-"
 
     def _patch(record: dict) -> None:
@@ -122,11 +118,8 @@ def _make_patcher(run_id: Optional[str], env: str = "development"):
 def _replay_bootstrap_buffer() -> None:
     """
     Drena los eventos pre-init al archivo ahora que los sinks existen.
-    Cada evento se reproduce con su timestamp original para trazabilidad.
-
-    Binding:
-      stage="bootstrap"  → permite filtrar en Loki / Datadog / grep
-      pre_init_ts        → timestamp real del evento antes del setup
+    Cada evento se reproduce con phase="pre_init" para distinguirlos
+    claramente de los eventos post-inicialización en consola y Loki.
     """
     entries = _drain_bootstrap()
     if not entries:
@@ -136,12 +129,10 @@ def _replay_bootstrap_buffer() -> None:
         ts    = entry.get("ts", "?")
         event = entry.get("event", "?")
         rest  = {k: v for k, v in entry.items() if k not in ("ts", "event")}
-        parts = " | ".join(f"{k}={v}" for k, v in rest.items())
-        msg   = f"{event}" + (f" | {parts}" if parts else "")
-        logger.bind(stage="bootstrap", pre_init_ts=ts).debug(msg)
+        logger.bind(phase="pre_init", pre_init_ts=ts, **rest).debug(event)
 
-    logger.bind(stage="bootstrap").debug(
-        "logging.bootstrap_drained | events={}", len(entries)
+    logger.bind(phase="pre_init").debug(
+        "logging.bootstrap_drained", events=len(entries)
     )
 
 
@@ -158,10 +149,8 @@ def _install_stdlib_bridge() -> None:
 
 # ---------------------------------------------------------------------
 # Helper interno: instala sinks según config resuelta
-# Requiere logger.remove() previo para evitar duplicación.
 # ---------------------------------------------------------------------
 def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
-    """Instala sinks y retorna lista de handler IDs creados."""
     ids: list = []
     if resolved["console"]:
         ids.append(logger.add(
@@ -180,7 +169,7 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
             rotation=resolved["rotation"],
             retention=resolved["retention"],
             compression="gz",
-            level=resolved["level"],   # respeta config YAML — antes era "DEBUG" hardcoded
+            level=resolved["level"],
             format=FILE,
             backtrace=True,
             diagnose=False,
@@ -204,7 +193,7 @@ def _install_sinks(resolved: Dict[str, Any], debug: bool) -> list:
             retention=resolved["retention"],
             compression="gz",
             level="DEBUG",
-            serialize=True,            # JSON puro para Loki/ELK — format= ignorado con serialize=True
+            serialize=True,       # JSON puro para Loki/ELK
             filter=pipeline_filter,
         ))
     _ACTIVE_SINK_IDS.extend(ids)
@@ -238,11 +227,10 @@ def bootstrap_logging(
     _install_sinks(resolved, debug)
     _BOOTSTRAP_DONE = True
 
-    logger.bind(event="logging_configured").debug(
-        "Logging system initialized | level={level} log_dir={log_dir}"
-        " console={console} file={file} pipeline={pipeline}",
+    logger.bind(phase="init").debug(
+        "logging_initialized",
         level=resolved["level"],
-        log_dir=resolved["log_dir"],
+        log_dir=str(resolved["log_dir"]),
         console=resolved["console"],
         file=resolved["file"],
         pipeline=resolved["pipeline"],
@@ -264,17 +252,11 @@ def configure_logging(
     """
     Fase 2: reemplaza sinks de Fase 1 con configuración real del YAML.
 
-    - Reconfigura patcher con env real.
-    - Añade nuevos sinks ANTES de eliminar los antiguos (ventana cero sin sinks).
-    - Reinstala bridge stdlib → loguru.
-    - No toca el buffer de Fase 0 (ya drenado en Fase 1).
-
     env es obligatorio — sin default para forzar consistencia.
     Debe llamarse después de bootstrap_logging() y load_config().
     """
     resolved = _resolve_config(cfg, debug, None)
 
-    # Idempotencia por contenido: salta si la config no cambió
     def _stable_serialize(obj):
         if isinstance(obj, dict):
             return {k: _stable_serialize(v) for k, v in sorted(obj.items())}
@@ -291,35 +273,26 @@ def configure_logging(
     with _CONFIG_LOCK:
         global _CONFIG_HASH
         if _CONFIG_HASH == new_hash:
-            logger.debug("configure_logging | same hash={} — skipping", new_hash[:8])
+            logger.debug("logging_reconfigure_skipped", hash=new_hash[:8])
             return
         _CONFIG_HASH = new_hash
 
-    # IDs de sinks anteriores — propios, sin tocar internals de loguru
     old_ids = list(_ACTIVE_SINK_IDS)
-
-    # Reconfigurar patcher con env real
     logger.configure(patcher=_make_patcher(run_id, env))
-
-    # Añadir nuevos sinks primero — ventana sin sinks = cero
     _ACTIVE_SINK_IDS.clear()
     _install_sinks(resolved, debug)
-
-    # Bridge stdlib antes de eliminar antiguos — sin gaps para logs de stdlib
     _install_stdlib_bridge()
 
-    # Eliminar sinks antiguos DESPUÉS de instalar nuevos y bridge
     for h_id in old_ids:
         try:
             logger.remove(h_id)
         except Exception:
             pass
 
-    logger.bind(event="logging_reconfigured").debug(
-        "Logging reconfigured from YAML | level={level} log_dir={log_dir}"
-        " console={console} file={file} pipeline={pipeline}",
+    logger.bind(phase="reconfigure").debug(
+        "logging_reconfigured",
         level=resolved["level"],
-        log_dir=resolved["log_dir"],
+        log_dir=str(resolved["log_dir"]),
         console=resolved["console"],
         file=resolved["file"],
         pipeline=resolved["pipeline"],
@@ -327,7 +300,7 @@ def configure_logging(
 
 
 # ---------------------------------------------------------------------
-# Helpers de trazabilidad del pipeline — contrato explícito para callers
+# Helpers de trazabilidad del pipeline
 # ---------------------------------------------------------------------
 def bind_pipeline(
     component: str,
@@ -337,10 +310,6 @@ def bind_pipeline(
 ):
     """
     Retorna un logger enriquecido con contexto del pipeline.
-
-    Uso:
-        log = bind_pipeline("ingestion", exchange="bybit", dataset="BTC/USDT:USDT_1m")
-        log.info("fetch_complete | rows={}", n)
 
     component es obligatorio. exchange y dataset son opcionales pero
     recomendados para trazabilidad completa en pipeline_*.log (JSON → Loki/ELK).
@@ -357,12 +326,11 @@ def bind_pipeline(
 # Helpers de introspección
 # ---------------------------------------------------------------------
 def is_logging_configured() -> bool:
-    """Retorna True si bootstrap_logging() Y configure_logging() han sido llamados."""
     return _BOOTSTRAP_DONE and _CONFIG_HASH is not None
 
 
 # ---------------------------------------------------------------------
-# Alias de compatibilidad — deprecado, usar bootstrap_logging()
+# Alias deprecado
 # ---------------------------------------------------------------------
 def setup_logging(
     cfg: Optional[LoggingConfig] = None,
