@@ -34,3 +34,4 @@ Thumbs.db
 data_platform/data_lake/
 requirements.txt.bak
 .envrc
+refactor.sh
