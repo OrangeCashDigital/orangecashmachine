@@ -1,5 +1,5 @@
 """
-market_data/batch/strategies/repair.py
+market_data/processing/strategies/repair.py
 =======================================
 
 Strategy de reparación de huecos temporales en Silver.

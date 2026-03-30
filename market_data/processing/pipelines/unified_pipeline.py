@@ -1,5 +1,5 @@
 """
-market_data/batch/pipelines/unified_pipeline.py
+market_data/processing/pipelines/unified_pipeline.py
 ================================================
 
 Pipeline unificado con mode explicito.

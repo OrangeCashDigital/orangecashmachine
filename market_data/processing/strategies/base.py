@@ -1,5 +1,5 @@
 """
-market_data/batch/strategies/base.py
+market_data/processing/strategies/base.py
 =====================================
 
 Contrato central del sistema de pipeline unificado.

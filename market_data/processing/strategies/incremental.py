@@ -1,5 +1,5 @@
 """
-market_data/batch/strategies/incremental.py
+market_data/processing/strategies/incremental.py
 ============================================
 
 Strategy de ingestión incremental hacia adelante.
