@@ -59,13 +59,8 @@ class BackfillStrategy(StrategyMixin):
 
             log.info("Backfill origin", origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat())
 
-            start_ms = self._resolve_backfill_start(symbol, timeframe, ctx)
+            start_ms = await self._resolve_backfill_start(symbol, timeframe, ctx, origin_ms)
 
-            if start_ms is None:
-                log.info("Backfill skip — sin datos en Silver")
-                result.skipped     = True
-                result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                return result
 
             if start_ms <= origin_ms:
                 log.info("Backfill completo — ya se alcanzó el origen",
@@ -165,12 +160,14 @@ class BackfillStrategy(StrategyMixin):
     # Backfill Cursor
     # ----------------------------------------------------------
 
-    def _resolve_backfill_start(
+    async def _resolve_backfill_start(
         self,
         symbol:    str,
         timeframe: str,
         ctx:       PipelineContext,
-    ) -> Optional[int]:
+        origin_ms: int,
+    ) -> int:
+        # A. Cursor Redis
         try:
             bk_key = self._backfill_key(ctx, symbol, timeframe)
             raw = ctx.cursor.get_raw(bk_key)
@@ -185,11 +182,17 @@ class BackfillStrategy(StrategyMixin):
                 "Backfill cursor read failed (non-critical)", error=str(exc),
             )
 
-        oldest = self._get_oldest_silver_ts(ctx, symbol, timeframe)
+        # B. Oldest timestamp en Silver (I/O en threadpool para no bloquear el loop)
+        oldest = await asyncio.to_thread(self._get_oldest_silver_ts, ctx, symbol, timeframe)
         if oldest is not None:
             return int(oldest.timestamp() * 1000)
 
-        return None
+        # C. Cold start — sin cursor ni Silver: usar origin_ms como inicio.
+        #    start_ms > origin_ms garantizado por +1, evita el skip de "ya completo".
+        _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).info(
+            "Backfill cold start — sin datos previos, paginando desde origin"
+        )
+        return origin_ms + 1
 
     def _update_backfill_cursor(
         self,
