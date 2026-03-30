@@ -19,10 +19,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY pyproject.toml .
 
-RUN pip install --upgrade pip setuptools wheel \
-    && pip install --prefix=/install -r requirements.txt
+RUN pip install uv && uv sync --no-dev --system
 
 # Stage 2: runtime — imagen final limpia
 FROM python:3.11-slim-bookworm AS runtime
