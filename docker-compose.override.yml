@@ -1,0 +1,50 @@
+# ==========================================================
+# docker-compose.override.yml
+# Desarrollo local — sobreescribe docker-compose.yml
+#
+# Uso:
+#   docker compose up            <- aplica override automaticamente
+#
+# Que hace este override:
+#   - Monta el codigo fuente local en /app (sin rebuild al editar)
+#   - Define LOCAL_DATA_LAKE_PATH apuntando a un volumen del host
+#   - Expone puerto Redis al host para acceso desde el pipeline local
+# ==========================================================
+
+services:
+
+  # -- market-data -------------------------------------------------------
+  # Habilitar este bloque para correr el servicio dentro de Docker.
+  # Por defecto el pipeline corre en la maquina local (fuera de Docker).
+  # market-data:
+  #   build:
+  #     context: .
+  #     target: runtime
+  #   volumes:
+  #     - .:/app
+  #     - ocm_local_lake:/app/data_platform/local_data_lake
+  #   environment:
+  #     LOCAL_DATA_LAKE_PATH: data_platform/local_data_lake
+  #     OCM_ENV: development
+  #   profiles:
+  #     - dev
+
+  # -- redis: exponer puerto al host en desarrollo -----------------------
+  redis:
+    ports:
+      - "6379:6379"
+
+# -- Volumen para el Data Lake local -----------------------------------
+# El directorio en el host se configura via OCM_HOST_DATA_LAKE_PATH.
+# Si no esta definida, usa ~/ocm_data_lake.
+#
+# Antes del primer uso:
+#   mkdir -p ~/ocm_data_lake
+#
+volumes:
+  ocm_local_lake:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "${OCM_HOST_DATA_LAKE_PATH:-${HOME}/ocm_data_lake}"
