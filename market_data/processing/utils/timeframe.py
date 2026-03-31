@@ -129,3 +129,96 @@ def timeframe_to_ms(timeframe: str) -> int:
         return quantity * _UNIT_MS[unit]
     except (ValueError, IndexError):
         raise InvalidTimeframeError(timeframe)
+
+import pandas as pd
+
+
+# ==========================================================
+# API pública — alineación al grid temporal
+# ==========================================================
+
+def align_to_grid(
+    df:        pd.DataFrame,
+    timeframe: str,
+    exchange:  str = "unknown",
+    symbol:    str = "unknown",
+) -> pd.DataFrame:
+    """
+    Alinea los timestamps de un DataFrame OHLCV al grid canónico
+    del timeframe y agrega semánticamente las velas que colapsen
+    en el mismo bucket post-floor.
+
+    Por qué floor y no round
+    ------------------------
+    Round puede avanzar un timestamp al bucket siguiente, creando
+    una vela "del futuro" que rompe joins y backtests. Floor siempre
+    retrocede al inicio del intervalo — comportamiento correcto para
+    series financieras (una vela pertenece al bucket que la abre).
+
+    Invariantes de agregación post-floor
+    -------------------------------------
+    - open   → primer valor del bucket  (precio de apertura real)
+    - high   → máximo                   (extremo superior real)
+    - low    → mínimo                   (extremo inferior real)
+    - close  → último valor             (precio de cierre real)
+    - volume → suma                     (volumen total del bucket)
+
+    Métricas emitidas (SafeOps: nunca lanza si Prometheus falla)
+    -------------------------------------------------------------
+    - ocm_timestamp_drift_corrected_total   → velas corregidas
+    - ocm_timestamp_grid_collisions_total   → colisiones post-floor
+    """
+    from market_data.observability.metrics import (
+        TIMESTAMP_DRIFT_CORRECTED,
+        TIMESTAMP_GRID_COLLISIONS,
+    )
+
+    tf_ms     = timeframe_to_ms(timeframe)
+    tf_offset = pd.tseries.frequencies.to_offset(f"{tf_ms}ms")
+
+    # --- Floor al grid ---
+    floored = df["timestamp"].dt.floor(freq=tf_offset)
+    drifted = int((floored != df["timestamp"]).sum())
+
+    if drifted > 0:
+        try:
+            TIMESTAMP_DRIFT_CORRECTED.labels(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe,
+            ).inc(drifted)
+        except Exception:
+            pass
+
+    df = df.copy()
+    df["timestamp"] = floored
+
+    # --- Detectar colisiones post-floor ---
+    collisions = int(df.duplicated(subset="timestamp", keep=False).sum())
+    if collisions > 0:
+        try:
+            TIMESTAMP_GRID_COLLISIONS.labels(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe,
+            ).inc(collisions)
+        except Exception:
+            pass
+
+    # --- Agregación semántica OHLCV por bucket ---
+    # Ordenar primero garantiza que first/last sean open/close correctos
+    df = df.sort_values("timestamp")
+
+    df = (
+        df.groupby("timestamp", sort=False)
+        .agg(
+            open=("open",     "first"),
+            high=("high",     "max"),
+            low=("low",       "min"),
+            close=("close",   "last"),
+            volume=("volume", "sum"),
+        )
+        .reset_index()
+    )
+
+    return df[["timestamp", "open", "high", "low", "close", "volume"]]

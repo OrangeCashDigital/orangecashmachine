@@ -184,6 +184,19 @@ WRITE_LOCK_STARVATION = Counter(
     ["exchange", "symbol", "timeframe"],
 )
 
+
+TIMESTAMP_DRIFT_CORRECTED = Counter(
+    "ocm_timestamp_drift_corrected_total",
+    "Velas con timestamp desalineado corregidas al grid del timeframe",
+    ["exchange", "symbol", "timeframe"],
+)
+
+TIMESTAMP_GRID_COLLISIONS = Counter(
+    "ocm_timestamp_grid_collisions_total",
+    "Colisiones post-floor: múltiples velas colapsaron al mismo bucket temporal",
+    ["exchange", "symbol", "timeframe"],
+)
+
 FETCH_ABORTS_TOTAL = Counter(
     "ocm_fetch_aborts_total",
     "Veces que el circuit breaker aborto el pipeline por exchange",

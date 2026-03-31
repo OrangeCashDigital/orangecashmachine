@@ -32,6 +32,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.quality.schemas.ohlcv_schema import validate_ohlcv
+from market_data.processing.utils.timeframe import align_to_grid
 
 
 class OHLCVTransformer:
@@ -91,6 +92,7 @@ class OHLCVTransformer:
         df["timestamp"] = pd.to_datetime(
             df["timestamp"],
             errors="coerce",
+            utc=True,
         )
 
         for col in cls.NUMERIC_COLUMNS:
@@ -123,6 +125,29 @@ class OHLCVTransformer:
             )
 
         return df
+
+
+    # ---------------------------------------------------------
+    # Align to Temporal Grid
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def _align_to_grid(
+        df:        "pd.DataFrame",
+        timeframe: str,
+        exchange:  str,
+        symbol:    str,
+    ) -> "pd.DataFrame":
+        """
+        Alinea timestamps al grid canónico del timeframe.
+
+        Delega en align_to_grid (timeframe.py) — lógica de dominio pura.
+        Si timeframe es "unknown", el paso se omite para no romper
+        tests que no pasan timeframe explícito.
+        """
+        if timeframe == "unknown":
+            return df
+        return align_to_grid(df, timeframe, exchange=exchange, symbol=symbol)
 
     # ---------------------------------------------------------
     # Remove Invalid Rows
@@ -209,12 +234,14 @@ class OHLCVTransformer:
 
         df = cls._remove_duplicates(df)
 
+        df = cls._align_to_grid(df, timeframe, exchange, symbol)
+
         df = cls._drop_invalid_rows(df)
 
         df = cls._sort(df)
 
         # Validación final de schema (estructura y tipos)
-        df = validate_ohlcv(df)
+        df = validate_ohlcv(df, timeframe=timeframe)
 
 
         logger.info(

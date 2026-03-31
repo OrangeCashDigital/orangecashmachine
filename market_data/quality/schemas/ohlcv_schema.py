@@ -30,13 +30,15 @@ import pandera as pa
 from pandera import Column, Check, DataFrameSchema
 from loguru import logger
 
+from market_data.processing.utils.timeframe import timeframe_to_ms, InvalidTimeframeError
+
 
 # ==========================================================
 # Constants
 # ==========================================================
 
 # Bitcoin genesis block: primer timestamp válido del mercado crypto
-MIN_TIMESTAMP: pd.Timestamp = pd.Timestamp("2009-01-03")
+MIN_TIMESTAMP: pd.Timestamp = pd.Timestamp("2009-01-03", tz="UTC")
 
 # Columnas numéricas de precio (deben ser > 0, no solo >= 0)
 PRICE_COLUMNS: tuple[str, ...] = ("open", "high", "low", "close")
@@ -121,6 +123,39 @@ def _non_negative_volume_check() -> Check:
     return Check.ge(0, error="Volume must be >= 0")
 
 
+
+def make_grid_alignment_check(timeframe: str) -> Check | None:
+    """
+    Genera un Check de pandera que verifica alineación al grid del timeframe.
+
+    Por qué es estricto (SchemaError y no warning)
+    -----------------------------------------------
+    Si llega aquí un timestamp desalineado, align_to_grid no se ejecutó
+    o falló upstream — es un bug en el pipeline, no dato ruidoso.
+    El schema es la última línea de defensa y debe fallar ruidosamente.
+
+    Retorna None si el timeframe es desconocido (skip seguro).
+    """
+    try:
+        tf_ms = timeframe_to_ms(timeframe)
+    except InvalidTimeframeError:
+        return None
+
+    def _check(df: pd.DataFrame) -> bool:
+        ts_ms = df["timestamp"].astype("int64") // 1_000_000
+        return bool((ts_ms % tf_ms == 0).all())
+
+    return Check(
+        _check,
+        element_wise=False,
+        error=(
+            f"Timestamp grid misalignment for timeframe={timeframe}: "
+            f"all timestamps must be multiples of {tf_ms}ms. "
+            f"align_to_grid() must run before validate_ohlcv()."
+        ),
+    )
+
+
 # ==========================================================
 # OHLCV Schema Definition
 # ==========================================================
@@ -130,7 +165,7 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
     columns={
 
         "timestamp": Column(
-            pa.Timestamp,
+            pd.DatetimeTZDtype(tz="UTC"),
             nullable=False,
             coerce=True,
             checks=[
@@ -216,7 +251,7 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
 # Public Validation API
 # ==========================================================
 
-def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
+def validate_ohlcv(df: pd.DataFrame, timeframe: str = "unknown") -> pd.DataFrame:
     """
     Valida un DataFrame OHLCV contra el schema canónico.
 
@@ -229,6 +264,8 @@ def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     df : pd.DataFrame
         DataFrame OHLCV crudo. Debe contener las columnas:
         timestamp, open, high, low, close, volume.
+    timeframe : str
+        Timeframe para validar alineación al grid. "unknown" omite el check.
 
     Returns
     -------
@@ -244,6 +281,21 @@ def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         El atributo `failure_cases` contiene el detalle completo.
     """
     _assert_non_empty(df)
+    _assert_utc(df)
+
+    # Grid alignment check — ejecutado antes del schema (pandera no soporta add_checks en DataFrameSchema)
+    if timeframe != "unknown":
+        grid_check = make_grid_alignment_check(timeframe)
+        if grid_check is not None and not grid_check(df):
+            raise pa.errors.SchemaError(
+                schema=OHLCV_SCHEMA,
+                data=df,
+                message=(
+                    f"Timestamp grid misalignment for timeframe={timeframe}: "
+                    f"timestamps must be multiples of timeframe_to_ms(timeframe)ms. "
+                    f"align_to_grid() must run before validate_ohlcv()."
+                ),
+            )
 
     try:
         validated_df = OHLCV_SCHEMA.validate(df, lazy=True)
@@ -252,7 +304,6 @@ def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         _log_validation_failure(exc)
         raise
 
-    # Happy path: DEBUG para no saturar logs en producción
     logger.debug(
         "OHLCV validation passed | rows={} cols={}",
         len(validated_df),
@@ -265,6 +316,21 @@ def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
 # ==========================================================
 # Private Helpers
 # ==========================================================
+
+def _assert_utc(df: pd.DataFrame) -> None:
+    """
+    Lanza TypeError si timestamp no es tz-aware UTC.
+
+    Falla rápido antes de entrar al schema — evita TypeErrors crípticos
+    de pandas enterrados en pandera al comparar tz-naive vs tz-aware.
+    """
+    dtype = df["timestamp"].dtype
+    if not (hasattr(dtype, "tz") and str(dtype.tz) == "UTC"):
+        raise TypeError(
+            f"timestamp must be datetime64[ns, UTC], got {dtype!r}. "
+            "Call pd.to_datetime(..., utc=True) before validate_ohlcv()."
+        )
+
 
 def _assert_non_empty(df: pd.DataFrame) -> None:
     """
