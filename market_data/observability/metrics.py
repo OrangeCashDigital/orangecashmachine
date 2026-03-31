@@ -1,28 +1,37 @@
 """
-services/observability/metrics.py
-==================================
+market_data/observability/metrics.py
+=====================================
 
-Métricas Prometheus para OrangeCashMachine.
+Contadores y métricas Prometheus de dominio para OrangeCashMachine.
+
+Responsabilidad
+---------------
+Definir y registrar métricas de negocio (pipeline, exchange, storage).
+NO gestiona el servidor HTTP ni el push al Pushgateway —
+eso es responsabilidad de infra.observability.server.
 
 Métricas disponibles
 --------------------
-• pipeline_rows_ingested_total      — filas ingestadas por exchange/timeframe
-• pipeline_pair_duration_seconds    — duración de procesamiento por par
-• pipeline_errors_total             — errores por exchange/tipo
-• exchange_latency_ms               — latencia del exchange en validación
-• exchange_clock_drift_ms           — drift de reloj por exchange
-• pipeline_active_pairs             — pares procesándose actualmente (gauge)
-• pipeline_last_run_timestamp       — timestamp Unix del último run exitoso
-• pipeline_heartbeat_total          — counter que incrementa cada run (deadman)
-
-Notas de diseño
----------------
-• push_metrics(exchange=) usa job distinto por exchange para evitar
-  last-write-wins collision en Pushgateway cuando corren en paralelo.
-• NO se hace delete después del push — los counters deben persistir
-  entre runs para que PipelineStalled pueda calcular time() - max(counter).
-• El heartbeat es un counter que solo crece: Prometheus lo ve siempre,
-  y si deja de crecer → el pipeline dejó de correr.
+• ocm_pipeline_rows_ingested_total      — filas OHLCV ingestadas
+• ocm_pipeline_pair_duration_seconds    — duración por par símbolo/timeframe
+• ocm_pipeline_errors_total             — errores por exchange/tipo
+• ocm_pipeline_active_pairs             — pares en procesamiento (gauge)
+• ocm_pipeline_quality_decisions_total  — decisiones de calidad
+• ocm_exchange_latency_ms               — latencia del exchange
+• ocm_exchange_clock_drift_ms           — drift de reloj
+• ocm_exchange_rate_limit_ms            — rate limit configurado
+• ocm_fetch_chunk_duration_seconds      — duración de fetch por chunk
+• ocm_fetch_chunks_total                — chunks fetched por status
+• ocm_fetch_chunk_errors_total          — chunks con error
+• ocm_storage_write_duration_seconds    — duración de escritura Silver
+• ocm_storage_partition_size_rows       — tamaño de partición en filas
+• ocm_repair_gaps_found/healed/skipped  — gaps detectados/reparados
+• ocm_manifest_checksum_failures_total  — checksums inválidos
+• ocm_write_lock_*                      — contención de write lock Redis
+• ocm_timestamp_drift_corrected_total   — timestamps corregidos al grid
+• ocm_timestamp_grid_collisions_total   — colisiones post-floor
+• ocm_fetch_aborts_total                — aborts por circuit breaker
+• ocm_exchange_circuit_open_total       — rechazos por circuit breaker
 """
 
 from __future__ import annotations
@@ -30,16 +39,11 @@ from __future__ import annotations
 # Servidor de métricas y push → infra.observability.server
 
 from loguru import logger as _log
-import time as _time
 
 from prometheus_client import (
-    CollectorRegistry,
     Counter,
     Gauge,
     Histogram,
-    push_to_gateway,
-    start_http_server,
-    REGISTRY,
 )
 
 
