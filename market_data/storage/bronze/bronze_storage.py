@@ -40,6 +40,9 @@ from typing import Dict, Optional
 import pandas as pd
 from loguru import logger
 
+from core.config.paths import bronze_ohlcv_root
+from data_platform.ohlcv_utils import safe_symbol as _safe_symbol_fn
+
 
 # ==========================================================
 # Constants
@@ -49,7 +52,7 @@ REQUIRED_COLUMNS: tuple[str, ...] = (
     "timestamp", "open", "high", "low", "close", "volume"
 )
 
-_BRONZE_SUBPATH = ("data_platform", "data_lake", "bronze", "ohlcv")
+# _BRONZE_SUBPATH eliminado — path resuelto via core.config.paths
 
 
 # ==========================================================
@@ -162,7 +165,8 @@ class BronzeStorage:
 
     @staticmethod
     def _safe_symbol(symbol: str) -> str:
-        return symbol.replace("/", "_")
+        # Delega a data_platform.ohlcv_utils.safe_symbol — SSoT
+        return _safe_symbol_fn(symbol)
 
     def _partition_dir(self, symbol: str, timeframe: str, date) -> Path:
         path = (
@@ -210,9 +214,17 @@ class BronzeStorage:
 # ==========================================================
 
 def _resolve_base_path(base_path: Optional[str | Path]) -> Path:
+    """
+    Resuelve el path base de Bronze.
+
+    Orden de resolución:
+    1. base_path explícito (argumento del constructor)
+    2. core.config.paths.bronze_ohlcv_root() — lee storage.data_lake.path del YAML
+       o OCM_DATA_LAKE_PATH si está seteada
+    """
     if base_path:
         return Path(base_path).resolve()
-    return Path(__file__).resolve().parents[3].joinpath(*_BRONZE_SUBPATH)
+    return bronze_ohlcv_root()
 
 
 def _validate_dataframe(df: pd.DataFrame) -> None:

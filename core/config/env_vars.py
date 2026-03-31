@@ -37,6 +37,7 @@ PUSHGATEWAY_URL = "PUSHGATEWAY_URL"  # "host:port" del Prometheus Pushgateway
 # =============================================================================
 
 OCM_BACKFILL_MODE    = "OCM_BACKFILL_MODE"
+OCM_FETCH_ALL_HISTORY = "OCM_FETCH_ALL_HISTORY"  # override de fetch_all_history en pipeline.historical
 OCM_START_DATE       = "OCM_START_DATE"
 OCM_MAX_CONCURRENT   = "OCM_MAX_CONCURRENT"
 OCM_LOG_LEVEL        = "OCM_LOG_LEVEL"
@@ -73,3 +74,12 @@ def default_debug_for(env: str) -> bool:
     Si OCM_DEBUG está seteada explícitamente, este valor se ignora.
     """
     return _DEBUG_DEFAULTS.get(env, False)
+
+
+# =============================================================================
+# Variables de storage — leídas por core/config/paths.py
+# =============================================================================
+
+OCM_DATA_LAKE_PATH = "OCM_DATA_LAKE_PATH"  # override absoluto del data lake root
+OCM_GOLD_PATH      = "OCM_GOLD_PATH"       # override absoluto del gold root
+OCM_EXCHANGE       = "OCM_EXCHANGE"        # exchange default para research/loaders

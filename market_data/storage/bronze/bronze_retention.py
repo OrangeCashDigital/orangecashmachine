@@ -48,6 +48,8 @@ from typing import NamedTuple
 
 from loguru import logger
 
+from core.config.paths import bronze_ohlcv_root
+
 
 # ==========================================================
 # Constants
@@ -56,7 +58,7 @@ from loguru import logger
 RETENTION_DAYS_DEFAULT = 7
 MIN_KEEP_DAYS          = 2   # nunca borrar partes de los últimos N días
 
-_BRONZE_SUBPATH = ("data_platform", "data_lake", "bronze", "ohlcv")
+# _BRONZE_SUBPATH eliminado — path resuelto via core.config.paths
 
 
 # ==========================================================
@@ -172,9 +174,17 @@ def run_retention(
 # ==========================================================
 
 def _resolve_bronze_path(base_path: Path | None) -> Path:
+    """
+    Resuelve el path base de Bronze Retention.
+
+    Orden de resolución:
+    1. base_path explícito (argumento del constructor)
+    2. core.config.paths.bronze_ohlcv_root() — lee storage.data_lake.path del YAML
+       o OCM_DATA_LAKE_PATH si está seteada
+    """
     if base_path:
         return Path(base_path).resolve()
-    return Path(__file__).resolve().parents[3].joinpath(*_BRONZE_SUBPATH)
+    return bronze_ohlcv_root()
 
 
 def _cleanup_empty_dirs(root: Path) -> int:
