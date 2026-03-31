@@ -15,7 +15,10 @@ Descarga, procesa y almacena datos OHLCV históricos y en tiempo real desde múl
 ## Arquitectura
 
 ```
-core/               → Infraestructura base: config, logging
+core/
+    config/         → RunConfig, paths, env_vars, lineage
+    logging/        → Setup estructurado con loguru
+    utils.py        → repo_root() — anchor del repositorio
 infra/
     monitoring/     → Prometheus, Grafana, Alertmanager
     observability/  → Servidor de métricas Prometheus
@@ -28,10 +31,14 @@ market_data/
     storage/        → Bronze / Silver / Gold
     observability/  → Métricas de dominio
     orchestration/  → Flows y tasks Prefect
+data_platform/
+    loaders/        → MarketDataLoader, GoldLoader — acceso al Data Lake
+    ohlcv_utils.py  → safe_symbol, normalize_ohlcv_df
+    data_lake/      → Bronze / Silver / Gold (datos en disco)
 config/             → YAML por entorno: base, development, production
 trading/            → Estrategias y ejecución (en desarrollo)
 backtesting/        → Motor de backtesting (en desarrollo)
-research/           → Notebooks y acceso a datos
+research/           → Notebooks exploratorios (no instalable como paquete)
 ```
 
 ---
@@ -80,12 +87,70 @@ uv run python main.py
 
 | Variable | Descripción | Default |
 |---|---|---|
-| `OCM_ENV` | Entorno activo | `development` |
+| `OCM_ENV` | Entorno activo (`development`/`production`/`test`) | `development` |
+| `OCM_DATA_LAKE_PATH` | Path absoluto al Data Lake (Bronze + Silver) | *(lee YAML)* |
+| `OCM_GOLD_PATH` | Path absoluto a Gold si difiere del Data Lake | *(lee YAML)* |
+| `LOCAL_DATA_LAKE_PATH` | Path relativo al Data Lake en dev local | `data_platform/local_data_lake` |
 | `REDIS_HOST` | Host Redis | `localhost` |
 | `REDIS_PORT` | Puerto Redis | `6379` |
-| `VALIDATE_ONLY` | Solo validar config | `false` |
+| `VALIDATE_ONLY` | Solo validar config, sin ejecutar pipeline | `false` |
+
+Cascada de resolución de paths:
+1. Variable de entorno explícita (`OCM_DATA_LAKE_PATH`)
+2. `LOCAL_DATA_LAKE_PATH` interpolada en el YAML de entorno
+3. Default hardcodeado en `config/base.yaml`
 
 Ver `.env.example` para la lista completa.
+
+---
+
+## Acceso al Data Lake
+
+Los loaders abstraen el path resolution y la lectura de Parquet:
+
+```python
+from data_platform.loaders.market_data_loader import MarketDataLoader
+from data_platform.loaders.gold_loader import GoldLoader
+
+# Silver — datos OHLCV limpios
+loader = MarketDataLoader(exchange="kucoin")
+df = loader.load_ohlcv("BTC/USDT", "1h")
+
+# Gold — features procesados
+gold = GoldLoader(exchange="kucoin")
+df_gold = gold.load("BTC/USDT", "1h")
+```
+
+El path base se resuelve automáticamente desde `OCM_DATA_LAKE_PATH`
+o `LOCAL_DATA_LAKE_PATH`. No hay paths hardcodeados en el código.
+
+---
+
+## Lineage
+
+Cada escritura al Data Lake registra trazabilidad reproducible:
+
+```python
+from core.config.lineage import build_lineage
+
+rec = build_lineage(
+    run_id="20260330T000000-abc12345",
+    version_id="v000042",
+    layer="silver",
+    exchange="kucoin",
+)
+print(rec.to_manifest())
+# {
+#   "run_id": "20260330T000000-abc12345",
+#   "version_id": "v000042",
+#   "git_hash": "fd2aef9",
+#   "written_at": "2026-03-30T19:28:13+00:00",
+#   "layer": "silver",
+#   "exchange": "kucoin"
+# }
+```
+
+`git_hash` y `written_at` se capturan automáticamente en el momento de la llamada.
 
 ---
 
