@@ -30,7 +30,7 @@ Thumbs.db
 
 # Archivos temporales
 *.tmp
-*.swpdata_platform/data_lake/
+*.swp
 data_platform/data_lake/
 requirements.txt.bak
 .envrc
