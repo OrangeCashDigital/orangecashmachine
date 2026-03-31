@@ -3,21 +3,32 @@ from __future__ import annotations
 """
 core/utils.py
 =============
-Utilidades compartidas del proyecto OrangeCashMachine.
 
-Reglas
-------
-- Solo stdlib — sin dependencias internas ni de terceros
-- Importar desde aquí en lugar de redefinir en cada módulo
-- Todo lo que se use en 2+ módulos vive aquí
+Núcleo mínimo de utilidades stdlib.
+
+Contenido
+---------
+  repo_root()  — anchor del repositorio, sin dependencias, nunca parents[N]
+
+Funciones deprecadas (wrappers de compatibilidad)
+-------------------------------------------------
+Las funciones de path y lineage han migrado a sus módulos canónicos:
+
+  get_git_hash()      → core.config.lineage.get_git_hash
+  silver_ohlcv_root() → core.config.paths.silver_ohlcv_root
+  gold_features_root() → core.config.paths.gold_features_root
+
+Los wrappers se mantienen para no romper código externo, pero emiten
+DeprecationWarning. Se eliminarán en una versión futura.
 """
 
 import subprocess
+import warnings
 from pathlib import Path
 
 
 # ==========================================================
-# Repo root — anchor confiable, nunca parents[N] hardcodeado
+# Repo root — stdlib pura, anchor de toda la arquitectura de paths
 # ==========================================================
 
 def repo_root() -> Path:
@@ -26,7 +37,7 @@ def repo_root() -> Path:
 
     Busca el directorio .git subiendo desde este archivo.
     Falla explícitamente si no se encuentra — mejor que un
-    parents[3] silenciosamente incorrecto al mover archivos.
+    parents[N] silenciosamente incorrecto al mover archivos.
     """
     here = Path(__file__).resolve()
     for parent in here.parents:
@@ -39,48 +50,56 @@ def repo_root() -> Path:
 
 
 # ==========================================================
-# Rutas canónicas del Data Lakehouse
-# ==========================================================
-
-# Componentes relativos — se combinan con repo_root() en runtime
-LAKE_ROOT:         tuple[str, ...] = ("data_platform", "data_lake")
-SILVER_OHLCV_PATH: tuple[str, ...] = LAKE_ROOT + ("silver", "ohlcv")
-GOLD_FEATURES_PATH: tuple[str, ...] = LAKE_ROOT + ("gold", "features", "ohlcv")
-
-
-def silver_ohlcv_root() -> Path:
-    """Path absoluto a silver/ohlcv/. Falla explícitamente si no existe."""
-    return repo_root().joinpath(*SILVER_OHLCV_PATH)
-
-
-def gold_features_root() -> Path:
-    """Path absoluto a gold/features/ohlcv/. No requiere que exista."""
-    return repo_root().joinpath(*GOLD_FEATURES_PATH)
-
-
-
-# ==========================================================
-# Git
+# Wrappers de compatibilidad — DEPRECADOS
+# Migrar a core.config.lineage / core.config.paths
 # ==========================================================
 
 def get_git_hash() -> str:
-    """Hash corto del commit actual para trazabilidad de lineage."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=2,
-        )
-        return result.stdout.strip() or "unknown"
-    except Exception:
-        return "unknown"
+    """
+    DEPRECADO. Usar: from core.config.lineage import get_git_hash
+    """
+    warnings.warn(
+        "core.utils.get_git_hash está deprecado. "
+        "Usa: from core.config.lineage import get_git_hash",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from core.config.lineage import get_git_hash as _fn
+    return _fn()
+
+
+def silver_ohlcv_root() -> Path:
+    """
+    DEPRECADO. Usar: from core.config.paths import silver_ohlcv_root
+    """
+    warnings.warn(
+        "core.utils.silver_ohlcv_root está deprecado. "
+        "Usa: from core.config.paths import silver_ohlcv_root",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from core.config.paths import silver_ohlcv_root as _fn
+    return _fn()
+
+
+def gold_features_root() -> Path:
+    """
+    DEPRECADO. Usar: from core.config.paths import gold_features_root
+    """
+    warnings.warn(
+        "core.utils.gold_features_root está deprecado. "
+        "Usa: from core.config.paths import gold_features_root",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from core.config.paths import gold_features_root as _fn
+    return _fn()
 
 
 __all__ = [
     "repo_root",
-    "LAKE_ROOT",
-    "SILVER_OHLCV_PATH",
-    "GOLD_FEATURES_PATH",
+    # Deprecados — mantener para compatibilidad
+    "get_git_hash",
     "silver_ohlcv_root",
     "gold_features_root",
-    "get_git_hash",
 ]

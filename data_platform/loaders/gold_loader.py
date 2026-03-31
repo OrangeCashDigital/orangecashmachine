@@ -45,7 +45,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 from loguru import logger
 
-from core.utils import gold_features_root
+from core.config.paths import gold_features_root
 from data_platform.ohlcv_utils import safe_symbol
 from data_platform.loaders.market_data_loader import (
     DataNotFoundError,

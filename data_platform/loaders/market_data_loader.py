@@ -43,7 +43,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 from loguru import logger
 
-from core.utils import silver_ohlcv_root
+from core.config.paths import silver_ohlcv_root
 from data_platform.ohlcv_utils import safe_symbol, normalize_ohlcv_df
 
 

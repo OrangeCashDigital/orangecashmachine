@@ -42,7 +42,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 from loguru import logger
 
-from core.utils import get_git_hash, silver_ohlcv_root, gold_features_root
+from core.config.lineage import get_git_hash
+from core.config.paths import silver_ohlcv_root, gold_features_root
 from data_platform.ohlcv_utils import safe_symbol
 from market_data.storage.gold.feature_engineer import FeatureEngineer
 from market_data.storage.silver.silver_storage import SilverStorage

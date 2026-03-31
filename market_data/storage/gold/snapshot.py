@@ -38,12 +38,14 @@ Formato de snapshot
 from __future__ import annotations
 
 import json
-from core.utils import get_git_hash
+from core.config.lineage import get_git_hash
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from loguru import logger
+
+from core.utils import repo_root
 
 
 # ==========================================================
@@ -83,7 +85,7 @@ class SnapshotManager:
         if base_path:
             self._base = Path(base_path).resolve()
         else:
-            self._base = Path(__file__).resolve().parents[3]
+            self._base = repo_root()
 
         self._manifests_dir = self._base / _MANIFESTS_DIR
         self._silver_root   = self._base / _SILVER_ROOT

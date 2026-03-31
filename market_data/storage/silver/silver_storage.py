@@ -47,7 +47,9 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from core.utils import get_git_hash, silver_ohlcv_root
+from core.config.lineage import get_git_hash
+from core.config.paths import silver_ohlcv_root
+from data_platform.ohlcv_utils import safe_symbol as _safe_symbol_fn
 from data_platform.ohlcv_utils import safe_symbol, normalize_ohlcv_df
 from datetime import datetime, timezone
 from pathlib import Path
@@ -780,7 +782,14 @@ class SilverStorage:
 # ==========================================================
 
 def _resolve_base_path(base_path: Optional[str | Path]) -> Path:
-    """Resuelve el path base de Silver. Usa silver_ohlcv_root() como default."""
+    """
+    Resuelve el path base de Silver.
+
+    Orden de resolución:
+    1. base_path explícito (argumento del constructor)
+    2. core.config.paths.silver_ohlcv_root() — lee storage.data_lake.path del YAML
+       o OCM_DATA_LAKE_PATH si está seteada
+    """
     if base_path:
         return Path(base_path).resolve()
     return silver_ohlcv_root()
