@@ -16,8 +16,16 @@ environment:
 # ==============================================================================
 pipeline:
   historical:
+    # start_date: límite inferior para backfill y punto de inicio de incremental
+    # cuando no existe cursor. El backfill nunca retrocede más allá de esta fecha,
+    # pero sí puede hacerlo el exchange (si su origen es posterior, origin_ms gana).
+    # Para descargar todo el historial disponible, usar "2010-01-01T00:00:00Z".
+    # Para backfill parcial desde una fecha concreta, ajustar este valor.
     start_date: "2017-01-01T00:00:00Z"
-    backfill_mode: true
+
+    # backfill_mode: activar solo para carga inicial o reparación explícita.
+    # En ejecución periódica (cron/Prefect), mantener en false — usar incremental.
+    backfill_mode: false
 
     # Auto → resuelto dinámicamente en runtime (CPU-bound safe default)
     max_concurrent_tasks: auto

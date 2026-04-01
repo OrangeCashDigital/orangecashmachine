@@ -6,6 +6,7 @@ Strategy de backfill histórico completo hacia atrás.
 """
 
 from __future__ import annotations
+from datetime import datetime, timezone
 
 import asyncio
 import time
@@ -62,10 +63,11 @@ class BackfillStrategy(StrategyMixin):
             start_ms = await self._resolve_backfill_start(symbol, timeframe, ctx, origin_ms)
 
 
-            if start_ms <= origin_ms:
-                log.info("Backfill completo — ya se alcanzó el origen",
+            if start_ms < origin_ms:
+                log.info("Backfill completo — ya se alcanzó el origen o start_date",
                     oldest=pd.Timestamp(start_ms,  unit="ms", tz="UTC").isoformat(),
                     origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
+                    start_date=ctx.start_date,
                 )
                 result.skipped     = True
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
@@ -167,12 +169,22 @@ class BackfillStrategy(StrategyMixin):
         ctx:       PipelineContext,
         origin_ms: int,
     ) -> int:
-        # A. Cursor Redis
+        """
+        Resuelve el timestamp desde el cual continuar el backfill (paginando hacia atrás).
+
+        start_date actúa como floor: el backfill nunca retrocede más allá de la
+        fecha configurada, independientemente de lo que ofrezca el exchange.
+        Si start_date es posterior a origin_ms, el rango efectivo es [start_date, oldest_known].
+        Si start_date es anterior a origin_ms, el rango efectivo es [origin_ms, oldest_known].
+        """
+        start_date_ms = self._parse_start_date_ms(ctx.start_date)
+
+        # A. Cursor Redis — reanuda desde donde se detuvo, respetando floor
         try:
             bk_key = self._backfill_key(ctx, symbol, timeframe)
             raw = ctx.cursor.get_raw(bk_key)
             if raw:
-                ts_ms = int(raw)
+                ts_ms = max(int(raw), start_date_ms)
                 _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
                     "Backfill cursor hit", ts=pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
                 )
@@ -182,17 +194,19 @@ class BackfillStrategy(StrategyMixin):
                 "Backfill cursor read failed (non-critical)", error=str(exc),
             )
 
-        # B. Oldest timestamp en Silver (I/O en threadpool para no bloquear el loop)
+        # B. Oldest timestamp en Silver — respetando floor
         oldest = await asyncio.to_thread(self._get_oldest_silver_ts, ctx, symbol, timeframe)
         if oldest is not None:
-            return int(oldest.timestamp() * 1000)
+            return max(int(oldest.timestamp() * 1000), start_date_ms)
 
-        # C. Cold start — sin cursor ni Silver: usar origin_ms como inicio.
-        #    start_ms > origin_ms garantizado por +1, evita el skip de "ya completo".
+        # C. Cold start — sin cursor ni Silver: usar start_date_ms como inicio.
+        #    start_date_ms >= origin_ms (por definición del floor), así que
+        #    la condición de "completo" (start_ms < origin_ms) nunca dispara en falso.
         _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).info(
-            "Backfill cold start — sin datos previos, paginando desde origin"
+            "Backfill cold start — sin datos previos, paginando desde start_date",
+            start_date=ctx.start_date,
         )
-        return origin_ms + 1
+        return start_date_ms
 
     def _update_backfill_cursor(
         self,
@@ -210,6 +224,12 @@ class BackfillStrategy(StrategyMixin):
             _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
                 "Backfill cursor write failed (non-critical)", error=str(exc),
             )
+
+    @staticmethod
+    def _parse_start_date_ms(start_date: str) -> int:
+        """Convierte start_date ISO 8601 a milliseconds epoch."""
+        dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        return int(dt.timestamp() * 1000)
 
     def _get_oldest_silver_ts(
         self,
