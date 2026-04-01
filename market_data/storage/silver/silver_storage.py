@@ -738,6 +738,25 @@ class SilverStorage:
         version_num = len(existing) + 1
         version_id = f"v{version_num:06d}"
 
+        # Consolidar particiones previas con las nuevas.
+        # latest.json es un manifest delta — cada versión solo contiene las
+        # particiones escritas en esa operación. Para que el manifest refleje
+        # el estado completo del dataset, fusionamos previas + nuevas usando
+        # path como clave de deduplicación (las nuevas ganan en colisión).
+        merged: dict = {}
+        if latest_path.exists():
+            try:
+                prev = json.loads(latest_path.read_text(encoding="utf-8"))
+                for p in prev.get("partitions", []):
+                    if "path" in p:
+                        merged[p["path"]] = p
+            except Exception:
+                pass  # manifest corrupto — empezar desde cero
+        for p in partitions:
+            if "path" in p:
+                merged[p["path"]] = p
+        all_partitions = sorted(merged.values(), key=lambda p: p.get("path", ""))
+
         version_data: Dict = {
             "version":     version_num,
             "version_id":  version_id,
@@ -749,7 +768,7 @@ class SilverStorage:
             "market_type": self._market_type,
             "layer":       "silver",
             "git_hash":    get_git_hash(),
-            "partitions":  partitions,
+            "partitions":  all_partitions,
         }
 
         # Escritura atómica del manifest:

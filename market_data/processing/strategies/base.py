@@ -70,8 +70,9 @@ class PairResult:
     error:       str  = ""
     error_type:  str  = ""
     duration_ms: int  = 0
-    gaps_found:  int  = 0
-    gaps_healed: int  = 0
+    gaps_found:   int  = 0
+    gaps_healed:  int  = 0
+    gaps_partial: int  = 0
     chunks:      int  = 0
 
     @property
@@ -104,6 +105,7 @@ class PairResult:
             return (
                 f"[repair] {self.symbol}/{self.timeframe} "
                 f"gaps_found={self.gaps_found} gaps_healed={self.gaps_healed} "
+                f"gaps_partial={self.gaps_partial} "
                 f"rows={self.rows} duration={self.duration_ms}ms"
             )
         if self.mode == PipelineMode.BACKFILL:
@@ -160,7 +162,8 @@ class PipelineSummary:
     def total_gaps_found(self) -> int: return sum(r.gaps_found for r in self.results)
 
     @property
-    def total_gaps_healed(self) -> int: return sum(r.gaps_healed for r in self.results)
+    def total_gaps_healed(self)  -> int: return sum(r.gaps_healed  for r in self.results)
+    def total_gaps_partial(self) -> int: return sum(r.gaps_partial for r in self.results)
 
     @property
     def throughput_rows_per_sec(self) -> float:
@@ -190,6 +193,7 @@ class PipelineSummary:
                 "Repair summary",
                 gaps_found=self.total_gaps_found,
                 gaps_healed=self.total_gaps_healed,
+                gaps_partial=self.total_gaps_partial,
             )
         for r in self.results:
             if r.error:

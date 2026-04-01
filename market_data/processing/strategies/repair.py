@@ -140,7 +140,7 @@ class RepairStrategy(StrategyMixin):
             healed_count      = 0
             sem = asyncio.Semaphore(_GAP_CONCURRENCY)
 
-            async def _heal_with_sem(gap: GapRange) -> tuple[bool, int]:
+            async def _heal_with_sem(gap: GapRange) -> tuple[bool, int, float]:
                 if gap.expected > _MAX_HEALABLE_GAP_CANDLES:
                     log.warning("Gap demasiado grande — skip",
                         expected=gap.expected, max=_MAX_HEALABLE_GAP_CANDLES,
@@ -148,7 +148,7 @@ class RepairStrategy(StrategyMixin):
                     REPAIR_GAPS_SKIPPED.labels(
                         exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
                     ).inc()
-                    return False, 0
+                    return False, 0, 0.0
                 async with sem:
                     return await self._heal_gap(
                         gap=gap, symbol=symbol, timeframe=timeframe, ctx=ctx,
@@ -158,21 +158,31 @@ class RepairStrategy(StrategyMixin):
                 *[_heal_with_sem(gap) for gap in gaps],
                 return_exceptions=False,
             )
-            for healed, rows in heal_results:
+            partial_count = 0
+            for healed, rows, fill_ratio in heal_results:
                 if healed:
-                    healed_count      += 1
                     total_healed_rows += rows
-                    REPAIR_GAPS_HEALED.labels(
-                        exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-                    ).inc()
+                    if fill_ratio >= 0.95:
+                        healed_count += 1
+                        REPAIR_GAPS_HEALED.labels(
+                            exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                        ).inc()
+                    else:
+                        partial_count += 1
+                        log.warning(
+                            "Gap parcialmente sanado",
+                            rows=rows, fill_ratio=round(fill_ratio, 3),
+                        )
 
             result.gaps_healed = healed_count
             result.rows        = total_healed_rows
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
 
+            result.gaps_partial = partial_count
             log.info("Repair completado",
                 idx=idx, total=total,
                 gaps_found=result.gaps_found, gaps_healed=result.gaps_healed,
+                gaps_partial=partial_count,
                 rows=result.rows, duration_ms=result.duration_ms,
             )
 
@@ -283,7 +293,7 @@ class RepairStrategy(StrategyMixin):
 
             if not collected_raw:
                 log.warning("Gap heal: no data", gap=str(gap))
-                return False, 0
+                return False, 0, 0.0
 
             df = pd.DataFrame(
                 collected_raw,
@@ -294,7 +304,7 @@ class RepairStrategy(StrategyMixin):
             df = df.drop_duplicates(subset="timestamp", keep="last").sort_values("timestamp")
 
             if df.empty:
-                return False, 0
+                return False, 0, 0.0
 
             if gap.expected > 1000:
                 log.info("Gap heal: gap grande paginado",
@@ -307,12 +317,18 @@ class RepairStrategy(StrategyMixin):
 
             if not qres.accepted:
                 log.warning("Gap heal rechazado por calidad", score=round(qres.score, 1))
-                return False, 0
+                return False, 0, 0.0
 
             ctx.storage.save_ohlcv(df=qres.df, symbol=symbol, timeframe=timeframe)
 
-            log.info("Gap healed", rows=len(qres.df))
-            return True, len(qres.df)
+            fill_ratio = len(qres.df) / gap.expected if gap.expected > 0 else 1.0
+            heal_type  = "FULL" if fill_ratio >= 0.95 else "PARTIAL"
+            log.info(
+                "Gap healed",
+                rows=len(qres.df), expected=gap.expected,
+                fill_ratio=round(fill_ratio, 3), heal_type=heal_type,
+            )
+            return True, len(qres.df), fill_ratio
 
         except asyncio.CancelledError:
             raise
@@ -322,4 +338,4 @@ class RepairStrategy(StrategyMixin):
                 log.warning("Gap heal: fetch transitorio", error=str(exc))
             else:
                 log.error("Gap heal: error inesperado", error_type=type(exc).__name__, error=str(exc))
-            return False, 0
+            return False, 0, 0.0
