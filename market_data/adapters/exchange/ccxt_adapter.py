@@ -35,7 +35,7 @@ from market_data.adapters.exchange.errors import (
     ExchangeConnectionError,
     ExchangeCircuitOpenError,
 )
-from market_data.adapters.exchange.circuit_breaker import _get_breaker, get_breaker_state
+from market_data.adapters.exchange.circuit_breaker import _get_breaker, get_breaker_state, breaker_call_async
 from market_data.adapters.exchange.throttle import (
     AdaptiveThrottle,
     _THROTTLES,
@@ -195,7 +195,7 @@ class CCXTAdapter(ExchangeAdapter):
                     client.fetch_ticker(symbol),
                     timeout=_FETCH_TICKER_TIMEOUT,
                 )
-            return await self._breaker.call_async(_call)
+            return await breaker_call_async(self._breaker, _call)
         except pybreaker.CircuitBreakerError as exc:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
             EXCHANGE_CIRCUIT_OPEN.labels(
@@ -218,10 +218,14 @@ class CCXTAdapter(ExchangeAdapter):
         effective_type = market_type or self._default_type
         if effective_type:
             params["defaultType"] = effective_type
-        if self._exchange_id == "kucoin" and since is not None and not effective_type:
-            now_ts = int(time.time())
-            if since > now_ts:
-                params["endAt"] = now_ts
+        if self._exchange_id in ("kucoin", "kucoinfutures") and since is not None:
+            # since=0 no es válido — estos exchanges lo rechazan
+            if since == 0:
+                since = None
+            elif self._exchange_id == "kucoin" and not effective_type:
+                now_ts = int(time.time())
+                if since > now_ts:
+                    params["endAt"] = now_ts
         try:
             async def _call():
                 return await asyncio.wait_for(
@@ -232,7 +236,7 @@ class CCXTAdapter(ExchangeAdapter):
                     timeout=_FETCH_OHLCV_TIMEOUT,
                 )
             try:
-                return await self._breaker.call_async(_call)
+                return await breaker_call_async(self._breaker, _call)
             except asyncio.TimeoutError:
                 # Timeout de red — NO cuenta como fallo de breaker.
                 # Re-raise para que el fetcher lo trate como error transitorio.
@@ -258,7 +262,7 @@ class CCXTAdapter(ExchangeAdapter):
                     client.fetch_trades(symbol, limit=limit),
                     timeout=_FETCH_TRADES_TIMEOUT,
                 )
-            return await self._breaker.call_async(_call)
+            return await breaker_call_async(self._breaker, _call)
         except pybreaker.CircuitBreakerError as exc:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
             EXCHANGE_CIRCUIT_OPEN.labels(

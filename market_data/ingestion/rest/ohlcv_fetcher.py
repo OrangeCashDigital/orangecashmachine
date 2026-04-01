@@ -381,7 +381,7 @@ class HistoricalFetcherAsync:
                 try:
                     breaker = getattr(self._exchange, "_breaker", None)
                     if breaker is not None:
-                        breaker.call(lambda: (_ for _ in ()).throw(exc))
+                        breaker._inc_counter()
                 except Exception:
                     pass
                 self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2)).warning("Rate limit (429) — notified breaker")
@@ -414,7 +414,7 @@ class HistoricalFetcherAsync:
                 last_exc = exc
                 wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
                 wait    *= random.uniform(0.5, 1.5)
-                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), error_type=type(exc).__name__, err=str(exc)).warning("Fetch failed (unknown)")
+                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2)).warning("Fetch failed (unknown) | error_type={} err={}", type(exc).__name__, exc)
                 await asyncio.sleep(wait)
 
         raise ChunkFetchError(f"{symbol}/{timeframe} failed") from last_exc
