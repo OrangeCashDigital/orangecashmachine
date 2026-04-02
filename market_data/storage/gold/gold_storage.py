@@ -198,13 +198,20 @@ class GoldStorage:
         for symbol in symbols:
             for tf in timeframes:
                 try:
-                    self.build(
+                    result = self.build(
                         exchange=exchange,
                         symbol=symbol,
                         market_type=market_type,
                         timeframe=tf,
                     )
-                    done += 1
+                    if result is None:
+                        failed += 1
+                        logger.warning(
+                            "Gold build_all: build returned None | {}/{}/{}/{}",
+                            exchange, symbol, market_type, tf,
+                        )
+                    else:
+                        done += 1
                 except Exception as exc:
                     failed += 1
                     logger.error(

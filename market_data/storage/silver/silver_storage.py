@@ -460,6 +460,68 @@ class SilverStorage:
             logger.warning("Version read failed | {} | {}", path, exc)
             return None
 
+
+    def load_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: Optional[pd.Timestamp] = None,
+        end: Optional[pd.Timestamp] = None,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Lee datos OHLCV desde las particiones Parquet de Silver.
+
+        Usa find_partition_files() con pruning temporal — no abre parquets
+        fuera del rango solicitado.
+
+        Parameters
+        ----------
+        start / end : filtro temporal opcional (inclusivo en ambos extremos).
+
+        Returns
+        -------
+        DataFrame OHLCV ordenado por timestamp, o None si no hay datos.
+        """
+        files = self.find_partition_files(
+            symbol=symbol,
+            timeframe=timeframe,
+            since=start,
+            until=end,
+        )
+        if not files:
+            logger.debug(
+                "load_ohlcv: sin particiones | {}/{} exchange={}",
+                symbol, timeframe, self._exchange or "shared",
+            )
+            return None
+
+        parts = []
+        for f in files:
+            try:
+                parts.append(pd.read_parquet(f))
+            except Exception as exc:
+                logger.warning(
+                    "load_ohlcv: parquet read failed | {} | {}", f, exc
+                )
+
+        if not parts:
+            return None
+
+        df = pd.concat(parts, ignore_index=True)
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        df = (
+            df.sort_values("timestamp")
+            .drop_duplicates(subset="timestamp", keep="last")
+            .reset_index(drop=True)
+        )
+
+        if start is not None:
+            df = df[df["timestamp"] >= start]
+        if end is not None:
+            df = df[df["timestamp"] <= end]
+
+        return df if not df.empty else None
+
     # ======================================================
     # Path helpers
     # ======================================================
