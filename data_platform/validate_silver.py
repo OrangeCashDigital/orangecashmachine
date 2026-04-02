@@ -451,6 +451,16 @@ def main() -> int:
         action="store_true",
         help="Mostrar solo series con problemas",
     )
+    parser.add_argument(
+        "--push",
+        action="store_true",
+        help="Empujar métricas de calidad al Pushgateway (localhost:9091)",
+    )
+    parser.add_argument(
+        "--gateway",
+        default="localhost:9091",
+        help="URL del Pushgateway (default: localhost:9091)",
+    )
     args = parser.parse_args()
 
     series_list = discover_series(exchange=args.exchange)
@@ -471,6 +481,11 @@ def main() -> int:
     _print_summary(results)
 
     has_failures = any(not r.ok and not r.skipped for r in results)
+
+    if args.push:
+        from infra.observability.server import push_silver_quality_metrics
+        push_silver_quality_metrics(results, gateway=args.gateway)
+
     return 1 if has_failures else 0
 
 

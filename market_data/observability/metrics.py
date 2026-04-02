@@ -32,6 +32,7 @@ Métricas disponibles
 • ocm_timestamp_grid_collisions_total   — colisiones post-floor
 • ocm_fetch_aborts_total                — aborts por circuit breaker
 • ocm_exchange_circuit_open_total       — rechazos por circuit breaker
+• ocm_silver_gaps_total                 — gaps activos en Silver por serie
 """
 
 from __future__ import annotations
@@ -205,6 +206,12 @@ FETCH_ABORTS_TOTAL = Counter(
     "ocm_fetch_aborts_total",
     "Veces que el circuit breaker aborto el pipeline por exchange",
     ["exchange"],
+)
+
+SILVER_GAPS_TOTAL = Gauge(
+    "ocm_silver_gaps_total",
+    "Gaps activos en Silver por serie (0=limpio, >0=requiere repair)",
+    ["exchange", "symbol", "market_type", "timeframe"],
 )
 
 EXCHANGE_CIRCUIT_OPEN = Counter(

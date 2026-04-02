@@ -9,7 +9,7 @@ MONITORING_CONFIGS = \
 	infra/monitoring/alertmanager.yml \
 	infra/monitoring/alerts.yml
 
-.PHONY: up down restart status preflight repair repair-dry-run validate logs
+.PHONY: up down restart status preflight repair repair-dry-run validate validate-push logs
 
 preflight:
 	@echo "→ Verificando configs de monitoreo..."
@@ -40,6 +40,9 @@ repair-dry-run:
 
 validate:
 	uv run python3 data_platform/validate_silver.py
+
+validate-push:
+	uv run python3 data_platform/validate_silver.py --push
 
 logs:
 	$(COMPOSE) logs -f --tail=100

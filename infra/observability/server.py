@@ -62,3 +62,41 @@ def push_metrics(
         _log.bind(job=job, gateway=gateway).debug("metrics_pushed")
     except Exception as exc:
         _log.bind(job=job, gateway=gateway).warning("metrics_push_failed | error={}", exc)
+
+
+def push_silver_quality_metrics(
+    results: list,
+    gateway: str = "localhost:9091",
+    registry: CollectorRegistry = REGISTRY,
+) -> None:
+    """
+    Empuja métricas de calidad Silver al Pushgateway.
+
+    Diseño
+    ------
+    • job=ocm_validate_silver — separado de los jobs de pipeline.
+    • Para cada SeriesResult, setea ocm_silver_gaps_total con el
+      número de gaps activos. 0 = limpio, >0 = requiere repair.
+    • SafeOps: nunca lanza excepción al caller.
+
+    Parámetros
+    ----------
+    results : list[SeriesResult]
+        Output de validate_silver.main() — lista de SeriesResult.
+    """
+    from market_data.observability.metrics import SILVER_GAPS_TOTAL
+    job = "ocm_validate_silver"
+    try:
+        for r in results:
+            if r.skipped or r.error:
+                continue
+            SILVER_GAPS_TOTAL.labels(
+                exchange=r.exchange,
+                symbol=r.symbol,
+                market_type=r.market_type,
+                timeframe=r.timeframe,
+            ).set(len(r.gaps))
+        push_to_gateway(gateway, job=job, registry=registry)
+        _log.bind(job=job, gateway=gateway).debug("silver_quality_metrics_pushed | series={}", len(results))
+    except Exception as exc:
+        _log.bind(job=job, gateway=gateway).warning("silver_quality_push_failed | error={}", exc)
