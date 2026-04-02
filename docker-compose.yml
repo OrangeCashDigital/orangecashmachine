@@ -59,8 +59,14 @@ services:
   # --------------------------------------------------------
   # --------------------------------------------------------
   # CONFIG GUARD — Init container de validación de configs
-  # Falla explícitamente si algún archivo crítico falta o está vacío.
-  # prometheus y alertmanager dependen de este servicio.
+  #
+  # Protege el arranque desde cero (boot, docker compose up).
+  # Si un archivo crítico falta o está vacío, falla explícitamente
+  # antes de que prometheus o alertmanager intenten arrancar.
+  #
+  # ⚠️  No detecta cambios en caliente: un bind mount activo
+  # mantiene el inode del archivo original aunque se borre del host.
+  # Para integridad en runtime se requeriría un sidecar o cron.
   # --------------------------------------------------------
   config-guard:
     image: busybox:1.36
