@@ -156,10 +156,21 @@ class RepairStrategy(StrategyMixin):
 
             heal_results = await asyncio.gather(
                 *[_heal_with_sem(gap) for gap in gaps],
-                return_exceptions=False,
+                return_exceptions=True,
             )
             partial_count = 0
-            for healed, rows, fill_ratio in heal_results:
+            for _res in heal_results:
+                if isinstance(_res, BaseException):
+                    _log.bind(
+                        exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                    ).error("Gap heal: excepción inesperada en gather",
+                        error_type=type(_res).__name__, error=str(_res),
+                    )
+                    PIPELINE_ERRORS.labels(
+                        exchange=ctx.exchange_id, error_type="fatal",
+                    ).inc()
+                    continue
+                healed, rows, fill_ratio = _res
                 if healed:
                     total_healed_rows += rows
                     if fill_ratio >= 0.95:
@@ -292,8 +303,14 @@ class RepairStrategy(StrategyMixin):
                 since = last_ts  # avanzar sin overlap — estamos en rango exacto
 
             if not collected_raw:
-                log.warning("Gap heal: no data", gap=str(gap))
-                return False, 0, 0.0
+                # El exchange no tiene datos para este rango — no es un fallo de red.
+                # Distinguir de ChunkFetchError para no contaminar métricas de error.
+                from market_data.processing.exceptions import NoDataAvailableError
+                log.warning("Gap heal: exchange sin datos para el rango", gap=str(gap))
+                raise NoDataAvailableError(
+                    f"Exchange returned no data for gap {gap} "
+                    f"(symbol={symbol}, timeframe={timeframe})"
+                )
 
             df = pd.DataFrame(
                 collected_raw,
@@ -328,14 +345,48 @@ class RepairStrategy(StrategyMixin):
                 rows=len(qres.df), expected=gap.expected,
                 fill_ratio=round(fill_ratio, 3), heal_type=heal_type,
             )
+            # Notificar al GapRegistry que este gap fue sanado.
+            # SafeOps: si Redis no está disponible, degrada silenciosamente.
+            try:
+                from infra.state.gap_registry import build_gap_registry_from_env
+                _registry = build_gap_registry_from_env()
+                if _registry is not None:
+                    _registry.mark_healed(
+                        exchange  = ctx.exchange_id,
+                        symbol    = symbol,
+                        timeframe = timeframe,
+                        start_ms  = gap.start_ms,
+                    )
+            except Exception as _reg_exc:
+                log.debug("GapRegistry.mark_healed skipped", error=str(_reg_exc))
+
             return True, len(qres.df), fill_ratio
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            from market_data.processing.exceptions import ChunkFetchError
-            if isinstance(exc, ChunkFetchError):
-                log.warning("Gap heal: fetch transitorio", error=str(exc))
+            from market_data.processing.exceptions import (
+                ChunkFetchError, NoDataAvailableError,
+            )
+            from market_data.processing.strategies.base import classify_error
+            if isinstance(exc, NoDataAvailableError):
+                # No es un fallo — el exchange simplemente no tiene el dato.
+                # No incrementar PIPELINE_ERRORS. El gap quedará sin sanar.
+                log.warning("Gap heal: sin datos en exchange", gap=str(gap))
+            elif isinstance(exc, ChunkFetchError):
+                log.warning("Gap heal: fetch transitorio",
+                    error=str(exc), is_transient=True)
+                PIPELINE_ERRORS.labels(
+                    exchange=ctx.exchange_id, error_type="transient"
+                ).inc()
             else:
-                log.error("Gap heal: error inesperado", error_type=type(exc).__name__, error=str(exc))
+                log.error("Gap heal: error inesperado",
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                    is_transient=classify_error(exc),
+                )
+                PIPELINE_ERRORS.labels(
+                    exchange=ctx.exchange_id,
+                    error_type="transient" if classify_error(exc) else "fatal",
+                ).inc()
             return False, 0, 0.0

@@ -41,22 +41,102 @@ class PipelineContext:
     start_date:  str
 
 
-# Nombres de clase de excepción que indican error transitorio
-_TRANSIENT_ERROR_NAMES: frozenset[str] = frozenset({
-    "TimeoutError", "ConnectionError", "OSError",
-    "ConnectionRefusedError", "ConnectionResetError",
-    "BrokenPipeError", "ChunkFetchError",
-    # asyncio / aiohttp
-    "ClientConnectorError", "ServerDisconnectedError",
-    "ClientOSError", "ClientResponseError",
-})
+# Tipos de excepción de stdlib/aiohttp que indican error transitorio.
+# Mantenemos este set para excepciones externas que no controlamos
+# (aiohttp, ccxt, OSError). Para nuestras propias excepciones usamos
+# el atributo `is_transient` declarado en la clase.
+_TRANSIENT_STDLIB_TYPES: tuple[type, ...] = (
+    TimeoutError,
+    ConnectionError,       # incluye ConnectionRefusedError, ConnectionResetError
+    BrokenPipeError,
+    OSError,
+)
 
-# Substrings en el mensaje de error que indican error transitorio de red/exchange
+# Substrings en el mensaje de error que indican error transitorio de red/exchange.
+# Solo se usa como fallback cuando no hay información de tipo disponible.
 _TRANSIENT_ERROR_MSGS: tuple[str, ...] = (
     "timeout", "timed out", "rate limit", "429", "503", "502",
     "connection", "network", "session is closed", "temporarily",
     "too many requests", "service unavailable",
 )
+
+# Nombres de clase de aiohttp/ccxt (no importables sin instalar) que
+# indican error transitorio. Mantenemos strings solo para estas.
+_TRANSIENT_EXTERNAL_NAMES: frozenset[str] = frozenset({
+    "ClientConnectorError", "ServerDisconnectedError",
+    "ClientOSError", "ClientResponseError",
+})
+
+
+def classify_error(exc: BaseException) -> bool:
+    """
+    Retorna True si el error es transitorio (seguro para retry).
+
+    Jerarquía de decisión:
+    1. Nuestras excepciones con `is_transient` declarado → fuente de verdad
+    2. Tipos de stdlib conocidos como transitorios
+    3. Nombres de clase de librerías externas (aiohttp, ccxt)
+    4. Substrings en el mensaje — fallback de último recurso
+
+    SafeOps: nunca lanza excepción.
+    """
+    # 1. Nuestras propias excepciones — usar atributo de clase
+    if hasattr(exc, "is_transient"):
+        return bool(exc.is_transient)
+    # 2. Tipos de stdlib
+    if isinstance(exc, _TRANSIENT_STDLIB_TYPES):
+        return True
+    # 3. Nombres de clase externos
+    if type(exc).__name__ in _TRANSIENT_EXTERNAL_NAMES:
+        return True
+    # 4. Fallback por mensaje
+    err_lower = str(exc).lower()
+    return any(msg in err_lower for msg in _TRANSIENT_ERROR_MSGS)
+
+
+# Timeout por par individual (segundos).
+# Evita workers colgados cuando un fetch nunca retorna.
+# Repair usa un timeout más largo (gap healing puede paginar mucho).
+_PAIR_TIMEOUT_S:        int = 300   # 5 min — incremental/backfill
+_PAIR_TIMEOUT_REPAIR_S: int = 1800  # 30 min — repair (gaps grandes paginados)
+
+
+class _TransientProxy:
+    """
+    Proxy mínimo para classify_error() cuando solo tenemos strings
+    (error_type, error_msg) en lugar del objeto excepción original.
+
+    Permite que PairResult.is_transient_error delegue en classify_error()
+    sin duplicar lógica de clasificación.
+
+    Prioridad en classify_error():
+      1. hasattr(proxy, 'is_transient') → declarativo, para tipos conocidos
+      2. fallback de strings sobre __str__() → para tipos externos/desconocidos
+    """
+
+    _KNOWN_TRANSIENT: frozenset = frozenset({
+        "ChunkFetchError", "ExchangeConnectionError", "ExchangeCircuitOpenError",
+        "TimeoutError", "ConnectionError", "OSError", "ConnectionRefusedError",
+        "ConnectionResetError", "BrokenPipeError",
+        "ClientConnectorError", "ServerDisconnectedError",
+        "ClientOSError", "ClientResponseError",
+    })
+    _KNOWN_PERMANENT: frozenset = frozenset({
+        "NoDataAvailableError", "MissingStartDateError",
+        "SymbolNotFoundError", "InvalidMarketTypeError",
+        "UnsupportedExchangeError", "AuthenticationError",
+    })
+
+    def __init__(self, error_type: str, error_msg: str) -> None:
+        self._error_msg = error_msg
+        if error_type in self._KNOWN_TRANSIENT:
+            self.is_transient = True
+        elif error_type in self._KNOWN_PERMANENT:
+            self.is_transient = False
+        # Tipos desconocidos: sin atributo → classify_error usa fallback de strings
+
+    def __str__(self) -> str:
+        return self._error_msg
 
 
 @dataclass
@@ -82,18 +162,12 @@ class PairResult:
     @property
     def is_transient_error(self) -> bool:
         """
-        Clasifica el error como transitorio usando dos criterios independientes:
-        1. error_type: nombre exacto de la clase de excepción (capturado en StrategyMixin)
-        2. error: substrings de mensaje de red/exchange (insensible a mayúsculas)
-
-        Separar los dos criterios evita falsos positivos: comparar el *mensaje*
-        contra nombres de clase ("TimeoutError" in "connection timed out") nunca
-        coincide, mientras que comparar substrings de red sí es semánticamente correcto.
+        Fuente de verdad única: delega completamente a classify_error()
+        via _TransientProxy. No duplica lógica de clasificación aquí.
         """
-        if self.error_type in _TRANSIENT_ERROR_NAMES:
-            return True
-        err_lower = self.error.lower()
-        return any(msg in err_lower for msg in _TRANSIENT_ERROR_MSGS)
+        if not self.error_type and not self.error:
+            return False
+        return classify_error(_TransientProxy(self.error_type, self.error))
 
     def __str__(self) -> str:
         if self.error:
@@ -236,15 +310,37 @@ class StrategyMixin:
         result     = PairResult(symbol=symbol, timeframe=timeframe, mode=self._mode, exchange_id=ctx.exchange_id)
         pair_start = time.monotonic()
 
+        pair_timeout = (
+            _PAIR_TIMEOUT_REPAIR_S
+            if self._mode == PipelineMode.REPAIR
+            else _PAIR_TIMEOUT_S
+        )
+
         try:
-            await self._run(symbol, timeframe, idx, total, ctx, result)
+            await asyncio.wait_for(
+                self._run(symbol, timeframe, idx, total, ctx, result),
+                timeout=pair_timeout,
+            )
+        except asyncio.TimeoutError as exc:
+            result.error       = f"Pair timeout after {pair_timeout}s"
+            result.error_type  = "TimeoutError"
+            result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+            PIPELINE_ERRORS.labels(
+                exchange=ctx.exchange_id, error_type="transient",
+            ).inc()
+            _log.bind(
+                mode=self._mode.value, exchange=ctx.exchange_id,
+                symbol=symbol, timeframe=timeframe,
+                timeout_s=pair_timeout,
+            ).error("Pair timeout — worker liberado")
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             result.error       = str(exc)
             result.error_type  = type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-            error_label = "transient" if result.is_transient_error else "fatal"
+            is_transient = classify_error(exc)
+            error_label  = "transient" if is_transient else "fatal"
             PIPELINE_ERRORS.labels(
                 exchange=ctx.exchange_id, error_type=error_label,
             ).inc()
@@ -253,6 +349,7 @@ class StrategyMixin:
                 symbol=symbol, timeframe=timeframe,
                 idx=idx, total=total,
                 error_type=result.error_type, error=str(exc),
+                is_transient=is_transient,
                 duration_ms=result.duration_ms,
             ).error("Strategy fallida")
         finally:

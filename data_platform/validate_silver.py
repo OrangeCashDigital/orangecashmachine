@@ -485,6 +485,45 @@ def main() -> int:
     if args.push:
         from infra.observability.server import push_silver_quality_metrics
         push_silver_quality_metrics(results, gateway=args.gateway)
+        # --push es operación de observabilidad, no gate de CI.
+        # El estado de calidad lo expresa la métrica, no el exit code.
+
+        # Registrar gaps detectados en GapRegistry para repair automático.
+        # SafeOps: si Redis no está disponible, degrada silenciosamente.
+        try:
+            from infra.state.gap_registry import build_gap_registry_from_env
+            registry = build_gap_registry_from_env()
+            if registry is not None:
+                registered = 0
+                for r in results:
+                    if not r.gaps:
+                        continue
+                    parts = r.key.split("/")  # exchange/symbol/market_type/timeframe
+                    if len(parts) < 4:
+                        continue
+                    exchange, symbol_raw, _market, timeframe = parts[0], parts[1], parts[2], parts[3]
+                    symbol = symbol_raw.replace("-", "/")  # bybit/BTC-USDT → BTC/USDT
+                    for gap in r.gaps:
+                        start_ms = int(gap.start_ts.timestamp() * 1000)
+                        end_ms   = int(gap.end_ts.timestamp()   * 1000)
+                        ok = registry.register(
+                            exchange    = exchange,
+                            symbol      = symbol,
+                            timeframe   = timeframe,
+                            start_ms    = start_ms,
+                            end_ms      = end_ms,
+                            expected    = int(gap.gap_candles),
+                            gap_seconds = gap.gap_seconds,
+                            source      = "validate",
+                        )
+                        if ok:
+                            registered += 1
+                if registered:
+                    print(f"GapRegistry: {registered} gap(s) registrados en Redis")
+        except Exception as _exc:
+            print(f"GapRegistry: advertencia — no se pudo registrar gaps: {_exc}")
+
+        return 0
 
     return 1 if has_failures else 0
 

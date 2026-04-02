@@ -87,16 +87,47 @@ groups:
       - alert: SilverGapDetected
         expr: |
           ocm_silver_gaps_total > 0
+          and
+          ocm_silver_gap_max_candles <= 43200
         for: 5m
         labels:
           severity: warning
           team: data
         annotations:
-          summary: "Gap en Silver | {{ $labels.exchange }}/{{ $labels.symbol }}/{{ $labels.timeframe }}"
+          summary: "Gap reparable en Silver | {{ $labels.exchange }}/{{ $labels.symbol }}/{{ $labels.timeframe }}"
           description: >
             La serie {{ $labels.exchange }}/{{ $labels.symbol }}/{{ $labels.market_type }}/{{ $labels.timeframe }}
-            tiene {{ $value }} gap(s) activos en la capa Silver.
+            tiene {{ $value }} gap(s) activos reparables en la capa Silver.
             Ejecutar: make repair && make validate-push
+
+      - alert: SilverLargeGapSkipped
+        expr: |
+          ocm_silver_gap_max_candles > 43200
+        for: 5m
+        labels:
+          severity: critical
+          team: data
+        annotations:
+          summary: "Gap enorme en Silver — intervención manual | {{ $labels.exchange }}/{{ $labels.symbol }}/{{ $labels.timeframe }}"
+          description: >
+            La serie {{ $labels.exchange }}/{{ $labels.symbol }}/{{ $labels.market_type }}/{{ $labels.timeframe }}
+            tiene un gap de {{ $value }} velas (>43200 = 30 días en 1m).
+            El repair automático lo skipeará. Requiere backfill manual o exclusión de la serie.
+            Verificar disponibilidad histórica del exchange.
+
+      - alert: SilverCoverageLow
+        expr: |
+          ocm_silver_series_coverage_ratio < 0.95
+        for: 10m
+        labels:
+          severity: warning
+          team: data
+        annotations:
+          summary: "Cobertura Silver baja | {{ $labels.exchange }}/{{ $labels.symbol }}/{{ $labels.timeframe }}"
+          description: >
+            La serie {{ $labels.exchange }}/{{ $labels.symbol }}/{{ $labels.market_type }}/{{ $labels.timeframe }}
+            tiene cobertura del {{ $value | humanizePercentage }} (umbral: 95%).
+            Puede indicar gaps acumulados o datos insuficientes. Ejecutar: make validate-push
 
   - name: ocm_exchange
     interval: 1m

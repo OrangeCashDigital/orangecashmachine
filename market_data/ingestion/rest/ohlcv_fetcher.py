@@ -47,6 +47,7 @@ DEFAULT_CHUNK_LIMIT   = 500
 MAX_RETRIES           = 5
 BACKOFF_BASE          = 1.6
 MAX_BACKOFF_SECONDS   = 30.0
+CHUNK_FETCH_TIMEOUT   = 60.0   # segundos máximos por intento individual de fetch_ohlcv
 MAX_CHUNKS_PER_RUN    = 100_000
 DEFAULT_OVERLAP_BARS  = 3
 
@@ -364,8 +365,9 @@ class HistoricalFetcherAsync:
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                return await self._exchange.fetch_ohlcv(
-                    symbol, timeframe, since, limit,
+                return await asyncio.wait_for(
+                    self._exchange.fetch_ohlcv(symbol, timeframe, since, limit),
+                    timeout=CHUNK_FETCH_TIMEOUT,
                 )
             except ExchangeCircuitOpenError:
                 # Circuit abierto — reintentar es inútil. Re-raise inmediato.

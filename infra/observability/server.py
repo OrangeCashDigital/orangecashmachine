@@ -84,19 +84,42 @@ def push_silver_quality_metrics(
     results : list[SeriesResult]
         Output de validate_silver.main() — lista de SeriesResult.
     """
-    from market_data.observability.metrics import SILVER_GAPS_TOTAL
+    from market_data.observability.metrics import (
+        SILVER_GAPS_TOTAL,
+        SILVER_GAP_MAX_CANDLES,
+        SILVER_SERIES_COVERAGE_RATIO,
+    )
     job = "ocm_validate_silver"
     try:
         for r in results:
             if r.skipped or r.error:
                 continue
-            SILVER_GAPS_TOTAL.labels(
+            labels = dict(
                 exchange=r.exchange,
                 symbol=r.symbol,
                 market_type=r.market_type,
                 timeframe=r.timeframe,
-            ).set(len(r.gaps))
+            )
+            SILVER_GAPS_TOTAL.labels(**labels).set(len(r.gaps))
+
+            max_candles = max((g.gap_candles for g in r.gaps), default=0.0)
+            SILVER_GAP_MAX_CANDLES.labels(**labels).set(max_candles)
+
+            # Coverage: velas presentes / velas esperadas en el rango completo.
+            # Requiere first_ts, last_ts y timeframe_s conocidos.
+            from data_platform.validate_silver import _TIMEFRAME_SECONDS
+            tf_s = _TIMEFRAME_SECONDS.get(r.timeframe)
+            if tf_s and r.first_ts and r.last_ts and r.total_rows > 0:
+                span_s   = (r.last_ts - r.first_ts).total_seconds()
+                expected = max(span_s / tf_s, 1.0)
+                coverage = min(r.total_rows / expected, 1.0)
+            else:
+                coverage = 1.0 if not r.gaps else 0.0
+            SILVER_SERIES_COVERAGE_RATIO.labels(**labels).set(coverage)
+
         push_to_gateway(gateway, job=job, registry=registry)
-        _log.bind(job=job, gateway=gateway).debug("silver_quality_metrics_pushed | series={}", len(results))
+        _log.bind(job=job, gateway=gateway).debug(
+            "silver_quality_metrics_pushed | series={}", len(results)
+        )
     except Exception as exc:
         _log.bind(job=job, gateway=gateway).warning("silver_quality_push_failed | error={}", exc)
