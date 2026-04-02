@@ -57,6 +57,40 @@ services:
   # --------------------------------------------------------
   # POSTGRES — Metadata store de Prefect
   # --------------------------------------------------------
+  # --------------------------------------------------------
+  # CONFIG GUARD — Init container de validación de configs
+  # Falla explícitamente si algún archivo crítico falta o está vacío.
+  # prometheus y alertmanager dependen de este servicio.
+  # --------------------------------------------------------
+  config-guard:
+    image: busybox:1.36
+    container_name: ocm_config_guard
+    restart: "no"
+    command: >
+      sh -c '
+        set -e
+        check() {
+          if [ ! -f "$1" ]; then
+            echo "MISSING: $1"; exit 1
+          fi
+          if [ ! -s "$1" ]; then
+            echo "EMPTY: $1"; exit 1
+          fi
+          echo "OK: $1"
+        }
+        check /config/prometheus.yml
+        check /config/alertmanager.yml
+        check /config/alerts.yml
+        echo "config-guard: all configs valid."
+      '
+    volumes:
+      - type: bind
+        source: ./infra/monitoring
+        target: /config
+        read_only: true
+    networks:
+      - ocm_internal
+
   postgres:
     image: postgres:15.6-alpine
     container_name: ocm_postgres
@@ -153,10 +187,22 @@ services:
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
     volumes:
-      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infra/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - type: bind
+        source: ./infra/monitoring/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./infra/monitoring/alerts.yml
+        target: /etc/prometheus/alerts.yml
+        read_only: true
+        bind:
+          create_host_path: false
       - prometheus_data:/prometheus
     depends_on:
+      config-guard:
+        condition: service_completed_successfully
       alertmanager:
         condition: service_healthy
       pushgateway:
@@ -222,7 +268,15 @@ services:
     ports:
       - "${ALERTMANAGER_HOST_PORT:-9093}:9093"
     volumes:
-      - ./infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - type: bind
+        source: ./infra/monitoring/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      config-guard:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/healthy || exit 1"]
       interval: 15s
