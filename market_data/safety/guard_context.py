@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 market_data/safety/guard_context.py
 =====================================
