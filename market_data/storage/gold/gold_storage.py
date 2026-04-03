@@ -70,12 +70,49 @@ class GoldStorage:
         self,
         silver_path: Optional[Path] = None,
         gold_path:   Optional[Path] = None,
+        dry_run:     bool           = False,
     ) -> None:
         self._silver   = Path(silver_path) if silver_path else silver_ohlcv_root()
         self._gold     = Path(gold_path)   if gold_path   else gold_features_root()
         self._gold.mkdir(parents=True, exist_ok=True)
         self._engineer = FeatureEngineer()
-        logger.info("GoldStorage ready | silver={} gold={}", self._silver, self._gold)
+        self._dry_run  = dry_run
+        logger.info("GoldStorage ready | silver={} gold={} dry_run={}", self._silver, self._gold, self._dry_run)
+
+    # ----------------------------------------------------------
+    # Silver manifest reader
+    # ----------------------------------------------------------
+
+    def _read_silver_manifest(
+        self,
+        exchange: str,
+        symbol: str,
+        market_type: str,
+        timeframe: str,
+        version_id: str,
+    ) -> dict:
+        """Lee manifest de Silver para lineage en Gold. Nunca lanza."""
+        fname = "latest.json" if version_id == "latest" else f"{version_id}.json"
+        path = (
+            self._silver
+            / f"exchange={exchange}"
+            / f"symbol={safe_symbol(symbol)}"
+            / f"market_type={market_type}"
+            / f"timeframe={timeframe}"
+            / "_versions" / fname
+        )
+        base = {
+            "layer": "silver", "exchange": exchange, "symbol": symbol,
+            "market_type": market_type, "timeframe": timeframe,
+            "version_id": version_id,
+        }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return {**base, "version_id": data.get("version_id", version_id),
+                    "run_id": data.get("run_id"), "git_hash": data.get("git_hash"),
+                    "written_at": data.get("written_at")}
+        except Exception:
+            return base
 
     # ----------------------------------------------------------
     # Public API
@@ -90,6 +127,7 @@ class GoldStorage:
         start:       Optional[pd.Timestamp] = None,
         end:         Optional[pd.Timestamp] = None,
         silver_version: str = "latest",
+        run_id:      Optional[str] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Lee Silver, calcula features y persiste en Gold con manifest versionado.
@@ -146,6 +184,19 @@ class GoldStorage:
         # ── Feature engineering ──────────────────────────────────────────
         df = self._engineer.compute(df, symbol=symbol, timeframe=timeframe)
 
+        # ── Resolver versión concreta de Silver (reproducibilidad) ─────
+        resolved_silver_v = self._resolve_silver_version(
+            exchange, symbol, market_type, timeframe, silver_version
+        )
+
+        # ── DRY RUN ──────────────────────────────────────────────────────
+        if self._dry_run:
+            logger.info(
+                "[DRY RUN] Gold build skipped | {}/{}/{}/{} rows={} features={} run_id={}",
+                exchange, symbol, market_type, timeframe, len(df), len(df.columns), run_id,
+            )
+            return df
+
         # ── Persistir ────────────────────────────────────────────────────
         out_dir = (
             self._gold
@@ -161,19 +212,24 @@ class GoldStorage:
 
         # ── Versionado ───────────────────────────────────────────────────
         checksum = _file_checksum(out_file)
+        silver_manifest = self._read_silver_manifest(
+            exchange, symbol, market_type, timeframe, resolved_silver_v
+        )
         self._write_version(
-            out_dir    = out_dir,
-            out_file   = out_file,
-            exchange   = exchange,
-            symbol     = symbol,
-            market_type= market_type,
-            timeframe  = timeframe,
-            rows       = len(df),
-            features   = len(df.columns),
-            checksum   = checksum,
-            silver_version = silver_version,
-            min_ts     = str(df["timestamp"].min()) if not df.empty else None,
-            max_ts     = str(df["timestamp"].max()) if not df.empty else None,
+            out_dir        = out_dir,
+            out_file       = out_file,
+            exchange       = exchange,
+            symbol         = symbol,
+            market_type    = market_type,
+            timeframe      = timeframe,
+            rows           = len(df),
+            features       = len(df.columns),
+            checksum       = checksum,
+            silver_version = resolved_silver_v,
+            run_id         = run_id,
+            input_versions = [silver_manifest],
+            min_ts         = str(df["timestamp"].min()) if not df.empty else None,
+            max_ts         = str(df["timestamp"].max()) if not df.empty else None,
         )
 
         logger.info(
@@ -190,6 +246,7 @@ class GoldStorage:
         symbols:     List[str],
         market_type: str,
         timeframes:  List[str],
+        run_id:      Optional[str] = None,
     ) -> None:
         """Construye Gold para todos los pares/timeframes de un exchange."""
         total   = len(symbols) * len(timeframes)
@@ -203,6 +260,7 @@ class GoldStorage:
                         symbol=symbol,
                         market_type=market_type,
                         timeframe=tf,
+                        run_id=run_id,
                     )
                     if result is None:
                         failed += 1
@@ -239,6 +297,42 @@ class GoldStorage:
         if not versions_dir.exists():
             return []
         return sorted(p.stem for p in versions_dir.glob("v*.json"))
+
+    # ----------------------------------------------------------
+    # Silver version resolver
+    # ----------------------------------------------------------
+
+    def _resolve_silver_version(
+        self,
+        exchange: str,
+        symbol: str,
+        market_type: str,
+        timeframe: str,
+        requested: str = "latest",
+    ) -> str:
+        """
+        Resuelve 'latest' al version_id concreto de Silver.
+
+        'latest' no es reproducible: si Silver se actualiza entre
+        dos builds de Gold, los manifests apuntan a datos distintos
+        con el mismo string. Esta función los ancla a 'v000042'.
+        """
+        if requested != "latest":
+            return requested
+        latest_path = (
+            self._silver
+            / f"exchange={exchange}"
+            / f"symbol={safe_symbol(symbol)}"
+            / f"market_type={market_type}"
+            / f"timeframe={timeframe}"
+            / "_versions"
+            / "latest.json"
+        )
+        try:
+            data = json.loads(latest_path.read_text(encoding="utf-8"))
+            return data.get("version_id", "latest")
+        except Exception:
+            return "latest"
 
     # ----------------------------------------------------------
     # Path helpers
@@ -286,6 +380,8 @@ class GoldStorage:
         silver_version: str,
         min_ts:         Optional[str],
         max_ts:         Optional[str],
+        run_id:         Optional[str] = None,
+        input_versions: Optional[list] = None,
     ) -> None:
         """
         Escribe manifest versionado en _versions/.
@@ -327,6 +423,8 @@ class GoldStorage:
             "market_type":      market_type,
             "timeframe":        timeframe,
             "layer":            "gold",
+            "run_id":           run_id,
+            "input_versions":   input_versions or [],
             "git_hash":         get_git_hash(),
             "engineer_version": getattr(self._engineer, "VERSION", "unknown"),
             "silver_version":   silver_version,

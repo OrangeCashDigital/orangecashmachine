@@ -187,11 +187,13 @@ class SilverStorage:
         exchange:     Optional[str]        = None,
         market_type:  str                  = "spot",
         redis_client  = None,
+        dry_run:      bool                 = False,
     ) -> None:
         self._base_path:   Path = _resolve_base_path(base_path)
         self._exchange:    Optional[str] = exchange.lower() if exchange else None
         self._market_type: str = market_type.lower()
-        self._redis = redis_client  # opcional — sin Redis, no hay lock
+        self._redis   = redis_client  # opcional — sin Redis, no hay lock
+        self._dry_run = dry_run
         self._manifest_cache = _ManifestCache(ttl_seconds=60.0)
         # Registrar script Lua una sola vez por instancia.
         # Redis lo cachea por SHA1 — register_script solo hace overhead en el primer call.
@@ -201,9 +203,10 @@ class SilverStorage:
         )
         self._base_path.mkdir(parents=True, exist_ok=True)
         logger.info(
-            "SilverStorage ready | exchange={} market_type={} path={} redis={}",
+            "SilverStorage ready | exchange={} market_type={} path={} redis={} dry_run={}",
             self._exchange or "shared", self._market_type, self._base_path,
             "enabled" if self._redis else "disabled",
+            self._dry_run,
         )
 
     @contextmanager
@@ -319,6 +322,13 @@ class SilverStorage:
         _t0 = time.monotonic()
         _validate_dataframe(df)
         df = _normalize_dataframe(df)
+
+        if self._dry_run:
+            logger.info(
+                "[DRY RUN] Silver save_ohlcv skipped | {}/{} exchange={} rows={} run_id={}",
+                symbol, timeframe, self._exchange or "shared", len(df), run_id,
+            )
+            return
 
         # Write lock: previene race conditions entre Prefect workers
         # que procesen el mismo symbol/timeframe en paralelo.

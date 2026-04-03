@@ -21,6 +21,9 @@ from pathlib import Path
 
 import hashlib
 import json
+import time as _time
+import uuid
+from datetime import datetime, timezone
 
 from core.logging.setup import bind_pipeline
 from core.config.lineage import get_git_hash
@@ -89,8 +92,9 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     )
 
     timeout   = config.pipeline.timeouts.historical_pipeline
+    run_id    = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
     exit_code = 0
-    _t0 = _time.monotonic()
+    _t0       = _time.monotonic()
     try:
         asyncio.run(
             asyncio.wait_for(
@@ -122,6 +126,7 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
         _guard_summary = guard.summary()
         log.info("execution_guard_summary", **_guard_summary)
         record_run(
+            run_id=run_id,
             env=run_cfg.env,
             git_hash=git_hash,
             config_hash=config_hash,
@@ -132,7 +137,7 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
         )
         if exit_code != 130:
             # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
-            PostProcessingService(config).execute()
+            PostProcessingService(config, run_id=run_id).execute()
             for ex in config.exchanges:
                 push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
         else:

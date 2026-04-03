@@ -93,6 +93,7 @@ class EnvironmentValidator:
         if run_cfg.env in self._PRODUCTION_ENVS:
             self._check_production_credentials(config, log)
             self._check_production_test_symbols(config, log)
+            self._check_storage_path(config, log)
 
         log.info("environment_validation_passed", env=run_cfg.env)
 
@@ -160,3 +161,25 @@ class EnvironmentValidator:
             )
             # Warning, no error — el fix real está en _select_test_symbol
             # pero queremos visibilidad en producción
+
+    @staticmethod
+    def _check_storage_path(config: "AppConfig", log) -> None:
+        """
+        En producción, el storage path NO debe apuntar a local_data_lake
+        ni a data_platform/. Indica config de desarrollo sin sobrescribir.
+        """
+        storage = getattr(config, "storage", None)
+        data_lake = getattr(storage, "data_lake", None) if storage else None
+        path_str = str(getattr(data_lake, "path", ""))
+        forbidden = ("local_data_lake", "data_platform/data_lake")
+        if any(fragment in path_str for fragment in forbidden):
+            log.critical(
+                "environment_check_failed",
+                check="storage_path",
+                storage_path=path_str,
+                reason="Production storage path looks like a development path",
+            )
+            raise EnvironmentMismatchError(
+                f"Production storage path '{path_str}' contains a development fragment. "
+                "Set DATA_LAKE_PATH to a production path (e.g. /var/lib/orangecashmachine/data_lake)."
+            )

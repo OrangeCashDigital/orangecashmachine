@@ -49,10 +49,12 @@ class PostProcessingService:
         config: AppConfig,
         snapshot_manager: Optional[SnapshotManager] = None,
         gold_storage: Optional[GoldStorage] = None,
+        run_id: Optional[str] = None,
     ) -> None:
         self._config   = config
         self._snapshot = snapshot_manager or SnapshotManager()
         self._gold     = gold_storage or GoldStorage()
+        self._run_id   = run_id
 
     def execute(self) -> None:
         """Ejecuta snapshot y Gold build. Nunca lanza excepción."""
@@ -82,6 +84,7 @@ class PostProcessingService:
                         symbols=ex.markets.spot_symbols,
                         market_type="spot",
                         timeframes=self._config.pipeline.historical.timeframes,
+                        run_id=self._run_id,
                     )
                 if ex.has_futures and ex.markets.futures_symbols:
                     self._gold.build_all(
@@ -89,6 +92,7 @@ class PostProcessingService:
                         symbols=ex.markets.futures_symbols,
                         market_type="swap",
                         timeframes=self._config.pipeline.historical.timeframes,
+                        run_id=self._run_id,
                     )
             _log.info("gold_build_completed")
         except Exception as exc:

@@ -267,9 +267,11 @@ class TimeoutsConfig(StrictBaseModel):
 
 
 class PipelineConfig(StrictBaseModel):
-    historical: HistoricalConfig = Field(default_factory=HistoricalConfig)
-    realtime:   RealtimeConfig   = Field(default_factory=RealtimeConfig)
-    timeouts:   TimeoutsConfig   = Field(default_factory=TimeoutsConfig)
+    historical:             HistoricalConfig = Field(default_factory=HistoricalConfig)
+    realtime:               RealtimeConfig   = Field(default_factory=RealtimeConfig)
+    timeouts:               TimeoutsConfig   = Field(default_factory=TimeoutsConfig)
+    dry_run:                bool             = Field(default=False, description="Si True, no escribe en disco (Silver/Gold). Solo loggea.")
+    max_consecutive_errors: int              = Field(default=10, ge=1, description="Máximo de errores consecutivos antes de ExecutionGuard.stop()")
 
 
 # =============================================================================
