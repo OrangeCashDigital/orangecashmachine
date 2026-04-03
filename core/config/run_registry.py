@@ -81,8 +81,7 @@ def record_run(
     try:
         _REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _REGISTRY_PATH.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record) + "
-")
+            f.write(json.dumps(record) + "\n")
     except Exception:
         pass  # SafeOps — auditabilidad no debe romper el pipeline
 
