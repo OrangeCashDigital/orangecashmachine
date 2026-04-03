@@ -57,6 +57,15 @@ async def managed_adapter(
         yield injected
         return
 
+    # Fallback: adapter creado sin ExchangeProbe previo.
+    # En flows de produccion, el adapter SIEMPRE debe venir de
+    # validate_exchange_connection. Este path es solo para resilencia
+    # interna de tasks (tests, reparacion manual, retry isolation).
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "managed_adapter fallback | exchange=%s market_type=%s — "        "adapter created without prior ExchangeProbe validation",
+        exchange_cfg.name.value, market_type,
+    )
     adapter = CCXTAdapter(config=exchange_cfg, default_type=market_type)
     try:
         yield adapter
