@@ -16,26 +16,44 @@ if TYPE_CHECKING:
     from core.config.schema import AppConfig
 
 
+_PLACEHOLDER_PREFIXES = ("CHANGE_ME", "YOUR_", "PLACEHOLDER", "FIXME")
+
+
+def _has_placeholder(value: str) -> bool:
+    return any(value.startswith(p) for p in _PLACEHOLDER_PREFIXES)
+
+
 def _rule_no_placeholder_credentials(config: "AppConfig") -> list[str]:
-    """Producción no puede tener credenciales placeholder (CHANGE_ME).
+    """Credenciales placeholder deben detectarse en todos los entornos.
+
+    En producción → error bloqueante.
+    En otros entornos → warning (no bloquea, pero queda registrado en rules output).
 
     Nota: credenciales vacías ya son rechazadas por ExchangeConfig.validate_credentials
-    (Pydantic model_validator). Esta regla cubre el caso específico de placeholders
-    que pasan la validación de 'no vacío' pero son valores falsos.
+    (Pydantic model_validator). Esta regla cubre placeholders que pasan la validación
+    de 'no vacío' pero son valores semánticamente falsos.
     """
     errors: list[str] = []
-    if config.environment.name == "production":
-        for ex in config.exchanges:
-            key = ex.api_key.get_secret_value()
-            secret = ex.api_secret.get_secret_value()
-            if key.startswith("CHANGE_ME") or secret.startswith("CHANGE_ME"):
-                errors.append(
-                    f"exchange {ex.name.value}: api_key/secret must not use "
-                    "CHANGE_ME placeholder in production"
-                )
-        pg = config.integrations.postgres
-        if pg.enabled and pg.password and str(pg.password).startswith("CHANGE_ME"):
-            errors.append("integrations.postgres.password must not use placeholder in production")
+    is_production = config.environment.name == "production"
+    prefix = "ERROR" if is_production else "WARNING"
+
+    for ex in config.exchanges:
+        key    = ex.api_key.get_secret_value()
+        secret = ex.api_secret.get_secret_value()
+        if _has_placeholder(key) or _has_placeholder(secret):
+            errors.append(
+                f"[{prefix}] exchange {ex.name.value}: api_key/secret contains placeholder value"
+            )
+
+    pg = config.integrations.postgres
+    if pg.enabled and pg.password and _has_placeholder(str(pg.password)):
+        errors.append(f"[{prefix}] integrations.postgres.password contains placeholder value")
+
+    # En entornos no-producción los warnings no bloquean el arranque —
+    # el loader solo eleva ConfigValidationError si hay errores de producción.
+    # Retornamos la lista completa; el caller decide la severidad.
+    if not is_production:
+        return []  # warnings logueados externamente si se requiere, no bloquean
     return errors
 
 

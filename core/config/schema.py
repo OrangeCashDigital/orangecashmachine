@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator, ConfigDict
 
+from core.logging.config import LoggingConfig
+
 CONFIG_PATH: Path = Path("config/settings.yaml")
 
 # =============================================================================
@@ -357,8 +359,6 @@ class IntegrationsConfig(StrictBaseModel):
 # =============================================================================
 # Observability
 # =============================================================================
-
-from core.logging.config import LoggingConfig  # moved: core/logging/config.py
 
 
 class MetricsConfig(StrictBaseModel):

@@ -47,19 +47,38 @@ _OCM_OVERRIDES: dict[str, tuple[str, ...]] = {
 
 
 def _coerce(value: str, original: Any) -> Any:
-    """Coerce string env var al tipo del valor original en el dict."""
-    if isinstance(original, bool) or value.lower() in ("true", "false", "1", "0", "yes", "no"):
+    """Coerce string env var al tipo del valor original en el dict.
+
+    Orden de resolución:
+    1. Si original es bool  → coerce a bool (prioridad sobre int, evita "1"→True en ints)
+    2. Si original es int   → coerce a int
+    3. Si original es float → coerce a float
+    4. Si value es literal bool sin contexto de original → coerce a bool
+    5. Resto → str
+
+    Nota: bool se evalúa ANTES que int porque bool es subclase de int en Python.
+    Sin este orden, isinstance(True, int) == True provocaría int("true") → ValueError
+    y retornaría el string crudo en lugar del bool esperado.
+    """
+    # Paso 1: original es bool → prioridad absoluta
+    if isinstance(original, bool):
         return value.lower() in ("true", "1", "yes")
+    # Paso 2: original es int conocido → coerce numérico
     if isinstance(original, int):
         try:
             return int(value)
         except ValueError:
             pass
+    # Paso 3: original es float conocido → coerce numérico
     if isinstance(original, float):
         try:
             return float(value)
         except ValueError:
             pass
+    # Paso 4: sin contexto de original, valor parece bool literal
+    if value.lower() in ("true", "false", "1", "0", "yes", "no"):
+        return value.lower() in ("true", "1", "yes")
+    # Paso 5: string crudo
     return value
 
 

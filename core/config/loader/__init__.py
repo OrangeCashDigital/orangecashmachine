@@ -11,8 +11,6 @@ import time
 from pathlib import Path
 from typing import Optional, Union
 
-from pydantic import ValidationError
-
 from .audit         import record as _audit
 from .cache         import ConfigCache, _config_cache, make_cache_key
 from .env_resolver  import EnvResolver, load_dotenv_for_env, resolve_env, _ALLOWED_ENVS
@@ -113,14 +111,6 @@ def load_config(
         logger.error("config_file_not_found | env={} error={}", env, exc)
         raise ConfigurationError(
             f"Config file not found | env={env} path={exc.filename}"
-        ) from exc
-
-    except ValidationError as exc:
-        # ValidationError de pydantic — error de schema, no de IO
-        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
-        logger.error("config_validation_failed | env={} errors={}", env, exc.error_count())
-        raise ConfigValidationError(
-            f"Config schema validation failed | env={env} errors={exc.error_count()}"
         ) from exc
 
     except Exception as exc:
