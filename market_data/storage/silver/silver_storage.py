@@ -356,7 +356,7 @@ class SilverStorage:
                 )
             ]
             tasks = [
-                (part, symbol, timeframe, y, m, mode, d)
+                (part, symbol, timeframe, y, m, mode, d, run_id)
                 for y, m, d, part in groups
             ]
         else:
@@ -368,7 +368,7 @@ class SilverStorage:
                 )
             ]
             tasks = [
-                (part, symbol, timeframe, y, m, mode, None)
+                (part, symbol, timeframe, y, m, mode, None, run_id)
                 for y, m, part in groups
             ]
 
@@ -640,6 +640,11 @@ class SilverStorage:
                 for p in partitions:
                     full_path = self._base_path / p["path"]
                     if not full_path.exists():
+                        import os as _os_env
+                        if _os_env.getenv("OCM_ENV", "development") == "production":
+                            raise PartitionWriteError(
+                                f"[production] Partition en manifest no existe en disco: {full_path}"
+                            )
                         logger.warning(
                             "Partition en manifest no existe en disco | path={}",
                             full_path,
@@ -707,6 +712,7 @@ class SilverStorage:
         month: int,
         mode: WriteMode,
         day: Optional[int] = None,
+        run_id: Optional[str] = None,
     ) -> Dict:
         """
         Escritura atómica de una partición. Devuelve metadata de la partición.
@@ -731,7 +737,7 @@ class SilverStorage:
             df.to_parquet(temp_path, compression="snappy", index=False)
             temp_path.replace(file_path)
 
-            partition_meta = _write_partition_meta(meta_path, df, symbol, timeframe)
+            partition_meta = _write_partition_meta(meta_path, df, symbol, timeframe, run_id=run_id)
 
             label = f"{year}/{month:02d}/{day:02d}" if day is not None else f"{year}/{month:02d}"
             logger.debug(
@@ -920,6 +926,14 @@ def _clean_partition(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _read_max_timestamp(file: Path) -> Optional[pd.Timestamp]:
+    """
+    Deprecated: use SilverStorage.get_last_timestamp() que lee max_ts del
+    manifest en O(1) en lugar de abrir el parquet.
+    Mantenida por compatibilidad — se eliminará en la próxima limpieza.
+    """
+    logger.warning(
+        "_read_max_timestamp() está deprecada — usa get_last_timestamp() | file={}", file
+    )
     try:
         df = pd.read_parquet(file, columns=["timestamp"])
         return pd.to_datetime(df["timestamp"].max(), utc=True)
@@ -933,6 +947,7 @@ def _write_partition_meta(
     df: pd.DataFrame,
     symbol: str,
     timeframe: str,
+    run_id: Optional[str] = None,
 ) -> Dict:
     """Escribe sidecar .meta.json y devuelve el dict para el manifest de versión."""
     try:
@@ -944,6 +959,8 @@ def _write_partition_meta(
         ).hexdigest()
 
         file_path = meta_path.with_suffix(".parquet")
+        # file_size calculado post-rename atómico — nunca None en producción.
+        # Si el archivo no existe (test/dry-run) se guarda None explícitamente.
         file_size = file_path.stat().st_size if file_path.exists() else None
 
         meta: Dict = {
@@ -956,6 +973,7 @@ def _write_partition_meta(
             "file_size":  file_size,
             "written_at": datetime.now(timezone.utc).isoformat(),
             "layer":      "silver",
+            "run_id":     run_id,
         }
 
         meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -77,6 +78,8 @@ class GoldStorage:
         self._gold.mkdir(parents=True, exist_ok=True)
         self._engineer = FeatureEngineer()
         self._dry_run  = dry_run
+        self._write_locks: Dict[str, threading.Lock] = {}
+        self._write_locks_meta = threading.Lock()
         logger.info("GoldStorage ready | silver={} gold={} dry_run={}", self._silver, self._gold, self._dry_run)
 
     # ----------------------------------------------------------
@@ -197,21 +200,26 @@ class GoldStorage:
             )
             return df
 
-        # ── Persistir ────────────────────────────────────────────────────
-        out_dir = (
-            self._gold
-            / f"exchange={exchange}"
-            / f"symbol={sym_safe}"
-            / f"market_type={market_type}"
-            / f"timeframe={timeframe}"
-        )
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_file = out_dir / f"{sym_safe}_{timeframe}_features.parquet"
+        # ── Persistir + Versionado (bajo write lock por dataset) ────────
+        _lock = self._get_write_lock(exchange, symbol, market_type, timeframe)
+        with _lock:
+            out_dir = (
+                self._gold
+                / f"exchange={exchange}"
+                / f"symbol={sym_safe}"
+                / f"market_type={market_type}"
+                / f"timeframe={timeframe}"
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_file = out_dir / f"{sym_safe}_{timeframe}_features.parquet"
 
-        df.to_parquet(out_file, index=False, compression="zstd", compression_level=4)
+            df.to_parquet(out_file, index=False, compression="zstd", compression_level=4)
 
         # ── Versionado ───────────────────────────────────────────────────
         checksum = _file_checksum(out_file)
+        # schema_hash: detecta drift silencioso de columnas entre versiones.
+        # Cambia si FeatureEngineer añade/elimina/renombra features.
+        schema_hash = hashlib.md5(",".join(sorted(df.columns)).encode()).hexdigest()
         silver_manifest = self._read_silver_manifest(
             exchange, symbol, market_type, timeframe, resolved_silver_v
         )
@@ -228,6 +236,7 @@ class GoldStorage:
             silver_version = resolved_silver_v,
             run_id         = run_id,
             input_versions = [silver_manifest],
+            schema_hash    = schema_hash,
             min_ts         = str(df["timestamp"].min()) if not df.empty else None,
             max_ts         = str(df["timestamp"].max()) if not df.empty else None,
         )
@@ -363,6 +372,18 @@ class GoldStorage:
         return self._dataset_dir(exchange, symbol, market_type, timeframe) / "_versions"
 
     # ----------------------------------------------------------
+    # Concurrency
+    # ----------------------------------------------------------
+
+    def _get_write_lock(self, exchange: str, symbol: str, market_type: str, timeframe: str) -> threading.Lock:
+        """Lock por dataset — evita race conditions entre builds paralelos."""
+        key = f"{exchange}:{symbol}:{market_type}:{timeframe}"
+        with self._write_locks_meta:
+            if key not in self._write_locks:
+                self._write_locks[key] = threading.Lock()
+            return self._write_locks[key]
+
+    # ----------------------------------------------------------
     # Versioning
     # ----------------------------------------------------------
 
@@ -382,6 +403,7 @@ class GoldStorage:
         max_ts:         Optional[str],
         run_id:         Optional[str] = None,
         input_versions: Optional[list] = None,
+        schema_hash:    Optional[str] = None,
     ) -> None:
         """
         Escribe manifest versionado en _versions/.
@@ -432,6 +454,7 @@ class GoldStorage:
             "rows":             rows,
             "features":         features,
             "checksum":         checksum,
+            "schema_hash":      schema_hash,
             "min_ts":           min_ts,
             "max_ts":           max_ts,
         }
