@@ -55,6 +55,10 @@ def get_git_hash() -> str:
             ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, timeout=2,
         )
+        # returncode != 0 indica repo sin commits o git no inicializado.
+        # stdout estará vacío y stderr tendrá el mensaje de error — no usar.
+        if result.returncode != 0:
+            return "unknown"
         return result.stdout.strip() or "unknown"
     except Exception:
         return "unknown"

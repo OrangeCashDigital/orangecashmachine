@@ -125,11 +125,10 @@ def load_config(
         ) from exc
 
 
-try:
-    from .prefect_integration import load_and_validate_config_task
-    _PREFECT_AVAILABLE_LOADER = True
-except ImportError:
-    _PREFECT_AVAILABLE_LOADER = False
+# prefect_integration siempre exporta load_and_validate_config_task —
+# cuando Prefect no está instalado el módulo provee un stub async.
+from .prefect_integration import load_and_validate_config_task, _PREFECT_AVAILABLE
+_PREFECT_AVAILABLE_LOADER = _PREFECT_AVAILABLE
 
 
 __all__ = [
@@ -139,5 +138,5 @@ __all__ = [
     "_make_cache_key", "_load_dotenv_for_env",
     "CONFIG_LOAD_COUNT", "CONFIG_LOAD_DURATION", "CONFIG_RELOAD_TIME",
     "CONFIG_CACHE_HITS", "_PROMETHEUS_AVAILABLE",
-    *(["load_and_validate_config_task"] if _PREFECT_AVAILABLE_LOADER else []),
+    "load_and_validate_config_task",
 ]

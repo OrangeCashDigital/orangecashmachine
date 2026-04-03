@@ -30,6 +30,7 @@ Diseño
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -103,7 +104,6 @@ def _expand_env(value: str) -> str:
         ${DATA_LAKE_PATH}
         → valor de DATA_LAKE_PATH, o string vacío si no está seteada
     """
-    import re
     def _sub(m: re.Match) -> str:
         var    = m.group(1)
         default = m.group(2) or ""
@@ -116,7 +116,9 @@ def _read_yaml_lake_path() -> Optional[str]:
     Lee storage.data_lake.path del YAML mergeado (base → env → settings).
 
     Import lazy para evitar ciclo: paths.py → yaml_loader → paths.py.
-    Falla silenciosamente — si el YAML no es accesible se usa el fallback.
+    Falla silenciosamente ante errores de IO/YAML — si el YAML no es
+    accesible se usa el fallback estructural. Loguea en DEBUG para que
+    el silencio no oculte errores de configuración durante desarrollo.
     """
     try:
         from core.config.loader.yaml_loader import YamlLoader
@@ -141,7 +143,12 @@ def _read_yaml_lake_path() -> Optional[str]:
                 .get("path")
         )
         return _expand_env(raw) if raw else None
-    except Exception:
+    except Exception as exc:
+        try:
+            from loguru import logger
+            logger.debug("paths._read_yaml_lake_path fallback | reason={}", exc)
+        except Exception:
+            pass
         return None
 
 
