@@ -68,10 +68,9 @@ class PostProcessingService:
             snapshot_id = self._snapshot.create_snapshot()
             _log.info("snapshot_created", snapshot_id=snapshot_id)
         except Exception as exc:
-            _log.warning(
+            _log.opt(exception=True).warning(
                 "snapshot_failed",
                 error_type=type(exc).__name__,
-                error=str(exc),
             )
 
     def _build_gold(self) -> None:
@@ -93,8 +92,7 @@ class PostProcessingService:
                     )
             _log.info("gold_build_completed")
         except Exception as exc:
-            _log.warning(
+            _log.opt(exception=True).warning(
                 "gold_build_failed",
                 error_type=type(exc).__name__,
-                error=str(exc),
             )

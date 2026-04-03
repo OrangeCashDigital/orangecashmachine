@@ -37,8 +37,7 @@ async def _run_flow_local(config: AppConfig, run_cfg: RunConfig) -> None:
     log.info("flow_launching", flow="market_data_flow")
     await market_data_flow(env=run_cfg.env, config_dir=config_dir)
     log.info("flow_completed", flow="market_data_flow")
-
-    PostProcessingService(config).execute()
+    # PostProcessingService se ejecuta en el finally de run() — fuera del timeout
 
 
 def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
@@ -90,6 +89,8 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
         exit_code = 1
     finally:
         if exit_code != 130:
+            # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
+            PostProcessingService(config).execute()
             for ex in config.exchanges:
                 push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
         else:
