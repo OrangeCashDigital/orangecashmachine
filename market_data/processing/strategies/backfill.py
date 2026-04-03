@@ -9,7 +9,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import asyncio
-import time
 from typing import Optional
 
 import pandas as pd
@@ -22,7 +21,8 @@ from market_data.processing.strategies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from market_data.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
+from market_data.observability.metrics import ROWS_INGESTED
+from infra.state.cursor_store import encode_cursor_key as _encode
 
 _log = bind_pipeline("backfill")
 
@@ -35,80 +35,58 @@ _MAX_BACKFILL_CHUNKS:  int = 100_000
 class BackfillStrategy(StrategyMixin):
     _mode = PipelineMode.BACKFILL
 
-    async def execute_pair(
+    async def _run(
         self,
         symbol:    str,
         timeframe: str,
         idx:       int,
         total:     int,
         ctx:       PipelineContext,
-    ) -> PairResult:
+        result:    PairResult,
+    ) -> None:
 
-        result     = PairResult(symbol=symbol, timeframe=timeframe, mode=PipelineMode.BACKFILL)
-        pair_start = time.monotonic()
-        log        = _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, mode="backfill")
+        log = _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, mode="backfill")
+        log.info("Backfill iniciando", idx=idx, total=total)
 
-        try:
-            log.info("Backfill iniciando", idx=idx, total=total)
+        origin_ms = await self._discover_origin(symbol, timeframe, ctx)
+        if origin_ms is None:
+            log.warning("Backfill skip — no se pudo determinar origen")
+            result.skipped = True
+            return
 
-            origin_ms = await self._discover_origin(symbol, timeframe, ctx)
-            if origin_ms is None:
-                log.warning("Backfill skip — no se pudo determinar origen")
-                result.skipped     = True
-                result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                return result
+        log.info("Backfill origin", origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat())
 
-            log.info("Backfill origin", origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat())
+        start_ms = await self._resolve_backfill_start(symbol, timeframe, ctx, origin_ms)
 
-            start_ms = await self._resolve_backfill_start(symbol, timeframe, ctx, origin_ms)
-
-
-            if start_ms < origin_ms:
-                log.info("Backfill completo — ya se alcanzó el origen o start_date",
-                    oldest=pd.Timestamp(start_ms,  unit="ms", tz="UTC").isoformat(),
-                    origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
-                    start_date=ctx.start_date,
-                )
-                result.skipped     = True
-                result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-                return result
-
-            total_rows, chunks = await self._paginate_backward(
-                symbol    = symbol,
-                timeframe = timeframe,
-                since_ms  = start_ms,
-                origin_ms = origin_ms,
-                ctx       = ctx,
+        if start_ms < origin_ms:
+            log.info("Backfill completo — ya se alcanzó el origen o start_date",
+                oldest=pd.Timestamp(start_ms,  unit="ms", tz="UTC").isoformat(),
+                origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
+                start_date=ctx.start_date,
             )
+            result.skipped = True
+            return
 
-            result.rows        = total_rows
-            result.chunks      = chunks
-            result.duration_ms = int((time.monotonic() - pair_start) * 1000)
+        total_rows, chunks = await self._paginate_backward(
+            symbol    = symbol,
+            timeframe = timeframe,
+            since_ms  = start_ms,
+            origin_ms = origin_ms,
+            ctx       = ctx,
+        )
 
-            if total_rows > 0:
-                ROWS_INGESTED.labels(
-                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-                ).inc(total_rows)
+        result.rows   = total_rows
+        result.chunks = chunks
 
-            log.success("Backfill completado",
-                idx=idx, total=total, chunks=chunks,
-                rows=total_rows, duration_ms=result.duration_ms,
-            )
+        if total_rows > 0:
+            ROWS_INGESTED.labels(
+                exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+            ).inc(total_rows)
 
-        except asyncio.CancelledError:
-            raise
-
-        except Exception as exc:
-            result.error       = str(exc)
-            result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-            error_type = "transient" if result.is_transient_error else "fatal"
-            PIPELINE_ERRORS.labels(exchange=ctx.exchange_id, error_type=error_type).inc()
-            log.error("Backfill fallido",
-                idx=idx, total=total,
-                error=str(exc), duration_ms=result.duration_ms,
-            )
-
-        return result
+        log.success("Backfill completado",
+            idx=idx, total=total, chunks=chunks,
+            rows=total_rows,
+        )
 
     # ----------------------------------------------------------
     # Origin Discovery
@@ -299,10 +277,15 @@ class BackfillStrategy(StrategyMixin):
             if not raw:
                 break
 
+            if len(raw) < chunk_limit * 0.1:
+                log.warning("Sparse chunk — possible data gap or exchange throttling",
+                    received=len(raw), expected=chunk_limit,
+                )
+
             df = pd.DataFrame(raw, columns=["timestamp","open","high","low","close","volume"])
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-            ts_ns = df["timestamp"].astype("int64") // 1_000_000
-            df = df[ts_ns < current_end].sort_values("timestamp").reset_index(drop=True)
+            df = df.sort_values("timestamp").reset_index(drop=True)
+            df = df[df["timestamp"] < pd.Timestamp(current_end, unit="ms", tz="UTC")]
 
             if df.empty:
                 break
@@ -323,15 +306,33 @@ class BackfillStrategy(StrategyMixin):
             )
 
             if qres.accepted:
-                ctx.storage.save_ohlcv(df=qres.df, symbol=symbol, timeframe=timeframe)
-                total_rows += len(qres.df)
+                try:
+                    ctx.storage.save_ohlcv(df=qres.df, symbol=symbol, timeframe=timeframe)
+                    total_rows += len(qres.df)
+                    self._update_backfill_cursor(symbol, timeframe, oldest_in_chunk, ctx)
+                except Exception as exc:
+                    PIPELINE_ERRORS.labels(
+                        exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                    ).inc()
+                    log.error(
+                        "Backfill chunk save failed — cursor NO avanzado, abortando",
+                        error=str(exc),
+                        chunk=chunks + 1,
+                        oldest=pd.Timestamp(oldest_in_chunk, unit="ms", tz="UTC").isoformat(),
+                    )
+                    raise
             else:
-                log.warning("Backfill chunk rechazado por calidad", score=round(qres.score, 1))
+                log.warning(
+                    "Backfill chunk rechazado por calidad — ventana NO avanzada",
+                    score=round(qres.score, 1),
+                    chunk=chunks + 1,
+                    oldest=pd.Timestamp(oldest_in_chunk, unit="ms", tz="UTC").isoformat(),
+                )
+                current_end = oldest_in_chunk
+                continue
 
             chunks  += 1
             last_end = oldest_in_chunk
-
-            self._update_backfill_cursor(symbol, timeframe, oldest_in_chunk, ctx)
 
             current_end = oldest_in_chunk
 
@@ -351,11 +352,9 @@ class BackfillStrategy(StrategyMixin):
     # ----------------------------------------------------------
 
     def _origin_key(self, ctx: PipelineContext, symbol: str, timeframe: str) -> str:
-        from infra.state.cursor_store import _encode
         env = getattr(ctx.cursor, "_env", "development")
         return f"{env}:{_ORIGIN_KEY_PREFIX}:{_encode(ctx.exchange_id)}:{_encode(symbol)}:{_encode(timeframe)}"
 
     def _backfill_key(self, ctx: PipelineContext, symbol: str, timeframe: str) -> str:
-        from infra.state.cursor_store import _encode
         env = getattr(ctx.cursor, "_env", "development")
         return f"{env}:{_BACKFILL_KEY_PREFIX}:{_encode(ctx.exchange_id)}:{_encode(symbol)}:{_encode(timeframe)}"
