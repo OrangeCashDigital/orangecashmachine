@@ -303,7 +303,7 @@ async def validate_exchange_connection(
         "yes" if cfg.has_credentials else "no",
     )
 
-    adapter = CCXTAdapter(config=cfg, default_type=None)  # probe adapter = spot context siempre
+    adapter = CCXTAdapter(config=cfg)  # default_type resuelto desde cfg.markets.futures_default_type
 
     try:
         await adapter.connect()
