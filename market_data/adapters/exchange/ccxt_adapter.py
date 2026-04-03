@@ -304,24 +304,6 @@ class CCXTAdapter(ExchangeAdapter):
         )
         return {k: v for k, v in required.items() if v}
 
-    async def test_connection(self) -> bool:
-        """Test de conectividad. SafeOps: nunca lanza excepción."""
-        try:
-            start   = time.perf_counter()
-            markets = await self.load_markets()
-            latency = (time.perf_counter() - start) * 1000
-            logger.info(
-                "Exchange OK | {} markets={} latency={:.1f}ms",
-                self._exchange_id, len(markets), latency,
-            )
-            return True
-        except Exception as exc:
-            logger.error(
-                "Exchange connection failed | {} error={}",
-                self._exchange_id, exc,
-            )
-            return False
-
     # ----------------------------------------------------------
     # Credential resolvers (privados — SRP)
     # ----------------------------------------------------------

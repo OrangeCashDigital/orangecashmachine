@@ -355,8 +355,12 @@ class InMemoryCursorStore:
         self._store_raw[key] = value
 
 
-def _encode(value: str) -> str:
+def encode_cursor_key(value: str) -> str:
+    """Codifica un segmento de clave Redis en base64 urlsafe (sin padding)."""
     return base64.urlsafe_b64encode(value.encode()).decode().rstrip("=")
+
+
+_encode = encode_cursor_key  # alias interno — no eliminar: usado por RedisCursorStore
 
 def _decode(value: str) -> str:
     padding = 4 - len(value) % 4
