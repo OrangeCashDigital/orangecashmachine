@@ -109,6 +109,7 @@ exchanges:
   kucoinfutures:
     enabled: true
     enableRateLimit: true
+    test_symbol: "BTC/USDT:USDT"  # linear perpetual — único símbolo válido en futuros-only
     auto_discover_symbols: false
 
     credentials:
