@@ -68,6 +68,7 @@ from core.config.loader.env_resolver import bootstrap_dotenv
 from core.config.schema import AppConfig
 from core.logging import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner
+from market_data.safety.environment_validator import EnvironmentValidator, EnvironmentMismatchError
 from infra.observability.server import start_metrics_server
 
 
@@ -227,7 +228,16 @@ def run_application(
     setup_observability(config, log)
 
     # -----------------------------------------------------------------
-    # 5. Preparación del pipeline
+    # 5. Validación de entorno (falla rápido si incoherente)
+    # -----------------------------------------------------------------
+    try:
+        EnvironmentValidator().check(config, run_cfg)
+    except EnvironmentMismatchError as exc:
+        log.critical("environment_validation_failed", error=str(exc))
+        return 1
+
+    # -----------------------------------------------------------------
+    # 6. Preparación del pipeline
     # -----------------------------------------------------------------
     pipeline_cfg = getattr(config, "pipeline", None)
     timeouts_cfg = getattr(pipeline_cfg, "timeouts", None)
@@ -239,7 +249,7 @@ def run_application(
     log.info("pipeline_started", timeout_s=timeout)
 
     # -----------------------------------------------------------------
-    # 6. Validation mode (NO ejecuta lógica de negocio)
+    # 7. Validation mode (NO ejecuta lógica de negocio)
     # -----------------------------------------------------------------
     if validate_only:
         log.info("validation_mode_enabled")
@@ -255,7 +265,7 @@ def run_application(
         return 0
 
     # -----------------------------------------------------------------
-    # 7. Execution boundary (🔥 lógica de negocio)
+    # 8. Execution boundary (🔥 lógica de negocio)
     # -----------------------------------------------------------------
     result = pipeline_runner(
         config=config,
@@ -264,7 +274,7 @@ def run_application(
     )
 
     # -----------------------------------------------------------------
-    # 8. Validación defensiva
+    # 9. Validación defensiva
     # -----------------------------------------------------------------
     if not isinstance(result, int):
         log.error("pipeline_runner_returned_non_int", value=result)
@@ -290,6 +300,7 @@ def main(run_cfg: Optional[runtime.RunConfig] = None) -> int:
         FileNotFoundError,
         config_loader.ConfigurationError,
         config_loader.ConfigValidationError,
+        EnvironmentMismatchError,
     ) as exc:
         logger.opt(exception=True).critical(
             "config_failure",

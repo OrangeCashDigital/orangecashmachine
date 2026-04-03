@@ -43,6 +43,7 @@ _MAX_CLOCK_DRIFT_MS:    int = 5_000
 _FEE_FETCH_TIMEOUT:     int = 10
 _CLOCK_FETCH_TIMEOUT:   int = 5
 _DATASET_PROBE_TIMEOUT: int = 15  # aumentado: 3s era insuficiente en exchanges lentos
+_FETCH_TICKER_TIMEOUT: int = 10   # ticker independiente del timeout del task
 
 _DATASET_CAPABILITY_MAP: Dict[str, str] = {
     "ohlcv":         "fetchOHLCV",
@@ -151,7 +152,16 @@ def _calculate_max_concurrent(
 
 def _select_test_symbol(exchange: Any, preferred: Optional[str] = None) -> str:
     """
-    Selecciona un símbolo de prueba válido con fallback al primero disponible.
+    Selecciona un símbolo de prueba válido con awareness del market_type cargado.
+
+    Estrategia
+    ----------
+    1. Si preferred existe y pertenece al universo cargado → usarlo (camino feliz).
+    2. Detectar market_type desde options.defaultType del exchange.
+    3. Si es derivado → filtrar usando exchange.markets metadata real (no string parsing).
+       exchange.markets[symbol]["type"] ∈ {"swap", "future", "option"} es la fuente
+       canónica de CCXT — más robusta que heurísticas de formato de símbolo.
+    4. Fallback final: primer símbolo disponible.
 
     Raises RuntimeError si el exchange no tiene símbolos cargados,
     lo que indica que load_markets() no fue llamado previamente.
@@ -161,8 +171,30 @@ def _select_test_symbol(exchange: Any, preferred: Optional[str] = None) -> str:
         raise RuntimeError(
             "No symbols available — ensure load_markets() was called before validation."
         )
+
+    # 1. Preferred válido dentro del universo cargado
     if preferred and preferred in symbols:
         return preferred
+
+    # 2. Detectar market_type desde opciones internas del cliente ccxt
+    market_type: Optional[str] = (
+        getattr(exchange, "options", {}) or {}
+    ).get("defaultType")
+
+    # 3. Para derivados: usar metadata real de exchange.markets en lugar de
+    #    string parsing. exchange.markets es un dict {symbol: market_dict}
+    #    donde market_dict["type"] es la fuente canónica de CCXT.
+    if market_type in ("swap", "future", "option"):
+        markets: Dict[str, Any] = getattr(exchange, "markets", {}) or {}
+        candidates = [
+            s for s, m in markets.items()
+            if isinstance(m, dict) and m.get("type") in ("swap", "future", "option")
+            and m.get("active", True)  # excluir mercados deslistados
+        ]
+        if candidates:
+            return candidates[0]
+
+    # 4. Fallback final seguro
     return symbols[0]
 
 
@@ -317,7 +349,7 @@ async def validate_exchange_connection(
         t0 = time.monotonic()
         ticker = await asyncio.wait_for(
             exchange.fetch_ticker(symbol),
-            timeout=EXCHANGE_TASK_TIMEOUT,
+            timeout=_FETCH_TICKER_TIMEOUT,
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
 

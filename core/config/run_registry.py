@@ -40,7 +40,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 _REGISTRY_PATH = Path("logs/run_registry.jsonl")
@@ -55,6 +55,7 @@ def record_run(
     result:      str,
     duration_s:  float,
     run_id:      Optional[str] = None,
+    extra:       Optional[dict] = None,
 ) -> str:
     """
     Persiste metadata de un run en el registry JSONL.
@@ -77,6 +78,8 @@ def record_run(
         "result":     result,
         "duration_s": round(duration_s, 3),
     }
+    if extra:
+        record["extra"] = extra
 
     try:
         _REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)

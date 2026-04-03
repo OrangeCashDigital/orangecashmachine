@@ -48,6 +48,7 @@ from market_data.orchestration.tasks.batch_tasks import (
     run_derivatives_pipeline,
 )
 from infra.observability.server import push_metrics
+from market_data.safety import guard_context
 
 _PUSHGATEWAY = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 
@@ -211,7 +212,18 @@ async def _consolidate_results(
     futures: List[asyncio.Future],
     log,
 ) -> tuple[int, int]:
-    """Consolida resultados de pipeline tasks. Retorna (ok, failed)."""
+    """
+    Consolida resultados de pipeline tasks. Retorna (ok, failed).
+
+    Guard integration
+    -----------------
+    Los errores que llegan aquí ya sobrevivieron todos los retries de Prefect
+    — son fatales por definición. El guard los cuenta para activar el kill
+    switch si se supera max_errors consecutivos en futuras ejecuciones.
+
+    SafeOps: guard_context.get_guard() retorna None si no hay guard activo
+    (ej: ejecución directa desde Prefect Server sin entrypoint local).
+    """
     results  = await asyncio.gather(*futures, return_exceptions=True)
     failures = [r for r in results if isinstance(r, Exception)]
     ok       = len(results) - len(failures)
@@ -224,6 +236,19 @@ async def _consolidate_results(
             "Flow completed with partial failures | ok=%s failed=%s",
             ok, len(failures),
         )
+
+    # Notificar al guard — solo si hay uno activo en este proceso
+    guard = guard_context.get_guard()
+    if guard is not None:
+        if failures:
+            guard.record_error(reason=f"{len(failures)}_pipeline_tasks_failed")
+            if guard.should_stop():
+                log.critical(
+                    "execution_guard_triggered | reason=%s",
+                    guard._stop_reason,
+                )
+        else:
+            guard.record_success()
 
     return ok, len(failures)
 

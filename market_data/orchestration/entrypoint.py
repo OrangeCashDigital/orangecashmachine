@@ -29,16 +29,19 @@ from core.config.runtime import RunConfig
 from core.config.loader import load_config
 from core.config.schema import AppConfig
 from market_data.orchestration.flows.batch_flow import market_data_flow
+from market_data.safety.execution_guard import ExecutionGuard, ExecutionStoppedError
+from market_data.safety import guard_context
 from market_data.orchestration.post_processing import PostProcessingService
 from infra.observability.server import push_metrics
 
 _log = bind_pipeline("entrypoint")
 
 
-async def _run_flow_local(config: AppConfig, run_cfg: RunConfig) -> None:
+async def _run_flow_local(config: AppConfig, run_cfg: RunConfig, guard: ExecutionGuard) -> None:
     config_dir = str(Path("config").resolve())
     log = _log.bind(mode="local", env=run_cfg.env, config_dir=config_dir)
 
+    guard.check()  # verifica kill switch antes de lanzar el flow
     log.info("flow_launching", flow="market_data_flow")
     await market_data_flow(env=run_cfg.env, config_dir=config_dir)
     log.info("flow_completed", flow="market_data_flow")
@@ -65,6 +68,14 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     """
     log = _log.bind(mode="local", env=run_cfg.env)
 
+    guard = ExecutionGuard(
+        max_errors    = getattr(getattr(config, "pipeline", None), "max_consecutive_errors", 10),
+        max_runtime_s = getattr(getattr(getattr(config, "pipeline", None), "timeouts", None), "historical_pipeline", 0) or 0,
+    )
+    guard.start()
+    guard_context.set_guard(guard)  # disponible para batch_flow sin pasar por Prefect
+    log.debug("execution_guard_started", max_errors=guard.max_errors, max_runtime_s=guard.max_runtime_s)
+
     git_hash    = get_git_hash()
     config_hash = hashlib.sha256(
         json.dumps(config.model_dump(mode="json"), sort_keys=True, default=str).encode()
@@ -83,12 +94,15 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     try:
         asyncio.run(
             asyncio.wait_for(
-                _run_flow_local(config, run_cfg),
+                _run_flow_local(config, run_cfg, guard=guard),
                 timeout=timeout,
             )
         )
     except asyncio.TimeoutError:
         log.error("pipeline_timeout", timeout_s=timeout)
+        exit_code = 1
+    except ExecutionStoppedError as exc:
+        log.critical("pipeline_stopped_by_guard", reason=str(exc))
         exit_code = 1
     except KeyboardInterrupt:
         log.warning("pipeline_interrupted", signal="SIGINT")
@@ -103,6 +117,10 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     finally:
         _duration = _time.monotonic() - _t0
         _result   = {0: "success", 1: "error", 130: "interrupted"}.get(exit_code, "unknown")
+        guard.stop()
+        guard_context.set_guard(None)  # limpiar contexto de proceso
+        _guard_summary = guard.summary()
+        log.info("execution_guard_summary", **_guard_summary)
         record_run(
             env=run_cfg.env,
             git_hash=git_hash,
@@ -110,6 +128,7 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
             exchanges=config.exchange_names,
             result=_result,
             duration_s=_duration,
+            extra={"guard": _guard_summary},
         )
         if exit_code != 130:
             # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
