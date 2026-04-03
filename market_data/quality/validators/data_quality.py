@@ -1,6 +1,6 @@
 from __future__ import annotations
-import functools
-import subprocess
+
+from core.config.lineage import get_git_hash as _get_git_hash
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -140,18 +140,4 @@ class DataQualityChecker:
         n = int(((df["high"]-df["low"]) < df["close"]*self._flatline_threshold).sum())
         if n > 0: report.issues.append(QualityIssue(check="flatline_candles",severity="warning",description=f"{n} velas congeladas (high~=low)",affected_rows=n,details={"threshold_pct":self._flatline_threshold*100,"timeframe":self._timeframe,"adaptive":True}))
 
-@functools.lru_cache(maxsize=1)
-def _get_git_hash() -> str:
-    """
-    Hash del commit actual. Cacheado — solo ejecuta git una vez por proceso.
-    Sin lru_cache se lanzaba un subprocess por cada DataFrame procesado
-    (180+ subprocesos en un run con 30 pares × 6 timeframes).
-    """
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=2,
-        )
-        return r.stdout.strip() or "unknown"
-    except:
-        return "unknown"
+

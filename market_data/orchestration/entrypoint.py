@@ -19,7 +19,12 @@ import asyncio
 import sys
 from pathlib import Path
 
+import hashlib
+import json
+
 from core.logging.setup import bind_pipeline
+from core.config.lineage import get_git_hash
+from core.config.run_registry import record_run
 from core.config.runtime import RunConfig
 from core.config.loader import load_config
 from core.config.schema import AppConfig
@@ -60,13 +65,21 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     """
     log = _log.bind(mode="local", env=run_cfg.env)
 
+    git_hash    = get_git_hash()
+    config_hash = hashlib.sha256(
+        json.dumps(config.model_dump(mode="json"), sort_keys=True, default=str).encode()
+    ).hexdigest()[:12]
+
     log.info(
         "pipeline_starting",
         exchanges=config.exchange_names,
+        git_hash=git_hash,
+        config_hash=config_hash,
     )
 
     timeout   = config.pipeline.timeouts.historical_pipeline
     exit_code = 0
+    _t0 = _time.monotonic()
     try:
         asyncio.run(
             asyncio.wait_for(
@@ -88,6 +101,16 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
         )
         exit_code = 1
     finally:
+        _duration = _time.monotonic() - _t0
+        _result   = {0: "success", 1: "error", 130: "interrupted"}.get(exit_code, "unknown")
+        record_run(
+            env=run_cfg.env,
+            git_hash=git_hash,
+            config_hash=config_hash,
+            exchanges=config.exchange_names,
+            result=_result,
+            duration_s=_duration,
+        )
         if exit_code != 130:
             # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
             PostProcessingService(config).execute()
