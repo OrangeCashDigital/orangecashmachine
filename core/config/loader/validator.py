@@ -12,6 +12,7 @@ class ConfigValidator:
     def validate(data: dict, source: str):
         from core.config.schema import AppConfig
         from core.config.rules  import check_all_rules
+        from loguru import logger
         try:
             config = AppConfig.model_validate(data)
         except ValidationError as exc:
@@ -20,10 +21,20 @@ class ConfigValidator:
                 for err in exc.errors()
             )
             raise ConfigurationError(f"Validation error ({source}):\n{errors}") from exc
+
         rule_errors = check_all_rules(config, source)
-        if rule_errors:
+        if not rule_errors:
+            return config
+
+        is_production = config.environment.name == "production"
+        if is_production:
+            # En production todos los errores de reglas son bloqueantes.
             raise ConfigValidationError(
                 f"Business rule violations ({source}):\n"
                 + "\n".join(f"  - {e}" for e in rule_errors)
             )
+        # En otros entornos: loguear como warning, no bloquear.
+        # Las reglas detectan, el validator decide la severidad. SRP honrado.
+        for msg in rule_errors:
+            logger.warning("config_rule_warning | source={} msg={}", source, msg)
         return config

@@ -49,11 +49,10 @@ def _rule_no_placeholder_credentials(config: "AppConfig") -> list[str]:
     if pg.enabled and pg.password and _has_placeholder(str(pg.password)):
         errors.append(f"[{prefix}] integrations.postgres.password contains placeholder value")
 
-    # En entornos no-producción los warnings no bloquean el arranque —
-    # el loader solo eleva ConfigValidationError si hay errores de producción.
-    # Retornamos la lista completa; el caller decide la severidad.
-    if not is_production:
-        return []  # warnings logueados externamente si se requiere, no bloquean
+    # Devolver siempre la lista completa — la severidad la decide el caller.
+    # En production: el loader eleva ConfigValidationError si hay errores.
+    # En otros entornos: el loader puede loguear como warning sin bloquear.
+    # SRP: esta función detecta, no decide.
     return errors
 
 

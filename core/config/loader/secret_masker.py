@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+# Términos que identifican claves sensibles.
+# El matching es por substring sobre key.lower() — intencional:
+# cubre variantes como 'api_secret', 'db_password', 'auth_token'.
+# Efecto colateral conocido: 'authenticated_user' matchea 'auth'.
+# Aceptable — mejor enmascarar de más que filtrar de menos en este contexto.
 _SENSITIVE_KEYS = frozenset({
     "password", "passwd", "secret", "token", "api_key", "apikey",
     "private_key", "auth", "credential", "credentials", "access_key",

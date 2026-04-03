@@ -20,4 +20,7 @@ except ImportError:
     CONFIG_LOAD_DURATION = _NoOpMetric()  # type: ignore[assignment]
     CONFIG_CACHE_HITS    = _NoOpMetric()  # type: ignore[assignment]
 
+# Alias de compatibilidad — CONFIG_RELOAD_TIME referencia el mismo objeto
+# que CONFIG_LOAD_DURATION. Exportado en __all__ del loader por compatibilidad
+# con código existente que lo importa por nombre. No crear nuevos usos.
 CONFIG_RELOAD_TIME = CONFIG_LOAD_DURATION

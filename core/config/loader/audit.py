@@ -11,13 +11,16 @@ if TYPE_CHECKING:
 
 def record(config: "AppConfig", cache_key: str, h: str, source: str) -> "AppConfig":
     from core.config.schema import AuditEntry
+    # Capturar el instante una sola vez — AuditEntry.timestamp y
+    # AppConfig.last_reload deben ser el mismo momento exacto.
+    now = datetime.now(timezone.utc)
     entry = AuditEntry(
-        timestamp=datetime.now(timezone.utc),
+        timestamp=now,
         cache_key=cache_key,
         hash=h,
         source_file=source,
     )
     return config.model_copy(update={
         "audit_log":   [*config.audit_log, entry],
-        "last_reload": datetime.now(timezone.utc),
+        "last_reload": now,
     })
