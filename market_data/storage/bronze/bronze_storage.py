@@ -196,6 +196,11 @@ class BronzeStorage:
         meta_file = part_dir / f"part-{run_id}.meta.json"
         temp_file = part_dir / f"part-{run_id}.tmp"
 
+        if part_file.exists():
+            raise BronzeWriteError(
+                f"Duplicate run_id detected — {part_file.name} already exists"
+            )
+
         try:
             df.to_parquet(temp_file, compression="snappy", index=False)
             temp_file.replace(part_file)
@@ -233,6 +238,12 @@ def _validate_dataframe(df: pd.DataFrame) -> None:
     missing = set(REQUIRED_COLUMNS) - set(df.columns)
     if missing:
         raise BronzeStorageError(f"Missing columns: {sorted(missing)}")
+    unexpected = set(df.columns) - set(REQUIRED_COLUMNS) - {"ingestion_ts"}
+    if unexpected:
+        logger.warning(
+            "Bronze schema drift — columnas inesperadas serán preservadas | cols={}",
+            sorted(unexpected),
+        )
 
 
 def _generate_run_id() -> str:
