@@ -348,11 +348,22 @@ async def market_data_flow(
             log.warning("Adapter close (post-validation) failed | exchange=%s error=%s", name, exc)
     adapters = {}  # ya no se necesitan
 
-    pipeline_futures: List[asyncio.Future] = []
+    # Fase 1: spot + repair (paralelo entre exchanges, secuencial vs futures)
+    # Fase 2: futures (solo cuando fase 1 completa)
+    # Evita contención de rate limits cuando spot y futures comparten exchange.
+    spot_futures: List[asyncio.Future] = []
     for probe in probes:
-        pipeline_futures.extend(
-            _launch_pipelines_for_exchange(config, probe, requested, log)
+        spot_futures.extend(
+            _launch_spot_and_repair(config, probe, requested, log)
         )
+
+    futures_futures: List[asyncio.Future] = []
+    for probe in probes:
+        futures_futures.extend(
+            _launch_futures_only(config, probe, requested, log)
+        )
+
+    pipeline_futures: List[asyncio.Future] = spot_futures + futures_futures
 
     if not pipeline_futures:
         log.warning("No pipelines launched. Check config and exchange capabilities.")
@@ -361,7 +372,23 @@ async def market_data_flow(
     flow_start = time.monotonic()
     ok = failed = 0
     try:
-        ok, failed = await _consolidate_results(pipeline_futures, log)
+        # Stages declarativos: cada fase es una unidad de trabajo independiente.
+        # Orden spot → futures garantiza que la fuente primaria completa antes
+        # de que los derivados inicien. Extensible: añadir fases sin tocar lógica.
+        stages = [
+            ("spot+repair", spot_futures),
+            ("futures",     futures_futures),
+        ]
+        for stage_name, stage_tasks in stages:
+            if not stage_tasks:
+                continue
+            log.info("Stage: %s | tasks=%s", stage_name, len(stage_tasks))
+            ok_s, fail_s = await _consolidate_results(stage_tasks, log)
+            ok     += ok_s
+            failed += fail_s
+            if fail_s > 0 and ok_s == 0:
+                log.error("Stage failed completely — skipping remaining stages | stage=%s", stage_name)
+                break
         if failed > 0 and ok == 0:
             raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
     finally:
