@@ -372,23 +372,26 @@ async def market_data_flow(
     flow_start = time.monotonic()
     ok = failed = 0
     try:
-        # Stages declarativos: cada fase es una unidad de trabajo independiente.
-        # Orden spot → futures garantiza que la fuente primaria completa antes
-        # de que los derivados inicien. Extensible: añadir fases sin tocar lógica.
+        # Stages con dependencias explícitas.
+        # requires_success=True: el stage solo corre si el anterior no falló 100%.
+        # Extensible: añadir fases con sus propias reglas de dependencia.
         stages = [
-            ("spot+repair", spot_futures),
-            ("futures",     futures_futures),
+            {"name": "spot+repair", "tasks": spot_futures,    "requires_success": False},
+            {"name": "futures",     "tasks": futures_futures, "requires_success": True},
         ]
-        for stage_name, stage_tasks in stages:
-            if not stage_tasks:
+        for stage in stages:
+            if stage["requires_success"] and failed > 0 and ok == 0:
+                log.warning(
+                    "Stage skipped — previous stage failed completely | stage=%s",
+                    stage["name"],
+                )
+                break
+            if not stage["tasks"]:
                 continue
-            log.info("Stage: %s | tasks=%s", stage_name, len(stage_tasks))
-            ok_s, fail_s = await _consolidate_results(stage_tasks, log)
+            log.info("Stage: %s | tasks=%s", stage["name"], len(stage["tasks"]))
+            ok_s, fail_s = await _consolidate_results(stage["tasks"], log)
             ok     += ok_s
             failed += fail_s
-            if fail_s > 0 and ok_s == 0:
-                log.error("Stage failed completely — skipping remaining stages | stage=%s", stage_name)
-                break
         if failed > 0 and ok == 0:
             raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
     finally:
