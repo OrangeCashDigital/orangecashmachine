@@ -71,6 +71,14 @@ _LOAD_MARKETS_TIMEOUT  = 30.0
 _DEFAULT_EXCHANGE      = "binance"
 _MARKETS_CACHE_TTL     = 60.0   # segundos — reutilizar markets en reconnect
 
+# Cache global de markets compartida entre instancias del mismo exchange.
+# Clave: "{exchange_id}:{default_type}" — cada combinación tiene su propio snapshot.
+# Esto evita llamadas redundantes a load_markets() cuando múltiples tasks
+# crean adapters independientes para el mismo exchange en el mismo proceso.
+# Thread-safety: asyncio es single-threaded — no se necesita Lock.
+_GLOBAL_MARKETS_CACHE: Dict[str, Any] = {}
+_GLOBAL_MARKETS_CACHED_AT: Dict[str, float] = {}
+
 # Timeouts por operación (segundos)
 _FETCH_TICKER_TIMEOUT  = 10.0
 _FETCH_OHLCV_TIMEOUT   = 30.0
@@ -406,17 +414,32 @@ class CCXTAdapter(ExchangeAdapter):
                 client = exchange_class(params)
 
                 now = time.perf_counter()
-                cache_valid = (
+                global_key = f"{self._exchange_id}:{self._default_type or 'spot'}"
+                # Prioridad de cache: instancia > global > load_markets()
+                instance_valid = (
                     self._markets_cache is not None
                     and (now - self._markets_cached_at) < _MARKETS_CACHE_TTL
                 )
+                global_valid = (
+                    global_key in _GLOBAL_MARKETS_CACHE
+                    and (now - _GLOBAL_MARKETS_CACHED_AT.get(global_key, 0.0)) < _MARKETS_CACHE_TTL
+                )
 
-                if cache_valid:
+                if instance_valid:
                     client.markets = self._markets_cache
                     latency = 0.0
                     logger.debug(
-                        "Exchange connected (markets from cache) | {} cache_age={:.1f}s",
+                        "Exchange connected (markets from instance cache) | {} cache_age={:.1f}s",
                         self._exchange_id, now - self._markets_cached_at,
+                    )
+                elif global_valid:
+                    client.markets = _GLOBAL_MARKETS_CACHE[global_key]
+                    self._markets_cache     = client.markets
+                    self._markets_cached_at = now
+                    latency = 0.0
+                    logger.debug(
+                        "Exchange connected (markets from global cache) | {} cache_age={:.1f}s",
+                        self._exchange_id, now - _GLOBAL_MARKETS_CACHED_AT[global_key],
                     )
                 else:
                     start = time.perf_counter()
@@ -425,8 +448,10 @@ class CCXTAdapter(ExchangeAdapter):
                         timeout=_LOAD_MARKETS_TIMEOUT,
                     )
                     latency = (time.perf_counter() - start) * 1000
-                    self._markets_cache     = client.markets
-                    self._markets_cached_at = time.perf_counter()
+                    self._markets_cache                  = client.markets
+                    self._markets_cached_at              = time.perf_counter()
+                    _GLOBAL_MARKETS_CACHE[global_key]    = client.markets
+                    _GLOBAL_MARKETS_CACHED_AT[global_key] = self._markets_cached_at
 
                 self._client = client
                 logger.info(
