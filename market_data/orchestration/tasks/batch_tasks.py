@@ -241,9 +241,10 @@ async def run_historical_pipeline(
     tags=["ohlcv", "historical", "futures"],
 )
 async def run_futures_pipeline(
-    config:       AppConfig,
-    exchange_cfg: ExchangeConfig,
-    probe:        ExchangeProbe,
+    config:          AppConfig,
+    exchange_cfg:    ExchangeConfig,
+    probe:           ExchangeProbe,
+    exchange_client: 'CCXTAdapter | None' = None,
 ) -> None:
     """
     Ejecuta el pipeline histórico OHLCV para futuros/perpetuos.
@@ -290,18 +291,27 @@ async def run_futures_pipeline(
         len(futures_symbols), len(hist_cfg.timeframes), effective_concurrency,
     )
 
-    async with managed_adapter(exchange_cfg, futures_market_type) as futures_client:
+    async def _run_pipeline(client) -> None:
+        nonlocal summary
         pipeline = UnifiedPipeline(
             symbols         = futures_symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
             max_concurrency = effective_concurrency,
-            exchange_client = futures_client,
+            exchange_client = client,
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = futures_market_type,
         )
         pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
         summary = await pipeline.run(mode=pipeline_mode)
+
+    summary = None  # will be set inside _run_pipeline
+    if exchange_client is not None:
+        # Reutilizar el adapter validado — evita managed_adapter fallback
+        await _run_pipeline(exchange_client)
+    else:
+        async with managed_adapter(exchange_cfg, futures_market_type) as futures_client:
+            await _run_pipeline(futures_client)
 
     _update_throttle_from_summary(throttle, summary)
 

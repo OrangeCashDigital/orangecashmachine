@@ -104,6 +104,7 @@ def _launch_futures_pipelines(
     probe:   ExchangeProbe,
     active:  Set[str],
     log,
+    adapter=None,
 ) -> List[asyncio.Future]:
     if "ohlcv" not in active:
         return []
@@ -123,7 +124,7 @@ def _launch_futures_pipelines(
         exc_cfg.markets.futures_symbols,
         exc_cfg.markets.futures_default_type or "swap",
     )
-    return [run_futures_pipeline(config, exc_cfg, probe)]
+    return [run_futures_pipeline(config, exc_cfg, probe, exchange_client=adapter)]
 
 
 def _launch_derivative_pipelines(
@@ -175,7 +176,7 @@ def _launch_pipelines_for_exchange(
     log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
     return [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
-        *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
+        *_launch_futures_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
         *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
     ]
 
