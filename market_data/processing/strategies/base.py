@@ -97,7 +97,20 @@ def classify_error(exc: BaseException) -> bool:
 # Timeout por par individual (segundos).
 # Evita workers colgados cuando un fetch nunca retorna.
 # Repair usa un timeout más largo (gap healing puede paginar mucho).
-_PAIR_TIMEOUT_S:        int = 300   # 5 min — incremental/backfill
+# Timeout por par individual (segundos), por granularidad de timeframe.
+# 1m backfill puede paginar meses de historia — necesita mucho más tiempo
+# que 1d que solo requiere unos pocos chunks.
+# Repair siempre usa _PAIR_TIMEOUT_REPAIR_S independientemente del timeframe
+# porque el gap healing pagina en ambas direcciones sobre rangos arbitrarios.
+_PAIR_TIMEOUT_BY_TF: dict[str, int] = {
+    "1m":  7200,   # 2h — backfill completo de 1m puede ser meses
+    "5m":  3600,   # 1h
+    "15m": 1800,   # 30 min
+    "1h":   600,   # 10 min
+    "4h":   300,   # 5 min
+    "1d":   300,   # 5 min
+}
+_PAIR_TIMEOUT_S:        int = 300   # fallback para timeframes no mapeados
 _PAIR_TIMEOUT_REPAIR_S: int = 1800  # 30 min — repair (gaps grandes paginados)
 
 
@@ -313,7 +326,7 @@ class StrategyMixin:
         pair_timeout = (
             _PAIR_TIMEOUT_REPAIR_S
             if self._mode == PipelineMode.REPAIR
-            else _PAIR_TIMEOUT_S
+            else _PAIR_TIMEOUT_BY_TF.get(timeframe, _PAIR_TIMEOUT_S)
         )
 
         try:

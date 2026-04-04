@@ -149,17 +149,27 @@ class GapRegistry:
             )
             return False
 
+    # TTL para gaps irrecuperables: 365 días.
+    # Suficiente para que el exchange añada datos históricos si cambia su API.
+    _IRRECOVERABLE_TTL_S: int = 365 * 24 * 3600
+
     def mark_healed(
         self,
-        exchange:  str,
-        symbol:    str,
-        timeframe: str,
-        start_ms:  int,
+        exchange:     str,
+        symbol:       str,
+        timeframe:    str,
+        start_ms:     int,
+        irreversible: bool = False,
     ) -> bool:
         """
-        Borra el gap del registry. Llamar cuando healed=True en repair.
+        Registra un gap como sanado. Llamar cuando healed=True en repair.
 
-        Returns True si existía y fue borrado.
+        irreversible=True: el exchange no tiene datos para este rango
+        (p.ej. gap pre-origin). Almacena una clave centinela con TTL=365d
+        para que is_irrecoverable() filtre el gap en futuras ejecuciones
+        sin necesidad de un fetch real. Suprime retries infinitos.
+
+        Returns True si la clave original existía y fue borrada.
         """
         key = _gap_key(self._env, exchange, symbol, timeframe, start_ms)
         try:
@@ -170,11 +180,50 @@ class GapRegistry:
                     "symbol={} timeframe={} start_ms={}",
                     exchange, symbol, timeframe, start_ms,
                 )
+            if irreversible:
+                # Guardar centinela para evitar retries infinitos.
+                # SafeOps: fallo aquí no es crítico — el gap se reintentará
+                # en la próxima ejecución, pero no corrompe datos.
+                irr_key = _gap_key(
+                    self._env, exchange, symbol, timeframe, start_ms,
+                    prefix="irrecoverable",
+                )
+                _retry(lambda: self._store._client.setex(
+                    irr_key, self._IRRECOVERABLE_TTL_S, b"1",
+                ))
+                logger.info(
+                    "GapRegistry: gap marcado irrecuperable | exchange={} "
+                    "symbol={} timeframe={} start_ms={} ttl_days=365",
+                    exchange, symbol, timeframe, start_ms,
+                )
             return deleted
         except Exception as exc:
             logger.warning(
                 "GapRegistry.mark_healed failed (non-critical) | key={} error={}", key, exc
             )
+            return False
+
+    def is_irrecoverable(
+        self,
+        exchange:  str,
+        symbol:    str,
+        timeframe: str,
+        start_ms:  int,
+    ) -> bool:
+        """
+        Consulta si este gap fue marcado irrecuperable (NoDataAvailableError
+        previo). Si True, execute_pair lo salta sin fetch.
+
+        SafeOps: ante cualquier error Redis retorna False — el gap se
+        reintentará, pero nunca se omitirá un gap sano por error de infra.
+        """
+        irr_key = _gap_key(
+            self._env, exchange, symbol, timeframe, start_ms,
+            prefix="irrecoverable",
+        )
+        try:
+            return bool(_retry(lambda: self._store._client.exists(irr_key)))
+        except Exception:
             return False
 
     def increment_attempts(

@@ -165,6 +165,26 @@ class RepairStrategy(StrategyMixin):
                         exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
                     ).inc()
                     return False, 0, 0.0
+                # Filtrar gaps irrecuperables (NoDataAvailableError previo).
+                # SafeOps: is_irrecoverable retorna False ante fallo Redis —
+                # el gap se reintentará, nunca se omite un gap sano por error.
+                try:
+                    from infra.state.gap_registry import build_gap_registry_from_env
+                    _reg = build_gap_registry_from_env()
+                    if _reg is not None and _reg.is_irrecoverable(
+                        exchange=ctx.exchange_id, symbol=symbol,
+                        timeframe=timeframe, start_ms=gap.start_ms,
+                    ):
+                        log.debug(
+                            "Gap skip — conocido irrecuperable (sin datos en exchange)",
+                            gap=str(gap),
+                        )
+                        REPAIR_GAPS_SKIPPED.labels(
+                            exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                        ).inc()
+                        return False, 0, 0.0
+                except Exception as _irr_exc:
+                    log.debug("is_irrecoverable check skipped", error=str(_irr_exc))
                 async with sem:
                     return await self._heal_gap(
                         gap=gap, symbol=symbol, timeframe=timeframe, ctx=ctx,
@@ -286,7 +306,7 @@ class RepairStrategy(StrategyMixin):
         symbol:    str,
         timeframe: str,
         ctx:       PipelineContext,
-    ) -> tuple[bool, int]:
+    ) -> tuple[bool, int, float]:
         try:
             log = _log.bind(
                 exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
@@ -420,9 +440,31 @@ class RepairStrategy(StrategyMixin):
             )
             from market_data.processing.strategies.base import classify_error
             if isinstance(exc, NoDataAvailableError):
-                # No es un fallo — el exchange simplemente no tiene el dato.
-                # No incrementar PIPELINE_ERRORS. El gap quedará sin sanar.
-                log.warning("Gap heal: sin datos en exchange", gap=str(gap))
+                # No es un fallo — el exchange no tiene datos para este rango
+                # (p.ej. gap pre-origin: el exchange no existía aún).
+                # Marcar como irrecuperable para suprimir retries infinitos
+                # que saturarían workers y contaminarían métricas de error.
+                # SafeOps: si Redis no está disponible, degrada silenciosamente.
+                log.warning(
+                    "Gap heal: sin datos en exchange — marcando irrecuperable",
+                    gap=str(gap),
+                )
+                try:
+                    from infra.state.gap_registry import build_gap_registry_from_env
+                    _registry = build_gap_registry_from_env()
+                    if _registry is not None:
+                        _registry.mark_healed(
+                            exchange     = ctx.exchange_id,
+                            symbol       = symbol,
+                            timeframe    = timeframe,
+                            start_ms     = gap.start_ms,
+                            irreversible = True,
+                        )
+                except Exception as _reg_exc:
+                    log.debug(
+                        "GapRegistry.mark_healed(irreversible) skipped",
+                        error=str(_reg_exc),
+                    )
             elif isinstance(exc, ChunkFetchError):
                 log.warning("Gap heal: fetch transitorio",
                     error=str(exc), is_transient=True)
