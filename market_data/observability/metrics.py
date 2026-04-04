@@ -37,6 +37,7 @@ Métricas disponibles
 • ocm_silver_gaps_total                 — gaps activos en Silver por serie
 • ocm_silver_gap_max_candles            — tamaño del gap más grande por serie
 • ocm_silver_series_coverage_ratio      — fracción de velas presentes vs esperadas
+• ocm_silver_freshness_seconds          — segundos desde último candle Silver (SLA)
 """
 
 from __future__ import annotations
@@ -228,6 +229,12 @@ SILVER_SERIES_COVERAGE_RATIO = Gauge(
     "ocm_silver_series_coverage_ratio",
     "Fracción de velas presentes vs esperadas en el rango completo (0.0-1.0).",
     ["exchange", "symbol", "market_type", "timeframe"],
+)
+
+SILVER_FRESHNESS_SECONDS = Gauge(
+    "ocm_silver_freshness_seconds",
+    "Segundos desde el último candle en Silver hasta ahora. SLA de frescura.",
+    ["exchange", "symbol", "timeframe"],
 )
 
 # Lateness real observado por candle (ms entre close esperado y momento de fetch).
