@@ -876,6 +876,27 @@ class SilverStorage:
             symbol, timeframe, version_id, self._exchange or "shared", len(partitions),
         )
 
+    def commit_version(
+        self,
+        symbol:    str,
+        timeframe: str,
+        run_id:    Optional[str] = None,
+    ) -> None:
+        """Commit final del dataset tras backfill masivo con skip_versioning=True.
+
+        Consolida todas las particiones existentes en un único manifest latest.json,
+        creando una versión numerada que refleja el estado completo del dataset.
+
+        Debe llamarse una sola vez al final del backfill, no por chunk.
+        Es idempotente: si no hay particiones nuevas respecto a latest.json,
+        el dedup check interno evita crear una versión duplicada.
+        """
+        self._write_version(symbol, timeframe, partitions=[], run_id=run_id)
+        logger.info(
+            "Backfill version committed | {}/{} exchange={}",
+            symbol, timeframe, self._exchange or "shared",
+        )
+
 
 # ==========================================================
 # Helpers (puros)

@@ -400,6 +400,24 @@ class BackfillStrategy(StrategyMixin):
                 )
                 break
 
+        # Commit final del backfill: genera una versión consolidada en latest.json
+        # que refleja el estado completo del dataset tras la paginación.
+        # No se hace por chunk (skip_versioning=True) para evitar miles de versiones.
+        if total_rows > 0:
+            try:
+                ctx.storage.commit_version(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    run_id=getattr(ctx, 'run_id', None),
+                )
+            except Exception as exc:
+                _log.bind(
+                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                ).warning(
+                    "Backfill commit_version failed (non-critical)",
+                    error=str(exc),
+                )
+
         return total_rows, chunks
 
     # ----------------------------------------------------------
