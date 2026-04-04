@@ -306,10 +306,22 @@ async def run_futures_pipeline(
         summary = await pipeline.run(mode=pipeline_mode)
 
     summary = None  # will be set inside _run_pipeline
-    if exchange_client is not None:
-        # Reutilizar el adapter validado — evita managed_adapter fallback
+    # Invariante de aislamiento: nunca reutilizar un adapter inyectado
+    # si está cerrado o en un loop diferente (retry de Prefect).
+    # En ese caso, crear uno fresco con owned lifecycle.
+    _use_injected = (
+        exchange_client is not None
+        and not exchange_client._closed
+        and await exchange_client.is_healthy()
+    )
+    if _use_injected:
         await _run_pipeline(exchange_client)
     else:
+        if exchange_client is not None:
+            log.warning(
+                "Futures adapter unhealthy or closed — creating fresh adapter | exchange=%s",
+                exchange_name,
+            )
         async with managed_adapter(exchange_cfg, futures_market_type) as futures_client:
             await _run_pipeline(futures_client)
 

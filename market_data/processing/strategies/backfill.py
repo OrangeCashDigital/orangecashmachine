@@ -22,7 +22,7 @@ from market_data.processing.strategies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from market_data.observability.metrics import ROWS_INGESTED
+from market_data.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
 from infra.state.cursor_store import encode_cursor_key as _encode
 
 _log = bind_pipeline("backfill")
