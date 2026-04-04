@@ -41,6 +41,24 @@ class GapRange:
         end   = pd.Timestamp(self.end_ms,   unit="ms", tz="UTC").isoformat()
         return f"Gap[{start} → {end} expected={self.expected}]"
 
+    @property
+    def duration_ms(self) -> int:
+        return self.end_ms - self.start_ms
+
+    @property
+    def severity(self) -> str:
+        """Clasifica el gap por candles esperados perdidos.
+
+        low    : <= 2 candles  — ruido / latencia puntual
+        medium : <= 10 candles — sesión con datos faltantes
+        high   : > 10 candles  — pérdida de datos significativa
+        """
+        if self.expected <= 2:
+            return "low"
+        elif self.expected <= 10:
+            return "medium"
+        return "high"
+
 
 def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapRange]:
     """

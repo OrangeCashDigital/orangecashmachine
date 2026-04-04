@@ -100,9 +100,11 @@ class QualityPipeline:
         # Warning únicamente — no bloquea el pipeline (datos parciales > sin datos).
         _gaps = scan_gaps(df, timeframe)
         if _gaps:
-            logger.warning(
-                "Gap scan: {} gaps detectados post-ingesta | {}/{} exchange={}",
-                len(_gaps), symbol, timeframe, exchange,
+            _high = sum(1 for g in _gaps if g.severity == "high")
+            _lvl  = logger.warning if _high > 0 else logger.info
+            _lvl(
+                "Gap scan | total={} high={} | {}/{} exchange={}",
+                len(_gaps), _high, symbol, timeframe, exchange,
             )
 
         if result.decision == QualityDecision.REJECT:
