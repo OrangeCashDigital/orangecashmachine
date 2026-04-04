@@ -129,7 +129,14 @@ class UnifiedPipeline:
         )
         quality = QualityPipeline()
 
-        from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync
+        from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync, overlap_for_timeframe
+        # overlap se resuelve por timeframe si hay uno único configurado;
+        # en multi-timeframe cada símbolo hereda el overlap del fetcher.
+        _overlap = (
+            overlap_for_timeframe(self.timeframes[0])
+            if len(self.timeframes) == 1
+            else None  # fetcher usará DEFAULT_OVERLAP_BARS; suficiente para multi-tf
+        )
         fetcher = HistoricalFetcherAsync(
             storage           = silver,
             transformer       = OHLCVTransformer(),
@@ -138,6 +145,7 @@ class UnifiedPipeline:
             backfill_mode     = self.backfill_mode,
             market_type       = market_type,
             config_start_date = start_date,
+            **({'overlap_bars': _overlap} if _overlap is not None else {}),
         )
 
         self._ctx = PipelineContext(

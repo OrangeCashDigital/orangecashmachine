@@ -51,6 +51,30 @@ CHUNK_FETCH_TIMEOUT   = 60.0   # segundos máximos por intento individual de fet
 MAX_CHUNKS_PER_RUN    = 100_000
 DEFAULT_OVERLAP_BARS  = 3
 
+# Overlap por timeframe para incremental.
+# Valor = barras a reingesta para cubrir correcciones tardías del exchange.
+# Exchanges crypto pueden corregir candles hasta ~15 min después del cierre.
+_OVERLAP_BY_TIMEFRAME: dict[str, int] = {
+    "1m":  15,   # 15 min — exchanges corrigen candles hasta ~10-15 min
+    "3m":  10,   # 30 min
+    "5m":  6,    # 30 min
+    "15m": 4,    # 60 min
+    "30m": 4,    # 120 min
+    "1h":  3,    # 3 horas
+    "2h":  3,    # 6 horas
+    "4h":  3,    # 12 horas
+    "6h":  2,    # 12 horas
+    "8h":  2,    # 16 horas
+    "12h": 2,    # 24 horas
+    "1d":  2,    # 2 días
+    "1w":  1,    # 1 semana
+}
+
+
+def overlap_for_timeframe(timeframe: str) -> int:
+    """Devuelve el overlap en barras recomendado para el timeframe dado."""
+    return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
+
 OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
 # ==========================================================
