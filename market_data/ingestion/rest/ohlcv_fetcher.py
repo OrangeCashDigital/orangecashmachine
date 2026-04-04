@@ -270,6 +270,7 @@ class HistoricalFetcherAsync:
 
         since_ts = await self._resolve_start_timestamp(symbol, timeframe, start_date)
         tf_ms    = timeframe_to_ms(timeframe)
+        _mode    = "backfill" if self._backfill_mode else "incremental"
 
         collected:    List[pd.DataFrame] = []
         last_seen_ts: Optional[int]      = None
@@ -286,7 +287,7 @@ class HistoricalFetcherAsync:
                 self._log.bind(symbol=symbol, timeframe=timeframe, chunk=chunk_idx).warning("Circuit open — aborting chunked download")
                 FETCH_CHUNKS_TOTAL.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                    status=_status,
+                    status=_status, mode=_mode,
                 ).inc()
                 if not collected:
                     # Sin datos — propagar para que el pipeline aborte el exchange.
@@ -309,13 +310,13 @@ class HistoricalFetcherAsync:
                 if _status not in ("circuit_open", "error"):
                     FETCH_CHUNKS_TOTAL.labels(
                         exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                        status=_status,
+                        status=_status, mode=_mode,
                     ).inc()
 
             if not raw:
                 FETCH_CHUNKS_TOTAL.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                    status="empty",
+                    status="empty", mode=_mode,
                 ).inc()
                 break
 
@@ -343,7 +344,7 @@ class HistoricalFetcherAsync:
             _delay_ms       = _now_ms - _candle_close
             if _delay_ms > 0:
                 CANDLE_DELAY_MS.labels(
-                    exchange=exchange_name, timeframe=timeframe,
+                    exchange=exchange_name, timeframe=timeframe, mode=_mode,
                 ).observe(_delay_ms)
 
             if last_ts <= since_ts:
@@ -351,7 +352,7 @@ class HistoricalFetcherAsync:
                 self._log.bind(symbol=symbol, timeframe=timeframe, severity=_stale_severity, last_ts=last_ts, since_ts=since_ts).warning("Stale window — aborting")
                 FETCH_CHUNKS_TOTAL.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                    status=_stale_severity,
+                    status=_stale_severity, mode=_mode,
                 ).inc()
                 break
 
