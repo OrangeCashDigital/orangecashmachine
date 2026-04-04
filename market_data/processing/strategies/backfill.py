@@ -113,7 +113,7 @@ class BackfillStrategy(StrategyMixin):
 
         try:
             raw_data = await ctx.fetcher.fetch_chunk(
-                symbol=symbol, timeframe=timeframe, since=0, limit=1,
+                symbol=symbol, timeframe=timeframe, since=None, limit=1,
             )
             if not raw_data:
                 return None
