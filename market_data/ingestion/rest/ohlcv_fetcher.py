@@ -156,7 +156,7 @@ class HistoricalFetcherAsync:
         self,
         symbol:    str,
         timeframe: str,
-        since:     int,
+        since:     Optional[int],
         limit:     int = DEFAULT_CHUNK_LIMIT,
         end_ms:    Optional[int] = None,
     ) -> List[list]:
@@ -347,7 +347,7 @@ class HistoricalFetcherAsync:
         self,
         symbol:    str,
         timeframe: str,
-        since:     int,
+        since:     Optional[int],
         limit:     int,
         end_ms:    Optional[int] = None,
     ) -> List[list]:
