@@ -125,9 +125,11 @@ FETCH_CHUNK_DURATION = Histogram(
 FETCH_CHUNKS_TOTAL = Counter(
     "ocm_fetch_chunks_total",
     "Total de chunks fetched del exchange",
-    ["exchange", "symbol", "timeframe", "status", "mode"],
+    ["exchange", "timeframe", "status", "mode"],
+    # symbol eliminado — evita cardinalidad explosiva (20 symbols × 3 exchanges × 10 TF)
     # status: success | empty | circuit_open | stale | regression
     # mode: backfill | incremental — separa distribuciones para calibración
+    # Para debug por symbol usar logs (ya instrumentados en _download_chunked)
 )
 
 FETCH_CHUNK_ERRORS_TOTAL = Counter(
@@ -243,9 +245,11 @@ CANDLE_DELAY_MS = Histogram(
     "ocm_candle_delay_ms",
     "Delay entre cierre esperado del candle y momento de fetch (ms)",
     ["exchange", "timeframe", "mode"],
+    # Sin symbol — cardinalidad controlada: exchange × TF × mode = ~60 series
     # mode: backfill | incremental — crítico para p99 útil:
     # backfill tiene delays de días, incremental de segundos.
     # Mezclarlos produce un p99 inútil para calibración de lateness.
+    # Con buckets: ~60 × 9 = ~540 series Prometheus. Manejable.
     buckets=[1000, 5000, 10000, 30000, 60000, 300000, 600000, 900000],
 )
 
