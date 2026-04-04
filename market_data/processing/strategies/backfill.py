@@ -15,6 +15,7 @@ import pandas as pd
 from core.logging.setup import bind_pipeline
 from market_data.ingestion.rest.ohlcv_fetcher import DEFAULT_CHUNK_LIMIT
 from market_data.processing.utils.timeframe import timeframe_to_ms
+from market_data.adapters.exchange.exchange_quirks import get_quirks
 from market_data.processing.strategies.base import (
     PairResult,
     PipelineContext,
@@ -266,10 +267,21 @@ class BackfillStrategy(StrategyMixin):
             )
 
             try:
-                raw = await ctx.fetcher.fetch_chunk(
-                    symbol=symbol, timeframe=timeframe,
-                    since=chunk_start, limit=chunk_limit,
-                )
+                _quirks = get_quirks(ctx.exchange_id)
+                if _quirks.backward_pagination:
+                    # KuCoin/KuCoinFutures: ignoran since cuando hay endAt.
+                    # Pasar since=None y end_ms=current_end para que el adapter
+                    # inyecte endAt correctamente en segundos.
+                    raw = await ctx.fetcher.fetch_chunk(
+                        symbol=symbol, timeframe=timeframe,
+                        since=None, limit=chunk_limit,
+                        end_ms=current_end,
+                    )
+                else:
+                    raw = await ctx.fetcher.fetch_chunk(
+                        symbol=symbol, timeframe=timeframe,
+                        since=chunk_start, limit=chunk_limit,
+                    )
             except Exception as exc:
                 log.warning("Backfill chunk fetch failed", error=str(exc))
                 break

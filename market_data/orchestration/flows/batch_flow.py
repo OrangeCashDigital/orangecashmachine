@@ -46,6 +46,7 @@ from market_data.orchestration.tasks.batch_tasks import (
     run_futures_pipeline,
     run_trades_pipeline,
     run_derivatives_pipeline,
+    run_repair_pipeline,
 )
 from infra.observability.server import push_metrics
 from market_data.safety import guard_context
@@ -178,6 +179,10 @@ def _launch_pipelines_for_exchange(
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
         *_launch_futures_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
         *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
+        # Repair corre después de ingestión — detecta y sana gaps en Silver.
+        # Se lanza por exchange, no por dataset, usando el adapter ya validado.
+        *([run_repair_pipeline(config, exc_cfg, probe, market_type="spot", exchange_client=adapter)]
+          if "ohlcv" in active and adapter is not None else []),
     ]
 
 
