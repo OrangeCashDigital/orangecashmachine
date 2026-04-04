@@ -223,13 +223,13 @@ class CCXTAdapter(ExchangeAdapter):
             # since=0 no es válido — estos exchanges lo rechazan
             if since == 0:
                 since = None
-            elif self._exchange_id == "kucoin" and not effective_type:
-                now_ts = int(time.time() * 1000)
-                # KuCoin: devuelve `limit` velas ANTERIORES a endAt — since es ignorado.
-                # Para repair pasamos gap_end_ms como end_ms; incremental usa now_ts.
-                # KuCoin REST espera endAt en SEGUNDOS (Unix), no milisegundos.
-                _end_at_ms = end_ms if end_ms is not None else now_ts
-                params["endAt"] = min(_end_at_ms, now_ts) // 1000
+        if self._exchange_id in ("kucoin", "kucoinfutures"):
+            now_ts = int(time.time() * 1000)
+            # KuCoin/KuCoinFutures: devuelve `limit` velas ANTERIORES a endAt.
+            # since es ignorado por el exchange cuando endAt está presente.
+            # KuCoin REST espera endAt en SEGUNDOS (Unix), no milisegundos.
+            _end_at_ms = end_ms if end_ms is not None else now_ts
+            params["endAt"] = min(_end_at_ms, now_ts) // 1000
         try:
             async def _call():
                 return await asyncio.wait_for(
