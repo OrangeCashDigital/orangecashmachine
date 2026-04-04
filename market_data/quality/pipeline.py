@@ -9,6 +9,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.quality.validators.data_quality import DataQualityChecker, DataQualityReport
+from market_data.processing.strategies.repair import scan_gaps
 from market_data.quality.policies.data_quality_policy import (
     DataQualityPolicy, PolicyResult, QualityDecision, default_policy,
 )
@@ -93,6 +94,16 @@ class QualityPipeline:
         checker = DataQualityChecker(timeframe=timeframe, exchange=exchange)
         report  = checker.check(df, symbol=symbol)
         result  = self._policy.evaluate(report)
+
+        # Gap scan post-ingesta: detecta huecos temporales silenciosos.
+        # Corre siempre, independiente del resultado de calidad.
+        # Warning únicamente — no bloquea el pipeline (datos parciales > sin datos).
+        _gaps = scan_gaps(df, timeframe)
+        if _gaps:
+            logger.warning(
+                "Gap scan: {} gaps detectados post-ingesta | {}/{} exchange={}",
+                len(_gaps), symbol, timeframe, exchange,
+            )
 
         if result.decision == QualityDecision.REJECT:
             tier = DataTier.REJECTED
