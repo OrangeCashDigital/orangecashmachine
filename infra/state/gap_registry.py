@@ -56,9 +56,22 @@ _GAP_TTL        = _GAP_TTL_DAYS * 86_400
 _SCAN_COUNT     = 100
 
 
-def _gap_key(env: str, exchange: str, symbol: str, timeframe: str, start_ms: int) -> str:
+def _gap_key(
+    env:       str,
+    exchange:  str,
+    symbol:    str,
+    timeframe: str,
+    start_ms:  int,
+    prefix:    str = "gap",
+) -> str:
+    """
+    Genera la clave Redis para un gap.
+
+    prefix='gap'           → clave normal del gap
+    prefix='irrecoverable' → centinela para gaps pre-origin (TTL=365d)
+    """
     return (
-        f"{env}:gap:{_encode(exchange)}:{_encode(symbol)}"
+        f"{env}:{prefix}:{_encode(exchange)}:{_encode(symbol)}"
         f":{_encode(timeframe)}:{start_ms}"
     )
 
