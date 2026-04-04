@@ -10,6 +10,7 @@ from loguru import logger
 
 from market_data.quality.validators.data_quality import DataQualityChecker, DataQualityReport
 from market_data.processing.strategies.repair import scan_gaps
+from market_data.observability.metrics import QUALITY_GAPS_TOTAL
 from market_data.quality.policies.data_quality_policy import (
     DataQualityPolicy, PolicyResult, QualityDecision, default_policy,
 )
@@ -100,12 +101,21 @@ class QualityPipeline:
         # Warning únicamente — no bloquea el pipeline (datos parciales > sin datos).
         _gaps = scan_gaps(df, timeframe)
         if _gaps:
-            _high = sum(1 for g in _gaps if g.severity == "high")
-            _lvl  = logger.warning if _high > 0 else logger.info
+            _high   = sum(1 for g in _gaps if g.severity == "high")
+            _medium = sum(1 for g in _gaps if g.severity == "medium")
+            _low    = len(_gaps) - _high - _medium
+            _lvl    = logger.warning if _high > 0 else logger.info
             _lvl(
-                "Gap scan | total={} high={} | {}/{} exchange={}",
-                len(_gaps), _high, symbol, timeframe, exchange,
+                "Gap scan | total={} high={} medium={} low={} | {}/{} exchange={}",
+                len(_gaps), _high, _medium, _low, symbol, timeframe, exchange,
             )
+            # Métricas Prometheus — permite alertas y dashboards por severidad.
+            for _sev, _cnt in (("high", _high), ("medium", _medium), ("low", _low)):
+                if _cnt:
+                    QUALITY_GAPS_TOTAL.labels(
+                        exchange=exchange, symbol=symbol,
+                        timeframe=timeframe, severity=_sev,
+                    ).inc(_cnt)
 
         if result.decision == QualityDecision.REJECT:
             tier = DataTier.REJECTED

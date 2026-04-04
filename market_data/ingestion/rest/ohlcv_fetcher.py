@@ -35,6 +35,7 @@ from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter, ExchangeCirc
 from market_data.observability.metrics import (
     FETCH_CHUNK_DURATION,
     FETCH_CHUNKS_TOTAL,
+    CANDLE_DELAY_MS,
     FETCH_CHUNK_ERRORS_TOTAL,
 )
 import time
@@ -333,6 +334,17 @@ class HistoricalFetcherAsync:
             collected.append(df)
 
             last_ts = int(df["timestamp"].max().timestamp() * 1000)
+
+            # candle_delay_ms: tiempo entre cierre esperado del candle y ahora.
+            # Fuente empírica para calibrar lateness por exchange.
+            # Solo se registra si el candle es del pasado (delay > 0).
+            _now_ms         = int(time.time() * 1000)
+            _candle_close   = last_ts + tf_ms  # cierre esperado
+            _delay_ms       = _now_ms - _candle_close
+            if _delay_ms > 0:
+                CANDLE_DELAY_MS.labels(
+                    exchange=exchange_name, timeframe=timeframe,
+                ).observe(_delay_ms)
 
             if last_ts <= since_ts:
                 _stale_severity = "regression" if last_ts < since_ts else "stale"

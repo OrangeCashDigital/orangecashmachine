@@ -32,6 +32,8 @@ Métricas disponibles
 • ocm_timestamp_grid_collisions_total   — colisiones post-floor
 • ocm_fetch_aborts_total                — aborts por circuit breaker
 • ocm_exchange_circuit_open_total       — rechazos por circuit breaker
+• ocm_candle_delay_ms                   — delay real entre cierre y fetch del candle
+• ocm_quality_gaps_total                — gaps detectados post-ingesta por severidad
 • ocm_silver_gaps_total                 — gaps activos en Silver por serie
 • ocm_silver_gap_max_candles            — tamaño del gap más grande por serie
 • ocm_silver_series_coverage_ratio      — fracción de velas presentes vs esperadas
@@ -226,6 +228,22 @@ SILVER_SERIES_COVERAGE_RATIO = Gauge(
     "ocm_silver_series_coverage_ratio",
     "Fracción de velas presentes vs esperadas en el rango completo (0.0-1.0).",
     ["exchange", "symbol", "market_type", "timeframe"],
+)
+
+# Lateness real observado por candle (ms entre close esperado y momento de fetch).
+# Fuente de verdad para calibrar _ALLOWED_LATENESS_MS_BY_EXCHANGE con p99.
+CANDLE_DELAY_MS = Histogram(
+    "ocm_candle_delay_ms",
+    "Delay entre cierre esperado del candle y momento de fetch (ms)",
+    ["exchange", "timeframe"],
+    buckets=[1000, 5000, 10000, 30000, 60000, 300000, 600000, 900000],
+)
+
+# Gaps detectados por QualityPipeline post-ingesta, por severidad.
+QUALITY_GAPS_TOTAL = Counter(
+    "ocm_quality_gaps_total",
+    "Gaps temporales detectados post-ingesta por QualityPipeline",
+    ["exchange", "symbol", "timeframe", "severity"],
 )
 
 EXCHANGE_CIRCUIT_OPEN = Counter(
