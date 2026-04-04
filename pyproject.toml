@@ -29,6 +29,8 @@ dependencies = [
     # Resiliencia
     "pybreaker==1.4.1",
     "redis>=7.4.0",
+    "pyiceberg[pyarrow,sql-sqlite]>=0.8.1",
+    "duckdb>=1.5.1",
 ]
 
 [project.scripts]
