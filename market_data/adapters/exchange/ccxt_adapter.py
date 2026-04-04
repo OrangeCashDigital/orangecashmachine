@@ -29,6 +29,7 @@ import pybreaker
 from loguru import logger
 
 from market_data.adapters.exchange.base import ExchangeAdapter
+from market_data.adapters.exchange.exchange_quirks import get_quirks
 from market_data.adapters.exchange.errors import (
     ExchangeAdapterError,
     UnsupportedExchangeError,
@@ -219,15 +220,13 @@ class CCXTAdapter(ExchangeAdapter):
         effective_type = market_type or self._default_type
         if effective_type:
             params["defaultType"] = effective_type
-        if self._exchange_id in ("kucoin", "kucoinfutures") and since is not None:
-            # since=0 no es válido — estos exchanges lo rechazan
-            if since == 0:
-                since = None
-        if self._exchange_id in ("kucoin", "kucoinfutures"):
+        _quirks = get_quirks(self._exchange_id)
+        if _quirks.reject_zero_since and since == 0:
+            since = None
+        if _quirks.requires_end_at:
             now_ts = int(time.time() * 1000)
-            # KuCoin/KuCoinFutures: devuelve `limit` velas ANTERIORES a endAt.
-            # since es ignorado por el exchange cuando endAt está presente.
-            # KuCoin REST espera endAt en SEGUNDOS (Unix), no milisegundos.
+            # endAt requerido: el exchange devuelve velas ANTERIORES a este timestamp.
+            # Se espera en SEGUNDOS (Unix), no milisegundos.
             _end_at_ms = end_ms if end_ms is not None else now_ts
             params["endAt"] = min(_end_at_ms, now_ts) // 1000
         try:

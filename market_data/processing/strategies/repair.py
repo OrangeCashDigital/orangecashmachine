@@ -21,6 +21,7 @@ from market_data.processing.strategies.base import (
     StrategyMixin,
 )
 from market_data.processing.utils.timeframe import timeframe_to_ms
+from market_data.adapters.exchange.exchange_quirks import get_quirks
 from market_data.observability.metrics import (
     ROWS_INGESTED, PIPELINE_ERRORS,
     REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED, REPAIR_GAPS_SKIPPED,
@@ -301,13 +302,12 @@ class RepairStrategy(StrategyMixin):
             collected_raw: list = []
             _MAX_GAP_CHUNKS = 200  # techo de seguridad: 200k velas por gap
 
-            # KuCoin ignora `since` cuando se usa `endAt` — devuelve las `limit`
-            # velas ANTERIORES a endAt. Para paginar correctamente usamos
-            # paginación backward: decrementamos end_ms en cada chunk.
-            # Para otros exchanges usamos paginación forward estándar con `since`.
-            is_kucoin = ctx.exchange_id in ("kucoin", "kucoinfutures")
+            # La estrategia de paginación depende del exchange:
+            # - backward (ej. KuCoin): decrementar end_ms en cada chunk.
+            # - forward (ej. Bybit): incrementar since en cada chunk.
+            _quirks = get_quirks(ctx.exchange_id)
 
-            if is_kucoin:
+            if _quirks.backward_pagination:
                 # Backward pagination: empezar desde gap.end_ms y retroceder.
                 # KuCoin ignora since cuando hay endAt — NO pasar since (None)
                 # para evitar que el adapter entre en la rama incorrecta.
