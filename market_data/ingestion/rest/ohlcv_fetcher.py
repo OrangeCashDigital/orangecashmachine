@@ -124,22 +124,44 @@ _OVERLAP_BY_TIMEFRAME: dict[str, int] = {
 def overlap_for_timeframe(timeframe: str, exchange: str | None = None) -> int:
     """Devuelve el overlap en barras para el timeframe y exchange dados.
 
-    Si se pasa exchange, usa _ALLOWED_LATENESS_MS_BY_EXCHANGE[exchange]
-    (con fallback a _ALLOWED_LATENESS_MS_DEFAULT) para calcular el overlap
-    dinámicamente. Sin exchange, usa la tabla precomputada (default).
+    Orden de resolución de lateness_ms:
+    1. Redis (calibración empírica via scripts/calibrate_lateness.py) — p99 real
+    2. _ALLOWED_LATENESS_MS_BY_EXCHANGE (hardcoded conservador) — fallback
+    3. _ALLOWED_LATENESS_MS_DEFAULT (15 min) — fallback final
 
-    Recalibrar _ALLOWED_LATENESS_MS_BY_EXCHANGE con p99 empírico por exchange
-    una vez acumulados datos de candle_delay_ms en producción.
+    La calibración Redis se activa cuando hay ≥50 observaciones incrementales
+    acumuladas en ocm_candle_delay_ms{mode="incremental"}.
     """
     if exchange is not None:
-        lateness_ms = _ALLOWED_LATENESS_MS_BY_EXCHANGE.get(
-            exchange, _ALLOWED_LATENESS_MS_DEFAULT
-        )
+        # Prioridad 1: calibración empírica desde Redis
+        lateness_ms = _get_calibrated_lateness_ms(exchange, timeframe)
+        # Prioridad 2: hardcoded conservador
+        if lateness_ms is None:
+            lateness_ms = _ALLOWED_LATENESS_MS_BY_EXCHANGE.get(
+                exchange, _ALLOWED_LATENESS_MS_DEFAULT
+            )
         tf_ms = _TF_MS.get(timeframe)
         if tf_ms is not None:
             floor = _MIN_OVERLAP_BARS_BY_TF.get(timeframe, 1)
             return max(floor, math.ceil(lateness_ms / tf_ms))
     return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
+
+
+def _get_calibrated_lateness_ms(exchange: str, timeframe: str) -> int | None:
+    """
+    Lee lateness_ms calibrado desde Redis. None si no disponible.
+
+    SafeOps: nunca lanza — si Redis falla, overlap_for_timeframe()
+    usa el hardcoded como fallback sin interrumpir el pipeline.
+    """
+    try:
+        from infra.state.lateness_calibration import build_calibration_store_from_env
+        store = build_calibration_store_from_env()
+        if store is None:
+            return None
+        return store.get_lateness_ms(exchange, timeframe)
+    except Exception:
+        return None
 
 OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
