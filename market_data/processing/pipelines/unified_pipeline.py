@@ -132,10 +132,12 @@ class UnifiedPipeline:
         from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync, overlap_for_timeframe
         # overlap se resuelve por timeframe si hay uno único configurado;
         # en multi-timeframe cada símbolo hereda el overlap del fetcher.
-        _overlap = (
-            overlap_for_timeframe(self.timeframes[0])
-            if len(self.timeframes) == 1
-            else None  # fetcher usará DEFAULT_OVERLAP_BARS; suficiente para multi-tf
+        # Exchange-aware overlap: usa lateness calibrado por exchange.
+        # Multi-tf: toma el overlap máximo entre todos los timeframes configurados
+        # para ese exchange — garantiza consistencia cross-timeframe.
+        _overlap = max(
+            overlap_for_timeframe(tf, exchange=self._exchange_id)
+            for tf in self.timeframes
         )
         fetcher = HistoricalFetcherAsync(
             storage           = silver,
