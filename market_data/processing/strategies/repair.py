@@ -390,8 +390,16 @@ class RepairStrategy(StrategyMixin):
             df = df.drop_duplicates(subset="timestamp", keep="last").sort_values("timestamp")
 
             if df.empty:
-                _log.bind(symbol=symbol, timeframe=timeframe).warning("Gap heal: df vacio tras filtro", gap_start=str(gap_start), gap_end=str(gap_end), collected_raw=len(collected_raw))
-                return False, 0, 0.0
+                _log.bind(symbol=symbol, timeframe=timeframe).warning(
+                    "Gap heal: df vacio tras filtro — marcando irrecuperable",
+                    gap_start=str(gap_start), gap_end=str(gap_end),
+                    collected_raw=len(collected_raw),
+                )
+                from market_data.processing.exceptions import NoDataAvailableError
+                raise NoDataAvailableError(
+                    f"Exchange returned data but none within gap window {gap} "
+                    f"(symbol={symbol}, timeframe={timeframe})"
+                )
 
             if gap.expected > 1000:
                 log.info("Gap heal: gap grande paginado",

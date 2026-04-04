@@ -33,7 +33,7 @@ FUTURES_SYMBOL_REGEX = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+:[A-Z0-9]+$")
 _ALLOWED_FUTURES_TYPES: frozenset[str] = frozenset({"swap", "future", "option"})
 
 EXCHANGE_TASK_TIMEOUT: int = 120
-PIPELINE_TASK_TIMEOUT: int = 3_600
+PIPELINE_TASK_TIMEOUT: int = 86_400  # 24h — backfill completo
 
 _ALLOWED_TIMEFRAMES:        frozenset[str] = frozenset({"1m", "5m", "15m", "1h", "4h", "1d"})
 _EXCHANGES_WITH_PASSPHRASE: frozenset[str] = frozenset({"kucoin", "okx"})

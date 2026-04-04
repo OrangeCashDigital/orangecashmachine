@@ -38,6 +38,9 @@ pipeline:
     start_date: "2021-06-01T00:00:00Z"  # kucoinfutures BTC/USDT:USDT data available from ~2021
     max_concurrent_tasks: 1
 
+  timeouts:
+    historical_pipeline: 86400  # 24h — necesario para backfill completo de 1m/5m
+
   realtime:
     # Reduce uso de memoria en local
     max_stream_buffer: 1000
