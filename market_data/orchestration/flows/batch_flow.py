@@ -215,6 +215,13 @@ async def _validate_exchanges(
     return probes, adapters
 
 
+# Bounded concurrency: máximo de pipelines simultáneos por stage.
+# Evita saturar rate limits cuando hay múltiples exchanges en paralelo.
+# Valor 4: conservador para la config actual (3 exchanges × 1 símbolo).
+# Ajustar si se escala a más exchanges o símbolos.
+_PIPELINE_SEMAPHORE = asyncio.Semaphore(4)
+
+
 async def _consolidate_results(
     futures: List[asyncio.Future],
     log,
@@ -230,8 +237,15 @@ async def _consolidate_results(
 
     SafeOps: guard_context.get_guard() retorna None si no hay guard activo
     (ej: ejecución directa desde Prefect Server sin entrypoint local).
+
+    Bounded concurrency: _PIPELINE_SEMAPHORE limita pipelines simultáneos.
+    Evita saturar rate limits y conexiones con múltiples exchanges en paralelo.
     """
-    results  = await asyncio.gather(*futures, return_exceptions=True)
+    async def _guarded(task):
+        async with _PIPELINE_SEMAPHORE:
+            return await task
+
+    results  = await asyncio.gather(*(_guarded(f) for f in futures), return_exceptions=True)
     failures = [r for r in results if isinstance(r, Exception)]
     ok       = len(results) - len(failures)
 
