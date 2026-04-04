@@ -212,6 +212,7 @@ class CCXTAdapter(ExchangeAdapter):
         since:       Optional[int] = None,
         limit:       int = 100,
         market_type: Optional[str] = None,
+        end_ms:      Optional[int] = None,
     ) -> List[List[Any]]:
         client = await self._get_client()
         params: Dict[str, Any] = {}
@@ -223,9 +224,12 @@ class CCXTAdapter(ExchangeAdapter):
             if since == 0:
                 since = None
             elif self._exchange_id == "kucoin" and not effective_type:
-                now_ts = int(time.time())
-                if since > now_ts:
-                    params["endAt"] = now_ts
+                now_ts = int(time.time() * 1000)
+                # KuCoin: devuelve `limit` velas ANTERIORES a endAt — since es ignorado.
+                # Para repair pasamos gap_end_ms como end_ms; incremental usa now_ts.
+                # KuCoin REST espera endAt en SEGUNDOS (Unix), no milisegundos.
+                _end_at_ms = end_ms if end_ms is not None else now_ts
+                params["endAt"] = min(_end_at_ms, now_ts) // 1000
         try:
             async def _call():
                 return await asyncio.wait_for(

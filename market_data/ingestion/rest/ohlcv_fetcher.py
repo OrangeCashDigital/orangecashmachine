@@ -158,9 +158,10 @@ class HistoricalFetcherAsync:
         timeframe: str,
         since:     int,
         limit:     int = DEFAULT_CHUNK_LIMIT,
+        end_ms:    Optional[int] = None,
     ) -> List[list]:
         """API pública de fetch de un chunk. Usada por BackfillStrategy."""
-        return await self._fetch_chunk_with_retry(symbol, timeframe, since, limit)
+        return await self._fetch_chunk_with_retry(symbol, timeframe, since, limit, end_ms=end_ms)
 
     async def close(self) -> None:
         await self._exchange.close()
@@ -348,6 +349,7 @@ class HistoricalFetcherAsync:
         timeframe: str,
         since:     int,
         limit:     int,
+        end_ms:    Optional[int] = None,
     ) -> List[list]:
         """
         Retry con clasificación tipada de errores ccxt.
@@ -366,7 +368,7 @@ class HistoricalFetcherAsync:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 return await asyncio.wait_for(
-                    self._exchange.fetch_ohlcv(symbol, timeframe, since, limit),
+                    self._exchange.fetch_ohlcv(symbol, timeframe, since, limit, end_ms=end_ms),
                     timeout=CHUNK_FETCH_TIMEOUT,
                 )
             except ExchangeCircuitOpenError:

@@ -293,6 +293,7 @@ class RepairStrategy(StrategyMixin):
                     timeframe = timeframe,
                     since     = since,
                     limit     = _CHUNK,
+                    end_ms    = gap.end_ms + tf_ms,
                 )
                 if not raw_chunk:
                     break
@@ -321,6 +322,7 @@ class RepairStrategy(StrategyMixin):
             df = df.drop_duplicates(subset="timestamp", keep="last").sort_values("timestamp")
 
             if df.empty:
+                _log.bind(symbol=symbol, timeframe=timeframe).warning("Gap heal: df vacio tras filtro", gap_start=str(gap_start), gap_end=str(gap_end), collected_raw=len(collected_raw))
                 return False, 0, 0.0
 
             if gap.expected > 1000:
