@@ -737,7 +737,7 @@ class SilverStorage:
             df.to_parquet(temp_path, compression="snappy", index=False)
             temp_path.replace(file_path)
 
-            partition_meta = _write_partition_meta(meta_path, df, symbol, timeframe, run_id=run_id)
+            partition_meta = _write_partition_meta(meta_path, df, symbol, timeframe, run_id=run_id, file_path=file_path)
 
             label = f"{year}/{month:02d}/{day:02d}" if day is not None else f"{year}/{month:02d}"
             logger.debug(
@@ -948,6 +948,7 @@ def _write_partition_meta(
     symbol: str,
     timeframe: str,
     run_id: Optional[str] = None,
+    file_path: Optional[Path] = None,
 ) -> Dict:
     """Escribe sidecar .meta.json y devuelve el dict para el manifest de versión."""
     try:
@@ -958,10 +959,10 @@ def _write_partition_meta(
             pd.util.hash_pandas_object(df[["timestamp","open","high","low","close","volume"]], index=False).values.tobytes()
         ).hexdigest()
 
-        file_path = meta_path.with_suffix(".parquet")
         # file_size calculado post-rename atómico — nunca None en producción.
-        # Si el archivo no existe (test/dry-run) se guarda None explícitamente.
-        file_size = file_path.stat().st_size if file_path.exists() else None
+        # file_path viene del caller (_write_partition) que conoce el path real.
+        # NO usar meta_path.with_suffix() — falla con extensiones compuestas (.meta.json).
+        file_size = file_path.stat().st_size if file_path is not None and file_path.exists() else None
 
         meta: Dict = {
             "symbol":     symbol,
