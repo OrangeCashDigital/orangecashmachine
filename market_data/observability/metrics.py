@@ -125,9 +125,9 @@ FETCH_CHUNK_DURATION = Histogram(
 FETCH_CHUNKS_TOTAL = Counter(
     "ocm_fetch_chunks_total",
     "Total de chunks fetched del exchange",
-    ["exchange", "symbol", "timeframe", "status"],
-    # status: success | empty | circuit_open | stale
-    # Para errores usar FETCH_CHUNK_ERRORS_TOTAL (PromQL más limpio)
+    ["exchange", "symbol", "timeframe", "status", "mode"],
+    # status: success | empty | circuit_open | stale | regression
+    # mode: backfill | incremental — separa distribuciones para calibración
 )
 
 FETCH_CHUNK_ERRORS_TOTAL = Counter(
@@ -242,7 +242,10 @@ SILVER_FRESHNESS_SECONDS = Gauge(
 CANDLE_DELAY_MS = Histogram(
     "ocm_candle_delay_ms",
     "Delay entre cierre esperado del candle y momento de fetch (ms)",
-    ["exchange", "timeframe"],
+    ["exchange", "timeframe", "mode"],
+    # mode: backfill | incremental — crítico para p99 útil:
+    # backfill tiene delays de días, incremental de segundos.
+    # Mezclarlos produce un p99 inútil para calibración de lateness.
     buckets=[1000, 5000, 10000, 30000, 60000, 300000, 600000, 900000],
 )
 
