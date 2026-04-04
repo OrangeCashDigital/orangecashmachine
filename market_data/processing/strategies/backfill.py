@@ -114,7 +114,7 @@ class BackfillStrategy(StrategyMixin):
 
         try:
             raw_data = await ctx.fetcher.fetch_chunk(
-                symbol=symbol, timeframe=timeframe, since=None, limit=1,
+                symbol=symbol, timeframe=timeframe, since=1, limit=1,
             )
             if not raw_data:
                 return None
@@ -178,14 +178,17 @@ class BackfillStrategy(StrategyMixin):
         if oldest is not None:
             return max(int(oldest.timestamp() * 1000), start_date_ms)
 
-        # C. Cold start — sin cursor ni Silver: usar start_date_ms como inicio.
-        #    start_date_ms >= origin_ms (por definición del floor), así que
-        #    la condición de "completo" (start_ms < origin_ms) nunca dispara en falso.
+        # C. Cold start — sin cursor ni Silver: el punto de partida es el mayor
+        #    entre start_date y origin_ms. Si start_date < origin_ms (p.ej. el
+        #    exchange no existía aún), paginar desde origin_ms evita SKIPPED falso.
+        tf_ms_bf = timeframe_to_ms(timeframe)
+        cold_start_ms = max(start_date_ms, origin_ms) + tf_ms_bf
         _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).info(
-            "Backfill cold start — sin datos previos, paginando desde start_date",
+            "Backfill cold start — sin datos previos, paginando desde max(start_date, origin)",
             start_date=ctx.start_date,
+            cold_start=pd.Timestamp(cold_start_ms, unit="ms", tz="UTC").isoformat(),
         )
-        return start_date_ms
+        return cold_start_ms
 
     def _update_backfill_cursor(
         self,
@@ -207,8 +210,8 @@ class BackfillStrategy(StrategyMixin):
     @staticmethod
     def _parse_start_date_ms(start_date: str) -> int:
         """Convierte start_date ISO 8601 a milliseconds epoch."""
-        dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-        return int(dt.timestamp() * 1000)
+        # pd.Timestamp maneja Z, +00:00 y naive sin ambigüedad
+        return int(pd.Timestamp(start_date, tz="UTC").value // 1_000_000)
 
     def _get_oldest_silver_ts(
         self,
@@ -258,7 +261,21 @@ class BackfillStrategy(StrategyMixin):
 
         for _ in range(_MAX_BACKFILL_CHUNKS):
 
+            if current_end <= origin_ms:
+                log.info("Backfill: cursor ya en origen — paginacion completa")
+                break
+
+
             chunk_start = max(current_end - (chunk_limit * tf_ms), origin_ms)
+
+            # Métrica de sanidad: detecta rango degenerado antes de hacer fetch
+            effective_span = current_end - chunk_start
+            if effective_span <= 0:
+                log.warning("Backfill: effective_span degenerado — abortando",
+                    effective_span_ms=effective_span, tf_ms=tf_ms,
+                    current_end=current_end, chunk_start=chunk_start,
+                )
+                break
 
             log.debug("Backfill chunk",
                 chunk=chunks + 1,

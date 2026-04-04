@@ -120,6 +120,7 @@ class CCXTAdapter(ExchangeAdapter):
         # Spot y futures del mismo exchange comparten el mismo breaker —
         # si bybit está degradado, ambos pipelines lo detectan juntos.
         self._breaker = _get_breaker(self._exchange_id)
+        self._closed: bool = False  # idempotencia en close()
 
     # ----------------------------------------------------------
     # Lifecycle
@@ -173,6 +174,9 @@ class CCXTAdapter(ExchangeAdapter):
 
     async def close(self) -> None:
         """Cierre seguro e idempotente — nunca lanza excepción."""
+        if self._closed:
+            return
+        self._closed = True
         async with self._init_lock:
             if self._client is None:
                 return
