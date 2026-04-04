@@ -72,10 +72,21 @@ DEFAULT_OVERLAP_BARS  = 3
 #   )
 #
 # Ref: Akidau et al. (2015) — The Dataflow Model
-# TODO: recalibrar _ALLOWED_LATENESS_MS con datos reales de Bybit/KuCoin
+# Valores iniciales conservadores. Recalibrar con p99 real de cada exchange
+# una vez acumulados datos de candle_delay_ms en producción.
 # ==========================================================
 
-_ALLOWED_LATENESS_MS: int = 15 * 60 * 1000  # 15 min — pendiente calibración
+# Lateness por exchange (ms). Captura diferencias reales de corrección de velas:
+#   bybit       — correcciones rápidas, jitter bajo
+#   kucoin      — correcciones más lentas, históricamente ~15 min
+#   kucoinfutures — igual que kucoin spot por infraestructura compartida
+# Fallback para exchanges no listados: 15 min (conservador).
+_ALLOWED_LATENESS_MS_BY_EXCHANGE: dict[str, int] = {
+    "bybit":          10 * 60_000,  # 10 min — pendiente calibración empírica
+    "kucoin":         15 * 60_000,  # 15 min — pendiente calibración empírica
+    "kucoinfutures":  15 * 60_000,  # 15 min — pendiente calibración empírica
+}
+_ALLOWED_LATENESS_MS_DEFAULT: int = 15 * 60_000  # fallback para exchanges no listados
 
 # Floor diferenciado por magnitud de timeframe.
 # Para TF largos, 3 barras sería excesivo (ej: 1w → 21 días de reingesta).
@@ -101,19 +112,32 @@ _TF_MS: dict[str, int] = {
     "1w":  7  * 86_400_000,
 }
 
+# _OVERLAP_BY_TIMEFRAME usa el lateness default (fallback).
+# Para lateness por exchange, usar overlap_for_timeframe(tf, exchange).
 _OVERLAP_BY_TIMEFRAME: dict[str, int] = {
-    tf: max(_MIN_OVERLAP_BARS_BY_TF[tf], math.ceil(_ALLOWED_LATENESS_MS / tf_ms))
+    tf: max(_MIN_OVERLAP_BARS_BY_TF[tf], math.ceil(_ALLOWED_LATENESS_MS_DEFAULT / tf_ms))
     for tf, tf_ms in _TF_MS.items()
 }
 
 
-def overlap_for_timeframe(timeframe: str) -> int:
-    """Devuelve el overlap en barras para el timeframe dado.
+def overlap_for_timeframe(timeframe: str, exchange: str | None = None) -> int:
+    """Devuelve el overlap en barras para el timeframe y exchange dados.
 
-    Derivado de _ALLOWED_LATENESS_MS con floor _MIN_OVERLAP_BARS.
-    Para TF cortos domina el lateness absoluto; para TF largos el floor.
-    Ajustar _ALLOWED_LATENESS_MS tras calibración empírica con exchanges reales.
+    Si se pasa exchange, usa _ALLOWED_LATENESS_MS_BY_EXCHANGE[exchange]
+    (con fallback a _ALLOWED_LATENESS_MS_DEFAULT) para calcular el overlap
+    dinámicamente. Sin exchange, usa la tabla precomputada (default).
+
+    Recalibrar _ALLOWED_LATENESS_MS_BY_EXCHANGE con p99 empírico por exchange
+    una vez acumulados datos de candle_delay_ms en producción.
     """
+    if exchange is not None:
+        lateness_ms = _ALLOWED_LATENESS_MS_BY_EXCHANGE.get(
+            exchange, _ALLOWED_LATENESS_MS_DEFAULT
+        )
+        tf_ms = _TF_MS.get(timeframe)
+        if tf_ms is not None:
+            floor = _MIN_OVERLAP_BARS_BY_TF.get(timeframe, 1)
+            return max(floor, math.ceil(lateness_ms / tf_ms))
     return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
 
 OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
