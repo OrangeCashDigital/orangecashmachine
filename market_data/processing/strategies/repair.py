@@ -60,6 +60,21 @@ def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapR
         ts_ms = ts_col.astype("int64").values
 
     gaps: List[GapRange] = []
+
+    # Head-gap: si la primera vela no cae en el inicio esperado de su día UTC,
+    # existe un hueco desde 00:00 del día hasta la primera vela disponible.
+    # Esto ocurre en KuCoin cuando el backfill comenzó a mitad de sesión.
+    first_ts = int(ts_ms[0])
+    day_start_ms = (first_ts // 86_400_000) * 86_400_000  # truncar a 00:00 UTC
+    head_gap_ms  = first_ts - day_start_ms
+    if head_gap_ms >= tf_ms * 2:  # al menos 2 velas faltantes para ser gap real
+        expected_head = int(head_gap_ms // tf_ms)
+        gaps.append(GapRange(
+            start_ms = day_start_ms,
+            end_ms   = first_ts - tf_ms,
+            expected = expected_head,
+        ))
+
     for i in range(1, len(ts_ms)):
         delta = ts_ms[i] - ts_ms[i - 1]
         if delta >= threshold:
@@ -283,25 +298,56 @@ class RepairStrategy(StrategyMixin):
             gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
 
             _CHUNK = 1000
-            since  = gap.start_ms - tf_ms  # un tick antes para overlap
             collected_raw: list = []
             _MAX_GAP_CHUNKS = 200  # techo de seguridad: 200k velas por gap
 
-            for _chunk_idx in range(_MAX_GAP_CHUNKS):
-                raw_chunk = await ctx.fetcher.fetch_chunk(
-                    symbol    = symbol,
-                    timeframe = timeframe,
-                    since     = since,
-                    limit     = _CHUNK,
-                    end_ms    = gap.end_ms + tf_ms,
-                )
-                if not raw_chunk:
-                    break
-                collected_raw.extend(raw_chunk)
-                last_ts = raw_chunk[-1][0]  # timestamp ms del último item
-                if last_ts >= gap.end_ms or len(raw_chunk) < _CHUNK:
-                    break  # llegamos al final del gap o el exchange no tiene más
-                since = last_ts  # avanzar sin overlap — estamos en rango exacto
+            # KuCoin ignora `since` cuando se usa `endAt` — devuelve las `limit`
+            # velas ANTERIORES a endAt. Para paginar correctamente usamos
+            # paginación backward: decrementamos end_ms en cada chunk.
+            # Para otros exchanges usamos paginación forward estándar con `since`.
+            is_kucoin = ctx.exchange_id in ("kucoin", "kucoinfutures")
+
+            if is_kucoin:
+                # Backward pagination: empezar desde gap.end_ms y retroceder
+                current_end_ms = gap.end_ms + tf_ms
+                for _chunk_idx in range(_MAX_GAP_CHUNKS):
+                    raw_chunk = await ctx.fetcher.fetch_chunk(
+                        symbol    = symbol,
+                        timeframe = timeframe,
+                        since     = gap.start_ms - tf_ms,  # hint ignorado por KuCoin
+                        limit     = _CHUNK,
+                        end_ms    = current_end_ms,
+                    )
+                    if not raw_chunk:
+                        break
+                    collected_raw.extend(raw_chunk)
+                    first_ts_chunk = raw_chunk[0][0]   # timestamp del primer item
+                    last_ts_chunk  = raw_chunk[-1][0]  # timestamp del último item
+                    # Filtrar ya aquí lo que está fuera del gap para no acumular basura
+                    if first_ts_chunk <= gap.start_ms:
+                        break  # ya cubrimos el inicio del gap
+                    if len(raw_chunk) < _CHUNK:
+                        break  # el exchange no tiene más datos hacia atrás
+                    # Retroceder end_ms al primer timestamp del chunk actual
+                    current_end_ms = first_ts_chunk
+            else:
+                # Forward pagination estándar para Bybit y otros exchanges
+                since = gap.start_ms - tf_ms
+                for _chunk_idx in range(_MAX_GAP_CHUNKS):
+                    raw_chunk = await ctx.fetcher.fetch_chunk(
+                        symbol    = symbol,
+                        timeframe = timeframe,
+                        since     = since,
+                        limit     = _CHUNK,
+                        end_ms    = gap.end_ms + tf_ms,
+                    )
+                    if not raw_chunk:
+                        break
+                    collected_raw.extend(raw_chunk)
+                    last_ts = raw_chunk[-1][0]
+                    if last_ts >= gap.end_ms or len(raw_chunk) < _CHUNK:
+                        break
+                    since = last_ts
 
             if not collected_raw:
                 # El exchange no tiene datos para este rango — no es un fallo de red.
