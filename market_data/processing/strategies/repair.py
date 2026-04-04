@@ -308,13 +308,15 @@ class RepairStrategy(StrategyMixin):
             is_kucoin = ctx.exchange_id in ("kucoin", "kucoinfutures")
 
             if is_kucoin:
-                # Backward pagination: empezar desde gap.end_ms y retroceder
+                # Backward pagination: empezar desde gap.end_ms y retroceder.
+                # KuCoin ignora since cuando hay endAt — NO pasar since (None)
+                # para evitar que el adapter entre en la rama incorrecta.
                 current_end_ms = gap.end_ms + tf_ms
                 for _chunk_idx in range(_MAX_GAP_CHUNKS):
                     raw_chunk = await ctx.fetcher.fetch_chunk(
                         symbol    = symbol,
                         timeframe = timeframe,
-                        since     = gap.start_ms - tf_ms,  # hint ignorado por KuCoin
+                        since     = None,  # KuCoin ignora since con endAt; omitir
                         limit     = _CHUNK,
                         end_ms    = current_end_ms,
                     )
