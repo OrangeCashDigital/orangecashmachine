@@ -147,19 +147,30 @@ def overlap_for_timeframe(timeframe: str, exchange: str | None = None) -> int:
     return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
 
 
+# Cache del store de calibración — se inicializa una vez por proceso.
+# Evita reconstruir la conexión Redis en cada llamada a overlap_for_timeframe().
+# None significa "no inicializado aún" o "Redis no disponible".
+_CALIBRATION_STORE = None
+_CALIBRATION_STORE_INITIALIZED = False
+
+
 def _get_calibrated_lateness_ms(exchange: str, timeframe: str) -> int | None:
     """
     Lee lateness_ms calibrado desde Redis. None si no disponible.
 
+    El store se inicializa una vez por proceso (lazy singleton).
     SafeOps: nunca lanza — si Redis falla, overlap_for_timeframe()
     usa el hardcoded como fallback sin interrumpir el pipeline.
     """
+    global _CALIBRATION_STORE, _CALIBRATION_STORE_INITIALIZED
     try:
-        from infra.state.lateness_calibration import build_calibration_store_from_env
-        store = build_calibration_store_from_env()
-        if store is None:
+        if not _CALIBRATION_STORE_INITIALIZED:
+            from infra.state.lateness_calibration import build_calibration_store_from_env
+            _CALIBRATION_STORE = build_calibration_store_from_env()
+            _CALIBRATION_STORE_INITIALIZED = True
+        if _CALIBRATION_STORE is None:
             return None
-        return store.get_lateness_ms(exchange, timeframe)
+        return _CALIBRATION_STORE.get_lateness_ms(exchange, timeframe)
     except Exception:
         return None
 
@@ -308,7 +319,7 @@ class HistoricalFetcherAsync:
                 _status = "circuit_open"
                 self._log.bind(symbol=symbol, timeframe=timeframe, chunk=chunk_idx).warning("Circuit open — aborting chunked download")
                 FETCH_CHUNKS_TOTAL.labels(
-                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                    exchange=exchange_name, timeframe=timeframe,
                     status=_status, mode=_mode,
                 ).inc()
                 if not collected:
@@ -329,16 +340,20 @@ class HistoricalFetcherAsync:
                 FETCH_CHUNK_DURATION.labels(
                     exchange=exchange_name, symbol=symbol, timeframe=timeframe,
                 ).observe(time.perf_counter() - _t0)
-                if _status not in ("circuit_open", "error"):
+                # Contar solo success aquí — circuit_open, empty y
+                # stale/regression se cuentan en sus bloques explícitos.
+                # Evita doble conteo de empty (bug previo).
+                if _status == "success":
                     FETCH_CHUNKS_TOTAL.labels(
-                        exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                        exchange=exchange_name, timeframe=timeframe,
                         status=_status, mode=_mode,
                     ).inc()
 
             if not raw:
+                _status = "empty"
                 FETCH_CHUNKS_TOTAL.labels(
-                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                    status="empty", mode=_mode,
+                    exchange=exchange_name, timeframe=timeframe,
+                    status=_status, mode=_mode,
                 ).inc()
                 break
 
@@ -373,7 +388,7 @@ class HistoricalFetcherAsync:
                 _stale_severity = "regression" if last_ts < since_ts else "stale"
                 self._log.bind(symbol=symbol, timeframe=timeframe, severity=_stale_severity, last_ts=last_ts, since_ts=since_ts).warning("Stale window — aborting")
                 FETCH_CHUNKS_TOTAL.labels(
-                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
+                    exchange=exchange_name, timeframe=timeframe,
                     status=_stale_severity, mode=_mode,
                 ).inc()
                 break
