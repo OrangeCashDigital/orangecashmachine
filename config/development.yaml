@@ -100,4 +100,3 @@ safety:
   prevent_full_reingestion: false
 
   # Permite ejecución sin confirmación (dev-friendly)
-  require_explicit_start: false
