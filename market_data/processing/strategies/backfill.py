@@ -347,7 +347,10 @@ class BackfillStrategy(StrategyMixin):
 
             if qres.accepted:
                 try:
-                    ctx.storage.save_ohlcv(df=qres.df, symbol=symbol, timeframe=timeframe)
+                    ctx.storage.save_ohlcv(
+                        df=qres.df, symbol=symbol, timeframe=timeframe,
+                        skip_versioning=True,
+                    )
                     total_rows += len(qres.df)
                     self._update_backfill_cursor(symbol, timeframe, oldest_in_chunk, ctx)
                 except Exception as exc:

@@ -294,6 +294,7 @@ class SilverStorage:
         timeframe: str,
         mode: WriteMode = "append",
         run_id: Optional[str] = None,
+        skip_versioning: bool = False,
     ) -> None:
         """
         Guarda OHLCV limpio y genera una nueva versión del dataset.
@@ -400,7 +401,9 @@ class SilverStorage:
         )
 
         # Generar versión del dataset
-        if partitions_written:
+        # skip_versioning=True en backfill masivo para evitar miles de archivos;
+        # el caller es responsable de llamar _write_version al finalizar el par.
+        if partitions_written and not skip_versioning:
             self._write_version(symbol, timeframe, partitions_written, run_id)
 
     def get_last_timestamp(
