@@ -181,14 +181,20 @@ class BackfillStrategy(StrategyMixin):
         # C. Cold start — sin cursor ni Silver: el punto de partida es el mayor
         #    entre start_date y origin_ms. Si start_date < origin_ms (p.ej. el
         #    exchange no existía aún), paginar desde origin_ms evita SKIPPED falso.
-        tf_ms_bf = timeframe_to_ms(timeframe)
-        cold_start_ms = max(start_date_ms, origin_ms) + tf_ms_bf
+        # Cold start: paginar desde ahora hacia atrás hasta origin_ms.
+        # NO usar origin_ms como punto de inicio — eso colapsa el rango
+        # al primer chunk y el cursor queda en origin, disparando el guard
+        # en la siguiente ejecución sin haber descargado historia real.
+        # floor: nunca retroceder más allá de max(start_date, origin).
+        now_ms = int(pd.Timestamp.utcnow().timestamp() * 1000)
+        effective_origin = max(start_date_ms, origin_ms)
         _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).info(
-            "Backfill cold start — sin datos previos, paginando desde max(start_date, origin)",
+            "Backfill cold start — paginando desde now hacia origin",
             start_date=ctx.start_date,
-            cold_start=pd.Timestamp(cold_start_ms, unit="ms", tz="UTC").isoformat(),
+            effective_origin=pd.Timestamp(effective_origin, unit="ms", tz="UTC").isoformat(),
+            now=pd.Timestamp(now_ms, unit="ms", tz="UTC").isoformat(),
         )
-        return cold_start_ms
+        return now_ms
 
     def _update_backfill_cursor(
         self,
@@ -259,14 +265,19 @@ class BackfillStrategy(StrategyMixin):
         last_end    = None
         log         = _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, mode="backfill")
 
+        start_date_ms_pg = self._parse_start_date_ms(ctx.start_date)
+        effective_origin_pg = max(start_date_ms_pg, origin_ms)
+
         for _ in range(_MAX_BACKFILL_CHUNKS):
 
-            if current_end <= origin_ms:
-                log.info("Backfill: cursor ya en origen — paginacion completa")
+            if current_end <= effective_origin_pg:
+                log.info("Backfill: paginacion completa — origen alcanzado",
+                    effective_origin=pd.Timestamp(effective_origin_pg, unit="ms", tz="UTC").isoformat(),
+                )
                 break
 
 
-            chunk_start = max(current_end - (chunk_limit * tf_ms), origin_ms)
+            chunk_start = max(current_end - (chunk_limit * tf_ms), effective_origin_pg)
 
             # Métrica de sanidad: detecta rango degenerado antes de hacer fetch
             effective_span = current_end - chunk_start
@@ -370,8 +381,10 @@ class BackfillStrategy(StrategyMixin):
                 oldest=pd.Timestamp(current_end, unit="ms", tz="UTC").strftime("%Y-%m-%d"),
             )
 
-            if current_end <= origin_ms:
-                log.info("Backfill alcanzó el origen")
+            if current_end <= effective_origin_pg:
+                log.info("Backfill alcanzó el origen",
+                    effective_origin=pd.Timestamp(effective_origin_pg, unit="ms", tz="UTC").isoformat(),
+                )
                 break
 
         return total_rows, chunks
