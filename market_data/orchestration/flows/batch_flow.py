@@ -75,8 +75,9 @@ def _launch_spot_pipelines(
     probe: ExchangeProbe,
     active: Set[str],
     log,
-    adapter: "CCXTAdapter | None" = None,
 ) -> List[asyncio.Future]:
+    # No se pasa adapter — cada task crea el suyo con lifecycle aislado.
+    # El markets cache en CCXTAdapter (TTL=60s) absorbe el costo de reconexión.
     spot_requested = active & {"ohlcv", "trades", "orderbook"}
     if not spot_requested:
         return []
@@ -90,7 +91,7 @@ def _launch_spot_pipelines(
 
     futures: List[asyncio.Future] = []
     if "ohlcv" in spot_requested:
-        futures.append(run_historical_pipeline(config, exc_cfg, probe, exchange_client=adapter))
+        futures.append(run_historical_pipeline(config, exc_cfg, probe))
     if "trades" in spot_requested:
         futures.append(run_trades_pipeline(config, exc_cfg, probe, dataset="trades"))
     if "orderbook" in spot_requested:
@@ -105,7 +106,6 @@ def _launch_futures_pipelines(
     probe:   ExchangeProbe,
     active:  Set[str],
     log,
-    adapter=None,
 ) -> List[asyncio.Future]:
     if "ohlcv" not in active:
         return []
@@ -125,7 +125,7 @@ def _launch_futures_pipelines(
         exc_cfg.markets.futures_symbols,
         exc_cfg.markets.futures_default_type or "swap",
     )
-    return [run_futures_pipeline(config, exc_cfg, probe, exchange_client=adapter)]
+    return [run_futures_pipeline(config, exc_cfg, probe)]
 
 
 def _launch_derivative_pipelines(
@@ -157,8 +157,9 @@ def _launch_pipelines_for_exchange(
     probe: ExchangeProbe,
     requested: Set[str],
     log,
-    adapter: "CCXTAdapter | None" = None,
 ) -> List[asyncio.Future]:
+    # Invariante de aislamiento: no se pasa adapter entre flow y tasks.
+    # Cada task gestiona su propio lifecycle de conexión.
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
         log.warning("Exchange config not found | exchange=%s", probe.exchange)
@@ -176,13 +177,11 @@ def _launch_pipelines_for_exchange(
 
     log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
     return [
-        *_launch_spot_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
-        *_launch_futures_pipelines(config, exc_cfg, probe, active, log, adapter=adapter),
+        *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
+        *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
         *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
-        # Repair corre después de ingestión — detecta y sana gaps en Silver.
-        # Se lanza por exchange, no por dataset, usando el adapter ya validado.
-        *([run_repair_pipeline(config, exc_cfg, probe, market_type="spot", exchange_client=adapter)]
-          if "ohlcv" in active and adapter is not None else []),
+        *([run_repair_pipeline(config, exc_cfg, probe, market_type="spot")]
+          if "ohlcv" in active else []),
     ]
 
 
@@ -309,11 +308,20 @@ async def market_data_flow(
 
     probes, adapters = await _validate_exchanges(config, log)
 
+    # Cerrar adapters de validación antes de lanzar pipelines.
+    # Invariante: adapters no cruzan boundaries de task — cada task
+    # crea el suyo. El markets cache (TTL=60s) absorbe el costo.
+    for name, adapter in adapters.items():
+        try:
+            await adapter.close()
+        except Exception as exc:
+            log.warning("Adapter close (post-validation) failed | exchange=%s error=%s", name, exc)
+    adapters = {}  # ya no se necesitan
+
     pipeline_futures: List[asyncio.Future] = []
     for probe in probes:
-        adapter = adapters.get(probe.exchange)
         pipeline_futures.extend(
-            _launch_pipelines_for_exchange(config, probe, requested, log, adapter=adapter)
+            _launch_pipelines_for_exchange(config, probe, requested, log)
         )
 
     if not pipeline_futures:
@@ -327,13 +335,6 @@ async def market_data_flow(
         if failed > 0 and ok == 0:
             raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
     finally:
-        # ── Cerrar adapters ───────────────────────────────────────────────────
-        for name, adapter in adapters.items():
-            try:
-                await adapter.close()
-            except Exception as exc:
-                log.warning("Adapter close failed | exchange=%s error=%s", name, exc)
-
         # ── Push métricas por exchange ────────────────────────────────────────
         for probe in probes:
             push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
