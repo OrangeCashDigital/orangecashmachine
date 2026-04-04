@@ -50,6 +50,8 @@ from market_data.orchestration.tasks.batch_tasks import (
 )
 from infra.observability.server import push_metrics
 from market_data.safety import guard_context
+from market_data.safety.execution_guard import ExecutionGuard
+from market_data.safety.environment_validator import EnvironmentValidator, EnvironmentMismatchError
 
 _PUSHGATEWAY = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 
@@ -296,6 +298,34 @@ async def market_data_flow(
 
     config = load_config(env=resolved_env, path=resolved_dir)
 
+    # ── Guard + Validator ─────────────────────────────────────────────────────
+    # Si ya hay un guard activo (inyectado por entrypoint.py en local),
+    # lo reutilizamos. Si no (Prefect directo en producción), lo creamos aquí.
+    # Esto garantiza que _consolidate_results siempre encuentre un guard.
+    if guard_context.get_guard() is None:
+        _guard = ExecutionGuard(
+            max_errors    = getattr(getattr(config, "pipeline", None), "max_consecutive_errors", 10),
+            max_runtime_s = 0,  # sin límite de tiempo en producción — Prefect gestiona timeouts
+        )
+        _guard.start()
+        guard_context.set_guard(_guard)
+        log.info("ExecutionGuard initialized | source=flow (production mode)")
+    else:
+        log.debug("ExecutionGuard reused | source=entrypoint (local mode)")
+
+    # EnvironmentValidator: checks locales antes de tocar red o storage.
+    # SafeOps: falla rápido con mensaje claro, no a mitad del pipeline.
+    try:
+        from core.config.runtime import RunConfig
+        _run_cfg = RunConfig.from_env()
+        EnvironmentValidator().check(config, _run_cfg)
+    except EnvironmentMismatchError as exc:
+        log.critical("Environment validation failed — aborting | reason=%s", exc)
+        raise
+    except Exception as exc:
+        # RunConfig puede fallar en entornos atípicos — log + continuar (no fatal)
+        log.warning("EnvironmentValidator skipped | error=%s", exc)
+
     if not config.datasets.any_active:
         log.warning("No active datasets configured. Exiting flow.")
         return
@@ -335,6 +365,12 @@ async def market_data_flow(
         if failed > 0 and ok == 0:
             raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
     finally:
+        # ── Guard teardown (solo si fue creado por el flow, no por entrypoint) ──
+        _flow_guard = guard_context.get_guard()
+        if _flow_guard is not None:
+            _flow_guard.stop()
+            guard_context.set_guard(None)
+
         # ── Push métricas por exchange ────────────────────────────────────────
         for probe in probes:
             push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
