@@ -17,6 +17,7 @@ SafeOps Ready 🚀
 from __future__ import annotations
 
 import asyncio
+import math
 import random
 from dataclasses import dataclass
 from typing import List, Optional
@@ -51,28 +52,68 @@ CHUNK_FETCH_TIMEOUT   = 60.0   # segundos máximos por intento individual de fet
 MAX_CHUNKS_PER_RUN    = 100_000
 DEFAULT_OVERLAP_BARS  = 3
 
-# Overlap por timeframe para incremental.
-# Valor = barras a reingesta para cubrir correcciones tardías del exchange.
-# Exchanges crypto pueden corregir candles hasta ~15 min después del cierre.
+# ==========================================================
+# Overlap model basado en principios de event-time processing
+# ==========================================================
+#
+# _ALLOWED_LATENESS_MS:
+#   Tiempo máximo que un exchange puede tardar en corregir un candle
+#   después de su cierre (event-time lateness).
+#   Valor conservador: 15 min. Pendiente calibración empírica.
+#
+# _MIN_OVERLAP_BARS:
+#   Floor operativo: incluso si lateness < timeframe, los exchanges
+#   pueden corregir el candle previo al cerrar el siguiente.
+#
+# Diseño:
+#   overlap_bars = max(
+#       _MIN_OVERLAP_BARS,
+#       ceil(_ALLOWED_LATENESS_MS / timeframe_ms)
+#   )
+#
+# Ref: Akidau et al. (2015) — The Dataflow Model
+# TODO: recalibrar _ALLOWED_LATENESS_MS con datos reales de Bybit/KuCoin
+# ==========================================================
+
+_ALLOWED_LATENESS_MS: int = 15 * 60 * 1000  # 15 min — pendiente calibración
+
+# Floor diferenciado por magnitud de timeframe.
+# Para TF largos, 3 barras sería excesivo (ej: 1w → 21 días de reingesta).
+_MIN_OVERLAP_BARS_BY_TF: dict[str, int] = {
+    "1m":  1, "3m":  1, "5m":  1, "15m": 1, "30m": 1,
+    "1h":  2, "2h":  2, "4h":  2, "6h":  2, "8h":  2, "12h": 2,
+    "1d":  1, "1w":  1,
+}
+
+_TF_MS: dict[str, int] = {
+    "1m":  60_000,
+    "3m":  3  * 60_000,
+    "5m":  5  * 60_000,
+    "15m": 15 * 60_000,
+    "30m": 30 * 60_000,
+    "1h":  3_600_000,
+    "2h":  2  * 3_600_000,
+    "4h":  4  * 3_600_000,
+    "6h":  6  * 3_600_000,
+    "8h":  8  * 3_600_000,
+    "12h": 12 * 3_600_000,
+    "1d":  86_400_000,
+    "1w":  7  * 86_400_000,
+}
+
 _OVERLAP_BY_TIMEFRAME: dict[str, int] = {
-    "1m":  15,   # 15 min — exchanges corrigen candles hasta ~10-15 min
-    "3m":  10,   # 30 min
-    "5m":  6,    # 30 min
-    "15m": 4,    # 60 min
-    "30m": 4,    # 120 min
-    "1h":  3,    # 3 horas
-    "2h":  3,    # 6 horas
-    "4h":  3,    # 12 horas
-    "6h":  2,    # 12 horas
-    "8h":  2,    # 16 horas
-    "12h": 2,    # 24 horas
-    "1d":  2,    # 2 días
-    "1w":  1,    # 1 semana
+    tf: max(_MIN_OVERLAP_BARS_BY_TF[tf], math.ceil(_ALLOWED_LATENESS_MS / tf_ms))
+    for tf, tf_ms in _TF_MS.items()
 }
 
 
 def overlap_for_timeframe(timeframe: str) -> int:
-    """Devuelve el overlap en barras recomendado para el timeframe dado."""
+    """Devuelve el overlap en barras para el timeframe dado.
+
+    Derivado de _ALLOWED_LATENESS_MS con floor _MIN_OVERLAP_BARS.
+    Para TF cortos domina el lateness absoluto; para TF largos el floor.
+    Ajustar _ALLOWED_LATENESS_MS tras calibración empírica con exchanges reales.
+    """
     return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
 
 OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
