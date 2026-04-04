@@ -315,6 +315,16 @@ class BackfillStrategy(StrategyMixin):
                 break
 
             if not raw:
+                # Avanzar cursor defensivamente — evita repetir el mismo rango
+                # en runs siguientes si el exchange devuelve vacío por rate limit
+                # o glitch transitorio. Patrón: "progress even on partial failure".
+                log.warning(
+                    "Empty chunk — advancing cursor defensively",
+                    chunk_start=pd.Timestamp(chunk_start, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
+                    current_end=pd.Timestamp(current_end, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
+                )
+                current_end = chunk_start
+                self._update_backfill_cursor(symbol, timeframe, current_end, ctx)
                 break
 
             if len(raw) < chunk_limit * 0.1:

@@ -441,6 +441,13 @@ class CCXTAdapter(ExchangeAdapter):
                     "load_markets timeout | {} attempt={}",
                     self._exchange_id, attempt,
                 )
+                # Destruir cliente parcialmente inicializado — puede tener
+                # sockets abiertos o estado inconsistente tras cancel de wait_for.
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+                client = None
 
             except Exception as exc:
                 last_exc = exc
@@ -449,6 +456,12 @@ class CCXTAdapter(ExchangeAdapter):
                     "Connection failed | {} attempt={} retry_in={:.1f}s error={}",
                     self._exchange_id, attempt, delay, exc,
                 )
+                # Destruir cliente antes de reintentar — evita leaks de sesión.
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+                client = None
                 await asyncio.sleep(delay)
 
         raise ExchangeConnectionError(
