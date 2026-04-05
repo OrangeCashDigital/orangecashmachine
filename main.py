@@ -38,6 +38,10 @@ from core.config.schema import AppConfig
 from core.logging import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner
 from infra.observability.runtime import init_metrics_runtime
+from market_data.safety.environment_validator import (
+    EnvironmentValidator,
+    EnvironmentMismatchError,
+)
 
 
 # ---------------------------------------------------------------------
@@ -77,12 +81,15 @@ def run_application(
     setup_observability(config, validate_only=validate_only)
 
     # 3. Validación del entorno
-    # 3. Validación del entorno (credenciales en producción)
-    if env == "production":
-        missing = [ex.name for ex in config.exchanges if ex.enabled and not ex.has_credentials]
-        if missing:
-            log.critical("environment_validation_failed | missing_credentials={}", missing)
-            return 1
+    try:
+        from core.config.runtime import RunConfig
+        run_cfg = RunConfig.from_env(explicit_env=env)
+        EnvironmentValidator().check(config, run_cfg)
+    except EnvironmentMismatchError as exc:
+        log.critical("environment_validation_failed | error={}", exc)
+        return 1
+    except Exception as exc:
+        log.warning("EnvironmentValidator skipped | error={}", exc)
 
     # 4. Modo validación — salida anticipada sin pipeline
     if validate_only:
@@ -149,6 +156,7 @@ def main() -> None:
     except (
         config_loader.ConfigurationError,
         config_loader.ConfigValidationError,
+        EnvironmentMismatchError,
     ) as exc:
         logger.opt(exception=True).critical(
             "config_failure | type={} error={}", type(exc).__name__, exc
