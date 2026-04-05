@@ -170,11 +170,11 @@ def calibrate(
     Returns dict con resultados por exchange+timeframe:
       {"bybit:1m": {"status": "ok", "lateness_ms": 5000, ...}, ...}
     """
-    from infra.state.lateness_calibration import build_calibration_store_from_env
+    from infra.state.factories import build_lateness_calibration_store
 
     cal_store = None
     if not dry_run:
-        cal_store = build_calibration_store_from_env()
+        cal_store = build_lateness_calibration_store()
         if cal_store is None:
             logger.error("Redis no disponible — abortando calibración")
             return {}

@@ -165,8 +165,8 @@ def _get_calibrated_lateness_ms(exchange: str, timeframe: str) -> int | None:
     global _CALIBRATION_STORE, _CALIBRATION_STORE_INITIALIZED
     try:
         if not _CALIBRATION_STORE_INITIALIZED:
-            from infra.state.lateness_calibration import build_calibration_store_from_env
-            _CALIBRATION_STORE = build_calibration_store_from_env()
+            from infra.state.factories import build_lateness_calibration_store
+            _CALIBRATION_STORE = build_lateness_calibration_store()
             _CALIBRATION_STORE_INITIALIZED = True
         if _CALIBRATION_STORE is None:
             return None

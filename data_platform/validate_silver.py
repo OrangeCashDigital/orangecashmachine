@@ -491,8 +491,8 @@ def main() -> int:
         # Registrar gaps detectados en GapRegistry para repair automático.
         # SafeOps: si Redis no está disponible, degrada silenciosamente.
         try:
-            from infra.state.gap_registry import build_gap_registry_from_env
-            registry = build_gap_registry_from_env()
+            from infra.state.factories import build_gap_registry
+            registry = build_gap_registry()
             if registry is not None:
                 registered = 0
                 for r in results:
