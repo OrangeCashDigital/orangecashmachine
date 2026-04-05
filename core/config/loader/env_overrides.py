@@ -3,123 +3,176 @@ from __future__ import annotations
 """
 core/config/loader/env_overrides.py
 ====================================
+
 Aplica overrides desde variables de entorno OCM_* sobre el dict
-mergeado, después del merge YAML y antes de la validación Pydantic.
+mergeado de YAML, antes de la validación Pydantic.
 
-Patrón:
-    OCM_PIPELINE_HISTORICAL_FETCH_ALL_HISTORY=true
-    → config["pipeline"]["historical"]["backfill_mode"] = True
+Implementación: pydantic-settings BaseSettings.
+  - Coerción de tipos: automática vía Pydantic (elimina _coerce manual)
+  - Paths anidados:    campo field_name con "__" como separador
+  - Validación:        campos tipados (elimina whitelist manual)
+  - SSOT:              nombres de vars en env_vars.py
 
-Coerción automática de tipos:
-    "true" / "false"  → bool
-    "123"             → int
-    "1.5"             → float
-    resto             → str
+Aliases de compatibilidad (vars legacy sin prefijo OCM_ + sin __):
+    OCM_BACKFILL_MODE      → pipeline.historical.backfill_mode
+    OCM_START_DATE         → pipeline.historical.start_date
+    OCM_MAX_CONCURRENT     → pipeline.historical.max_concurrent_tasks
+    OCM_LOG_LEVEL          → observability.logging.level
+    OCM_SNAPSHOT_INTERVAL  → pipeline.realtime.snapshot_interval_seconds
+    OCM_METRICS_ENABLED    → observability.metrics.enabled
+    OCM_METRICS_PORT       → observability.metrics.port
+    OCM_DEBUG              → environment.debug
+
+Nuevo formato (también soportado):
+    OCM_PIPELINE__HISTORICAL__BACKFILL_MODE=true
+    OCM_OBSERVABILITY__METRICS__PORT=9090
 """
 
 import os
-from typing import Any
-
-from core.config.env_vars import (
-    OCM_BACKFILL_MODE,
-    OCM_FETCH_ALL_HISTORY,
-    OCM_START_DATE,
-    OCM_MAX_CONCURRENT,
-    OCM_LOG_LEVEL,
-    OCM_SNAPSHOT_INTERVAL,
-    OCM_DEBUG,
-)
+from typing import Optional
 
 from loguru import logger
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Mapping explícito: env var → path en el dict de config
-# Keys importados de env_vars.py — SSOT: un solo lugar define los nombres de vars
-# Ventaja sobre el recorrido dinámico: auditables, sin typos silenciosos
-_OCM_OVERRIDES: dict[str, tuple[str, ...]] = {
-    OCM_BACKFILL_MODE:      ("pipeline", "historical", "backfill_mode"),
-    OCM_FETCH_ALL_HISTORY:  ("pipeline", "historical", "fetch_all_history"),
-    OCM_START_DATE:       ("pipeline", "historical", "start_date"),
-    OCM_MAX_CONCURRENT:   ("pipeline", "historical", "max_concurrent_tasks"),
-    OCM_LOG_LEVEL:        ("observability", "logging", "level"),
-    OCM_SNAPSHOT_INTERVAL: ("pipeline", "realtime", "snapshot_interval_seconds"),
-    OCM_DEBUG:            ("environment", "debug"),  # debug gate — bloqueado en production por rules.py
+
+# =============================================================================
+# Mapping: field_name → path en el dict de config
+# El field_name usa "__" como separador — se convierte a tuple en apply()
+# =============================================================================
+
+_FIELD_TO_PATH: dict[str, tuple[str, ...]] = {
+    "pipeline__historical__backfill_mode":           ("pipeline", "historical", "backfill_mode"),
+    "pipeline__historical__start_date":              ("pipeline", "historical", "start_date"),
+    "pipeline__historical__max_concurrent_tasks":    ("pipeline", "historical", "max_concurrent_tasks"),
+    "pipeline__historical__fetch_all_history":       ("pipeline", "historical", "fetch_all_history"),
+    "pipeline__realtime__snapshot_interval_seconds": ("pipeline", "realtime", "snapshot_interval_seconds"),
+    "observability__metrics__enabled":               ("observability", "metrics", "enabled"),
+    "observability__metrics__port":                  ("observability", "metrics", "port"),
+    "observability__logging__level":                 ("observability", "logging", "level"),
+    "environment__debug":                            ("environment", "debug"),
 }
 
 
-def _coerce(value: str, original: Any) -> Any:
-    """Coerce string env var al tipo del valor original en el dict.
-
-    Orden de resolución:
-    1. Si original es bool  → coerce a bool (prioridad sobre int, evita "1"→True en ints)
-    2. Si original es int   → coerce a int
-    3. Si original es float → coerce a float
-    4. Si value es literal bool sin contexto de original → coerce a bool
-    5. Resto → str
-
-    Nota: bool se evalúa ANTES que int porque bool es subclase de int en Python.
-    Sin este orden, isinstance(True, int) == True provocaría int("true") → ValueError
-    y retornaría el string crudo en lugar del bool esperado.
+class OcmSettings(BaseSettings):
     """
-    # Paso 1: original es bool → prioridad absoluta
-    if isinstance(original, bool):
-        return value.lower() in ("true", "1", "yes")
-    # Paso 2: original es int conocido → coerce numérico
-    if isinstance(original, int):
-        try:
-            return int(value)
-        except ValueError:
-            pass
-    # Paso 3: original es float conocido → coerce numérico
-    if isinstance(original, float):
-        try:
-            return float(value)
-        except ValueError:
-            pass
-    # Paso 4: sin contexto de original, valor parece bool literal
-    if value.lower() in ("true", "false", "1", "0", "yes", "no"):
-        return value.lower() in ("true", "1", "yes")
-    # Paso 5: string crudo
-    return value
+    Lee las variables OCM_* del entorno con tipos correctos vía Pydantic.
+
+    Soporta dos formatos:
+      1. Aliases legacy:  OCM_BACKFILL_MODE=true
+      2. Nuevo formato:   OCM_PIPELINE__HISTORICAL__BACKFILL_MODE=true
+
+    Todos los campos son Optional — solo se aplican los que están presentes.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix           = "OCM_",
+        env_nested_delimiter = "__",
+        case_sensitive       = False,
+        extra                = "ignore",
+        populate_by_name     = True,
+    )
+
+    # ── pipeline.historical ──────────────────────────────────────────────────
+    pipeline__historical__backfill_mode: Optional[bool] = Field(
+        default=None,
+        validation_alias="OCM_BACKFILL_MODE",
+    )
+    pipeline__historical__start_date: Optional[str] = Field(
+        default=None,
+        validation_alias="OCM_START_DATE",
+    )
+    pipeline__historical__max_concurrent_tasks: Optional[int] = Field(
+        default=None,
+        validation_alias="OCM_MAX_CONCURRENT",
+    )
+    pipeline__historical__fetch_all_history: Optional[bool] = Field(
+        default=None,
+    )
+
+    # ── pipeline.realtime ────────────────────────────────────────────────────
+    pipeline__realtime__snapshot_interval_seconds: Optional[int] = Field(
+        default=None,
+        validation_alias="OCM_SNAPSHOT_INTERVAL",
+    )
+
+    # ── observability.metrics ────────────────────────────────────────────────
+    observability__metrics__enabled: Optional[bool] = Field(
+        default=None,
+        validation_alias="OCM_METRICS_ENABLED",
+    )
+    observability__metrics__port: Optional[int] = Field(
+        default=None,
+        validation_alias="OCM_METRICS_PORT",
+    )
+
+    # ── observability.logging ────────────────────────────────────────────────
+    observability__logging__level: Optional[str] = Field(
+        default=None,
+        validation_alias="OCM_LOG_LEVEL",
+    )
+
+    # ── environment ──────────────────────────────────────────────────────────
+    environment__debug: Optional[bool] = Field(
+        default=None,
+        validation_alias="OCM_DEBUG",
+    )
+
+    def apply(self, config: dict) -> dict:
+        """
+        Aplica los overrides sobre el dict mergeado de YAML.
+        Solo parchea campos explícitamente seteados (en model_fields_set).
+        Retorna el mismo dict modificado in-place.
+        """
+        applied: list[str] = []
+
+        # model_fields_set es set[str] — nombres de campos con valor explícito
+        for field_name in self.model_fields_set:
+            value = getattr(self, field_name, None)
+            if value is None:
+                continue
+
+            path = _FIELD_TO_PATH.get(field_name)
+            if path is None:
+                # campo no mapeado (extra ignorado) — skip silencioso
+                continue
+
+            _set_nested(config, path, value)
+            applied.append(f"{field_name.upper()}={value!r} → {'.'.join(path)}")
+            logger.info(
+                "env_override_applied | path={} value={}",
+                ".".join(path), value,
+            )
+
+        if applied:
+            logger.debug(
+                "env_overrides_summary | count={} applied={}",
+                len(applied), " | ".join(applied),
+            )
+        else:
+            logger.debug("env_overrides_summary | count=0")
+
+        return config
 
 
-def _get_nested(d: dict, path: tuple[str, ...]) -> Any:
-    """Navega el dict siguiendo el path. Retorna None si no existe."""
-    for key in path:
-        if not isinstance(d, dict) or key not in d:
-            return None
-        d = d[key]
-    return d
+# =============================================================================
+# Helpers
+# =============================================================================
 
-
-def _set_nested(d: dict, path: tuple[str, ...], value: Any) -> None:
-    """Pisa el valor en el dict siguiendo el path, creando dicts intermedios si es necesario."""
+def _set_nested(d: dict, path: tuple[str, ...], value: object) -> None:
+    """Pisa el valor en el dict siguiendo el path, creando dicts intermedios."""
     for key in path[:-1]:
         d = d.setdefault(key, {})
     d[path[-1]] = value
 
 
+# =============================================================================
+# Public API — firma idéntica a la versión anterior
+# =============================================================================
+
 def apply_env_overrides(config: dict) -> dict:
     """
-    Aplica overrides desde env vars OCM_* sobre el dict mergeado.
-    No modifica los YAML. Retorna el mismo dict modificado in-place.
+    Punto de entrada para el loader.
+    Crea OcmSettings (lee env vars), aplica sobre el dict mergeado, retorna.
     """
-    applied = []
-
-    for env_var, path in _OCM_OVERRIDES.items():
-        raw = os.getenv(env_var)
-        if raw is None:
-            continue
-
-        original = _get_nested(config, path)
-        coerced  = _coerce(raw, original)
-        _set_nested(config, path, coerced)
-
-        applied.append(f"{env_var}={raw!r} → {'.'.join(path)}={coerced!r}")
-        logger.info("env_override_applied | var={} path={} value={}", env_var, ".".join(path), coerced)
-
-    if applied:
-        logger.debug("env_overrides_summary | count={} applied={}", len(applied), " | ".join(applied))
-    else:
-        logger.debug("env_overrides_summary | count=0")
-
-    return config
+    return OcmSettings().apply(config)
