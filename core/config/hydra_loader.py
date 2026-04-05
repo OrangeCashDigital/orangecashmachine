@@ -26,6 +26,7 @@ from loguru import logger
 
 from core.config.schema import AppConfig
 from core.config.loader.snapshot import write_config_snapshot
+from core.config.loader.env_overrides import apply_env_overrides
 
 
 # Campos internos que Hydra puede inyectar — romperían extra="forbid"
@@ -64,6 +65,10 @@ def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
         raw.pop(key, None)
 
     _normalize_empty_strings(raw)
+
+    # Aplicar overrides OCM_* (OCM_LOG_LEVEL, OCM_BACKFILL_MODE, etc.)
+    # Tienen prioridad sobre YAML — se aplican después del merge de Hydra
+    raw = apply_env_overrides(raw)
 
     logger.debug("hydra_cfg_to_appconfig | top_keys={}", list(raw.keys()))
 
