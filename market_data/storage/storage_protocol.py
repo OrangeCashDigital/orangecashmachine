@@ -83,3 +83,17 @@ class OHLCVStorage(Protocol):
         timeframe: str,
         run_id:    Optional[str] = None,
     ) -> None: ...
+
+    def load_ohlcv(
+        self,
+        symbol:    str,
+        timeframe: str,
+        start:     Optional[pd.Timestamp] = None,
+        end:       Optional[pd.Timestamp] = None,
+    ) -> Optional[pd.DataFrame]: ...
+
+    def get_oldest_timestamp(
+        self,
+        symbol:    str,
+        timeframe: str,
+    ) -> Optional[pd.Timestamp]: ...
