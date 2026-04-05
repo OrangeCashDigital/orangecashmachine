@@ -449,69 +449,6 @@ async def run_derivatives_pipeline(
     description="Backfills complete historical OHLCV data to exchange origin.",
     tags=["ohlcv", "backfill"],
 )
-async def run_backfill_pipeline(
-    config:          AppConfig,
-    exchange_cfg:    ExchangeConfig,
-    probe:           ExchangeProbe,
-    market_type:     str = "spot",
-    exchange_client: "CCXTAdapter | None" = None,
-) -> None:
-    log           = get_run_logger()
-    exchange_name = exchange_cfg.name.value
-    hist_cfg      = config.pipeline.historical
-
-    symbols = (
-        exchange_cfg.markets.spot_symbols
-        if market_type == "spot"
-        else exchange_cfg.markets.futures_symbols
-    )
-
-    if not symbols:
-        log.warning(
-            "Backfill skip — no symbols configured | exchange=%s market=%s",
-            exchange_name, market_type,
-        )
-        return
-
-    log.info(
-        "Backfill pipeline starting | exchange=%s market=%s symbols=%s timeframes=%s",
-        exchange_name, market_type, len(symbols), len(hist_cfg.timeframes),
-    )
-
-    async with managed_adapter(exchange_cfg, market_type, injected=exchange_client) as client:
-        pipeline = UnifiedPipeline(
-            symbols         = symbols,
-            timeframes      = hist_cfg.timeframes,
-            start_date      = hist_cfg.start_date,
-            max_concurrency = probe.max_concurrent,
-            exchange_client = client,
-            market_type     = market_type,
-            backfill_mode   = True,
-        )
-        summary = await pipeline.run(mode="backfill")
-
-    log.info(
-        "Backfill pipeline finished | exchange=%s market=%s ok=%s failed=%s rows=%s",
-        exchange_name, market_type,
-        summary.succeeded, summary.failed, summary.total_rows,
-    )
-
-    _raise_if_total_failure(summary, "Backfill", exchange_name)
-
-
-# ==========================================================
-# Repair Pipeline Task
-# ==========================================================
-
-@task(
-    name="repair_pipeline",
-    retries=1,
-    retry_delay_seconds=[120],
-    timeout_seconds=PIPELINE_TASK_TIMEOUT * 2,
-    task_run_name="{exchange_cfg.name.value}-repair",
-    description="Detects and repairs temporal gaps in Silver OHLCV data.",
-    tags=["ohlcv", "repair"],
-)
 async def run_repair_pipeline(
     config:          AppConfig,
     exchange_cfg:    ExchangeConfig,
