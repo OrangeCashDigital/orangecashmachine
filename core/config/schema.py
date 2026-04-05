@@ -167,10 +167,29 @@ class ExchangeConfig(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_credentials(self) -> "ExchangeConfig":
+        import os as _os
+        env = _os.getenv("OCM_ENV", "development")
+        is_prod = env == "production"
+
         if self.enabled and not self.has_credentials:
-            raise ValueError(f"Exchange '{self.name.value}' is enabled but credentials are missing.")
+            if is_prod:
+                raise ValueError(
+                    f"Exchange '{self.name.value}' is enabled but credentials are missing."
+                )
+            warnings.warn(
+                f"[{env}] Exchange '{self.name.value}': credentials missing — "
+                "will fail if pipeline attempts to connect.",
+                UserWarning, stacklevel=2,
+            )
+
         if self.requires_passphrase and not self.has_passphrase:
-            raise ValueError(f"Exchange '{self.name.value}' requires a passphrase.")
+            if is_prod:
+                raise ValueError(f"Exchange '{self.name.value}' requires a passphrase.")
+            warnings.warn(
+                f"[{env}] Exchange '{self.name.value}': passphrase missing.",
+                UserWarning, stacklevel=2,
+            )
+
         return self
 
     @property
