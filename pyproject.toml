@@ -62,7 +62,7 @@ packages = [
     "infra",
     "market_data",
     "data_platform",
-    "trading",
-    "backtesting",
-    # "research" excluido del wheel — código exploratorio, no instalable
+    "trading",      # 🚧 stub — pendiente de market_data estable
+    "backtesting",  # 🚧 stub — pendiente de GoldLoader validado
+    # "research" excluido — exploratorio, no instalable
 ]
