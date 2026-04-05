@@ -368,13 +368,17 @@ async def market_data_flow(
     spot_futures: List[asyncio.Future] = []
     for probe in probes:
         spot_futures.extend(
-            _launch_spot_and_repair(config, probe, requested, log)
+            _launch_spot_pipelines(config, config.get_exchange(probe.exchange), probe, set(requested) & {"ohlcv", "trades", "orderbook"}, log)
+        )
+        spot_futures.extend(
+            [run_repair_pipeline(config, config.get_exchange(probe.exchange), probe, market_type="spot")]
+            if "ohlcv" in requested and config.get_exchange(probe.exchange) else []
         )
 
     futures_futures: List[asyncio.Future] = []
     for probe in probes:
         futures_futures.extend(
-            _launch_futures_only(config, probe, requested, log)
+            _launch_futures_pipelines(config, config.get_exchange(probe.exchange), probe, set(requested), log)
         )
 
     pipeline_futures: List[asyncio.Future] = spot_futures + futures_futures
