@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Protocol, runtime_checkable
 
-from core.logging.setup import bind_pipeline
+from core.logging import bind_pipeline
 from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.storage.bronze.bronze_storage import BronzeStorage

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import pandas as pd
-from core.logging.setup import bind_pipeline
+from core.logging import bind_pipeline
 from market_data.processing.strategies.base import (
     PairResult,
     PipelineContext,

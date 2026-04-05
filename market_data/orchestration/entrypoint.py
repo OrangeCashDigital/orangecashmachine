@@ -25,7 +25,7 @@ import time as _time
 import uuid
 from datetime import datetime, timezone
 
-from core.logging.setup import bind_pipeline
+from core.logging import bind_pipeline
 from core.config.lineage import get_git_hash
 from core.config.run_registry import record_run
 from core.config.runtime import RunConfig

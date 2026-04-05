@@ -27,7 +27,7 @@ import pybreaker
 import ccxt.async_support as _ccxt_async
 from loguru import logger
 
-from core.logging.setup import bind_pipeline
+from core.logging import bind_pipeline
 
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.core.transformers.transformer import OHLCVTransformer
