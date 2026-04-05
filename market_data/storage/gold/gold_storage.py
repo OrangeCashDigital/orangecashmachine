@@ -47,7 +47,7 @@ from core.config.lineage import get_git_hash
 from core.config.paths import silver_ohlcv_root, gold_features_root
 from data_platform.ohlcv_utils import safe_symbol
 from market_data.storage.gold.feature_engineer import FeatureEngineer
-from market_data.storage.silver.silver_storage import SilverStorage
+from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 
 
 # ==========================================================
@@ -69,18 +69,22 @@ class GoldStorage:
 
     def __init__(
         self,
-        silver_path: Optional[Path] = None,
         gold_path:   Optional[Path] = None,
         dry_run:     bool           = False,
+        silver_path: Optional[Path] = None,  # deprecated — ignorado, Silver es Iceberg
     ) -> None:
-        self._silver   = Path(silver_path) if silver_path else silver_ohlcv_root()
-        self._gold     = Path(gold_path)   if gold_path   else gold_features_root()
+        if silver_path is not None:
+            logger.warning(
+                "GoldStorage: silver_path está deprecado — Silver es Iceberg, "
+                "el path de filesystem no tiene efecto."
+            )
+        self._gold     = Path(gold_path) if gold_path else gold_features_root()
         self._gold.mkdir(parents=True, exist_ok=True)
         self._engineer = FeatureEngineer()
         self._dry_run  = dry_run
         self._write_locks: Dict[str, threading.Lock] = {}
         self._write_locks_meta = threading.Lock()
-        logger.info("GoldStorage ready | silver={} gold={} dry_run={}", self._silver, self._gold, self._dry_run)
+        logger.info("GoldStorage ready | gold={} dry_run={}", self._gold, self._dry_run)
 
     # ----------------------------------------------------------
     # Silver manifest reader
@@ -94,28 +98,29 @@ class GoldStorage:
         timeframe: str,
         version_id: str,
     ) -> dict:
-        """Lee manifest de Silver para lineage en Gold. Nunca lanza."""
-        fname = "latest.json" if version_id == "latest" else f"{version_id}.json"
-        path = (
-            self._silver
-            / f"exchange={exchange}"
-            / f"symbol={safe_symbol(symbol)}"
-            / f"market_type={market_type}"
-            / f"timeframe={timeframe}"
-            / "_versions" / fname
-        )
+        """
+        Retorna metadata de lineage de Silver (Iceberg) para el manifest de Gold.
+
+        Con Iceberg no hay archivos _versions/ — la versión es el snapshot_id.
+        """
         base = {
-            "layer": "silver", "exchange": exchange, "symbol": symbol,
-            "market_type": market_type, "timeframe": timeframe,
-            "version_id": version_id,
+            "layer":       "silver",
+            "backend":     "iceberg",
+            "exchange":    exchange,
+            "symbol":      symbol,
+            "market_type": market_type,
+            "timeframe":   timeframe,
+            "version_id":  version_id,
         }
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return {**base, "version_id": data.get("version_id", version_id),
-                    "run_id": data.get("run_id"), "git_hash": data.get("git_hash"),
-                    "written_at": data.get("written_at")}
+            storage = IcebergStorage(exchange=exchange, market_type=market_type)
+            snap = storage._table.current_snapshot()
+            if snap is not None:
+                base["snapshot_id"]  = snap.snapshot_id
+                base["snapshot_ms"]  = snap.timestamp_ms
         except Exception:
-            return base
+            pass
+        return base
 
     # ----------------------------------------------------------
     # Public API
@@ -147,13 +152,9 @@ class GoldStorage:
                          silver_version="v000042" produce el mismo Gold.
         """
         sym_safe = safe_symbol(symbol)
-        silver = SilverStorage(
-            base_path=self._silver,
-            exchange=exchange,
-            market_type=market_type,
-        )
+        silver = IcebergStorage(exchange=exchange, market_type=market_type)
 
-        # ── Cargar Silver ────────────────────────────────────────────────
+        # ── Cargar Silver (Iceberg) ──────────────────────────────────────
         try:
             df = silver.load_ohlcv(
                 symbol=symbol,
@@ -163,7 +164,7 @@ class GoldStorage:
             )
         except Exception as exc:
             logger.warning(
-                "Gold build: Silver load failed | {}/{}/{}/{} err={}",
+                "Gold build: Iceberg load failed | {}/{}/{}/{} err={}",
                 exchange, symbol, market_type, timeframe, exc,
             )
             return None
@@ -320,28 +321,22 @@ class GoldStorage:
         requested: str = "latest",
     ) -> str:
         """
-        Resuelve 'latest' al version_id concreto de Silver.
+        Resuelve la versión de Silver (Iceberg) como snapshot_id.
 
-        'latest' no es reproducible: si Silver se actualiza entre
-        dos builds de Gold, los manifests apuntan a datos distintos
-        con el mismo string. Esta función los ancla a 'v000042'.
+        Con Iceberg el versionado es por snapshot — cada append genera
+        un snapshot_id único. Usamos el snapshot actual como proxy de
+        'latest'. Si se pasa un snapshot_id concreto, se devuelve tal cual.
         """
         if requested != "latest":
             return requested
-        latest_path = (
-            self._silver
-            / f"exchange={exchange}"
-            / f"symbol={safe_symbol(symbol)}"
-            / f"market_type={market_type}"
-            / f"timeframe={timeframe}"
-            / "_versions"
-            / "latest.json"
-        )
         try:
-            data = json.loads(latest_path.read_text(encoding="utf-8"))
-            return data.get("version_id", "latest")
+            storage = IcebergStorage(exchange=exchange, market_type=market_type)
+            snap = storage._table.current_snapshot()
+            if snap is not None:
+                return f"iceberg-snap-{snap.snapshot_id}"
         except Exception:
-            return "latest"
+            pass
+        return "iceberg-latest"
 
     # ----------------------------------------------------------
     # Path helpers
