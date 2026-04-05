@@ -62,7 +62,7 @@ class ExecutionGuard:
     """
 
     max_errors:    int   = 10
-    max_runtime_s: float = 0.0   # 0 → sin límite de tiempo
+    max_runtime_s: Optional[float] = None  # None → sin límite de tiempo
 
     # Estado interno — no expuesto en constructor
     _stop_event:         threading.Event  = field(default_factory=threading.Event, init=False, repr=False)
@@ -120,7 +120,7 @@ class ExecutionGuard:
         if self._stop_event.is_set():
             return True
 
-        if self.max_runtime_s > 0 and self._start_time is not None:
+        if self.max_runtime_s is not None and self._start_time is not None:
             elapsed = time.monotonic() - self._start_time
             if elapsed >= self.max_runtime_s:
                 self.trigger(f"runtime_limit_exceeded:{elapsed:.0f}s")

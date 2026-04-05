@@ -88,6 +88,7 @@ class OcmSettings(BaseSettings):
     )
     pipeline__historical__fetch_all_history: Optional[bool] = Field(
         default=None,
+        validation_alias="OCM_FETCH_ALL_HISTORY",
     )
 
     # ── pipeline.realtime ────────────────────────────────────────────────────

@@ -319,7 +319,7 @@ async def market_data_flow(
     if guard_context.get_guard() is None:
         _guard = ExecutionGuard(
             max_errors    = getattr(getattr(config, "pipeline", None), "max_consecutive_errors", 10),
-            max_runtime_s = 0,  # Prefect Worker gestiona el timeout externamente — desactivado aquí
+            max_runtime_s = None,  # None = sin límite — Prefect Worker gestiona el timeout externamente
         )
         _guard.start()
         guard_context.set_guard(_guard)
