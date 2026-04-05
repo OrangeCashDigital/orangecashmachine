@@ -99,7 +99,6 @@ def print_partition_stats(table) -> None:
     """Muestra distribución de archivos por partición — útil para detectar skew."""
     print("\n  ── Distribución de particiones ──────────────────────────")
     try:
-        import pyarrow.compute as pc
         df = table.scan().to_arrow()
         combos = df.group_by(
             ["exchange", "market_type", "symbol", "timeframe"]

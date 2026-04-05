@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 scripts/calibrate_lateness.py
 ==============================
@@ -45,14 +44,15 @@ Usage
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import json
 import sys
 import urllib.request
 import urllib.parse
 from typing import Optional
 
-# Añadir raíz del proyecto al path para imports
-sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.dirname(__file__)))
+_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_ROOT))
 
 from loguru import logger
 
