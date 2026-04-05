@@ -9,7 +9,6 @@ import pandas as pd
 from loguru import logger
 
 from market_data.quality.validators.data_quality import DataQualityChecker, DataQualityReport
-from market_data.processing.strategies.repair import scan_gaps
 from market_data.observability.metrics import QUALITY_GAPS_TOTAL
 from market_data.quality.policies.data_quality_policy import (
     DataQualityPolicy, PolicyResult, QualityDecision, default_policy,
@@ -99,6 +98,7 @@ class QualityPipeline:
         # Gap scan post-ingesta: detecta huecos temporales silenciosos.
         # Corre siempre, independiente del resultado de calidad.
         # Warning únicamente — no bloquea el pipeline (datos parciales > sin datos).
+        from market_data.processing.strategies.repair import scan_gaps  # lazy — evita circular
         _gaps = scan_gaps(df, timeframe)
         if _gaps:
             _high   = sum(1 for g in _gaps if g.severity == "high")
