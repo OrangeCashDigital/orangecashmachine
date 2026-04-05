@@ -67,7 +67,7 @@ def _get_catalog() -> SqlCatalog:
     """
     Devuelve el catálogo Iceberg, creándolo una sola vez por proceso.
 
-    Paths resueltos desde silver_ohlcv_root() para garantizar
+    Paths resueltos desde data_lake_root() para garantizar
     consistencia con el resto del data platform, independientemente
     del cwd desde donde se lance el proceso.
     """
