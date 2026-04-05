@@ -65,7 +65,6 @@ _PARTITION_EXECUTOR = ThreadPoolExecutor(
     thread_name_prefix="silver-io",
 )
 
-
 # ==========================================================
 # Constants
 # ==========================================================
@@ -73,7 +72,6 @@ _PARTITION_EXECUTOR = ThreadPoolExecutor(
 REQUIRED_COLUMNS: tuple[str, ...] = (
     "timestamp", "open", "high", "low", "close", "volume"
 )
-
 
 WriteMode = Literal["append", "overwrite"]
 
@@ -93,7 +91,6 @@ else
     return 0
 end
 """
-
 
 # ==========================================================
 # Manifest Cache
@@ -145,7 +142,6 @@ class _ManifestCache:
         with self._lock:
             self._store.clear()
 
-
 # ==========================================================
 # Exceptions
 # ==========================================================
@@ -158,7 +154,6 @@ class InvalidDataFrameError(SilverStorageError):
 
 class PartitionWriteError(SilverStorageError):
     """Partition write failure."""
-
 
 # ==========================================================
 # SilverStorage
@@ -460,9 +455,11 @@ class SilverStorage:
             return None
         timestamps: List[pd.Timestamp] = []
         for f in files:
-            ts = _read_max_timestamp(f)
-            if ts is not None:
-                timestamps.append(ts)
+            try:
+                df = pd.read_parquet(f, columns=["timestamp"])
+                timestamps.append(pd.to_datetime(df["timestamp"].max(), utc=True))
+            except Exception as exc:
+                logger.warning("Timestamp read failed | {} | {}", f, exc)
         return max(timestamps) if timestamps else None
 
     def get_version(self, symbol: str, timeframe: str, version: str = "latest") -> Optional[Dict]:
@@ -492,7 +489,6 @@ class SilverStorage:
         except Exception as exc:
             logger.warning("Version read failed | {} | {}", path, exc)
             return None
-
 
     def load_ohlcv(
         self,
@@ -917,7 +913,6 @@ class SilverStorage:
             symbol, timeframe, self._exchange or "shared",
         )
 
-
 # ==========================================================
 # Helpers (puros)
 # ==========================================================
@@ -935,7 +930,6 @@ def _resolve_base_path(base_path: Optional[str | Path]) -> Path:
         return Path(base_path).resolve()
     return silver_ohlcv_root()
 
-
 def _validate_dataframe(df: pd.DataFrame) -> None:
     if df is None or df.empty:
         raise InvalidDataFrameError("DataFrame vacío")
@@ -943,13 +937,11 @@ def _validate_dataframe(df: pd.DataFrame) -> None:
     if missing:
         raise InvalidDataFrameError(f"Missing columns: {sorted(missing)}")
 
-
 def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
     df = df.dropna(subset=["timestamp"])
     return df
-
 
 def _merge_full(new_df: pd.DataFrame, file_path: Path) -> pd.DataFrame:
     existing = pd.read_parquet(file_path)
@@ -960,31 +952,12 @@ def _merge_full(new_df: pd.DataFrame, file_path: Path) -> pd.DataFrame:
         .pipe(normalize_ohlcv_df)
     )
 
-
 def _clean_partition(df: pd.DataFrame) -> pd.DataFrame:
     return (
         df.sort_values("timestamp")
         .drop_duplicates(subset="timestamp", keep="last")
         .reset_index(drop=True)
     )
-
-
-def _read_max_timestamp(file: Path) -> Optional[pd.Timestamp]:
-    """
-    Deprecated: use SilverStorage.get_last_timestamp() que lee max_ts del
-    manifest en O(1) en lugar de abrir el parquet.
-    Mantenida por compatibilidad — se eliminará en la próxima limpieza.
-    """
-    logger.warning(
-        "_read_max_timestamp() está deprecada — usa get_last_timestamp() | file={}", file
-    )
-    try:
-        df = pd.read_parquet(file, columns=["timestamp"])
-        return pd.to_datetime(df["timestamp"].max(), utc=True)
-    except Exception as exc:
-        logger.warning("Timestamp read failed | {} | {}", file, exc)
-        return None
-
 
 def _write_partition_meta(
     meta_path: Path,
