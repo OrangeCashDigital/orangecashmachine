@@ -9,8 +9,7 @@ Implementación única
 --------------------
 - IcebergStorage : Apache Iceberg sobre SQLite catalog (único backend)
 
-SilverStorage (parquet en filesystem) está deprecado.
-Migración completada: Bronze → Parquet | Silver → Iceberg | Gold → Iceberg
+Arquitectura: Bronze → Parquet | Silver → Iceberg | Gold → lee Iceberg
 
 Notas de diseño
 ---------------
@@ -18,7 +17,7 @@ commit_version es no-op en Iceberg (versiona en cada write automáticamente).
 Existe en el contrato por compatibilidad con llamadas existentes en backfill.
 
 find_partition_files NO forma parte del contrato — es un artefacto de
-SilverStorage sin equivalente en Iceberg. Llamadas existentes reciben [].
+No tiene equivalente en Iceberg. Llamadas existentes reciben [].
 """
 from __future__ import annotations
 

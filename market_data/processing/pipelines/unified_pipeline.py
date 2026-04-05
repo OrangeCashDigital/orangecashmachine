@@ -55,8 +55,7 @@ def _build_storage(
     """
     Factory de storage OHLCV — IcebergStorage es el único backend.
 
-    SilverStorage está deprecado. La variable OCM_STORAGE_BACKEND
-    ya no tiene efecto — Iceberg es siempre el backend activo.
+    IcebergStorage es el único backend activo.
     """
     _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
         "storage_factory | IcebergStorage"
@@ -360,7 +359,7 @@ class UnifiedPipeline:
         4. SafeOps: cualquier excepción es capturada y logueada, nunca relanzada
 
         Nota: load_ohlcv está en el contrato OHLCVStorage — disponible en
-        SilverStorage e IcebergStorage sin necesidad de getattr.
+        IcebergStorage sin necesidad de getattr.
         """
         from market_data.processing.strategies.repair import scan_gaps, GapRange
 

@@ -225,7 +225,7 @@ class BackfillStrategy(StrategyMixin):
         symbol:    str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
-        """Delega al Protocol — funciona con SilverStorage e IcebergStorage."""
+        """Delega al Protocol OHLCVStorage — IcebergStorage."""
         try:
             return ctx.storage.get_oldest_timestamp(symbol, timeframe)
         except Exception as exc:

@@ -2,34 +2,32 @@
 market_data/storage/iceberg/iceberg_storage.py
 ===============================================
 
-Implementación Iceberg de la capa Silver.
+Capa Silver — único backend de storage OHLCV.
 
-Interfaz compatible con SilverStorage — mismos métodos públicos:
-  save_ohlcv(), get_last_timestamp(), load_ohlcv()
+Tabla: silver.ohlcv (Apache Iceberg sobre SQLite catalog)
+Particionado por: exchange / market_type / symbol / timeframe / ts_month
 
-Permite inyección en HistoricalFetcherAsync sin modificar el fetcher:
+Interfaz pública (OHLCVStorage Protocol)
+-----------------------------------------
+  save_ohlcv()          — append transaccional con snapshot consistency
+  get_last_timestamp()  — scan con partition pruning, sin abrir archivos
+  get_oldest_timestamp()— simétrico, para backfill boundary detection
+  load_ohlcv()          — scan con pushdown de filtros temporales
+  commit_version()      — no-op (Iceberg versiona por snapshot)
+
+Uso
+---
   storage = IcebergStorage(exchange="bybit", market_type="spot")
   fetcher = HistoricalFetcherAsync(exchange_client=..., storage=storage)
-
-Diferencias vs SilverStorage
------------------------------
-• Escribe en Iceberg (append transaccional) en lugar de parquet plano
-• get_last_timestamp() lee de Iceberg — sin parquet local
-• load_ohlcv() escanea Iceberg con pushdown de filtros nativos
-• Sin _versions/ ni .meta.json — Iceberg lo reemplaza nativamente
-• Sin write lock Redis — Iceberg garantiza atomicidad por snapshot
 
 Notas de implementación
 -----------------------
 • row_filter usa pyiceberg.expressions (EqualTo, And, etc.) — NO pc.field().
-  pc.field() es PyArrow compute y lanza "Cannot visit unsupported expression"
-  cuando se pasa a scan(). Son dos sistemas de expresiones incompatibles.
-• pc (pyarrow.compute) se usa SOLO post-scan: pc.max(), etc.
-• pc.max() sobre columnas tz-aware devuelve datetime ya tz-aware.
-  pd.Timestamp(max_ts, tz=...) falla si el objeto ya tiene tzinfo.
-  Solución: pd.Timestamp(max_ts) + tz_localize solo si viene sin tz.
-• Timestamps se normalizan a microsegundos (us) antes de escribir:
-  pyiceberg 0.8 no soporta nanosegundos nativamente.
+  pc.field() es PyArrow compute — sistemas de expresiones incompatibles.
+• pc (pyarrow.compute) se usa SOLO post-scan: pc.max(), pc.min().
+• Timestamps normalizados a microsegundos (us) — pyiceberg 0.8 no soporta ns.
+• pd.Timestamp(max_ts, tz=...) falla si el objeto ya tiene tzinfo —
+  usar tz_localize solo si viene sin tz.
 """
 
 from __future__ import annotations
@@ -110,8 +108,7 @@ class IcebergStorage:
     """
     Capa Silver sobre Apache Iceberg.
 
-    Misma interfaz pública que SilverStorage para permitir
-    sustitución directa (duck typing / inyección de dependencia).
+    Implementación única del contrato OHLCVStorage.
     """
 
     def __init__(
@@ -182,7 +179,7 @@ class IcebergStorage:
         )
 
     # =========================================================================
-    # Public API — compatible con SilverStorage
+    # Public API — OHLCVStorage Protocol
     # =========================================================================
 
     def save_ohlcv(
@@ -349,7 +346,7 @@ class IcebergStorage:
             return None
 
     # =========================================================================
-    # Compatibilidad con SilverStorage — stubs no-op
+    # Protocol stubs — no-op en Iceberg
     # =========================================================================
 
     def commit_version(

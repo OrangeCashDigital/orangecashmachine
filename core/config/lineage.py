@@ -87,7 +87,7 @@ class LineageRecord:
 
     Uso en manifests
     ----------------
-    El dict .to_manifest() produce exactamente los campos que silver_storage
+    El dict .to_manifest() produce los campos de lineage
     y gold_storage ya escriben en sus version JSONs — centraliza el schema.
     """
 
@@ -105,7 +105,7 @@ class LineageRecord:
         """
         Serializa a dict compatible con los manifests de versión existentes.
 
-        Produce los mismos campos que silver_storage._write_version() y
+        Produce los campos de lineage compatibles con el manifest de Gold y
         gold_storage ya escriben — reemplaza la lógica dispersa por un
         schema centralizado.
         """
