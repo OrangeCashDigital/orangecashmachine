@@ -47,7 +47,7 @@ from pyiceberg.expressions import (
     LessThanOrEqual,
 )
 
-from core.config.paths import silver_ohlcv_root
+from core.config.paths import data_lake_root
 
 
 # =============================================================================
@@ -73,7 +73,7 @@ def _get_catalog() -> SqlCatalog:
     """
     global _CATALOG
     if _CATALOG is None:
-        base      = silver_ohlcv_root().parent.parent.parent  # .../data_platform/
+        base      = data_lake_root().parent  # .../data_platform/
         cat_path  = base / "iceberg_catalog"
         ware_path = base / "iceberg_warehouse"
         _CATALOG  = SqlCatalog(

@@ -55,11 +55,7 @@ def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
         3. Normalizar strings vacíos → None
         4. AppConfig(**raw) — validación Pydantic completa
     """
-    raw: dict = OmegaConf.to_container(
-        cfg,
-        resolve=True,
-        
-    )
+    raw: dict = OmegaConf.to_container(cfg, resolve=True)
 
     for key in _HYDRA_INTERNAL:
         raw.pop(key, None)
