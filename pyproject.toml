@@ -31,6 +31,7 @@ dependencies = [
     "redis>=7.4.0",
     "pyiceberg[pyarrow,sql-sqlite]>=0.8.1",
     "duckdb>=1.5.1",
+    "pyspark>=4.1.1",
 ]
 
 [project.scripts]
