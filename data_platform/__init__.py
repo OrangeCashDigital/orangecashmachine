@@ -9,12 +9,11 @@ Exports públicos del paquete data_platform.
 Capas
 -----
   ohlcv_utils  — utilidades de dominio OHLCV (safe_symbol, normalize_ohlcv_df)
-  loaders      — acceso al Data Lake (MarketDataLoader, GoldLoader)
+  loaders      — acceso al Data Lake (GoldLoader)
 
 Uso
 ---
     from data_platform.ohlcv_utils import safe_symbol, normalize_ohlcv_df
-    from data_platform.loaders.market_data_loader import MarketDataLoader
     from data_platform.loaders.gold_loader import GoldLoader
 """
 

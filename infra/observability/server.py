@@ -107,7 +107,7 @@ def push_silver_quality_metrics(
 
             # Coverage: velas presentes / velas esperadas en el rango completo.
             # Requiere first_ts, last_ts y timeframe_s conocidos.
-            from data_platform.validate_silver import _TIMEFRAME_SECONDS
+            from data_platform.ohlcv_utils import TIMEFRAME_SECONDS as _TIMEFRAME_SECONDS
             tf_s = _TIMEFRAME_SECONDS.get(r.timeframe)
             if tf_s and r.first_ts and r.last_ts and r.total_rows > 0:
                 span_s   = (r.last_ts - r.first_ts).total_seconds()
