@@ -44,7 +44,7 @@ import pandas as pd
 from loguru import logger
 
 from core.config.lineage import get_git_hash
-from core.config.paths import silver_ohlcv_root, gold_features_root
+from core.config.paths import gold_features_root
 from data_platform.ohlcv_utils import safe_symbol
 from market_data.storage.gold.feature_engineer import FeatureEngineer
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
@@ -69,15 +69,9 @@ class GoldStorage:
 
     def __init__(
         self,
-        gold_path:   Optional[Path] = None,
-        dry_run:     bool           = False,
-        silver_path: Optional[Path] = None,  # deprecated — ignorado, Silver es Iceberg
+        gold_path: Optional[Path] = None,
+        dry_run:   bool           = False,
     ) -> None:
-        if silver_path is not None:
-            logger.warning(
-                "GoldStorage: silver_path está deprecado — Silver es Iceberg, "
-                "el path de filesystem no tiene efecto."
-            )
         self._gold     = Path(gold_path) if gold_path else gold_features_root()
         self._gold.mkdir(parents=True, exist_ok=True)
         self._engineer = FeatureEngineer()
@@ -90,37 +84,20 @@ class GoldStorage:
     # Silver manifest reader
     # ----------------------------------------------------------
 
-    def _read_silver_manifest(
-        self,
-        exchange: str,
-        symbol: str,
-        market_type: str,
-        timeframe: str,
-        version_id: str,
-    ) -> dict:
+    @staticmethod
+    def _silver_lineage(snapshot_id: int, snapshot_ms: int) -> dict:
         """
-        Retorna metadata de lineage de Silver (Iceberg) para el manifest de Gold.
+        Lineage de Silver para el manifest de Gold.
 
-        Con Iceberg no hay archivos _versions/ — la versión es el snapshot_id.
+        Iceberg reemplaza _versions/ — la versión es el snapshot_id.
+        snapshot_ms es el timestamp Unix en ms del snapshot.
         """
-        base = {
+        return {
             "layer":       "silver",
             "backend":     "iceberg",
-            "exchange":    exchange,
-            "symbol":      symbol,
-            "market_type": market_type,
-            "timeframe":   timeframe,
-            "version_id":  version_id,
+            "snapshot_id": snapshot_id,
+            "snapshot_ms": snapshot_ms,
         }
-        try:
-            storage = IcebergStorage(exchange=exchange, market_type=market_type)
-            snap = storage._table.current_snapshot()
-            if snap is not None:
-                base["snapshot_id"]  = snap.snapshot_id
-                base["snapshot_ms"]  = snap.timestamp_ms
-        except Exception:
-            pass
-        return base
 
     # ----------------------------------------------------------
     # Public API
@@ -134,25 +111,35 @@ class GoldStorage:
         timeframe:   str,
         start:       Optional[pd.Timestamp] = None,
         end:         Optional[pd.Timestamp] = None,
-        silver_version: str = "latest",
         run_id:      Optional[str] = None,
     ) -> Optional[pd.DataFrame]:
         """
-        Lee Silver, calcula features y persiste en Gold con manifest versionado.
+        Lee Silver (Iceberg), calcula features y persiste en Gold.
+
+        El lineage queda anclado al snapshot_id de Iceberg capturado
+        antes del load — reproducible sin gestión manual de versiones.
 
         Parameters
         ----------
-        exchange       : e.g. "bybit"
-        symbol         : e.g. "BTC/USDT"
-        market_type    : "spot" | "swap"
-        timeframe      : e.g. "1h"
-        start / end    : filtro de tiempo opcional sobre Silver
-        silver_version : versión de Silver a usar (default "latest")
-                         Permite reproducibilidad completa: rebuild con
-                         silver_version="v000042" produce el mismo Gold.
+        exchange    : e.g. "bybit"
+        symbol      : e.g. "BTC/USDT"
+        market_type : "spot" | "swap"
+        timeframe   : e.g. "1h"
+        start / end : filtro temporal opcional sobre Silver
+        run_id      : correlación con el run de ingestión
         """
         sym_safe = safe_symbol(symbol)
-        silver = IcebergStorage(exchange=exchange, market_type=market_type)
+        silver   = IcebergStorage(exchange=exchange, market_type=market_type)
+
+        # Capturar snapshot_id ANTES de leer — ancla el lineage al punto
+        # exacto en el tiempo que Gold usó. Si Silver se actualiza durante
+        # el build, el manifest de Gold refleja los datos reales leídos.
+        try:
+            _snap          = silver._table.current_snapshot()
+            _snap_id       = _snap.snapshot_id if _snap else 0
+            _snap_ms       = _snap.timestamp_ms if _snap else 0
+        except Exception:
+            _snap_id, _snap_ms = 0, 0
 
         # ── Cargar Silver (Iceberg) ──────────────────────────────────────
         try:
@@ -188,10 +175,8 @@ class GoldStorage:
         # ── Feature engineering ──────────────────────────────────────────
         df = self._engineer.compute(df, symbol=symbol, timeframe=timeframe)
 
-        # ── Resolver versión concreta de Silver (reproducibilidad) ─────
-        resolved_silver_v = self._resolve_silver_version(
-            exchange, symbol, market_type, timeframe, silver_version
-        )
+        # ── Lineage Silver → snapshot capturado antes del load ─────────
+        # _snap_id ancla el manifest al snapshot exacto leído, no al actual.
 
         # ── DRY RUN ──────────────────────────────────────────────────────
         if self._dry_run:
@@ -221,9 +206,6 @@ class GoldStorage:
         # schema_hash: detecta drift silencioso de columnas entre versiones.
         # Cambia si FeatureEngineer añade/elimina/renombra features.
         schema_hash = hashlib.md5(",".join(sorted(df.columns)).encode()).hexdigest()
-        silver_manifest = self._read_silver_manifest(
-            exchange, symbol, market_type, timeframe, resolved_silver_v
-        )
         self._write_version(
             out_dir        = out_dir,
             out_file       = out_file,
@@ -234,9 +216,9 @@ class GoldStorage:
             rows           = len(df),
             features       = len(df.columns),
             checksum       = checksum,
-            silver_version = resolved_silver_v,
+            silver_snapshot_id = _snap_id,
+            silver_snapshot_ms = _snap_ms,
             run_id         = run_id,
-            input_versions = [silver_manifest],
             schema_hash    = schema_hash,
             min_ts         = str(df["timestamp"].min()) if not df.empty else None,
             max_ts         = str(df["timestamp"].max()) if not df.empty else None,
@@ -312,31 +294,7 @@ class GoldStorage:
     # Silver version resolver
     # ----------------------------------------------------------
 
-    def _resolve_silver_version(
-        self,
-        exchange: str,
-        symbol: str,
-        market_type: str,
-        timeframe: str,
-        requested: str = "latest",
-    ) -> str:
-        """
-        Resuelve la versión de Silver (Iceberg) como snapshot_id.
 
-        Con Iceberg el versionado es por snapshot — cada append genera
-        un snapshot_id único. Usamos el snapshot actual como proxy de
-        'latest'. Si se pasa un snapshot_id concreto, se devuelve tal cual.
-        """
-        if requested != "latest":
-            return requested
-        try:
-            storage = IcebergStorage(exchange=exchange, market_type=market_type)
-            snap = storage._table.current_snapshot()
-            if snap is not None:
-                return f"iceberg-snap-{snap.snapshot_id}"
-        except Exception:
-            pass
-        return "iceberg-latest"
 
     # ----------------------------------------------------------
     # Path helpers
@@ -384,21 +342,21 @@ class GoldStorage:
 
     def _write_version(
         self,
-        out_dir:        Path,
-        out_file:       Path,
-        exchange:       str,
-        symbol:         str,
-        market_type:    str,
-        timeframe:      str,
-        rows:           int,
-        features:       int,
-        checksum:       str,
-        silver_version: str,
-        min_ts:         Optional[str],
-        max_ts:         Optional[str],
-        run_id:         Optional[str] = None,
-        input_versions: Optional[list] = None,
-        schema_hash:    Optional[str] = None,
+        out_dir:            Path,
+        out_file:           Path,
+        exchange:           str,
+        symbol:             str,
+        market_type:        str,
+        timeframe:          str,
+        rows:               int,
+        features:           int,
+        checksum:           str,
+        silver_snapshot_id: int,
+        silver_snapshot_ms: int,
+        min_ts:             Optional[str],
+        max_ts:             Optional[str],
+        run_id:             Optional[str] = None,
+        schema_hash:        Optional[str] = None,
     ) -> None:
         """
         Escribe manifest versionado en _versions/.
@@ -432,26 +390,27 @@ class GoldStorage:
         version_id  = f"v{version_num:06d}"
 
         manifest: Dict = {
-            "version":          version_num,
-            "version_id":       version_id,
-            "written_at":       datetime.now(timezone.utc).isoformat(),
-            "exchange":         exchange,
-            "symbol":           symbol,
-            "market_type":      market_type,
-            "timeframe":        timeframe,
-            "layer":            "gold",
-            "run_id":           run_id,
-            "input_versions":   input_versions or [],
-            "git_hash":         get_git_hash(),
-            "engineer_version": getattr(self._engineer, "VERSION", "unknown"),
-            "silver_version":   silver_version,
-            "file":             str(out_file.relative_to(self._gold)),
-            "rows":             rows,
-            "features":         features,
-            "checksum":         checksum,
-            "schema_hash":      schema_hash,
-            "min_ts":           min_ts,
-            "max_ts":           max_ts,
+            "version":             version_num,
+            "version_id":          version_id,
+            "written_at":          datetime.now(timezone.utc).isoformat(),
+            "exchange":            exchange,
+            "symbol":              symbol,
+            "market_type":         market_type,
+            "timeframe":           timeframe,
+            "layer":               "gold",
+            "run_id":              run_id,
+            "git_hash":            get_git_hash(),
+            "engineer_version":    getattr(self._engineer, "VERSION", "unknown"),
+            "silver_backend":      "iceberg",
+            "silver_snapshot_id":  silver_snapshot_id,
+            "silver_snapshot_ms":  silver_snapshot_ms,
+            "file":                str(out_file.relative_to(self._gold)),
+            "rows":                rows,
+            "features":            features,
+            "checksum":            checksum,
+            "schema_hash":         schema_hash,
+            "min_ts":              min_ts,
+            "max_ts":              max_ts,
         }
 
         serialized = json.dumps(manifest, indent=2)
