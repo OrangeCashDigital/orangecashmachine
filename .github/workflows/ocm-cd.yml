@@ -1,95 +1,12 @@
 name: OrangeCashMachine CD
-
+# 🚧 Deshabilitado — deploy manual via SSH hasta que se defina deploy_ocm.sh
+# El CD anterior era para un proyecto distinto (freqtrade BOTS).
+# Re-habilitar cuando: deploy_ocm.sh esté implementado.
 on:
-  workflow_run:
-    workflows: ["OrangeCashMachine CI"]
-    types:
-      - completed
-
-concurrency:
-  group: ocm-deploy
-  cancel-in-progress: false
+  workflow_dispatch:  # solo manual, nunca automático
 
 jobs:
-  deploy:
-    name: Deploy Trading Stack
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+  placeholder:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
     steps:
-      # -------------------------------------------------
-      # Step 1: Validar secretos
-      # -------------------------------------------------
-      - name: Validate required secrets
-        run: |
-          : "${{ secrets.SERVER_HOST:?Missing SERVER_HOST secret}}"
-          : "${{ secrets.SERVER_USER:?Missing SERVER_USER secret}}"
-          : "${{ secrets.SERVER_KEY:?Missing SERVER_KEY secret}}"
-          echo "✅ All required secrets are set"
-
-      # -------------------------------------------------
-      # Step 2: Deploy via SSH
-      # -------------------------------------------------
-      - name: Deploy to trading server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_KEY }}
-          port: 22
-          script: |
-            set -euo pipefail
-
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "🚀 OrangeCashMachine Deploy"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-            REPO_DIR="/home/orangemusic/trading/orangecashmachine"
-
-            # Verificar repositorio
-            if [ ! -d "$REPO_DIR/.git" ]; then
-              echo "❌ Repository not found at $REPO_DIR"
-              exit 1
-            fi
-
-            cd "$REPO_DIR"
-            echo "📦 Updating repository..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            # Ejecutar deploy
-            echo "⚙️ Running deploy script..."
-            chmod +x deploy_ocm.sh
-
-            # Capturar error para rollback
-            if ! ./deploy_ocm.sh production; then
-              echo "❌ Deployment failed! Attempting rollback..."
-              docker compose down -v || echo "⚠️ No containers to remove"
-              exit 1
-            fi
-
-            # Mostrar estado de contenedores
-            echo ""
-            echo "📊 Container status"
-            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-            echo ""
-            echo "✅ Deploy completed successfully"
-
-      # -------------------------------------------------
-      # Step 3: Optional: Post-deploy health check
-      # -------------------------------------------------
-      - name: Verify bot containers
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_KEY }}
-          port: 22
-          script: |
-            set -euo pipefail
-            echo "🔍 Verifying bot containers..."
-            docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "BTCUSDT|XAUTUSDT" || echo "⚠️ Some bots may not be running"
+      - run: echo "CD pendiente de implementación — ver deploy.py"

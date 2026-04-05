@@ -1,1 +1,0 @@
-# Reemplazado por pyproject.toml — ver: uv sync

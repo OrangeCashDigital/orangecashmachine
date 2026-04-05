@@ -7,80 +7,23 @@ on:
     branches: [ main ]
 
 jobs:
-
-  test-bots:
-    name: Test Trading Bots
+  test:
+    name: Tests
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
 
-      # -------------------------------------------------
-      # 1️⃣ Checkout
-      # -------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
 
-      # -------------------------------------------------
-      # 2️⃣ Configurar Docker Buildx
-      # -------------------------------------------------
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Install dependencies
+        run: uv sync
 
-      # -------------------------------------------------
-      # 3️⃣ Validar estructura del proyecto
-      # -------------------------------------------------
-      - name: Validate project structure
-        run: |
-          echo "🔹 Validating project structure..."
-          if [ ! -d BOTS ]; then
-            echo "❌ BOTS directory missing"
-            exit 1
-          fi
-          echo "✅ BOTS directory found"
+      - name: Run tests
+        run: uv run pytest tests/ -x -q
 
-      # -------------------------------------------------
-      # 4️⃣ Validar estrategias Python
-      # -------------------------------------------------
-      - name: Validate Python strategies
-        run: |
-          echo "🔹 Checking Python syntax for each bot..."
-          find BOTS -name "*.py" -print0 | while IFS= read -r -d '' file; do
-              python -m py_compile "$file" || { echo "❌ Python syntax error in $file"; exit 1; }
-          done
-          echo "✅ Python syntax validated"
-
-      # -------------------------------------------------
-      # 5️⃣ Validar archivos config.json
-      # -------------------------------------------------
-      - name: Validate freqtrade configs
-        run: |
-          echo "🔹 Validating config.json files..."
-          find BOTS -name "config.json" -print0 | while IFS= read -r -d '' file; do
-              python -m json.tool "$file" > /dev/null || { echo "❌ Invalid JSON in $file"; exit 1; }
-          done
-          echo "✅ JSON configs validated"
-
-      # -------------------------------------------------
-      # 6️⃣ Construir y testear contenedores por bot
-      # -------------------------------------------------
-      - name: Build and test bot containers
-        run: |
-          echo "🔹 Building and testing Docker containers for each bot..."
-          for bot_dir in BOTS/*; do
-            if [ -f "$bot_dir/docker-compose.yml" ]; then
-              echo "⚙️ Processing $bot_dir..."
-              docker compose -f "$bot_dir/docker-compose.yml" build || { echo "❌ Build failed for $bot_dir"; exit 1; }
-              docker compose -f "$bot_dir/docker-compose.yml" up --abort-on-container-exit || { echo "❌ Container test failed for $bot_dir"; exit 1; }
-              docker compose -f "$bot_dir/docker-compose.yml" down -v
-              echo "✅ $bot_dir tested successfully"
-            else
-              echo "ℹ️ No docker-compose.yml in $bot_dir, skipping..."
-            fi
-          done
-
-      # -------------------------------------------------
-      # 7️⃣ Mensaje final
-      # -------------------------------------------------
-      - name: CI Completed
-        run: |
-          echo "🎉 OrangeCashMachine CI pipeline completed successfully!"
+      - name: Validate config
+        run: OCM_VALIDATE_ONLY=1 uv run python main.py
