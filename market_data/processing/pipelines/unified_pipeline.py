@@ -240,6 +240,9 @@ class UnifiedPipeline:
                 duration_ms=duration_ms,
             ).success("Pipeline OK")
 
+        # Validación de completitud post-pipeline (non-blocking)
+        await self._run_completeness_check(summary)
+
         return summary
 
     # ======================================================
@@ -341,6 +344,85 @@ class UnifiedPipeline:
                     w.cancel()
 
         return results, degraded
+
+    # ======================================================
+    # Completeness check (post-pipeline)
+    # ======================================================
+
+    async def _run_completeness_check(self, summary: "PipelineSummary") -> None:
+        """
+        Valida cobertura temporal de las series escritas en este pipeline.
+
+        Corre después de que el pipeline termina — nunca bloquea escrituras.
+        Solo verifica series con rows > 0 (saltea skipped/errores).
+
+        Estrategia
+        ----------
+        1. Leer datos desde storage (load_ohlcv con start=None → todo el dataset)
+        2. Ejecutar scan_gaps sobre el DataFrame completo
+        3. Loguear gaps por severidad — warning si high, info si medium/low
+        4. SafeOps: cualquier excepción es capturada y logueada, nunca relanzada
+
+        Nota: load_ohlcv puede no estar en OHLCVStorage Protocol (SilverStorage
+        lo tiene, IcebergStorage también). Se llama via getattr con fallback seguro.
+        """
+        from market_data.processing.strategies.repair import scan_gaps, GapRange
+
+        written = [r for r in summary.results if r.success and r.rows > 0]
+        if not written:
+            return
+
+        self._log.bind(mode="completeness", series=len(written)).debug(
+            "Completeness check iniciando"
+        )
+
+        total_gaps   = 0
+        total_high   = 0
+        series_clean = 0
+
+        for result in written:
+            try:
+                load_fn = getattr(self._ctx.storage, "load_ohlcv", None)
+                if load_fn is None:
+                    continue
+
+                df = load_fn(symbol=result.symbol, timeframe=result.timeframe)
+                if df is None or df.empty:
+                    continue
+
+                gaps = scan_gaps(df, result.timeframe)
+                if not gaps:
+                    series_clean += 1
+                    continue
+
+                high   = sum(1 for g in gaps if g.severity == "high")
+                medium = sum(1 for g in gaps if g.severity == "medium")
+                low    = len(gaps) - high - medium
+                total_gaps += len(gaps)
+                total_high += high
+
+                _lvl = self._log.warning if high > 0 else self._log.info
+                _lvl(
+                    "Completeness gap detected | {}/{} exchange={} "
+                    "gaps={} high={} medium={} low={}",
+                    result.symbol, result.timeframe, self._exchange_id,
+                    len(gaps), high, medium, low,
+                )
+
+            except Exception as exc:
+                self._log.bind(
+                    symbol=result.symbol, timeframe=result.timeframe,
+                    error=str(exc),
+                ).warning("Completeness check failed for series (non-critical)")
+
+        self._log.bind(
+            mode="completeness",
+            series_checked=len(written),
+            series_clean=series_clean,
+            total_gaps=total_gaps,
+            total_high=total_high,
+            status="OK" if total_high == 0 else "GAPS_DETECTED",
+        ).info("Completeness check finalizado")
 
     # ======================================================
     # Single pair execution (barrera de seguridad)
