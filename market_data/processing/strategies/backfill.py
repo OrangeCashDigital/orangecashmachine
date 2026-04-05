@@ -225,28 +225,14 @@ class BackfillStrategy(StrategyMixin):
         symbol:    str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
+        """Delega al Protocol — funciona con SilverStorage e IcebergStorage."""
         try:
-            files = ctx.storage.find_partition_files(symbol, timeframe)
-            if not files:
-                return None
-            timestamps = []
-            for f in files[:3]:
-                try:
-                    df = pd.read_parquet(f, columns=["timestamp"])
-                    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-                    timestamps.append(df["timestamp"].min())
-                except Exception:
-                    continue
-            return min(timestamps) if timestamps else None
+            return ctx.storage.get_oldest_timestamp(symbol, timeframe)
         except Exception as exc:
             _log.bind(symbol=symbol, timeframe=timeframe).warning(
                 "Oldest silver ts failed", error=str(exc),
             )
             return None
-
-    # ----------------------------------------------------------
-    # Backward Pagination
-    # ----------------------------------------------------------
 
     async def _paginate_backward(
         self,
