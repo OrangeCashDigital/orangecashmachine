@@ -29,7 +29,6 @@ from loguru import logger
 
 from core.logging.setup import bind_pipeline
 
-from market_data.storage.silver.silver_storage import SilverStorage
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.core.transformers.transformer import OHLCVTransformer
 from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
