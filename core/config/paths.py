@@ -17,7 +17,6 @@ Orden de resolución para data_lake_root()
 Paths derivados
 ---------------
   bronze_ohlcv_root() → <lake_root>/bronze/ohlcv/
-  silver_ohlcv_root() → <lake_root>/silver/ohlcv/
   gold_features_root() → <lake_root>/gold/features/ohlcv/
 
 Diseño
@@ -70,9 +69,6 @@ def bronze_ohlcv_root() -> Path:
     return data_lake_root() / "bronze" / "ohlcv"
 
 
-def silver_ohlcv_root() -> Path:
-    """Path absoluto a silver/ohlcv/."""
-    return data_lake_root() / "silver" / "ohlcv"
 
 
 def gold_features_root() -> Path:
@@ -174,6 +170,5 @@ def _find_config_dir() -> Optional[Path]:
 __all__ = [
     "data_lake_root",
     "bronze_ohlcv_root",
-    "silver_ohlcv_root",
     "gold_features_root",
 ]

@@ -13,7 +13,6 @@ from core.config.paths import (
     _read_yaml_lake_path,
     data_lake_root,
     bronze_ohlcv_root,
-    silver_ohlcv_root,
     gold_features_root,
 )
 from core.config.env_vars import OCM_DATA_LAKE_PATH, OCM_GOLD_PATH
@@ -70,10 +69,6 @@ def test_bronze_ohlcv_root_suffix(monkeypatch, tmp_path):
     monkeypatch.setenv(OCM_DATA_LAKE_PATH, str(tmp_path))
     assert bronze_ohlcv_root() == tmp_path.resolve() / "bronze" / "ohlcv"
 
-
-def test_silver_ohlcv_root_suffix(monkeypatch, tmp_path):
-    monkeypatch.setenv(OCM_DATA_LAKE_PATH, str(tmp_path))
-    assert silver_ohlcv_root() == tmp_path.resolve() / "silver" / "ohlcv"
 
 
 def test_gold_features_root_env_override(monkeypatch, tmp_path):

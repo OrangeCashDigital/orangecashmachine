@@ -90,7 +90,7 @@ class GapRegistry:
     -------------
     registry = GapRegistry(cursor_store)
 
-    # Al detectar un gap (validate_silver):
+    # Al detectar un gap:
     registry.register(exchange, symbol, timeframe, start_ms, end_ms, expected, gap_seconds)
 
     # Al sanar un gap (repair):

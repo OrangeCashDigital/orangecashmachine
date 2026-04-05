@@ -215,29 +215,6 @@ FETCH_ABORTS_TOTAL = Counter(
     ["exchange"],
 )
 
-SILVER_GAPS_TOTAL = Gauge(
-    "ocm_silver_gaps_total",
-    "Gaps activos en Silver por serie (0=limpio, >0=requiere repair)",
-    ["exchange", "symbol", "market_type", "timeframe"],
-)
-
-SILVER_GAP_MAX_CANDLES = Gauge(
-    "ocm_silver_gap_max_candles",
-    "Tamaño del gap más grande en la serie (candles). Distingue severidad.",
-    ["exchange", "symbol", "market_type", "timeframe"],
-)
-
-SILVER_SERIES_COVERAGE_RATIO = Gauge(
-    "ocm_silver_series_coverage_ratio",
-    "Fracción de velas presentes vs esperadas en el rango completo (0.0-1.0).",
-    ["exchange", "symbol", "market_type", "timeframe"],
-)
-
-SILVER_FRESHNESS_SECONDS = Gauge(
-    "ocm_silver_freshness_seconds",
-    "Segundos desde el último candle en Silver hasta ahora. SLA de frescura.",
-    ["exchange", "symbol", "timeframe"],
-)
 
 # Lateness real observado por candle (ms entre close esperado y momento de fetch).
 # Fuente de verdad para calibrar _ALLOWED_LATENESS_MS_BY_EXCHANGE con p99.
