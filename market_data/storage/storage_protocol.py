@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 market_data/storage/storage_protocol.py
 ========================================
@@ -10,12 +11,25 @@ el pipeline — basta con que ambos implementen esta interfaz
 
 Implementaciones actuales
 --------------------------
-- SilverStorage  : parquet particionado en filesystem
+- SilverStorage  : parquet particionado en filesystem local
 - IcebergStorage : Apache Iceberg sobre SQLite catalog
 
-Uso
----
-from market_data.storage.storage_protocol import OHLCVStorage
+Notas de diseño
+---------------
+skip_versioning es un detalle de implementación de SilverStorage
+usado durante backfills masivos para evitar generar miles de archivos
+de versión. IcebergStorage lo acepta como no-op. No forma parte del
+contrato público porque:
+
+  1. No tiene significado semántico en todos los backends.
+  2. El Protocol debe expresar el mínimo común denominador.
+  3. SilverStorage lo mantiene como kwarg extra con default=False,
+     compatible con duck typing sin romper el Protocol.
+
+commit_version es no-op en Iceberg (versiona en cada write).
+Existe en el contrato para que el pipeline pueda llamarlo
+incondicionalmente al final de un backfill masivo sin conocer
+el backend concreto.
 """
 from __future__ import annotations
 
@@ -32,20 +46,21 @@ class OHLCVStorage(Protocol):
 
     Contrato semántico
     ------------------
-    - save_ohlcv        : idempotente — re-escritura del mismo rango no duplica filas
-    - get_last_timestamp: retorna None si no hay datos (primer backfill)
-    - find_partition_files: puede retornar [] en backends sin archivos físicos
-    - commit_version    : no-op en backends con versionado automático (Iceberg)
+    - save_ohlcv         : idempotente — re-escritura del mismo rango
+                           no duplica filas.
+    - get_last_timestamp : retorna None si no hay datos (primer backfill).
+    - find_partition_files: puede retornar [] en backends sin archivos
+                           físicos (Iceberg).
+    - commit_version     : no-op en backends con versionado automático.
     """
 
     def save_ohlcv(
         self,
-        df:              pd.DataFrame,
-        symbol:          str,
-        timeframe:       str,
-        mode:            str           = "append",
-        run_id:          Optional[str] = None,
-        skip_versioning: bool          = False,
+        df:        pd.DataFrame,
+        symbol:    str,
+        timeframe: str,
+        mode:      str           = "append",
+        run_id:    Optional[str] = None,
     ) -> None: ...
 
     def get_last_timestamp(
