@@ -354,18 +354,19 @@ class GapRegistry:
             return None
 
 
-def build_gap_registry_from_env(env: Optional[str] = None) -> Optional[GapRegistry]:
+def build_gap_registry_from_env(env: Optional[str] = None) -> Optional["GapRegistry"]:
     """
-    Factory: construye GapRegistry desde env.
-    Retorna None si Redis no está disponible — el caller decide si degradar.
+    .. deprecated::
+        Usar ``infra.state.factories.build_gap_registry`` en código nuevo.
+        Shim mantenido por compatibilidad — será eliminado en la próxima
+        limpieza de deuda técnica una vez migrados todos los callers.
     """
-    try:
-        from infra.state.cursor_store import build_cursor_store_from_env
-        store = build_cursor_store_from_env(env=env)
-        if not store.is_healthy():
-            logger.warning("GapRegistry: Redis no disponible — registry deshabilitado")
-            return None
-        return GapRegistry(store)
-    except Exception as exc:
-        logger.warning("GapRegistry: no se pudo inicializar | error={}", exc)
-        return None
+    import warnings
+    warnings.warn(
+        "build_gap_registry_from_env está deprecada — "
+        "usa infra.state.factories.build_gap_registry",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from infra.state.factories import build_gap_registry
+    return build_gap_registry(env=env)

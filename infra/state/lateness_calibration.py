@@ -202,22 +202,20 @@ class LatenessCalibrationStore:
 
 def build_calibration_store_from_env(
     env: Optional[str] = None,
-) -> Optional[LatenessCalibrationStore]:
+) -> Optional["LatenessCalibrationStore"]:
     """
-    Factory: construye LatenessCalibrationStore desde env.
-    Retorna None si Redis no está disponible.
+    .. deprecated::
+        Usar ``infra.state.factories.build_lateness_calibration_store``
+        en código nuevo. Shim mantenido por compatibilidad — será eliminado
+        en la próxima limpieza de deuda técnica una vez migrados todos los
+        callers.
     """
-    try:
-        from infra.state.cursor_store import build_cursor_store_from_env
-        store = build_cursor_store_from_env(env=env)
-        if not store.is_healthy():
-            logger.warning(
-                "LatenessCalibration: Redis no disponible — calibración deshabilitada"
-            )
-            return None
-        return LatenessCalibrationStore(store)
-    except Exception as exc:
-        logger.warning(
-            "LatenessCalibration: no se pudo inicializar | error={}", exc
-        )
-        return None
+    import warnings
+    warnings.warn(
+        "build_calibration_store_from_env está deprecada — "
+        "usa infra.state.factories.build_lateness_calibration_store",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from infra.state.factories import build_lateness_calibration_store
+    return build_lateness_calibration_store(env=env)
