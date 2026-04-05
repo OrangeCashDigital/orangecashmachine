@@ -181,14 +181,18 @@ class SilverStorage:
         base_path:    Optional[str | Path] = None,
         exchange:     Optional[str]        = None,
         market_type:  str                  = "spot",
-        redis_client  = None,
-        dry_run:      bool                 = False,
+        redis_client       = None,
+        dry_run:           bool                 = False,
+        on_write_complete  = None,
     ) -> None:
         self._base_path:   Path = _resolve_base_path(base_path)
         self._exchange:    Optional[str] = exchange.lower() if exchange else None
         self._market_type: str = market_type.lower()
-        self._redis   = redis_client  # opcional — sin Redis, no hay lock
-        self._dry_run = dry_run
+        self._redis            = redis_client  # opcional — sin Redis, no hay lock
+        self._dry_run          = dry_run
+        # Optional[Callable[[str, str, str, float], None]]
+        # Firma: (exchange, symbol, timeframe, freshness_seconds) -> None
+        self._on_write_complete = on_write_complete
         self._manifest_cache = _ManifestCache(ttl_seconds=60.0)
         # Registrar script Lua una sola vez por instancia.
         # Redis lo cachea por SHA1 — register_script solo hace overhead en el primer call.
@@ -398,22 +402,22 @@ class SilverStorage:
         # Freshness SLA: tiempo desde el último candle hasta ahora.
         # Gauge por serie — permite alertar si un par lleva N segundos sin datos.
         # Se registra solo si la escritura produjo filas (no en errores parciales).
-        if total_rows > 0:
+        if total_rows > 0 and self._on_write_complete is not None:
             try:
-                from market_data.observability.metrics import SILVER_FRESHNESS_SECONDS
                 _max_ts_list = [
                     p["max_ts"] for p in partitions_written if "max_ts" in p
                 ]
                 if _max_ts_list:
                     _last_ts = max(pd.Timestamp(ts, tz="UTC") for ts in _max_ts_list)
                     _freshness = time.time() - _last_ts.timestamp()
-                    SILVER_FRESHNESS_SECONDS.labels(
-                        exchange=self._exchange or "shared",
-                        symbol=symbol,
-                        timeframe=timeframe,
-                    ).set(_freshness)
+                    self._on_write_complete(
+                        self._exchange or "shared",
+                        symbol,
+                        timeframe,
+                        _freshness,
+                    )
             except Exception as _fe:
-                logger.warning("freshness metric failed (non-critical) | {}", _fe)
+                logger.warning("on_write_complete callback failed (non-critical) | {}", _fe)
 
         # Generar versión del dataset
         # skip_versioning=True en backfill masivo para evitar miles de archivos;
