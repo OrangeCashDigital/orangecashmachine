@@ -381,11 +381,13 @@ def build_cursor_store_from_config(config=None) -> RedisCursorStore:
     """
     Factory principal: construye RedisCursorStore desde AppConfig.
     Centraliza configuracion validada, cacheada y auditable (DRY).
-    Si config es None, carga via load_config() con defaults.
+    config debe pasarse explícito — no se carga automáticamente.
     """
     if config is None:
-        from core.config.loader import load_config
-        config = load_config()
+        raise RuntimeError(
+            "build_cursor_store_from_config() requires an AppConfig. "
+            "Load config via load_appconfig_standalone() and pass it explicitly."
+        )
     redis_cfg = config.integrations.redis
     return RedisCursorStore(
         host=redis_cfg.host,

@@ -29,7 +29,7 @@ from core.logging.setup import bind_pipeline
 from core.config.lineage import get_git_hash
 from core.config.run_registry import record_run
 from core.config.runtime import RunConfig
-from core.config.loader import load_config
+from core.config.hydra_loader import load_appconfig_standalone
 from core.config.schema import AppConfig
 from market_data.orchestration.flows.batch_flow import market_data_flow
 from market_data.safety.execution_guard import ExecutionGuard, ExecutionStoppedError
@@ -150,7 +150,7 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
 if __name__ == "__main__":
     from core.logging import bootstrap_logging, configure_logging
     _run_cfg = RunConfig.from_env()
-    _config  = load_config(env=_run_cfg.env, path=_run_cfg.config_path)
+    _config  = load_appconfig_standalone(env=_run_cfg.env, config_dir=_run_cfg.config_path)
     bootstrap_logging(debug=_run_cfg.debug, env=_run_cfg.env)
     configure_logging(cfg=_config.observability.logging, env=_run_cfg.env, debug=_run_cfg.debug)
     sys.exit(run(config=_config, run_cfg=_run_cfg, debug=_run_cfg.debug))

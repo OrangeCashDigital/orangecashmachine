@@ -74,7 +74,7 @@ def load_appconfig_from_hydra(
     cfg: DictConfig,
     *,
     env: str = "unknown",
-    write_snapshot: bool = True,
+    write_snapshot: bool = True,  # para main.py (Hydra): siempre activo
 ) -> AppConfig:
     """
     Pipeline completo: DictConfig → AppConfig + snapshot de auditoría.
@@ -97,3 +97,46 @@ def load_appconfig_from_hydra(
             logger.warning("snapshot_failed | error={}", exc)
 
     return config
+
+
+def load_appconfig_standalone(
+    env: Optional[str] = None,
+    config_dir: Optional["Path"] = None,
+    *,
+    write_snapshot: Optional[bool] = None,
+) -> AppConfig:
+    """
+    Carga AppConfig sin contexto Hydra activo.
+
+    Para uso en: scripts standalone, Prefect Workers, __main__ blocks.
+    Replica el merge que hace Hydra: base.yaml → env/{env}.yaml → settings.yaml
+    usando OmegaConf directamente, sin estado global de Hydra.
+
+    Parámetros
+    ----------
+    env        : entorno activo — si None, resuelve desde OCM_ENV / settings.yaml
+    config_dir : directorio de config — si None, usa config/ relativo al cwd
+    """
+    from pathlib import Path as _Path
+    from omegaconf import OmegaConf as _OC
+    from core.config.loader.env_resolver import resolve_env, load_dotenv_for_env
+
+    _env = resolve_env(env)
+    load_dotenv_for_env(_env)
+
+    _dir = _Path(config_dir).resolve() if config_dir else _Path("config").resolve()
+
+    base     = _OC.load(_dir / "base.yaml")
+    env_file = _dir / "env" / f"{_env}.yaml"
+    settings = _dir / "settings.yaml"
+
+    cfg = base
+    if env_file.exists():
+        cfg = _OC.merge(cfg, _OC.load(env_file))
+    if settings.exists():
+        cfg = _OC.merge(cfg, _OC.load(settings))
+
+    # write_snapshot: por defecto solo en producción — evita ruido en dev/tests
+    _snapshot = write_snapshot if write_snapshot is not None else (_env == "production")
+    logger.debug("load_appconfig_standalone | env={} config_dir={}", _env, _dir)
+    return load_appconfig_from_hydra(cfg, env=_env, write_snapshot=_snapshot)

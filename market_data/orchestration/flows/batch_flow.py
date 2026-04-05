@@ -37,7 +37,7 @@ from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 from prefect import flow, get_run_logger
 
 from core.config.schema import AppConfig
-from core.config.loader import load_config
+from core.config.hydra_loader import load_appconfig_standalone
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe, validate_exchange_connection
 if TYPE_CHECKING:
     from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
@@ -310,7 +310,7 @@ async def market_data_flow(
 
     log.info("Flow starting | env=%s config_dir=%s", resolved_env, resolved_dir)
 
-    config = load_config(env=resolved_env, path=resolved_dir)
+    config = load_appconfig_standalone(env=resolved_env, config_dir=resolved_dir)
 
     # ── Guard + Validator ─────────────────────────────────────────────────────
     # Si ya hay un guard activo (inyectado por entrypoint.py en local),
@@ -319,7 +319,7 @@ async def market_data_flow(
     if guard_context.get_guard() is None:
         _guard = ExecutionGuard(
             max_errors    = getattr(getattr(config, "pipeline", None), "max_consecutive_errors", 10),
-            max_runtime_s = 0,  # sin límite de tiempo en producción — Prefect gestiona timeouts
+            max_runtime_s = 0,  # Prefect Worker gestiona el timeout externamente — desactivado aquí
         )
         _guard.start()
         guard_context.set_guard(_guard)

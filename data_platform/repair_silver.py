@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from core.config.loader import load_config
+from core.config.hydra_loader import load_appconfig_standalone
 from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
 from market_data.processing.pipelines.unified_pipeline import UnifiedPipeline
 from data_platform.validate_silver import discover_series, validate_series
@@ -44,7 +44,7 @@ async def _repair_series(
 ) -> bool:
     """Repara una serie. Retorna True si tuvo éxito."""
 
-    config   = load_config(env="development", path=config_path)
+    config   = load_appconfig_standalone(env=None, config_dir=config_path)
     exc_cfg  = config.get_exchange(exchange_id)
 
     if exc_cfg is None:

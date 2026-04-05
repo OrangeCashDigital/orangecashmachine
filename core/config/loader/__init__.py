@@ -32,7 +32,13 @@ _load_dotenv_for_env = load_dotenv_for_env
 from loguru import logger
 
 
-def load_config(
+def load_config(*args, **kwargs):
+    raise RuntimeError(
+        "load_config() is deprecated. Use load_appconfig_standalone() from core.config.hydra_loader."
+    )
+
+
+def _load_config_legacy(
     env:          Optional[str]             = None,
     path:         Optional[Union[str, Path]] = None,
     use_cache:    bool                       = True,
