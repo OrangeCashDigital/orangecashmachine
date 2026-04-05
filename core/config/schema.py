@@ -179,7 +179,7 @@ class ExchangeConfig(StrictBaseModel):
             warnings.warn(
                 f"[{env}] Exchange '{self.name.value}': credentials missing — "
                 "will fail if pipeline attempts to connect.",
-                UserWarning, stacklevel=2,
+                UserWarning, stacklevel=1,
             )
 
         if self.requires_passphrase and not self.has_passphrase:
@@ -187,7 +187,7 @@ class ExchangeConfig(StrictBaseModel):
                 raise ValueError(f"Exchange '{self.name.value}' requires a passphrase.")
             warnings.warn(
                 f"[{env}] Exchange '{self.name.value}': passphrase missing.",
-                UserWarning, stacklevel=2,
+                UserWarning, stacklevel=1,
             )
 
         return self
@@ -476,7 +476,7 @@ class AppConfig(StrictBaseModel):
     @model_validator(mode="after")
     def warn_if_no_datasets(self) -> "AppConfig":
         if not self.datasets.any_active:
-            warnings.warn("No datasets enabled.", UserWarning, stacklevel=2)
+            warnings.warn("No datasets enabled.", UserWarning, stacklevel=1)
         return self
 
     @property

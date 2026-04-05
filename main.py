@@ -90,6 +90,7 @@ def run_application(
         return 1
     except Exception as exc:
         log.warning("EnvironmentValidator skipped | error={}", exc)
+        # continuar sin bloquear
 
     # 4. Modo validación — salida anticipada sin pipeline
     if validate_only:
