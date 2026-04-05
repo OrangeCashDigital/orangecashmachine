@@ -26,7 +26,6 @@ from market_data.quality.pipeline import QualityPipeline
 from market_data.storage.bronze.bronze_storage import BronzeStorage
 import os as _os
 from market_data.storage.storage_protocol import OHLCVStorage
-from market_data.storage.silver.silver_storage import SilverStorage
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.processing.strategies.base import (
     PairResult,
@@ -51,21 +50,18 @@ from infra.state.cursor_store import (
 def _build_storage(
     exchange:    str,
     market_type: str,
-    redis_client=None,
+    redis_client=None,   # no-op — Iceberg no usa Redis lock
 ) -> "OHLCVStorage":
     """
-    Factory de storage OHLCV controlada por variable de entorno.
+    Factory de storage OHLCV — IcebergStorage es el único backend.
 
-    OCM_STORAGE_BACKEND=silver  → SilverStorage  (default)
-    OCM_STORAGE_BACKEND=iceberg → IcebergStorage (Fase 3)
+    SilverStorage está deprecado. La variable OCM_STORAGE_BACKEND
+    ya no tiene efecto — Iceberg es siempre el backend activo.
     """
-    backend = _os.getenv("OCM_STORAGE_BACKEND", "silver").lower()
-    if backend == "iceberg":
-        _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).info(
-            "storage_factory | IcebergStorage"
-        )
-        return IcebergStorage(exchange=exchange, market_type=market_type)
-    return SilverStorage(exchange=exchange, market_type=market_type, redis_client=redis_client)
+    _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
+        "storage_factory | IcebergStorage"
+    )
+    return IcebergStorage(exchange=exchange, market_type=market_type)
 
 
 DEFAULT_MAX_CONCURRENCY: int = 6
