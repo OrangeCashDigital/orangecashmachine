@@ -273,45 +273,24 @@ class RepairStrategy(StrategyMixin):
 
     def _read_silver(
         self,
-        ctx:       PipelineContext,
-        symbol:    str,
-        timeframe: str,
-        columns_only: Optional[list] = None,
+        ctx:          PipelineContext,
+        symbol:       str,
+        timeframe:    str,
+        columns_only: list | None = None,
     ) -> Optional[pd.DataFrame]:
-        """Lee particiones Silver.
+        """Lee datos Silver delegando al Protocol (parquet o Iceberg).
 
-        Parameters
-        ----------
-        columns_only : list, optional
-            Si se especifica, lee solo esas columnas (útil para scan de gaps
-            con datasets grandes — ej. 2.5M filas de 1m).
+        columns_only se ignora — load_ohlcv retorna el dataset completo.
+        Ambas implementaciones aplican sort + dedup internamente.
         """
         try:
-            files = ctx.storage.find_partition_files(symbol, timeframe)
-            if not files:
+            df = ctx.storage.load_ohlcv(symbol=symbol, timeframe=timeframe)
+            if df is None or df.empty:
                 return None
-
-            parts = []
-            for f in files:
-                try:
-                    df = pd.read_parquet(f, columns=columns_only)
-                    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-                    parts.append(df)
-                except Exception as exc:
-                    _log.bind(symbol=symbol, timeframe=timeframe).warning(
-                        "Repair: parquet read failed", file=str(f), error=str(exc),
-                    )
-
-            if not parts:
-                return None
-
-            return (
-                pd.concat(parts, ignore_index=True)
-                .sort_values("timestamp")
-                .drop_duplicates(subset="timestamp", keep="last")
-                .reset_index(drop=True)
-            )
-
+            if columns_only:
+                cols = [c for c in columns_only if c in df.columns]
+                df = df[cols]
+            return df
         except Exception as exc:
             _log.bind(symbol=symbol, timeframe=timeframe).warning(
                 "Repair: silver read failed", error=str(exc),
