@@ -3,152 +3,51 @@ from __future__ import annotations
 """
 core/config/loader/__init__.py
 ==============================
-Paquete de carga de configuración. Flujo:
-  YamlLoader → EnvResolver → ConfigValidator → audit → ConfigCache
+Paquete de carga de configuración — API mínima post-refactor.
+
+Punto de entrada canónico:
+    from core.config.hydra_loader import load_appconfig_standalone
+
+Módulos internos activos:
+    env_resolver  — resolución de entorno y dotenv
+    env_overrides — OCM_* env vars sobre dict YAML
+    yaml_loader   — carga y merge recursivo de YAML
+    snapshot      — snapshot inmutable por run_id
+    exceptions    — ConfigurationError, ConfigValidationError
+
+Módulos eliminados (eran dead code):
+    watch, metrics, cache, audit, secret_masker,
+    prefect_integration, validator
 """
 
-import time
-from pathlib import Path
-from typing import Optional, Union
-
-from .audit         import record as _audit
-from .cache         import ConfigCache, _config_cache, make_cache_key
-from .env_resolver  import EnvResolver, load_dotenv_for_env, resolve_env, _ALLOWED_ENVS
+from .env_resolver  import (
+    EnvResolver,
+    resolve_env,
+    load_dotenv_for_env,
+    bootstrap_dotenv,
+)
 from .env_overrides import apply_env_overrides
 from .exceptions    import ConfigurationError, ConfigValidationError
-from .metrics       import (
-    CONFIG_CACHE_HITS, CONFIG_LOAD_COUNT, CONFIG_LOAD_DURATION,
-    CONFIG_RELOAD_TIME, _PROMETHEUS_AVAILABLE,
-)
-from .secret_masker import SecretMasker
-from .snapshot     import write_config_snapshot
-from .validator     import ConfigValidator
-from .watch         import watch_config_files, stop_config_watcher
+from .snapshot      import write_config_snapshot
 from .yaml_loader   import YamlLoader, compute_hash
 
-_make_cache_key      = make_cache_key
-_load_dotenv_for_env = load_dotenv_for_env
 
-from loguru import logger
-
-
-def load_config(*args, **kwargs):
-    raise RuntimeError(
-        "load_config() is deprecated. Use load_appconfig_standalone() from core.config.hydra_loader."
-    )
-
-
-def _load_config_legacy(
-    env:          Optional[str]             = None,
-    path:         Optional[Union[str, Path]] = None,
-    use_cache:    bool                       = True,
-    force_reload: bool                       = False,
-    market_type:  Optional[str]             = None,
-):
-    from core.config.schema import CONFIG_PATH
-
-    # env ya puede venir resuelto desde RunConfig — solo resolver si es None
-    if env is None:
-        env = resolve_env(None, Path(path).resolve() if path else None)
-    if env not in _ALLOWED_ENVS:
-        raise ConfigurationError(
-            f"Invalid environment: '{env}'. Allowed: {sorted(_ALLOWED_ENVS)}"
-        )
-
-    config_dir = Path(path).resolve() if path else CONFIG_PATH.parent
-    cache_key  = make_cache_key(env, config_dir, market_type)
-    load_dotenv_for_env(env)
-
-    base     = config_dir / "base.yaml"
-    env_file = config_dir / f"{env}.yaml"
-    settings = config_dir / "settings.yaml"
-
-    start = time.monotonic()
-    try:
-        merged = YamlLoader.load(base, required=True)
-        env_data = YamlLoader.load(env_file, required=False)
-        merged = YamlLoader.merge(merged, env_data)
-        merged = YamlLoader.merge(merged, YamlLoader.load(settings, required=False))
-        # environment.name y environment.debug son campos de identidad del entorno.
-        # settings.yaml puede overridear parámetros operacionales pero no puede
-        # cambiar quién es el entorno — eso lo fija <env>.yaml con precedencia absoluta.
-        if "environment" in env_data:
-            merged.setdefault("environment", {})
-            for field in ("name", "debug"):
-                if field in env_data["environment"]:
-                    merged["environment"][field] = env_data["environment"][field]
-        merged = EnvResolver.resolve(merged)
-        merged = apply_env_overrides(merged)
-        h      = compute_hash(merged)
-
-        if use_cache and not force_reload:
-            cached = _config_cache.get(cache_key, h)
-            if cached:
-                CONFIG_CACHE_HITS.labels(env=env).inc()
-                CONFIG_LOAD_COUNT.labels(env=env, status="cache_hit").inc()
-                logger.debug("config_cache_hit | env={} hash={}", env, h[:8])
-                return cached
-
-        # Audit honesto: refleja todos los archivos mergeados, no solo el primero que existe
-        source_name = "+".join(
-            p.name for p in (base, env_file, settings) if p.exists()
-        ) or base.name
-        config = ConfigValidator.validate(merged, source_name)
-        config = _audit(config, cache_key, h, source_name)
-
-        # Snapshot inmutable por run — auditoría y reproducibilidad
-        _run_id = getattr(config, '_run_id', None) or cache_key[:12]
-        write_config_snapshot(config, run_id=_run_id, config_hash=h, env=env)
-
-        if use_cache:
-            _config_cache.set(cache_key, h, config)
-
-        duration = time.monotonic() - start
-        CONFIG_LOAD_COUNT.labels(env=env, status="success").inc()
-        CONFIG_LOAD_DURATION.labels(env=env).observe(duration)
-        logger.info(
-            "config_loaded | env={} hash={} source={} duration_seconds={:.3f}",
-            env, h[:8], source_name, duration,
-        )
-        return config
-
-    except (ConfigurationError, ConfigValidationError):
-        # Ya tienen tipo preciso — dejar propagar sin envolver
-        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
-        raise
-
-    except FileNotFoundError as exc:
-        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
-        logger.error("config_file_not_found | env={} error={}", env, exc)
-        raise ConfigurationError(
-            f"Config file not found | env={env} path={exc.filename}"
-        ) from exc
-
-    except Exception as exc:
-        # Residual: errores de YAML malformado, permisos, etc.
-        CONFIG_LOAD_COUNT.labels(env=env, status="error").inc()
-        logger.error(
-            "config_load_failed | env={} type={} error={}",
-            env, type(exc).__name__, exc,
-        )
-        raise ConfigurationError(
-            f"Config load failed | env={env} type={type(exc).__name__}"
-        ) from exc
-
-
-# prefect_integration siempre exporta load_and_validate_config_task —
-# cuando Prefect no está instalado el módulo provee un stub async.
-from .prefect_integration import load_and_validate_config_task, _PREFECT_AVAILABLE
-_PREFECT_AVAILABLE_LOADER = _PREFECT_AVAILABLE
 
 
 __all__ = [
-    "load_config", "watch_config_files", "stop_config_watcher",
-    "ConfigCache", "ConfigurationError", "ConfigValidationError",
-    "SecretMasker", "YamlLoader", "EnvResolver", "ConfigValidator",
-    "_make_cache_key", "_load_dotenv_for_env",
-    "CONFIG_LOAD_COUNT", "CONFIG_LOAD_DURATION", "CONFIG_RELOAD_TIME",
-    "CONFIG_CACHE_HITS", "_PROMETHEUS_AVAILABLE",
-    "load_and_validate_config_task",
+    # resolución de entorno
+    "EnvResolver",
+    "resolve_env",
+    "load_dotenv_for_env",
+    "bootstrap_dotenv",
+    # overrides
+    "apply_env_overrides",
+    # excepciones
+    "ConfigurationError",
+    "ConfigValidationError",
+    # snapshot
     "write_config_snapshot",
+    # YAML
+    "YamlLoader",
+    "compute_hash",
 ]
