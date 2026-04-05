@@ -428,12 +428,6 @@ class FeaturesConfig(BaseModel):
 # Audit
 # =============================================================================
 
-class AuditEntry(StrictBaseModel):
-    timestamp:   datetime
-    cache_key:   str
-    hash:        str
-    source_file: str
-
 
 # =============================================================================
 # AppConfig
@@ -452,8 +446,6 @@ class AppConfig(StrictBaseModel):
     safety:        SafetyConfig        = Field(default_factory=SafetyConfig)
     features:      FeaturesConfig      = Field(default_factory=FeaturesConfig)
 
-    audit_log:   List[AuditEntry]   = Field(default_factory=list)
-    last_reload: Optional[datetime] = None
 
     @model_validator(mode="before")
     @classmethod
