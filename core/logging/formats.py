@@ -1,18 +1,21 @@
+from __future__ import annotations
+
 """
 core/logging/formats.py
 =======================
+
 Formatos de log centralizados para todos los sinks de Loguru.
-Cambia aquí, se propaga a consola, archivos y pipeline.
 
-run_id
-------
-FILE y CONSOLE usan {extra[run_id]}.
-El default "-" se garantiza via logger.configure(patcher=...) en setup.py,
-no en el string de formato — loguru lanza KeyError si la key no existe.
-Semántica: run_id identifica una ejecución completa del proceso.
+Un cambio aquí se propaga a consola, archivos y pipeline.
 
-PIPELINE no incluye run_id: ese sink filtra por exchange+dataset
-y logger.bind() en ese contexto no incluye run_id.
+Nota sobre ``run_id``
+---------------------
+``FILE`` y ``CONSOLE`` usan ``{extra[run_id]}``. El valor por defecto ``"-"``
+se garantiza vía ``logger.configure(patcher=...)`` en ``setup.py``, no en el
+string de formato — loguru lanza ``KeyError`` si la clave no existe.
+
+``PIPELINE`` no incluye ``run_id``: ese sink filtra por ``exchange``/``dataset``
+y el contexto de ``logger.bind()`` en ese flujo no propaga ``run_id``.
 """
 
 CONSOLE: str = (
