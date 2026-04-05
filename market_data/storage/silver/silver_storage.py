@@ -466,6 +466,47 @@ class SilverStorage:
                 logger.warning("Timestamp read failed | {} | {}", f, exc)
         return max(timestamps) if timestamps else None
 
+
+    def get_oldest_timestamp(
+        self,
+        symbol:    str,
+        timeframe: str,
+    ) -> Optional[pd.Timestamp]:
+        """
+        Obtiene el timestamp más antiguo disponible.
+
+        Lee min_ts del manifest latest.json en O(1).
+        Fallback a lectura de parquet si el manifest no existe.
+        """
+        versions_dir = self._dataset_root(symbol, timeframe) / "_versions"
+        latest_path  = versions_dir / "latest.json"
+
+        if latest_path.exists():
+            try:
+                manifest    = json.loads(latest_path.read_text(encoding="utf-8"))
+                partitions  = manifest.get("partitions", [])
+                min_ts_strs = [p["min_ts"] for p in partitions if "min_ts" in p]
+                if min_ts_strs:
+                    return min(pd.Timestamp(ts, tz="UTC") for ts in min_ts_strs)
+            except Exception as exc:
+                logger.warning(
+                    "latest.json min_ts read failed, fallback a parquet | "
+                    "symbol={} timeframe={} error={}",
+                    symbol, timeframe, exc,
+                )
+
+        files = self._find_partition_files(symbol, timeframe)
+        if not files:
+            return None
+        timestamps: List[pd.Timestamp] = []
+        for f in files:
+            try:
+                df = pd.read_parquet(f, columns=["timestamp"])
+                timestamps.append(pd.to_datetime(df["timestamp"].min(), utc=True))
+            except Exception as exc:
+                logger.warning("Oldest timestamp read failed | {} | {}", f, exc)
+        return min(timestamps) if timestamps else None
+
     def get_version(self, symbol: str, timeframe: str, version: str = "latest") -> Optional[Dict]:
         """
         Obtiene el manifest de una versión específica del dataset.
