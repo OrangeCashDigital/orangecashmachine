@@ -268,6 +268,35 @@ class IcebergStorage:
             )
             return None
 
+
+    def get_oldest_timestamp(
+        self,
+        symbol:    str,
+        timeframe: str,
+    ) -> Optional[pd.Timestamp]:
+        """
+        Obtiene el timestamp más antiguo disponible para symbol/timeframe.
+
+        Scan Iceberg con pc.min() — simétrico a get_last_timestamp.
+        """
+        try:
+            result = (
+                self._table
+                .scan(
+                    row_filter      = self._base_filter(symbol, timeframe),
+                    selected_fields = ("timestamp",),
+                )
+                .to_arrow()
+            )
+            if result.num_rows == 0:
+                return None
+            return _to_utc_timestamp(pc.min(result.column("timestamp")).as_py())
+        except Exception as exc:
+            logger.warning(
+                "IcebergStorage.get_oldest_timestamp failed | {}/{} error={}",
+                symbol, timeframe, exc,
+            )
+            return None
     def load_ohlcv(
         self,
         symbol:    str,
