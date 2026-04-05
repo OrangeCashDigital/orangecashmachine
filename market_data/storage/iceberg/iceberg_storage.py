@@ -353,3 +353,17 @@ class IcebergStorage:
             }
         except Exception:
             return None
+
+    def find_partition_files(
+        self,
+        symbol:    str,
+        timeframe: str,
+        since:     Optional[pd.Timestamp] = None,
+        until:     Optional[pd.Timestamp] = None,
+    ) -> list:
+        """
+        No-op: Iceberg no expone archivos físicos de partición.
+        RepairStrategy usará scan() directamente cuando soporte Iceberg.
+        Retorna [] para que RepairStrategy salte silenciosamente.
+        """
+        return []

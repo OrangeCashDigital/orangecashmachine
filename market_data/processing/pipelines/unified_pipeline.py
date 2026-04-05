@@ -24,7 +24,10 @@ _log = bind_pipeline("pipeline")
 
 from market_data.quality.pipeline import QualityPipeline
 from market_data.storage.bronze.bronze_storage import BronzeStorage
+import os as _os
+from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.storage.silver.silver_storage import SilverStorage
+from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.processing.strategies.base import (
     PairResult,
     PipelineContext,
@@ -43,6 +46,27 @@ from infra.state.cursor_store import (
     InMemoryCursorStore,
     build_cursor_store_from_config,
 )
+
+
+def _build_storage(
+    exchange:    str,
+    market_type: str,
+    redis_client=None,
+) -> "OHLCVStorage":
+    """
+    Factory de storage OHLCV controlada por variable de entorno.
+
+    OCM_STORAGE_BACKEND=silver  → SilverStorage  (default)
+    OCM_STORAGE_BACKEND=iceberg → IcebergStorage (Fase 3)
+    """
+    backend = _os.getenv("OCM_STORAGE_BACKEND", "silver").lower()
+    if backend == "iceberg":
+        _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).info(
+            "storage_factory | IcebergStorage"
+        )
+        return IcebergStorage(exchange=exchange, market_type=market_type)
+    return SilverStorage(exchange=exchange, market_type=market_type, redis_client=redis_client)
+
 
 DEFAULT_MAX_CONCURRENCY: int = 6
 PipelineModeStr = Literal["incremental", "backfill", "repair"]
@@ -122,10 +146,10 @@ class UnifiedPipeline:
 
         cursor  = cursor_store or _build_cursor_store_safe()
         bronze  = BronzeStorage(exchange=self._exchange_id)
-        silver  = SilverStorage(
-            exchange=self._exchange_id,
-            market_type=self.market_type,
-            redis_client=getattr(cursor, '_client', None),
+        silver  = _build_storage(
+            exchange    = self._exchange_id,
+            market_type = self.market_type,
+            redis_client= getattr(cursor, '_client', None),
         )
         quality = QualityPipeline()
 
