@@ -76,6 +76,9 @@ def default_debug_for(env: str) -> bool:
     return _DEBUG_DEFAULTS.get(env, False)
 
 
+OCM_METRICS_ENABLED = "OCM_METRICS_ENABLED"  # "true" | "false" — override metrics server
+OCM_METRICS_PORT    = "OCM_METRICS_PORT"     # puerto del servidor Prometheus (default: 8000)
+
 # =============================================================================
 # Variables de storage — leídas por core/config/paths.py
 # =============================================================================

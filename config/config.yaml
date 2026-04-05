@@ -1,0 +1,29 @@
+# ==============================================================================
+# OrangeCashMachine — Hydra Entry Point
+# ==============================================================================
+# Composición:
+#   base.yaml → env/development → settings.yaml → _self_
+#
+# Uso CLI:
+#   uv run python main.py                                    # development (default)
+#   uv run python main.py env=production                     # producción
+#   uv run python main.py env=test                           # test
+#   uv run python main.py pipeline.historical.backfill_mode=true
+#   uv run python main.py pipeline.historical.max_concurrent_tasks=8
+#   uv run python main.py -m env=development,production      # multirun
+# ==============================================================================
+
+defaults:
+  - base
+  - env: development
+  - settings
+  - _self_
+
+hydra:
+  run:
+    dir: logs/hydra/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: logs/hydra/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.num}
+  job:
+    chdir: false

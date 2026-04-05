@@ -21,6 +21,7 @@ from .metrics       import (
     CONFIG_RELOAD_TIME, _PROMETHEUS_AVAILABLE,
 )
 from .secret_masker import SecretMasker
+from .snapshot     import write_config_snapshot
 from .validator     import ConfigValidator
 from .watch         import watch_config_files, stop_config_watcher
 from .yaml_loader   import YamlLoader, compute_hash
@@ -89,6 +90,10 @@ def load_config(
         config = ConfigValidator.validate(merged, source_name)
         config = _audit(config, cache_key, h, source_name)
 
+        # Snapshot inmutable por run — auditoría y reproducibilidad
+        _run_id = getattr(config, '_run_id', None) or cache_key[:12]
+        write_config_snapshot(config, run_id=_run_id, config_hash=h, env=env)
+
         if use_cache:
             _config_cache.set(cache_key, h, config)
 
@@ -139,4 +144,5 @@ __all__ = [
     "CONFIG_LOAD_COUNT", "CONFIG_LOAD_DURATION", "CONFIG_RELOAD_TIME",
     "CONFIG_CACHE_HITS", "_PROMETHEUS_AVAILABLE",
     "load_and_validate_config_task",
+    "write_config_snapshot",
 ]

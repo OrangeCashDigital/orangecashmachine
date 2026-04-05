@@ -1,0 +1,52 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Development Configuration
+# ==============================================================================
+# Overrides sobre base.yaml. Principio: debug-friendly, aislado de producción.
+# ==============================================================================
+
+environment:
+  name: development
+  debug: true
+
+pipeline:
+  historical:
+    max_concurrent_tasks: 2
+  realtime:
+    snapshot_interval_seconds: 10
+    max_stream_buffer: 1000
+
+observability:
+  logging:
+    level: DEBUG
+    log_dir: logs
+    rotation: 1 day
+    retention: 7 days
+    console: true
+    file: true
+    pipeline: true
+  metrics:
+    enabled: false
+    exporter: prometheus
+    port: 8000
+  tracing:
+    enabled: false
+
+storage:
+  data_lake:
+    path: ${oc.env:DEV_DATA_LAKE_PATH,data_platform/dev_data_lake}
+
+integrations:
+  redis:
+    enabled: ${oc.env:REDIS_ENABLED,true}
+    host: ${oc.env:REDIS_HOST,localhost}
+    port: ${oc.env:REDIS_PORT,6379}
+    db: ${oc.env:REDIS_DB,1}
+    password: ${oc.env:REDIS_PASSWORD,""}
+  kafka:
+    enabled: false
+  postgres:
+    enabled: false
+
+safety:
+  prevent_full_reingestion: false
