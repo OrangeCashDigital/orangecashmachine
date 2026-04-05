@@ -363,8 +363,8 @@ class UnifiedPipeline:
         3. Loguear gaps por severidad — warning si high, info si medium/low
         4. SafeOps: cualquier excepción es capturada y logueada, nunca relanzada
 
-        Nota: load_ohlcv puede no estar en OHLCVStorage Protocol (SilverStorage
-        lo tiene, IcebergStorage también). Se llama via getattr con fallback seguro.
+        Nota: load_ohlcv está en el contrato OHLCVStorage — disponible en
+        SilverStorage e IcebergStorage sin necesidad de getattr.
         """
         from market_data.processing.strategies.repair import scan_gaps, GapRange
 
@@ -382,11 +382,9 @@ class UnifiedPipeline:
 
         for result in written:
             try:
-                load_fn = getattr(self._ctx.storage, "load_ohlcv", None)
-                if load_fn is None:
-                    continue
-
-                df = load_fn(symbol=result.symbol, timeframe=result.timeframe)
+                df = self._ctx.storage.load_ohlcv(
+                    symbol=result.symbol, timeframe=result.timeframe,
+                )
                 if df is None or df.empty:
                     continue
 
