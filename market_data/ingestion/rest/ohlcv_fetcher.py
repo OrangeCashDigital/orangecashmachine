@@ -30,6 +30,7 @@ from loguru import logger
 from core.logging.setup import bind_pipeline
 
 from market_data.storage.silver.silver_storage import SilverStorage
+from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.core.transformers.transformer import OHLCVTransformer
 from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter, ExchangeCircuitOpenError
 from market_data.observability.metrics import (
@@ -225,7 +226,7 @@ class HistoricalFetcherAsync:
     def __init__(
         self,
         exchange_client:    CCXTAdapter,
-        storage:            Optional[SilverStorage]     = None,
+        storage:            Optional[OHLCVStorage]      = None,
         transformer:        Optional[OHLCVTransformer]  = None,
         overlap_bars:       int                         = DEFAULT_OVERLAP_BARS,
         cursor_store:       Optional[CursorStore]       = None,
@@ -234,9 +235,12 @@ class HistoricalFetcherAsync:
         config_start_date:  Optional[str]               = None,
     ) -> None:
         self._exchange          = exchange_client
-        self._storage           = storage or SilverStorage(
-            redis_client=getattr(cursor_store, '_client', None),
-        )
+        if storage is None:
+            raise TypeError(
+                "OHLCVFetcher requiere 'storage' explícito — "
+                "inyectar desde unified_pipeline via storage_factory()"
+            )
+        self._storage = storage
         self._transformer       = transformer or OHLCVTransformer()
         self._overlap           = overlap_bars
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
