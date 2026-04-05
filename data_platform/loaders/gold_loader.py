@@ -47,7 +47,7 @@ from loguru import logger
 
 from core.config.paths import gold_features_root
 from data_platform.ohlcv_utils import safe_symbol
-from data_platform.loaders.market_data_loader import (
+from data_platform.ohlcv_utils import (
     DataNotFoundError,
     DataReadError,
     VersionNotFoundError,
