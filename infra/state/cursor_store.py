@@ -396,7 +396,7 @@ def build_cursor_store_from_config(config=None) -> RedisCursorStore:
         password=getattr(redis_cfg, "password", None) or None,
         env=getattr(config, "environment", type("E", (), {"name": "development"})()).name
              if hasattr(config, "environment") else "development",
-        ttl_days=int(os.getenv("CURSOR_TTL_DAYS", str(_DEFAULT_TTL_DAYS))),
+        ttl_days=getattr(redis_cfg, "ttl_days", _DEFAULT_TTL_DAYS),
     )
 
 

@@ -174,7 +174,8 @@ class ExchangeConfig(StrictBaseModel):
     @model_validator(mode="after")
     def validate_credentials(self) -> ExchangeConfig:
         """Valida credenciales según el entorno: error en prod, warning en dev."""
-        env = os.getenv("OCM_ENV", "development")
+        from core.config.loader.env_resolver import resolve_env
+        env = resolve_env()
         is_prod = env == "production"
 
         if self.enabled and not self.has_credentials:
@@ -399,6 +400,7 @@ class RedisConfig(StrictBaseModel):
     password: Optional[str] = None
     socket_timeout: int = Field(default=5, ge=1)
     retry_on_timeout: bool = True
+    ttl_days: int = Field(default=90, ge=1, description="TTL del cursor store en días")
 
 
 class KafkaConfig(StrictBaseModel):
