@@ -331,14 +331,17 @@ class IcebergStorage:
             row_filter = self._base_filter(symbol, timeframe)
 
             if start is not None:
+                # Microsegundos epoch — tipo interno de Iceberg TimestampType.
+                # isoformat() con tz-aware produce "...+00:00" que pyiceberg
+                # puede rechazar dependiendo de la versión. int epoch es seguro.
                 row_filter = And(
                     row_filter,
-                    GreaterThanOrEqual("timestamp", start.isoformat()),
+                    GreaterThanOrEqual("timestamp", int(start.timestamp() * 1_000_000)),
                 )
             if end is not None:
                 row_filter = And(
                     row_filter,
-                    LessThanOrEqual("timestamp", end.isoformat()),
+                    LessThanOrEqual("timestamp", int(end.timestamp() * 1_000_000)),
                 )
 
             df = (

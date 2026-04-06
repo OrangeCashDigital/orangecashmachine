@@ -165,17 +165,11 @@ class CCXTAdapter(ExchangeAdapter):
             session = getattr(self._client, "session", None)
             if session is None:
                 return True
+            # session.closed es suficiente — session._loop fue eliminado en
+            # aiohttp >= 3.9 y getattr retornaba None silenciosamente,
+            # desactivando el check de loop sin ningún aviso.
             if hasattr(session, "closed") and session.closed:
                 return False
-            session_loop = getattr(session, "_loop", None) or getattr(session, "connector", None)
-            if session_loop is not None:
-                try:
-                    current_loop = asyncio.get_running_loop()
-                    loop = getattr(session, "_loop", None)
-                    if loop is not None and loop is not current_loop:
-                        return False
-                except RuntimeError:
-                    pass
             return True
         except Exception:
             return False
