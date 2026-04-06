@@ -29,7 +29,6 @@ no se ejecuta. Job por exchange evita colisiones last-write-wins.
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
