@@ -41,10 +41,10 @@ defaults:
 # ==============================================================================
 hydra:
   run:
-    dir: logs/hydra/${env:ENV_NAME,development}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: logs/hydra/${oc.env:ENV_NAME,development}/${now:%Y-%m-%d_%H-%M-%S}
 
   sweep:
-    dir: logs/hydra/multirun/${env:ENV_NAME,development}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: logs/hydra/multirun/${oc.env:ENV_NAME,development}/${now:%Y-%m-%d_%H-%M-%S}
     subdir: ${hydra.job.num}
 
   job:
