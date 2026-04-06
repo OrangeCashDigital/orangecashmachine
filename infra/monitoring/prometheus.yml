@@ -1,3 +1,7 @@
+# ==========================================================
+# Prometheus — OrangeCashMachine
+# ==========================================================
+
 global:
   scrape_interval:     15s
   evaluation_interval: 15s
@@ -24,3 +28,13 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets: ["pushgateway:9091"]
+
+  # ── Loki — métricas internas del servidor de logs ─────────────────
+  - job_name: "loki"
+    static_configs:
+      - targets: ["loki:3100"]
+
+  # ── Promtail — métricas del agente de recolección ─────────────────
+  - job_name: "promtail"
+    static_configs:
+      - targets: ["promtail:9080"]
