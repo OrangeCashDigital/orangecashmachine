@@ -61,9 +61,10 @@ async def managed_adapter(
     # En flows de produccion, el adapter SIEMPRE debe venir de
     # validate_exchange_connection. Este path es solo para resilencia
     # interna de tasks (tests, reparacion manual, retry isolation).
-    import logging as _logging
-    _logging.getLogger(__name__).warning(
-        "managed_adapter fallback | exchange=%s market_type=%s — "        "adapter created without prior ExchangeProbe validation",
+    from loguru import logger as _loguru
+    _loguru.warning(
+        "managed_adapter fallback | exchange={} market_type={} — "
+        "adapter created without prior ExchangeProbe validation",
         exchange_cfg.name.value, market_type,
     )
     adapter = CCXTAdapter(config=exchange_cfg, default_type=market_type)
@@ -117,7 +118,7 @@ def _log_pipeline_metrics(summary, market_type: str, log) -> None:
     for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
         status = "✓" if r.success else ("↷" if r.skipped else "✗")
         log.info(
-            "  %s %s/%s/%s | rows=%s duration=%sms error=%s",
+            "  {} {}/{}/{} | rows={} duration={}ms error={}",
             status, market_type, r.symbol, r.timeframe,
             r.rows, r.duration_ms, r.error or "-",
         )
@@ -211,7 +212,7 @@ async def run_historical_pipeline(
         exchange_name, summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
     )
 
-    log.info("── Pipeline metrics | exchange=%s ──────────────────────────", exchange_name)
+    log.info("── Pipeline metrics | exchange={} ──────────────────────────", exchange_name)
     _log_pipeline_metrics(summary, "spot", log)
     log.info(
         "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
@@ -334,7 +335,7 @@ async def run_futures_pipeline(
         summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
     )
 
-    log.info("── Pipeline metrics | exchange=%s market=%s ──────────────────", exchange_name, futures_market_type)
+    log.info("── Pipeline metrics | exchange={} market={} ──────────────────", exchange_name, futures_market_type)
     _log_pipeline_metrics(summary, futures_market_type, log)
     log.info(
         "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",

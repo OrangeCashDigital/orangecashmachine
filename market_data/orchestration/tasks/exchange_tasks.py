@@ -98,14 +98,14 @@ class ExchangeProbe:
     def log_summary(self, log) -> None:
         """Emite resumen estructurado en una sola línea de log."""
         log.info(
-            "ExchangeProbe | exchange=%s reachable=%s latency=%sms last_price=%s "
-            "spread=%s rate_limit=%sms max_concurrent=%s datasets=%s markets=%s clock_drift=%sms",
+            "ExchangeProbe | exchange={} reachable={} latency={}ms last_price={} "
+            "spread={} rate_limit={}ms max_concurrent={} datasets={} markets={} clock_drift={}ms",
             self.exchange, self.reachable, self.latency_ms, self.last_price,
             self.spread_pct, self.rate_limit_ms, self.max_concurrent,
             self.supported_datasets, self.available_markets, self.clock_drift_ms,
         )
         for w in self.warnings:
-            log.warning("ExchangeProbe warning | exchange=%s msg=%s", self.exchange, w)
+            log.warning("ExchangeProbe warning | exchange={} msg={}", self.exchange, w)
 
 
 # ==========================================================
@@ -225,9 +225,9 @@ async def _detect_supported_datasets(
     for dataset, method in _DATASET_CAPABILITY_MAP.items():
         if has.get(method, False):
             supported.append(dataset)
-            log.debug("Dataset disponible | dataset=%s method=%s", dataset, method)
+            log.debug("Dataset disponible | dataset={} method={}", dataset, method)
 
-    log.info("Datasets detectados | exchange=%s datasets=%s", exchange.id, supported)
+    log.info("Datasets detectados | exchange={} datasets={}", exchange.id, supported)
     return supported
 
 
@@ -256,7 +256,7 @@ async def _fetch_trading_fees(
         market = (exchange.markets or {}).get(symbol, {})
         return market.get("maker"), market.get("taker")
     except Exception as exc:
-        log.debug("Fee fetch skipped | reason=%s", exc)
+        log.debug("Fee fetch skipped | reason={}", exc)
         return None, None
 
 
@@ -281,7 +281,7 @@ async def _check_clock_sync(
         drift_ms = abs(server_time - (local_before + local_after) // 2)
         return drift_ms < max_drift_ms, drift_ms
     except Exception as exc:
-        log.debug("Clock sync skipped | reason=%s", exc)
+        log.debug("Clock sync skipped | reason={}", exc)
         return True, None
 
 
@@ -330,7 +330,7 @@ async def validate_exchange_connection(
         raise ValueError("ExchangeConfig.name must be defined")
 
     log.info(
-        "Validating exchange | name=%s credentials=%s",
+        "Validating exchange | name={} credentials={}",
         name,
         "yes" if cfg.has_credentials else "no",
     )
@@ -371,12 +371,12 @@ async def validate_exchange_connection(
                 )
             )
         except asyncio.TimeoutError:
-            log.warning("Parallel probe timed out | name=%s — usando defaults", name)
+            log.warning("Parallel probe timed out | name={} — usando defaults", name)
             maker_fee, taker_fee  = None, None
             server_time_ok, drift = True, None
             supported_datasets    = []
         except Exception as exc:
-            log.warning("Parallel probe failed | name=%s error=%s — usando defaults", name, exc)
+            log.warning("Parallel probe failed | name={} error={} — usando defaults", name, exc)
             maker_fee, taker_fee  = None, None
             server_time_ok, drift = True, None
             supported_datasets    = []
@@ -388,7 +388,7 @@ async def validate_exchange_connection(
         if not server_time_ok:
             msg = f"Clock drift {drift}ms exceeds {_MAX_CLOCK_DRIFT_MS}ms"
             warnings.append(msg)
-            log.warning("Clock drift | name=%s drift=%sms", name, drift)
+            log.warning("Clock drift | name={} drift={}ms", name, drift)
 
         probe = ExchangeProbe(
             exchange           = name,
@@ -420,5 +420,5 @@ async def validate_exchange_connection(
     except Exception as exc:
         # Cierre garantizado ante cualquier fallo — evita fugas de conexión
         await adapter.close()
-        log.error("Validation failed | name=%s error=%s", name, exc)
+        log.error("Validation failed | name={} error={}", name, exc)
         raise

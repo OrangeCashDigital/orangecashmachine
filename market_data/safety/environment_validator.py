@@ -84,7 +84,7 @@ class EnvironmentValidator:
             component="EnvironmentValidator",
         )
 
-        log.debug("environment_validation_start", env=run_cfg.env)
+        log.debug("environment_validation_start | env={}", run_cfg.env)
 
         self._check_exchanges_enabled(config, run_cfg, log)
 
@@ -93,7 +93,7 @@ class EnvironmentValidator:
             self._check_production_test_symbols(config, log)
             self._check_storage_path(config, log)
 
-        log.info("environment_validation_passed", env=run_cfg.env)
+        log.info("environment_validation_passed | env={}", run_cfg.env)
 
     # ------------------------------------------------------------------ #
     # Checks privados

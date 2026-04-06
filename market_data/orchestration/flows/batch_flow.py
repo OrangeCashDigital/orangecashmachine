@@ -51,9 +51,9 @@ from market_data.orchestration.tasks.batch_tasks import (
 from infra.observability.server import push_metrics
 from market_data.safety import guard_context
 from market_data.safety.execution_guard import ExecutionGuard
-from market_data.safety.environment_validator import EnvironmentValidator, EnvironmentMismatchError
 
-_PUSHGATEWAY = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
+from core.config.env_vars import PUSHGATEWAY_URL as _PUSHGATEWAY_URL
+_PUSHGATEWAY = _PUSHGATEWAY_URL  # SSoT: env_vars.py; runtime lo resuelve desde RunConfig
 
 # ==================================================================
 # Helpers de dominio (desacoplados y testeables)
@@ -164,7 +164,7 @@ def _launch_pipelines_for_exchange(
     # Cada task gestiona su propio lifecycle de conexión.
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
-        log.warning("Exchange config not found | exchange=%s", probe.exchange)
+        log.warning("Exchange config not found | exchange={}", probe.exchange)
         return []
 
     active, skipped = _filter_active_datasets(requested, probe)
@@ -174,10 +174,10 @@ def _launch_pipelines_for_exchange(
             probe.exchange, sorted(skipped),
         )
     if not active:
-        log.warning("No active datasets for exchange | exchange=%s", probe.exchange)
+        log.warning("No active datasets for exchange | exchange={}", probe.exchange)
         return []
 
-    log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
+    log.info("Launching pipelines | exchange={} datasets={}", probe.exchange, sorted(active))
     return [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
         *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
@@ -211,7 +211,7 @@ async def _validate_exchanges(
     if not probes:
         raise RuntimeError("All exchange validations failed. Cannot proceed.")
 
-    log.info("Exchanges validated | ok=%s/%s", len(probes), len(config.exchanges))
+    log.info("Exchanges validated | ok={}/{}", len(probes), len(config.exchanges))
     return probes, adapters
 
 
@@ -250,7 +250,7 @@ async def _consolidate_results(
     ok       = len(results) - len(failures)
 
     for f in failures:
-        log.error("Pipeline task failed | error=%s", f)
+        log.error("Pipeline task failed | error={}", f)
 
     if failures:
         log.warning(
@@ -308,7 +308,7 @@ async def market_data_flow(
     resolved_env = env or "production"
     resolved_dir = Path(config_dir) if config_dir else Path("/app/config")
 
-    log.info("Flow starting | env=%s config_dir=%s", resolved_env, resolved_dir)
+    log.info("Flow starting | env={} config_dir={}", resolved_env, resolved_dir)
 
     config = load_appconfig_standalone(env=resolved_env, config_dir=resolved_dir)
 
@@ -327,18 +327,8 @@ async def market_data_flow(
     else:
         log.debug("ExecutionGuard reused | source=entrypoint (local mode)")
 
-    # EnvironmentValidator: checks locales antes de tocar red o storage.
-    # SafeOps: falla rápido con mensaje claro, no a mitad del pipeline.
-    try:
-        from core.config.runtime import RunConfig
-        _run_cfg = RunConfig.from_env()
-        EnvironmentValidator().check(config, _run_cfg)
-    except EnvironmentMismatchError as exc:
-        log.critical("Environment validation failed — aborting | reason=%s", exc)
-        raise
-    except Exception as exc:
-        # RunConfig puede fallar en entornos atípicos — log + continuar (no fatal)
-        log.warning("EnvironmentValidator skipped | error=%s", exc)
+    # EnvironmentValidator ya ejecutado en run_application() antes de llamar al flow.
+    # En modo Prefect standalone (sin entrypoint), el guard lo cubre en su contexto.
 
     if not config.datasets.any_active:
         log.warning("No active datasets configured. Exiting flow.")
@@ -359,7 +349,7 @@ async def market_data_flow(
         try:
             await adapter.close()
         except Exception as exc:
-            log.warning("Adapter close (post-validation) failed | exchange=%s error=%s", name, exc)
+            log.warning("Adapter close (post-validation) failed | exchange={} error={}", name, exc)
     adapters = {}  # ya no se necesitan
 
     # Fase 1: spot + repair (paralelo entre exchanges, secuencial vs futures)
@@ -406,7 +396,7 @@ async def market_data_flow(
                 break
             if not stage["tasks"]:
                 continue
-            log.info("Stage: %s | tasks=%s", stage["name"], len(stage["tasks"]))
+            log.info("Stage: {} | tasks={}", stage["name"], len(stage["tasks"]))
             ok_s, fail_s = await _consolidate_results(stage["tasks"], log)
             ok     += ok_s
             failed += fail_s
@@ -422,7 +412,7 @@ async def market_data_flow(
         # ── Push métricas por exchange ────────────────────────────────────────
         for probe in probes:
             push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
-            log.info("Metrics pushed | exchange=%s", probe.exchange)
+            log.info("Metrics pushed | exchange={}", probe.exchange)
 
         # ── Flow summary ──────────────────────────────────────────────────────
         duration_s  = time.monotonic() - flow_start
