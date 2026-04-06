@@ -3,8 +3,6 @@
 # OrangeCashMachine — Risk Management
 # ==============================================================================
 
-risk:
-  dry_run: true   # SAFE DEFAULT: nunca operar real sin override explícito
 
   position:
     max_position_pct: 0.05       # max 5% del capital por posición
