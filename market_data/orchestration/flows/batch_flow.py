@@ -189,12 +189,14 @@ def _launch_pipelines_for_exchange(
 async def _validate_exchanges(
     config: AppConfig,
     log,
-) -> Tuple[List[ExchangeProbe], Dict[str, CCXTAdapter]]:
+) -> List[ExchangeProbe]:
+    # Adapters de validacion se crean y cierran aqui — no cruzan boundaries.
+    # Cada task downstream crea el suyo propio.
+    # Invariante: lifecycle completo dentro de esta funcion.
     futures = [validate_exchange_connection(exc) for exc in config.exchanges]
     results = await asyncio.gather(*futures, return_exceptions=True)
 
-    probes:   List[ExchangeProbe]    = []
-    adapters: Dict[str, CCXTAdapter] = {}
+    probes: List[ExchangeProbe] = []
 
     for exc, res in zip(config.exchanges, results):
         if isinstance(res, Exception):
@@ -205,13 +207,21 @@ async def _validate_exchanges(
         else:
             probe, adapter = res
             probes.append(probe)
-            adapters[probe.exchange] = adapter
+            # Cerrar adapter aqui — su unico proposito era validacion.
+            # Markets cache (TTL=60s) absorbe el costo en reconexion.
+            try:
+                await adapter.close()
+            except Exception as close_exc:
+                log.warning(
+                    "Adapter close (post-validation) failed | exchange=%s error=%s",
+                    probe.exchange, close_exc,
+                )
 
     if not probes:
         raise RuntimeError("All exchange validations failed. Cannot proceed.")
 
     log.info("Exchanges validated | ok={}/{}", len(probes), len(config.exchanges))
-    return probes, adapters
+    return probes
 
 
 # Bounded concurrency: máximo de pipelines simultáneos por stage.
@@ -339,35 +349,33 @@ async def market_data_flow(
         config.exchange_names, sorted(requested),
     )
 
-    probes, adapters = await _validate_exchanges(config, log)
+    probes = await _validate_exchanges(config, log)
 
-    # Cerrar adapters de validación antes de lanzar pipelines.
-    # Invariante: adapters no cruzan boundaries de task — cada task
-    # crea el suyo. El markets cache (TTL=60s) absorbe el costo.
-    for name, adapter in adapters.items():
-        try:
-            await adapter.close()
-        except Exception as exc:
-            log.warning("Adapter close (post-validation) failed | exchange={} error={}", name, exc)
-    adapters = {}  # ya no se necesitan
 
-    # Fase 1: spot + repair (paralelo entre exchanges, secuencial vs futures)
-    # Fase 2: futures (solo cuando fase 1 completa)
-    # Evita contención de rate limits cuando spot y futures comparten exchange.
+    # Delegar a _launch_pipelines_for_exchange — SSoT para lanzamiento de pipelines.
+    # Separa spot+repair (fase 1) de futures (fase 2) para evitar contención
+    # de rate limits cuando ambos comparten el mismo exchange.
+    # _launch_pipelines_for_exchange ya maneja el filtrado de datasets activos,
+    # el chequeo de market_type disponible y los warnings de datasets no soportados.
     spot_futures: List[asyncio.Future] = []
-    for probe in probes:
-        spot_futures.extend(
-            _launch_spot_pipelines(config, config.get_exchange(probe.exchange), probe, set(requested) & {"ohlcv", "trades", "orderbook"}, log)
-        )
-        spot_futures.extend(
-            [run_repair_pipeline(config, config.get_exchange(probe.exchange), probe, market_type="spot")]
-            if "ohlcv" in requested and config.get_exchange(probe.exchange) else []
-        )
-
     futures_futures: List[asyncio.Future] = []
+
     for probe in probes:
+        exc_cfg = config.get_exchange(probe.exchange)
+        if exc_cfg is None:
+            log.warning("Exchange config not found — skipping | exchange=%s", probe.exchange)
+            continue
+
+        # Fase 1: spot + repair
+        spot_futures.extend(
+            _launch_spot_pipelines(config, exc_cfg, probe, requested & {"ohlcv", "trades", "orderbook"}, log)
+        )
+        if "ohlcv" in requested:
+            spot_futures.append(run_repair_pipeline(config, exc_cfg, probe, market_type="spot"))
+
+        # Fase 2: futures (se ejecuta solo si fase 1 no falla completamente)
         futures_futures.extend(
-            _launch_futures_pipelines(config, config.get_exchange(probe.exchange), probe, set(requested), log)
+            _launch_futures_pipelines(config, exc_cfg, probe, requested, log)
         )
 
     pipeline_futures: List[asyncio.Future] = spot_futures + futures_futures

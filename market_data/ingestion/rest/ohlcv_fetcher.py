@@ -307,6 +307,16 @@ class HistoricalFetcherAsync:
         since_ts = await self._resolve_start_timestamp(symbol, timeframe, start_date)
         tf_ms    = timeframe_to_ms(timeframe)
         _mode    = "backfill" if self._backfill_mode else "incremental"
+        # overlap por par: resuelve lateness calibrado por exchange y timeframe.
+        # Sobrescribe self._overlap (valor global del constructor) con el valor
+        # específico para este (exchange, timeframe). SafeOps: si falla, usa
+        # self._overlap como fallback (DEFAULT_OVERLAP_BARS).
+        _exchange_name = getattr(self._exchange, "_exchange_id", None)
+        try:
+            _pair_overlap = overlap_for_timeframe(timeframe, exchange=_exchange_name)
+        except Exception:
+            _pair_overlap = self._overlap
+        _effective_overlap = _pair_overlap
 
         collected:    List[pd.DataFrame] = []
         last_seen_ts: Optional[int]      = None
@@ -397,7 +407,7 @@ class HistoricalFetcherAsync:
                 break
 
             last_seen_ts = last_ts
-            since_ts     = last_ts - (self._overlap * tf_ms)
+            since_ts     = last_ts - (_effective_overlap * tf_ms)
 
             if len(raw) < limit:
                 break

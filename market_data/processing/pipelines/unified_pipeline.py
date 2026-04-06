@@ -148,16 +148,15 @@ class UnifiedPipeline:
         )
         quality = QualityPipeline()
 
-        from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync, overlap_for_timeframe
-        # overlap se resuelve por timeframe si hay uno único configurado;
-        # en multi-timeframe cada símbolo hereda el overlap del fetcher.
-        # Exchange-aware overlap: usa lateness calibrado por exchange.
-        # Multi-tf: toma el overlap máximo entre todos los timeframes configurados
-        # para ese exchange — garantiza consistencia cross-timeframe.
-        _overlap = max(
-            overlap_for_timeframe(tf, exchange=self._exchange_id)
-            for tf in self.timeframes
-        )
+        from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync
+        # overlap NO se resuelve globalmente aquí.
+        # Razón: un único max() sobre todos los timeframes produciría
+        # solapamiento excesivo en timeframes largos (ej: overlap de 1m
+        # aplicado a 1d = 15 días de reingesta innecesaria).
+        # overlap_for_timeframe(tf, exchange) se invoca por par dentro de
+        # _resolve_start_timestamp del fetcher, que ya recibe el exchange_id
+        # via self._exchange (CCXTAdapter._exchange_id).
+        # El fetcher usa DEFAULT_OVERLAP_BARS como base y lo ajusta por par.
         fetcher = HistoricalFetcherAsync(
             storage           = silver,
             transformer       = OHLCVTransformer(),
@@ -166,7 +165,8 @@ class UnifiedPipeline:
             backfill_mode     = self.backfill_mode,
             market_type       = market_type,
             config_start_date = start_date,
-            **({'overlap_bars': _overlap} if _overlap is not None else {}),
+            # overlap_bars omitido: el fetcher resuelve por par via
+            # overlap_for_timeframe(timeframe, exchange=exchange_id)
         )
 
         self._ctx = PipelineContext(
@@ -362,6 +362,7 @@ class UnifiedPipeline:
         IcebergStorage sin necesidad de getattr.
         """
         from market_data.processing.strategies.repair import scan_gaps, GapRange
+        from market_data.quality.invariants.invariants import check_dataset_invariants
 
         written = [r for r in summary.results if r.success and r.rows > 0]
         if not written:
@@ -401,6 +402,33 @@ class UnifiedPipeline:
                     result.symbol, result.timeframe, self._exchange_id,
                     len(gaps), high, medium, low,
                 )
+
+                # Verificar invariantes formales del dataset completo.
+                # Solo se ejecuta si load_ohlcv tuvo éxito — datos ya disponibles.
+                try:
+                    _manifest = {
+                        "symbol":     result.symbol,
+                        "timeframe":  result.timeframe,
+                        "exchange":   self._exchange_id,
+                        "version":    1,
+                        "partitions": [{"min_ts": str(df["timestamp"].min()),
+                                        "max_ts": str(df["timestamp"].max()),
+                                        "rows":   len(df)}],
+                    }
+                    _inv = check_dataset_invariants(_manifest, check_lag=True)
+                    if not _inv.ok:
+                        for violation in _inv.violations:
+                            self._log.bind(
+                                symbol=result.symbol, timeframe=result.timeframe,
+                            ).warning("Invariant violation | {}", violation)
+                    for warning in _inv.warnings:
+                        self._log.bind(
+                            symbol=result.symbol, timeframe=result.timeframe,
+                        ).info("Invariant warning | {}", warning)
+                except Exception as _inv_exc:
+                    self._log.bind(error=str(_inv_exc)).debug(
+                        "Invariant check skipped (non-critical)"
+                    )
 
             except Exception as exc:
                 self._log.bind(

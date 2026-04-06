@@ -69,9 +69,15 @@ class IncrementalStrategy(StrategyMixin):
         ).inc()
 
         if not qres.accepted:
+            # Bronze ya contiene los datos crudos (append anterior).
+            # Silver NO recibirá este lote — trazabilidad explícita con run_id
+            # para correlacionar Bronze rechazado con el log de quality.
             logger.warning(
-                "Par rechazado por calidad [{}/{}] | exchange={} symbol={} timeframe={} score={:.1f}",
-                idx, total, ctx.exchange_id, symbol, timeframe, qres.score,
+                "Par rechazado por calidad [{}/{}] | exchange={} symbol={} "
+                "timeframe={} score={:.1f} bronze_run_id={} "
+                "(datos en Bronze, NO escritos en Silver)",
+                idx, total, ctx.exchange_id, symbol, timeframe,
+                qres.score, run_id,
             )
             result.skipped = True
             return

@@ -299,6 +299,21 @@ class IcebergStorage:
                 symbol, timeframe, exc,
             )
             return None
+    def get_current_snapshot(self) -> Optional[dict]:
+        # Expone el snapshot actual sin acceso directo a _table.
+        # GoldStorage usa este metodo para anclar lineage antes del build.
+        # SafeOps: nunca lanza — retorna None si no hay snapshot aun.
+        try:
+            snap = self._table.current_snapshot()
+            if snap is None:
+                return None
+            return {
+                "snapshot_id":  snap.snapshot_id,
+                "timestamp_ms": snap.timestamp_ms,
+            }
+        except Exception:
+            return None
+
     def load_ohlcv(
         self,
         symbol:    str,

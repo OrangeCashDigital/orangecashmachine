@@ -134,12 +134,10 @@ class GoldStorage:
         # Capturar snapshot_id ANTES de leer — ancla el lineage al punto
         # exacto en el tiempo que Gold usó. Si Silver se actualiza durante
         # el build, el manifest de Gold refleja los datos reales leídos.
-        try:
-            _snap          = silver._table.current_snapshot()
-            _snap_id       = _snap.snapshot_id if _snap else 0
-            _snap_ms       = _snap.timestamp_ms if _snap else 0
-        except Exception:
-            _snap_id, _snap_ms = 0, 0
+        # Usa get_current_snapshot() público — no accede a _table directamente.
+        _snap_meta = silver.get_current_snapshot() or {}
+        _snap_id   = _snap_meta.get("snapshot_id", 0)
+        _snap_ms   = _snap_meta.get("timestamp_ms", 0)
 
         # ── Cargar Silver (Iceberg) ──────────────────────────────────────
         try:
