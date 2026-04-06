@@ -163,7 +163,7 @@ def _launch_pipelines_for_exchange(
     # Cada task gestiona su propio lifecycle de conexión.
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
-        log.warning("Exchange config not found | exchange={}", probe.exchange)
+        log.warning("Exchange config not found | exchange=%s", probe.exchange)
         return []
 
     active, skipped = _filter_active_datasets(requested, probe)
@@ -173,10 +173,10 @@ def _launch_pipelines_for_exchange(
             probe.exchange, sorted(skipped),
         )
     if not active:
-        log.warning("No active datasets for exchange | exchange={}", probe.exchange)
+        log.warning("No active datasets for exchange | exchange=%s", probe.exchange)
         return []
 
-    log.info("Launching pipelines | exchange={} datasets={}", probe.exchange, sorted(active))
+    log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
     return [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
         *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
@@ -220,7 +220,7 @@ async def _validate_exchanges(
     if not probes:
         raise RuntimeError("All exchange validations failed. Cannot proceed.")
 
-    log.info("Exchanges validated | ok={}/{}", len(probes), len(config.exchanges))
+    log.info("Exchanges validated | ok=%s/%s", len(probes), len(config.exchanges))
     return probes
 
 
@@ -259,7 +259,7 @@ async def _consolidate_results(
     ok       = len(results) - len(failures)
 
     for f in failures:
-        log.error("Pipeline task failed | error={}", f)
+        log.error("Pipeline task failed | error=%s", f)
 
     if failures:
         log.warning(
@@ -317,7 +317,7 @@ async def market_data_flow(
     resolved_env = env or "production"
     resolved_dir = Path(config_dir) if config_dir else Path("/app/config")
 
-    log.info("Flow starting | env={} config_dir={}", resolved_env, resolved_dir)
+    log.info("Flow starting | env=%s config_dir=%s", resolved_env, resolved_dir)
 
     config = load_appconfig_standalone(env=resolved_env, config_dir=resolved_dir)
 
@@ -403,7 +403,7 @@ async def market_data_flow(
                 break
             if not stage["tasks"]:
                 continue
-            log.info("Stage: {} | tasks={}", stage["name"], len(stage["tasks"]))
+            log.info("Stage: %s | tasks=%s", stage["name"], len(stage["tasks"]))
             ok_s, fail_s = await _consolidate_results(stage["tasks"], log)
             ok     += ok_s
             failed += fail_s
@@ -419,7 +419,7 @@ async def market_data_flow(
         # ── Push métricas por exchange ────────────────────────────────────────
         for probe in probes:
             push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
-            log.info("Metrics pushed | exchange={}", probe.exchange)
+            log.info("Metrics pushed | exchange=%s", probe.exchange)
 
         # ── Flow summary ──────────────────────────────────────────────────────
         duration_s  = time.monotonic() - flow_start
