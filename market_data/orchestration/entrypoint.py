@@ -114,44 +114,45 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
             main_task.cancel()
 
     try:
-        asyncio.set_event_loop(loop)
-        for _sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(_sig, _request_shutdown, _sig)
+        try:
+            asyncio.set_event_loop(loop)
+            for _sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(_sig, _request_shutdown, _sig)
 
-        main_task = loop.create_task(
-            asyncio.wait_for(
-                _run_flow_local(config, run_cfg, guard=guard),
-                timeout=timeout,
+            main_task = loop.create_task(
+                asyncio.wait_for(
+                    _run_flow_local(config, run_cfg, guard=guard),
+                    timeout=timeout,
+                )
             )
-        )
-        loop.run_until_complete(main_task)
+            loop.run_until_complete(main_task)
 
-    except asyncio.TimeoutError:
-        log.error("pipeline_timeout", timeout_s=timeout)
-        exit_code = 1
-    except asyncio.CancelledError:
-        # Cancelación limpia vía signal handler — exit_code ya seteado en 130
-        pass
-    except ExecutionStoppedError as exc:
-        log.critical("pipeline_stopped_by_guard", reason=str(exc))
-        exit_code = 1
-    except Exception as exc:
-        log.opt(exception=True).critical(
-            "pipeline_fatal",
-            error_type=type(exc).__name__,
-            error=str(exc),
-        )
-        exit_code = 1
-    finally:
-        # Cancelar tareas residuales y esperar su cleanup antes de cerrar loop
-        _pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
-        if _pending:
-            log.debug("shutdown_cancelling_tasks", count=len(_pending))
-            for t in _pending:
-                t.cancel()
-            loop.run_until_complete(asyncio.gather(*_pending, return_exceptions=True))
-        loop.close()
-        asyncio.set_event_loop(None)
+        except asyncio.TimeoutError:
+            log.error("pipeline_timeout", timeout_s=timeout)
+            exit_code = 1
+        except asyncio.CancelledError:
+            # Cancelación limpia vía signal handler — exit_code ya seteado en 130
+            pass
+        except ExecutionStoppedError as exc:
+            log.critical("pipeline_stopped_by_guard", reason=str(exc))
+            exit_code = 1
+        except Exception as exc:
+            log.opt(exception=True).critical(
+                "pipeline_fatal",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            exit_code = 1
+        finally:
+            # Cancelar tareas residuales y esperar su cleanup antes de cerrar loop
+            _pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+            if _pending:
+                log.debug("shutdown_cancelling_tasks", count=len(_pending))
+                for t in _pending:
+                    t.cancel()
+                loop.run_until_complete(asyncio.gather(*_pending, return_exceptions=True))
+            loop.close()
+            asyncio.set_event_loop(None)
     finally:
         _duration = _time.monotonic() - _t0
         _result   = {0: "success", 1: "error", 130: "interrupted"}.get(exit_code, "unknown")

@@ -31,7 +31,7 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
 
 from prefect import flow, get_run_logger
 
