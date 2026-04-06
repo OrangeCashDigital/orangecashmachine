@@ -1,201 +1,41 @@
 # ==============================================================================
-# OrangeCashMachine – Base Configuration (Production-Ready)
+# OrangeCashMachine — Base Configuration
+# ==============================================================================
+# Solo: metadata, integrations de infraestructura, healthchecks.
+# Todo lo modular está en pipeline/, exchanges/, storage/, observability/, risk/
 # ==============================================================================
 
-# ==============================================================================
-# ENVIRONMENT METADATA
-# ==============================================================================
 environment:
   name: base
   debug: false
   version: 1.1.0
   last_modified_by: orangemusic
-  last_modified_at: 2026-03-18T00:00:00Z
+  last_modified_at: 2026-04-06T00:00:00Z
 
 # ==============================================================================
-# PIPELINES
+# SAFETY (defaults seguros globales)
 # ==============================================================================
-pipeline:
-  historical:
-    # start_date: límite inferior para backfill y punto de inicio de incremental
-    # cuando no existe cursor. El backfill nunca retrocede más allá de esta fecha,
-    # pero sí puede hacerlo el exchange (si su origen es posterior, origin_ms gana).
-    # Para descargar todo el historial disponible, usar "2010-01-01T00:00:00Z".
-    # Para backfill parcial desde una fecha concreta, ajustar este valor.
-    start_date: "2017-01-01T00:00:00Z"
-
-    # backfill_mode: activar solo para carga inicial o reparación explícita.
-    # En ejecución periódica (cron/Prefect), mantener en false — usar incremental.
-    backfill_mode: false
-
-    # Auto → resuelto dinámicamente en runtime (CPU-bound safe default)
-    max_concurrent_tasks: auto
-
-    retry_policy:
-      max_attempts: 5
-      backoff_factor: 2
-      jitter: true
-
-    timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
-
-  realtime:
-    reconnect_delay_seconds: 5
-    heartbeat_timeout_seconds: 30
-    snapshot_interval_seconds: 60
-    max_stream_buffer: 50000
-    drop_policy: reject
+safety:
+  dry_run: true                    # SAFE DEFAULT global
+  prevent_full_reingestion: false
+  require_explicit_start: false
 
 # ==============================================================================
-# DATASETS
-# ==============================================================================
-datasets:
-  ohlcv: true
-  trades: false
-  orderbook: false
-  funding_rate: false
-  open_interest: false
-  liquidations: false
-  mark_price: false
-  index_price: false
-
-# ==============================================================================
-# EXCHANGES
-# ==============================================================================
-exchanges:
-  bybit:
-    enabled: true
-    enableRateLimit: true
-    auto_discover_symbols: false
-
-    credentials:
-      apiKey: ${oc.env:BYBIT_API_KEY,""}
-      secret: ${oc.env:BYBIT_API_SECRET,""}
-
-    options:
-      adjustForTimeDifference: true
-
-    markets:
-      spot:
-        enabled: true
-        symbols: [BTC/USDT]
-
-      futures:
-        enabled: true
-        defaultType: swap
-        symbols:
-          - BTC/USDT:USDT   # linear perpetual USDT-margined
-          - BTC/USD:BTC     # inverse perpetual coin-margined
-
-  kucoin:
-    enabled: true
-    enableRateLimit: true
-    auto_discover_symbols: false
-
-    credentials:
-      apiKey: ${oc.env:KUCOIN_API_KEY,""}
-      secret: ${oc.env:KUCOIN_API_SECRET,""}
-      password: ${oc.env:KUCOIN_PASSPHRASE,""}
-
-    options:
-      adjustForTimeDifference: true
-
-    markets:
-      spot:
-        enabled: true
-        symbols: [BTC/USDT]
-
-      futures:
-        enabled: false   # kucoin (ccxt) = spot only — derivados via kucoinfutures
-
-  kucoinfutures:
-    enabled: true
-    enableRateLimit: true
-    test_symbol: "BTC/USDT:USDT"  # linear perpetual — único símbolo válido en futuros-only
-    auto_discover_symbols: false
-
-    credentials:
-      apiKey: ${oc.env:KUCOIN_API_KEY,""}
-      secret: ${oc.env:KUCOIN_API_SECRET,""}
-      password: ${oc.env:KUCOIN_PASSPHRASE,""}
-
-    options:
-      adjustForTimeDifference: true
-      defaultType: swap
-
-    markets:
-      spot:
-        enabled: false
-        symbols: []
-
-      futures:
-        enabled: true
-        defaultType: swap
-        symbols:
-          - BTC/USDT:USDT   # linear perpetual USDT-margined
-
-# ==============================================================================
-# STORAGE (Data Platform)
-# ==============================================================================
-storage:
-  data_lake:
-    path: ${oc.env:DATA_LAKE_PATH,data_platform/data_lake}
-    format: parquet
-    compression: snappy
-
-    partitioning:
-      - exchange
-      - symbol
-      - timeframe
-      - year
-      - month
-
-# ==============================================================================
-# FEATURE STORE
-# ==============================================================================
-
-# ==============================================================================
-# OBSERVABILITY
-# ==============================================================================
-observability:
-  logging:
-    level: ${oc.env:LOG_LEVEL,INFO}
-
-  metrics:
-    enabled: true
-    exporter: prometheus
-    port: ${oc.env:METRICS_PORT,8000}
-
-  tracing:
-    enabled: false
-
-# ==============================================================================
-# INFRASTRUCTURE INTEGRATIONS
+# INTEGRATIONS
 # ==============================================================================
 integrations:
-
-  # --------------------------------------------------------
-  # Redis (Cursor Store / Cache)
-  # --------------------------------------------------------
   redis:
     enabled: ${oc.env:REDIS_ENABLED,true}
     host: ${oc.env:REDIS_HOST,localhost}
     port: ${oc.env:REDIS_PORT,6379}
     db: ${oc.env:REDIS_DB,0}
-
-    # SafeOps
     socket_timeout: 5
     retry_on_timeout: true
 
-  # --------------------------------------------------------
-  # Kafka (streaming future-ready)
-  # --------------------------------------------------------
   kafka:
     enabled: false
     bootstrap_servers: ${oc.env:KAFKA_BOOTSTRAP_SERVERS,localhost:9092}
 
-  # --------------------------------------------------------
-  # Postgres (metadata / analytics future)
-  # --------------------------------------------------------
   postgres:
     enabled: false
     host: ${oc.env:POSTGRES_HOST,localhost}
@@ -208,7 +48,6 @@ integrations:
 # ==============================================================================
 healthchecks:
   enabled: true
-
   checks:
     - storage
     - exchanges

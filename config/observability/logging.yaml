@@ -1,0 +1,15 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Observability: Logging
+# ==============================================================================
+
+observability:
+  logging:
+    level: ${oc.env:LOG_LEVEL,INFO}
+    format: text
+    log_dir: logs
+    rotation: 1 day
+    retention: 30 days
+    console: true
+    file: true
+    pipeline: true

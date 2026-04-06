@@ -1,0 +1,13 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Observability: Metrics
+# ==============================================================================
+
+observability:
+  metrics:
+    enabled: true
+    exporter: prometheus
+    port: ${oc.env:METRICS_PORT,8000}
+
+  tracing:
+    enabled: false

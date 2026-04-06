@@ -1,0 +1,24 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Risk Management
+# ==============================================================================
+
+risk:
+  dry_run: true   # SAFE DEFAULT: nunca operar real sin override explícito
+
+  position:
+    max_position_pct: 0.05       # max 5% del capital por posición
+    max_open_positions: 3
+
+  stop_loss:
+    enabled: true
+    default_pct: 0.02            # 2% stop-loss por defecto
+
+  drawdown:
+    max_daily_drawdown_pct: 0.05
+    max_total_drawdown_pct: 0.15
+    halt_on_breach: true
+
+  order:
+    min_order_usd: 10
+    max_order_usd: 1000

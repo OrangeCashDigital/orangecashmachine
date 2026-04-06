@@ -1,29 +1,57 @@
 # ==============================================================================
-# OrangeCashMachine — Hydra Entry Point
+# OrangeCashMachine — Hydra Root Configuration
 # ==============================================================================
-# Composición:
-#   base.yaml → env/development → settings.yaml → _self_
+# Entry point único. Solo ensambla. Sin lógica de negocio.
 #
-# Uso CLI:
-#   uv run python main.py                                    # development (default)
-#   uv run python main.py env=production                     # producción
+# CLI USAGE:
+#   uv run python main.py                                    # dev (default)
+#   uv run python main.py env=production                     # prod
 #   uv run python main.py env=test                           # test
 #   uv run python main.py pipeline.historical.backfill_mode=true
-#   uv run python main.py pipeline.historical.max_concurrent_tasks=8
+#   uv run python main.py +settings=local                    # overrides locales
 #   uv run python main.py -m env=development,production      # multirun
 # ==============================================================================
 
 defaults:
+  # Core
   - base
+
+  # Módulos (orden importa: base primero, luego especializados)
+  - pipeline/historical
+  - pipeline/realtime
+  - exchanges/bybit
+  - exchanges/kucoin
+  - exchanges/kucoinfutures
+  - observability/logging
+  - observability/metrics
+  - storage/datalake
+  - risk/risk
+
+  # Entorno (sobreescribe lo anterior)
   - env: development
-  - settings
+
+  # Overrides locales opcionales (NO cargado por defecto — SafeOps)
+  # - settings   ← activar con: +settings=local
+
+  # Hydra internal (siempre último)
   - _self_
 
+# ==============================================================================
+# HYDRA RUNTIME
+# ==============================================================================
 hydra:
   run:
-    dir: logs/hydra/${now:%Y-%m-%d_%H-%M-%S}
+    dir: logs/hydra/${env:ENV_NAME,development}/${now:%Y-%m-%d_%H-%M-%S}
+
   sweep:
-    dir: logs/hydra/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    dir: logs/hydra/multirun/${env:ENV_NAME,development}/${now:%Y-%m-%d_%H-%M-%S}
     subdir: ${hydra.job.num}
+
   job:
     chdir: false
+
+  job_logging:
+    root:
+      level: INFO
+
+  output_subdir: null

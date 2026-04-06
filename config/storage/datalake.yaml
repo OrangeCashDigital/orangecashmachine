@@ -1,0 +1,27 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Storage: Data Lake
+# ==============================================================================
+
+storage:
+  data_lake:
+    path: ${oc.env:DATA_LAKE_PATH,data_platform/data_lake}
+    format: parquet
+    compression: snappy
+
+    partitioning:
+      - exchange
+      - symbol
+      - timeframe
+      - year
+      - month
+
+datasets:
+  ohlcv: true
+  trades: false
+  orderbook: false
+  funding_rate: false
+  open_interest: false
+  liquidations: false
+  mark_price: false
+  index_price: false

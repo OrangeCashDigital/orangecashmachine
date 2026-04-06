@@ -1,0 +1,16 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Pipeline: Historical
+# ==============================================================================
+
+pipeline:
+  historical:
+    start_date: "2017-01-01T00:00:00Z"
+    backfill_mode: false
+    max_concurrent_tasks: auto
+    timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
+
+    retry_policy:
+      max_attempts: 5
+      backoff_factor: 2
+      jitter: true

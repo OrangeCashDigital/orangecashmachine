@@ -1,0 +1,12 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Pipeline: Realtime
+# ==============================================================================
+
+pipeline:
+  realtime:
+    reconnect_delay_seconds: 5
+    heartbeat_timeout_seconds: 30
+    snapshot_interval_seconds: 60
+    max_stream_buffer: 50000
+    drop_policy: reject

@@ -49,4 +49,5 @@ integrations:
     enabled: false
 
 safety:
+  dry_run: true                    # dev: nunca opera real
   prevent_full_reingestion: false
