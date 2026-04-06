@@ -232,20 +232,13 @@ def get_ohlcv_dict(
 # ==========================================================
 
 _gold_cache: Dict[str, GoldLoader] = {}
-_GOLD_PATH: Optional[Path] = (
-    Path(os.environ["OCM_GOLD_PATH"])
-    if "OCM_GOLD_PATH" in os.environ
-    else None
-)
 
 
 def _get_gold_loader(exchange: Optional[str] = None) -> GoldLoader:
     key = (exchange or _DEFAULT_EXCHANGE).lower()
     if key not in _gold_cache:
-        _gold_cache[key] = GoldLoader(
-            gold_path=_GOLD_PATH,
-            exchange=key,
-        )
+        # GoldLoader usa Iceberg — gold_path es legacy compat sin efecto.
+        _gold_cache[key] = GoldLoader(exchange=key)
         logger.debug("GoldLoader initialized | exchange={}", key)
     return _gold_cache[key]
 
