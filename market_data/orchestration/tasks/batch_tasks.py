@@ -446,9 +446,9 @@ async def run_derivatives_pipeline(
     retries=2,
     retry_delay_seconds=[60, 300],
     timeout_seconds=PIPELINE_TASK_TIMEOUT * 4,
-    task_run_name="{exchange_cfg.name.value}-backfill",
-    description="Backfills complete historical OHLCV data to exchange origin.",
-    tags=["ohlcv", "backfill"],
+    task_run_name="{exchange_cfg.name.value}-repair",
+    description="Repairs OHLCV gaps for a specific exchange and market type.",
+    tags=["ohlcv", "repair"],
 )
 async def run_repair_pipeline(
     config:          AppConfig,
