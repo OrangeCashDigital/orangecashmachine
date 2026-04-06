@@ -225,9 +225,9 @@ async def _detect_supported_datasets(
     for dataset, method in _DATASET_CAPABILITY_MAP.items():
         if has.get(method, False):
             supported.append(dataset)
-            log.debug("Dataset disponible | dataset={} method={}", dataset, method)
+            log.debug("Dataset disponible | dataset=%s method=%s", dataset, method)
 
-    log.info("Datasets detectados | exchange={} datasets={}", exchange.id, supported)
+    log.info("Datasets detectados | exchange=%s datasets=%s", exchange.id, supported)
     return supported
 
 
@@ -256,7 +256,7 @@ async def _fetch_trading_fees(
         market = (exchange.markets or {}).get(symbol, {})
         return market.get("maker"), market.get("taker")
     except Exception as exc:
-        log.debug("Fee fetch skipped | reason={}", exc)
+        log.debug("Fee fetch skipped | reason=%s", exc)
         return None, None
 
 
@@ -281,7 +281,7 @@ async def _check_clock_sync(
         drift_ms = abs(server_time - (local_before + local_after) // 2)
         return drift_ms < max_drift_ms, drift_ms
     except Exception as exc:
-        log.debug("Clock sync skipped | reason={}", exc)
+        log.debug("Clock sync skipped | reason=%s", exc)
         return True, None
 
 
