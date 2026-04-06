@@ -215,7 +215,12 @@ class RedisCursorStore:
                 lambda: self._cas_script(keys=[key], args=[str(timestamp_ms), str(self._ttl)])
             )
             if result == 0:
-                logger.debug("Cursor CAS skip | key={} new={}", key, timestamp_ms)
+                # CAS skip es señal de salud: el cursor ya está adelante o igual.
+                # INFO (no DEBUG) para que sea visible en producción sin grep extra.
+                logger.info(
+                    "Cursor already current — CAS skip | key={} attempted={} (no update needed)",
+                    key, timestamp_ms,
+                )
                 return False
             if _update_total: _update_total.labels(exchange=exchange).inc()
             self._record_lag(exchange, timestamp_ms)

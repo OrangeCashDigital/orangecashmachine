@@ -16,6 +16,7 @@ No conoce detalles de storage ni de features.
 """
 
 import asyncio
+import signal
 import sys
 from pathlib import Path
 
@@ -95,22 +96,45 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     run_id    = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
     exit_code = 0
     _t0       = _time.monotonic()
+    # ── Event loop explícito para shutdown graceful vía SIGINT/SIGTERM ──────
+    # asyncio.run(wait_for(...)) no permite cancelar el task raíz antes de
+    # cerrar el loop: las tareas hijas en vuelo terminan como Exception en
+    # lugar de CancelledError, produciendo logs "Strategy fallida" espurios.
+    # Con loop explícito instalamos signal handlers que cancelan el task raíz
+    # limpiamente y esperan a que todas las coroutines terminen su finally.
+    loop      = asyncio.new_event_loop()
+    main_task: "asyncio.Task[None] | None" = None
+
+    def _request_shutdown(sig: int) -> None:
+        sig_name = signal.Signals(sig).name
+        log.warning("pipeline_interrupted", signal=sig_name)
+        nonlocal exit_code
+        exit_code = 130
+        if main_task and not main_task.done():
+            main_task.cancel()
+
     try:
-        asyncio.run(
+        asyncio.set_event_loop(loop)
+        for _sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(_sig, _request_shutdown, _sig)
+
+        main_task = loop.create_task(
             asyncio.wait_for(
                 _run_flow_local(config, run_cfg, guard=guard),
                 timeout=timeout,
             )
         )
+        loop.run_until_complete(main_task)
+
     except asyncio.TimeoutError:
         log.error("pipeline_timeout", timeout_s=timeout)
         exit_code = 1
+    except asyncio.CancelledError:
+        # Cancelación limpia vía signal handler — exit_code ya seteado en 130
+        pass
     except ExecutionStoppedError as exc:
         log.critical("pipeline_stopped_by_guard", reason=str(exc))
         exit_code = 1
-    except KeyboardInterrupt:
-        log.warning("pipeline_interrupted", signal="SIGINT")
-        exit_code = 130
     except Exception as exc:
         log.opt(exception=True).critical(
             "pipeline_fatal",
@@ -118,6 +142,16 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
             error=str(exc),
         )
         exit_code = 1
+    finally:
+        # Cancelar tareas residuales y esperar su cleanup antes de cerrar loop
+        _pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        if _pending:
+            log.debug("shutdown_cancelling_tasks", count=len(_pending))
+            for t in _pending:
+                t.cancel()
+            loop.run_until_complete(asyncio.gather(*_pending, return_exceptions=True))
+        loop.close()
+        asyncio.set_event_loop(None)
     finally:
         _duration = _time.monotonic() - _t0
         _result   = {0: "success", 1: "error", 130: "interrupted"}.get(exit_code, "unknown")
