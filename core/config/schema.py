@@ -39,7 +39,7 @@ FUTURES_SYMBOL_REGEX: re.Pattern[str] = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+:[A-Z0-
 
 _ALLOWED_FUTURES_TYPES: frozenset[str] = frozenset({"swap", "future", "option"})
 _ALLOWED_TIMEFRAMES: frozenset[str] = frozenset({"1m", "5m", "15m", "1h", "4h", "1d"})
-_EXCHANGES_WITH_PASSPHRASE: frozenset[str] = frozenset({"kucoin", "okx"})
+_EXCHANGES_WITH_PASSPHRASE: frozenset[str] = frozenset({"kucoin", "kucoinfutures", "okx"})
 
 EXCHANGE_TASK_TIMEOUT: int = 120
 PIPELINE_TASK_TIMEOUT: int = 86_400
@@ -481,6 +481,43 @@ class FeaturesConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="allow")
 
 
+class RiskPositionConfig(StrictBaseModel):
+    """Límites de tamaño de posición."""
+    max_position_pct: float = Field(default=0.05, gt=0, le=1)
+    max_open_positions: int = Field(default=3, ge=1)
+
+
+class RiskStopLossConfig(StrictBaseModel):
+    """Configuración de stop-loss."""
+    enabled: bool = True
+    default_pct: float = Field(default=0.02, gt=0, le=1)
+
+
+class RiskDrawdownConfig(StrictBaseModel):
+    """Límites de drawdown — halt automático si se superan."""
+    max_daily_drawdown_pct: float = Field(default=0.05, gt=0, le=1)
+    max_total_drawdown_pct: float = Field(default=0.15, gt=0, le=1)
+    halt_on_breach: bool = True
+
+
+class RiskOrderConfig(StrictBaseModel):
+    """Límites de tamaño de orden en USD."""
+    min_order_usd: float = Field(default=10, gt=0)
+    max_order_usd: float = Field(default=1000, gt=0)
+
+
+class RiskConfig(StrictBaseModel):
+    """Parámetros de gestión de riesgo operacional.
+
+    En fase data pipeline estos valores son referencia.
+    Se aplican cuando execution/trading está activo.
+    """
+    position: RiskPositionConfig = Field(default_factory=RiskPositionConfig)
+    stop_loss: RiskStopLossConfig = Field(default_factory=RiskStopLossConfig)
+    drawdown: RiskDrawdownConfig = Field(default_factory=RiskDrawdownConfig)
+    order: RiskOrderConfig = Field(default_factory=RiskOrderConfig)
+
+
 class AppConfig(StrictBaseModel):
     """Configuración raíz de la aplicación.
 
@@ -500,6 +537,7 @@ class AppConfig(StrictBaseModel):
     healthchecks: HealthChecksConfig = Field(default_factory=HealthChecksConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    risk: RiskConfig = Field(default_factory=RiskConfig)
 
     @model_validator(mode="before")
     @classmethod

@@ -115,10 +115,19 @@ class CCXTAdapter(ExchangeAdapter):
     ) -> None:
 
         self._exchange_id  = self._resolve_exchange_id(exchange_id, config)
-        self._api_key      = self._resolve_api_key(api_key, config)
-        self._api_secret   = self._resolve_api_secret(api_secret, config)
-        self._api_password = self._resolve_api_password(config)
         self._default_type = default_type or self._resolve_default_type(config)
+
+        # Credenciales: config.ccxt_credentials() es la SSoT (schema.py).
+        # Path explícito solo para testing/scripts sin ExchangeConfig.
+        if config is not None:
+            _creds         = config.ccxt_credentials()
+            self._api_key      = _creds.get("apiKey") or None
+            self._api_secret   = _creds.get("secret") or None
+            self._api_password = _creds.get("password") or None
+        else:
+            self._api_key      = api_key or None
+            self._api_secret   = api_secret or None
+            self._api_password = None
 
         self._client:            Optional[ccxt.Exchange] = None
         self._init_lock:         asyncio.Lock            = asyncio.Lock()
@@ -327,36 +336,6 @@ class CCXTAdapter(ExchangeAdapter):
         if config is not None:
             return config.name.value
         return _DEFAULT_EXCHANGE
-
-    @staticmethod
-    def _resolve_api_key(
-        explicit: Optional[str],
-        config:   Optional["ExchangeConfig"],
-    ) -> Optional[str]:
-        if explicit:
-            return explicit
-        if config is not None and config.has_credentials:
-            return config.api_key.get_secret_value() or None
-        return None
-
-    @staticmethod
-    def _resolve_api_secret(
-        explicit: Optional[str],
-        config:   Optional["ExchangeConfig"],
-    ) -> Optional[str]:
-        if explicit:
-            return explicit
-        if config is not None and config.has_credentials:
-            return config.api_secret.get_secret_value() or None
-        return None
-
-    @staticmethod
-    def _resolve_api_password(
-        config: Optional["ExchangeConfig"],
-    ) -> Optional[str]:
-        if config is not None and config.has_passphrase:
-            return config.api_password.get_secret_value() or None
-        return None
 
     @staticmethod
     def _resolve_default_type(
