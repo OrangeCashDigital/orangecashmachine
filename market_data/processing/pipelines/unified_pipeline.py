@@ -43,7 +43,7 @@ from market_data.observability.metrics import FETCH_ABORTS_TOTAL
 from infra.state.cursor_store import (
     CursorStore,
     InMemoryCursorStore,
-    build_cursor_store_from_config,
+    build_cursor_store_from_env,
 )
 
 
@@ -81,8 +81,14 @@ class _ExchangeAbortError(Exception):
 
 
 def _build_cursor_store_safe() -> CursorStore:
+    # build_cursor_store_from_config() requiere AppConfig explícito y lanza
+    # RuntimeError si se llama sin él — lo que causaba que el cursor store
+    # cayera SIEMPRE a InMemoryCursorStore aunque Redis estuviera disponible,
+    # haciendo que los cursores no persistieran entre runs.
+    # build_cursor_store_from_env() resuelve config desde variables de entorno,
+    # consistente con el resto del sistema (factories.py).
     try:
-        store = build_cursor_store_from_config()
+        store = build_cursor_store_from_env()
         if store.is_healthy():
             return store
         _log.warning("Redis no disponible — cursor store en memoria (fallback)")
@@ -271,13 +277,17 @@ class UnifiedPipeline:
 
         async def worker() -> None:
             while True:
-                # Si el exchange fue abortado por otro worker, salir sin tomar más trabajo.
+                # Si el exchange fue abortado por otro worker, drenar toda la queue
+                # y salir. Drenar UN solo item (patrón anterior) dejaba items sin
+                # task_done cuando N items > M workers, bloqueando queue.join()
+                # hasta el timeout de 3600s en circuit open con muchos pares.
                 if abort_event.is_set():
-                    try:
-                        queue.get_nowait()
-                        queue.task_done()
-                    except asyncio.QueueEmpty:
-                        pass
+                    while True:
+                        try:
+                            queue.get_nowait()
+                            queue.task_done()
+                        except asyncio.QueueEmpty:
+                            break
                     return
 
                 try:
