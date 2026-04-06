@@ -76,7 +76,7 @@ class PostProcessingService:
                     self._gold.build_all(
                         exchange=ex.name.value,
                         symbols=ex.markets.futures_symbols,
-                        market_type="swap",
+                        market_type=ex.markets.futures_default_type or "swap",
                         timeframes=self._config.pipeline.historical.timeframes,
                         run_id=self._run_id,
                     )

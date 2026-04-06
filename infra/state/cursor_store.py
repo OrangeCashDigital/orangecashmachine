@@ -266,7 +266,7 @@ class RedisCursorStore:
             pipe   = self._client.pipeline()
             for key in keys:
                 pipe.get(key)
-            values = pipe.execute()
+            values = _retry(lambda: pipe.execute())
             for key, raw in zip(keys, values):
                 if raw:
                     result[key] = int(raw)
