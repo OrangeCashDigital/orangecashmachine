@@ -7,27 +7,21 @@ __pycache__/
 *.log
 *.sqlite
 *.db
-
 # Configs sensibles
 config.json
 .env
 secrets.yaml
-
 # Carpetas de trabajo de Freqtrade u otras herramientas
 user_data/
 backtest_results/
 strategy_results/
-
 # Datos históricos y parquet del trading
 data_platform/data_lake/**/*.parquet
-
 # Prefect temporal
 .prefect/
-
 # Archivos del sistema
 .DS_Store
 Thumbs.db
-
 # Archivos temporales
 *.tmp
 *.swp
@@ -35,7 +29,6 @@ data_platform/data_lake/
 requirements.txt.bak
 .envrc
 refactor.sh
-
 # Lakehouse local de desarrollo (path resuelto por settings.yaml / LOCAL_DATA_LAKE_PATH)
 data_platform/local_data_lake/
 logs/
