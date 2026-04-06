@@ -118,7 +118,7 @@ def _log_pipeline_metrics(summary, market_type: str, log) -> None:
     for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
         status = "✓" if r.success else ("↷" if r.skipped else "✗")
         log.info(
-            "  {} {}/{}/{} | rows={} duration={}ms error={}",
+            "  %s %s/%s/%s | rows=%s duration=%sms error=%s",
             status, market_type, r.symbol, r.timeframe,
             r.rows, r.duration_ms, r.error or "-",
         )
