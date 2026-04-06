@@ -10,9 +10,11 @@ Flujo de ejecución::
 
     hydra_main(cfg)
         ├── bootstrap_logging()
+        ├── RunConfig.from_env()             → RunConfig (env, debug, run_id…)
         ├── load_appconfig_from_hydra(cfg)   → AppConfig (Pydantic validado)
         ├── configure_logging(cfg, env, ...)
         ├── setup_observability()            → MetricsRuntime (idempotente)
+        ├── EnvironmentValidator.check()
         ├── validate_only? → sys.exit(0)
         └── pipeline_runner()               → lógica de negocio
 
@@ -27,7 +29,6 @@ Uso CLI::
 Principios: SOLID · KISS · DRY · SafeOps
 """
 
-import os
 import sys
 from typing import Callable
 
@@ -36,7 +37,6 @@ from omegaconf import DictConfig
 from loguru import logger
 
 import core.config.loader as config_loader
-from core.config.env_vars import OCM_ENV
 from core.config.hydra_loader import load_appconfig_from_hydra
 from core.config.runtime import RunConfig
 from core.config.schema import AppConfig
@@ -48,33 +48,7 @@ from market_data.safety.environment_validator import (
     EnvironmentMismatchError,
 )
 
-_APP_NAME = "OrangeCashMachine"
 _APP_VERSION = "0.2.0"
-
-
-# ---------------------------------------------------------------------------
-# Banner
-# ---------------------------------------------------------------------------
-
-def print_banner(env: str, version: str = _APP_VERSION) -> None:
-    """Imprime el banner de inicio de la aplicación en stdout.
-
-    Args:
-        env: Nombre del entorno activo (development, production, etc.).
-        version: Versión de la aplicación.
-    """
-    banner = f"""
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║   🍊  OrangeCashMachine  v{version:<34}║
-║                                                              ║
-║   Market-data ingestion pipeline for algorithmic trading     ║
-║   Medallion architecture · Prefect · Iceberg · DuckDB        ║
-║                                                              ║
-║   env  : {env:<52}║
-╚══════════════════════════════════════════════════════════════╝
-"""
-    print(banner, flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -186,10 +160,9 @@ def hydra_main(cfg: DictConfig) -> None:
     bootstrap_logging()
 
     env_block = cfg.get("environment", {})
-    explicit_env: str | None = env_block.get("name", None) or os.getenv(OCM_ENV)
+    # explicit_env: solo el valor que Hydra/CLI aporta — RunConfig resuelve OCM_ENV
+    explicit_env: str | None = env_block.get("name") or None
     run_cfg = RunConfig.from_env(explicit_env=explicit_env)
-
-    print_banner(run_cfg.env)
 
     try:
         config = load_appconfig_from_hydra(cfg, env=run_cfg.env)
