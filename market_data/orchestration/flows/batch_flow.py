@@ -153,18 +153,24 @@ def _launch_derivative_pipelines(
     return [run_derivatives_pipeline(config, exc_cfg, probe, list(deriv_requested))]
 
 
+class ExchangeTasks(NamedTuple):
+    """Par de listas de futures separadas por fase para el stage system del flow."""
+    spot: List[asyncio.Future]     # fase 1: spot + repair
+    futures: List[asyncio.Future]  # fase 2: futures + derivatives
+
+
 def _launch_pipelines_for_exchange(
     config: AppConfig,
     probe: ExchangeProbe,
     requested: Set[str],
     log,
-) -> List[asyncio.Future]:
+) -> ExchangeTasks:
     # Invariante de aislamiento: no se pasa adapter entre flow y tasks.
     # Cada task gestiona su propio lifecycle de conexión.
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
         log.warning("Exchange config not found | exchange=%s", probe.exchange)
-        return []
+        return ExchangeTasks([], [])
 
     active, skipped = _filter_active_datasets(requested, probe)
     if skipped:
@@ -174,16 +180,19 @@ def _launch_pipelines_for_exchange(
         )
     if not active:
         log.warning("No active datasets for exchange | exchange=%s", probe.exchange)
-        return []
+        return ExchangeTasks([], [])
 
     log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
-    return [
+    spot_tasks: List[asyncio.Future] = [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
-        *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
-        *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
         *([run_repair_pipeline(config, exc_cfg, probe, market_type="spot")]
           if "ohlcv" in active else []),
     ]
+    futures_tasks: List[asyncio.Future] = [
+        *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
+        *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
+    ]
+    return ExchangeTasks(spot=spot_tasks, futures=futures_tasks)
 
 
 async def _validate_exchanges(
@@ -352,31 +361,15 @@ async def market_data_flow(
     probes = await _validate_exchanges(config, log)
 
 
-    # Delegar a _launch_pipelines_for_exchange — SSoT para lanzamiento de pipelines.
-    # Separa spot+repair (fase 1) de futures (fase 2) para evitar contención
-    # de rate limits cuando ambos comparten el mismo exchange.
-    # _launch_pipelines_for_exchange ya maneja el filtrado de datasets activos,
-    # el chequeo de market_type disponible y los warnings de datasets no soportados.
+    # SSoT: _launch_pipelines_for_exchange centraliza filtrado, validación de
+    # capabilities y separación de stages. El flow solo acumula y ejecuta.
     spot_futures: List[asyncio.Future] = []
     futures_futures: List[asyncio.Future] = []
 
     for probe in probes:
-        exc_cfg = config.get_exchange(probe.exchange)
-        if exc_cfg is None:
-            log.warning("Exchange config not found — skipping | exchange=%s", probe.exchange)
-            continue
-
-        # Fase 1: spot + repair
-        spot_futures.extend(
-            _launch_spot_pipelines(config, exc_cfg, probe, requested & {"ohlcv", "trades", "orderbook"}, log)
-        )
-        if "ohlcv" in requested:
-            spot_futures.append(run_repair_pipeline(config, exc_cfg, probe, market_type="spot"))
-
-        # Fase 2: futures (se ejecuta solo si fase 1 no falla completamente)
-        futures_futures.extend(
-            _launch_futures_pipelines(config, exc_cfg, probe, requested, log)
-        )
+        tasks = _launch_pipelines_for_exchange(config, probe, requested, log)
+        spot_futures.extend(tasks.spot)
+        futures_futures.extend(tasks.futures)
 
     pipeline_futures: List[asyncio.Future] = spot_futures + futures_futures
 
@@ -386,16 +379,19 @@ async def market_data_flow(
 
     flow_start = time.monotonic()
     ok = failed = 0
+    ok_prev = fail_prev = 0  # resultado del stage inmediatamente anterior
     try:
         # Stages con dependencias explícitas.
         # requires_success=True: el stage solo corre si el anterior no falló 100%.
+        # ok_prev/fail_prev reflejan el stage anterior, no el acumulado global,
+        # para evitar que fallos de fases posteriores bloqueen stages siguientes.
         # Extensible: añadir fases con sus propias reglas de dependencia.
         stages = [
             {"name": "spot+repair", "tasks": spot_futures,    "requires_success": False},
             {"name": "futures",     "tasks": futures_futures, "requires_success": True},
         ]
         for stage in stages:
-            if stage["requires_success"] and failed > 0 and ok == 0:
+            if stage["requires_success"] and fail_prev > 0 and ok_prev == 0:
                 log.warning(
                     "Stage skipped — previous stage failed completely | stage=%s",
                     stage["name"],
@@ -407,6 +403,7 @@ async def market_data_flow(
             ok_s, fail_s = await _consolidate_results(stage["tasks"], log)
             ok     += ok_s
             failed += fail_s
+            ok_prev, fail_prev = ok_s, fail_s  # snapshot para el stage siguiente
         if failed > 0 and ok == 0:
             raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
     finally:

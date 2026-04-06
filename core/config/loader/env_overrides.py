@@ -1,179 +1,140 @@
 from __future__ import annotations
+from typing import Any, Optional, Tuple
+from loguru import logger
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 """
 core/config/loader/env_overrides.py
-====================================
+===================================
 
-Aplica overrides desde variables de entorno OCM_* sobre el dict
-mergeado de YAML, antes de la validación Pydantic.
+Environment override layer (Layer 0.5 en arquitectura de config).
 
-Implementación: pydantic-settings BaseSettings.
-  - Coerción de tipos: automática vía Pydantic (elimina _coerce manual)
-  - Paths anidados:    campo field_name con "__" como separador
-  - Validación:        campos tipados (elimina whitelist manual)
-  - SSOT:              nombres de vars en env_vars.py
+Responsabilidad:
+    Aplicar overrides desde variables de entorno OCM_* sobre el dict
+    mergeado de YAML ANTES de validación Pydantic (AppConfig).
 
-Aliases de compatibilidad (vars legacy sin prefijo OCM_ + sin __):
-    OCM_BACKFILL_MODE      → pipeline.historical.backfill_mode
-    OCM_START_DATE         → pipeline.historical.start_date
-    OCM_MAX_CONCURRENT     → pipeline.historical.max_concurrent_tasks
-    OCM_LOG_LEVEL          → observability.logging.level
-    OCM_SNAPSHOT_INTERVAL  → pipeline.realtime.snapshot_interval_seconds
-    OCM_METRICS_ENABLED    → observability.metrics.enabled
-    OCM_METRICS_PORT       → observability.metrics.port
-    OCM_DEBUG              → environment.debug
+Principios:
+    • KISS: sin alias, sin lógica innecesaria
+    • DRY: naming = estructura (sin mappings duplicados)
+    • SSOT: env var path == config path
+    • SafeOps: overrides explícitos, auditables
+    • Fail-safe: ignora campos desconocidos sin romper runtime
 
-Nuevo formato (también soportado):
-    OCM_PIPELINE__HISTORICAL__BACKFILL_MODE=true
-    OCM_OBSERVABILITY__METRICS__PORT=9090
+Formato estándar:
+    OCM_<SECTION>__<SUBSECTION>__<FIELD>=value
+
+Ejemplo:
+    OCM_PIPELINE__HISTORICAL__START_DATE=2023-01-01T00:00:00Z
 """
 
-import os
-from typing import Optional
-
-from loguru import logger
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
 # =============================================================================
-# Mapping: field_name → path en el dict de config
-# El field_name usa "__" como separador — se convierte a tuple en apply()
+# SETTINGS MODEL
 # =============================================================================
-
-_FIELD_TO_PATH: dict[str, tuple[str, ...]] = {
-    "pipeline__historical__backfill_mode":           ("pipeline", "historical", "backfill_mode"),
-    "pipeline__historical__start_date":              ("pipeline", "historical", "start_date"),
-    "pipeline__historical__max_concurrent_tasks":    ("pipeline", "historical", "max_concurrent_tasks"),
-    "pipeline__historical__fetch_all_history":       ("pipeline", "historical", "fetch_all_history"),
-    "pipeline__realtime__snapshot_interval_seconds": ("pipeline", "realtime", "snapshot_interval_seconds"),
-    "observability__metrics__enabled":               ("observability", "metrics", "enabled"),
-    "observability__metrics__port":                  ("observability", "metrics", "port"),
-    "observability__logging__level":                 ("observability", "logging", "level"),
-    "environment__debug":                            ("environment", "debug"),
-}
-
 
 class OcmSettings(BaseSettings):
     """
-    Lee las variables OCM_* del entorno con tipos correctos vía Pydantic.
+    Settings explícitos desde OCM_* env vars.
 
-    Soporta dos formatos:
-      1. Aliases legacy:  OCM_BACKFILL_MODE=true
-      2. Nuevo formato:   OCM_PIPELINE__HISTORICAL__BACKFILL_MODE=true
-
-    Todos los campos son Optional — solo se aplican los que están presentes.
+    Diseño:
+        • Sin alias → evita ambigüedad
+        • Sin mappings → evita duplicación
+        • Escalable automáticamente (Open/Closed)
     """
 
     model_config = SettingsConfigDict(
-        env_prefix           = "OCM_",
-        env_nested_delimiter = "__",
-        case_sensitive       = False,
-        extra                = "ignore",
-        populate_by_name     = True,
+        env_prefix="OCM_",
+        env_nested_delimiter="__",
+        case_sensitive=False,
+        extra="ignore",
     )
 
-    # ── pipeline.historical ──────────────────────────────────────────────────
-    pipeline__historical__backfill_mode: Optional[bool] = Field(
-        default=None,
-        validation_alias="OCM_BACKFILL_MODE",
-    )
-    pipeline__historical__start_date: Optional[str] = Field(
-        default=None,
-        validation_alias="OCM_START_DATE",
-    )
-    pipeline__historical__max_concurrent_tasks: Optional[int] = Field(
-        default=None,
-        validation_alias="OCM_MAX_CONCURRENT",
-    )
-    pipeline__historical__fetch_all_history: Optional[bool] = Field(
-        default=None,
-        validation_alias="OCM_FETCH_ALL_HISTORY",
-    )
+    # ── pipeline.historical ────────────────────────────────────────────────
+    pipeline__historical__backfill_mode: Optional[bool] = None
+    pipeline__historical__start_date: Optional[str] = None
+    pipeline__historical__max_concurrent_tasks: Optional[int] = None
+    pipeline__historical__fetch_all_history: Optional[bool] = None
 
-    # ── pipeline.realtime ────────────────────────────────────────────────────
-    pipeline__realtime__snapshot_interval_seconds: Optional[int] = Field(
-        default=None,
-        validation_alias="OCM_SNAPSHOT_INTERVAL",
-    )
+    # ── pipeline.realtime ─────────────────────────────────────────────────
+    pipeline__realtime__snapshot_interval_seconds: Optional[int] = None
 
-    # ── observability.metrics ────────────────────────────────────────────────
-    observability__metrics__enabled: Optional[bool] = Field(
-        default=None,
-        validation_alias="OCM_METRICS_ENABLED",
-    )
-    observability__metrics__port: Optional[int] = Field(
-        default=None,
-        validation_alias="OCM_METRICS_PORT",
-    )
+    # ── observability ─────────────────────────────────────────────────────
+    observability__metrics__enabled: Optional[bool] = None
+    observability__metrics__port: Optional[int] = None
+    observability__logging__level: Optional[str] = None
 
-    # ── observability.logging ────────────────────────────────────────────────
-    observability__logging__level: Optional[str] = Field(
-        default=None,
-        validation_alias="OCM_LOG_LEVEL",
-    )
+    # ── environment ───────────────────────────────────────────────────────
+    environment__debug: Optional[bool] = None
 
-    # ── environment ──────────────────────────────────────────────────────────
-    environment__debug: Optional[bool] = Field(
-        default=None,
-        validation_alias="OCM_DEBUG",
-    )
+    # ---------------------------------------------------------------------
+    # APPLY OVERRIDES
+    # ---------------------------------------------------------------------
 
-    def apply(self, config: dict) -> dict:
+    def apply(self, config: dict[str, Any]) -> dict[str, Any]:
         """
-        Aplica los overrides sobre el dict mergeado de YAML.
-        Solo parchea campos explícitamente seteados (en model_fields_set).
-        Retorna el mismo dict modificado in-place.
+        Aplica overrides sobre config dict (in-place).
+        Solo modifica claves explícitamente presentes en env.
         """
         applied: list[str] = []
 
-        # model_fields_set es set[str] — nombres de campos con valor explícito
         for field_name in self.model_fields_set:
-            value = getattr(self, field_name, None)
+            value = getattr(self, field_name)
             if value is None:
                 continue
 
-            path = _FIELD_TO_PATH.get(field_name)
-            if path is None:
-                # campo no mapeado (extra ignorado) — skip silencioso
-                continue
-
+            path = _field_to_path(field_name)
             _set_nested(config, path, value)
-            applied.append(f"{field_name.upper()}={value!r} → {'.'.join(path)}")
+            applied.append(f"{field_name.upper()}={value!r}")
             logger.info(
                 "env_override_applied | path={} value={}",
-                ".".join(path), value,
+                ".".join(path),
+                value,
             )
 
-        if applied:
-            logger.debug(
-                "env_overrides_summary | count={} applied={}",
-                len(applied), " | ".join(applied),
-            )
-        else:
-            logger.debug("env_overrides_summary | count=0")
-
+        _log_summary(applied)
         return config
 
 
 # =============================================================================
-# Helpers
+# HELPERS
 # =============================================================================
 
-def _set_nested(d: dict, path: tuple[str, ...], value: object) -> None:
-    """Pisa el valor en el dict siguiendo el path, creando dicts intermedios."""
-    for key in path[:-1]:
-        d = d.setdefault(key, {})
-    d[path[-1]] = value
+def _field_to_path(field_name: str) -> Tuple[str, ...]:
+    """Convierte nombre de campo a path de config."""
+    return tuple(field_name.split("__"))
 
 
-# =============================================================================
-# Public API — firma idéntica a la versión anterior
-# =============================================================================
-
-def apply_env_overrides(config: dict) -> dict:
+def _set_nested(d: dict[str, Any], path: Tuple[str, ...], value: Any) -> None:
     """
-    Punto de entrada para el loader.
-    Crea OcmSettings (lee env vars), aplica sobre el dict mergeado, retorna.
+    Set value en dict anidado creando niveles intermedios.
+    Safe: no rompe si faltan niveles.
+    """
+    current = d
+    for key in path[:-1]:
+        current = current.setdefault(key, {})
+    current[path[-1]] = value
+
+
+def _log_summary(applied: list[str]) -> None:
+    """Log consolidado de overrides."""
+    if applied:
+        logger.debug(
+            "env_overrides_summary | count={} applied={}",
+            len(applied),
+            " | ".join(applied),
+        )
+    else:
+        logger.debug("env_overrides_summary | count=0")
+
+
+# =============================================================================
+# PUBLIC API
+# =============================================================================
+
+def apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
+    """
+    Entry point para loader.
+    Flujo:
+        1. Parse env → OcmSettings
+        2. Apply → config dict
     """
     return OcmSettings().apply(config)

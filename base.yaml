@@ -1,0 +1,202 @@
+# ==============================================================================
+# OrangeCashMachine – Base Configuration (Production-Ready, Refactor)
+# ==============================================================================
+
+# ==============================================================================
+# ENVIRONMENT METADATA
+# ==============================================================================
+environment:
+  name: base
+  debug: false
+  version: 1.1.0
+  last_modified_by: orangemusic
+  last_modified_at: 2026-03-18T00:00:00Z
+
+# ==============================================================================
+# PIPELINES
+# ==============================================================================
+pipeline:
+  historical:
+    # SafeOps: backfill completo sin limitar con fecha fija.
+    # start_date se usa solo si no existe cursor, default "full" backfill.
+    start_date: "auto"  # reemplaza "2017-01-01T00:00:00Z" → backfill dinámico
+    backfill_mode: false  # solo true para reparaciones o inicialización
+    max_concurrent_tasks: auto  # resuelto dinámicamente (CPU-bound safe)
+
+    retry_policy:
+      max_attempts: 5
+      backoff_factor: 2
+      jitter: true
+
+    timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
+
+  realtime:
+    reconnect_delay_seconds: 5
+    heartbeat_timeout_seconds: 30
+    snapshot_interval_seconds: 60
+    max_stream_buffer: 50000
+    drop_policy: reject
+    execution_mode: paper  # "paper" o "real" → execution layer
+
+# ==============================================================================
+# DATASETS
+# ==============================================================================
+datasets:
+  ohlcv: true
+  trades: false
+  orderbook: false
+  funding_rate: false
+  open_interest: false
+  liquidations: false
+  mark_price: false
+  index_price: false
+
+# ==============================================================================
+# EXCHANGES
+# ==============================================================================
+exchanges:
+  bybit:
+    enabled: true
+    enableRateLimit: true
+    auto_discover_symbols: false
+
+    credentials:
+      apiKey: ${oc.env:BYBIT_API_KEY,""}
+      secret: ${oc.env:BYBIT_API_SECRET,""}
+
+    options:
+      adjustForTimeDifference: true
+
+    markets:
+      spot:
+        enabled: true
+        symbols: [BTC/USDT]
+
+      futures:
+        enabled: true
+        defaultType: swap
+        symbols:
+          - BTC/USDT:USDT
+          - BTC/USD:BTC
+
+  kucoin:
+    enabled: true
+    enableRateLimit: true
+    auto_discover_symbols: false
+
+    credentials:
+      apiKey: ${oc.env:KUCOIN_API_KEY,""}
+      secret: ${oc.env:KUCOIN_API_SECRET,""}
+      password: ${oc.env:KUCOIN_PASSPHRASE,""}
+
+    options:
+      adjustForTimeDifference: true
+
+    markets:
+      spot:
+        enabled: true
+        symbols: [BTC/USDT]
+      futures:
+        enabled: false
+
+  kucoinfutures:
+    enabled: true
+    enableRateLimit: true
+    test_symbol: "BTC/USDT:USDT"
+    auto_discover_symbols: false
+
+    credentials:
+      apiKey: ${oc.env:KUCOIN_API_KEY,""}
+      secret: ${oc.env:KUCOIN_API_SECRET,""}
+      password: ${oc.env:KUCOIN_PASSPHRASE,""}
+
+    options:
+      adjustForTimeDifference: true
+      defaultType: swap
+
+    markets:
+      spot:
+        enabled: false
+        symbols: []
+      futures:
+        enabled: true
+        defaultType: swap
+        symbols: [BTC/USDT:USDT]
+
+# ==============================================================================
+# STORAGE (Data Platform)
+# ==============================================================================
+storage:
+  data_lake:
+    path: ${oc.env:DATA_LAKE_PATH,data_platform/data_lake}
+    format: parquet
+    compression: snappy
+    partitioning:
+      - exchange
+      - symbol
+      - timeframe
+      - year
+      - month
+
+# ==============================================================================
+# FEATURE STORE
+# ==============================================================================
+features:
+  enable_new_strategy: false  # flag global
+  # parámetros de estrategia futuros se agregan aquí
+
+# ==============================================================================
+# RISK (SafeOps / Trading Risk Layer)
+# ==============================================================================
+risk:
+  max_position_size: 1.0        # fracción de cartera por asset
+  stop_loss_pct: 0.05           # límite de pérdida por trade
+  max_drawdown_pct: 0.2         # límite global de drawdown
+  exposure_per_asset: 0.1       # fracción de capital por asset
+
+# ==============================================================================
+# OBSERVABILITY
+# ==============================================================================
+observability:
+  logging:
+    level: ${oc.env:LOG_LEVEL,INFO}
+  metrics:
+    enabled: true
+    exporter: prometheus
+    port: ${oc.env:METRICS_PORT,8000}
+  tracing:
+    enabled: false
+  alerts: []  # lista de alertas (email, slack, etc.)
+
+# ==============================================================================
+# INFRASTRUCTURE INTEGRATIONS
+# ==============================================================================
+integrations:
+  redis:
+    enabled: ${oc.env:REDIS_ENABLED,true}
+    host: ${oc.env:REDIS_HOST,localhost}
+    port: ${oc.env:REDIS_PORT,6379}
+    db: ${oc.env:REDIS_DB,0}
+    socket_timeout: 5
+    retry_on_timeout: true
+
+  kafka:
+    enabled: false
+    bootstrap_servers: ${oc.env:KAFKA_BOOTSTRAP_SERVERS,localhost:9092}
+
+  postgres:
+    enabled: false
+    host: ${oc.env:POSTGRES_HOST,localhost}
+    port: ${oc.env:POSTGRES_PORT,5432}
+    user: ${oc.env:POSTGRES_USER,""}
+    password: ${oc.env:POSTGRES_PASSWORD,""}
+
+# ==============================================================================
+# HEALTH CHECKS
+# ==============================================================================
+healthchecks:
+  enabled: true
+  checks:
+    - storage
+    - exchanges
+    - redis

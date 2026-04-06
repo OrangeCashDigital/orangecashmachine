@@ -27,91 +27,10 @@ from market_data.observability.metrics import (
     REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED, REPAIR_GAPS_SKIPPED,
 )
 
+from market_data.processing.utils.gap_utils import GapRange, scan_gaps  # noqa: F401 — re-export
+
 _log = bind_pipeline("repair")
 
-
-@dataclass(frozen=True)
-class GapRange:
-    start_ms: int
-    end_ms:   int
-    expected: int
-
-    def __str__(self) -> str:
-        start = pd.Timestamp(self.start_ms, unit="ms", tz="UTC").isoformat()
-        end   = pd.Timestamp(self.end_ms,   unit="ms", tz="UTC").isoformat()
-        return f"Gap[{start} → {end} expected={self.expected}]"
-
-    @property
-    def duration_ms(self) -> int:
-        return self.end_ms - self.start_ms
-
-    @property
-    def severity(self) -> str:
-        """Clasifica el gap por candles esperados perdidos.
-
-        low    : <= 2 candles  — ruido / latencia puntual
-        medium : <= 10 candles — sesión con datos faltantes
-        high   : > 10 candles  — pérdida de datos significativa
-        """
-        if self.expected <= 2:
-            return "low"
-        elif self.expected <= 10:
-            return "medium"
-        return "high"
-
-
-def scan_gaps(df: pd.DataFrame, timeframe: str, tolerance: int = 0) -> List[GapRange]:
-    """
-    Detecta huecos temporales en un DataFrame OHLCV ordenado.
-    Retorna lista de GapRange. Lista vacía = sin huecos.
-    """
-    if df is None or df.empty or len(df) < 2:
-        return []
-
-    tf_ms     = timeframe_to_ms(timeframe)
-    threshold = tf_ms * (tolerance + 2)
-
-    df_sorted = df.sort_values("timestamp").reset_index(drop=True)
-    ts_col = df_sorted["timestamp"]
-    if hasattr(ts_col.dtype, "tz"):
-        ts_ms = (ts_col.astype("int64") // 1_000_000).values
-    else:
-        ts_ms = ts_col.astype("int64").values
-
-    gaps: List[GapRange] = []
-
-    # Head-gap: si la primera vela no cae en el inicio esperado de su día UTC,
-    # existe un hueco desde 00:00 del día hasta la primera vela disponible.
-    # Esto ocurre en KuCoin cuando el backfill comenzó a mitad de sesión.
-    first_ts = int(ts_ms[0])
-    day_start_ms = (first_ts // 86_400_000) * 86_400_000  # truncar a 00:00 UTC
-    head_gap_ms  = first_ts - day_start_ms
-    if head_gap_ms >= tf_ms * 2:  # al menos 2 velas faltantes para ser gap real
-        expected_head = int(head_gap_ms // tf_ms)
-        gaps.append(GapRange(
-            start_ms = day_start_ms,
-            end_ms   = first_ts - tf_ms,
-            expected = expected_head,
-        ))
-
-    for i in range(1, len(ts_ms)):
-        delta = ts_ms[i] - ts_ms[i - 1]
-        if delta >= threshold:
-            expected = int(delta // tf_ms) - 1
-            gaps.append(GapRange(
-                start_ms = ts_ms[i - 1] + tf_ms,
-                end_ms   = ts_ms[i]     - tf_ms,
-                expected = expected,
-            ))
-
-    if gaps:
-        _log.bind(timeframe=timeframe).debug(
-            "Gaps detected",
-            total_gaps=len(gaps),
-            missing_candles=sum(g.expected for g in gaps),
-        )
-
-    return gaps
 
 
 # Guardrail: gaps más grandes que esto se logean y se skipean.
