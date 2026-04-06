@@ -38,6 +38,13 @@ PUSHGATEWAY_URL: str = "PUSHGATEWAY_URL"
 """``"host:port"`` del Prometheus Pushgateway (default: ``"localhost:9091"``)."""
 
 # =============================================================================
+# Proceso — flags de comportamiento del proceso (leídas por main.py / RunConfig)
+# =============================================================================
+
+OCM_VALIDATE_ONLY: str = "OCM_VALIDATE_ONLY"
+"""``"1"`` | ``"true"`` — valida config y sale sin ejecutar pipeline."""
+
+# =============================================================================
 # Aplicación — leídas por env_overrides.py
 # =============================================================================
 

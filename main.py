@@ -29,7 +29,6 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 import os
 import sys
-import uuid
 from typing import Callable
 
 import hydra
@@ -37,7 +36,9 @@ from omegaconf import DictConfig
 from loguru import logger
 
 import core.config.loader as config_loader
+from core.config.env_vars import OCM_ENV
 from core.config.hydra_loader import load_appconfig_from_hydra
+from core.config.runtime import RunConfig
 from core.config.schema import AppConfig
 from core.logging import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner
@@ -102,26 +103,24 @@ def setup_observability(config: AppConfig, *, validate_only: bool = False) -> No
 
 def run_application(
     config: AppConfig,
+    run_cfg: RunConfig,
     *,
-    run_id: str,
-    env: str,
-    debug: bool = False,
-    validate_only: bool = False,
     pipeline_runner: Callable[..., int] = default_pipeline_runner,
 ) -> int:
     """Ejecuta el ciclo de vida completo de la aplicación.
 
     Args:
         config: Configuración Pydantic validada.
-        run_id: Identificador único del proceso (hex de 12 chars).
-        env: Nombre del entorno activo.
-        debug: Activa logging verboso y diagnósticos extra.
-        validate_only: Sale con código 0 tras validar config, sin ejecutar pipeline.
+        run_cfg: Configuración de proceso inmutable (env, debug, validate_only…).
         pipeline_runner: Callable inyectable para tests.
 
     Returns:
         Código de salida POSIX: 0 = éxito, 1 = error.
     """
+    run_id = run_cfg.run_id
+    env = run_cfg.env
+    debug = run_cfg.debug
+    validate_only = run_cfg.validate_only
     try:
         configure_logging(
             config.observability.logging,
@@ -140,10 +139,7 @@ def run_application(
 
     setup_observability(config, validate_only=validate_only)
 
-    run_cfg = None
     try:
-        from core.config.runtime import RunConfig
-        run_cfg = RunConfig.from_env(explicit_env=env)
         EnvironmentValidator().check(config, run_cfg)
     except EnvironmentMismatchError as exc:
         log.critical("environment_validation_failed | error={}", exc)
@@ -154,10 +150,6 @@ def run_application(
     if validate_only:
         log.info("validation_complete | status=ok")
         return 0
-
-    if run_cfg is None:
-        log.error("run_cfg_unavailable | cannot_start_pipeline")
-        return 1
 
     result: object = pipeline_runner(config=config, run_cfg=run_cfg, debug=debug)
 
@@ -184,36 +176,30 @@ def hydra_main(cfg: DictConfig) -> None:
 
     Args:
         cfg: DictConfig compuesto por Hydra.
+
+    Variables de entorno reconocidas (prefijo ``OCM_``)::
+
+        OCM_ENV             — entorno activo (development | production)
+        OCM_DEBUG           — activa logging verboso (1 | true)
+        OCM_VALIDATE_ONLY   — valida config y sale sin ejecutar pipeline (1 | true)
     """
     bootstrap_logging()
 
     env_block = cfg.get("environment", {})
-    env: str = str(
-        env_block.get("name", None) or os.getenv("OCM_ENV", "development")
-    )
-    debug: bool = bool(env_block.get("debug", False)) or (
-        os.getenv("OCM_DEBUG", "").lower() in ("1", "true")
-    )
-    validate_only: bool = os.getenv("OCM_VALIDATE_ONLY", "").lower() in ("1", "true")
-    run_id: str = uuid.uuid4().hex[:12]
+    explicit_env: str | None = env_block.get("name", None) or os.getenv(OCM_ENV)
+    run_cfg = RunConfig.from_env(explicit_env=explicit_env)
 
-    print_banner(env)
+    print_banner(run_cfg.env)
 
     try:
-        config = load_appconfig_from_hydra(cfg, env=env)
+        config = load_appconfig_from_hydra(cfg, env=run_cfg.env)
     except Exception as exc:
         logger.opt(exception=True).critical(
             "config_load_failed | type={} error={}", type(exc).__name__, exc
         )
         sys.exit(1)
 
-    exit_code: int = run_application(
-        config,
-        run_id=run_id,
-        env=env,
-        debug=debug,
-        validate_only=validate_only,
-    )
+    exit_code: int = run_application(config, run_cfg)
     sys.exit(exit_code)
 
 

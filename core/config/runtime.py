@@ -28,7 +28,8 @@ Principios: inmutable · construido una sola vez · propagado hacia abajo.
 """
 
 import os
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +37,7 @@ from core.config.env_vars import (
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
     OCM_DEBUG,
+    OCM_VALIDATE_ONLY,
     PUSHGATEWAY_URL,
     TRUTHY_VALUES,
     default_debug_for,
@@ -53,8 +55,10 @@ class RunConfig:
         pushgateway: ``host:port`` del Prometheus Pushgateway.
     """
 
-    debug: bool
     env: str
+    debug: bool
+    validate_only: bool
+    run_id: str
     config_path: Optional[Path]
     pushgateway: str
 
@@ -86,11 +90,17 @@ class RunConfig:
         raw_path = os.getenv(OCM_CONFIG_PATH) or os.getenv(OCM_CONFIG_DIR)
         config_path = Path(raw_path) if raw_path else None
 
+        validate_only: bool = (
+            os.getenv(OCM_VALIDATE_ONLY, "").lower() in TRUTHY_VALUES
+        )
+
         pushgateway = os.getenv(PUSHGATEWAY_URL, "localhost:9091")
 
         return cls(
-            debug=debug,
             env=env,
+            debug=debug,
+            validate_only=validate_only,
+            run_id=uuid.uuid4().hex[:12],
             config_path=config_path,
             pushgateway=pushgateway,
         )
@@ -98,5 +108,6 @@ class RunConfig:
     def __str__(self) -> str:
         return (
             f"RunConfig(env={self.env!r}, debug={self.debug}, "
+            f"validate_only={self.validate_only}, run_id={self.run_id!r}, "
             f"config_path={self.config_path!r}, pushgateway={self.pushgateway!r})"
         )
