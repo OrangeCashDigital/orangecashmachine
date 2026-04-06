@@ -24,6 +24,8 @@
 # ✅ grafana         : activo — visualización
 # ✅ alertmanager    : activo — enrutamiento de alertas
 # ✅ pushgateway     : activo — recepción de métricas push
+# ✅ loki            : activo — agregación de logs
+# ✅ promtail        : activo — agente de recolección de logs
 # 🔕 market-data    : deshabilitado — corre en máquina local
 #                     rehabilitar para despliegue distribuido
 # ==========================================================
@@ -87,6 +89,7 @@ services:
         check /config/prometheus.yml
         check /config/alertmanager.yml
         check /config/alerts.yml
+        check /config/loki/loki.yml
         echo "config-guard: all configs valid."
       '
     volumes:
@@ -361,6 +364,80 @@ services:
   #   networks:
   #     - ocm_internal
 
+
+  # --------------------------------------------------------
+  # LOKI — Agregación de logs estructurados
+  # --------------------------------------------------------
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: ocm_loki
+    init: true
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yml
+    ports:
+      - "${LOKI_HOST_PORT:-3100}:3100"
+    volumes:
+      - type: bind
+        source: ./infra/monitoring/loki/loki.yml
+        target: /etc/loki/loki.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - loki_data:/loki
+    depends_on:
+      config-guard:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+  # --------------------------------------------------------
+  # PROMTAIL — Agente de recolección de logs
+  # Lee ./logs/ del host + containers Docker
+  # --------------------------------------------------------
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: ocm_promtail
+    init: true
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail.yml
+    environment:
+      OCM_ENV: ${OCM_ENV:-development}
+    volumes:
+      - type: bind
+        source: ./infra/monitoring/promtail/promtail.yml
+        target: /etc/promtail/promtail.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./logs
+        target: /logs
+        read_only: true
+        bind:
+          create_host_path: true
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - ocm_public
+
 volumes:
   postgres_data:
     name: ocm_postgres_data
@@ -372,3 +449,5 @@ volumes:
     name: ocm_grafana_data
   prometheus_data:
     name: ocm_prometheus_data
+  loki_data:
+    name: ocm_loki_data
