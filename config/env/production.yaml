@@ -47,7 +47,7 @@ pipeline:
 observability:
 
   logging:
-    level: ${LOG_LEVEL:-INFO}
+    level: ${oc.env:LOG_LEVEL,INFO}
     format: json
 
   metrics:
