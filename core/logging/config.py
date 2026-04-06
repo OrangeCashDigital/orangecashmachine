@@ -35,6 +35,9 @@ class LoggingConfig(BaseModel):
     file:      bool = True
     pipeline:  bool = True
 
+    # ── Formato de salida ─────────────────────────────────────────────
+    format:    str  = "text"   # "text" | "json"
+
     # ── Loki (sink remoto) ────────────────────────────────────────────
     loki_url:    Optional[str]       = None
     loki_labels: dict[str, str]      = {}

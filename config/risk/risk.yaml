@@ -2,8 +2,11 @@
 # ==============================================================================
 # OrangeCashMachine — Risk Management
 # ==============================================================================
+# Parámetros de gestión de riesgo. Solo usados cuando execution está activo.
+# En fase data pipeline, estos valores son referencia — no se aplican en runtime.
+# ==============================================================================
 
-
+risk:
   position:
     max_position_pct: 0.05       # max 5% del capital por posición
     max_open_positions: 3
