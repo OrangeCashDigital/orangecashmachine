@@ -442,7 +442,7 @@ async def run_derivatives_pipeline(
 # ==========================================================
 
 @task(
-    name="backfill_pipeline",
+    name="repair_pipeline",
     retries=2,
     retry_delay_seconds=[60, 300],
     timeout_seconds=PIPELINE_TASK_TIMEOUT * 4,
