@@ -212,7 +212,7 @@ async def run_historical_pipeline(
         exchange_name, summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
     )
 
-    log.info("── Pipeline metrics | exchange={} ──────────────────────────", exchange_name)
+    log.info("── Pipeline metrics | exchange=%s ──────────────────────────", exchange_name)
     _log_pipeline_metrics(summary, "spot", log)
     log.info(
         "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
