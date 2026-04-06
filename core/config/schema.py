@@ -321,10 +321,6 @@ class PipelineConfig(StrictBaseModel):
     historical: HistoricalConfig = Field(default_factory=HistoricalConfig)
     realtime: RealtimeConfig = Field(default_factory=RealtimeConfig)
     timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)
-    dry_run: bool = Field(
-        default=False,
-        description="Si True, no escribe en disco (Silver/Gold). Solo loggea.",
-    )
     max_consecutive_errors: int = Field(
         default=10,
         ge=1,
@@ -461,8 +457,16 @@ class HealthChecksConfig(StrictBaseModel):
 
 
 class SafetyConfig(StrictBaseModel):
-    """Guards de seguridad operacional para prevenir operaciones destructivas."""
+    """Guards de seguridad operacional para prevenir operaciones destructivas.
 
+    dry_run es el SafeOps master switch: True en todos los entornos excepto
+    production. Los módulos de storage/execution deben leerlo de aquí.
+    """
+
+    dry_run: bool = Field(
+        default=True,
+        description="Master safety switch. False solo en production.",
+    )
     prevent_full_reingestion: bool = True
     require_explicit_start: bool = False
 

@@ -169,6 +169,25 @@ def load_appconfig_standalone(
 
     cfg = _OC.load(base_path)
 
+    # Módulos Hydra: mismo orden que config.yaml defaults
+    _MODULE_GLOBS = [
+        "pipeline/historical.yaml",
+        "pipeline/realtime.yaml",
+        "exchanges/bybit.yaml",
+        "exchanges/kucoin.yaml",
+        "exchanges/kucoinfutures.yaml",
+        "observability/logging.yaml",
+        "observability/metrics.yaml",
+        "storage/datalake.yaml",
+        "risk/risk.yaml",
+    ]
+    for rel in _MODULE_GLOBS:
+        fpath = _dir / rel
+        if fpath.exists():
+            cfg = _OC.merge(cfg, _OC.load(fpath))
+        else:
+            logger.debug("load_appconfig_standalone | module_missing={}", fpath)
+
     env_file = _dir / "env" / f"{_env}.yaml"
     if env_file.exists():
         cfg = _OC.merge(cfg, _OC.load(env_file))
