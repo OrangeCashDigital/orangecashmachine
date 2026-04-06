@@ -194,9 +194,23 @@ def _ensure_log_dir(log_dir: Path) -> None:
         logger.warning("log_dir_creation_failed | error={}", exc)
 
 
+# Loggers de terceros con volumen excesivo en DEBUG — silenciados al nivel WARNING.
+# ccxt loguea responses HTTP completos (1-3 MB por línea) que rompen Loki.
+_NOISY_LOGGERS: tuple[str, ...] = (
+    "ccxt",
+    "ccxt.async_support",
+    "ccxt.async_support.base.exchange",
+)
+
 def _install_stdlib_bridge() -> None:
-    """Instala InterceptHandler como único handler del stdlib."""
+    """Instala InterceptHandler como único handler del stdlib.
+
+    Loggers ruidosos (ccxt) se limitan a WARNING para evitar que sus
+    responses HTTP de varios MB saturen los archivos locales y Loki.
+    """
     std_logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+    for name in _NOISY_LOGGERS:
+        std_logging.getLogger(name).setLevel(std_logging.WARNING)
 
 
 def _stable(obj: Any) -> Any:

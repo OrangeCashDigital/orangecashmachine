@@ -39,7 +39,7 @@ scrape_configs:
         labels:
           job:     ocm_pipeline
           service: orangecashmachine
-          env:     "${OCM_ENV:-development}"
+          env:     "$OCM_ENV"
           __path__: /logs/*.log
 
     pipeline_stages:
