@@ -322,7 +322,7 @@ async def run_futures_pipeline(
         summary.succeeded, summary.failed, summary.skipped, summary.total_rows,
     )
 
-    log.info("── Pipeline metrics | exchange={} market={} ──────────────────", exchange_name, futures_market_type)
+    log.info("── Pipeline metrics | exchange=%s market=%s ──────────────────", exchange_name, futures_market_type)
     _log_pipeline_metrics(summary, futures_market_type, log)
     log.info(
         "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
