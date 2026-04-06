@@ -51,6 +51,7 @@ def _build_storage(
     exchange:    str,
     market_type: str,
     redis_client=None,   # no-op — Iceberg no usa Redis lock
+    dry_run:     bool = False,
 ) -> "OHLCVStorage":
     """
     Factory de storage OHLCV — IcebergStorage es el único backend.
@@ -60,7 +61,7 @@ def _build_storage(
     _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
         "storage_factory | IcebergStorage"
     )
-    return IcebergStorage(exchange=exchange, market_type=market_type)
+    return IcebergStorage(exchange=exchange, market_type=market_type, dry_run=dry_run)
 
 
 DEFAULT_MAX_CONCURRENCY: int = 6
@@ -127,6 +128,7 @@ class UnifiedPipeline:
         cursor_store:    Optional[CursorStore] = None,
         backfill_mode:   bool                  = True,
         market_type:     str                   = "spot",
+        dry_run:         bool                  = False,
     ) -> None:
         if not symbols:
             raise ValueError("symbols no puede estar vacio")
@@ -151,6 +153,7 @@ class UnifiedPipeline:
             exchange    = self._exchange_id,
             market_type = self.market_type,
             redis_client= getattr(cursor, '_client', None),
+            dry_run     = dry_run,
         )
         quality = QualityPipeline()
 

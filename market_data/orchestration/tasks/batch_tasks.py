@@ -201,6 +201,7 @@ async def run_historical_pipeline(
             exchange_client = client,
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = "spot",
+            dry_run         = config.safety.dry_run,
         )
         summary = await pipeline.run(mode="incremental")
 
@@ -302,6 +303,7 @@ async def run_futures_pipeline(
             exchange_client = client,
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = futures_market_type,
+            dry_run         = config.safety.dry_run,
         )
         pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
         summary = await pipeline.run(mode=pipeline_mode)
@@ -475,6 +477,7 @@ async def run_repair_pipeline(
             exchange_client = client,
             market_type     = market_type,
             backfill_mode   = hist_cfg.backfill_mode,
+            dry_run         = config.safety.dry_run,
         )
         summary = await pipeline.run(mode="repair")
 

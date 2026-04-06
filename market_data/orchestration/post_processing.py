@@ -49,7 +49,7 @@ class PostProcessingService:
         run_id: Optional[str] = None,
     ) -> None:
         self._config   = config
-        self._gold     = gold_storage or GoldStorage()
+        self._gold     = gold_storage or GoldStorage(dry_run=config.safety.dry_run)
         self._run_id   = run_id
 
     def execute(self) -> None:
