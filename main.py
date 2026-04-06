@@ -48,7 +48,6 @@ from market_data.safety.environment_validator import (
     EnvironmentMismatchError,
 )
 
-_APP_VERSION = "0.2.0"
 
 
 # ---------------------------------------------------------------------------

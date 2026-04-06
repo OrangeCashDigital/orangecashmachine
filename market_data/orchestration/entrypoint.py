@@ -16,15 +16,14 @@ No conoce detalles de storage ni de features.
 """
 
 import asyncio
-import signal
-import sys
-from pathlib import Path
-
 import hashlib
 import json
+import signal
+import sys
 import time as _time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from core.logging import bind_pipeline
 from core.config.lineage import get_git_hash
@@ -73,8 +72,8 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     log = _log.bind(mode="local", env=run_cfg.env)
 
     guard = ExecutionGuard(
-        max_errors    = getattr(getattr(config, "pipeline", None), "max_consecutive_errors", 10),
-        max_runtime_s = getattr(getattr(getattr(config, "pipeline", None), "timeouts", None), "historical_pipeline", 0) or 0,
+        max_errors    = config.pipeline.max_consecutive_errors,
+        max_runtime_s = config.pipeline.timeouts.historical_pipeline,
     )
     guard.start()
     guard_context.set_guard(guard)  # disponible para batch_flow sin pasar por Prefect
