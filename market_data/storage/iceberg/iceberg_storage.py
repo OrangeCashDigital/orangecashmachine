@@ -76,6 +76,8 @@ def _get_catalog() -> SqlCatalog:
         base      = data_lake_root().parent  # .../data_platform/
         cat_path  = base / "iceberg_catalog"
         ware_path = base / "iceberg_warehouse"
+        cat_path.mkdir(parents=True, exist_ok=True)
+        ware_path.mkdir(parents=True, exist_ok=True)
         _CATALOG  = SqlCatalog(
             "ocm",
             **{
@@ -224,7 +226,10 @@ class IcebergStorage:
             market_type = self._market_type or "unknown",
         )
 
-        self._table.append(pa.Table.from_pandas(prepared, preserve_index=False))
+        arrow_schema = self._table.schema().as_arrow()
+        self._table.append(
+            pa.Table.from_pandas(prepared, schema=arrow_schema, preserve_index=False)
+        )
 
         logger.debug(
             "IcebergStorage saved | {}/{} exchange={} rows={} duration={}ms",

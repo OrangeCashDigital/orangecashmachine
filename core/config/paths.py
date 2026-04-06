@@ -91,20 +91,28 @@ def gold_features_root() -> Path:
 
 def _expand_env(value: str) -> str:
     """
-    Resuelve variables de entorno con sintaxis bash ${VAR:-default}.
+    Resuelve variables de entorno con sintaxis bash y OmegaConf.
 
-    Ejemplos:
-        ${LOCAL_DATA_LAKE_PATH:-data_platform/local_data_lake}
-        → valor de LOCAL_DATA_LAKE_PATH, o 'data_platform/local_data_lake' si no está seteada
-
-        ${DATA_LAKE_PATH}
-        → valor de DATA_LAKE_PATH, o string vacío si no está seteada
+    Soporta:
+        ${VAR:-default}                     — bash
+        ${oc.env:VAR,default}               — OmegaConf / Hydra
+        ${oc.env:VAR}                       — OmegaConf sin default
     """
-    def _sub(m: re.Match) -> str:
-        var    = m.group(1)
+    # OmegaConf: ${oc.env:VAR,default} o ${oc.env:VAR}
+    def _sub_omegaconf(m: re.Match) -> str:
+        var     = m.group(1)
+        default = m.group(2) if m.group(2) is not None else ""
+        return os.environ.get(var, default)
+
+    value = re.sub(r'\$\{oc\.env:([^},]+)(?:,([^}]*))?\}', _sub_omegaconf, value)
+
+    # Bash: ${VAR:-default}
+    def _sub_bash(m: re.Match) -> str:
+        var     = m.group(1)
         default = m.group(2) or ""
         return os.environ.get(var, default)
-    return re.sub(r'\$\{([^}:]+)(?::-([^}]*))?\}', _sub, value)
+
+    return re.sub(r'\$\{([^}:]+)(?::-([^}]*))?\}', _sub_bash, value)
 
 
 def _read_yaml_lake_path() -> Optional[str]:
@@ -127,7 +135,7 @@ def _read_yaml_lake_path() -> Optional[str]:
         env = resolve_env()
 
         data: dict = {}
-        for fname in ("base.yaml", f"{env}.yaml", "settings.yaml"):
+        for fname in ("base.yaml", f"env/{env}.yaml", "settings.yaml"):
             fpath = config_dir / fname
             chunk = YamlLoader.load(fpath, required=False)
             if chunk:

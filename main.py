@@ -95,6 +95,11 @@ def run_application(
     env = run_cfg.env
     debug = run_cfg.debug
     validate_only = run_cfg.validate_only
+
+    # Bind antes del try — garantiza run_id en todos los logs incluso si
+    # configure_logging falla (fail-soft: el pipeline no debe bloquearse)
+    log = logger.bind(run_id=run_id, env=env)
+
     try:
         configure_logging(
             config.observability.logging,
@@ -103,9 +108,8 @@ def run_application(
             run_id=run_id,
         )
     except Exception as exc:
-        logger.warning("logging_configure_failed | error={}", exc)
+        log.warning("logging_configure_failed | error={}", exc)
 
-    log = logger.bind(run_id=run_id, env=env)
     log.info(
         "application_starting | env={} run_id={} debug={} validate_only={}",
         env, run_id, debug, validate_only,
