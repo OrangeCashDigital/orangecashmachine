@@ -286,11 +286,19 @@ class HistoricalConfig(StrictBaseModel):
     @field_validator("start_date")
     @classmethod
     def validate_start_date(cls, v: str) -> str:
-        """Valida que start_date sea ISO 8601 y no esté en el futuro."""
+        """Valida que start_date sea ISO 8601 o el literal 'auto'.
+
+        'auto' delega la resolución de fecha al pipeline en runtime
+        (e.g. último cursor conocido o fecha por defecto del exchange).
+        """
+        if v == "auto":
+            return v
         try:
             dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
         except ValueError:
-            raise ValueError(f"start_date must be ISO 8601: '{v}'")
+            raise ValueError(
+                f"start_date must be ISO 8601 or 'auto', got: '{v}'"
+            )
         if dt > datetime.now(timezone.utc):
             raise ValueError("start_date cannot be in the future.")
         return v
@@ -469,6 +477,23 @@ class SafetyConfig(StrictBaseModel):
     )
     prevent_full_reingestion: bool = True
     require_explicit_start: bool = False
+
+    # --- Paper trading / backfill guards ---
+    max_backfill_days: int = Field(
+        default=90,
+        ge=1,
+        description=(
+            "Máximo de días hacia atrás permitido en backfill. "
+            "Protege contra reingestas accidentales masivas."
+        ),
+    )
+    require_confirmation: bool = Field(
+        default=False,
+        description=(
+            "Si True, operaciones destructivas exigen confirmación explícita. "
+            "Útil en staging antes de habilitar live trading."
+        ),
+    )
 
 
 class FeaturesConfig(BaseModel):
