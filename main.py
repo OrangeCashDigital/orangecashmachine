@@ -33,8 +33,30 @@ import sys
 from typing import Callable
 
 import hydra
+from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 from loguru import logger
+
+from core.config.structured import PipelineConfig, ObservabilityConfig
+
+
+def _register_structured_configs() -> None:
+    """Registra Structured Configs en Hydra ConfigStore.
+
+    Debe llamarse antes de que Hydra arranque. Establece los schemas
+    que Hydra usa para validar tipos durante la composición del config.
+
+    Arquitectura:
+        Hydra Structured Config  → valida tipos (int, str, bool, Optional)
+        OmegaConf merge          → resuelve ${oc.env:...}
+        Pydantic                 → valida reglas de negocio (ge, le, regex…)
+    """
+    cs = ConfigStore.instance()
+    cs.store(group="pipeline", name="schema", node=PipelineConfig)
+    cs.store(group="observability", name="schema", node=ObservabilityConfig)
+
+
+_register_structured_configs()
 
 import core.config.loader as config_loader
 from core.config.hydra_loader import load_appconfig_from_hydra
