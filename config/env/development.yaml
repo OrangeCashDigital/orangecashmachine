@@ -51,3 +51,6 @@ integrations:
 safety:
   dry_run: true                    # dev: nunca opera real
   prevent_full_reingestion: false
+
+datasets:
+  ohlcv: true      # Bronze → Silver → Gold activo en dev (dry_run=True protege escritura)

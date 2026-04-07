@@ -265,8 +265,13 @@ class HistoricalConfig(StrictBaseModel):
     @model_validator(mode="before")
     @classmethod
     def resolve_auto_concurrency(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Resuelve 'auto' → número de CPUs disponibles (máx 16)."""
-        if values.get("max_concurrent_tasks") == "auto":
+        """Resuelve 'auto' o None → número de CPUs disponibles (máx 16).
+
+        None viene de ``max_concurrent_tasks: null`` en YAML (valor no definido).
+        'auto' es el alias explícito. Ambos delegan al runtime.
+        """
+        v = values.get("max_concurrent_tasks")
+        if v in ("auto", None):
             values["max_concurrent_tasks"] = max(1, min((os.cpu_count() or 4), 16))
         return values
 
