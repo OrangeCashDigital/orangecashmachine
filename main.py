@@ -61,6 +61,7 @@ _register_structured_configs()
 import core.config.loader as config_loader
 from core.config.hydra_loader import load_appconfig_from_hydra
 from core.config.runtime import RunConfig
+from core.config.runtime_context import RuntimeContext
 from core.config.schema import AppConfig
 from core.logging import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner
@@ -150,7 +151,14 @@ def run_application(
         log.info("validation_complete | status=ok")
         return 0
 
-    result: object = pipeline_runner(config=config, run_cfg=run_cfg, debug=debug)
+    runtime_context = RuntimeContext(
+        app_config=config,
+        run_config=run_cfg,
+        environment=run_cfg.env,
+        run_id=run_id,
+        started_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+    )
+    result: object = pipeline_runner(config=config, run_cfg=run_cfg, runtime_context=runtime_context, debug=debug)
 
     if not isinstance(result, int):
         log.error(

@@ -54,3 +54,12 @@ safety:
 
 datasets:
   ohlcv: true      # Bronze → Silver → Gold activo en dev (dry_run=True protege escritura)
+
+exchanges:
+  bybit:
+    enabled: true
+    markets:
+      spot:
+        enabled: true
+        symbols:
+          - BTC/USDT
