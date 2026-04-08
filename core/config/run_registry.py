@@ -209,11 +209,12 @@ def query_runs(
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(limit)
 
-        rows = conn.execute(
+        cur = conn.execute(
             f"SELECT * FROM runs {where} ORDER BY timestamp DESC LIMIT ?",
             params,
-        ).fetchall()
-        cols = [d[0] for d in conn.description]
+        )
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
         conn.close()
 
         result_list = []
