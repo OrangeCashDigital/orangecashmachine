@@ -52,6 +52,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from loguru import logger
+
 
 _DB_PATH    = Path("logs/run_registry.db")
 _JSONL_PATH = Path("logs/run_registry.jsonl")
@@ -129,8 +131,12 @@ def record_run(
         conn.commit()
         conn.close()
         _sqlite_ok = True
-    except Exception:
-        pass  # SafeOps — caer a JSONL
+    except Exception as exc:
+        logger.warning(
+            "run_registry.record_run | sqlite_failed run_id={} exc_type={} exc={}",
+            run_id, type(exc).__name__, exc,
+        )
+        # SafeOps — continúa hacia JSONL
 
     # ── JSONL (fallback + grep-ability) ─────────────────────────────────
     record: Dict[str, Any] = {
@@ -152,8 +158,12 @@ def record_run(
         _JSONL_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _JSONL_PATH.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
-    except Exception:
-        pass  # SafeOps — auditabilidad no rompe el pipeline
+    except Exception as exc:
+        logger.error(
+            "run_registry.record_run | jsonl_failed run_id={} exc_type={} exc={} audit_loss=True",
+            run_id, type(exc).__name__, exc,
+        )
+        # SafeOps — auditabilidad nunca aborta el pipeline
 
     return run_id
 
@@ -215,7 +225,11 @@ def query_runs(
             result_list.append(d)
         return result_list
 
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "run_registry.query_runs | failed exc_type={} exc={}",
+            type(exc).__name__, exc,
+        )
         return []
 
 

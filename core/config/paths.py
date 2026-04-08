@@ -167,11 +167,11 @@ def _read_yaml_lake_path() -> Optional[str]:
         return _expand_env(raw) if raw else None
 
     except Exception as exc:
-        try:
-            from loguru import logger
-            logger.debug("paths._read_yaml_lake_path fallback | reason={}", exc)
-        except Exception:
-            pass
+        from loguru import logger
+        logger.debug(
+            "paths._read_yaml_lake_path | fallback_to_structural exc_type={} exc={}",
+            type(exc).__name__, exc,
+        )
         return None
 
 
