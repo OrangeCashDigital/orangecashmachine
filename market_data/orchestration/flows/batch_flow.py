@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
 
 from prefect import flow, get_run_logger
+from prefect.runtime import flow_run as _prefect_flow_run
 
 from core.config.schema import AppConfig
 from core.config.runtime_context import RuntimeContext
@@ -349,6 +350,13 @@ async def market_data_flow(
     7. Cerrar adapters — lifecycle garantizado en finally
     """
     log = get_run_logger()
+    # Binding explícito OCM run_id ↔ Prefect flow run ID para trazabilidad cruzada.
+    # Permite correlacionar registros de run_registry, Prometheus y Prefect UI
+    # con un único identificador en cualquier sistema de observabilidad.
+    _prefect_id = str(_prefect_flow_run.id) if _prefect_flow_run.id else "no-prefect-context"
+    # Support invocation with a serialized context (dict) coming from Prefect
+    if isinstance(runtime_context, dict):
+        runtime_context = RuntimeContext.from_dict(runtime_context)  # type: ignore[assignment]
 
     # El flow recibe un RuntimeContext resuelto por el entrypoint/runner.
     if runtime_context is None:
@@ -358,7 +366,13 @@ async def market_data_flow(
     config = runtime_context.app_config
     env = runtime_context.environment
     config_dir = Path("config").resolve()
-    log.info("Flow starting | env=%s config_dir=%s", env, config_dir)
+    log.info(
+        "flow_starting | env=%s config_dir=%s ocm_run_id=%s prefect_run_id=%s",
+        env,
+        config_dir,
+        runtime_context.run_id,
+        _prefect_id,
+    )
     # ── Guard + Validator ─────────────────────────────────────────────────────
     # Si ya hay un guard activo (inyectado por entrypoint.py en local),
     # lo reutilizamos. Si no (Prefect directo en producción), lo creamos aquí.

@@ -134,8 +134,13 @@ def run(
     )
 
     timeout = config.pipeline.timeouts.historical_pipeline
+    # SSoT: usar el run_id del RuntimeContext si ya fue resuelto por
+    # entrypoint/main.py. Generar uno nuevo solo si run() se invoca
+    # en aislamiento (tests, CLI directo sin contexto previo).
     run_id = (
-        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
+        runtime_context.run_id
+        if runtime_context is not None
+        else f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
     )
     exit_code = 0
     _t0 = _time.monotonic()
@@ -207,16 +212,6 @@ def run(
         guard_context.set_guard(None)  # limpiar contexto de proceso
         _guard_summary = guard.summary()
         log.info("execution_guard_summary", **_guard_summary)
-        record_run(
-            run_id=run_id,
-            env=run_cfg.env,
-            git_hash=git_hash,
-            config_hash=config_hash,
-            exchanges=config.exchange_names,
-            result=_result,
-            duration_s=_duration,
-            extra={"guard": _guard_summary},
-        )
         if exit_code != 130:
             # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
             PostProcessingService(config, run_id=run_id).execute()
@@ -224,6 +219,28 @@ def run(
                 push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
         else:
             log.debug("metrics_push_skipped", reason="SIGINT")
+        # record_run al final del ciclo de vida: captura duración real incluyendo
+        # post-processing y push de métricas. Envuelto en try para que un fallo
+        # de persistencia no corte el log de cierre.
+        try:
+            record_run(
+                run_id=run_id,
+                env=run_cfg.env,
+                git_hash=git_hash,
+                config_hash=config_hash,
+                exchanges=config.exchange_names,
+                result=_result,
+                duration_s=_duration,
+                extra={"guard": _guard_summary},
+            )
+            log.info(
+                "run_recorded | run_id={} result={} duration_s={:.1f}",
+                run_id,
+                _result,
+                _duration,
+            )
+        except Exception as _rec_exc:
+            log.warning("record_run_failed | run_id={} error={}", run_id, _rec_exc)
         log.info("shutdown_complete", exit_code=exit_code)
 
     return exit_code
