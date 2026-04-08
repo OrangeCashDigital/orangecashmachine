@@ -13,9 +13,16 @@ importan desde aquí. Si una variable se renombra, se cambia aquí y solo aquí.
 Categorías
 ----------
 - **Proceso**      — controlan cómo arranca el proceso (bootstrap).
-- **Aplicación**   — overrides de configuración de app (``env_overrides.py``).
 - **Credenciales** — credenciales de exchanges (``credentials.py``).
 - **Storage**      — rutas del data lake (``paths.py``).
+
+Nota sobre overrides de aplicación
+-----------------------------------
+Las variables OCM_PIPELINE__*, OCM_OBSERVABILITY__*, OCM_ENVIRONMENT__*
+son resueltas automáticamente por ``OcmSettings`` (pydantic-settings) via
+``env_prefix="OCM_"`` y ``env_nested_delimiter="__"``.
+``OcmSettings`` en ``loader/env_overrides.py`` es el SSoT de esas variables
+— no se definen como constantes aquí para evitar duplicación y desincronía.
 """
 
 # =============================================================================
@@ -34,28 +41,11 @@ OCM_CONFIG_PATH: str = "OCM_CONFIG_PATH"
 OCM_CONFIG_DIR: str = "OCM_CONFIG_DIR"
 """Alias legacy de ``OCM_CONFIG_PATH``. Preferir ``OCM_CONFIG_PATH``."""
 
-PUSHGATEWAY_URL: str = "PUSHGATEWAY_URL"
-"""``"host:port"`` del Prometheus Pushgateway (default: ``"localhost:9091"``)."""
-
-# =============================================================================
-# Proceso — flags de comportamiento del proceso (leídas por main.py / RunConfig)
-# =============================================================================
-
 OCM_VALIDATE_ONLY: str = "OCM_VALIDATE_ONLY"
 """``"1"`` | ``"true"`` — valida config y sale sin ejecutar pipeline."""
 
-# =============================================================================
-# Aplicación — leídas por env_overrides.py
-# =============================================================================
-
-OCM_BACKFILL_MODE: str = "OCM_BACKFILL_MODE"
-OCM_FETCH_ALL_HISTORY: str = "OCM_FETCH_ALL_HISTORY"
-OCM_START_DATE: str = "OCM_START_DATE"
-OCM_MAX_CONCURRENT: str = "OCM_MAX_CONCURRENT"
-OCM_LOG_LEVEL: str = "OCM_LOG_LEVEL"
-OCM_SNAPSHOT_INTERVAL: str = "OCM_SNAPSHOT_INTERVAL"
-OCM_METRICS_ENABLED: str = "OCM_METRICS_ENABLED"
-OCM_METRICS_PORT: str = "OCM_METRICS_PORT"
+PUSHGATEWAY_URL: str = "PUSHGATEWAY_URL"
+"""``"host:port"`` del Prometheus Pushgateway (default: ``"localhost:9091"``)."""
 
 # =============================================================================
 # Credenciales — leídas por credentials.py
@@ -92,9 +82,9 @@ TRUTHY_VALUES: frozenset[str] = frozenset({"1", "true", "yes"})
 
 _DEBUG_DEFAULTS: dict[str, bool] = {
     "development": True,
-    "test": True,
-    "staging": False,
-    "production": False,
+    "test":        True,
+    "staging":     False,
+    "production":  False,
 }
 
 

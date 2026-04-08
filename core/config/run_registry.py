@@ -8,7 +8,7 @@ Persistencia de metadata de ejecución (auditabilidad).
 
 Storage
 -------
-Primario : SQLite  — logs/run_registry.db  (consultable, indexado)
+Primario : SQLite  — logs/run_registry.db   (consultable, indexado)
 Fallback : JSONL   — logs/run_registry.jsonl (grep-able, append-only)
 
 Si SQLite falla (permisos, disco lleno), escribe en JSONL y sigue.
@@ -53,18 +53,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
-_DB_PATH      = Path("logs/run_registry.db")
-_JSONL_PATH   = Path("logs/run_registry.jsonl")
+_DB_PATH    = Path("logs/run_registry.db")
+_JSONL_PATH = Path("logs/run_registry.jsonl")
 
 _DDL = """
-CREATE TABLE IF NOT EXISTS run_metrics (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id      TEXT NOT NULL,
-    metric_key  TEXT NOT NULL,
-    metric_val  REAL,
-    recorded_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-CREATE INDEX IF NOT EXISTS idx_run_metrics_run_id ON run_metrics(run_id);
 CREATE TABLE IF NOT EXISTS runs (
     run_id       TEXT PRIMARY KEY,
     timestamp    TEXT NOT NULL,
@@ -227,41 +219,4 @@ def query_runs(
         return []
 
 
-def record_run_metric(
-    run_id: str,
-    metrics: Dict[str, float],
-) -> None:
-    """
-    Persiste métricas numéricas de un run (latencia, filas, errores).
-
-    Uso
-    ---
-    record_run_metric(run_id, {"duration_ms": 1234, "rows_written": 5000, "errors": 0})
-    """
-    try:
-        conn = _ensure_db()
-        conn.executemany(
-            "INSERT INTO run_metrics (run_id, metric_key, metric_val) VALUES (?, ?, ?)",
-            [(run_id, k, float(v)) for k, v in metrics.items()],
-        )
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass  # SafeOps — nunca interrumpe el pipeline
-
-
-def query_run_metrics(run_id: str) -> List[Dict]:
-    """Devuelve todas las métricas registradas para un run_id."""
-    try:
-        conn = _ensure_db()
-        rows = conn.execute(
-            "SELECT metric_key, metric_val, recorded_at FROM run_metrics WHERE run_id = ? ORDER BY id",
-            (run_id,),
-        ).fetchall()
-        conn.close()
-        return [{"key": r[0], "val": r[1], "recorded_at": r[2]} for r in rows]
-    except Exception:
-        return []
-
-
-__all__ = ["record_run", "query_runs", "record_run_metric", "query_run_metrics"]
+__all__ = ["record_run", "query_runs"]

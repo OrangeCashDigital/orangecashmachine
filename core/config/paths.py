@@ -10,13 +10,13 @@ Orden de resolución para data_lake_root()
 ------------------------------------------
 1. OCM_DATA_LAKE_PATH (env var) — override absoluto, máxima prioridad
 2. storage.data_lake.path del YAML mergeado — configurable por entorno
-   • base.yaml   → data_platform/data_lake
+   • base.yaml     → data_platform/data_lake
    • settings.yaml → data_platform/local_data_lake  (en development)
 3. repo_root() / "data_platform" / "data_lake" — fallback seguro
 
 Paths derivados
 ---------------
-  bronze_ohlcv_root() → <lake_root>/bronze/ohlcv/
+  bronze_ohlcv_root()  → <lake_root>/bronze/ohlcv/
   gold_features_root() → <lake_root>/gold/features/ohlcv/
 
 Diseño
@@ -33,34 +33,38 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from core.config.env_vars import OCM_DATA_LAKE_PATH, OCM_GOLD_PATH
+from core.config.env_vars import (
+    OCM_CONFIG_DIR,
+    OCM_CONFIG_PATH,
+    OCM_DATA_LAKE_PATH,
+    OCM_GOLD_PATH,
+)
 from core.utils import repo_root
 
 
+# ==========================================================
+# API pública
+# ==========================================================
+
 def data_lake_root() -> Path:
-    """
-    Raíz del Data Lake. Configurable por entorno, sin hardcode.
+    """Raíz del Data Lake. Configurable por entorno, sin hardcode.
 
     Resolución (en orden de prioridad):
     1. OCM_DATA_LAKE_PATH — override absoluto via env var
     2. storage.data_lake.path del YAML mergeado
     3. repo_root() / data_platform / data_lake — fallback seguro
     """
-    # Prioridad 1: override explícito via env var
     env_override = os.getenv(OCM_DATA_LAKE_PATH)
     if env_override:
         return Path(env_override).resolve()
 
-    # Prioridad 2: config YAML mergeada
     yaml_path = _read_yaml_lake_path()
     if yaml_path:
         p = Path(yaml_path)
-        # Path relativo → relativo al repo root
         if not p.is_absolute():
             p = repo_root() / p
         return p.resolve()
 
-    # Prioridad 3: fallback estructural
     return repo_root() / "data_platform" / "data_lake"
 
 
@@ -69,11 +73,8 @@ def bronze_ohlcv_root() -> Path:
     return data_lake_root() / "bronze" / "ohlcv"
 
 
-
-
 def gold_features_root() -> Path:
-    """
-    Path absoluto a gold/features/ohlcv/.
+    """Path absoluto a gold/features/ohlcv/.
 
     Resolución:
     1. OCM_GOLD_PATH — override absoluto
@@ -90,15 +91,13 @@ def gold_features_root() -> Path:
 # ==========================================================
 
 def _expand_env(value: str) -> str:
-    """
-    Resuelve variables de entorno con sintaxis bash y OmegaConf.
+    """Resuelve variables de entorno con sintaxis bash y OmegaConf.
 
     Soporta:
-        ${VAR:-default}                     — bash
-        ${oc.env:VAR,default}               — OmegaConf / Hydra
-        ${oc.env:VAR}                       — OmegaConf sin default
+        ${VAR:-default}           — bash
+        ${oc.env:VAR,default}     — OmegaConf / Hydra
+        ${oc.env:VAR}             — OmegaConf sin default
     """
-    # OmegaConf: ${oc.env:VAR,default} o ${oc.env:VAR}
     def _sub_omegaconf(m: re.Match) -> str:
         var     = m.group(1)
         default = m.group(2) if m.group(2) is not None else ""
@@ -106,7 +105,6 @@ def _expand_env(value: str) -> str:
 
     value = re.sub(r'\$\{oc\.env:([^},]+)(?:,([^}]*))?\}', _sub_omegaconf, value)
 
-    # Bash: ${VAR:-default}
     def _sub_bash(m: re.Match) -> str:
         var     = m.group(1)
         default = m.group(2) or ""
@@ -115,14 +113,34 @@ def _expand_env(value: str) -> str:
     return re.sub(r'\$\{([^}:]+)(?::-([^}]*))?\}', _sub_bash, value)
 
 
-def _read_yaml_lake_path() -> Optional[str]:
+def _find_config_dir() -> Optional[Path]:
+    """Localiza el directorio de config YAML.
+
+    Busca en este orden:
+    1. OCM_CONFIG_PATH / OCM_CONFIG_DIR (env vars)
+    2. repo_root() / config
+
+    NOTA: No delega a RunConfig.from_env() intencionalmente.
+    paths.py se importa antes de que RunConfig exista (bootstrap, import
+    time en scripts standalone). La duplicación está justificada por el
+    orden de inicialización — no "limpiar" sin entender este invariante.
     """
-    Lee storage.data_lake.path del YAML mergeado (base → env → settings).
+    raw = os.getenv(OCM_CONFIG_PATH) or os.getenv(OCM_CONFIG_DIR)
+    if raw:
+        p = Path(raw)
+        return p if p.is_dir() else None
+
+    candidate = repo_root() / "config"
+    return candidate if candidate.is_dir() else None
+
+
+def _read_yaml_lake_path() -> Optional[str]:
+    """Lee storage.data_lake.path del YAML mergeado (base → env → settings).
 
     Import lazy para evitar ciclo: paths.py → yaml_loader → paths.py.
-    Falla silenciosamente ante errores de IO/YAML — si el YAML no es
-    accesible se usa el fallback estructural. Loguea en DEBUG para que
-    el silencio no oculte errores de configuración durante desarrollo.
+    Falla silenciosamente — si el YAML no es accesible se usa el fallback
+    estructural. Loguea en DEBUG para que el silencio no oculte errores
+    de configuración durante desarrollo.
     """
     try:
         from core.config.loader.yaml_loader import YamlLoader
@@ -147,6 +165,7 @@ def _read_yaml_lake_path() -> Optional[str]:
                 .get("path")
         )
         return _expand_env(raw) if raw else None
+
     except Exception as exc:
         try:
             from loguru import logger
@@ -154,25 +173,6 @@ def _read_yaml_lake_path() -> Optional[str]:
         except Exception:
             pass
         return None
-
-
-def _find_config_dir() -> Optional[Path]:
-    """
-    Localiza el directorio de config YAML.
-
-    Busca en este orden:
-    1. OCM_CONFIG_PATH / OCM_CONFIG_DIR (env vars)
-    2. repo_root() / config
-    """
-    from core.config.env_vars import OCM_CONFIG_PATH, OCM_CONFIG_DIR
-
-    raw = os.getenv(OCM_CONFIG_PATH) or os.getenv(OCM_CONFIG_DIR)
-    if raw:
-        p = Path(raw)
-        return p if p.is_dir() else None
-
-    candidate = repo_root() / "config"
-    return candidate if candidate.is_dir() else None
 
 
 __all__ = [
