@@ -36,22 +36,60 @@ from market_data.safety.execution_guard import ExecutionGuard, ExecutionStoppedE
 from market_data.safety import guard_context
 from market_data.orchestration.post_processing import PostProcessingService
 from infra.observability.server import push_metrics
+from core.config.runtime_context import RuntimeContext
 
 _log = bind_pipeline("entrypoint")
 
 
-async def _run_flow_local(config: AppConfig, run_cfg: RunConfig, guard: ExecutionGuard) -> None:
+def build_context():
+    """Central context builder.
+
+    Reads configuration via the Hydra standalone path and builds the runtime
+    context by resolving AppConfig and RunConfig in a single place.
+    This function unifies the two startup paths into one canonical entry point
+    for local execution, without touching the flow implementation yet.
+    """
+    run_cfg = RunConfig.from_env()
+    config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
+    run_id = (
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    )
+    started_at = datetime.now(timezone.utc)
+    runtime_context = RuntimeContext(
+        app_config=config,
+        run_config=run_cfg,
+        environment=run_cfg.env,
+        run_id=run_id,
+        started_at=started_at,
+    )
+    return config, run_cfg, runtime_context
+
+
+async def _run_flow_local(
+    config: AppConfig,
+    run_cfg: RunConfig,
+    runtime_context: RuntimeContext | None,
+    guard: ExecutionGuard,
+) -> None:
     config_dir = str(Path("config").resolve())
     log = _log.bind(mode="local", env=run_cfg.env, config_dir=config_dir)
 
     guard.check()  # verifica kill switch antes de lanzar el flow
     log.info("flow_launching", flow="market_data_flow")
-    await market_data_flow(env=run_cfg.env, config_dir=config_dir)
+    # Si no hay runtime_context, construirlo a partir del entrypoint
+    if runtime_context is None:
+        _, _, runtime_context = build_context()
+    await market_data_flow(runtime_context)
     log.info("flow_completed", flow="market_data_flow")
     # PostProcessingService se ejecuta en el finally de run() — fuera del timeout
 
 
-def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
+def run(
+    config: AppConfig,
+    run_cfg: RunConfig,
+    runtime_context: RuntimeContext | None = None,
+    debug: bool = False,
+) -> int:
     """
     Ejecuta el pipeline en modo local.
 
@@ -72,14 +110,18 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
     log = _log.bind(mode="local", env=run_cfg.env)
 
     guard = ExecutionGuard(
-        max_errors    = config.pipeline.max_consecutive_errors,
-        max_runtime_s = config.pipeline.timeouts.historical_pipeline,
+        max_errors=config.pipeline.max_consecutive_errors,
+        max_runtime_s=config.pipeline.timeouts.historical_pipeline,
     )
     guard.start()
     guard_context.set_guard(guard)  # disponible para batch_flow sin pasar por Prefect
-    log.debug("execution_guard_started", max_errors=guard.max_errors, max_runtime_s=guard.max_runtime_s)
+    log.debug(
+        "execution_guard_started",
+        max_errors=guard.max_errors,
+        max_runtime_s=guard.max_runtime_s,
+    )
 
-    git_hash    = get_git_hash()
+    git_hash = get_git_hash()
     config_hash = hashlib.sha256(
         json.dumps(config.model_dump(mode="json"), sort_keys=True, default=str).encode()
     ).hexdigest()[:12]
@@ -91,17 +133,19 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
         config_hash=config_hash,
     )
 
-    timeout   = config.pipeline.timeouts.historical_pipeline
-    run_id    = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    timeout = config.pipeline.timeouts.historical_pipeline
+    run_id = (
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    )
     exit_code = 0
-    _t0       = _time.monotonic()
+    _t0 = _time.monotonic()
     # ── Event loop explícito para shutdown graceful vía SIGINT/SIGTERM ──────
     # asyncio.run(wait_for(...)) no permite cancelar el task raíz antes de
     # cerrar el loop: las tareas hijas en vuelo terminan como Exception en
     # lugar de CancelledError, produciendo logs "Strategy fallida" espurios.
     # Con loop explícito instalamos signal handlers que cancelan el task raíz
     # limpiamente y esperan a que todas las coroutines terminen su finally.
-    loop      = asyncio.new_event_loop()
+    loop = asyncio.new_event_loop()
     main_task: "asyncio.Task[None] | None" = None
 
     def _request_shutdown(sig: int) -> None:
@@ -120,7 +164,7 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
 
             main_task = loop.create_task(
                 asyncio.wait_for(
-                    _run_flow_local(config, run_cfg, guard=guard),
+                    _run_flow_local(config, run_cfg, runtime_context, guard=guard),
                     timeout=timeout,
                 )
             )
@@ -149,12 +193,16 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
                 log.debug("shutdown_cancelling_tasks", count=len(_pending))
                 for t in _pending:
                     t.cancel()
-                loop.run_until_complete(asyncio.gather(*_pending, return_exceptions=True))
+                loop.run_until_complete(
+                    asyncio.gather(*_pending, return_exceptions=True)
+                )
             loop.close()
             asyncio.set_event_loop(None)
     finally:
         _duration = _time.monotonic() - _t0
-        _result   = {0: "success", 1: "error", 130: "interrupted"}.get(exit_code, "unknown")
+        _result = {0: "success", 1: "error", 130: "interrupted"}.get(
+            exit_code, "unknown"
+        )
         guard.stop()
         guard_context.set_guard(None)  # limpiar contexto de proceso
         _guard_summary = guard.summary()
@@ -183,8 +231,18 @@ def run(config: AppConfig, run_cfg: RunConfig, debug: bool = False) -> int:
 
 if __name__ == "__main__":
     from core.logging import bootstrap_logging, configure_logging
-    _run_cfg = RunConfig.from_env()
-    _config  = load_appconfig_standalone(env=_run_cfg.env, config_dir=_run_cfg.config_path)
-    bootstrap_logging(debug=_run_cfg.debug, env=_run_cfg.env)
-    configure_logging(cfg=_config.observability.logging, env=_run_cfg.env, debug=_run_cfg.debug)
-    sys.exit(run(config=_config, run_cfg=_run_cfg, debug=_run_cfg.debug))
+
+    # Build centralized context using canonical resolver
+    config, run_cfg, runtime_context = build_context()
+    bootstrap_logging(debug=run_cfg.debug, env=run_cfg.env)
+    configure_logging(
+        cfg=config.observability.logging, env=run_cfg.env, debug=run_cfg.debug
+    )
+    sys.exit(
+        run(
+            config=config,
+            run_cfg=run_cfg,
+            runtime_context=runtime_context,
+            debug=run_cfg.debug,
+        )
+    )

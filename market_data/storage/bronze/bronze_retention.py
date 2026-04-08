@@ -1,232 +1,192 @@
 """
-bronze_retention.py
-===================
+market_data/storage/bronze/bronze_retention.py
+===============================================
 
-Política de retención para la capa Bronze.
-
-Principio
----------
-Bronze es la "caja negra" de ingestión — append-only e inmutable.
-Pero sin retención, crece indefinidamente: cada run genera ~1100 archivos.
-En producción con runs cada hora = ~26,000 archivos/día solo en Bronze.
+Política de retención para la capa Bronze (Iceberg).
 
 Estrategia
 ----------
-Eliminar parts Bronze con written_at > RETENTION_DAYS días.
-Cualquier dato de más de RETENTION_DAYS días ya fue:
-  1. Procesado por Silver (merge + dedup)
-  2. Versionado en Silver _versions/
-  3. Disponible para reproducibilidad via Silver
+Bronze es append-only — crece con cada run. La retención elimina
+snapshots Iceberg anteriores al cutoff mediante expire_snapshots(),
+liberando los archivos Parquet físicos que ya no son referenciados.
+
+Cualquier dato expirado ya fue:
+  1. Procesado por Silver (append + dedup en silver.ohlcv)
+  2. Versionado en Silver via snapshots Iceberg
+  3. Accesible para reproducibilidad via IcebergStorage
 
 SafeOps
 -------
-• Nunca toca Silver — solo Bronze
-• Solo elimina parts con escrita > RETENTION_DAYS días (default: 7)
-• Siempre preserva al menos MIN_KEEP_DAYS días (default: 2)
-• Dry-run mode por defecto — nada se elimina sin --execute
-• Loguea todo antes de eliminar
+• Nunca toca Silver ni Gold — solo bronze.ohlcv.
+• Solo expira snapshots con timestamp_ms anterior al cutoff.
+• Preserva siempre al menos MIN_KEEP_DAYS días.
+• dry_run=True (default) — reporta sin modificar nada.
+• Loguea snapshot_ids candidatos antes de expirar.
 
 Uso
 ---
-    # Ver qué se eliminaría (sin borrar nada)
-    python -m market_data.storage.bronze_retention
+    # Ver qué se expiraría (sin modificar nada)
+    python -m market_data.storage.bronze.bronze_retention
 
-    # Ejecutar limpieza real
-    python -m market_data.storage.bronze_retention --execute
+    # Ejecutar expiración real
+    python -m market_data.storage.bronze.bronze_retention --execute
 
     # Retención agresiva (3 días)
-    python -m market_data.storage.bronze_retention --days 3 --execute
+    python -m market_data.storage.bronze.bronze_retention --days 3 --execute
 """
-
 from __future__ import annotations
 
 import argparse
-import json
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from typing import NamedTuple
 
 from loguru import logger
 
-from core.config.paths import bronze_ohlcv_root
+from market_data.storage.iceberg.catalog import get_catalog, ensure_bronze_table
 
 
-# ==========================================================
-# Constants
-# ==========================================================
+# =============================================================================
+# Constantes
+# =============================================================================
 
-RETENTION_DAYS_DEFAULT = 7
-MIN_KEEP_DAYS          = 2   # nunca borrar partes de los últimos N días
-
-# _BRONZE_SUBPATH eliminado — path resuelto via core.config.paths
+RETENTION_DAYS_DEFAULT: int = 7
+MIN_KEEP_DAYS:          int = 2   # nunca expirar snapshots de los últimos N días
 
 
-# ==========================================================
-# Data classes
-# ==========================================================
+# =============================================================================
+# Data class resultado
+# =============================================================================
 
 class RetentionResult(NamedTuple):
-    scanned:  int
-    eligible: int
-    deleted:  int
+    scanned:  int   # snapshots inspeccionados
+    eligible: int   # snapshots anteriores al cutoff
+    expired:  int   # snapshots efectivamente expirados (0 en dry_run)
     errors:   int
-    freed_mb: float
 
 
-# ==========================================================
+# =============================================================================
 # Core
-# ==========================================================
+# =============================================================================
 
 def run_retention(
-    base_path: Path | None = None,
-    retention_days: int = RETENTION_DAYS_DEFAULT,
-    dry_run: bool = True,
+    retention_days: int  = RETENTION_DAYS_DEFAULT,
+    dry_run:        bool = True,
 ) -> RetentionResult:
     """
-    Escanea Bronze y elimina parts con written_at > retention_days.
+    Expira snapshots Bronze con timestamp_ms anterior al cutoff.
 
     Parameters
     ----------
-    base_path : Path, optional
-        Ruta al directorio bronze/ohlcv. Por defecto auto-detecta.
     retention_days : int
-        Parts con más de esta edad (días) son elegibles.
+        Snapshots con más de esta edad (días) son elegibles.
     dry_run : bool
-        Si True, solo reporta sin eliminar. Default: True.
+        Si True, solo reporta sin expirar. Default: True.
+
+    Returns
+    -------
+    RetentionResult
     """
-    bronze_path = _resolve_bronze_path(base_path)
+    ensure_bronze_table()
+    table = get_catalog().load_table("bronze.ohlcv")
+
     cutoff      = datetime.now(timezone.utc) - timedelta(days=retention_days)
     safe_cutoff = datetime.now(timezone.utc) - timedelta(days=MIN_KEEP_DAYS)
-
-    # Usar el más conservador
-    effective_cutoff = min(cutoff, safe_cutoff)
+    effective   = min(cutoff, safe_cutoff)
+    cutoff_ms   = int(effective.timestamp() * 1000)
 
     logger.info(
-        "Bronze retention | path={} retention_days={} cutoff={} dry_run={}",
-        bronze_path, retention_days,
-        effective_cutoff.strftime("%Y-%m-%d %H:%M UTC"), dry_run,
+        "Bronze retention | retention_days={} cutoff={} dry_run={}",
+        retention_days,
+        effective.strftime("%Y-%m-%d %H:%M UTC"),
+        dry_run,
     )
 
-    meta_files = list(bronze_path.rglob("*.meta.json"))
-    logger.info("Scanned {} meta files", len(meta_files))
+    try:
+        history = list(table.history())
+    except Exception as exc:
+        logger.error("Bronze retention: cannot read snapshot history | {}", exc)
+        return RetentionResult(scanned=0, eligible=0, expired=0, errors=1)
 
-    scanned  = len(meta_files)
-    eligible = 0
-    deleted  = 0
+    scanned  = len(history)
+    eligible = [s for s in history if s.timestamp_ms < cutoff_ms]
     errors   = 0
-    freed_b  = 0
-
-    for meta_path in meta_files:
-        try:
-            meta = json.loads(meta_path.read_text())
-            written_at_str = meta.get("written_at", "")
-            if not written_at_str:
-                continue
-
-            written_at = datetime.fromisoformat(written_at_str)
-            if written_at > effective_cutoff:
-                continue  # reciente — conservar
-
-            eligible += 1
-            part_path = meta_path.with_suffix(".parquet")
-            part_size = part_path.stat().st_size if part_path.exists() else 0
-
-            if dry_run:
-                logger.debug(
-                    "DRY-RUN would delete | {} (written {})",
-                    part_path.name, written_at.strftime("%Y-%m-%d %H:%M")
-                )
-                freed_b += part_size
-            else:
-                if part_path.exists():
-                    part_path.unlink()
-                    freed_b += part_size
-                meta_path.unlink()
-                deleted += 1
-                logger.debug("Deleted | {}", part_path.name)
-
-        except Exception as exc:
-            errors += 1
-            logger.warning("Retention error | {} | {}", meta_path, exc)
-
-    # Limpiar directorios vacíos
-    if not dry_run:
-        _cleanup_empty_dirs(bronze_path)
-
-    freed_mb = freed_b / (1024 * 1024)
 
     logger.info(
-        "Bronze retention complete | scanned={} eligible={} deleted={} errors={} freed={:.1f}MB dry_run={}",
-        scanned, eligible, deleted, errors, freed_mb, dry_run,
+        "Bronze retention | scanned={} snapshots eligible={}",
+        scanned, len(eligible),
     )
+
+    for snap in eligible:
+        snap_dt = datetime.fromtimestamp(snap.timestamp_ms / 1000, tz=timezone.utc)
+        logger.debug(
+            "Bronze retention candidate | snapshot_id={} ts={}",
+            snap.snapshot_id,
+            snap_dt.strftime("%Y-%m-%d %H:%M UTC"),
+        )
+
+    if dry_run:
+        logger.info(
+            "Bronze retention DRY-RUN complete | would expire={} snapshots",
+            len(eligible),
+        )
+        return RetentionResult(
+            scanned  = scanned,
+            eligible = len(eligible),
+            expired  = 0,
+            errors   = 0,
+        )
+
+    # Expiración real vía Iceberg expire_snapshots
+    expired = 0
+    try:
+        (
+            table.expire_snapshots()
+            .expire_older_than(effective)
+            .commit()
+        )
+        expired = len(eligible)
+        logger.info(
+            "Bronze retention complete | expired={} snapshots",
+            expired,
+        )
+    except Exception as exc:
+        errors += 1
+        logger.error("Bronze retention: expire_snapshots failed | {}", exc)
 
     return RetentionResult(
-        scanned=scanned,
-        eligible=eligible,
-        deleted=deleted,
-        errors=errors,
-        freed_mb=freed_mb,
+        scanned  = scanned,
+        eligible = len(eligible),
+        expired  = expired,
+        errors   = errors,
     )
 
 
-# ==========================================================
-# Helpers
-# ==========================================================
-
-def _resolve_bronze_path(base_path: Path | None) -> Path:
-    """
-    Resuelve el path base de Bronze Retention.
-
-    Orden de resolución:
-    1. base_path explícito (argumento del constructor)
-    2. core.config.paths.bronze_ohlcv_root() — lee storage.data_lake.path del YAML
-       o OCM_DATA_LAKE_PATH si está seteada
-    """
-    if base_path:
-        return Path(base_path).resolve()
-    return bronze_ohlcv_root()
-
-
-def _cleanup_empty_dirs(root: Path) -> int:
-    """Elimina directorios vacíos de hojas hacia arriba. Retorna count."""
-    removed = 0
-    # Iterar en orden inverso (hojas primero)
-    for d in sorted(root.rglob("*"), reverse=True):
-        if d.is_dir() and not any(d.iterdir()):
-            try:
-                d.rmdir()
-                removed += 1
-            except OSError:
-                pass
-    return removed
-
-
-# ==========================================================
+# =============================================================================
 # CLI
-# ==========================================================
+# =============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Bronze retention policy")
+    parser = argparse.ArgumentParser(description="Bronze Iceberg retention policy")
     parser.add_argument(
         "--days", type=int, default=RETENTION_DAYS_DEFAULT,
-        help=f"Retener N días (default: {RETENTION_DAYS_DEFAULT})"
+        help=f"Expirar snapshots con más de N días (default: {RETENTION_DAYS_DEFAULT})",
     )
     parser.add_argument(
         "--execute", action="store_true",
-        help="Ejecutar borrado real (sin este flag es dry-run)"
+        help="Ejecutar expiración real (sin este flag es dry-run)",
     )
     args = parser.parse_args()
 
     result = run_retention(
-        retention_days=args.days,
-        dry_run=not args.execute,
+        retention_days = args.days,
+        dry_run        = not args.execute,
     )
 
-    print(f"\n{'DRY-RUN' if not args.execute else 'EXECUTED'} SUMMARY")
-    print(f"  Scanned:  {result.scanned:,} meta files")
-    print(f"  Eligible: {result.eligible:,} parts to delete")
-    print(f"  Deleted:  {result.deleted:,} parts")
-    print(f"  Errors:   {result.errors}")
-    print(f"  Freed:    {result.freed_mb:.1f} MB")
+    label = "DRY-RUN" if not args.execute else "EXECUTED"
+    print(f"\n{label} SUMMARY")
+    print(f"  Snapshots scanned:  {result.scanned:,}")
+    print(f"  Eligible to expire: {result.eligible:,}")
+    print(f"  Expired:            {result.expired:,}")
+    print(f"  Errors:             {result.errors}")
     if not args.execute and result.eligible > 0:
-        print(f"\n  → Run with --execute to delete {result.eligible:,} files")
+        print(f"\n  → Run with --execute to expire {result.eligible:,} snapshots")

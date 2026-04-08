@@ -9,7 +9,7 @@ environment:
 
 pipeline:
   historical:
-    max_concurrent_tasks: auto
+    max_concurrent_tasks: null   # resuelto en código — máximo disponible
     backfill_mode: false
 
   realtime:
@@ -34,9 +34,7 @@ storage:
 
 integrations:
   redis:
-    enabled: ${oc.env:REDIS_ENABLED,true}
     host: ${oc.env:REDIS_HOST,redis}
-    port: ${oc.env:REDIS_PORT,6379}
     db: ${oc.env:REDIS_DB,0}
 
   kafka:
@@ -46,11 +44,10 @@ integrations:
   postgres:
     enabled: ${oc.env:POSTGRES_ENABLED,false}
     host: ${oc.env:POSTGRES_HOST,postgres}
-    port: ${oc.env:POSTGRES_PORT,5432}
-    user: ${oc.env:POSTGRES_USER,""}
-    password: ${oc.env:POSTGRES_PASSWORD,""}
 
 safety:
   dry_run: false                   # PRODUCCIÓN: opera real
   prevent_full_reingestion: true
   require_explicit_start: true
+  max_backfill_days: 30            # más restrictivo en prod
+  require_confirmation: true       # bloquea sin flag explícito

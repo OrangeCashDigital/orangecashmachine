@@ -36,8 +36,12 @@ from typing import Dict, List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
 from prefect import flow, get_run_logger
 
 from core.config.schema import AppConfig
-from core.config.hydra_loader import load_appconfig_standalone
-from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe, validate_exchange_connection
+from core.config.runtime_context import RuntimeContext
+from market_data.orchestration.tasks.exchange_tasks import (
+    ExchangeProbe,
+    validate_exchange_connection,
+)
+
 if TYPE_CHECKING:
     from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
 from market_data.orchestration.tasks.batch_tasks import (
@@ -52,11 +56,15 @@ from market_data.safety import guard_context
 from market_data.safety.execution_guard import ExecutionGuard
 
 from core.config.env_vars import PUSHGATEWAY_URL as _PUSHGATEWAY_URL
-_PUSHGATEWAY = _PUSHGATEWAY_URL  # SSoT: env_vars.py; runtime lo resuelve desde RunConfig
+
+_PUSHGATEWAY = (
+    _PUSHGATEWAY_URL  # SSoT: env_vars.py; runtime lo resuelve desde RunConfig
+)
 
 # ==================================================================
 # Helpers de dominio (desacoplados y testeables)
 # ==================================================================
+
 
 def _filter_active_datasets(
     requested: Set[str],
@@ -86,7 +94,8 @@ def _launch_spot_pipelines(
     if not _supports_market_type(probe, "spot"):
         log.warning(
             "Spot datasets requested but no spot market | exchange=%s datasets=%s",
-            probe.exchange, sorted(spot_requested),
+            probe.exchange,
+            sorted(spot_requested),
         )
         return []
 
@@ -102,17 +111,17 @@ def _launch_spot_pipelines(
 
 
 def _launch_futures_pipelines(
-    config:  AppConfig,
+    config: AppConfig,
     exc_cfg,
-    probe:   ExchangeProbe,
-    active:  Set[str],
+    probe: ExchangeProbe,
+    active: Set[str],
     log,
 ) -> List[asyncio.Future]:
     if "ohlcv" not in active:
         return []
     if not exc_cfg.has_futures:
         return []
-    has_swap   = _supports_market_type(probe, "swap")
+    has_swap = _supports_market_type(probe, "swap")
     has_future = _supports_market_type(probe, "future")
     if not has_swap and not has_future:
         log.warning(
@@ -137,16 +146,23 @@ def _launch_derivative_pipelines(
     log,
 ) -> List[asyncio.Future]:
     derivative_datasets = {
-        "funding_rate", "open_interest", "liquidations", "mark_price", "index_price"
+        "funding_rate",
+        "open_interest",
+        "liquidations",
+        "mark_price",
+        "index_price",
     }
     deriv_requested = active & derivative_datasets
     if not deriv_requested:
         return []
 
-    if not _supports_market_type(probe, "swap") and not _supports_market_type(probe, "future"):
+    if not _supports_market_type(probe, "swap") and not _supports_market_type(
+        probe, "future"
+    ):
         log.warning(
             "Derivative datasets requested but no futures market | exchange=%s datasets=%s",
-            probe.exchange, sorted(deriv_requested),
+            probe.exchange,
+            sorted(deriv_requested),
         )
         return []
 
@@ -155,7 +171,8 @@ def _launch_derivative_pipelines(
 
 class ExchangeTasks(NamedTuple):
     """Par de listas de futures separadas por fase para el stage system del flow."""
-    spot: List[asyncio.Future]     # fase 1: spot + repair
+
+    spot: List[asyncio.Future]  # fase 1: spot + repair
     futures: List[asyncio.Future]  # fase 2: futures + derivatives
 
 
@@ -176,17 +193,23 @@ def _launch_pipelines_for_exchange(
     if skipped:
         log.warning(
             "Skipped datasets (unsupported) | exchange=%s skipped=%s",
-            probe.exchange, sorted(skipped),
+            probe.exchange,
+            sorted(skipped),
         )
     if not active:
         log.warning("No active datasets for exchange | exchange=%s", probe.exchange)
         return ExchangeTasks([], [])
 
-    log.info("Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active))
+    log.info(
+        "Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active)
+    )
     spot_tasks: List[asyncio.Future] = [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
-        *([run_repair_pipeline(config, exc_cfg, probe, market_type="spot")]
-          if "ohlcv" in active else []),
+        *(
+            [run_repair_pipeline(config, exc_cfg, probe, market_type="spot")]
+            if "ohlcv" in active
+            else []
+        ),
     ]
     futures_tasks: List[asyncio.Future] = [
         *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
@@ -211,7 +234,8 @@ async def _validate_exchanges(
         if isinstance(res, Exception):
             log.error(
                 "Exchange validation failed | exchange=%s error=%s",
-                exc.name.value, res,
+                exc.name.value,
+                res,
             )
         else:
             probe, adapter = res
@@ -223,7 +247,8 @@ async def _validate_exchanges(
             except Exception as close_exc:
                 log.warning(
                     "Adapter close (post-validation) failed | exchange=%s error=%s",
-                    probe.exchange, close_exc,
+                    probe.exchange,
+                    close_exc,
                 )
 
     if not probes:
@@ -259,13 +284,16 @@ async def _consolidate_results(
     Bounded concurrency: _PIPELINE_SEMAPHORE limita pipelines simultáneos.
     Evita saturar rate limits y conexiones con múltiples exchanges en paralelo.
     """
+
     async def _guarded(task):
         async with _PIPELINE_SEMAPHORE:
             return await task
 
-    results  = await asyncio.gather(*(_guarded(f) for f in futures), return_exceptions=True)
+    results = await asyncio.gather(
+        *(_guarded(f) for f in futures), return_exceptions=True
+    )
     failures = [r for r in results if isinstance(r, Exception)]
-    ok       = len(results) - len(failures)
+    ok = len(results) - len(failures)
 
     for f in failures:
         log.error("Pipeline task failed | error=%s", f)
@@ -273,7 +301,8 @@ async def _consolidate_results(
     if failures:
         log.warning(
             "Flow completed with partial failures | ok=%s failed=%s",
-            ok, len(failures),
+            ok,
+            len(failures),
         )
 
     # Notificar al guard — solo si hay uno activo en este proceso
@@ -296,6 +325,7 @@ async def _consolidate_results(
 # Prefect Flow
 # ==================================================================
 
+
 @flow(
     name="market_data_ingestion",
     description="Ingesta de datos de mercado: OHLCV histórico por exchange y timeframe.",
@@ -303,8 +333,7 @@ async def _consolidate_results(
     retries=0,
 )
 async def market_data_flow(
-    env: Optional[str] = None,
-    config_dir: Optional[str] = None,
+    runtime_context: Optional[RuntimeContext] = None,
 ) -> None:
     """
     Flow principal de ingestión de datos de mercado.
@@ -321,23 +350,25 @@ async def market_data_flow(
     """
     log = get_run_logger()
 
-    # env y config_dir vienen desde quien dispara el flow (RunConfig o CLI).
-    # El flow de Prefect no lee el entorno directamente — recibe valores resueltos.
-    resolved_env = env or "production"
-    resolved_dir = Path(config_dir) if config_dir else Path("/app/config")
-
-    log.info("Flow starting | env=%s config_dir=%s", resolved_env, resolved_dir)
-
-    config = load_appconfig_standalone(env=resolved_env, config_dir=resolved_dir)
-
+    # El flow recibe un RuntimeContext resuelto por el entrypoint/runner.
+    if runtime_context is None:
+        raise RuntimeError(
+            "market_data_flow requires a resolved RuntimeContext provided by the entrypoint."
+        )
+    config = runtime_context.app_config
+    env = runtime_context.environment
+    config_dir = Path("config").resolve()
+    log.info("Flow starting | env=%s config_dir=%s", env, config_dir)
     # ── Guard + Validator ─────────────────────────────────────────────────────
     # Si ya hay un guard activo (inyectado por entrypoint.py en local),
     # lo reutilizamos. Si no (Prefect directo en producción), lo creamos aquí.
     # Esto garantiza que _consolidate_results siempre encuentre un guard.
     if guard_context.get_guard() is None:
         _guard = ExecutionGuard(
-            max_errors    = getattr(getattr(config, "pipeline", None), "max_consecutive_errors", 10),
-            max_runtime_s = None,  # None = sin límite — Prefect Worker gestiona el timeout externamente
+            max_errors=getattr(
+                getattr(config, "pipeline", None), "max_consecutive_errors", 10
+            ),
+            max_runtime_s=None,  # None = sin límite — Prefect Worker gestiona el timeout externamente
         )
         _guard.start()
         guard_context.set_guard(_guard)
@@ -355,11 +386,16 @@ async def market_data_flow(
     requested: Set[str] = set(config.datasets.active_datasets)
     log.info(
         "Datasets requested | exchanges=%s datasets=%s",
-        config.exchange_names, sorted(requested),
+        config.exchange_names,
+        sorted(requested),
     )
 
-    probes = await _validate_exchanges(config, log)
-
+    # Validación de exchanges: si falla, abortar gracefully y registrar.
+    try:
+        probes = await _validate_exchanges(config, log)
+    except Exception as exc:
+        log.error("exchange_validation_failed | error={}", exc)
+        return
 
     # SSoT: _launch_pipelines_for_exchange centraliza filtrado, validación de
     # capabilities y separación de stages. El flow solo acumula y ejecuta.
@@ -387,8 +423,8 @@ async def market_data_flow(
         # para evitar que fallos de fases posteriores bloqueen stages siguientes.
         # Extensible: añadir fases con sus propias reglas de dependencia.
         stages = [
-            {"name": "spot+repair", "tasks": spot_futures,    "requires_success": False},
-            {"name": "futures",     "tasks": futures_futures, "requires_success": True},
+            {"name": "spot+repair", "tasks": spot_futures, "requires_success": False},
+            {"name": "futures", "tasks": futures_futures, "requires_success": True},
         ]
         for stage in stages:
             if stage["requires_success"] and fail_prev > 0 and ok_prev == 0:
@@ -401,7 +437,7 @@ async def market_data_flow(
                 continue
             log.info("Stage: %s | tasks=%s", stage["name"], len(stage["tasks"]))
             ok_s, fail_s = await _consolidate_results(stage["tasks"], log)
-            ok     += ok_s
+            ok += ok_s
             failed += fail_s
             ok_prev, fail_prev = ok_s, fail_s  # snapshot para el stage siguiente
         if failed > 0 and ok == 0:
@@ -419,14 +455,18 @@ async def market_data_flow(
             log.info("Metrics pushed | exchange=%s", probe.exchange)
 
         # ── Flow summary ──────────────────────────────────────────────────────
-        duration_s  = time.monotonic() - flow_start
+        duration_s = time.monotonic() - flow_start
         flow_status = "OK" if failed == 0 else ("PARTIAL" if ok > 0 else "FAILED")
         log.info(
             "══ FLOW SUMMARY | %s | env=%s exchanges=%s/%s "
             "pipelines=%s/%s duration=%.1fs ══",
-            flow_status, resolved_env,
-            len(probes), len(config.exchanges),
-            ok, len(pipeline_futures), duration_s,
+            flow_status,
+            env,
+            len(probes),
+            len(config.exchanges),
+            ok,
+            len(pipeline_futures),
+            duration_s,
         )
 
     if failed == 0:

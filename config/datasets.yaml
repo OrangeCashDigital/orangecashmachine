@@ -1,0 +1,17 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Datasets
+# ==============================================================================
+# Define QUÉ datos se capturan. Separado de storage (QUÉ cómo se almacenan).
+# Owner único de habilitación de tipos de datos.
+# ==============================================================================
+
+datasets:
+  ohlcv: true
+  trades: false
+  orderbook: false
+  funding_rate: false
+  open_interest: false
+  liquidations: false
+  mark_price: false
+  index_price: false

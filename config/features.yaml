@@ -1,0 +1,16 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Feature Flags
+# ==============================================================================
+# Owner único de todos los feature flags del sistema.
+# Agrupados por dominio para evitar deuda técnica.
+# Regla: solo booleanos. No control de flujo, no lógica de negocio.
+# Overrides van en env/*.yaml bajo features.<dominio>.*
+# ==============================================================================
+
+features:
+  strategy:
+    enable_new_strategy: false
+
+  risk:
+    enable_risk_simulator: false

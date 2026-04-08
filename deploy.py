@@ -21,42 +21,69 @@ import sys
 
 
 def serve_local() -> None:
-    """Modo desarrollo: flow.serve() — bloqueante, sin work pool."""
+    """Modo desarrollo: ejecuta el flow localmente con runtime_context."""
+    import asyncio
     from market_data.orchestration.flows.batch_flow import market_data_flow
+    from core.config.runtime import RunConfig
+    from core.config.hydra_loader import load_appconfig_standalone
+    from core.config.runtime_context import RuntimeContext
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from pathlib import Path
 
-    print("Iniciando market_data_flow en modo serve (desarrollo)...")
-    market_data_flow.serve(
-        name="market-data-hourly",
-        cron="0 * * * *",
-        parameters={
-            "env": "development",
-            "config_dir": "config",
-        },
-        tags=["market-data", "development"],
+    print(
+        "Iniciando market_data_flow en modo serve (desarrollo) con runtime_context..."
     )
+    # Construcción del contexto único de ejecución
+    run_cfg = RunConfig.from_env()
+    config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
+    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid4().hex[:8]}"
+    started_at = datetime.now(timezone.utc)
+    runtime_context = RuntimeContext(
+        app_config=config,
+        run_config=run_cfg,
+        environment=run_cfg.env,
+        run_id=run_id,
+        started_at=started_at,
+    )
+    # Ejecutar el flow directamente con el runtime_context
+    asyncio.run(market_data_flow(runtime_context))
 
 
 def deploy_prod() -> None:
-    """Modo producción: flow.deploy() — requiere work pool activo."""
+    """Modo producción adaptado: registra deployment y ejecuta con runtime_context (prueba)."""
+    import asyncio
     from market_data.orchestration.flows.batch_flow import market_data_flow
+    from core.config.runtime import RunConfig
+    from core.config.hydra_loader import load_appconfig_standalone
+    from core.config.runtime_context import RuntimeContext
+    from datetime import datetime, timezone
+    from uuid import uuid4
 
-    market_data_flow.deploy(
-        name="market-data-hourly",
-        work_pool_name="local-pool",
-        cron="0 * * * *",
-        parameters={
-            "env": "production",
-            "config_dir": "/app/config",
-        },
-        tags=["market-data", "production"],
+    # Construcción del contexto para ejecución real (test de despliegue)
+    run_cfg = RunConfig.from_env()
+    config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
+    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid4().hex[:8]}"
+    started_at = datetime.now(timezone.utc)
+    runtime_context = RuntimeContext(
+        app_config=config,
+        run_config=run_cfg,
+        environment=run_cfg.env,
+        run_id=run_id,
+        started_at=started_at,
     )
-    print("Deployment registrado en work pool 'local-pool'")
+
+    print(
+        "Desplegando market_data_flow con runtime_context (producción) para pruebas..."
+    )
+    asyncio.run(market_data_flow(runtime_context))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--prod", action="store_true",
-                        help="Registrar en work pool (producción)")
+    parser.add_argument(
+        "--prod", action="store_true", help="Registrar en work pool (producción)"
+    )
     args = parser.parse_args()
 
     if args.prod:

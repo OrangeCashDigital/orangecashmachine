@@ -1,25 +1,5 @@
 # @package _global_
-# ==============================================================================
-# OrangeCashMachine — Exchange: KuCoin
-# ==============================================================================
 
 exchanges:
   kucoin:
-    enabled: true
-    enableRateLimit: true
-    auto_discover_symbols: false
-
-    credentials:
-      apiKey: ${oc.env:KUCOIN_API_KEY,""}
-      secret: ${oc.env:KUCOIN_API_SECRET,""}
-      password: ${oc.env:KUCOIN_PASSPHRASE,""}
-
-    options:
-      adjustForTimeDifference: true
-
-    markets:
-      spot:
-        enabled: true
-        symbols: [BTC/USDT]
-      futures:
-        enabled: false   # spot only — derivados via kucoinfutures
+    enabled: false

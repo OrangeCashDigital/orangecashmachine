@@ -1,7 +1,7 @@
 # ==============================================================================
 # OrangeCashMachine — Base Configuration
 # ==============================================================================
-# Solo: metadata, integrations de infraestructura, healthchecks.
+# Solo: metadata, integrations de infraestructura, healthchecks, safety global.
 # Todo lo modular está en pipeline/, exchanges/, storage/, observability/, risk/
 # ==============================================================================
 
@@ -16,9 +16,11 @@ environment:
 # SAFETY (defaults seguros globales)
 # ==============================================================================
 safety:
-  dry_run: true                    # SAFE DEFAULT global
+  dry_run: true                    # SAFE DEFAULT — producción lo sobrescribe explícitamente
   prevent_full_reingestion: false
   require_explicit_start: false
+  max_backfill_days: 90            # límite de backfill por ejecución — evita reingesta masiva accidental
+  require_confirmation: false      # true en prod → requiere flag explícito en CLI antes de operar
 
 # ==============================================================================
 # INTEGRATIONS

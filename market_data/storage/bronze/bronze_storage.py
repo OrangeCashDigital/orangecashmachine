@@ -1,281 +1,220 @@
 """
-bronze_storage.py
-=================
+market_data/storage/bronze/bronze_storage.py
+=============================================
 
-Capa Bronze del Data Lakehouse.
+Capa Bronze — append-only sobre Apache Iceberg.
 
-Responsabilidad
----------------
-Almacenar datos OHLCV exactamente como llegan del exchange,
-sin ninguna transformación, deduplicación ni corrección.
+Tabla : bronze.ohlcv
+Particionado : exchange / market_type / symbol / timeframe / ts_month
 
-Principios
-----------
-• Append-only: nunca sobreescribe, nunca hace merge
-• Inmutable: cada ingestión genera un archivo nuevo (part-{run_id})
-• Forense: es la "caja negra" — si el exchange corrige datos,
-  aquí se puede ver qué había antes
-• Sin pérdida: duplicados, gaps y anomalías se preservan tal cual
+Garantías
+---------
+• append() inserta filas sin dedup ni normalización de valores.
+• ingestion_ts se añade como columna de trazabilidad forense.
+• dry_run=True registra la intención sin escribir en Iceberg.
+• BronzeWriteError encapsula cualquier fallo de escritura.
 
-Estructura de partición
------------------------
-bronze/ohlcv/
-  exchange={exchange}/
-    symbol={symbol}/
-      timeframe={timeframe}/
-        dt={YYYY-MM-DD}/
-          part-{run_id}.parquet
-          part-{run_id}.meta.json
+Migración desde filesystem
+---------------------------
+La versión anterior escribía part-*.parquet por run en directorios
+particionados por dt=. Este módulo reemplaza esa lógica por un append
+atómico en Iceberg: sin archivos individuales por run, sin meta.json
+manuales — el versionado queda en snapshots de Iceberg.
 """
-
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 import pandas as pd
+import pyarrow as pa
 from loguru import logger
 
-from core.config.paths import bronze_ohlcv_root
-from data_platform.ohlcv_utils import safe_symbol as _safe_symbol_fn
+from market_data.storage.iceberg.catalog import ensure_bronze_table, get_catalog
 
-
-# ==========================================================
-# Constants
-# ==========================================================
-
-REQUIRED_COLUMNS: tuple[str, ...] = (
-    "timestamp", "open", "high", "low", "close", "volume"
+# Columnas mínimas requeridas en el DataFrame de entrada
+REQUIRED_COLUMNS: frozenset[str] = frozenset(
+    {"timestamp", "open", "high", "low", "close", "volume"}
 )
 
-# _BRONZE_SUBPATH eliminado — path resuelto via core.config.paths
+# Orden canónico de columnas para la tabla Iceberg
+_BRONZE_COLS = [
+    "timestamp", "open", "high", "low", "close", "volume",
+    "exchange", "market_type", "symbol", "timeframe", "ingestion_ts",
+]
 
 
-# ==========================================================
-# Exceptions
-# ==========================================================
+# =============================================================================
+# Excepciones
+# =============================================================================
 
 class BronzeStorageError(Exception):
-    """Base error."""
+    """Error base de BronzeStorage."""
+
 
 class BronzeWriteError(BronzeStorageError):
-    """Fallo de escritura en bronze."""
+    """Fallo de escritura en Iceberg Bronze."""
 
 
-# ==========================================================
+# =============================================================================
 # BronzeStorage
-# ==========================================================
+# =============================================================================
 
 class BronzeStorage:
     """
-    Writer append-only para la capa Bronze.
+    Writer append-only para la capa Bronze (Iceberg).
 
-    Cada llamada a append() genera un nuevo archivo part-{run_id}.parquet
-    en la partición correspondiente. Nunca lee ni modifica archivos
-    existentes — solo escribe nuevos.
+    Cada llamada a append() genera un nuevo snapshot en bronze.ohlcv
+    con las filas del batch. Nunca lee ni modifica datos existentes.
 
     Uso
     ---
-    bronze = BronzeStorage(exchange="kucoin")
+    bronze = BronzeStorage(exchange="kucoin", market_type="spot")
     bronze.append(df, symbol="BTC/USDT", timeframe="1m", run_id=run_id)
     """
 
     def __init__(
         self,
-        base_path: Optional[str | Path] = None,
-        exchange: Optional[str] = None,
+        exchange:    Optional[str] = None,
+        market_type: Optional[str] = "spot",
+        dry_run:     bool          = False,
+        # base_path: ignorado — compat con código que usaba la API filesystem.
+        # Bronze ya no usa el filesystem; este parámetro se acepta pero no
+        # tiene efecto para no romper llamadas existentes durante la transición.
+        base_path:   object        = None,
     ) -> None:
-        self._base_path: Path = _resolve_base_path(base_path)
-        self._exchange: str = (exchange or "unknown").lower()
-        self._base_path.mkdir(parents=True, exist_ok=True)
+        self._exchange    = (exchange    or "unknown").lower()
+        self._market_type = (market_type or "spot").lower()
+        self._dry_run     = dry_run
+        ensure_bronze_table()
+        self._table = get_catalog().load_table("bronze.ohlcv")
         logger.debug(
-            "BronzeStorage ready | exchange={} path={}",
-            self._exchange, self._base_path,
+            "BronzeStorage ready | exchange={} market_type={} dry_run={}",
+            self._exchange, self._market_type, self._dry_run,
         )
 
-    # ======================================================
+    # =========================================================================
     # Public API
-    # ======================================================
+    # =========================================================================
 
     def append(
         self,
-        df: pd.DataFrame,
-        symbol: str,
+        df:        pd.DataFrame,
+        symbol:    str,
         timeframe: str,
-        run_id: Optional[str] = None,
+        run_id:    Optional[str] = None,
     ) -> str:
         """
-        Escribe df como un nuevo archivo part en bronze.
+        Inserta un batch OHLCV en bronze.ohlcv (Iceberg).
 
-        El df se guarda exactamente como viene — sin dedup, sin merge,
-        sin normalización (solo se añade ingestion_ts para trazabilidad).
+        Los datos se persisten exactamente como vienen — sin dedup,
+        sin merge, sin normalización de valores. Solo se añade
+        ingestion_ts para trazabilidad forense.
 
         Parameters
         ----------
-        df : pd.DataFrame
-            Datos OHLCV tal como vienen del fetcher.
-        symbol : str
-            Par de trading, e.g. "BTC/USDT".
-        timeframe : str
-            Intervalo, e.g. "1m".
-        run_id : str, optional
-            ID del run de ingestión. Se genera uno si no se pasa.
+        df        : DataFrame OHLCV. Debe tener las columnas REQUIRED_COLUMNS.
+        symbol    : Par de trading, e.g. "BTC/USDT".
+        timeframe : Intervalo, e.g. "1m".
+        run_id    : Correlación con Silver/Gold. Se genera si no se pasa.
 
         Returns
         -------
         str
-            run_id usado (útil para correlacionar con silver/manifests).
+            run_id usado — correlaciona este batch con Silver y Gold.
+
+        Raises
+        ------
+        BronzeStorageError : DataFrame vacío o columnas faltantes.
+        BronzeWriteError   : Fallo al escribir en Iceberg.
         """
         _validate_dataframe(df)
 
         if run_id is None:
             run_id = _generate_run_id()
 
-        # Añadir ingestion_ts para trazabilidad forense
-        df = df.copy()
-        df["ingestion_ts"] = datetime.now(timezone.utc).isoformat()
+        if self._dry_run:
+            logger.info(
+                "[DRY RUN] BronzeStorage.append skipped | {}/{} exchange={} rows={}",
+                symbol, timeframe, self._exchange, len(df),
+            )
+            return run_id
 
-        # Normalizar timestamp solo para particionado (no modifica datos)
-        ts_col = pd.to_datetime(df["timestamp"], unit="ms", utc=True, errors="coerce")
-        ts_col = ts_col.fillna(pd.to_datetime(df["timestamp"], utc=True, errors="coerce"))
+        prepared = _normalize_df(
+            df,
+            symbol      = symbol,
+            timeframe   = timeframe,
+            exchange    = self._exchange,
+            market_type = self._market_type,
+        )
 
-        # Agrupar por día para particionado
-        dates = ts_col.dt.date.unique()
-
-        for date in sorted(dates):
-            mask = ts_col.dt.date == date
-            part_df = df[mask].copy()
-            if part_df.empty:
-                continue
-            self._write_part(part_df, symbol, timeframe, date, run_id)
+        try:
+            self._table.append(
+                pa.Table.from_pandas(
+                    prepared,
+                    schema         = self._table.schema().as_arrow(),
+                    preserve_index = False,
+                )
+            )
+        except Exception as exc:
+            raise BronzeWriteError(
+                f"Bronze Iceberg append failed | {symbol}/{timeframe} | {exc}"
+            ) from exc
 
         logger.debug(
-            "Bronze append | exchange={} symbol={} timeframe={} run_id={} rows={}",
-            self._exchange, symbol, timeframe, run_id, len(df),
+            "Bronze append | exchange={} market_type={} symbol={} timeframe={}"
+            " run_id={} rows={}",
+            self._exchange, self._market_type, symbol, timeframe,
+            run_id, len(prepared),
         )
         return run_id
 
-    # ======================================================
-    # Path helpers
-    # ======================================================
 
-    @staticmethod
-    def _safe_symbol(symbol: str) -> str:
-        # Delega a data_platform.ohlcv_utils.safe_symbol — SSoT
-        return _safe_symbol_fn(symbol)
+# =============================================================================
+# Helpers internos
+# =============================================================================
 
-    def _partition_dir(self, symbol: str, timeframe: str, date) -> Path:
-        path = (
-            self._base_path
-            / f"exchange={self._exchange}"
-            / f"symbol={self._safe_symbol(symbol)}"
-            / f"timeframe={timeframe}"
-            / f"dt={date}"
-        )
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
-    # ======================================================
-    # Writer
-    # ======================================================
-
-    def _write_part(
-        self,
-        df: pd.DataFrame,
-        symbol: str,
-        timeframe: str,
-        date,
-        run_id: str,
-    ) -> None:
-        part_dir  = self._partition_dir(symbol, timeframe, date)
-        part_file = part_dir / f"part-{run_id}.parquet"
-        meta_file = part_dir / f"part-{run_id}.meta.json"
-        temp_file = part_dir / f"part-{run_id}.tmp"
-
-        if part_file.exists():
-            raise BronzeWriteError(
-                f"Duplicate run_id detected — {part_file.name} already exists"
-            )
-
-        try:
-            df.to_parquet(temp_file, compression="snappy", index=False)
-            temp_file.replace(part_file)
-            _write_part_meta(meta_file, df, symbol, timeframe, run_id)
-
-        except Exception as exc:
-            if temp_file.exists():
-                temp_file.unlink(missing_ok=True)
-            raise BronzeWriteError(
-                f"Failed writing bronze part {symbol}/{timeframe}/{date}"
-            ) from exc
-
-
-# ==========================================================
-# Helpers
-# ==========================================================
-
-def _resolve_base_path(base_path: Optional[str | Path]) -> Path:
+def _normalize_df(
+    df:          pd.DataFrame,
+    symbol:      str,
+    timeframe:   str,
+    exchange:    str,
+    market_type: str,
+) -> pd.DataFrame:
     """
-    Resuelve el path base de Bronze.
-
-    Orden de resolución:
-    1. base_path explícito (argumento del constructor)
-    2. core.config.paths.bronze_ohlcv_root() — lee storage.data_lake.path del YAML
-       o OCM_DATA_LAKE_PATH si está seteada
+    Prepara el DataFrame para escritura en Iceberg:
+    - Convierte timestamp a microsegundos UTC (pyiceberg 0.8 no soporta ns).
+    - Inyecta columnas de partición e ingestion_ts.
+    - Ordena por timestamp (sin dedup — eso es responsabilidad de Silver).
     """
-    if base_path:
-        return Path(base_path).resolve()
-    return bronze_ohlcv_root()
+    df = df.copy()
+    df["timestamp"] = (
+        pd.to_datetime(df["timestamp"], utc=True)
+        .astype("datetime64[us, UTC]")
+    )
+    now_us = pd.Timestamp(datetime.now(timezone.utc)).floor("us")
+    df["ingestion_ts"] = now_us.tz_localize(None)  # se reinterpreta como UTC al escribir
+    df["ingestion_ts"] = (
+        pd.to_datetime(df["ingestion_ts"], utc=True)
+        .astype("datetime64[us, UTC]")
+    )
+    df["exchange"]     = exchange
+    df["market_type"]  = market_type
+    df["symbol"]       = symbol
+    df["timeframe"]    = timeframe
+    return df[_BRONZE_COLS].sort_values("timestamp").reset_index(drop=True)
 
 
 def _validate_dataframe(df: pd.DataFrame) -> None:
     if df is None or df.empty:
         raise BronzeStorageError("DataFrame vacío")
-    missing = set(REQUIRED_COLUMNS) - set(df.columns)
+    missing = REQUIRED_COLUMNS - set(df.columns)
     if missing:
         raise BronzeStorageError(f"Missing columns: {sorted(missing)}")
-    unexpected = set(df.columns) - set(REQUIRED_COLUMNS) - {"ingestion_ts"}
-    if unexpected:
-        logger.warning(
-            "Bronze schema drift — columnas inesperadas serán preservadas | cols={}",
-            sorted(unexpected),
-        )
 
 
 def _generate_run_id() -> str:
-    """Genera un run_id único basado en timestamp + uuid corto."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts  = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     uid = uuid.uuid4().hex[:8]
     return f"{ts}-{uid}"
-
-
-def _write_part_meta(
-    meta_path: Path,
-    df: pd.DataFrame,
-    symbol: str,
-    timeframe: str,
-    run_id: str,
-) -> None:
-    try:
-        ts_col = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-        ts_bytes = ts_col.dropna().astype("int64").values.tobytes()
-        checksum = hashlib.md5(ts_bytes).hexdigest()
-
-        meta: Dict = {
-            "run_id":      run_id,
-            "symbol":      symbol,
-            "timeframe":   timeframe,
-            "rows":        len(df),
-            "min_ts":      str(ts_col.min()),
-            "max_ts":      str(ts_col.max()),
-            "checksum":    checksum,
-            "written_at":  datetime.now(timezone.utc).isoformat(),
-            "layer":       "bronze",
-        }
-        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Bronze meta write failed (non-critical) | {} | {}", meta_path, exc)

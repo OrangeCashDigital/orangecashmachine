@@ -2,12 +2,17 @@
 # ==============================================================================
 # OrangeCashMachine — Pipeline: Historical
 # ==============================================================================
+# Owner de todos los parámetros del pipeline histórico.
+# start_date: "auto" = backfill dinámico desde cursor existente o inicio completo.
+# max_concurrent_tasks: null = resuelto en código (cpu_count // 2), no en YAML.
+# Overrides explícitos van en env/*.yaml bajo pipeline.historical.*
+# ==============================================================================
 
 pipeline:
   historical:
-    start_date: "2017-01-01T00:00:00Z"
+    start_date: "auto"
     backfill_mode: false
-    max_concurrent_tasks: auto
+    max_concurrent_tasks: null   # null = resuelto dinámicamente en código
     timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
 
     retry_policy:
