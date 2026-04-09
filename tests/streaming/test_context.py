@@ -12,7 +12,12 @@ from __future__ import annotations
 import pytest
 from market_data.streaming.context import StreamingContext
 from market_data.streaming.consumer import PrefectTriggerHandler
-from market_data.streaming.payloads import EventPayload, OHLCVBar
+from market_data.streaming.payloads import (
+    EventPayload, OHLCVBar,
+    SchemaVersionError,
+    PAYLOAD_SCHEMA_VERSION,
+    CONTEXT_SCHEMA_VERSION,
+)
 
 
 # --------------------------------------------------
@@ -56,7 +61,7 @@ class TestStreamingContext:
 
     def test_to_dict_keys(self):
         d = _make_ctx().to_dict()
-        assert set(d.keys()) == {"env", "run_id", "pushgateway", "deployment", "created_at"}
+        assert set(d.keys()) == {"context_version", "env", "run_id", "pushgateway", "deployment", "created_at"}
 
     def test_to_dict_no_credentials(self):
         """El dict serializado no debe contener campos sensibles."""
@@ -87,6 +92,22 @@ class TestStreamingContext:
         ctx = _make_ctx()
         with pytest.raises((AttributeError, TypeError)):
             ctx.env = "production"  # type: ignore
+
+    def test_to_dict_includes_context_version(self):
+        d = _make_ctx().to_dict()
+        assert "context_version" in d
+        assert d["context_version"] == CONTEXT_SCHEMA_VERSION
+
+    def test_from_dict_round_trip_with_version(self):
+        ctx  = _make_ctx()
+        ctx2 = StreamingContext.from_dict(ctx.to_dict())
+        assert ctx2.context_version == CONTEXT_SCHEMA_VERSION
+
+    def test_from_dict_rejects_future_version(self):
+        d = _make_ctx().to_dict()
+        d["context_version"] = CONTEXT_SCHEMA_VERSION + 99
+        with pytest.raises(SchemaVersionError):
+            StreamingContext.from_dict(d)
 
 
 # --------------------------------------------------

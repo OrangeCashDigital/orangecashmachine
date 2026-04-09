@@ -41,6 +41,14 @@ backtesting/        → Motor de backtesting (en desarrollo)
 research/           → Notebooks exploratorios (no instalable como paquete)
 ```
 
+## Contrato entre entrypoint y market_data_flow
+- El entrypoint (market_data) es el único responsable de construir RunConfig y AppConfig y de generar un RuntimeContext inmutable.
+- El flow real market_data_flow consume ese RuntimeContext y no realiza carga de configuración ni resolución de entorno.
+- Firma del flow: market_data_flow(runtime_context: RuntimeContext) -> None
+- Local (entrypoint) invoca: market_data_flow(runtime_context)
+- Producción (Prefect) debe inyectar un RuntimeContext ya resuelto al flow (a través de deploy/wrapper), no reconstruir la configuración en el flow.
+- Esto evita defaults ocultos como env en el flow y garantiza consistencia entre entornos.
+
 ---
 
 ## Requisitos
@@ -103,6 +111,18 @@ Cascada de resolución de paths:
 Ver `.env.example` para la lista completa.
 
 ---
+
+## Prefect deployments (ruta production) yRuntimeContext
+
+- Para mantener la arquitectura limpia, Prefect debe invocar market_data_flow con un RuntimeContext ya resuelto, serializable si se envía a través de la red.
+- En la ruta actual, deploy.py ofrece wrappers que construyen RunConfig, AppConfig y un RuntimeContext y luego ejecutan market_data_flow(runtime_context) para pruebas/locales o despachos controlados.
+- En escenarios de producción con Prefect Server/Worker, la sugerencia es inyectar un RuntimeContext serializable (un dict) al flow, y dejar que el flow lo reconstruya automáticamente usando RuntimeContext.from_dict().
+- Cambio clave: market_data_flow acepta runtime_context como dict o como objeto RuntimeContext y lo normaliza internamente (con RuntimeContext.from_dict si llega como dict).
+- Ejemplo de invocación desde Prefect (pseudo-código):
+  - runtime_ctx = RuntimeContext(app_config=..., run_config=..., environment=..., run_id=..., started_at=...)
+  - market_data_flow(runtime_context=runtime_ctx.to_dict())  # Prefect invoca con dict
+
+- Esto permite mantener la fuente única de verdad para configuración y entorno (entrypoint) y pasar ese estado a producción sin reconstrucción adicional.
 
 ## Acceso al Data Lake
 

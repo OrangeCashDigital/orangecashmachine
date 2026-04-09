@@ -133,3 +133,92 @@ def build_lateness_calibration_store(
             "build_lateness_calibration_store: no se pudo inicializar | error={}", exc
         )
         return None
+
+
+def build_stream_publisher(
+    stream_name: str = "ohlcv",
+    env:         Optional[str] = None,
+) -> Optional["StreamPublisher"]:
+    """
+    Construye un StreamPublisher desde variables de entorno.
+
+    Ensambla: redis.Redis → RedisStreamPublisher → StreamPublisher.
+
+    Returns None si Redis no está disponible.
+
+    Parameters
+    ----------
+    stream_name : nombre lógico del stream (sin prefijo).
+    env         : entorno explícito. Si None, usa resolve_env().
+    """
+    from infra.state.redis_stream import RedisStreamPublisher
+    from market_data.streaming.publisher import StreamPublisher
+
+    try:
+        store = build_cursor_store_from_env(env=env)
+        if not store.is_healthy():
+            logger.warning(
+                "build_stream_publisher: Redis no disponible — publisher deshabilitado"
+            )
+            return None
+        infra = RedisStreamPublisher(
+            client      = store._pool and store._client or _get_redis_client(store),
+            stream_name = stream_name,
+        )
+        return StreamPublisher(publisher=infra)
+    except Exception as exc:
+        logger.warning("build_stream_publisher: no se pudo inicializar | error={}", exc)
+        return None
+
+
+def build_stream_source(
+    router:        "EventRouter",
+    stream_name:   str = "ohlcv",
+    consumer_name: str = "worker-1",
+    env:           Optional[str] = None,
+) -> Optional["StreamSource"]:
+    """
+    Construye un StreamSource desde variables de entorno.
+
+    Ensambla: redis.Redis → RedisStreamConsumer → StreamSource.
+
+    Llama a ensure_group() automáticamente — idempotente.
+    Returns None si Redis no está disponible.
+
+    Parameters
+    ----------
+    router        : EventRouter ya configurado (inyectado).
+    stream_name   : nombre lógico del stream.
+    consumer_name : nombre de este worker dentro del consumer group.
+    env           : entorno explícito. Si None, usa resolve_env().
+    """
+    from infra.state.redis_stream import RedisStreamConsumer
+    from market_data.streaming.source import StreamSource
+
+    try:
+        store = build_cursor_store_from_env(env=env)
+        if not store.is_healthy():
+            logger.warning(
+                "build_stream_source: Redis no disponible — source deshabilitado"
+            )
+            return None
+        consumer = RedisStreamConsumer(
+            client        = _get_redis_client(store),
+            stream_name   = stream_name,
+            consumer_name = consumer_name,
+        )
+        consumer.ensure_group()
+        return StreamSource(consumer=consumer, router=router)
+    except Exception as exc:
+        logger.warning("build_stream_source: no se pudo inicializar | error={}", exc)
+        return None
+
+
+def _get_redis_client(store: "RedisCursorStore"):
+    """
+    Extrae el cliente Redis del RedisCursorStore.
+
+    RedisCursorStore expone _client internamente. Si la interfaz
+    cambia, este helper es el único punto a actualizar.
+    """
+    return store._client

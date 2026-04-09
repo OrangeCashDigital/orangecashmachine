@@ -47,18 +47,20 @@ class StreamingContext:
 
     Attributes
     ----------
-    env         : Entorno activo (development | staging | production).
-    run_id      : Identificador único del run OCM (trazabilidad).
-    pushgateway : host:port del Prometheus Pushgateway.
-    deployment  : Nombre del deployment Prefect a disparar.
-    created_at  : Momento de construcción (UTC ISO 8601).
+    env             : Entorno activo (development | staging | production).
+    run_id          : Identificador único del run OCM (trazabilidad).
+    pushgateway     : host:port del Prometheus Pushgateway.
+    deployment      : Nombre del deployment Prefect a disparar.
+    created_at      : Momento de construcción (UTC ISO 8601).
+    context_version : Versión del schema de este contexto.
     """
 
-    env:         str
-    run_id:      str
-    pushgateway: str
-    deployment:  str
-    created_at:  str
+    env:             str
+    run_id:          str
+    pushgateway:     str
+    deployment:      str
+    created_at:      str
+    context_version: int = 1  # SSoT: CONTEXT_SCHEMA_VERSION de payloads.py
 
     # --------------------------------------------------
     # Constructors
@@ -115,13 +117,28 @@ class StreamingContext:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StreamingContext":
-        """Deserializa desde dict (ej: payload de Redis Stream)."""
+        """Deserializa desde dict (ej: payload de Redis Stream).
+
+        Valida context_version — falla explícitamente si el schema
+        es incompatible en lugar de producir datos corruptos.
+        """
+        from market_data.streaming.payloads import (
+            CONTEXT_SCHEMA_VERSION,
+            SchemaVersionError,
+        )
+        version = int(data.get("context_version", 1))
+        if version != CONTEXT_SCHEMA_VERSION:
+            raise SchemaVersionError(
+                f"StreamingContext schema v{version} incompatible "
+                f"con v{CONTEXT_SCHEMA_VERSION} esperada."
+            )
         return cls(
-            env         = str(data["env"]),
-            run_id      = str(data["run_id"]),
-            pushgateway = str(data["pushgateway"]),
-            deployment  = str(data["deployment"]),
-            created_at  = str(data["created_at"]),
+            env             = str(data["env"]),
+            run_id          = str(data["run_id"]),
+            pushgateway     = str(data["pushgateway"]),
+            deployment      = str(data["deployment"]),
+            created_at      = str(data["created_at"]),
+            context_version = version,
         )
 
     # --------------------------------------------------
@@ -131,9 +148,10 @@ class StreamingContext:
     def to_dict(self) -> Dict[str, Any]:
         """Serializa a dict plano — seguro para Redis Streams / JSON."""
         return {
-            "env":         self.env,
-            "run_id":      self.run_id,
-            "pushgateway": self.pushgateway,
-            "deployment":  self.deployment,
-            "created_at":  self.created_at,
+            "context_version": self.context_version,
+            "env":             self.env,
+            "run_id":          self.run_id,
+            "pushgateway":     self.pushgateway,
+            "deployment":      self.deployment,
+            "created_at":      self.created_at,
         }

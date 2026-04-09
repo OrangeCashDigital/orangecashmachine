@@ -133,3 +133,38 @@ class TestEventRouter:
         ])
         router.route(_make_event())
         assert called == ["A", "B", "C"]
+
+
+# --------------------------------------------------
+# Versionado de EventPayload
+# --------------------------------------------------
+
+class TestEventPayloadVersioning:
+
+    def test_to_dict_includes_event_version(self):
+        from market_data.streaming.payloads import PAYLOAD_SCHEMA_VERSION
+        d = _make_event().to_dict()
+        assert "event_version" in d
+        assert d["event_version"] == PAYLOAD_SCHEMA_VERSION
+
+    def test_from_dict_round_trip_preserves_version(self):
+        from market_data.streaming.payloads import PAYLOAD_SCHEMA_VERSION
+        e  = _make_event()
+        e2 = EventPayload.from_dict(e.to_dict())
+        assert e2.event_version == PAYLOAD_SCHEMA_VERSION
+
+    def test_from_dict_rejects_incompatible_version(self):
+        from market_data.streaming.payloads import (
+            PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
+        )
+        d = _make_event().to_dict()
+        d["event_version"] = PAYLOAD_SCHEMA_VERSION + 99
+        with pytest.raises(SchemaVersionError):
+            EventPayload.from_dict(d)
+
+    def test_from_dict_accepts_missing_version_as_v1(self):
+        """Payloads legacy sin event_version se tratan como v1."""
+        d = _make_event().to_dict()
+        del d["event_version"]
+        e = EventPayload.from_dict(d)
+        assert e.event_version == 1
