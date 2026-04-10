@@ -39,7 +39,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 from loguru import logger
-from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.expressions import (
     And,
     EqualTo,
@@ -47,45 +46,14 @@ from pyiceberg.expressions import (
     LessThanOrEqual,
 )
 
-from core.config.paths import data_lake_root
+from market_data.storage.iceberg.catalog import get_catalog
 
-
-# =============================================================================
-# Catálogo — singleton por proceso
-# =============================================================================
-
-_CATALOG: Optional[SqlCatalog] = None
 
 # Columnas OHLCV en el orden del schema Iceberg
 _OHLCV_COLS = [
     "timestamp", "open", "high", "low", "close", "volume",
     "exchange", "market_type", "symbol", "timeframe",
 ]
-
-
-def _get_catalog() -> SqlCatalog:
-    """
-    Devuelve el catálogo Iceberg, creándolo una sola vez por proceso.
-
-    Paths resueltos desde data_lake_root() para garantizar
-    consistencia con el resto del data platform, independientemente
-    del cwd desde donde se lance el proceso.
-    """
-    global _CATALOG
-    if _CATALOG is None:
-        base      = data_lake_root().parent  # .../data_platform/
-        cat_path  = base / "iceberg_catalog"
-        ware_path = base / "iceberg_warehouse"
-        cat_path.mkdir(parents=True, exist_ok=True)
-        ware_path.mkdir(parents=True, exist_ok=True)
-        _CATALOG  = SqlCatalog(
-            "ocm",
-            **{
-                "uri":       f"sqlite:///{cat_path}/catalog.db",
-                "warehouse": str(ware_path.absolute()),
-            },
-        )
-    return _CATALOG
 
 
 def _to_utc_timestamp(dt: object) -> Optional[pd.Timestamp]:
@@ -122,7 +90,7 @@ class IcebergStorage:
         self._exchange    = exchange
         self._market_type = market_type
         self._dry_run     = dry_run
-        self._table       = _get_catalog().load_table("silver.ohlcv")
+        self._table       = get_catalog().load_table("silver.ohlcv")
 
     # =========================================================================
     # Helpers internos
