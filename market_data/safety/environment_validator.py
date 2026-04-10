@@ -163,8 +163,11 @@ class EnvironmentValidator:
     @staticmethod
     def _check_storage_path(config: "AppConfig", log) -> None:
         """
-        En producción, el storage path NO debe apuntar a local_data_lake
-        ni a data_platform/. Indica config de desarrollo sin sobrescribir.
+        En producción, el warehouse Iceberg NO debe apuntar a data_platform/ local.
+        Indica config de desarrollo sin sobrescribir.
+
+        Valida el path anchor de DataLakeConfig — data_lake_root().parent resuelve
+        el warehouse Iceberg relativo a este path.
         """
         storage = getattr(config, "storage", None)
         data_lake = getattr(storage, "data_lake", None) if storage else None
@@ -179,5 +182,6 @@ class EnvironmentValidator:
             )
             raise EnvironmentMismatchError(
                 f"Production storage path '{path_str}' contains a development fragment. "
-                "Set DATA_LAKE_PATH to a production path (e.g. /var/lib/orangecashmachine/data_lake)."
+                "Set OCM_DATA_LAKE_PATH to a production path "
+                "(e.g. /var/lib/orangecashmachine/data_platform/data_lake)."
             )

@@ -6,52 +6,33 @@ market_data/streaming/source.py
 
 StreamSource — orquesta el loop de consumo Redis → EventRouter.
 
-Responsabilidad
----------------
-Leer mensajes de RedisStreamConsumer, deserializarlos a EventPayload,
-pasarlos al EventRouter, y hacer ACK solo si el router los aceptó.
+Idempotencia (dos capas)
+------------------------
+  L1 SeenFilter      — memoria, O(1), muere con el proceso
+  L2 PersistentSeenFilter — Redis SET/TTL, sobrevive reinicios
 
-Loop de consumo (prioridad)
----------------------------
-  1. claim_pending()  — recupera mensajes de workers caídos (PEL)
-  2. consume()        — procesa mensajes nuevos
-
-Idempotencia
-------------
-SeenFilter descarta duplicados por event_id en memoria.
-Duplicados entre workers o entre reinicios son responsabilidad
-de los handlers (idempotencia en capa de negocio).
-
-DLQ
----
-Mensajes que fallan MAX_RETRIES veces → Dead Letter Stream.
+Si se inyecta dedup_store (RedisCursorStore), se usa CompositeSeenFilter.
+Si no, se usa solo SeenFilter (modo memoria — backward compat).
 
 Principios: SRP · DI · SafeOps · at-least-once · self-healing
-           · idempotencia · observabilidad
+           · idempotencia persistente · observabilidad
 """
 
 from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
 
-from market_data.streaming.dedup    import SeenFilter
+from market_data.streaming.dedup    import SeenFilter, CompositeSeenFilter
 from market_data.streaming.metrics  import StreamMetrics, timer
 from market_data.streaming.payloads import EventPayload, SchemaVersionError
 from market_data.streaming.router   import EventRouter
 
-# Máximo de reintentos antes de enviar a DLQ
 _MAX_RETRIES_BEFORE_DLQ: int = 3
 
 
 class StreamSource:
     """
     Orquesta el loop: RedisStreamConsumer → EventPayload → EventRouter → ACK.
-
-    At-least-once + idempotencia:
-    - ACK solo si router.route() retorna True.
-    - Duplicados por event_id se descartan (ACK inmediato).
-    - Mensajes rechazados quedan en PEL → claim_pending() los recupera.
-    - Tras MAX_RETRIES fallos → DLQ.
 
     Parámetros
     ----------
@@ -60,17 +41,21 @@ class StreamSource:
     max_errors     : int                 — errores consecutivos antes de detener.
     stream_name    : str                 — nombre lógico para métricas.
     claim_idle_ms  : int                 — ms idle antes de reclamar pendientes.
-    dedup_max_size : int                 — máximo de event_ids en memoria.
+    dedup_max_size : int                 — tamaño máximo L1 (memoria).
+    dedup_store    : RedisCursorStore | None — si se provee, activa L2 persistente.
+    dedup_ttl_days : int                 — TTL de event_ids en Redis (L2).
     """
 
     def __init__(
         self,
         consumer,
         router:         EventRouter,
-        max_errors:     int = 10,
-        stream_name:    str = "ohlcv",
-        claim_idle_ms:  int = 60_000,
-        dedup_max_size: int = 10_000,
+        max_errors:     int  = 10,
+        stream_name:    str  = "ohlcv",
+        claim_idle_ms:  int  = 60_000,
+        dedup_max_size: int  = 10_000,
+        dedup_store          = None,
+        dedup_ttl_days: int  = 7,
     ) -> None:
         self._consumer      = consumer
         self._router        = router
@@ -79,7 +64,16 @@ class StreamSource:
         self._metrics       = StreamMetrics(stream_name=stream_name)
         self._log           = logger.bind(component="StreamSource")
         self._retry_counts: Dict[str, int] = {}
-        self._seen          = SeenFilter(max_size=dedup_max_size)
+
+        # Deduplicación: L1 solo o L1+L2 según dedup_store
+        if dedup_store is not None:
+            self._seen = CompositeSeenFilter(
+                store    = dedup_store,
+                max_size = dedup_max_size,
+                ttl_days = dedup_ttl_days,
+            )
+        else:
+            self._seen = SeenFilter(max_size=dedup_max_size)
 
     # --------------------------------------------------
     # Public API
@@ -92,7 +86,6 @@ class StreamSource:
     def run_once_pending(self) -> tuple[int, int]:
         """
         Recupera y procesa mensajes pendientes (claim_pending).
-
         SafeOps: retorna (0, 0) si el consumer no tiene claim_pending.
         """
         claim_fn = getattr(self._consumer, "claim_pending", None)
@@ -162,7 +155,6 @@ class StreamSource:
         self,
         messages: List[Tuple[str, Dict]],
     ) -> tuple[int, int]:
-        """Procesa una lista de (entry_id, fields)."""
         if not messages:
             return 0, 0
 
@@ -195,14 +187,13 @@ class StreamSource:
                 failed += 1
                 continue
 
-            # -- Deduplicación por event_id --
+            # -- Deduplicación (L1 + L2) --
             if self._seen.is_duplicate(event.event_id):
                 self._consumer.ack(entry_id)
                 self._log.bind(
                     entry_id = entry_id,
                     event_id = event.event_id,
                 ).debug("duplicate_event_skipped")
-                # duplicado no cuenta como processed ni failed
                 continue
 
             # -- Routing con latencia medida --

@@ -26,7 +26,10 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
 
 from prefect import task, get_run_logger
 
@@ -94,6 +97,7 @@ class ExchangeProbe:
     supported_datasets: List[str]       = field(default_factory=list)
     available_markets:  List[str]       = field(default_factory=list)
     warnings:           List[str]       = field(default_factory=list)
+    adapter:            "Optional[CCXTAdapter]" = field(default=None, repr=False)  # lifecycle: flow owner
 
     def log_summary(self, log) -> None:
         """Emite resumen estructurado en una sola línea de log."""

@@ -86,8 +86,8 @@ def _launch_spot_pipelines(
     active: Set[str],
     log,
 ) -> List[asyncio.Future]:
-    # No se pasa adapter — cada task crea el suyo con lifecycle aislado.
-    # El markets cache en CCXTAdapter (TTL=60s) absorbe el costo de reconexión.
+    # El adapter del probe (ya conectado y con markets cacheados) se inyecta
+    # en los tasks via exchange_client. El flow cierra el adapter en finally.
     spot_requested = active & {"ohlcv", "trades", "orderbook"}
     if not spot_requested:
         return []
@@ -102,7 +102,8 @@ def _launch_spot_pipelines(
 
     futures: List[asyncio.Future] = []
     if "ohlcv" in spot_requested:
-        futures.append(run_historical_pipeline(config, exc_cfg, probe))
+        futures.append(run_historical_pipeline(config, exc_cfg, probe,
+                                               exchange_client=probe.adapter))
     if "trades" in spot_requested:
         futures.append(run_trades_pipeline(config, exc_cfg, probe, dataset="trades"))
     if "orderbook" in spot_requested:
@@ -183,7 +184,7 @@ def _launch_pipelines_for_exchange(
     requested: Set[str],
     log,
 ) -> ExchangeTasks:
-    # Invariante de aislamiento: no se pasa adapter entre flow y tasks.
+    # El adapter del probe se pasa via exchange_client a los tasks relevantes.
     # Cada task gestiona su propio lifecycle de conexión.
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
@@ -207,7 +208,8 @@ def _launch_pipelines_for_exchange(
     spot_tasks: List[asyncio.Future] = [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
         *(
-            [run_repair_pipeline(config, exc_cfg, probe, market_type="spot")]
+            [run_repair_pipeline(config, exc_cfg, probe, market_type="spot",
+                               exchange_client=probe.adapter)]
             if "ohlcv" in active
             else []
         ),
@@ -240,17 +242,8 @@ async def _validate_exchanges(
             )
         else:
             probe, adapter = res
+            probe.adapter = adapter  # lifecycle: flow cierra en finally
             probes.append(probe)
-            # Cerrar adapter aqui — su unico proposito era validacion.
-            # Markets cache (TTL=60s) absorbe el costo en reconexion.
-            try:
-                await adapter.close()
-            except Exception as close_exc:
-                log.warning(
-                    "Adapter close (post-validation) failed | exchange=%s error=%s",
-                    probe.exchange,
-                    close_exc,
-                )
 
     if not probes:
         raise RuntimeError("All exchange validations failed. Cannot proceed.")
@@ -462,6 +455,16 @@ async def market_data_flow(
         if _flow_guard is not None:
             _flow_guard.stop()
             guard_context.set_guard(None)
+
+        # ── Cerrar adapters de validación ────────────────────────────────────
+        for probe in probes:
+            if probe.adapter is not None:
+                try:
+                    await probe.adapter.close()
+                except Exception as _close_exc:
+                    pass  # best-effort — no ocultar errores del flow
+                finally:
+                    probe.adapter = None
 
         # ── Push métricas por exchange ────────────────────────────────────────
         for probe in probes:

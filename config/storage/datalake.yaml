@@ -1,18 +1,15 @@
 # @package _global_
 # ==============================================================================
-# OrangeCashMachine — Storage: Data Lake
+# OrangeCashMachine — Storage: Data Platform path anchor
 # ==============================================================================
-# Define CÓMO se almacenan los datos. No define qué datos se capturan.
+# Este archivo define el path base del data platform.
+# data_lake_root() en paths.py lo lee para resolver:
+#   iceberg_warehouse/ → data_lake_root().parent / "iceberg_warehouse"
+#   iceberg_catalog/   → data_lake_root().parent / "iceberg_catalog"
+#
+# Override en producción: OCM_DATA_LAKE_PATH env var (máxima prioridad)
 # ==============================================================================
 
 storage:
   data_lake:
     path: ${oc.env:DATA_LAKE_PATH,data_platform/data_lake}
-    format: parquet
-    compression: snappy
-    partitioning:
-      - exchange
-      - symbol
-      - timeframe
-      - year
-      - month

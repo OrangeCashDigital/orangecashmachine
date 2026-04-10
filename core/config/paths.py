@@ -37,7 +37,6 @@ from core.config.env_vars import (
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
     OCM_DATA_LAKE_PATH,
-    OCM_GOLD_PATH,
 )
 from core.utils import repo_root
 
@@ -68,22 +67,8 @@ def data_lake_root() -> Path:
     return repo_root() / "data_platform" / "data_lake"
 
 
-def bronze_ohlcv_root() -> Path:
-    """Path absoluto a bronze/ohlcv/."""
-    return data_lake_root() / "bronze" / "ohlcv"
 
 
-def gold_features_root() -> Path:
-    """Path absoluto a gold/features/ohlcv/.
-
-    Resolución:
-    1. OCM_GOLD_PATH — override absoluto
-    2. Derivado de data_lake_root()
-    """
-    env_override = os.getenv(OCM_GOLD_PATH)
-    if env_override:
-        return Path(env_override).resolve()
-    return data_lake_root() / "gold" / "features" / "ohlcv"
 
 
 # ==========================================================
@@ -177,6 +162,4 @@ def _read_yaml_lake_path() -> Optional[str]:
 
 __all__ = [
     "data_lake_root",
-    "bronze_ohlcv_root",
-    "gold_features_root",
 ]

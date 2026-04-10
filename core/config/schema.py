@@ -342,14 +342,12 @@ class PipelineConfig(StrictBaseModel):
 
 
 class DataLakeConfig(StrictBaseModel):
-    """Configuración del data lake (capa Bronze/Silver del medallion)."""
+    """Path anchor del data platform — usado por paths.py para resolver el warehouse Iceberg.
+
+    Nota: format/compression/partitioning eliminados — Iceberg gestiona esto internamente.
+    """
 
     path: str = "data_platform/data_lake"
-    format: str = "parquet"
-    compression: str = "snappy"
-    partitioning: list[str] = Field(
-        default_factory=lambda: ["exchange", "symbol", "timeframe", "year", "month"]
-    )
 
 
 class FeatureStoreConfig(StrictBaseModel):

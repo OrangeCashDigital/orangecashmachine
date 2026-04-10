@@ -49,11 +49,11 @@ integrations:
     enabled: false
 
 safety:
-  dry_run: true                    # dev: nunca opera real
+  dry_run: false                   # escritura Iceberg activa — warehouse validado
   prevent_full_reingestion: false
 
 datasets:
-  ohlcv: true      # Bronze → Silver → Gold activo en dev (dry_run=True protege escritura)
+  ohlcv: true      # Bronze → Silver → Gold activo en dev
 
 exchanges:
   bybit:
