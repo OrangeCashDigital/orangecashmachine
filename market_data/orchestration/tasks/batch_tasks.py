@@ -19,7 +19,7 @@ DRY    – validaciones centralizadas, sin repetición
 SafeOps – placeholders no fallan en producción si están desactivados por config
 """
 
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from prefect import task, get_run_logger
 
@@ -50,8 +50,8 @@ async def managed_adapter(
     Si no hay adapter inyectado, crea uno, lo conecta y garantiza
     su cierre en finally — el lifecycle es responsabilidad de esta task.
 
-    DRY: elimina el patrón _owns_client duplicado en 3 tasks.
-    SafeOps: cierre garantizado en finally cuando _owns_client=True.
+    DRY: un único punto de gestión de lifecycle — sin patrón _owns_client.
+    SafeOps: cierre garantizado en finally cuando el adapter es propio.
     """
     if injected is not None:
         yield injected
@@ -203,7 +203,8 @@ async def run_historical_pipeline(
             market_type     = "spot",
             dry_run         = config.safety.dry_run,
         )
-        summary = await pipeline.run(mode="incremental")
+        pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
+        summary = await pipeline.run(mode=pipeline_mode)
 
     _update_throttle_from_summary(throttle, summary)
 
@@ -293,27 +294,19 @@ async def run_futures_pipeline(
         len(futures_symbols), len(hist_cfg.timeframes), effective_concurrency,
     )
 
-    async def _run_pipeline(client) -> None:
-        nonlocal summary
+    pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
+    async with managed_adapter(exchange_cfg, futures_market_type, injected=exchange_client) as futures_client:
         pipeline = UnifiedPipeline(
             symbols         = futures_symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
             max_concurrency = effective_concurrency,
-            exchange_client = client,
+            exchange_client = futures_client,
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = futures_market_type,
             dry_run         = config.safety.dry_run,
         )
-        pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
         summary = await pipeline.run(mode=pipeline_mode)
-
-    summary = None  # will be set inside _run_pipeline
-    # managed_adapter gestiona el lifecycle completo:
-    #   - injected != None: usa el adapter existente, NO lo cierra.
-    #   - injected is None: crea adapter fresco, cierre garantizado en finally.
-    async with managed_adapter(exchange_cfg, futures_market_type, injected=exchange_client) as futures_client:
-        await _run_pipeline(futures_client)
 
     _update_throttle_from_summary(throttle, summary)
 
@@ -396,7 +389,7 @@ async def run_derivatives_pipeline(
     config: AppConfig,
     exchange_cfg: ExchangeConfig,
     probe: ExchangeProbe,
-    datasets: List[str],
+    datasets: list[str],
 ) -> None:
     """
     Pipeline de derivados (funding_rate, open_interest, liquidations, etc.).
@@ -463,9 +456,21 @@ async def run_repair_pipeline(
         )
         return
 
+    if not hist_cfg.timeframes:
+        raise ValueError("Repair pipeline requires at least one timeframe.")
+
+    throttle = get_or_create_throttle(
+        exchange_id       = exchange_name,
+        market_type       = market_type,
+        dataset           = "ohlcv",
+        initial           = probe.max_concurrent,
+        maximum           = probe.max_concurrent,
+        latency_target_ms = probe.latency_ms or 500,
+    )
+
     log.info(
-        "Repair pipeline starting | exchange=%s market=%s symbols=%s timeframes=%s",
-        exchange_name, market_type, len(symbols), len(hist_cfg.timeframes),
+        "Repair pipeline starting | exchange=%s market=%s symbols=%s timeframes=%s workers=%s",
+        exchange_name, market_type, len(symbols), len(hist_cfg.timeframes), throttle.current,
     )
 
     async with managed_adapter(exchange_cfg, market_type, injected=exchange_client) as client:
@@ -473,7 +478,7 @@ async def run_repair_pipeline(
             symbols         = symbols,
             timeframes      = hist_cfg.timeframes,
             start_date      = hist_cfg.start_date,
-            max_concurrency = probe.max_concurrent,
+            max_concurrency = throttle.current,
             exchange_client = client,
             market_type     = market_type,
             backfill_mode   = hist_cfg.backfill_mode,
@@ -481,6 +486,9 @@ async def run_repair_pipeline(
         )
         summary = await pipeline.run(mode="repair")
 
+    _update_throttle_from_summary(throttle, summary)
+
+    ts = get_throttle_state(exchange_name, market_type=market_type, dataset="ohlcv")
     log.info(
         "Repair pipeline finished | exchange=%s market=%s ok=%s failed=%s "
         "gaps_found=%s gaps_healed=%s rows=%s",
@@ -488,6 +496,13 @@ async def run_repair_pipeline(
         summary.succeeded, summary.failed,
         summary.total_gaps_found, summary.total_gaps_healed,
         summary.total_rows,
+    )
+
+    log.info("── Pipeline metrics | exchange=%s market=%s ──────────────────", exchange_name, market_type)
+    _log_pipeline_metrics(summary, market_type, log)
+    log.info(
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        ts["key"], ts["concurrent"], ts["maximum"], ts["error_rate"] * 100, int(ts["p95_ms"]),
     )
 
     _raise_if_total_failure(summary, "Repair", exchange_name)
