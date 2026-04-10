@@ -177,15 +177,25 @@ class GoldStorage:
         )
 
         # ── Overwrite atómico — reemplaza solo este dataset ───────────────────
+        # snapshot_properties inyecta la identidad del dataset en el snapshot
+        # para que list_versions() pueda filtrar por dataset sin scan de datos.
+        # Las properties se persisten en summary.additional_properties (pyiceberg).
         self._table.overwrite(
             pa.Table.from_pandas(
                 prepared,
                 schema         = self._table.schema().as_arrow(),
                 preserve_index = False,
             ),
-            overwrite_filter = _dataset_filter(
+            overwrite_filter     = _dataset_filter(
                 exchange, symbol, market_type, timeframe,
             ),
+            snapshot_properties  = {
+                "ocm.exchange":    exchange,
+                "ocm.symbol":      symbol,
+                "ocm.market_type": market_type,
+                "ocm.timeframe":   timeframe,
+                "ocm.run_id":      run_id or "",
+            },
         )
 
         logger.info(
@@ -243,9 +253,29 @@ class GoldStorage:
         market_type: str,
         timeframe:   str,
     ) -> List[int]:
-        """Retorna snapshot_ids disponibles en el historial Iceberg."""
+        """
+        Retorna snapshot_ids que construyeron este dataset específico,
+        en orden cronológico.
+
+        Filtra por ocm.* properties inyectadas en cada overwrite().
+        Snapshots anteriores a esta feature (sin properties) se omiten
+        — no hay forma de verificar su dataset sin scan de datos.
+        """
         try:
-            return [s.snapshot_id for s in self._table.history()]
+            result = []
+            for entry in self._table.history():
+                snap = self._table.snapshot_by_id(entry.snapshot_id)
+                if snap is None:
+                    continue
+                props = getattr(snap.summary, "additional_properties", {}) or {}
+                if (
+                    props.get("ocm.exchange")    == exchange
+                    and props.get("ocm.symbol")      == symbol
+                    and props.get("ocm.market_type") == market_type
+                    and props.get("ocm.timeframe")   == timeframe
+                ):
+                    result.append(entry.snapshot_id)
+            return result
         except Exception:
             return []
 

@@ -155,9 +155,28 @@ class GoldLoader:
         market_type: str,
         timeframe:   str,
     ) -> List[int]:
-        """Retorna snapshot_ids disponibles (orden cronológico)."""
+        """
+        Retorna snapshot_ids que construyeron este dataset específico,
+        en orden cronológico.
+
+        Filtra por ocm.* properties inyectadas por GoldStorage.build().
+        Snapshots sin properties (anteriores a esta feature) se omiten.
+        """
         try:
-            return [s.snapshot_id for s in self._table.history()]
+            result = []
+            for entry in self._table.history():
+                snap = self._table.snapshot_by_id(entry.snapshot_id)
+                if snap is None:
+                    continue
+                props = getattr(snap.summary, "additional_properties", {}) or {}
+                if (
+                    props.get("ocm.exchange")    == exchange
+                    and props.get("ocm.symbol")      == symbol
+                    and props.get("ocm.market_type") == market_type
+                    and props.get("ocm.timeframe")   == timeframe
+                ):
+                    result.append(entry.snapshot_id)
+            return result
         except Exception:
             return []
 
@@ -170,7 +189,12 @@ class GoldLoader:
         version:     str = "latest",
         as_of:       Optional[str] = None,
     ) -> Optional[Dict]:
-        """Metadata del snapshot resuelto."""
+        """
+        Metadata del snapshot resuelto para este dataset.
+
+        Incluye las ocm.* properties inyectadas por GoldStorage.build()
+        más estadísticas del snapshot (registros, archivos, tamaño).
+        """
         snap_id = self._resolve_snapshot(version, as_of)
         try:
             snap = (
@@ -180,13 +204,21 @@ class GoldLoader:
             )
             if snap is None:
                 return None
+            props = getattr(snap.summary, "additional_properties", {}) or {}
             return {
-                "snapshot_id":  snap.snapshot_id,
-                "timestamp_ms": snap.timestamp_ms,
-                "exchange":     exchange,
-                "symbol":       symbol,
-                "market_type":  market_type,
-                "timeframe":    timeframe,
+                "snapshot_id":    snap.snapshot_id,
+                "timestamp_ms":   snap.timestamp_ms,
+                # Identidad del dataset desde properties del snapshot (SSOT)
+                "exchange":       props.get("ocm.exchange",    exchange),
+                "symbol":         props.get("ocm.symbol",      symbol),
+                "market_type":    props.get("ocm.market_type", market_type),
+                "timeframe":      props.get("ocm.timeframe",   timeframe),
+                "run_id":         props.get("ocm.run_id",      ""),
+                # Estadísticas del snapshot
+                "added_records":  props.get("added-records"),
+                "total_records":  props.get("total-records"),
+                "total_files":    props.get("total-data-files"),
+                "total_size":     props.get("total-files-size"),
             }
         except Exception:
             return None

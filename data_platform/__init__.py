@@ -8,19 +8,25 @@ Exports públicos del paquete data_platform.
 
 Capas
 -----
+  protocols    — contratos estructurales (OHLCVStorageProtocol, FeatureStorageProtocol)
+  platform     — facade DataPlatform (punto de entrada para research/backtesting)
   ohlcv_utils  — utilidades de dominio OHLCV (safe_symbol, normalize_ohlcv_df)
-  loaders      — acceso al Data Lake (GoldLoader)
+  loaders      — acceso directo al Gold layer (GoldLoader)
 
-Uso
----
-    from data_platform.ohlcv_utils import safe_symbol, normalize_ohlcv_df
-    from data_platform.loaders.gold_loader import GoldLoader
+Uso recomendado
+---------------
+    from data_platform.platform import DataPlatform
+
+    data = DataPlatform(exchange="bybit", market_type="spot")
+    df   = data.ohlcv("BTC/USDT", "1h")
+    df   = data.features("BTC/USDT", "1h")
 """
 
-# Exports de ohlcv_utils son los más usados — re-exportar para conveniencia
 from data_platform.ohlcv_utils import safe_symbol, normalize_ohlcv_df
+from data_platform.platform import DataPlatform
 
 __all__ = [
+    "DataPlatform",
     "safe_symbol",
     "normalize_ohlcv_df",
 ]

@@ -14,14 +14,13 @@ Orden de resolución para data_lake_root()
    • settings.yaml → data_platform/local_data_lake  (en development)
 3. repo_root() / "data_platform" / "data_lake" — fallback seguro
 
-Paths derivados
----------------
-  bronze_ohlcv_root()  → <lake_root>/bronze/ohlcv/
-  gold_features_root() → <lake_root>/gold/features/ohlcv/
+Uso
+---
+  data_lake_root() — anchor para environment_validator (_check_storage_path)
+                     y para catalog.py (iceberg_warehouse / iceberg_catalog).
 
 Diseño
 ------
-• Ningún path tiene parents[N] — siempre relativo a un anchor explícito
 • Configurable por entorno sin cambiar código
 • Compatible con Docker (montar volumen + OCM_DATA_LAKE_PATH)
 • Las funciones son lazy — no leen disco en import time
