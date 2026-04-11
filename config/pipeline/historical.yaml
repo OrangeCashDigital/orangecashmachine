@@ -11,8 +11,11 @@
 pipeline:
   historical:
     start_date: "auto"
-    auto_lookback_days: 1825   # 5 años — activo solo cuando start_date: "auto"
-                               # Ajustar por exchange: Bybit spot ~2019, futures ~2020
+    auto_lookback_days: 3650   # 10 años — activo solo cuando start_date: "auto"
+                               # El loop para cuando el exchange no devuelve más datos.
+                               # Valor mayor que cualquier exchange activo → cobertura completa.
+                               # TODO: implementar binary-search hacia atrás para discovery
+                               #       exacto del earliest candle sin depender de este valor.
     backfill_mode: false
     max_concurrent_tasks: null   # null = resuelto dinámicamente en código
     timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
