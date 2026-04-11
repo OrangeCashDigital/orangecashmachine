@@ -11,6 +11,8 @@
 pipeline:
   historical:
     start_date: "auto"
+    auto_lookback_days: 1825   # 5 años — activo solo cuando start_date: "auto"
+                               # Ajustar por exchange: Bybit spot ~2019, futures ~2020
     backfill_mode: false
     max_concurrent_tasks: null   # null = resuelto dinámicamente en código
     timeframes: [1m, 5m, 15m, 1h, 4h, 1d]

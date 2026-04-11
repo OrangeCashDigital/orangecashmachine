@@ -229,9 +229,10 @@ class HistoricalFetcherAsync:
         transformer:        Optional[OHLCVTransformer]  = None,
         overlap_bars:       int                         = DEFAULT_OVERLAP_BARS,
         cursor_store:       Optional[CursorStore]       = None,
-        backfill_mode:      bool                        = False,
-        market_type:        Optional[str]               = None,
-        config_start_date:  Optional[str]               = None,
+        backfill_mode:        bool                      = False,
+        market_type:          Optional[str]             = None,
+        config_start_date:    Optional[str]             = None,
+        auto_lookback_days:   int                       = 1825,
     ) -> None:
         self._exchange          = exchange_client
         if storage is None:
@@ -245,7 +246,8 @@ class HistoricalFetcherAsync:
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
         self._backfill_mode     = backfill_mode
         self._market_type       = market_type
-        self._config_start_date = config_start_date
+        self._config_start_date  = config_start_date
+        self._auto_lookback_days = auto_lookback_days
         self._log = bind_pipeline(
             "fetcher",
             exchange=getattr(exchange_client, "_exchange_id", "unknown"),
@@ -305,6 +307,17 @@ class HistoricalFetcherAsync:
     ) -> DownloadResult:
 
         since_ts = await self._resolve_start_timestamp(symbol, timeframe, start_date)
+        if since_ts is None:
+            # _resolve_start_timestamp no encontró cursor, storage ni config_start_date.
+            # No es un error de red — el par no puede iniciar sin un punto de arranque.
+            # MissingStartDateError debería haberse lanzado antes; esta guardia es
+            # defensa en profundidad para evitar TypeError en el loop (int <= None).
+            self._log.bind(
+                symbol=symbol, timeframe=timeframe,
+            ).error("since_ts=None — sin punto de inicio resuelto, abortando par")
+            raise MissingStartDateError(
+                f"No se pudo resolver since_ts para {symbol}/{timeframe}"
+            )
         tf_ms    = timeframe_to_ms(timeframe)
         _mode    = "backfill" if self._backfill_mode else "incremental"
         # overlap por par: resuelve lateness calibrado por exchange y timeframe.
@@ -471,22 +484,49 @@ class HistoricalFetcherAsync:
             self._log.bind(symbol=symbol, timeframe=timeframe, ts_ms=cursor_ts).debug("Cursor hit")
             return cursor_ts - (self._overlap * tf_ms)
 
-        # B. Fallback parquet
+        # B. Fallback Iceberg (get_last_timestamp — L1/L2/L3)
         last_ts = self._storage.get_last_timestamp(symbol, timeframe)
         if last_ts is not None:
-            self._log.bind(symbol=symbol, timeframe=timeframe).debug("Cursor miss — fallback parquet")
-            return int(last_ts.timestamp() * 1000) - (self._overlap * tf_ms)
+            if not isinstance(last_ts, pd.Timestamp):
+                # Guardia defensiva: _to_utc_timestamp debe devolver siempre
+                # pd.Timestamp. Si llega otro tipo, el caché L1 está corrupto.
+                self._log.bind(
+                    symbol=symbol, timeframe=timeframe,
+                    last_ts_type=type(last_ts).__name__, last_ts_repr=repr(last_ts),
+                ).error("get_last_timestamp devolvió tipo inesperado — abortando par")
+                raise MissingStartDateError(
+                    f"get_last_timestamp devolvió {type(last_ts).__name__} "
+                    f"en lugar de pd.Timestamp para {symbol}/{timeframe}"
+                )
+            since_ms  = int(last_ts.timestamp() * 1000) - (self._overlap * tf_ms)
+            delta_ms  = int(last_ts.timestamp() * 1000) - since_ms
+            self._log.bind(
+                symbol=symbol, timeframe=timeframe,
+                last_ts=last_ts.isoformat(), since_ms=since_ms,
+                delta_ms=delta_ms, overlap_candles=self._overlap,
+            ).debug("Cursor miss — fallback Iceberg")
+            return since_ms
 
-        # C. Primer inicio desde arg o config
+        # C. Primer inicio desde arg o config (ignora el sentinel "auto")
         for candidate in [start_date, self._config_start_date]:
-            if candidate:
-                self._log.bind(symbol=symbol, timeframe=timeframe, desde=candidate).info("Primer inicio")
+            if candidate and candidate != "auto":
+                self._log.bind(symbol=symbol, timeframe=timeframe, desde=candidate).info("Primer inicio — fecha configurada")
                 return self._exchange.parse8601(candidate)
 
-        raise MissingStartDateError(
-            f"{symbol}/{timeframe} en modo incremental sin cursor, "
-            f"sin parquet y sin start_date configurado."
-        )
+        # D. Sin fecha configurada o start_date=="auto": lookback fijo.
+        # Política deliberada: descargamos todo el historial disponible
+        # usando un lookback conservador de 5 años. El sistema es idempotente
+        # (cursor + Iceberg evitan reingestas) y el usuario puede acortar
+        # con una fecha ISO explícita en config.pipeline.historical.start_date.
+        _lookback_days = self._auto_lookback_days
+        import time as _time
+        _auto_since_ms = int((_time.time() - _lookback_days * 86400) * 1000)
+        self._log.bind(
+            symbol=symbol, timeframe=timeframe,
+            lookback_days=_lookback_days,
+            since_ms=_auto_since_ms,
+        ).info("Primer inicio — modo auto (lookback fijo)")
+        return _auto_since_ms
 
     # ======================================================
     # Fetch with retry + breaker

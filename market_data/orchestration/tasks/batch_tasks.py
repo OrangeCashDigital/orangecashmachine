@@ -194,14 +194,15 @@ async def run_historical_pipeline(
 
     async with managed_adapter(exchange_cfg, "spot", injected=exchange_client) as client:
         pipeline = UnifiedPipeline(
-            symbols         = spot_symbols,
-            timeframes      = hist_cfg.timeframes,
-            start_date      = hist_cfg.start_date,
-            max_concurrency = effective_concurrency,
-            exchange_client = client,
-            backfill_mode   = hist_cfg.backfill_mode,
-            market_type     = "spot",
-            dry_run         = config.safety.dry_run,
+            symbols             = spot_symbols,
+            timeframes          = hist_cfg.timeframes,
+            start_date          = hist_cfg.start_date,
+            max_concurrency     = effective_concurrency,
+            exchange_client     = client,
+            backfill_mode       = hist_cfg.backfill_mode,
+            market_type         = "spot",
+            dry_run             = config.safety.dry_run,
+            auto_lookback_days  = getattr(hist_cfg, "auto_lookback_days", 1825),
         )
         pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
         summary = await pipeline.run(mode=pipeline_mode)

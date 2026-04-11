@@ -48,10 +48,11 @@ from infra.state.cursor_store import (
 
 
 def _build_storage(
-    exchange:    str,
-    market_type: str,
-    redis_client=None,   # no-op — Iceberg no usa Redis lock
-    dry_run:     bool = False,
+    exchange:     str,
+    market_type:  str,
+    redis_client=None,                   # no-op — Iceberg no usa Redis lock
+    dry_run:      bool              = False,
+    cursor_store: "CursorStore | None" = None,
 ) -> "OHLCVStorage":
     """
     Factory de storage OHLCV — IcebergStorage es el único backend.
@@ -61,7 +62,12 @@ def _build_storage(
     _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
         "storage_factory | IcebergStorage"
     )
-    return IcebergStorage(exchange=exchange, market_type=market_type, dry_run=dry_run)
+    return IcebergStorage(
+        exchange     = exchange,
+        market_type  = market_type,
+        dry_run      = dry_run,
+        cursor_store = cursor_store,  # L2 cache cross-process
+    )
 
 
 DEFAULT_MAX_CONCURRENCY: int = 6
@@ -136,6 +142,8 @@ class UnifiedPipeline:
             raise ValueError("timeframes no puede estar vacio")
         if not start_date:
             raise ValueError("start_date es obligatorio")
+        # "auto" es el sentinel para lookback dinámico — se resuelve en el fetcher.
+        # Una fecha ISO explícita actúa como floor; el fetcher la respeta en path C.
         if exchange_client is None:
             raise ValueError("exchange_client es obligatorio")
 
@@ -150,10 +158,11 @@ class UnifiedPipeline:
         cursor  = cursor_store or _build_cursor_store_safe()
         bronze  = BronzeStorage(exchange=self._exchange_id)
         silver  = _build_storage(
-            exchange    = self._exchange_id,
-            market_type = self.market_type,
-            redis_client= getattr(cursor, '_client', None),
-            dry_run     = dry_run,
+            exchange     = self._exchange_id,
+            market_type  = self.market_type,
+            redis_client = getattr(cursor, '_client', None),
+            dry_run      = dry_run,
+            cursor_store = cursor,  # L2 cache cross-process en get_last_timestamp
         )
         quality = QualityPipeline()
 
@@ -167,13 +176,14 @@ class UnifiedPipeline:
         # via self._exchange (CCXTAdapter._exchange_id).
         # El fetcher usa DEFAULT_OVERLAP_BARS como base y lo ajusta por par.
         fetcher = HistoricalFetcherAsync(
-            storage           = silver,
-            transformer       = OHLCVTransformer(),
-            exchange_client   = exchange_client,
-            cursor_store      = cursor,
-            backfill_mode     = self.backfill_mode,
-            market_type       = market_type,
-            config_start_date = start_date,
+            storage             = silver,
+            transformer         = OHLCVTransformer(),
+            exchange_client     = exchange_client,
+            cursor_store        = cursor,
+            backfill_mode       = self.backfill_mode,
+            market_type         = market_type,
+            config_start_date   = start_date,
+            auto_lookback_days  = auto_lookback_days,
             # overlap_bars omitido: el fetcher resuelve por par via
             # overlap_for_timeframe(timeframe, exchange=exchange_id)
         )
