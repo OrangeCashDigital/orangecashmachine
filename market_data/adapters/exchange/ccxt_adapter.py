@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import copy
 import time
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
@@ -406,7 +407,7 @@ class CCXTAdapter(ExchangeAdapter):
                         self._exchange_id, now - self._markets_cached_at,
                     )
                 elif global_valid:
-                    client.markets = _GLOBAL_MARKETS_CACHE[global_key]
+                    client.markets = copy.deepcopy(_GLOBAL_MARKETS_CACHE[global_key])
                     self._markets_cache     = client.markets
                     self._markets_cached_at = now
                     latency = 0.0
@@ -423,7 +424,7 @@ class CCXTAdapter(ExchangeAdapter):
                     latency = (time.perf_counter() - start) * 1000
                     self._markets_cache                  = client.markets
                     self._markets_cached_at              = time.perf_counter()
-                    _GLOBAL_MARKETS_CACHE[global_key]    = client.markets
+                    _GLOBAL_MARKETS_CACHE[global_key]    = copy.deepcopy(client.markets)
                     _GLOBAL_MARKETS_CACHED_AT[global_key] = self._markets_cached_at
 
                 self._client = client

@@ -339,7 +339,7 @@ async def validate_exchange_connection(
         "yes" if cfg.has_credentials else "no",
     )
 
-    adapter = CCXTAdapter(config=cfg)  # default_type resuelto desde cfg.markets.futures_default_type
+    adapter = CCXTAdapter(config=cfg, default_type="spot")  # probe usa spot — pipelines futures crean su propio adapter
 
     try:
         await adapter.connect()

@@ -568,6 +568,15 @@ class HistoricalFetcherAsync:
             except Exception as exc:
                 # Fallback: error desconocido — loguear tipo completo.
                 last_exc = exc
+                err_str  = str(exc)
+                # "Event loop is closed" indica sesión aiohttp destruida —
+                # tratarlo igual que Session dead: reconectar antes de reintentar.
+                is_loop_dead = "Event loop is closed" in err_str
+                if is_loop_dead and not session_reconnected:
+                    self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, err=err_str).warning("Loop dead — reconnecting")
+                    await self._exchange.reconnect()
+                    session_reconnected = True
+                    continue
                 wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
                 wait    *= random.uniform(0.5, 1.5)
                 self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2)).warning("Fetch failed (unknown) | error_type={} err={}", type(exc).__name__, exc)

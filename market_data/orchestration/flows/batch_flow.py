@@ -208,8 +208,7 @@ def _launch_pipelines_for_exchange(
     spot_tasks: List[asyncio.Future] = [
         *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
         *(
-            [run_repair_pipeline(config, exc_cfg, probe, market_type="spot",
-                               exchange_client=probe.adapter)]
+            [run_repair_pipeline(config, exc_cfg, probe, market_type="spot", exchange_client=probe.adapter)]
             if "ohlcv" in active
             else []
         ),
