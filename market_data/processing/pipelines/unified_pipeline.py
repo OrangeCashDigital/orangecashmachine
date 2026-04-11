@@ -132,9 +132,10 @@ class UnifiedPipeline:
         exchange_client: CCXTAdapter,
         max_concurrency: int                   = DEFAULT_MAX_CONCURRENCY,
         cursor_store:    Optional[CursorStore] = None,
-        backfill_mode:   bool                  = True,
-        market_type:     str                   = "spot",
-        dry_run:         bool                  = False,
+        backfill_mode:      bool                  = True,
+        market_type:        str                   = "spot",
+        dry_run:            bool                  = False,
+        auto_lookback_days: int                   = 3650,
     ) -> None:
         if not symbols:
             raise ValueError("symbols no puede estar vacio")

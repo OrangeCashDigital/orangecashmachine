@@ -34,6 +34,7 @@ class HistoricalConfig:
                                  si se pasa un valor sea int >= 1.
     """
     start_date: str = "auto"
+    auto_lookback_days: int = 3650  # 10 años — activo solo cuando start_date="auto"
     backfill_mode: bool = False
     max_concurrent_tasks: Optional[int] = None
     timeframes: List[str] = field(default_factory=lambda: ["1m", "5m", "15m", "1h", "4h", "1d"])

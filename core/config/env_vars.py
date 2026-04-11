@@ -45,6 +45,7 @@ OCM_VALIDATE_ONLY: str = "OCM_VALIDATE_ONLY"
 """``"1"`` | ``"true"`` — valida config y sale sin ejecutar pipeline."""
 
 PUSHGATEWAY_URL: str = "PUSHGATEWAY_URL"
+PUSHGATEWAY_HOST_PORT: str = "PUSHGATEWAY_HOST_PORT"
 """``"host:port"`` del Prometheus Pushgateway (default: ``"localhost:9091"``)."""
 
 # =============================================================================
@@ -68,6 +69,7 @@ OCM_GOLD_PATH: str = "OCM_GOLD_PATH"
 """Override absoluto del root del gold layer."""
 
 OCM_EXCHANGE: str = "OCM_EXCHANGE"
+OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
 """Exchange default para scripts de research y loaders standalone."""
 
 # =============================================================================

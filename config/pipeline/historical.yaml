@@ -1,4 +1,4 @@
-# @package _global_
+# @package pipeline.historical
 # ==============================================================================
 # OrangeCashMachine — Pipeline: Historical
 # ==============================================================================
@@ -8,19 +8,17 @@
 # Overrides explícitos van en env/*.yaml bajo pipeline.historical.*
 # ==============================================================================
 
-pipeline:
-  historical:
-    start_date: "auto"
-    auto_lookback_days: 3650   # 10 años — activo solo cuando start_date: "auto"
-                               # El loop para cuando el exchange no devuelve más datos.
-                               # Valor mayor que cualquier exchange activo → cobertura completa.
-                               # TODO: implementar binary-search hacia atrás para discovery
-                               #       exacto del earliest candle sin depender de este valor.
-    backfill_mode: false
-    max_concurrent_tasks: null   # null = resuelto dinámicamente en código
-    timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
+start_date: "auto"
+auto_lookback_days: 3650   # 10 años — activo solo cuando start_date: "auto"
+                           # El loop para cuando el exchange no devuelve más datos.
+                           # Valor mayor que cualquier exchange activo → cobertura completa.
+                           # TODO: implementar binary-search hacia atrás para discovery
+                           #       exacto del earliest candle sin depender de este valor.
+backfill_mode: false
+max_concurrent_tasks: null   # null = resuelto dinámicamente en código
+timeframes: [1m, 5m, 15m, 1h, 4h, 1d]
 
-    retry_policy:
-      max_attempts: 5
-      backoff_factor: 2
-      jitter: true
+retry_policy:
+  max_attempts: 5
+  backoff_factor: 2
+  jitter: true

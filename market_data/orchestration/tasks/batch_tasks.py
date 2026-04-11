@@ -476,14 +476,15 @@ async def run_repair_pipeline(
 
     async with managed_adapter(exchange_cfg, market_type, injected=exchange_client) as client:
         pipeline = UnifiedPipeline(
-            symbols         = symbols,
-            timeframes      = hist_cfg.timeframes,
-            start_date      = hist_cfg.start_date,
-            max_concurrency = throttle.current,
-            exchange_client = client,
-            market_type     = market_type,
-            backfill_mode   = hist_cfg.backfill_mode,
-            dry_run         = config.safety.dry_run,
+            symbols             = symbols,
+            timeframes          = hist_cfg.timeframes,
+            start_date          = hist_cfg.start_date,
+            max_concurrency     = throttle.current,
+            exchange_client     = client,
+            market_type         = market_type,
+            backfill_mode       = hist_cfg.backfill_mode,
+            dry_run             = config.safety.dry_run,
+            auto_lookback_days  = getattr(hist_cfg, "auto_lookback_days", 1825),
         )
         summary = await pipeline.run(mode="repair")
 

@@ -256,7 +256,10 @@ class RetryPolicy(StrictBaseModel):
 class HistoricalConfig(StrictBaseModel):
     """Configuración del pipeline histórico (backfill e incremental)."""
 
-    start_date: str = "2017-01-01T00:00:00Z"
+    start_date: str = "auto"
+    auto_lookback_days: int = Field(default=3650, ge=1, le=36500,
+        description="Días de lookback cuando start_date='auto'. "
+                    "El loop para al agotar datos del exchange.")
     backfill_mode: bool = False
     max_concurrent_tasks: int = Field(default=4, ge=1, le=64)
     timeframes: list[str] = Field(default_factory=list)
@@ -398,13 +401,18 @@ class DatasetsConfig(StrictBaseModel):
 
 
 class RedisConfig(StrictBaseModel):
-    """Configuración de Redis (cursor store, estado de pipeline)."""
+    """Configuración de Redis (cursor store, estado de pipeline).
+
+    password usa SecretStr — nunca aparece en logs ni en repr().
+    Esto previene leakage accidental en tracebacks o --cfg job.
+    Ref: Pydantic SecretStr — https://docs.pydantic.dev/latest/concepts/types/#secret-types
+    """
 
     enabled: bool = False
     host: str = "localhost"
     port: int = Field(default=6379, ge=1, le=65535)
     db: int = Field(default=0, ge=0)
-    password: Optional[str] = None
+    password: Optional[SecretStr] = None
     socket_timeout: int = Field(default=5, ge=1)
     retry_on_timeout: bool = True
     ttl_days: int = Field(default=90, ge=1, description="TTL del cursor store en días")
@@ -418,14 +426,36 @@ class KafkaConfig(StrictBaseModel):
 
 
 class PostgresConfig(StrictBaseModel):
-    """Configuración de PostgreSQL (metadata / analytics — future-ready)."""
+    """Configuración de PostgreSQL (metadata / analytics — future-ready).
+
+    password es Optional cuando postgres está deshabilitado.
+    Si enabled=True, password vacío lanza ValueError — contraseñas vacías
+    son vector directo de ataque (CWE-521: Weak Password Requirements).
+    Ref: https://cwe.mitre.org/data/definitions/521.html
+    """
 
     enabled: bool = False
     host: str = "localhost"
     port: int = Field(default=5432, ge=1, le=65535)
     user: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[SecretStr] = None
     database: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_credentials_when_enabled(self) -> PostgresConfig:
+        """Falla explícitamente si postgres está habilitado sin credenciales."""
+        if not self.enabled:
+            return self
+        if not self.password or not self.password.get_secret_value():
+            raise ValueError(
+                "postgres.password no puede ser vacío cuando postgres.enabled=true. "
+                "Setear POSTGRES_PASSWORD en el entorno."
+            )
+        if not self.user:
+            raise ValueError(
+                "postgres.user no puede ser vacío cuando postgres.enabled=true."
+            )
+        return self
 
 
 class IntegrationsConfig(StrictBaseModel):
@@ -585,6 +615,17 @@ class AppConfig(StrictBaseModel):
         """Verifica que al menos un exchange esté habilitado."""
         if not self.exchanges:
             raise ValueError("At least one exchange must be enabled.")
+        return self
+
+    @model_validator(mode="after")
+    def ensure_log_dir(self) -> AppConfig:
+        """Crea log_dir si no existe — falla rápido antes de arrancar el pipeline.
+
+        Un log_dir inaccesible en runtime produce errores silenciosos difíciles
+        de diagnosticar. Mejor fallar aquí con mensaje claro.
+        """
+        log_dir = Path(self.observability.logging.log_dir)
+        log_dir.mkdir(parents=True, exist_ok=True)
         return self
 
     @model_validator(mode="after")
