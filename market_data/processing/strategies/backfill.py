@@ -215,7 +215,22 @@ class BackfillStrategy(StrategyMixin):
 
     @staticmethod
     def _parse_start_date_ms(start_date: str) -> int:
-        """Convierte start_date ISO 8601 a milliseconds epoch."""
+        """Convierte start_date ISO 8601 a milliseconds epoch.
+
+        'auto' no está soportado en backfill — backfill requiere un floor
+        explícito para que el rango sea determinístico y reproducible.
+        Si llega aquí es un error de config: el caller debe resolver 'auto'
+        a un timestamp concreto antes de invocar esta estrategia.
+        Ref: HistoricalConfig.validate_start_date — acepta 'auto' como
+        literal válido, pero delega la resolución al fetcher (modo incremental).
+        En backfill el fetcher ya lanza MissingStartDateError si candidate
+        es None — este guard es una segunda línea de defensa.
+        """
+        if start_date == "auto":
+            raise ValueError(
+                "start_date='auto' no es válido en BackfillStrategy. "
+                "Configurar un ISO 8601 explícito, e.g. '2021-01-01T00:00:00Z'."
+            )
         # pd.Timestamp maneja Z, +00:00 y naive sin ambigüedad
         return int(pd.Timestamp(start_date, tz="UTC").value // 1_000_000)
 

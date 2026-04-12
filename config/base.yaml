@@ -30,7 +30,7 @@ integrations:
     enabled: ${oc.env:REDIS_ENABLED,true}
     host: ${oc.env:REDIS_HOST,localhost}
     port: ${oc.env:REDIS_PORT,6379}
-    db: ${oc.env:REDIS_DB,0}
+    db: ${oc.env:REDIS_DB,1}    # 1 = canónico dev. Setear REDIS_DB en .env.
     socket_timeout: 5
     retry_on_timeout: true
 

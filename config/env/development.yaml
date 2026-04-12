@@ -32,9 +32,8 @@ observability:
   tracing:
     enabled: false
 
-storage:
-  data_lake:
-    path: ${oc.env:DEV_DATA_LAKE_PATH,data_platform/dev_data_lake}
+# storage.data_lake.path: viene de OCM_DATA_LAKE_PATH en .env (SSOT).
+# No sobrescribir aquí — un solo punto de verdad por entorno.
 
 integrations:
   redis:
@@ -48,9 +47,11 @@ integrations:
   postgres:
     enabled: false
 
-safety:
-  dry_run: false                   # escritura Iceberg activa — warehouse validado
-  prevent_full_reingestion: false
+# safety: base.yaml define dry_run: true como safe default global.
+# En dev NO sobrescribimos — heredamos el default seguro.
+# Para escribir en Iceberg en dev, pasar explícitamente por CLI:
+#   uv run python main.py safety.dry_run=false
+# Esto hace el riesgo visible e intencional, no silencioso.
 
 datasets:
   ohlcv: true      # Bronze → Silver → Gold activo en dev
@@ -63,3 +64,5 @@ exchanges:
         enabled: true
         symbols:
           - BTC/USDT
+safety:
+  dry_run: false

@@ -1,2 +1,18 @@
+# @package _global_
+# ==============================================================================
 # OrangeCashMachine — settings.yaml
-# Configuración global. Vacío por ahora — parámetros en config/env/*.yaml
+# ==============================================================================
+# Configuración global de último recurso.
+#
+# env_resolver.py lee este archivo como cuarto nivel de la cascada:
+#   1. explicit_env (CLI o hydra override)
+#   2. OCM_ENV (variable de entorno)
+#   3. .env (dotenv)
+#   4. settings.yaml → environment.default_env   ← este archivo
+#   5. hardcode "development"
+#
+# Mantener este archivo mínimo. No poner lógica de negocio aquí.
+# ==============================================================================
+
+environment:
+  default_env: development

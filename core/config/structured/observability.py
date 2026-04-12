@@ -25,7 +25,9 @@ class LoggingConfig:
 
 @dataclass
 class MetricsConfig:
-    enabled: bool = True
+    # Default False — alineado con observability/metrics.yaml.
+    # Solo production.yaml activa métricas explícitamente.
+    enabled: bool = False
     exporter: str = "prometheus"
     port: int = 8000
 

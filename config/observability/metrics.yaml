@@ -5,7 +5,11 @@
 
 observability:
   metrics:
-    enabled: true
+    # Default conservador: métricas desactivadas.
+    # Solo production.yaml las activa explícitamente.
+    # Esto evita que dev/test exponga un servidor Prometheus innecesario
+    # y hace que el estado activo sea siempre una decisión explícita.
+    enabled: false
     exporter: prometheus
     port: ${oc.env:METRICS_PORT,8000}
 

@@ -21,7 +21,8 @@ except ImportError:
 
 _DEFAULT_HOST:      str   = "localhost"
 _DEFAULT_PORT:      int   = 6379
-_DEFAULT_DB:        int   = 0
+_DEFAULT_DB:        int   = 1  # db=1 — canónico para dev. db=0 = legacy (cursores expirados).
+                               # Ref: .env REDIS_DB=1
 _DEFAULT_ENV:       str   = "development"
 _DEFAULT_TTL_DAYS:  int   = 30
 _SOCKET_TIMEOUT:    int   = 3
