@@ -576,8 +576,8 @@ class HistoricalFetcherAsync:
                 raise ChunkFetchError(f"{symbol}/{timeframe} auth failed") from exc
             except _ccxt_async.RateLimitExceeded as exc:
                 last_exc = exc
-                wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
-                wait    *= random.uniform(0.5, 1.5)
+                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
+                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
                 try:
                     breaker = getattr(self._exchange, "_breaker", None)
                     if breaker is not None:
@@ -589,15 +589,15 @@ class HistoricalFetcherAsync:
             except (_ccxt_async.RequestTimeout, asyncio.TimeoutError) as exc:
                 # Timeout de red — NO cuenta como fallo de breaker.
                 last_exc = exc
-                wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
-                wait    *= random.uniform(0.5, 1.5)
+                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
+                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
                 self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), err=str(exc)).warning("Timeout — retrying")
                 await asyncio.sleep(wait)
             except _ccxt_async.NetworkError as exc:
                 # Errores de red transitorios — conn reset, DNS, session muerta.
                 last_exc = exc
-                wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
-                wait    *= random.uniform(0.5, 1.5)
+                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
+                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
                 err_str  = str(exc)
                 is_session_dead = any(
                     m in err_str for m in ("Session is closed", "Connection closed")
@@ -621,8 +621,8 @@ class HistoricalFetcherAsync:
                     await self._exchange.reconnect()
                     session_reconnected = True
                     continue
-                wait     = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
-                wait    *= random.uniform(0.5, 1.5)
+                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
+                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
                 self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2)).warning("Fetch failed (unknown) | error_type={} err={}", type(exc).__name__, exc)
                 await asyncio.sleep(wait)
 
