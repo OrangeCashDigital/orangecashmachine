@@ -9,7 +9,7 @@ Implementación única
 --------------------
 - IcebergStorage : Apache Iceberg sobre SQLite catalog (único backend)
 
-Arquitectura: Bronze → Parquet | Silver → Iceberg | Gold → lee Iceberg
+Arquitectura: Bronze → Parquet (archivos físicos) | Silver → Iceberg | Gold → Iceberg
 
 Notas de diseño
 ---------------

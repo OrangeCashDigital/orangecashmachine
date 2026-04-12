@@ -272,23 +272,6 @@ class DataPlatform:
             symbol      = symbol,
             market_type = self._market_type,
             timeframe   = timeframe,
-        )
-
-    def get_manifest(
-        self,
-        symbol:    str,
-        timeframe: str,
-        version:   str           = "latest",
-        as_of:     Optional[str] = None,
-    ) -> Optional[Dict]:
-        """
-        Metadata del snapshot resuelto: identidad, lineage y estadísticas.
-        """
-        return self._get_loader().get_manifest(
-            exchange    = self._exchange,
-            symbol      = symbol,
-            market_type = self._market_type,
-            timeframe   = timeframe,
             version     = version,
             as_of       = as_of,
         )
