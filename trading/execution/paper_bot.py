@@ -129,11 +129,13 @@ class PaperBot:
         data_source: GoldDataSource,
         risk:        Optional[RiskConfig] = None,
         exchange:    str = "bybit",
+        market_type: str = "spot",
     ) -> None:
         self.strategy     = strategy
         self.data_source  = data_source
         self.risk         = risk or RiskConfig()
         self.exchange     = exchange
+        self.market_type  = market_type
         self._open_trades: list[PaperOrder] = []
         self._order_log:   list[PaperOrder] = []
 
@@ -154,9 +156,10 @@ class PaperBot:
 
         import pandas as pd
         df = self.data_source.load_features(
-            exchange  = self.exchange,
-            symbol    = strategy.symbol,
-            timeframe = strategy.timeframe,
+            exchange    = self.exchange,
+            symbol      = strategy.symbol,
+            market_type = self.market_type,
+            timeframe   = strategy.timeframe,
         )
 
         if df is None or (hasattr(df, "empty") and df.empty):
