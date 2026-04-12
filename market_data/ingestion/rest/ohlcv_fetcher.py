@@ -331,6 +331,16 @@ class HistoricalFetcherAsync:
         collected:    List[pd.DataFrame] = []
         for chunk_idx in range(MAX_CHUNKS_PER_RUN):
 
+            # Startup jitter: solo en el primer chunk de cada par.
+            # Segunda línea de defensa contra thundering herd — actúa
+            # dentro del fetcher independientemente del caller.
+            # Rango: [0, 200ms] — imperceptible individualmente,
+            # pero distribuye N workers uniformemente en 200ms.
+            # SafeOps: random.uniform es determinista si se siembra —
+            # aquí NO se siembra deliberadamente para maximizar dispersión.
+            if chunk_idx == 0:
+                await asyncio.sleep(random.uniform(0.0, 0.2))
+
             exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
             _t0 = time.perf_counter()
             _status = "success"

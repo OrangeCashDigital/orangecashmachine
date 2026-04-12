@@ -69,7 +69,12 @@ def _build_storage(
     )
 
 
-DEFAULT_MAX_CONCURRENCY: int = 6
+DEFAULT_MAX_CONCURRENCY: int  = 6
+# Tiempo de stagger entre arranque de workers consecutivos (segundos).
+# Previene thundering herd: N workers × WORKER_STAGGER_S = ventana de dispersión.
+# Ejemplo: 20 workers × 0.05s = 1s total de dispersión — imperceptible al usuario.
+# Configurable aquí para ajuste fino sin tocar lógica de negocio.
+WORKER_STAGGER_S: float = 0.05
 PipelineModeStr = Literal["incremental", "backfill", "repair"]
 
 
@@ -332,9 +337,24 @@ class OHLCVPipeline:
                 finally:
                     queue.task_done()
 
+        # Stagger de arranque entre workers: dispersa los primeros fetches
+        # en el tiempo para evitar bursts sincronizados contra el exchange.
+        # Principio: thundering herd prevention (distribuye carga de red).
+        # WORKER_STAGGER_S calibrado para ser imperceptible en pipelines
+        # pequeños (<1s total para 20 workers) pero efectivo bajo carga.
+        #
+        # Ref: "The Thundering Herd Problem" — Stevens, Unix Network Programming
+        # SafeOps: asyncio.sleep(0) es un no-op seguro si stagger=0.
+        # stagger usa WORKER_STAGGER_S definido a nivel de módulo
+
+        async def _staggered_worker(stagger_s: float) -> None:
+            if stagger_s > 0:
+                await asyncio.sleep(stagger_s)
+            await worker()
+
         workers = [
-            asyncio.create_task(worker())
-            for _ in range(self.max_concurrency)
+            asyncio.create_task(_staggered_worker(i * WORKER_STAGGER_S))
+            for i in range(self.max_concurrency)
         ]
 
         try:
