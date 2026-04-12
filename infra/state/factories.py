@@ -138,7 +138,7 @@ def build_lateness_calibration_store(
 def build_stream_publisher(
     stream_name: str = "ohlcv",
     env:         Optional[str] = None,
-) -> Optional["StreamPublisher"]:
+) -> Optional["StreamPublisher"]:  # noqa: F821
     """
     Construye un StreamPublisher desde variables de entorno.
 
@@ -172,11 +172,11 @@ def build_stream_publisher(
 
 
 def build_stream_source(
-    router:        "EventRouter",
+    router:        "EventRouter",  # noqa: F821
     stream_name:   str = "ohlcv",
     consumer_name: str = "worker-1",
     env:           Optional[str] = None,
-) -> Optional["StreamSource"]:
+) -> Optional["StreamSource"]:  # noqa: F821
     """
     Construye un StreamSource desde variables de entorno.
 

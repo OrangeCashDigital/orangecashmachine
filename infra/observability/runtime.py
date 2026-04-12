@@ -132,7 +132,7 @@ class MetricsRuntime:
         if self.mode == MetricsMode.PULL:
             return False
 
-        from prometheus_client import push_to_gateway, Gauge, Counter
+        from prometheus_client import push_to_gateway
 
         job = f"ocm_pipeline_{exchange}"
         try:

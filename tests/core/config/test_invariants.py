@@ -23,11 +23,9 @@ estructurales de la arquitectura que NO deben degradarse con el tiempo:
 """
 
 import ast
-import os
 import re
 from pathlib import Path
 
-import pytest
 
 import core.config.env_vars as env_vars_module
 from core.config.env_vars import (
@@ -174,7 +172,7 @@ def test_all_getenv_literals_declared_in_env_vars():
 
     undeclared = used_literals - declared_values - _SYSTEM_VARS_ALLOWLIST
     assert not undeclared, (
-        f"Env vars usadas como literal sin declarar en env_vars.py:\n"
+        "Env vars usadas como literal sin declarar en env_vars.py:\n"
         + "\n".join(f"  - {v}" for v in sorted(undeclared))
         + "\nSolución: añadir constante en core/config/env_vars.py"
     )

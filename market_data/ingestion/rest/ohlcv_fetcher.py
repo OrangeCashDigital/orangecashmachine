@@ -23,9 +23,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import pandas as pd
-import pybreaker
 import ccxt.async_support as _ccxt_async
-from loguru import logger
 
 from core.logging import bind_pipeline
 
@@ -179,13 +177,12 @@ OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 # ==========================================================
 # Exceptions
 from market_data.processing.exceptions import (  # noqa: E402
-    FetcherError, MissingStartDateError, ChunkFetchError,
-    SymbolNotFoundError, InvalidMarketTypeError,
+    MissingStartDateError, ChunkFetchError,
+    InvalidMarketTypeError,
 )
 # ==========================================================
 
 
-from market_data.processing.utils.timeframe import InvalidTimeframeError  # noqa: E402
 
 
 # ==========================================================
@@ -332,8 +329,6 @@ class HistoricalFetcherAsync:
         _effective_overlap = _pair_overlap
 
         collected:    List[pd.DataFrame] = []
-        last_seen_ts: Optional[int]      = None
-
         for chunk_idx in range(MAX_CHUNKS_PER_RUN):
 
             exchange_name = getattr(self._exchange, "_exchange_id", "unknown")
@@ -419,7 +414,6 @@ class HistoricalFetcherAsync:
                 ).inc()
                 break
 
-            last_seen_ts = last_ts
             since_ts     = last_ts - (_effective_overlap * tf_ms)
 
             if len(raw) < limit:

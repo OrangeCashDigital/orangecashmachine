@@ -40,7 +40,6 @@ from market_data.adapters.exchange.errors import (
 from market_data.adapters.exchange.circuit_breaker import _get_breaker, get_breaker_state, breaker_call_async
 from market_data.adapters.exchange.throttle import (
     AdaptiveThrottle,
-    _THROTTLES,
     get_or_create_throttle,
     get_throttle_state,
 )

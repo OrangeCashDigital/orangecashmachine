@@ -34,7 +34,7 @@ Principios: SRP · inmutable · serializable · sin credenciales
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.config.runtime_context import RuntimeContext

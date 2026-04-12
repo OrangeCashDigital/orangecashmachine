@@ -6,7 +6,6 @@ Strategy de backfill histórico completo hacia atrás.
 """
 
 from __future__ import annotations
-from datetime import datetime, timezone
 
 import asyncio
 from typing import Optional

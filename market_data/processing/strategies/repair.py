@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 import pandas as pd
 from core.logging import bind_pipeline
@@ -260,7 +259,7 @@ class RepairStrategy(StrategyMixin):
                         break
                     collected_raw.extend(raw_chunk)
                     first_ts_chunk = raw_chunk[0][0]   # timestamp del primer item
-                    last_ts_chunk  = raw_chunk[-1][0]  # timestamp del último item
+                    _              = raw_chunk[-1][0]  # last_ts_chunk: calculado, no usado
                     # Filtrar ya aquí lo que está fuera del gap para no acumular basura
                     if first_ts_chunk <= gap.start_ms:
                         break  # ya cubrimos el inicio del gap

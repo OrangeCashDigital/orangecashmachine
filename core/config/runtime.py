@@ -30,7 +30,7 @@ Principios: inmutable · construido una sola vez · propagado hacia abajo.
 
 import os
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 

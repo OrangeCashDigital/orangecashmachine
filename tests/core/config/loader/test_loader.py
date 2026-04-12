@@ -8,7 +8,6 @@ Los tests de env_overrides ya estan en test_env_overrides.py.
 """
 from __future__ import annotations
 
-import pytest
 
 
 # Placeholder — expandir cuando se confirmen las APIs publicas de loader

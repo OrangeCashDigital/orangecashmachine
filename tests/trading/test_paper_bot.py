@@ -13,7 +13,6 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from trading.execution.paper_bot import GoldDataSource, PaperBot, PaperOrder, RiskConfig
 from trading.strategies.base import Signal

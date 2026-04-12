@@ -1,9 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 from loguru import logger
-from market_data.quality.validators.data_quality import DataQualityReport, QualityIssue
+from market_data.quality.validators.data_quality import DataQualityReport
 
 class QualityDecision(str, Enum):
     ACCEPT = "accept"

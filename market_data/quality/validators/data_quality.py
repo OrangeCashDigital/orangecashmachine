@@ -3,7 +3,7 @@ from __future__ import annotations
 from core.config.lineage import get_git_hash as _get_git_hash
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -103,8 +103,8 @@ class DataQualityChecker:
     @staticmethod
     def _check_ohlc_inconsistencies(df, report):
         if not {"high","low","open","close"}.issubset(df.columns): return
-        h,l,o,c = df["high"],df["low"],df["open"],df["close"]
-        v = {k:int(m.sum()) for k,m in {"high_lt_low":h<l,"close_gt_high":c>h,"close_lt_low":c<l,"open_gt_high":o>h,"open_lt_low":o<l}.items() if m.sum()>0}
+        h,lo,o,c = df["high"],df["low"],df["open"],df["close"]
+        v = {k:int(m.sum()) for k,m in {"high_lt_low":h<lo,"close_gt_high":c>h,"close_lt_low":c<lo,"open_gt_high":o>h,"open_lt_low":o<lo}.items() if m.sum()>0}
         if v: report.issues.append(QualityIssue(check="ohlc_inconsistencies",severity="critical",description=f"Violaciones OHLC en {sum(v.values())} filas",affected_rows=sum(v.values()),details=v))
 
     @staticmethod

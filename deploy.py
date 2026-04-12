@@ -17,7 +17,6 @@ Uso
 from __future__ import annotations
 
 import argparse
-import sys
 
 
 def serve_local() -> None:
@@ -29,7 +28,6 @@ def serve_local() -> None:
     from core.config.runtime_context import RuntimeContext
     from datetime import datetime, timezone
     from uuid import uuid4
-    from pathlib import Path
 
     print(
         "Iniciando market_data_flow en modo serve (desarrollo) con runtime_context..."

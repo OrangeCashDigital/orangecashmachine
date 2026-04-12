@@ -75,7 +75,7 @@ class PrefectTriggerHandler:
     def __init__(
         self,
         deployment_name: str = "market_data_ingestion/default",
-        context: Optional["StreamingContext"] = None,  # type: ignore[name-defined]
+        context: Optional["StreamingContext"] = None,  # type: ignore[name-defined]  # noqa: F821
     ) -> None:
         # Importación local — evita circular en módulos que importan
         # consumer antes que context esté disponible en el paquete.

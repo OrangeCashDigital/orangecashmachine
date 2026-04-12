@@ -16,10 +16,9 @@ Verifica:
 import json
 from typing import Optional
 
-import pytest
 
 from market_data.streaming.payloads import (
-    EventPayload, OHLCVBar, PAYLOAD_SCHEMA_VERSION,
+    EventPayload, OHLCVBar,
 )
 from market_data.streaming.publisher import StreamPublisher
 

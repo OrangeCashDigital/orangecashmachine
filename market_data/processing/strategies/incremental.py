@@ -8,7 +8,6 @@ El boilerplate de timing/errores/métricas vive en StrategyMixin.
 
 from __future__ import annotations
 
-import asyncio
 
 from loguru import logger
 

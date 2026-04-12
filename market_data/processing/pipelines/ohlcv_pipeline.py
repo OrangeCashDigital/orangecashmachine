@@ -24,7 +24,6 @@ _log = bind_pipeline("pipeline")
 
 from market_data.quality.pipeline import QualityPipeline
 from market_data.storage.bronze.bronze_storage import BronzeStorage
-import os as _os
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.processing.strategies.base import (
@@ -385,7 +384,7 @@ class OHLCVPipeline:
         Nota: load_ohlcv está en el contrato OHLCVStorage — disponible en
         IcebergStorage sin necesidad de getattr.
         """
-        from market_data.processing.utils.gap_utils import scan_gaps, GapRange
+        from market_data.processing.utils.gap_utils import scan_gaps
         from market_data.quality.invariants.invariants import check_dataset_invariants
 
         written = [r for r in summary.results if r.success and r.rows > 0]

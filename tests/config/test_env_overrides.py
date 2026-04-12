@@ -1,5 +1,3 @@
-import pytest
-import os
 from core.config.loader.env_overrides import apply_env_overrides
 
 def test_env_override_applies_correctly(monkeypatch):

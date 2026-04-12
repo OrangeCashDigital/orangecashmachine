@@ -39,7 +39,6 @@ Consumer group
 Principios: SRP · DI · SafeOps · at-least-once
 """
 
-import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import redis as redis_lib

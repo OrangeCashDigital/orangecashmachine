@@ -38,7 +38,6 @@ Principios: SRP · optional dependency · zero overhead sin Prometheus
 """
 
 import time
-from typing import Optional
 
 try:
     from prometheus_client import Counter, Gauge, Histogram

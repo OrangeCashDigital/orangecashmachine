@@ -13,7 +13,6 @@ Estrategia de aislamiento
 """
 from __future__ import annotations
 
-from typing import List
 from unittest.mock import MagicMock, patch
 
 import numpy as np

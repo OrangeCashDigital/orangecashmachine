@@ -26,7 +26,7 @@ Uso
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Protocol, runtime_checkable
 
@@ -154,7 +154,6 @@ class PaperBot:
         """
         strategy = self.strategy
 
-        import pandas as pd
         df = self.data_source.load_features(
             exchange    = self.exchange,
             symbol      = strategy.symbol,

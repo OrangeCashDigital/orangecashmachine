@@ -7,12 +7,10 @@ tests/streaming/test_source.py
 Tests de StreamSource con mocks — sin Redis real.
 """
 
-import pytest
 from typing import List, Tuple, Dict, Optional
 
 from market_data.streaming.payloads import (
-    EventPayload, OHLCVBar,
-    PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
+    EventPayload, PAYLOAD_SCHEMA_VERSION,
 )
 from market_data.streaming.router  import EventRouter
 from market_data.streaming.source  import StreamSource, _MAX_RETRIES_BEFORE_DLQ

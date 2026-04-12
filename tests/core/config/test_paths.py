@@ -2,11 +2,8 @@ from __future__ import annotations
 
 """Tests para core/config/paths.py."""
 
-import os
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from core.config.paths import (
     _expand_env,

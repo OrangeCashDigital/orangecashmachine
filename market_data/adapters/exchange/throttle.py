@@ -18,7 +18,7 @@ concurrencia del spot y viceversa.
 from __future__ import annotations
 
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 from loguru import logger
 

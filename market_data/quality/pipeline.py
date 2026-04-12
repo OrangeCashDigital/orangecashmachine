@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import FrozenSet, Optional, Tuple
+from typing import Optional, Tuple
 
 import pandas as pd
 from loguru import logger

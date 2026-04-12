@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.config.lineage import LineageRecord, build_lineage, get_git_hash
+from core.config.lineage import build_lineage, get_git_hash
 
 
 # ---------------------------------------------------------------------------

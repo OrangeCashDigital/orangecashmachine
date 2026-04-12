@@ -15,7 +15,6 @@ from market_data.streaming.consumer import PrefectTriggerHandler
 from market_data.streaming.payloads import (
     EventPayload, OHLCVBar,
     SchemaVersionError,
-    PAYLOAD_SCHEMA_VERSION,
     CONTEXT_SCHEMA_VERSION,
 )
 

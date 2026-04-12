@@ -18,7 +18,6 @@ import pytest
 from market_data.storage.bronze.bronze_storage import (
     BronzeStorage,
     BronzeStorageError,
-    BronzeWriteError,
     REQUIRED_COLUMNS,
 )
 

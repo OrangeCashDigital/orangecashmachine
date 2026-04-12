@@ -3,7 +3,7 @@ from __future__ import annotations
 """tests/logging/test_setup.py — Unit tests para bootstrap y configure."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import core.logging.setup as _setup_mod
 from core.logging.config import LoggingConfig
@@ -139,7 +139,6 @@ def test_is_logging_configured_true_after_both():
 # ── bind_pipeline ─────────────────────────────────────────────────────────────
 
 def test_bind_pipeline_returns_logger():
-    from loguru._logger import Logger
     log = bind_pipeline("ohlcv_fetcher")
     assert log is not None
 

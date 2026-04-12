@@ -17,7 +17,7 @@ import argparse
 from loguru import logger
 
 from data_platform.loaders.gold_loader import GoldLoader
-from trading.execution.paper_bot import PaperBot, RiskConfig
+from trading.execution.paper_bot import PaperBot
 from trading.strategies.ema_crossover import EMACrossoverStrategy
 
 

@@ -43,13 +43,12 @@ SafeOps
 """
 
 import json
-import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from loguru import logger
 
-from infra.state.cursor_store import _encode, _decode, _retry, RedisCursorStore
+from infra.state.cursor_store import _encode, _retry, RedisCursorStore
 
 _GAP_TTL_DAYS   = 90
 _GAP_TTL        = _GAP_TTL_DAYS * 86_400

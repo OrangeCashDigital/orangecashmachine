@@ -334,7 +334,7 @@ class StrategyMixin:
                 self._run(symbol, timeframe, idx, total, ctx, result),
                 timeout=pair_timeout,
             )
-        except asyncio.TimeoutError as exc:
+        except asyncio.TimeoutError:
             result.error       = f"Pair timeout after {pair_timeout}s"
             result.error_type  = "TimeoutError"
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)

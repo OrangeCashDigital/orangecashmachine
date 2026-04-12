@@ -22,7 +22,6 @@ import pytest
 from data_platform.ohlcv_utils import (
     DataNotFoundError,
     DataReadError,
-    MarketDataLoaderError,
 )
 from research.data.data_access import (
     _reset_gold_loader,

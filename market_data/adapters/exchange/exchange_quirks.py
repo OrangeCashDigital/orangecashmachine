@@ -9,7 +9,7 @@ este módulo centraliza las diferencias de API en un dict de reglas.
 Agregar soporte a un nuevo exchange = añadir una entrada aquí.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

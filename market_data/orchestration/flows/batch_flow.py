@@ -33,7 +33,7 @@ import re
 import asyncio
 import time
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
+from typing import List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
 
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run as _prefect_flow_run
@@ -46,7 +46,7 @@ from market_data.orchestration.tasks.exchange_tasks import (
 )
 
 if TYPE_CHECKING:
-    from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+    pass
 from market_data.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
     run_futures_pipeline,
