@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-trading/execution/
-==================
+from trading.execution.paper_bot import GoldDataSource, PaperBot, PaperOrder, RiskConfig
 
-Order management y broker adapters para ejecución live.
-
-Estado: 🚧 pendiente — ver trading/__init__.py
-"""
+__all__ = ["GoldDataSource", "PaperBot", "PaperOrder", "RiskConfig"]

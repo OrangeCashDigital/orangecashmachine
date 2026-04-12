@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-trading/strategies/
-====================
+from trading.strategies.base import BaseStrategy, Signal, SignalType
+from trading.strategies.ema_crossover import EMACrossoverStrategy
 
-Implementaciones de estrategias de trading.
-
-Estado: 🚧 pendiente — ver trading/__init__.py
-"""
+__all__ = ["BaseStrategy", "Signal", "SignalType", "EMACrossoverStrategy"]
