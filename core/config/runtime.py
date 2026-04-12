@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 """
 core/config/runtime.py
@@ -95,6 +96,8 @@ class RunConfig:
         )
 
         pushgateway = os.getenv(PUSHGATEWAY_URL, "localhost:9091")
+        # push_to_gateway requiere host:port, no URL completa
+        pushgateway = re.sub(r"^https?://", "", pushgateway)
 
         return cls(
             env=env,
