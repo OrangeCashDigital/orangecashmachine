@@ -18,10 +18,12 @@ class PolicyResult:
     report: DataQualityReport
 
     @property
-    def accepted(self) -> bool: return self.decision != QualityDecision.REJECT
+    def accepted(self) -> bool:
+        return self.decision != QualityDecision.REJECT
 
     @property
-    def flagged(self) -> bool: return self.decision == QualityDecision.ACCEPT_WITH_FLAGS
+    def flagged(self) -> bool:
+        return self.decision == QualityDecision.ACCEPT_WITH_FLAGS
 
     def summary(self) -> str:
         return f"PolicyResult | decision={self.decision.value} score={self.score:.1f} reasons={self.reasons}"
@@ -68,7 +70,8 @@ class DataQualityPolicy:
         return result
 
     def _compute_score(self, report: DataQualityReport) -> float:
-        if not report.issues: return 100.0
+        if not report.issues:
+            return 100.0
         penalty = 0.0
         for issue in report.issues:
             weight = _SCORE_WEIGHTS.get(issue.check, 0.3)
@@ -78,10 +81,12 @@ class DataQualityPolicy:
         return max(0.0, 100.0 - penalty)
 
     def _should_reject(self, report: DataQualityReport, score: float) -> bool:
-        if score < _REJECT_THRESHOLD: return True
+        if score < _REJECT_THRESHOLD:
+            return True
         if report.has_critical_issues:
             critical_rows = sum(i.affected_rows for i in report.criticals)
-            if critical_rows / max(report.rows, 1) > _MAX_CRITICAL_ROWS_PCT: return True
+            if critical_rows / max(report.rows, 1) > _MAX_CRITICAL_ROWS_PCT:
+                return True
         return False
 
     def _collect_reasons(self, report: DataQualityReport) -> List[str]:
