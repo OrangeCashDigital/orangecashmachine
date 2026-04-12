@@ -27,6 +27,8 @@ no se ejecuta. Job por exchange evita colisiones last-write-wins.
 """
 
 from __future__ import annotations
+import os
+import re
 
 import asyncio
 import time
@@ -58,8 +60,11 @@ from market_data.safety.execution_guard import ExecutionGuard
 
 from core.config.env_vars import PUSHGATEWAY_URL as _PUSHGATEWAY_URL
 
-_PUSHGATEWAY = (
-    _PUSHGATEWAY_URL  # SSoT: env_vars.py; runtime lo resuelve desde RunConfig
+# Leer el valor de la variable de entorno, no el nombre de la constante.
+# RunConfig.from_env() ya normaliza http(s):// → host:port.
+_PUSHGATEWAY: str = re.sub(
+    r'^https?://', '',
+    os.getenv(_PUSHGATEWAY_URL, 'localhost:9091'),
 )
 
 # ==================================================================

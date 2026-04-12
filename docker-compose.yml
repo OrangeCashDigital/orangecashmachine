@@ -425,6 +425,12 @@ services:
           create_host_path: true
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       loki:
         condition: service_healthy
