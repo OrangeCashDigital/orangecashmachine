@@ -238,7 +238,7 @@ class HistoricalFetcherAsync:
         if storage is None:
             raise TypeError(
                 "OHLCVFetcher requiere 'storage' explícito — "
-                "inyectar desde unified_pipeline via storage_factory()"
+                "inyectar desde ohlcv_pipeline via storage_factory()"
             )
         self._storage = storage
         self._transformer       = transformer or OHLCVTransformer()

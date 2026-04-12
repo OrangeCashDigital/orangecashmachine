@@ -102,7 +102,7 @@ class IcebergStorage:
         self._dry_run     = dry_run
         # cursor_store opcional — actúa como cache L2 distribuido (cross-process)
         # en get_last_timestamp. Sin él, solo cache L1 in-process.
-        # Inyectado desde _build_storage() en unified_pipeline.
+        # Inyectado desde _build_storage() en ohlcv_pipeline.
         self._cursor: Optional[CursorStore] = cursor_store
         # Bootstrap idempotente: crea silver.ohlcv si no existe.
         # Patrón "ensure before load" — hace el storage self-healing en cada
