@@ -137,6 +137,16 @@ class CCXTAdapter(ExchangeAdapter):
         # Spot y futures del mismo exchange comparten el mismo breaker —
         # si bybit está degradado, ambos pipelines lo detectan juntos.
         self._breaker = _get_breaker(self._exchange_id)
+        # Throttle singleton compartido por pipeline key "exchange:type:ohlcv".
+        # Registra latencias y errores reales para escalar concurrencia dinámicamente.
+        self._throttle = get_or_create_throttle(
+            exchange_id       = self._exchange_id,
+            market_type       = self._default_type or "spot",
+            dataset           = "ohlcv",
+            initial           = 5,
+            maximum           = 20,
+            latency_target_ms = 500,
+        )
         self._closed: bool = False  # idempotencia en close()
 
     # ----------------------------------------------------------
@@ -254,16 +264,23 @@ class CCXTAdapter(ExchangeAdapter):
                     timeout=_FETCH_OHLCV_TIMEOUT,
                 )
             try:
-                return await breaker_call_async(self._breaker, _call)
+                _t0_throttle = time.perf_counter()
+                result = await breaker_call_async(self._breaker, _call)
+                self._throttle.record_success(
+                    latency_ms=(time.perf_counter() - _t0_throttle) * 1000
+                )
+                return result
             except asyncio.TimeoutError:
                 # Timeout de red — NO cuenta como fallo de breaker.
                 # Re-raise para que el fetcher lo trate como error transitorio.
+                self._throttle.record_error(error_type="timeout")
                 raise
         except pybreaker.CircuitBreakerError as exc:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
             EXCHANGE_CIRCUIT_OPEN.labels(
                 exchange=self._exchange_id, operation="fetch_ohlcv"
             ).inc()
+            self._throttle.record_error(error_type="rate_limit")
             raise ExchangeCircuitOpenError(
                 f"Circuit open for '{self._exchange_id}' — ohlcv unavailable"
             ) from exc
