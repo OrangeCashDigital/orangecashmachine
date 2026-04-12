@@ -471,9 +471,12 @@ async def market_data_flow(
                     probe.adapter = None
 
         # ── Push métricas por exchange ────────────────────────────────────────
-        for probe in probes:
-            push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
-            log.info("Metrics pushed | exchange=%s", probe.exchange)
+        if config.observability.metrics.enabled:
+            for probe in probes:
+                push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
+                log.info("Metrics pushed | exchange=%s", probe.exchange)
+        else:
+            log.debug("metrics_push_skipped", reason="metrics.enabled=false")
 
         # ── Flow summary ──────────────────────────────────────────────────────
         duration_s = time.monotonic() - flow_start

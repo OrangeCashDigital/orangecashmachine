@@ -215,8 +215,11 @@ def run(
         if exit_code != 130:
             # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
             PostProcessingService(config, run_id=run_id).execute()
-            for ex in config.exchanges:
-                push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
+            if config.observability.metrics.enabled:
+                for ex in config.exchanges:
+                    push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
+            else:
+                log.debug("metrics_push_skipped", reason="metrics.enabled=false")
         else:
             log.debug("metrics_push_skipped", reason="SIGINT")
         # record_run al final del ciclo de vida: captura duración real incluyendo
