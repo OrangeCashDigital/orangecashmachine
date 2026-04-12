@@ -177,10 +177,21 @@ def _launch_derivative_pipelines(
 
 
 class ExchangeTasks(NamedTuple):
-    """Par de listas de futures separadas por fase para el stage system del flow."""
+    """
+    Listas de futures separadas por nodo del grafo de dependencias.
 
-    spot: List[asyncio.Future]  # fase 1: spot + repair
-    futures: List[asyncio.Future]  # fase 2: futures + derivatives
+    Nodos
+    -----
+    spot    : OHLCV spot — sin dependencias, siempre ejecuta
+    repair  : gap healing — dependencia PARTIAL_SUCCESS(spot)
+    futures : OHLCV swap/future + derivatives — sin dependencias, independiente de spot
+
+    Ref: Etikyala (2023), Kumar (2025) — dependency-satisfaction execution model
+    """
+
+    spot:    List[asyncio.Future]  # nodo 1: spot (independiente)
+    repair:  List[asyncio.Future]  # nodo 3: repair (dep: PARTIAL_SUCCESS spot)
+    futures: List[asyncio.Future]  # nodo 2: futures + derivatives (independiente)
 
 
 def _launch_pipelines_for_exchange(
@@ -210,19 +221,26 @@ def _launch_pipelines_for_exchange(
     log.info(
         "Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active)
     )
-    spot_tasks: List[asyncio.Future] = [
-        *_launch_spot_pipelines(config, exc_cfg, probe, active, log),
-        *(
-            [run_repair_pipeline(config, exc_cfg, probe, market_type="spot", exchange_client=probe.adapter)]
-            if "ohlcv" in active
-            else []
-        ),
-    ]
+    spot_tasks: List[asyncio.Future] = _launch_spot_pipelines(
+        config, exc_cfg, probe, active, log
+    )
+    # repair se separa de spot: tiene dependencia semántica propia (PARTIAL_SUCCESS).
+    # El flow decide si ejecutar repair basándose en el resultado de spot,
+    # no en si spot fue lanzado. Ver grafo de dependencias en market_data_flow.
+    repair_tasks: List[asyncio.Future] = (
+        [run_repair_pipeline(
+            config, exc_cfg, probe,
+            market_type="spot",
+            exchange_client=probe.adapter,
+        )]
+        if "ohlcv" in active
+        else []
+    )
     futures_tasks: List[asyncio.Future] = [
         *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
         *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
     ]
-    return ExchangeTasks(spot=spot_tasks, futures=futures_tasks)
+    return ExchangeTasks(spot=spot_tasks, repair=repair_tasks, futures=futures_tasks)
 
 
 async def _validate_exchanges(
@@ -410,15 +428,20 @@ async def market_data_flow(
 
     # SSoT: _launch_pipelines_for_exchange centraliza filtrado, validación de
     # capabilities y separación de stages. El flow solo acumula y ejecuta.
-    spot_futures: List[asyncio.Future] = []
+    spot_futures:    List[asyncio.Future] = []
+    repair_futures:  List[asyncio.Future] = []
     futures_futures: List[asyncio.Future] = []
 
     for probe in probes:
         tasks = _launch_pipelines_for_exchange(config, probe, requested, log)
         spot_futures.extend(tasks.spot)
+        repair_futures.extend(tasks.repair)
         futures_futures.extend(tasks.futures)
 
-    pipeline_futures: List[asyncio.Future] = spot_futures + futures_futures
+    # Total para el summary — incluye los 3 nodos del grafo
+    pipeline_futures: List[asyncio.Future] = (
+        spot_futures + repair_futures + futures_futures
+    )
 
     if not pipeline_futures:
         log.warning("No pipelines launched. Check config and exchange capabilities.")
@@ -426,31 +449,63 @@ async def market_data_flow(
 
     flow_start = time.monotonic()
     ok = failed = 0
-    ok_prev = fail_prev = 0  # resultado del stage inmediatamente anterior
     try:
-        # Stages con dependencias explícitas.
-        # requires_success=True: el stage solo corre si el anterior no falló 100%.
-        # ok_prev/fail_prev reflejan el stage anterior, no el acumulado global,
-        # para evitar que fallos de fases posteriores bloqueen stages siguientes.
-        # Extensible: añadir fases con sus propias reglas de dependencia.
-        stages = [
-            {"name": "spot+repair", "tasks": spot_futures, "requires_success": False},
-            {"name": "futures", "tasks": futures_futures, "requires_success": True},
-        ]
-        for stage in stages:
-            if stage["requires_success"] and fail_prev > 0 and ok_prev == 0:
+        # ── Grafo de dependencias explícito ─────────────────────────────────
+        #
+        # Diseño basado en dependency-satisfaction (no en orden secuencial):
+        #
+        #   spot    ──────────────────────────────────────────► (siempre)
+        #   futures ──────────────────────────────────────────► (siempre, independiente)
+        #   repair  ── depende de spot con PARTIAL_SUCCESS ───► (si ok_spot > 0)
+        #
+        # spot y futures son semánticamente independientes: usan APIs distintas
+        # (spot vs swap), storage separado y cursores independientes.
+        # Un fallo de spot NO debe bloquear futures.
+        #
+        # repair tiene dependencia semántica real: opera sobre datos escritos
+        # por spot. Si spot falló completamente (ok_spot == 0), no hay datos
+        # que reparar — skip seguro y explícito.
+        #
+        # Ref: Etikyala (2023) — "dependencies satisfied, not previous stage complete"
+        # Ref: Kumar (2025)    — fail-soft: aislar fallos por dominio
+        # Ref: Navarro (2025)  — pipelines lineales crean bottlenecks innecesarios
+        #
+        # Extensión futura: añadir nodo al grafo sin tocar nodos existentes.
+
+        # Nodo 1: spot — sin dependencias, siempre ejecuta
+        ok_spot = fail_spot = 0
+        if spot_futures:
+            log.info("Graph node: spot | tasks=%s", len(spot_futures))
+            ok_spot, fail_spot = await _consolidate_results(spot_futures, log)
+            ok     += ok_spot
+            failed += fail_spot
+
+        # Nodo 2: futures — sin dependencias, independiente de spot
+        # Razón: API swap != API spot; fallo de spot no implica fallo de futures.
+        if futures_futures:
+            log.info("Graph node: futures | tasks=%s", len(futures_futures))
+            ok_f, fail_f = await _consolidate_results(futures_futures, log)
+            ok     += ok_f
+            failed += fail_f
+
+        # Nodo 3: repair — dependencia PARTIAL_SUCCESS(spot)
+        # Solo ejecuta si spot escribió al menos 1 serie exitosa.
+        # Si ok_spot == 0, no hay datos que reparar — skip con log explícito.
+        if repair_futures:
+            if ok_spot == 0 and spot_futures:
                 log.warning(
-                    "Stage skipped — previous stage failed completely | stage=%s",
-                    stage["name"],
+                    "Graph node: repair skipped"
+                    " — spot failed completely, no data to repair"
+                    " | spot_ok=%s spot_failed=%s",
+                    ok_spot,
+                    fail_spot,
                 )
-                break
-            if not stage["tasks"]:
-                continue
-            log.info("Stage: %s | tasks=%s", stage["name"], len(stage["tasks"]))
-            ok_s, fail_s = await _consolidate_results(stage["tasks"], log)
-            ok += ok_s
-            failed += fail_s
-            ok_prev, fail_prev = ok_s, fail_s  # snapshot para el stage siguiente
+            else:
+                log.info("Graph node: repair | tasks=%s", len(repair_futures))
+                ok_r, fail_r = await _consolidate_results(repair_futures, log)
+                ok     += ok_r
+                failed += fail_r
+
         if failed > 0 and ok == 0:
             raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
     finally:
