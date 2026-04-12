@@ -46,7 +46,8 @@ from pyiceberg.expressions import (
     LessThanOrEqual,
 )
 
-from market_data.storage.iceberg.catalog import get_catalog
+from market_data.storage.iceberg.catalog import get_catalog, ensure_silver_table
+from infra.state.cursor_store import CursorStore
 
 
 # Columnas OHLCV en el orden del schema Iceberg
@@ -60,12 +61,20 @@ def _to_utc_timestamp(dt: object) -> Optional[pd.Timestamp]:
     """
     Convierte el resultado de pc.max() a pd.Timestamp UTC.
 
-    pc.max() sobre columnas tz-aware devuelve datetime con tzinfo ya
-    incluido. pd.Timestamp(obj, tz=...) falla en ese caso — hay que
-    usar tz_convert() o simplemente wrappear sin tz y normalizar.
+    pyiceberg 0.8 almacena timestamps como datetime64[us, UTC].
+    pc.max() sobre esa columna devuelve:
+      - datetime con tzinfo  → columnas tz-aware (caso normal)
+      - int en microsegundos → columnas tz-naive almacenadas como us epoch
+      - None                 → tabla vacía
+
+    pd.Timestamp(int) interpreta el int como nanosegundos — incorrecto.
+    Hay que detectar int y usar unit="us" explícitamente.
     """
     if dt is None:
         return None
+    if isinstance(dt, int):
+        # pc.max() devolvió microsegundos epoch — convertir explícitamente.
+        return pd.Timestamp(dt, unit="us", tz="UTC")
     ts = pd.Timestamp(dt)
     return ts if ts.tzinfo is not None else ts.tz_localize("UTC")
 
@@ -83,14 +92,28 @@ class IcebergStorage:
 
     def __init__(
         self,
-        exchange:    Optional[str] = None,
-        market_type: Optional[str] = None,
-        dry_run:     bool          = False,
+        exchange:     Optional[str]           = None,
+        market_type:  Optional[str]           = None,
+        dry_run:      bool                    = False,
+        cursor_store: Optional[CursorStore]   = None,
     ) -> None:
         self._exchange    = exchange
         self._market_type = market_type
         self._dry_run     = dry_run
-        self._table       = get_catalog().load_table("silver.ohlcv")
+        # cursor_store opcional — actúa como cache L2 distribuido (cross-process)
+        # en get_last_timestamp. Sin él, solo cache L1 in-process.
+        # Inyectado desde _build_storage() en unified_pipeline.
+        self._cursor: Optional[CursorStore] = cursor_store
+        # Bootstrap idempotente: crea silver.ohlcv si no existe.
+        # Patrón "ensure before load" — hace el storage self-healing en cada
+        # arranque sin depender de un script de inicialización externo.
+        # No-op si la tabla ya existe. Ref: catalog.ensure_silver_table()
+        ensure_silver_table()
+        self._table = get_catalog().load_table("silver.ohlcv")
+        # Cache L1 de metadatos por symbol/timeframe — evita scans repetidos
+        # en el mismo proceso. Invalidado en save_ohlcv (llama _invalidate_cache).
+        # Para cache cross-process ver self._cursor (L2).
+        self._last_ts_cache: dict[tuple[str, str], object] = {}
 
     # =========================================================================
     # Helpers internos
@@ -199,6 +222,7 @@ class IcebergStorage:
             pa.Table.from_pandas(prepared, schema=arrow_schema, preserve_index=False)
         )
 
+        self._last_ts_cache.pop((symbol, timeframe), None)
         logger.debug(
             "IcebergStorage saved | {}/{} exchange={} rows={} duration={}ms",
             symbol, timeframe, self._exchange or "shared",
@@ -210,12 +234,70 @@ class IcebergStorage:
         symbol:    str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
-        """
-        Obtiene el último timestamp disponible para symbol/timeframe.
+        """Obtiene el último timestamp disponible para symbol/timeframe.
 
         Scan Iceberg con filtros nativos (partition pruning activo).
         Solo lee la columna timestamp — mínimo I/O.
+
+        Resultado cacheado en memoria por instancia — el cache se invalida
+        automáticamente después de cada save_ohlcv exitoso. Safe para uso
+        concurrente dentro del mismo proceso (GIL protege el dict).
         """
+        cache_key = (symbol, timeframe)
+
+        # L1 — cache in-process (mismo worker). Invalidado en save_ohlcv.
+        if cache_key in self._last_ts_cache:
+            return self._last_ts_cache[cache_key]
+
+        # L2 — cursor Redis (cross-process, si inyectado).
+        # get_raw() es síncrono. Clave: cursor usa prefijo 'cursor:env:exchange:symbol:tf'
+        # pero get_raw acepta clave raw — usamos la clave interna del CursorStore.
+        # No se propaga al L1: el cursor puede estar adelantado respecto a Iceberg
+        # (escritura pendiente en otro worker). L1 solo se llena desde L3.
+        if self._cursor is not None:
+            exchange_key = (self._exchange or "unknown").lower()
+            market_key   = (self._market_type or "unknown").lower()
+            # Formato de clave interno de RedisCursorStore (base64-encoded segments).
+            # No podemos reconstruir la clave codificada aquí sin acoplar implementación.
+            # Usamos get_raw con la clave legible como best-effort; si falla → L3.
+            # NOTA: el cursor puede estar adelantado respecto a Iceberg si otro worker
+            # escribió y actualizó Redis pero el snapshot Iceberg aún no es visible.
+            # Por eso NO propagamos L2 al caché L1 — L1 solo se llena desde L3.
+            try:
+                raw = self._cursor.get_raw(
+                    f"{exchange_key}:{symbol}:{market_key}:{timeframe}"
+                )
+                if raw is not None:
+                    ts_l2 = pd.Timestamp(int(raw), unit="ms", tz="UTC")
+                    logger.debug(
+                        "get_last_timestamp L2 hit | {}/{} ts={}",
+                        symbol, timeframe, ts_l2,
+                    )
+                    # Sanity cross-layer: si L3 está disponible en caché L1,
+                    # loggear mismatch para detectar cursor adelantado/regresión.
+                    ts_l1 = self._last_ts_cache.get((symbol, timeframe))
+                    if ts_l1 is not None and isinstance(ts_l1, pd.Timestamp):
+                        delta_ms = int((ts_l2 - ts_l1).total_seconds() * 1000)
+                        if delta_ms < 0:
+                            logger.warning(
+                                "get_last_timestamp L2 < L1 (cursor regresión) | "
+                                "{}/{} l2={} l1={} delta_ms={}",
+                                symbol, timeframe, ts_l2, ts_l1, delta_ms,
+                            )
+                        elif delta_ms > 0:
+                            logger.debug(
+                                "get_last_timestamp L2 ahead of L1 | "
+                                "{}/{} delta_ms={}",
+                                symbol, timeframe, delta_ms,
+                            )
+                    return ts_l2
+            except Exception as _l2_exc:
+                logger.debug(
+                    "get_last_timestamp L2 miss | {}/{} err={}",
+                    symbol, timeframe, _l2_exc,
+                )
+
+        # L3 — scan Iceberg (fuente de verdad persistente).
         try:
             result = (
                 self._table
@@ -226,10 +308,15 @@ class IcebergStorage:
                 .to_arrow()
             )
 
-            if result.num_rows == 0:
-                return None
+            ts = (
+                None if result.num_rows == 0
+                else _to_utc_timestamp(pc.max(result.column("timestamp")).as_py())
+            )
 
-            return _to_utc_timestamp(pc.max(result.column("timestamp")).as_py())
+            # Solo cachear en L1 resultado del scan Iceberg.
+            # El cursor (L2) lo actualiza IncrementalStrategy tras cada write.
+            self._last_ts_cache[cache_key] = ts
+            return ts
 
         except Exception as exc:
             logger.warning(

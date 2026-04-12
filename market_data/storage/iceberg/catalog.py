@@ -14,18 +14,25 @@ Singleton por proceso — todos los storages comparten la misma instancia.
 Responsabilidad
 ---------------
 • Crear/abrir el catálogo SQLite.
-• Definir schemas Iceberg para Bronze y Gold (Silver ya existe).
+• Definir schemas Iceberg para Bronze, Silver y Gold (SSOT).
 • Exponer ensure_*_table() — idempotente, seguro llamar en cada __init__.
 
 Principios
 ----------
-• SSOT — un solo lugar donde viven schemas y rutas del catálogo.
-• DRY  — IcebergStorage, BronzeStorage y GoldStorage importan de aquí.
+• SSOT  — schemas y rutas del catálogo viven exclusivamente aquí.
+• DRY   — IcebergStorage, BronzeStorage y GoldStorage importan de aquí.
 • Fail Fast — si el warehouse no puede crearse, lanza inmediatamente.
+• Idempotencia — ensure_*_table() usa list_namespaces/list_tables antes
+  de create_* para garantizar cero efectos secundarios en re-runs.
+
+Referencias
+-----------
+• Apache Iceberg spec v2: https://iceberg.apache.org/spec/
+• pyiceberg SqlCatalog: https://py.iceberg.apache.org/configuration/#sql-catalog
+• Medallion architecture: https://www.databricks.com/glossary/medallion-architecture
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
 from pyiceberg.catalog.sql import SqlCatalog
@@ -50,11 +57,14 @@ _CATALOG: Optional[SqlCatalog] = None
 
 
 def get_catalog() -> SqlCatalog:
-    """
-    Devuelve el catálogo Iceberg compartido, creándolo una sola vez.
+    """Devuelve el catálogo Iceberg compartido, creándolo una sola vez.
 
     Paths resueltos desde repo_root() — independiente del cwd desde
     donde se lance el proceso.
+
+    El SQLite catalog es adecuado para desarrollo y producción single-node.
+    Para producción multi-nodo usar REST catalog o Hive Metastore.
+    Ref: https://py.iceberg.apache.org/configuration/#sql-catalog
     """
     global _CATALOG
     if _CATALOG is None:
@@ -77,9 +87,14 @@ def get_catalog() -> SqlCatalog:
 # Schemas
 # =============================================================================
 
-# Campos OHLCV base — IDs 1-10, idénticos en las tres capas.
-# El IcebergStorage (Silver) usa su propio schema definido inline;
-# Bronze y Gold usan los schemas de este módulo.
+# Campos OHLCV base — IDs 1-10, idénticos en las tres capas del medallón.
+# Compartidos vía _OHLCV_BASE_FIELDS para garantizar consistencia de IDs
+# y evitar drift entre capas al evolucionar el schema.
+#
+# Regla de schema evolution (Iceberg spec §3.5):
+#   - Nunca reusar IDs de campo eliminados.
+#   - Nuevos campos en Bronze/Silver: IDs >= 11 (actualmente ninguno).
+#   - Nuevos campos en Gold: IDs >= 20 (11-19 reservados para features).
 _OHLCV_BASE_FIELDS = [
     NestedField(1,  "timestamp",   TimestamptzType(), required=True),
     NestedField(2,  "open",        DoubleType(),      required=True),
@@ -96,8 +111,16 @@ _OHLCV_BASE_FIELDS = [
 BRONZE_SCHEMA: Schema = Schema(
     *_OHLCV_BASE_FIELDS,
     # ingestion_ts: cuándo llegó el dato al sistema — trazabilidad forense.
+    # Optional porque datos históricos importados no tienen ingestion_ts fiable.
     NestedField(11, "ingestion_ts", TimestamptzType(), required=False),
 )
+
+# Silver: schema canónico del medallón — sin columnas extra.
+# Diseño deliberado:
+#   • Máxima compatibilidad hacia arriba con Gold (que extiende Silver).
+#   • Mínima superficie de schema evolution en la capa más crítica.
+#   • Gold lee Silver vía scan; no necesita campos adicionales en Silver.
+SILVER_SCHEMA: Schema = Schema(*_OHLCV_BASE_FIELDS)
 
 GOLD_SCHEMA: Schema = Schema(
     *_OHLCV_BASE_FIELDS,
@@ -108,6 +131,8 @@ GOLD_SCHEMA: Schema = Schema(
     NestedField(14, "high_low_spread", DoubleType(), required=False),
     NestedField(15, "vwap",            DoubleType(), required=False),
     # ── Lineage — reproducibilidad total ────────────────────────────────
+    # silver_snapshot_id + silver_snapshot_ms permiten reconstruir el estado
+    # exacto de Silver que produjo este batch Gold (data lineage).
     NestedField(16, "run_id",             StringType(), required=False),
     NestedField(17, "engineer_version",   StringType(), required=False),
     NestedField(18, "silver_snapshot_id", LongType(),   required=False),
@@ -120,13 +145,20 @@ GOLD_SCHEMA: Schema = Schema(
 # =============================================================================
 
 def _ohlcv_partition_spec() -> PartitionSpec:
-    """
-    Spec de particionado idéntico para Bronze, Silver y Gold.
+    """Spec de particionado idéntico para Bronze, Silver y Gold.
 
-    exchange / market_type / symbol / timeframe / ts_month
+    Estrategia: exchange / market_type / symbol / timeframe / ts_month
 
-    ts_month (MonthTransform sobre timestamp) permite partition pruning
-    en queries con rango temporal — evita abrir archivos fuera del rango.
+    Justificación:
+    - Las cuatro columnas de identidad son los ejes naturales de consulta.
+      Partition pruning elimina archivos irrelevantes antes de leer datos.
+    - ts_month (MonthTransform sobre timestamp) habilita pruning temporal
+      en queries con rango de fechas — el caso más frecuente en backtesting
+      e ingesta histórica.
+    - Orden deliberado: identidad primero, tiempo después. Optimiza queries
+      del tipo "dame BTC/USDT 1h" que son más selectivas en identidad.
+
+    Ref: https://iceberg.apache.org/spec/#partitioning
     """
     return PartitionSpec(
         PartitionField(source_id=7,  field_id=1001, transform=IdentityTransform(), name="exchange"),
@@ -142,7 +174,11 @@ def _ohlcv_partition_spec() -> PartitionSpec:
 # =============================================================================
 
 def ensure_bronze_table() -> None:
-    """Crea bronze.ohlcv si no existe. Seguro llamar en cada __init__."""
+    """Crea bronze.ohlcv si no existe. Seguro llamar en cada __init__.
+
+    Bronze es la capa de ingesta raw: append-only, sin deduplicación.
+    Preserva trazabilidad forense completa incluyendo ingestion_ts.
+    """
     cat = get_catalog()
     existing_ns = {tuple(ns) for ns in cat.list_namespaces()}
     if ("bronze",) not in existing_ns:
@@ -156,8 +192,37 @@ def ensure_bronze_table() -> None:
         )
 
 
+def ensure_silver_table() -> None:
+    """Crea silver.ohlcv si no existe. Seguro llamar en cada __init__.
+
+    Silver es la capa canónica del medallón: datos OHLCV deduplicados,
+    versionados automáticamente por snapshot de Iceberg.
+
+    Patrón "ensure before load": elimina la dependencia de un script de
+    inicialización externo y hace el storage self-healing en cada arranque.
+    Safe: no-op si la tabla ya existe.
+
+    Ref: https://www.databricks.com/glossary/medallion-architecture
+    """
+    cat = get_catalog()
+    existing_ns = {tuple(ns) for ns in cat.list_namespaces()}
+    if ("silver",) not in existing_ns:
+        cat.create_namespace("silver")
+    existing_tables = {t[1] for t in cat.list_tables("silver")}
+    if "ohlcv" not in existing_tables:
+        cat.create_table(
+            "silver.ohlcv",
+            schema         = SILVER_SCHEMA,
+            partition_spec = _ohlcv_partition_spec(),
+        )
+
+
 def ensure_gold_table() -> None:
-    """Crea gold.features si no existe. Seguro llamar en cada __init__."""
+    """Crea gold.features si no existe. Seguro llamar en cada __init__.
+
+    Gold extiende Silver con features técnicos y columnas de lineage
+    para reproducibilidad total del pipeline de features.
+    """
     cat = get_catalog()
     existing_ns = {tuple(ns) for ns in cat.list_namespaces()}
     if ("gold",) not in existing_ns:
@@ -174,7 +239,9 @@ def ensure_gold_table() -> None:
 __all__ = [
     "get_catalog",
     "BRONZE_SCHEMA",
+    "SILVER_SCHEMA",
     "GOLD_SCHEMA",
     "ensure_bronze_table",
+    "ensure_silver_table",
     "ensure_gold_table",
 ]
