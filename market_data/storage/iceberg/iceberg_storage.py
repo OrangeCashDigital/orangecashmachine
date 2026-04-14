@@ -104,16 +104,20 @@ class IcebergStorage:
         # en get_last_timestamp. Sin él, solo cache L1 in-process.
         # Inyectado desde _build_storage() en ohlcv_pipeline.
         self._cursor: Optional[CursorStore] = cursor_store
-        # Bootstrap idempotente: crea silver.ohlcv si no existe.
-        # Patrón "ensure before load" — hace el storage self-healing en cada
-        # arranque sin depender de un script de inicialización externo.
-        # No-op si la tabla ya existe. Ref: catalog.ensure_silver_table()
-        ensure_silver_table()
-        self._table = get_catalog().load_table("silver.ohlcv")
         # Cache L1 de metadatos por symbol/timeframe — evita scans repetidos
-        # en el mismo proceso. Invalidado en save_ohlcv (llama _invalidate_cache).
+        # en el mismo proceso. Invalidado en save_ohlcv.
         # Para cache cross-process ver self._cursor (L2).
         self._last_ts_cache: dict[tuple[str, str], object] = {}
+        # SafeOps: en dry_run skip bootstrap y carga de tabla — sin I/O al catálogo.
+        # En tests/CI el catálogo SQLite puede no existir. Todos los métodos de
+        # escritura son no-op en dry_run. Los de lectura retornan None si _table=None.
+        self._table = None
+        if not dry_run:
+            # Bootstrap idempotente: crea silver.ohlcv si no existe.
+            # Patrón "ensure before load" — self-healing sin script externo.
+            # No-op si la tabla ya existe. Ref: catalog.ensure_silver_table()
+            ensure_silver_table()
+            self._table = get_catalog().load_table("silver.ohlcv")
 
     # =========================================================================
     # Helpers internos
@@ -298,6 +302,8 @@ class IcebergStorage:
                 )
 
         # L3 — scan Iceberg (fuente de verdad persistente).
+        if self._table is None:
+            return None
         try:
             result = (
                 self._table
@@ -336,6 +342,8 @@ class IcebergStorage:
 
         Scan Iceberg con pc.min() — simétrico a get_last_timestamp.
         """
+        if self._table is None:
+            return None
         try:
             result = (
                 self._table
@@ -382,6 +390,8 @@ class IcebergStorage:
         Combina filtro de identidad (exchange/symbol/timeframe/market_type)
         con rango temporal opcional. Partition pruning activo en ambos ejes.
         """
+        if self._table is None:
+            return None
         try:
             row_filter = self._base_filter(symbol, timeframe)
 

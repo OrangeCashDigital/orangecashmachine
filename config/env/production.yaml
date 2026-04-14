@@ -24,6 +24,7 @@ observability:
   metrics:
     enabled: true
     exporter: prometheus
+    port: ${oc.env:METRICS_PORT,8000}    # explícito en prod — no depender de herencia
 
   tracing:
     enabled: false
@@ -34,7 +35,7 @@ observability:
 integrations:
   redis:
     host: ${oc.env:REDIS_HOST,redis}
-    db: ${oc.env:REDIS_DB,0}
+    db: ${oc.env:REDIS_DB,1}    # SSOT: alineado con base.yaml y .env
 
   kafka:
     enabled: ${oc.env:KAFKA_ENABLED,false}

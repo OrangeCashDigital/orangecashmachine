@@ -3,6 +3,11 @@
 # OrangeCashMachine — Development Configuration
 # ==============================================================================
 # Overrides sobre base.yaml. Principio: debug-friendly, aislado de producción.
+#
+# SafeOps: dry_run viene de base.yaml (true por defecto).
+# Para escribir en Iceberg en dev, pasar explícitamente por CLI:
+#   uv run python main.py safety.dry_run=false
+# Esto hace el riesgo visible e intencional, nunca silencioso.
 # ==============================================================================
 
 environment:
@@ -25,10 +30,8 @@ observability:
     console: true
     file: true
     pipeline: true
-  metrics:
-    enabled: false
-    exporter: prometheus
-    port: 8000
+  # metrics: heredado de config/observability/metrics.yaml (SSOT via Hydra compose).
+  # No redeclarar aquí — un solo punto de verdad por configuración.
   tracing:
     enabled: false
 
@@ -47,12 +50,6 @@ integrations:
   postgres:
     enabled: false
 
-# safety: base.yaml define dry_run: true como safe default global.
-# En dev NO sobrescribimos — heredamos el default seguro.
-# Para escribir en Iceberg en dev, pasar explícitamente por CLI:
-#   uv run python main.py safety.dry_run=false
-# Esto hace el riesgo visible e intencional, no silencioso.
-
 datasets:
   ohlcv: true      # Bronze → Silver → Gold activo en dev
 
@@ -64,5 +61,10 @@ exchanges:
         enabled: true
         symbols:
           - BTC/USDT
-safety:
-  dry_run: false
+  kucoin:
+    enabled: true
+    markets:
+      spot:
+        enabled: true
+        symbols:
+          - BTC/USDT
