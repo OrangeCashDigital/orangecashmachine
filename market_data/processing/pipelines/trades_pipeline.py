@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+# -*- coding: utf-8 -*-
 """
 market_data/processing/pipelines/trades_pipeline.py
 ====================================================
@@ -17,16 +16,20 @@ Diferencias vs OHLCVPipeline
 - Volumen masivo : paginación agresiva, storage append-only
 - Sin repair     : trades son inmutables por definición
 
-Estado: esqueleto funcional. run() lanza NotImplementedError
-hasta que HistoricalTradesFetcher esté implementado.
-
 Principios: SOLID · KISS · DRY · SafeOps
 """
+from __future__ import annotations
 
+import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
+from loguru import logger
+
 from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+from market_data.ingestion.rest.trades_fetcher import TradesFetcher
+from market_data.storage.silver.trades_storage import TradesStorage
 
 # ---------------------------------------------------------------------------
 # Types
@@ -38,11 +41,9 @@ TradesPipelineMode = Literal["incremental", "backfill"]
 # Result / Summary
 # ---------------------------------------------------------------------------
 
-
 @dataclass(slots=True)
 class TradesResult:
     """Resultado de ingestion para un símbolo."""
-
     symbol:      str
     success:     bool          = False
     rows:        int           = 0
@@ -51,14 +52,12 @@ class TradesResult:
 
     @property
     def skipped(self) -> bool:
-        """True si no hay error pero tampoco rows nuevos (datos al día)."""
         return self.success and self.rows == 0
 
 
 @dataclass
 class TradesSummary:
     """Resumen agregado de un run de TradesPipeline."""
-
     results:     List[TradesResult] = field(default_factory=list)
     duration_ms: int                = 0
     mode:        str                = "incremental"
@@ -85,7 +84,6 @@ class TradesSummary:
 
     @property
     def status(self) -> str:
-        """Estado agregado: ok | partial | failed."""
         if self.failed == 0:
             return "ok"
         if self.succeeded > 0:
@@ -96,31 +94,20 @@ class TradesSummary:
 # Pipeline
 # ---------------------------------------------------------------------------
 
+WORKER_STAGGER_S: float = 0.05
+
 
 class TradesPipeline:
     """
     Pipeline de ingestion de trades (tick data).
 
-    Uso previsto::
-
-        pipeline = TradesPipeline(
-            symbols         = ["BTC/USDT"],
-            exchange_client = adapter,
-            market_type     = "spot",
-            dry_run         = False,
-        )
-        summary = await pipeline.run(mode="incremental")
-
-    Invariantes de construcción
-    ---------------------------
-    - symbols         : lista no vacía
-    - exchange_client : instancia CCXTAdapter (no None)
-    - max_concurrency : >= 1
+    Usa el mismo patrón producer/worker pool que OHLCVPipeline para
+    controlar concurrencia sin crear coroutines ilimitadas.
 
     SafeOps
     -------
     Constructor valida en tiempo de construcción (fail-fast).
-    run() lanza NotImplementedError explícito — nunca falla silenciosamente.
+    Errores por símbolo son capturados — nunca abortan el pipeline completo.
     """
 
     def __init__(
@@ -145,25 +132,148 @@ class TradesPipeline:
         self._exchange_id:    str       = getattr(
             exchange_client, "_exchange_id", "unknown"
         )
+        self._log = logger.bind(
+            exchange=self._exchange_id, pipeline="trades",
+        )
+
+        # Catalog inyectado o construido desde entorno (SafeOps)
+        _catalog = getattr(exchange_client, '_catalog', None)
+        if _catalog is None and not dry_run:
+            from market_data.storage.iceberg.catalog import get_catalog
+            _catalog = get_catalog()
+        storage = TradesStorage(
+            exchange    = self._exchange_id,
+            market_type = self.market_type,
+            catalog     = _catalog,
+            dry_run     = dry_run,
+        )
+        self._fetcher = TradesFetcher(
+            exchange_client = exchange_client,
+            storage         = storage,
+            market_type     = self.market_type,
+            dry_run         = dry_run,
+        )
 
     async def run(self, mode: TradesPipelineMode = "incremental") -> TradesSummary:
         """
-        Ejecuta la ingestion de trades.
+        Ejecuta la ingestion de trades para todos los símbolos.
 
-        Raises
-        ------
-        NotImplementedError
-            Hasta que HistoricalTradesFetcher esté implementado.
-            Deshabilitar con 'datasets.trades: false' en settings.yaml.
+        mode="incremental" : desde el último timestamp almacenado.
+        mode="backfill"    : desde el principio disponible (since_ms=None).
+
+        SafeOps: errores por símbolo se capturan y loguean — el pipeline
+        continúa con los demás símbolos.
         """
-        raise NotImplementedError(
-            f"TradesPipeline.run() no implementado | "
-            f"exchange={self._exchange_id} mode={mode}. "
-            "Implementar HistoricalTradesFetcher antes de habilitar. "
-            "Deshabilitar con 'datasets.trades: false' en settings.yaml."
+        self._log.info(
+            "TradesPipeline start | mode={} symbols={} concurrency={}",
+            mode, len(self.symbols), self.max_concurrency,
         )
 
-    def __repr__(self) -> str:  # pragma: no cover
+        pipeline_start = time.monotonic()
+        results        = await self._run_worker_pool(mode)
+        duration_ms    = int((time.monotonic() - pipeline_start) * 1000)
+
+        summary = TradesSummary(
+            results     = results,
+            duration_ms = duration_ms,
+            mode        = mode,
+        )
+
+        self._log.info(
+            "TradesPipeline done | mode={} ok={} failed={} skipped={}"
+            " total_rows={} duration_ms={}",
+            mode, summary.succeeded, summary.failed,
+            summary.skipped, summary.total_rows, duration_ms,
+        )
+        return summary
+
+    async def _run_worker_pool(self, mode: str) -> List[TradesResult]:
+        """Producer/worker pool — mismo patrón que OHLCVPipeline."""
+        queue:   asyncio.Queue      = asyncio.Queue()
+        results: List[TradesResult] = []
+
+        for idx, symbol in enumerate(self.symbols, 1):
+            await queue.put((idx, symbol))
+
+        since_ms: Optional[int] = None   # incremental usa cursor interno
+
+        async def worker() -> None:
+            while True:
+                try:
+                    item = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+                try:
+                    idx, symbol = item
+                    result = await self._fetch_symbol(symbol, mode, idx)
+                    results.append(result)
+                finally:
+                    queue.task_done()
+
+        async def _staggered_worker(stagger_s: float) -> None:
+            if stagger_s > 0:
+                await asyncio.sleep(stagger_s)
+            await worker()
+
+        workers = [
+            asyncio.create_task(_staggered_worker(i * WORKER_STAGGER_S))
+            for i in range(self.max_concurrency)
+        ]
+
+        try:
+            await asyncio.wait_for(queue.join(), timeout=3600)
+        except asyncio.TimeoutError:
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+            raise RuntimeError(
+                f"TradesPipeline worker pool timed out | exchange={self._exchange_id}"
+            )
+        except asyncio.CancelledError:
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+            raise
+        finally:
+            for w in workers:
+                if not w.done():
+                    w.cancel()
+
+        return results
+
+    async def _fetch_symbol(
+        self, symbol: str, mode: str, idx: int
+    ) -> TradesResult:
+        """Fetcha trades para un símbolo con captura de errores."""
+        start = time.monotonic()
+        try:
+            since_ms = None  # incremental usa cursor interno en TradesFetcher
+            rows = await self._fetcher.fetch_symbol(symbol, since_ms=since_ms)
+            duration_ms = int((time.monotonic() - start) * 1000)
+            self._log.info(
+                "  [{}/{}] {} | rows={} duration={}ms",
+                idx, len(self.symbols), symbol, rows, duration_ms,
+            )
+            return TradesResult(
+                symbol      = symbol,
+                success     = True,
+                rows        = rows,
+                duration_ms = duration_ms,
+            )
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            self._log.error(
+                "  [{}/{}] {} FAILED | err={} duration={}ms",
+                idx, len(self.symbols), symbol, exc, duration_ms,
+            )
+            return TradesResult(
+                symbol      = symbol,
+                success     = False,
+                error       = str(exc),
+                duration_ms = duration_ms,
+            )
+
+    def __repr__(self) -> str:
         return (
             f"TradesPipeline("
             f"exchange={self._exchange_id!r}, "

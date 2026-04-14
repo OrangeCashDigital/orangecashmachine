@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+# -*- coding: utf-8 -*-
 """
 market_data/processing/pipelines/derivatives_pipeline.py
 =========================================================
@@ -11,26 +10,33 @@ Dominio
 Métricas de mercado de derivados con schema variable por tipo:
   funding_rate  — tasa de financiación periódica (cada 8h típico)
   open_interest — contratos abiertos agregados (snapshot por intervalo)
-  liquidations  — posiciones liquidadas forzosamente (event-driven)
+
+Liquidaciones pendientes: requieren endpoint distinto no disponible
+en todos los exchanges via CCXT unified.
 
 Diferencias vs OHLCVPipeline
 ------------------------------
 - Schema variable : cada métrica tiene columnas propias
 - Sin timeframe   : resolución depende del endpoint
-- Fuentes mixtas  : APIs del exchange + proveedores externos (Coinglass)
-- Storage         : particionado por métrica, no por símbolo×timeframe
 - Sin repair      : gaps se rellenan en modo incremental
-
-Estado: esqueleto funcional. run() lanza NotImplementedError
-hasta que los fetchers por métrica estén implementados.
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+from __future__ import annotations
 
+import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
+from loguru import logger
+
 from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+from market_data.storage.silver.derivatives_storage import DerivativesStorage
+from market_data.ingestion.rest.derivatives_fetcher import (
+    FundingRateFetcher,
+    OpenInterestFetcher,
+)
 
 # ---------------------------------------------------------------------------
 # Types
@@ -38,20 +44,17 @@ from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
 
 DerivativesPipelineMode = Literal["incremental", "backfill"]
 
-#: Datasets soportados — fuente de verdad para validación en constructor.
 SUPPORTED_DERIVATIVE_DATASETS: frozenset[str] = frozenset(
-    {"funding_rate", "open_interest", "liquidations"}
+    {"funding_rate", "open_interest"}
 )
 
 # ---------------------------------------------------------------------------
 # Result / Summary
 # ---------------------------------------------------------------------------
 
-
 @dataclass(slots=True)
 class DerivativesResult:
     """Resultado de ingestion para un par (dataset, símbolo)."""
-
     dataset:     str
     symbol:      str
     success:     bool          = False
@@ -61,14 +64,12 @@ class DerivativesResult:
 
     @property
     def skipped(self) -> bool:
-        """True si no hay error pero tampoco rows nuevos."""
         return self.success and self.rows == 0
 
 
 @dataclass
 class DerivativesSummary:
     """Resumen agregado de un run de DerivativesPipeline."""
-
     results:     List[DerivativesResult] = field(default_factory=list)
     duration_ms: int                     = 0
     mode:        str                     = "incremental"
@@ -95,7 +96,6 @@ class DerivativesSummary:
 
     @property
     def status(self) -> str:
-        """Estado agregado: ok | partial | failed."""
         if self.failed == 0:
             return "ok"
         if self.succeeded > 0:
@@ -106,31 +106,20 @@ class DerivativesSummary:
 # Pipeline
 # ---------------------------------------------------------------------------
 
+WORKER_STAGGER_S: float = 0.05
+
 
 class DerivativesPipeline:
     """
     Pipeline de ingestion de derivados.
 
-    Uso previsto::
-
-        pipeline = DerivativesPipeline(
-            symbols         = ["BTC/USDT"],
-            datasets        = ["funding_rate", "open_interest"],
-            exchange_client = adapter,
-            dry_run         = False,
-        )
-        summary = await pipeline.run(mode="incremental")
-
-    Invariantes de construcción
-    ---------------------------
-    - symbols         : lista no vacía
-    - datasets        : subconjunto no vacío de SUPPORTED_DERIVATIVE_DATASETS
-    - exchange_client : instancia CCXTAdapter (no None)
+    Ejecuta un fetcher por dataset × símbolo en paralelo controlado.
+    Cada par (dataset, symbol) es una unidad de trabajo independiente.
 
     SafeOps
     -------
-    Constructor valida datasets desconocidos (fail-fast con mensaje claro).
-    run() lanza NotImplementedError explícito — nunca falla silenciosamente.
+    Constructor valida datasets desconocidos (fail-fast).
+    Errores por par son capturados — nunca abortan el pipeline.
     """
 
     def __init__(
@@ -138,7 +127,9 @@ class DerivativesPipeline:
         symbols:         List[str],
         datasets:        List[str],
         exchange_client: CCXTAdapter,
+        market_type:     str  = "swap",
         dry_run:         bool = False,
+        max_concurrency: int  = 4,
     ) -> None:
         if not symbols:
             raise ValueError("DerivativesPipeline: symbols no puede estar vacío")
@@ -154,33 +145,185 @@ class DerivativesPipeline:
                 f"Soportados: {sorted(SUPPORTED_DERIVATIVE_DATASETS)}"
             )
 
-        self.symbols:      List[str] = symbols
-        self.datasets:     List[str] = list(datasets)
-        self.dry_run:      bool      = dry_run
-        self._exchange_id: str       = getattr(
+        self.symbols:         List[str] = symbols
+        self.datasets:        List[str] = list(datasets)
+        self.market_type:     str       = market_type.lower()
+        self.dry_run:         bool      = dry_run
+        self.max_concurrency: int       = max_concurrency
+        self._exchange_id:    str       = getattr(
             exchange_client, "_exchange_id", "unknown"
         )
+        self._log = logger.bind(
+            exchange=self._exchange_id, pipeline="derivatives",
+        )
+
+        # Catalog — inyectado o resuelto desde entorno (SafeOps)
+        _catalog = getattr(exchange_client, '_catalog', None)
+        if _catalog is None and not dry_run:
+            from market_data.storage.iceberg.catalog import get_catalog
+            _catalog = get_catalog()
+        self._fetchers: dict[str, object] = {}
+        if "funding_rate" in datasets:
+            self._fetchers["funding_rate"] = FundingRateFetcher(
+                exchange_client = exchange_client,
+                storage         = DerivativesStorage(
+                    dataset     = "funding_rate",
+                    exchange    = self._exchange_id,
+                    market_type = self.market_type,
+                    catalog     = _catalog,
+                    dry_run     = dry_run,
+                ),
+                market_type     = self.market_type,
+                dry_run         = dry_run,
+            )
+        if "open_interest" in datasets:
+            self._fetchers["open_interest"] = OpenInterestFetcher(
+                exchange_client = exchange_client,
+                storage         = DerivativesStorage(
+                    dataset     = "open_interest",
+                    exchange    = self._exchange_id,
+                    market_type = self.market_type,
+                    catalog     = _catalog,
+                    dry_run     = dry_run,
+                ),
+                market_type     = self.market_type,
+                dry_run         = dry_run,
+            )
 
     async def run(
         self, mode: DerivativesPipelineMode = "incremental"
     ) -> DerivativesSummary:
         """
-        Ejecuta la ingestion de derivados.
+        Ejecuta la ingestion de derivados para todos los pares (dataset × símbolo).
 
-        Raises
-        ------
-        NotImplementedError
-            Hasta que los fetchers por métrica estén implementados.
-            Deshabilitar con 'datasets.<metric>: false' en settings.yaml.
+        SafeOps: errores por par son capturados y logueados — el pipeline
+        continúa con los demás pares.
         """
-        raise NotImplementedError(
-            f"DerivativesPipeline.run() no implementado | "
-            f"exchange={self._exchange_id} datasets={self.datasets} mode={mode}. "
-            "Implementar fetchers por métrica antes de habilitar. "
-            "Deshabilitar con 'datasets.<metric>: false' en settings.yaml."
+        pairs = [(ds, sym) for ds in self.datasets for sym in self.symbols]
+
+        self._log.info(
+            "DerivativesPipeline start | mode={} datasets={}"
+            " symbols={} pairs={} concurrency={}",
+            mode, self.datasets, len(self.symbols),
+            len(pairs), self.max_concurrency,
         )
 
-    def __repr__(self) -> str:  # pragma: no cover
+        pipeline_start = time.monotonic()
+        results        = await self._run_worker_pool(pairs)
+        duration_ms    = int((time.monotonic() - pipeline_start) * 1000)
+
+        summary = DerivativesSummary(
+            results     = results,
+            duration_ms = duration_ms,
+            mode        = mode,
+        )
+
+        self._log.info(
+            "DerivativesPipeline done | ok={} failed={} skipped={}"
+            " total_rows={} duration_ms={}",
+            summary.succeeded, summary.failed,
+            summary.skipped, summary.total_rows, duration_ms,
+        )
+        return summary
+
+    async def _run_worker_pool(
+        self, pairs: List[tuple[str, str]]
+    ) -> List[DerivativesResult]:
+        """Producer/worker pool — mismo patrón que OHLCVPipeline."""
+        queue:   asyncio.Queue           = asyncio.Queue()
+        results: List[DerivativesResult] = []
+
+        for idx, (dataset, symbol) in enumerate(pairs, 1):
+            await queue.put((idx, dataset, symbol))
+
+        async def worker() -> None:
+            while True:
+                try:
+                    item = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+                try:
+                    idx, dataset, symbol = item
+                    result = await self._fetch_pair(dataset, symbol, idx, len(pairs))
+                    results.append(result)
+                finally:
+                    queue.task_done()
+
+        async def _staggered_worker(stagger_s: float) -> None:
+            if stagger_s > 0:
+                await asyncio.sleep(stagger_s)
+            await worker()
+
+        workers = [
+            asyncio.create_task(_staggered_worker(i * WORKER_STAGGER_S))
+            for i in range(self.max_concurrency)
+        ]
+
+        try:
+            await asyncio.wait_for(queue.join(), timeout=3600)
+        except asyncio.TimeoutError:
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+            raise RuntimeError(
+                "DerivativesPipeline worker pool timed out"
+                f" | exchange={self._exchange_id}"
+            )
+        except asyncio.CancelledError:
+            for w in workers:
+                w.cancel()
+            await asyncio.gather(*workers, return_exceptions=True)
+            raise
+        finally:
+            for w in workers:
+                if not w.done():
+                    w.cancel()
+
+        return results
+
+    async def _fetch_pair(
+        self, dataset: str, symbol: str, idx: int, total: int
+    ) -> DerivativesResult:
+        """Fetcha un par (dataset, símbolo) con captura de errores."""
+        start   = time.monotonic()
+        fetcher = self._fetchers.get(dataset)
+        if fetcher is None:
+            return DerivativesResult(
+                dataset     = dataset,
+                symbol      = symbol,
+                success     = False,
+                error       = f"No fetcher for dataset={dataset!r}",
+                duration_ms = 0,
+            )
+        try:
+            rows = await fetcher.fetch_symbol(symbol)
+            duration_ms = int((time.monotonic() - start) * 1000)
+            self._log.info(
+                "  [{}/{}] {}/{} | rows={} duration={}ms",
+                idx, total, dataset, symbol, rows, duration_ms,
+            )
+            return DerivativesResult(
+                dataset     = dataset,
+                symbol      = symbol,
+                success     = True,
+                rows        = rows,
+                duration_ms = duration_ms,
+            )
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            self._log.error(
+                "  [{}/{}] {}/{} FAILED | err={} duration={}ms",
+                idx, total, dataset, symbol, exc, duration_ms,
+            )
+            return DerivativesResult(
+                dataset     = dataset,
+                symbol      = symbol,
+                success     = False,
+                error       = str(exc),
+                duration_ms = duration_ms,
+            )
+
+    def __repr__(self) -> str:
         return (
             f"DerivativesPipeline("
             f"exchange={self._exchange_id!r}, "

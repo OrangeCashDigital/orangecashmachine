@@ -222,3 +222,12 @@ def _get_redis_client(store: "RedisCursorStore"):
     cambia, este helper es el único punto a actualizar.
     """
     return store._client
+
+
+# ---------------------------------------------------------------------------
+# Alias de compatibilidad
+# ---------------------------------------------------------------------------
+# Históricamente algunos módulos generados importaban get_cursor_store.
+# Este alias mantiene compatibilidad sin duplicar lógica (DRY).
+# ---------------------------------------------------------------------------
+get_cursor_store = build_cursor_store
