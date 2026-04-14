@@ -2,27 +2,20 @@
 """
 trading/
 ========
+Sistema de trading desacoplado por dominios.
 
-Módulo de ejecución y estrategias de trading algorítmico.
+Importar desde los submódulos directamente:
 
-Estado
-------
-🚧 EN CONSTRUCCIÓN — pendiente de que market_data quede estable.
+    from trading.strategies import StrategyRegistry, BaseStrategy
+    from trading.risk import RiskManager, RiskConfig
+    from trading.execution import OMS, PaperExecutor
+    from trading.analytics import TradeTracker
 
-Bloqueado por
--------------
-- market_data pipeline debe estar completamente hardened (backfill,
-  incremental, repair) antes de construir lógica de ejecución encima.
-- Se necesita definir la interfaz de señales entre research/ y trading/.
-
-Submódulos planificados
------------------------
-trading/
-  strategies/   — implementaciones de estrategias (mean reversion, momentum…)
-  execution/    — order management, broker adapters (ccxt live trading)
-  risk/         — position sizing, drawdown limits, kill switch
-  portfolio/    — gestión de cartera multi-asset
-
-No eliminar este módulo — su existencia es intencional como placeholder
-para la siguiente fase de desarrollo del sistema.
+  strategies/  — plugin system + estrategias
+  risk/        — RiskManager + RiskConfig + modelos
+  execution/   — OMS + executors (paper, live)
+  analytics/   — TradeTracker, PerformanceEngine
+  engine.py    — TradingEngine (orquestador)
+  run_paper.py — entrypoint CLI paper trading
 """
+__version__ = "0.2.0"

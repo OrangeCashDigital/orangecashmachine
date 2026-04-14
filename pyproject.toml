@@ -89,6 +89,7 @@ dev = [
     "pytest-asyncio>=0.23,<1.0",
     "pytest-cov>=5.0,<6.0",
     "mypy>=1.9,<2.0",
+    "ruff>=0.4,<1.0",
     "structlog>=24.4.0",
     "httpx>=0.28.1",
 ]
@@ -108,7 +109,7 @@ line-length = 120
 # seguido de un docstring hace que ruff reporte todos los imports como E402.
 # Es un patrón intencional y correcto — no indica código mal estructurado.
 # Ref: https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file/
-ignore = ["E402", "E701", "E702"]
+ignore = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"

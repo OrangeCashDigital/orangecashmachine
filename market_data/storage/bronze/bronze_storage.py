@@ -149,6 +149,12 @@ class BronzeStorage:
             market_type = self._market_type,
         )
 
+        # Refresh antes de cada append — garantiza snapshot actual.
+        # Evita "branch main has changed": tabla cacheada en __init__ queda
+        # obsoleta cuando otro writer commitea entre instanciación y append.
+        # El lock de serialización (bronze_commit_lock) vive en IncrementalStrategy
+        # para que el await esté en contexto async — Bronze es síncrono.
+        self._table = get_catalog().load_table("bronze.ohlcv")
         try:
             self._table.append(
                 pa.Table.from_pandas(

@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
-
 import time
 from itertools import islice
 from typing import Iterator, Optional, Protocol, runtime_checkable
@@ -195,7 +194,8 @@ class RedisCursorStore:
             if _get_latency:
                 _get_latency.labels(exchange=exchange).observe(time.monotonic() - t0)
             if raw is None:
-                if _miss_total: _miss_total.labels(exchange=exchange).inc()
+                if _miss_total:
+                    _miss_total.labels(exchange=exchange).inc()
                 logger.debug("Cursor miss | key={}", key)
                 return None
             ts_ms = int(raw)
@@ -203,7 +203,8 @@ class RedisCursorStore:
             logger.debug("Cursor hit | key={} ts_ms={}", key, ts_ms)
             return ts_ms
         except Exception as exc:
-            if _error_total: _error_total.labels(operation="get").inc()
+            if _error_total:
+                _error_total.labels(operation="get").inc()
             logger.warning(
                 "CursorStore.get failed (fallback to parquet) | key={} error={}", key, exc
             )
@@ -223,12 +224,14 @@ class RedisCursorStore:
                     key, timestamp_ms,
                 )
                 return False
-            if _update_total: _update_total.labels(exchange=exchange).inc()
+            if _update_total:
+                _update_total.labels(exchange=exchange).inc()
             self._record_lag(exchange, timestamp_ms)
             logger.debug("Cursor updated | key={} ts_ms={}", key, timestamp_ms)
             return True
         except Exception as exc:
-            if _error_total: _error_total.labels(operation="update").inc()
+            if _error_total:
+                _error_total.labels(operation="update").inc()
             logger.warning(
                 "CursorStore.update failed (non-critical) | key={} error={}", key, exc
             )
@@ -241,7 +244,8 @@ class RedisCursorStore:
             logger.info("Cursor deleted | key={}", key)
             return deleted
         except Exception as exc:
-            if _error_total: _error_total.labels(operation="delete").inc()
+            if _error_total:
+                _error_total.labels(operation="delete").inc()
             logger.warning("CursorStore.delete failed | key={} error={}", key, exc)
             return False
 
@@ -252,11 +256,13 @@ class RedisCursorStore:
             for batch in _batched(self._scan_iter(pattern), _DELETE_BATCH_SIZE):
                 if batch:
                     deleted += int(self._client.delete(*batch))
-            if _active_cursors: _active_cursors.labels(exchange=exchange).set(0)
+            if _active_cursors:
+                _active_cursors.labels(exchange=exchange).set(0)
             logger.info("All cursors deleted | exchange={} count={}", exchange, deleted)
             return deleted
         except Exception as exc:
-            if _error_total: _error_total.labels(operation="delete_exchange").inc()
+            if _error_total:
+                _error_total.labels(operation="delete_exchange").inc()
             logger.warning(
                 "CursorStore.delete_exchange failed | exchange={} error={}", exchange, exc
             )
@@ -276,11 +282,13 @@ class RedisCursorStore:
             for key, raw in zip(keys, values):
                 if raw:
                     result[key] = int(raw)
-            if _active_cursors: _active_cursors.labels(exchange=exchange).set(len(result))
+            if _active_cursors:
+                _active_cursors.labels(exchange=exchange).set(len(result))
             logger.debug("Cursor list | exchange={} found={}", exchange, len(result))
             return result
         except Exception as exc:
-            if _error_total: _error_total.labels(operation="list").inc()
+            if _error_total:
+                _error_total.labels(operation="list").inc()
             logger.warning(
                 "CursorStore.list_cursors failed | exchange={} error={}", exchange, exc
             )
@@ -302,7 +310,8 @@ class RedisCursorStore:
             logger.debug("Scan exchanges | env={} found={}", self._env_raw, len(result))
             return result
         except Exception as exc:
-            if _error_total: _error_total.labels(operation="scan").inc()
+            if _error_total:
+                _error_total.labels(operation="scan").inc()
             logger.warning("CursorStore.scan_exchanges failed | error={}", exc)
             return []
 
@@ -400,8 +409,7 @@ def build_cursor_store_from_config(config=None) -> RedisCursorStore:
         port=redis_cfg.port,
         db=redis_cfg.db,
         password=getattr(redis_cfg, "password", None) or None,
-        env=getattr(config, "environment", type("E", (), {"name": "development"})()).name
-             if hasattr(config, "environment") else "development",
+        env=config.environment.name if hasattr(config, "environment") else "development",
         ttl_days=getattr(redis_cfg, "ttl_days", _DEFAULT_TTL_DAYS),
     )
 

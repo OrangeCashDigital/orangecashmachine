@@ -18,7 +18,8 @@ Uso
 ---
     from market_data.storage.gold.gold_storage import GoldStorage
     from trading.strategies.ema_crossover import EMACrossoverStrategy
-    from trading.execution.paper_bot import PaperBot, RiskConfig
+    from trading.execution.paper_bot import PaperBot
+    from trading.risk.models import RiskConfig
 
     strategy = EMACrossoverStrategy(symbol="BTC/USDT", timeframe="1h")
     bot      = PaperBot(strategy=strategy, data_source=GoldStorage())
@@ -58,16 +59,9 @@ class GoldDataSource(Protocol):
         ...
 
 
-# =============================================================================
-# Configuración de riesgo
-# =============================================================================
-
-@dataclass
-class RiskConfig:
-    """Límites de riesgo para paper trading."""
-    max_risk_pct:    float = 0.01   # máximo 1 % del capital por operación
-    max_open_trades: int   = 3      # posiciones abiertas simultáneas
-    min_confidence:  float = 0.8    # confianza mínima para actuar
+# RiskConfig canónica — SSOT en trading.risk.models (Pydantic, cargable desde YAML).
+# PaperBot accede a los límites via: risk.position, risk.signal_filter.
+from trading.risk.models import RiskConfig
 
 
 # =============================================================================
@@ -237,11 +231,11 @@ class PaperBot:
             )
             return None
 
-        if len(self._open_trades) >= self.risk.max_open_trades:
+        if len(self._open_trades) >= self.risk.position.max_open_positions:
             logger.warning(
                 "[PaperBot] Rechazada — máximo trades abiertos"
                 " | open={} max={}",
-                len(self._open_trades), self.risk.max_open_trades,
+                len(self._open_trades), self.risk.position.max_open_positions,
             )
             return None
 
@@ -249,7 +243,7 @@ class PaperBot:
             symbol    = signal.symbol,
             side      = signal.signal,
             price     = signal.price,
-            size_pct  = self.risk.max_risk_pct,
+            size_pct  = self.risk.position.max_position_pct,
             timestamp = signal.timestamp,
             signal    = signal,
         )

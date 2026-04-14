@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 main.py
 =======
@@ -28,6 +26,7 @@ Uso CLI::
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+from __future__ import annotations
 
 import sys
 from typing import Callable
