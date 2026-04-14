@@ -128,6 +128,11 @@ class ExecutionGuard:
 
         return False
 
+    @property
+    def stop_reason(self) -> Optional[str]:
+        """Razón de parada — None si el guard no está activo."""
+        return self._stop_reason
+
     def check(self) -> None:
         """
         Verifica si debe detenerse — lanza ExecutionStoppedError si es así.
