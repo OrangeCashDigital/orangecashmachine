@@ -141,11 +141,21 @@ class TestTradeTracker:
         assert tracker.trade_count == 0
 
     def test_on_fill_never_raises(self):
+        """
+        SafeOps: on_fill no debe lanzar ante errores internos.
+
+        Usamos un objeto que causa excepción durante _process_fill
+        sin depender de spec= (que restringe atributos del mock).
+        """
         tracker = TradeTracker(exchange="bybit")
-        bad_order = MagicMock(spec=Order)
-        bad_order.side = OrderSide.BUY
-        bad_order.symbol = None   # causa error interno
-        tracker.on_fill(bad_order)  # no debe lanzar
+
+        # Objeto que lanza en cualquier acceso a atributo
+        class BrokenOrder:
+            @property
+            def side(self):
+                raise RuntimeError("broken object")
+
+        tracker.on_fill(BrokenOrder())  # no debe lanzar
 
     def test_summary_observable(self):
         tracker = TradeTracker()

@@ -74,10 +74,9 @@ class TradeTracker:
         try:
             self._process_fill(order)
         except Exception as exc:
-            self._log.error(
-                "on_fill error | order={} error={}",
-                order.order_id, exc,
-            )
+            # SafeOps: NO acceder a order.order_id aquí — el objeto
+            # puede estar corrupto y causar un segundo error en el handler.
+            self._log.error("on_fill error | error={}", exc)
 
     # ------------------------------------------------------------------
     # Public API
