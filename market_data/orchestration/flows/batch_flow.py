@@ -329,7 +329,7 @@ async def _consolidate_results(
             if guard.should_stop():
                 log.critical(
                     "execution_guard_triggered | reason=%s",
-                    guard._stop_reason,
+                    guard.stop_reason,
                 )
         else:
             guard.record_success()

@@ -39,6 +39,13 @@ class PipelineContext:
     exchange_id: str
     market_type: str
     start_date:  str
+    # Locks de commit Iceberg — serializan appends concurrentes a la misma tabla.
+    # El fetch sigue siendo 100% paralelo; solo el commit (~200ms) se serializa.
+    # Un lock por tabla (bronze.ohlcv / silver.ohlcv) — tablas distintas pueden
+    # escribirse solapadas entre sí, solo se serializa dentro de cada tabla.
+    # Ref: Iceberg OCC — "branch main has changed" cuando dos writers compiten.
+    bronze_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    silver_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 # Tipos de excepción de stdlib/aiohttp que indican error transitorio.
@@ -250,6 +257,7 @@ class PipelineSummary:
 
     @property
     def total_gaps_healed(self)  -> int: return sum(r.gaps_healed  for r in self.results)
+    @property
     def total_gaps_partial(self) -> int: return sum(r.gaps_partial for r in self.results)
 
     @property
