@@ -24,10 +24,11 @@ Principios: SOLID · KISS · DRY · SafeOps
 """
 from __future__ import annotations
 
-import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
+
+from market_data.processing.pipelines._worker_pool import run_worker_pool
 
 from loguru import logger
 
@@ -106,7 +107,6 @@ class DerivativesSummary:
 # Pipeline
 # ---------------------------------------------------------------------------
 
-WORKER_STAGGER_S: float = 0.05
 
 
 class DerivativesPipeline:
@@ -229,56 +229,21 @@ class DerivativesPipeline:
     async def _run_worker_pool(
         self, pairs: List[tuple[str, str]]
     ) -> List[DerivativesResult]:
-        """Producer/worker pool — mismo patrón que OHLCVPipeline."""
-        queue:   asyncio.Queue           = asyncio.Queue()
-        results: List[DerivativesResult] = []
+        """Delega al worker pool genérico — sin lógica de concurrencia local."""
+        total = len(pairs)
+        items = [(idx, ds, sym) for idx, (ds, sym) in enumerate(pairs, 1)]
 
-        for idx, (dataset, symbol) in enumerate(pairs, 1):
-            await queue.put((idx, dataset, symbol))
+        async def _execute(item) -> DerivativesResult:
+            idx, dataset, symbol = item
+            return await self._fetch_pair(dataset, symbol, idx, total)
 
-        async def worker() -> None:
-            while True:
-                try:
-                    item = queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    return
-                try:
-                    idx, dataset, symbol = item
-                    result = await self._fetch_pair(dataset, symbol, idx, len(pairs))
-                    results.append(result)
-                finally:
-                    queue.task_done()
-
-        async def _staggered_worker(stagger_s: float) -> None:
-            if stagger_s > 0:
-                await asyncio.sleep(stagger_s)
-            await worker()
-
-        workers = [
-            asyncio.create_task(_staggered_worker(i * WORKER_STAGGER_S))
-            for i in range(self.max_concurrency)
-        ]
-
-        try:
-            await asyncio.wait_for(queue.join(), timeout=3600)
-        except asyncio.TimeoutError:
-            for w in workers:
-                w.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-            raise RuntimeError(
-                "DerivativesPipeline worker pool timed out"
-                f" | exchange={self._exchange_id}"
-            )
-        except asyncio.CancelledError:
-            for w in workers:
-                w.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-            raise
-        finally:
-            for w in workers:
-                if not w.done():
-                    w.cancel()
-
+        results, _ = await run_worker_pool(
+            items           = items,
+            execute_fn      = _execute,
+            max_concurrency = self.max_concurrency,
+            exchange_id     = self._exchange_id,
+            log             = self._log,
+        )
         return results
 
     async def _fetch_pair(

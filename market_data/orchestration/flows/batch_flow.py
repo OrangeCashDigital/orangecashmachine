@@ -110,9 +110,10 @@ def _launch_spot_pipelines(
         futures.append(run_historical_pipeline(config, exc_cfg, probe,
                                                exchange_client=probe.adapter))
     if "trades" in spot_requested:
-        futures.append(run_trades_pipeline(config, exc_cfg, probe, dataset="trades"))
-    if "orderbook" in spot_requested:
-        futures.append(run_trades_pipeline(config, exc_cfg, probe, dataset="orderbook"))
+        # TradesPipeline: tick data — dominio propio, adapter inyectado desde probe.
+        # Orderbook es un dominio distinto (L2 streaming) — no se mapea a TradesPipeline.
+        futures.append(run_trades_pipeline(config, exc_cfg, probe,
+                                           exchange_client=probe.adapter))
 
     return futures
 
@@ -205,7 +206,7 @@ def _launch_pipelines_for_exchange(
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
         log.warning("Exchange config not found | exchange=%s", probe.exchange)
-        return ExchangeTasks([], [])
+        return ExchangeTasks(spot=[], repair=[], futures=[])
 
     active, skipped = _filter_active_datasets(requested, probe)
     if skipped:

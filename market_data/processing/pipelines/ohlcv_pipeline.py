@@ -26,6 +26,7 @@ from market_data.quality.pipeline import QualityPipeline
 from market_data.storage.bronze.bronze_storage import BronzeStorage
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
+from market_data.processing.pipelines._worker_pool import run_worker_pool
 from market_data.processing.strategies.base import (
     PairResult,
     PipelineContext,
@@ -275,112 +276,48 @@ class OHLCVPipeline:
         mode:         PipelineMode,
     ) -> tuple[List[PairResult], List[str]]:
         """
-        Producer/consumer pool: evita crear todas las coroutines a la vez.
+        Delega al worker pool genérico con circuit breaker via on_abort.
 
-        El producer encola pares de a uno. Cada worker toma un par,
-        lo procesa, y deposita el resultado. El número de workers activos
-        nunca supera max_concurrency.
+        on_abort coordina el abort entre workers cuando _ExchangeAbortError
+        se detecta: activa abort_event, drena la queue y registra el exchange
+        degradado. El pool genérico gestiona el drenado y la cancelación.
+
+        Ref: Stevens, "Unix Network Programming" — thundering herd prevention
         """
-        queue:        asyncio.Queue  = asyncio.Queue()
-        results:      List[PairResult] = []
-        degraded:     List[str]        = []
-        total       = len(pairs)
-        # Señal compartida: cuando un worker detecta circuit open, todos los
-        # demás salen limpiamente sin cooldown duplicado ni reintentos inútiles.
+        total:    int       = len(pairs)
+        degraded: List[str] = []
+
+        # abort_event compartido: _execute_pair lo recibe para detectar
+        # si otro worker ya abortó y saltar el cooldown duplicado.
         abort_event: asyncio.Event = asyncio.Event()
 
-        # Encolar todos los trabajos
-        for idx, (symbol, tf) in enumerate(pairs, 1):
-            await queue.put((idx, symbol, tf))
+        items = [(idx, sym, tf) for idx, (sym, tf) in enumerate(pairs, 1)]
 
-        async def worker() -> None:
-            while True:
-                # Si el exchange fue abortado por otro worker, drenar toda la queue
-                # y salir. Drenar UN solo item (patrón anterior) dejaba items sin
-                # task_done cuando N items > M workers, bloqueando queue.join()
-                # hasta el timeout de 3600s en circuit open con muchos pares.
-                if abort_event.is_set():
-                    while True:
-                        try:
-                            queue.get_nowait()
-                            queue.task_done()
-                        except asyncio.QueueEmpty:
-                            break
-                    return
-
-                try:
-                    item = queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    return
-
-                try:
-                    idx, symbol, tf = item
-                    result = await self._execute_pair(
-                        strategy, symbol, tf, idx, total, mode, abort_event
-                    )
-                    results.append(result)
-                except _ExchangeAbortError as exc:
-                    # Señalizar a todos los workers antes de drenar.
-                    abort_event.set()
-                    drained = 0
-                    while not queue.empty():
-                        try:
-                            queue.get_nowait()
-                            queue.task_done()
-                            drained += 1
-                        except asyncio.QueueEmpty:
-                            break
-                    if exc.exchange_id not in degraded:
-                        degraded.append(exc.exchange_id)
-                    self._log.bind(drained=drained, aborted_exchange=exc.exchange_id).warning("Exchange aborted — pares drenados")
-                    return
-                finally:
-                    queue.task_done()
-
-        # Stagger de arranque entre workers: dispersa los primeros fetches
-        # en el tiempo para evitar bursts sincronizados contra el exchange.
-        # Principio: thundering herd prevention (distribuye carga de red).
-        # WORKER_STAGGER_S calibrado para ser imperceptible en pipelines
-        # pequeños (<1s total para 20 workers) pero efectivo bajo carga.
-        #
-        # Ref: "The Thundering Herd Problem" — Stevens, Unix Network Programming
-        # SafeOps: asyncio.sleep(0) es un no-op seguro si stagger=0.
-        # stagger usa WORKER_STAGGER_S definido a nivel de módulo
-
-        async def _staggered_worker(stagger_s: float) -> None:
-            if stagger_s > 0:
-                await asyncio.sleep(stagger_s)
-            await worker()
-
-        workers = [
-            asyncio.create_task(_staggered_worker(i * WORKER_STAGGER_S))
-            for i in range(self.max_concurrency)
-        ]
-
-        try:
-            # queue.join() con timeout — evita deadlock si un worker muere
-            # silenciosamente antes de llamar task_done().
-            # Timeout = 1h, suficiente para cualquier pipeline histórico real.
-            await asyncio.wait_for(queue.join(), timeout=3600)
-        except asyncio.TimeoutError:
-            self._log.bind(timeout_s=3600).error("Worker pool timed out — forzando shutdown")
-            for w in workers:
-                w.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-            raise RuntimeError(
-                f"Worker pool timed out after 3600s | exchange={self._exchange_id}"
+        async def _execute(item) -> PairResult:
+            idx, symbol, tf = item
+            return await self._execute_pair(
+                strategy, symbol, tf, idx, total, mode, abort_event
             )
-        except asyncio.CancelledError:
-            for w in workers:
-                w.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-            self._log.bind(workers=len(workers)).warning("Pipeline cancelado — workers detenidos")
-            raise
-        finally:
-            for w in workers:
-                if not w.done():
-                    w.cancel()
 
+        def _on_abort(item, exc: Exception) -> bool:
+            if not isinstance(exc, _ExchangeAbortError):
+                return False
+            abort_event.set()
+            if exc.exchange_id not in degraded:
+                degraded.append(exc.exchange_id)
+                self._log.bind(aborted_exchange=exc.exchange_id).warning(
+                    "Exchange aborted — circuit breaker"
+                )
+            return True
+
+        results, _ = await run_worker_pool(
+            items           = items,
+            execute_fn      = _execute,
+            max_concurrency = self.max_concurrency,
+            exchange_id     = self._exchange_id,
+            log             = self._log,
+            on_abort        = _on_abort,
+        )
         return results, degraded
 
     # ======================================================

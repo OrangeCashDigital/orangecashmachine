@@ -20,10 +20,11 @@ Principios: SOLID · KISS · DRY · SafeOps
 """
 from __future__ import annotations
 
-import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
+
+from market_data.processing.pipelines._worker_pool import run_worker_pool
 
 from loguru import logger
 
@@ -94,7 +95,6 @@ class TradesSummary:
 # Pipeline
 # ---------------------------------------------------------------------------
 
-WORKER_STAGGER_S: float = 0.05
 
 
 class TradesPipeline:
@@ -188,57 +188,20 @@ class TradesPipeline:
         return summary
 
     async def _run_worker_pool(self, mode: str) -> List[TradesResult]:
-        """Producer/worker pool — mismo patrón que OHLCVPipeline."""
-        queue:   asyncio.Queue      = asyncio.Queue()
-        results: List[TradesResult] = []
+        """Delega al worker pool genérico — sin lógica de concurrencia local."""
+        items = list(enumerate(self.symbols, 1))
 
-        for idx, symbol in enumerate(self.symbols, 1):
-            await queue.put((idx, symbol))
+        async def _execute(item) -> TradesResult:
+            idx, symbol = item
+            return await self._fetch_symbol(symbol, mode, idx)
 
-        since_ms: Optional[int] = None   # incremental usa cursor interno
-
-        async def worker() -> None:
-            while True:
-                try:
-                    item = queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    return
-                try:
-                    idx, symbol = item
-                    result = await self._fetch_symbol(symbol, mode, idx)
-                    results.append(result)
-                finally:
-                    queue.task_done()
-
-        async def _staggered_worker(stagger_s: float) -> None:
-            if stagger_s > 0:
-                await asyncio.sleep(stagger_s)
-            await worker()
-
-        workers = [
-            asyncio.create_task(_staggered_worker(i * WORKER_STAGGER_S))
-            for i in range(self.max_concurrency)
-        ]
-
-        try:
-            await asyncio.wait_for(queue.join(), timeout=3600)
-        except asyncio.TimeoutError:
-            for w in workers:
-                w.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-            raise RuntimeError(
-                f"TradesPipeline worker pool timed out | exchange={self._exchange_id}"
-            )
-        except asyncio.CancelledError:
-            for w in workers:
-                w.cancel()
-            await asyncio.gather(*workers, return_exceptions=True)
-            raise
-        finally:
-            for w in workers:
-                if not w.done():
-                    w.cancel()
-
+        results, _ = await run_worker_pool(
+            items           = items,
+            execute_fn      = _execute,
+            max_concurrency = self.max_concurrency,
+            exchange_id     = self._exchange_id,
+            log             = self._log,
+        )
         return results
 
     async def _fetch_symbol(

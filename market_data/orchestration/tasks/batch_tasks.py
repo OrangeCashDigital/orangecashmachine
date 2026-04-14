@@ -428,46 +428,98 @@ async def run_futures_pipeline(
     retry_delay_seconds=[30, 120],
     timeout_seconds=PIPELINE_TASK_TIMEOUT,
     task_run_name="{exchange_cfg.name.value}-trades",
-    description="Trades pipeline — skipped silently if disabled in config.",
+    description="Ingests tick-level trade data for a specific exchange.",
     tags=["trades"],
 )
 async def run_trades_pipeline(
-    config:       AppConfig,
-    exchange_cfg: ExchangeConfig,
-    probe:        ExchangeProbe,
-    dataset:      str = "trades",
+    config:          AppConfig,
+    exchange_cfg:    ExchangeConfig,
+    probe:           ExchangeProbe,
+    exchange_client: "CCXTAdapter | None" = None,
 ) -> None:
     """
     Pipeline de trades (tick data).
 
     Dominio distinto a OHLCV: sin timeframe, volumen masivo, append-only.
-    No comparte lógica con OHLCVPipeline — ver TradesPipeline cuando se implemente.
+    Usa TradesPipeline — no comparte lógica con OHLCVPipeline.
 
-    SafeOps: si datasets.trades está desactivado en config, retorna
-    silenciosamente sin error — no bloquea el flow.
+    SafeOps
+    -------
+    - Skip silencioso si datasets.trades desactivado en config
+    - Solo falla si el 100% de símbolos fallan
+    - Adapter siempre cerrado en finally via managed_adapter
 
-    Implementación pendiente:
-      from market_data.processing.pipelines.trades_pipeline import TradesPipeline
+    Ref: https://docs.prefect.io/latest/develop/write-tasks\#task-retries
     """
+    from market_data.processing.pipelines.trades_pipeline import TradesPipeline
+
     log = get_run_logger()
+    exchange_name = exchange_cfg.name.value
 
     if not config.datasets.trades:
         log.warning(
-            "Trades pipeline skipped — disabled in config | exchange=%s dataset=%s",
-            exchange_cfg.name.value,
-            dataset,
+            "Trades pipeline skipped — disabled in config | exchange=%s",
+            exchange_name,
         )
         return
 
-    log.error(
-        "Trades pipeline not implemented | exchange=%s dataset=%s",
-        exchange_cfg.name.value,
-        dataset,
+    spot_symbols = exchange_cfg.markets.spot_symbols
+    if not spot_symbols:
+        log.warning(
+            "Trades pipeline skipped — no spot symbols configured | exchange=%s",
+            exchange_name,
+        )
+        return
+
+    throttle = get_or_create_throttle(
+        exchange_id       = exchange_name,
+        market_type       = "spot",
+        dataset           = "trades",
+        initial           = probe.max_concurrent,
+        maximum           = probe.max_concurrent,
+        latency_target_ms = probe.latency_ms or 500,
     )
-    raise NotImplementedError(
-        f"Trades pipeline not implemented for '{exchange_cfg.name.value}'. "
-        "Set 'datasets.trades: false' in settings.yaml to suppress this error."
+
+    log.info(
+        "Trades pipeline starting | exchange=%s symbols=%s workers=%s",
+        exchange_name,
+        len(spot_symbols),
+        throttle.current,
     )
+
+    async with managed_adapter(exchange_cfg, "spot", injected=exchange_client) as client:
+        pipeline = TradesPipeline(
+            symbols          = spot_symbols,
+            exchange_client  = client,
+            market_type      = "spot",
+            dry_run          = config.safety.dry_run,
+            max_concurrency  = throttle.current,
+        )
+        pipeline_mode = "backfill" if config.pipeline.historical.backfill_mode else "incremental"
+        summary       = await pipeline.run(mode=pipeline_mode)
+
+    log.info(
+        "Trades pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
+        exchange_name,
+        summary.succeeded,
+        summary.failed,
+        summary.skipped,
+        summary.total_rows,
+    )
+
+    if summary.total > 0 and summary.failed == summary.total:
+        raise RuntimeError(
+            f"Trades pipeline failed for all {summary.total} symbols"
+            f" on '{exchange_name}'."
+        )
+
+    if summary.failed > 0:
+        log.warning(
+            "Trades pipeline partial failures | exchange=%s failed=%s/%s",
+            exchange_name,
+            summary.failed,
+            summary.total,
+        )
 
 
 # ==========================================================
@@ -480,48 +532,115 @@ async def run_trades_pipeline(
     retry_delay_seconds=[60],
     timeout_seconds=PIPELINE_TASK_TIMEOUT,
     task_run_name="{exchange_cfg.name.value}-derivatives",
-    description="Derivatives pipeline — skipped silently if disabled in config.",
+    description="Ingests derivative market metrics (funding_rate, open_interest).",
     tags=["derivatives"],
 )
 async def run_derivatives_pipeline(
-    config:       AppConfig,
-    exchange_cfg: ExchangeConfig,
-    probe:        ExchangeProbe,
-    datasets:     list[str],
+    config:          AppConfig,
+    exchange_cfg:    ExchangeConfig,
+    probe:           ExchangeProbe,
+    datasets:        list[str],
+    exchange_client: "CCXTAdapter | None" = None,
 ) -> None:
     """
-    Pipeline de derivados (funding_rate, open_interest, liquidations, etc.).
+    Pipeline de derivados (funding_rate, open_interest).
 
     Dominio distinto a OHLCV: schema variable por métrica, sin timeframe fijo.
-    No comparte lógica con OHLCVPipeline — ver DerivativesPipeline cuando se implemente.
+    Usa DerivativesPipeline — no comparte lógica con OHLCVPipeline.
 
-    SafeOps: si ningún dataset de derivados está activo en config, retorna
-    silenciosamente sin error — no bloquea el flow.
+    SafeOps
+    -------
+    - Skip silencioso si ningún dataset activo en config
+    - Valida datasets antes de construir el pipeline (fail-fast)
+    - Solo falla si el 100% de pares (dataset × símbolo) fallan
+    - Adapter siempre cerrado en finally via managed_adapter
 
-    Implementación pendiente:
-      from market_data.processing.pipelines.derivatives_pipeline import DerivativesPipeline
+    Ref: https://docs.prefect.io/latest/develop/write-tasks\#task-retries
     """
+    from market_data.processing.pipelines.derivatives_pipeline import DerivativesPipeline
+
     log = get_run_logger()
     _validate_derivatives_datasets(datasets)
 
-    active_derivatives = config.datasets.active_derivative_datasets
+    exchange_name      = exchange_cfg.name.value
+    active_derivatives = [d for d in datasets if d in (config.datasets.active_derivative_datasets or [])]
+
     if not active_derivatives:
         log.warning(
-            "Derivatives pipeline skipped — no derivative datasets active"
-            " | exchange=%s",
-            exchange_cfg.name.value,
+            "Derivatives pipeline skipped — no active derivative datasets"
+            " | exchange=%s requested=%s",
+            exchange_name,
+            datasets,
         )
         return
 
-    log.error(
-        "Derivatives pipeline not implemented | exchange=%s datasets=%s",
-        exchange_cfg.name.value,
-        datasets,
+    futures_symbols     = exchange_cfg.markets.futures_symbols
+    futures_market_type = exchange_cfg.markets.futures_default_type or "swap"
+
+    if not futures_symbols:
+        log.warning(
+            "Derivatives pipeline skipped — no futures symbols configured"
+            " | exchange=%s",
+            exchange_name,
+        )
+        return
+
+    throttle = get_or_create_throttle(
+        exchange_id       = exchange_name,
+        market_type       = futures_market_type,
+        dataset           = "derivatives",
+        initial           = probe.max_concurrent,
+        maximum           = probe.max_concurrent,
+        latency_target_ms = probe.latency_ms or 500,
     )
-    raise NotImplementedError(
-        f"Derivatives pipeline not implemented for '{exchange_cfg.name.value}'. "
-        f"Disable {datasets} in settings.yaml to suppress this error."
+
+    log.info(
+        "Derivatives pipeline starting | exchange=%s market=%s"
+        " datasets=%s symbols=%s workers=%s",
+        exchange_name,
+        futures_market_type,
+        active_derivatives,
+        len(futures_symbols),
+        throttle.current,
     )
+
+    async with managed_adapter(
+        exchange_cfg, futures_market_type, injected=exchange_client
+    ) as client:
+        pipeline = DerivativesPipeline(
+            symbols          = futures_symbols,
+            datasets         = active_derivatives,
+            exchange_client  = client,
+            market_type      = futures_market_type,
+            dry_run          = config.safety.dry_run,
+            max_concurrency  = throttle.current,
+        )
+        pipeline_mode = "backfill" if config.pipeline.historical.backfill_mode else "incremental"
+        summary       = await pipeline.run(mode=pipeline_mode)
+
+    log.info(
+        "Derivatives pipeline finished | exchange=%s ok=%s failed=%s"
+        " skipped=%s rows=%s",
+        exchange_name,
+        summary.succeeded,
+        summary.failed,
+        summary.skipped,
+        summary.total_rows,
+    )
+
+    if summary.total > 0 and summary.failed == summary.total:
+        raise RuntimeError(
+            f"Derivatives pipeline failed for all {summary.total} pairs"
+            f" on '{exchange_name}'."
+        )
+
+    if summary.failed > 0:
+        log.warning(
+            "Derivatives pipeline partial failures | exchange=%s failed=%s/%s",
+            exchange_name,
+            summary.failed,
+            summary.total,
+        )
 
 
 # ==========================================================
