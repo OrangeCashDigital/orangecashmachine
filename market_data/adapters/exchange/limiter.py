@@ -35,6 +35,9 @@ __all__ = [
     "get_limiter_state",
 ]
 
+# Sentinel para verificar que acquire() siempre tiene release() pareado.
+# AdaptiveLimiter.slot() retorna un context manager que garantiza esto.
+
 
 _LIMITERS: dict[str, "AdaptiveLimiter"] = {}
 
@@ -100,22 +103,38 @@ class AdaptiveLimiter:
         """Rate limit actual (req/s)."""
         return self._max_rate
 
-    async def acquire(self) -> None:
-        """Adquiere un slot del limiter (hard limit)."""
-        await self._semaphore.acquire()
-        try:
-            if self._min_interval > 0:
-                now = time.monotonic()
-                elapsed = now - self._last_acquire
-                if elapsed < self._min_interval:
-                    await asyncio.sleep(self._min_interval - elapsed)
-                self._last_acquire = time.monotonic()
-        except Exception:
-            self._semaphore.release()
-            raise
+    def slot(self) -> "_LimiterSlot":
+        """
+        Context manager que garantiza acquire/release pareados.
 
-    def release(self) -> None:
-        """Libera un slot del semaphore."""
+        Uso obligatorio (Fail-Fast: nunca acquire sin release garantizado):
+
+            async with self._limiter.slot():
+                result = await ccxt.fetch_ohlcv(...)
+
+        El semaphore se libera en __aexit__ incluso si la operación
+        downstream lanza excepción — elimina el leak progresivo de slots.
+        """
+        return _LimiterSlot(self)
+
+    async def _acquire_raw(self) -> None:
+        """
+        Adquiere semaphore + aplica rate limiting.
+
+        Privado — llamar solo desde _LimiterSlot.__aenter__.
+        Si el rate limiting falla tras adquirir el semaphore,
+        _LimiterSlot.__aexit__ garantiza el release.
+        """
+        await self._semaphore.acquire()
+        if self._min_interval > 0:
+            now = time.monotonic()
+            elapsed = now - self._last_acquire
+            if elapsed < self._min_interval:
+                await asyncio.sleep(self._min_interval - elapsed)
+            self._last_acquire = time.monotonic()
+
+    def _release_raw(self) -> None:
+        """Libera un slot. Privado — llamar solo desde _LimiterSlot.__aexit__."""
         self._semaphore.release()
 
     def update_concurrency(self, n: int) -> None:
@@ -174,6 +193,33 @@ class AdaptiveLimiter:
             "max_concurrency": self._max_concurrency,
             "max_rate": self._max_rate,
         }
+
+
+class _LimiterSlot:
+    """
+    Context manager de slot de concurrencia.
+
+    Garantiza que cada acquire() tiene exactamente un release() pareado,
+    independientemente de excepciones en el bloque `async with`.
+
+    No instanciar directamente — usar AdaptiveLimiter.slot().
+    """
+
+    __slots__ = ("_limiter", "_acquired")
+
+    def __init__(self, limiter: "AdaptiveLimiter") -> None:
+        self._limiter = limiter
+        self._acquired = False
+
+    async def __aenter__(self) -> "_LimiterSlot":
+        await self._limiter._acquire_raw()
+        self._acquired = True
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        if self._acquired:
+            self._limiter._release_raw()
+            self._acquired = False
 
 
 def get_or_create_limiter(
