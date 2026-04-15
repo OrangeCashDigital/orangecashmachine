@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 market_data/orchestration/tasks/batch_tasks.py
 ===============================================
@@ -10,6 +8,15 @@ Responsabilidad
 ---------------
 Cada task encapsula un pipeline de dominio específico y gestiona
 su ciclo de vida: validación, ejecución, logging y errores.
+
+Throttle
+--------
+OHLCVPipeline recibe el throttle directamente y lo alimenta por-par
+mid-run via _feed_throttle. El feedback loop opera dentro del run,
+no solo entre runs.
+
+TradesPipeline y DerivativesPipeline no tienen throttle inyectado —
+_update_throttle_from_summary los alimenta post-run sobre el summary.
 
 Principios
 ----------
@@ -113,7 +120,14 @@ def _validate_derivatives_datasets(datasets: Sequence[str]) -> None:
 
 def _update_throttle_from_summary(throttle, summary) -> None:
     """
-    Actualiza el throttle adaptivo según resultados del pipeline.
+    Actualiza el throttle adaptivo según resultados de un pipeline post-run.
+
+    Uso: TradesPipeline y DerivativesPipeline — pipelines que no tienen
+    throttle inyectado y no pueden alimentarlo por-par mid-run.
+
+    OHLCVPipeline usa _feed_throttle internamente (mid-run, por-par).
+    No llamar _update_throttle_from_summary para tasks OHLCV — los
+    resultados ya están registrados y se produciría doble conteo.
 
     Clasifica errores por tipo para ajustar la penalización de concurrencia:
       rate_limit → reducción agresiva (429 del exchange)
@@ -207,6 +221,12 @@ async def run_historical_pipeline(
     Dominio: OHLCV candles agregados por timeframe.
     No procesa trades ni derivados — ver TradesPipeline y DerivativesPipeline.
 
+    Throttle mid-run
+    ----------------
+    El throttle se inyecta en OHLCVPipeline. El pipeline alimenta el throttle
+    por-par via _feed_throttle — no se llama _update_throttle_from_summary
+    post-run para evitar doble conteo.
+
     SafeOps
     -------
     - Errores parciales loggeados — falla solo si el 100% de symbols fallan
@@ -218,9 +238,9 @@ async def run_historical_pipeline(
     log = get_run_logger()
     _validate_historical_inputs(exchange_cfg, config)
 
-    hist_cfg          = config.pipeline.historical
-    exchange_name     = exchange_cfg.name.value
-    spot_symbols      = exchange_cfg.markets.spot_symbols
+    hist_cfg      = config.pipeline.historical
+    exchange_name = exchange_cfg.name.value
+    spot_symbols  = exchange_cfg.markets.spot_symbols
 
     throttle = get_or_create_throttle(
         exchange_id       = exchange_name,
@@ -251,11 +271,13 @@ async def run_historical_pipeline(
             market_type        = "spot",
             dry_run            = config.safety.dry_run,
             auto_lookback_days = getattr(hist_cfg, "auto_lookback_days", 1825),
+            throttle           = throttle,
         )
         pipeline_mode = "backfill" if hist_cfg.backfill_mode else "incremental"
         summary       = await pipeline.run(mode=pipeline_mode)
 
-    _update_throttle_from_summary(throttle, summary)
+    # throttle ya alimentado por-par mid-run via _feed_throttle.
+    # No llamar _update_throttle_from_summary — evita doble conteo.
 
     ts = get_throttle_state(exchange_name, market_type="spot", dataset="ohlcv")
     log.info(
@@ -319,6 +341,12 @@ async def run_futures_pipeline(
     Si la API spot falla, futures puede ejecutar sin restricción.
     La dependencia es de recursos (rate limit del exchange), no de datos.
 
+    Throttle mid-run
+    ----------------
+    El throttle se inyecta en OHLCVPipeline. El pipeline alimenta el throttle
+    por-par via _feed_throttle — no se llama _update_throttle_from_summary
+    post-run para evitar doble conteo.
+
     SafeOps
     -------
     - Skip silencioso si futures no está habilitado en config
@@ -374,10 +402,12 @@ async def run_futures_pipeline(
             backfill_mode   = hist_cfg.backfill_mode,
             market_type     = futures_market_type,
             dry_run         = config.safety.dry_run,
+            throttle        = throttle,
         )
         summary = await pipeline.run(mode=pipeline_mode)
 
-    _update_throttle_from_summary(throttle, summary)
+    # throttle ya alimentado por-par mid-run via _feed_throttle.
+    # No llamar _update_throttle_from_summary — evita doble conteo.
 
     ts = get_throttle_state(
         exchange_name, market_type=futures_market_type, dataset="ohlcv"
@@ -419,7 +449,7 @@ async def run_futures_pipeline(
 
 
 # ==========================================================
-# Trades Pipeline (stub — SafeOps skip si desactivado)
+# Trades Pipeline
 # ==========================================================
 
 @task(
@@ -443,17 +473,22 @@ async def run_trades_pipeline(
     Dominio distinto a OHLCV: sin timeframe, volumen masivo, append-only.
     Usa TradesPipeline — no comparte lógica con OHLCVPipeline.
 
+    Throttle
+    --------
+    TradesPipeline no tiene throttle inyectado. El throttle se alimenta
+    post-run via _update_throttle_from_summary sobre el summary completo.
+
     SafeOps
     -------
     - Skip silencioso si datasets.trades desactivado en config
     - Solo falla si el 100% de símbolos fallan
     - Adapter siempre cerrado en finally via managed_adapter
 
-    Ref: https://docs.prefect.io/latest/develop/write-tasks\#task-retries
+    Ref: https://docs.prefect.io/latest/develop/write-tasks#task-retries
     """
     from market_data.processing.pipelines.trades_pipeline import TradesPipeline
 
-    log = get_run_logger()
+    log           = get_run_logger()
     exchange_name = exchange_cfg.name.value
 
     if not config.datasets.trades:
@@ -489,15 +524,18 @@ async def run_trades_pipeline(
 
     async with managed_adapter(exchange_cfg, "spot", injected=exchange_client) as client:
         pipeline = TradesPipeline(
-            symbols          = spot_symbols,
-            exchange_client  = client,
-            market_type      = "spot",
-            dry_run          = config.safety.dry_run,
-            max_concurrency  = throttle.current,
+            symbols         = spot_symbols,
+            exchange_client = client,
+            market_type     = "spot",
+            dry_run         = config.safety.dry_run,
+            max_concurrency = throttle.current,
         )
         pipeline_mode = "backfill" if config.pipeline.historical.backfill_mode else "incremental"
         summary       = await pipeline.run(mode=pipeline_mode)
 
+    _update_throttle_from_summary(throttle, summary)
+
+    ts = get_throttle_state(exchange_name, market_type="spot", dataset="trades")
     log.info(
         "Trades pipeline finished | exchange=%s ok=%s failed=%s skipped=%s rows=%s",
         exchange_name,
@@ -506,12 +544,16 @@ async def run_trades_pipeline(
         summary.skipped,
         summary.total_rows,
     )
+    log.info(
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        ts["key"],
+        ts["concurrent"],
+        ts["maximum"],
+        ts["error_rate"] * 100,
+        int(ts["p95_ms"]),
+    )
 
-    if summary.total > 0 and summary.failed == summary.total:
-        raise RuntimeError(
-            f"Trades pipeline failed for all {summary.total} symbols"
-            f" on '{exchange_name}'."
-        )
+    _raise_if_total_failure(summary, "Trades pipeline", exchange_name)
 
     if summary.failed > 0:
         log.warning(
@@ -523,7 +565,7 @@ async def run_trades_pipeline(
 
 
 # ==========================================================
-# Derivatives Pipeline (stub — SafeOps skip si desactivado)
+# Derivatives Pipeline
 # ==========================================================
 
 @task(
@@ -548,6 +590,11 @@ async def run_derivatives_pipeline(
     Dominio distinto a OHLCV: schema variable por métrica, sin timeframe fijo.
     Usa DerivativesPipeline — no comparte lógica con OHLCVPipeline.
 
+    Throttle
+    --------
+    DerivativesPipeline no tiene throttle inyectado. El throttle se alimenta
+    post-run via _update_throttle_from_summary sobre el summary completo.
+
     SafeOps
     -------
     - Skip silencioso si ningún dataset activo en config
@@ -555,7 +602,7 @@ async def run_derivatives_pipeline(
     - Solo falla si el 100% de pares (dataset × símbolo) fallan
     - Adapter siempre cerrado en finally via managed_adapter
 
-    Ref: https://docs.prefect.io/latest/develop/write-tasks\#task-retries
+    Ref: https://docs.prefect.io/latest/develop/write-tasks#task-retries
     """
     from market_data.processing.pipelines.derivatives_pipeline import DerivativesPipeline
 
@@ -563,7 +610,10 @@ async def run_derivatives_pipeline(
     _validate_derivatives_datasets(datasets)
 
     exchange_name      = exchange_cfg.name.value
-    active_derivatives = [d for d in datasets if d in (config.datasets.active_derivative_datasets or [])]
+    active_derivatives = [
+        d for d in datasets
+        if d in (config.datasets.active_derivative_datasets or [])
+    ]
 
     if not active_derivatives:
         log.warning(
@@ -608,16 +658,21 @@ async def run_derivatives_pipeline(
         exchange_cfg, futures_market_type, injected=exchange_client
     ) as client:
         pipeline = DerivativesPipeline(
-            symbols          = futures_symbols,
-            datasets         = active_derivatives,
-            exchange_client  = client,
-            market_type      = futures_market_type,
-            dry_run          = config.safety.dry_run,
-            max_concurrency  = throttle.current,
+            symbols         = futures_symbols,
+            datasets        = active_derivatives,
+            exchange_client = client,
+            market_type     = futures_market_type,
+            dry_run         = config.safety.dry_run,
+            max_concurrency = throttle.current,
         )
         pipeline_mode = "backfill" if config.pipeline.historical.backfill_mode else "incremental"
         summary       = await pipeline.run(mode=pipeline_mode)
 
+    _update_throttle_from_summary(throttle, summary)
+
+    ts = get_throttle_state(
+        exchange_name, market_type=futures_market_type, dataset="derivatives"
+    )
     log.info(
         "Derivatives pipeline finished | exchange=%s ok=%s failed=%s"
         " skipped=%s rows=%s",
@@ -627,12 +682,16 @@ async def run_derivatives_pipeline(
         summary.skipped,
         summary.total_rows,
     )
+    log.info(
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        ts["key"],
+        ts["concurrent"],
+        ts["maximum"],
+        ts["error_rate"] * 100,
+        int(ts["p95_ms"]),
+    )
 
-    if summary.total > 0 and summary.failed == summary.total:
-        raise RuntimeError(
-            f"Derivatives pipeline failed for all {summary.total} pairs"
-            f" on '{exchange_name}'."
-        )
+    _raise_if_total_failure(summary, "Derivatives pipeline", exchange_name)
 
     if summary.failed > 0:
         log.warning(
@@ -660,7 +719,7 @@ async def run_repair_pipeline(
     config:          AppConfig,
     exchange_cfg:    ExchangeConfig,
     probe:           ExchangeProbe,
-    market_type:     str               = "spot",
+    market_type:     str                  = "spot",
     exchange_client: "CCXTAdapter | None" = None,
 ) -> None:
     """
@@ -676,6 +735,12 @@ async def run_repair_pipeline(
     disponibilidad de API. Es la única dependencia real en el grafo.
 
     Ref: Etikyala (2023) — "dependencies satisfied, not previous stage complete"
+
+    Throttle mid-run
+    ----------------
+    El throttle se inyecta en OHLCVPipeline. El pipeline alimenta el throttle
+    por-par via _feed_throttle — no se llama _update_throttle_from_summary
+    post-run para evitar doble conteo.
 
     SafeOps
     -------
@@ -734,10 +799,12 @@ async def run_repair_pipeline(
             backfill_mode      = hist_cfg.backfill_mode,
             dry_run            = config.safety.dry_run,
             auto_lookback_days = getattr(hist_cfg, "auto_lookback_days", 1825),
+            throttle           = throttle,
         )
         summary = await pipeline.run(mode="repair")
 
-    _update_throttle_from_summary(throttle, summary)
+    # throttle ya alimentado por-par mid-run via _feed_throttle.
+    # No llamar _update_throttle_from_summary — evita doble conteo.
 
     ts = get_throttle_state(exchange_name, market_type=market_type, dataset="ohlcv")
     log.info(
