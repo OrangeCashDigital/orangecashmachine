@@ -11,11 +11,16 @@ Pydantic aplique reglas de negocio.
 
 Regla: solo tipos primitivos + Optional. Sin lógica de negocio
 (eso es responsabilidad de Pydantic en core/config/schema.py).
+
+Invariante del sistema
+----------------------
+  historical.timeframes = ["1m"]            — fuente base (exchange)
+  resample.targets      = [5m,15m,1h,4h,1d] — derivados (local)
+  union = todos los TF disponibles para estrategias
 """
 
 from dataclasses import dataclass, field
 from typing import List, Optional
-
 
 
 @dataclass
@@ -29,16 +34,32 @@ class RetryPolicyConfig:
 class HistoricalConfig:
     """Structured config para pipeline.historical.
 
+    timeframes: ["1m"] — SSOT: solo la fuente base se descarga del exchange.
+    Los TF derivados (5m, 15m, 1h, 4h, 1d) son responsabilidad de ResampleConfig.
+
     max_concurrent_tasks: None = resuelto dinámicamente en código
                                  (cpu_count // 2). Hydra valida que
                                  si se pasa un valor sea int >= 1.
     """
     start_date: str = "auto"
-    auto_lookback_days: int = 3650  # 10 años — activo solo cuando start_date="auto"
+    auto_lookback_days: int = 3650
     backfill_mode: bool = False
     max_concurrent_tasks: Optional[int] = None
-    timeframes: List[str] = field(default_factory=lambda: ["1m", "5m", "15m", "1h", "4h", "1d"])
+    timeframes: List[str] = field(default_factory=lambda: ["1m"])
     retry_policy: RetryPolicyConfig = field(default_factory=RetryPolicyConfig)
+
+
+@dataclass
+class ResampleConfig:
+    """Structured config para pipeline.resample.
+
+    SSOT de los timeframes producidos localmente por ResamplePipeline.
+    Nunca se piden al exchange — se construyen a partir de source_tf.
+    """
+    targets: List[str] = field(
+        default_factory=lambda: ["5m", "15m", "1h", "4h", "1d"]
+    )
+    source_tf: str = "1m"
 
 
 @dataclass
@@ -54,4 +75,5 @@ class RealtimeConfig:
 class PipelineConfig:
     """Structured config raíz para el bloque ``pipeline``."""
     historical: HistoricalConfig = field(default_factory=HistoricalConfig)
-    realtime: RealtimeConfig = field(default_factory=RealtimeConfig)
+    resample:   ResampleConfig   = field(default_factory=ResampleConfig)
+    realtime:   RealtimeConfig   = field(default_factory=RealtimeConfig)

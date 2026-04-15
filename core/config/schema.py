@@ -85,9 +85,7 @@ class MarketConfig(StrictBaseModel):
     def validate_default_type(cls, v: Optional[str]) -> Optional[str]:
         """Valida que defaultType sea un tipo de futuros reconocido por ccxt."""
         if v is not None and v not in _ALLOWED_FUTURES_TYPES:
-            raise ValueError(
-                f"Invalid defaultType: '{v}'. Allowed: {sorted(_ALLOWED_FUTURES_TYPES)}"
-            )
+            raise ValueError(f"Invalid defaultType: '{v}'. Allowed: {sorted(_ALLOWED_FUTURES_TYPES)}")
         return v
 
     @field_validator("symbols")
@@ -100,8 +98,7 @@ class MarketConfig(StrictBaseModel):
             s = symbol.strip().upper()
             if not SYMBOL_REGEX.match(s):
                 raise ValueError(
-                    f"Invalid symbol format: '{symbol}'. "
-                    "Expected spot (BTC/USDT) or futures (BTC/USDT:USDT) notation."
+                    f"Invalid symbol format: '{symbol}'. Expected spot (BTC/USDT) or futures (BTC/USDT:USDT) notation."
                 )
             if s not in seen:
                 seen.add(s)
@@ -144,6 +141,43 @@ class MarketsConfig(StrictBaseModel):
         return self.futures.defaultType if self.futures.enabled else None
 
 
+class ResilienceLimits(StrictBaseModel):
+    """Límites de concurrencia y rate limit para aiometer."""
+
+    max_concurrency: int = Field(default=5, ge=1, le=100)
+    max_rate: float = Field(default=10.0, ge=0.1, description="Requests por segundo")
+
+
+class ResilienceRetryPolicy(StrictBaseModel):
+    """Política de retry específica por tipo de error."""
+
+    max_attempts: int = Field(default=3, ge=1, le=10)
+    backoff_factor: float = Field(default=2.0, ge=1.0)
+    jitter: bool = True
+    cap_seconds: float = Field(default=30.0, ge=1.0)
+
+
+class ResilienceConfig(StrictBaseModel):
+    """Configuración de resiliencia para un exchange.
+
+    Define los límites de aiometer y las políticas de retry
+    por tipo de error (rate_limit, timeout, network).
+    """
+
+    limits: ResilienceLimits = Field(default_factory=ResilienceLimits)
+    rate_limit: ResilienceRetryPolicy = Field(
+        default_factory=lambda: ResilienceRetryPolicy(max_attempts=3, backoff_factor=2.0, jitter=True, cap_seconds=30.0)
+    )
+    timeout: ResilienceRetryPolicy = Field(
+        default_factory=lambda: ResilienceRetryPolicy(
+            max_attempts=2, backoff_factor=2.0, jitter=False, cap_seconds=10.0
+        )
+    )
+    network: ResilienceRetryPolicy = Field(
+        default_factory=lambda: ResilienceRetryPolicy(max_attempts=1, backoff_factor=1.5, jitter=False, cap_seconds=5.0)
+    )
+
+
 class ExchangeConfig(StrictBaseModel):
     """Configuración completa de un exchange incluyendo credenciales y mercados."""
 
@@ -159,12 +193,14 @@ class ExchangeConfig(StrictBaseModel):
     api_password: SecretStr = SecretStr("")
 
     markets: MarketsConfig = Field(default_factory=MarketsConfig)
+    resilience: ResilienceConfig = Field(default_factory=ResilienceConfig)
 
     @model_validator(mode="before")
     @classmethod
     def resolve_credentials(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Resuelve credenciales desde env vars antes de instanciar el modelo."""
         from core.config.credentials import resolve_exchange_credentials
+
         name = str(values.get("name", "")).upper()
         creds: dict[str, Any] = values.pop("credentials", {}) or {}
         resolved = resolve_exchange_credentials(name, creds)
@@ -175,6 +211,7 @@ class ExchangeConfig(StrictBaseModel):
     def validate_credentials(self) -> ExchangeConfig:
         """Valida credenciales según el entorno: error en prod, warning en dev."""
         from core.config.loader.env_resolver import resolve_env
+
         env = resolve_env()
         is_prod = env == "production"
 
@@ -184,7 +221,8 @@ class ExchangeConfig(StrictBaseModel):
                 raise ValueError(msg)
             warnings.warn(
                 f"[{env}] {msg} Will fail if pipeline attempts to connect.",
-                UserWarning, stacklevel=1,
+                UserWarning,
+                stacklevel=1,
             )
 
         if self.requires_passphrase and not self.has_passphrase:
@@ -193,16 +231,15 @@ class ExchangeConfig(StrictBaseModel):
                 raise ValueError(msg)
             warnings.warn(
                 f"[{env}] {msg} Passphrase missing.",
-                UserWarning, stacklevel=1,
+                UserWarning,
+                stacklevel=1,
             )
         return self
 
     @property
     def has_credentials(self) -> bool:
         """True si api_key y api_secret tienen valor."""
-        return bool(
-            self.api_key.get_secret_value() and self.api_secret.get_secret_value()
-        )
+        return bool(self.api_key.get_secret_value() and self.api_secret.get_secret_value())
 
     @property
     def requires_passphrase(self) -> bool:
@@ -257,12 +294,15 @@ class HistoricalConfig(StrictBaseModel):
     """Configuración del pipeline histórico (backfill e incremental)."""
 
     start_date: str = "auto"
-    auto_lookback_days: int = Field(default=3650, ge=1, le=36500,
-        description="Días de lookback cuando start_date='auto'. "
-                    "El loop para al agotar datos del exchange.")
+    auto_lookback_days: int = Field(
+        default=3650,
+        ge=1,
+        le=36500,
+        description="Días de lookback cuando start_date='auto'. El loop para al agotar datos del exchange.",
+    )
     backfill_mode: bool = False
     max_concurrent_tasks: int = Field(default=4, ge=1, le=64)
-    timeframes: list[str] = Field(default_factory=list)
+    timeframes: list[str] = Field(default_factory=lambda: ["1m"])
     retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
 
     @model_validator(mode="before")
@@ -286,9 +326,7 @@ class HistoricalConfig(StrictBaseModel):
             raise ValueError("At least one timeframe must be defined.")
         invalid = [tf for tf in v if tf not in _ALLOWED_TIMEFRAMES]
         if invalid:
-            raise ValueError(
-                f"Invalid timeframes: {invalid}. Allowed: {sorted(_ALLOWED_TIMEFRAMES)}"
-            )
+            raise ValueError(f"Invalid timeframes: {invalid}. Allowed: {sorted(_ALLOWED_TIMEFRAMES)}")
         return v
 
     @field_validator("start_date")
@@ -304,11 +342,47 @@ class HistoricalConfig(StrictBaseModel):
         try:
             dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
         except ValueError:
-            raise ValueError(
-                f"start_date must be ISO 8601 or 'auto', got: '{v}'"
-            )
+            raise ValueError(f"start_date must be ISO 8601 or 'auto', got: '{v}'")
         if dt > datetime.now(timezone.utc):
             raise ValueError("start_date cannot be in the future.")
+        return v
+
+
+class ResampleConfig(StrictBaseModel):
+    """Configuración del pipeline de resampling local.
+
+    SSOT de los timeframes producidos por ResamplePipeline.
+    Estos TF NO se descargan del exchange — se construyen desde source_tf.
+
+    Invariante del sistema:
+        historical.timeframes[0] == resample.source_tf  (ambos deben ser "1m")
+    """
+
+    targets: list[str] = Field(
+        default_factory=lambda: ["5m", "15m", "1h", "4h", "1d"],
+        description="Timeframes derivados producidos por ResamplePipeline.",
+    )
+    source_tf: str = Field(
+        default="1m",
+        description="Timeframe base — debe coincidir con historical.timeframes[0].",
+    )
+
+    @field_validator("targets")
+    @classmethod
+    def validate_targets(cls, v: list[str]) -> list[str]:
+        """Valida que todos los targets estén en el conjunto permitido."""
+        if not v:
+            raise ValueError("resample.targets must contain at least one timeframe.")
+        invalid = [tf for tf in v if tf not in _ALLOWED_TIMEFRAMES]
+        if invalid:
+            raise ValueError(f"Invalid resample targets: {invalid}. Allowed: {sorted(_ALLOWED_TIMEFRAMES)}")
+        return v
+
+    @field_validator("source_tf")
+    @classmethod
+    def validate_source_tf(cls, v: str) -> str:
+        if v not in _ALLOWED_TIMEFRAMES:
+            raise ValueError(f"Invalid source_tf: '{v}'. Allowed: {sorted(_ALLOWED_TIMEFRAMES)}")
         return v
 
 
@@ -335,6 +409,10 @@ class PipelineConfig(StrictBaseModel):
     """Configuración agregada de todos los pipelines del sistema."""
 
     historical: HistoricalConfig = Field(default_factory=HistoricalConfig)
+    resample: ResampleConfig = Field(
+        default_factory=ResampleConfig,
+        description="Timeframes producidos localmente por ResamplePipeline.",
+    )
     realtime: RealtimeConfig = Field(default_factory=RealtimeConfig)
     timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)
     max_consecutive_errors: int = Field(
@@ -394,8 +472,11 @@ class DatasetsConfig(StrictBaseModel):
     def active_derivative_datasets(self) -> list[str]:
         """Lista de datasets de derivados habilitados."""
         derivatives = {
-            "funding_rate", "open_interest", "liquidations",
-            "mark_price", "index_price",
+            "funding_rate",
+            "open_interest",
+            "liquidations",
+            "mark_price",
+            "index_price",
         }
         return [d for d in self.active_datasets if d in derivatives]
 
@@ -452,9 +533,7 @@ class PostgresConfig(StrictBaseModel):
                 "Setear POSTGRES_PASSWORD en el entorno."
             )
         if not self.user:
-            raise ValueError(
-                "postgres.user no puede ser vacío cuando postgres.enabled=true."
-            )
+            raise ValueError("postgres.user no puede ser vacío cuando postgres.enabled=true.")
         return self
 
 
@@ -492,9 +571,7 @@ class HealthChecksConfig(StrictBaseModel):
     """Configuración de health checks del sistema."""
 
     enabled: bool = True
-    checks: list[str] = Field(
-        default_factory=lambda: ["storage", "exchanges", "redis"]
-    )
+    checks: list[str] = Field(default_factory=lambda: ["storage", "exchanges", "redis"])
 
 
 class SafetyConfig(StrictBaseModel):
@@ -516,8 +593,7 @@ class SafetyConfig(StrictBaseModel):
         default=90,
         ge=1,
         description=(
-            "Máximo de días hacia atrás permitido en backfill. "
-            "Protege contra reingestas accidentales masivas."
+            "Máximo de días hacia atrás permitido en backfill. Protege contra reingestas accidentales masivas."
         ),
     )
     require_confirmation: bool = Field(
@@ -541,18 +617,21 @@ class FeaturesConfig(BaseModel):
 
 class RiskPositionConfig(StrictBaseModel):
     """Límites de tamaño de posición."""
+
     max_position_pct: float = Field(default=0.05, gt=0, le=1)
     max_open_positions: int = Field(default=3, ge=1)
 
 
 class RiskStopLossConfig(StrictBaseModel):
     """Configuración de stop-loss."""
+
     enabled: bool = True
     default_pct: float = Field(default=0.02, gt=0, le=1)
 
 
 class RiskDrawdownConfig(StrictBaseModel):
     """Límites de drawdown — halt automático si se superan."""
+
     max_daily_drawdown_pct: float = Field(default=0.05, gt=0, le=1)
     max_total_drawdown_pct: float = Field(default=0.15, gt=0, le=1)
     halt_on_breach: bool = True
@@ -560,6 +639,7 @@ class RiskDrawdownConfig(StrictBaseModel):
 
 class RiskOrderConfig(StrictBaseModel):
     """Límites de tamaño de orden en USD."""
+
     min_order_usd: float = Field(default=10, gt=0)
     max_order_usd: float = Field(default=1000, gt=0)
 
@@ -570,6 +650,7 @@ class RiskConfig(StrictBaseModel):
     En fase data pipeline estos valores son referencia.
     Se aplican cuando execution/trading está activo.
     """
+
     position: RiskPositionConfig = Field(default_factory=RiskPositionConfig)
     stop_loss: RiskStopLossConfig = Field(default_factory=RiskStopLossConfig)
     drawdown: RiskDrawdownConfig = Field(default_factory=RiskDrawdownConfig)
@@ -603,11 +684,7 @@ class AppConfig(StrictBaseModel):
         """Convierte exchanges de dict YAML a lista, filtrando los deshabilitados."""
         raw = values.get("exchanges", {})
         if isinstance(raw, dict):
-            values["exchanges"] = [
-                {"name": name, **cfg}
-                for name, cfg in raw.items()
-                if cfg.get("enabled", True)
-            ]
+            values["exchanges"] = [{"name": name, **cfg} for name, cfg in raw.items() if cfg.get("enabled", True)]
         return values
 
     @model_validator(mode="after")

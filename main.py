@@ -36,7 +36,12 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 from loguru import logger
 
-from core.config.structured import PipelineConfig, HistoricalConfig, ObservabilityConfig
+from core.config.structured import (
+    PipelineConfig,
+    HistoricalConfig,
+    ObservabilityConfig,
+    ResampleConfig,
+)
 
 
 def _register_structured_configs() -> None:
@@ -53,7 +58,8 @@ def _register_structured_configs() -> None:
     cs = ConfigStore.instance()
     cs.store(group="pipeline", name="schema", node=PipelineConfig)
     cs.store(group="pipeline/historical", name="schema", node=HistoricalConfig)
-    cs.store(group="observability", name="schema", node=ObservabilityConfig)
+    cs.store(group="pipeline/resample",   name="schema", node=ResampleConfig)
+    cs.store(group="observability",       name="schema", node=ObservabilityConfig)
 
 
 _register_structured_configs()

@@ -237,6 +237,17 @@ QUALITY_GAPS_TOTAL = Counter(
     ["exchange", "symbol", "timeframe", "severity"],
 )
 
+RESAMPLE_ROWS_TOTAL = Counter(
+    "ocm_resample_rows_total",
+    "Filas OHLCV producidas por ResamplePipeline",
+    ["exchange", "symbol", "timeframe", "market_type"],
+)
+RESAMPLE_DURATION_MS = Histogram(
+    "ocm_resample_duration_ms",
+    "Duracion de resampling por par (ms)",
+    ["exchange", "timeframe", "market_type"],
+    buckets=[10, 25, 50, 100, 250, 500, 1000, 2500],
+)
 EXCHANGE_CIRCUIT_OPEN = Counter(
     "ocm_exchange_circuit_open_total",
     "Veces que el circuit breaker rechazó una llamada al exchange",

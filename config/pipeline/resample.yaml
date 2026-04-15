@@ -1,0 +1,20 @@
+# @package pipeline.resample
+# ==============================================================================
+# OrangeCashMachine — Pipeline: Resample
+# ==============================================================================
+# SSOT de los timeframes producidos por ResamplePipeline.
+#
+# Estos timeframes NO se descargan del exchange — se construyen localmente
+# a partir de las velas 1m escritas por el pipeline histórico.
+#
+# Invariante del sistema:
+#   pipeline.historical.timeframes = ["1m"]   (fuente base)
+#   pipeline.resample.targets       = [5m, 15m, 1h, 4h, 1d]  (derivados)
+#   union = todos los TF disponibles para estrategias
+#
+# resample_flow corre cada 1m y llama timeframes_due(now_ms) para
+# determinar qué TF tienen su vela cerrada en cada tick.
+# ==============================================================================
+
+targets: [5m, 15m, 1h, 4h, 1d]
+source_tf: "1m"              # Timeframe base — debe coincidir con historical.timeframes[0]
