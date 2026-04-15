@@ -64,20 +64,11 @@ from market_data.adapters.exchange.throttle import (
 if TYPE_CHECKING:
     from core.config.schema import ExchangeConfig, ResilienceConfig
 
+# Símbolos definidos en este módulo.
+# Las clases de resiliencia, throttle y limiter se re-exportan desde
+# market_data.adapters.exchange.__init__ — no desde aquí.
 __all__ = [
     "CCXTAdapter",
-    "ExchangeAdapterError",
-    "UnsupportedExchangeError",
-    "ExchangeConnectionError",
-    "CircuitBreakerOpenError",
-    "ExchangeCircuitOpenError",
-    "RetryExhaustedError",
-    "AdaptiveThrottle",
-    "AdaptiveLimiter",
-    "get_or_create_throttle",
-    "get_or_create_limiter",
-    "get_throttle_state",
-    "get_limiter_state",
 ]
 
 
@@ -174,6 +165,10 @@ class CCXTAdapter(ExchangeAdapter):
             exchange_id=self._exchange_id,
             config=self._resilience_config,
         )
+        # Registrar en registry de proceso para que get_breaker_state() funcione.
+        # Idempotente: sobreescribe si ya existe (misma instancia en reconnect).
+        from market_data.adapters.exchange.resilience import register_resilience_layer
+        register_resilience_layer(self._exchange_id, self._resilience)
 
         self._closed: bool = False
 
@@ -242,32 +237,30 @@ class CCXTAdapter(ExchangeAdapter):
     # ----------------------------------------------------------
 
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
-        await self._limiter.acquire()
         client = await self._get_client()
-        try:
-
+        async with self._limiter.slot():
             async def _call():
                 return await asyncio.wait_for(
                     client.fetch_ticker(symbol),
                     timeout=_FETCH_TICKER_TIMEOUT,
                 )
 
-            _t0 = time.perf_counter()
-            result = await self._resilience.retry_call(_call)
-            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-            return result
-        except RetryExhaustedError as exc:
-            self._throttle.record_error(error_type=exc.error_type)
-            if exc.error_type == "rate_limit":
+            try:
+                _t0 = time.perf_counter()
+                result = await self._resilience.retry_call(_call)
+                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+                return result
+            except RetryExhaustedError as exc:
+                self._throttle.record_error(error_type=exc.error_type)
+                if exc.error_type == "rate_limit":
+                    self._throttle.record_rate_limit_hit()
+                raise
+            except ExchangeCircuitOpenError:
+                from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+                EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ticker").inc()
+                self._throttle.record_error(error_type="rate_limit")
                 self._throttle.record_rate_limit_hit()
-            raise
-        except ExchangeCircuitOpenError:
-            from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-
-            EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ticker").inc()
-            self._throttle.record_error(error_type="rate_limit")
-            self._throttle.record_rate_limit_hit()
-            raise
+                raise
 
     async def fetch_ohlcv(
         self,
@@ -278,7 +271,6 @@ class CCXTAdapter(ExchangeAdapter):
         market_type: Optional[str] = None,
         end_ms: Optional[int] = None,
     ) -> List[List[Any]]:
-        await self._limiter.acquire()
         client = await self._get_client()
         params: Dict[str, Any] = {}
         effective_type = market_type or self._default_type
@@ -292,70 +284,68 @@ class CCXTAdapter(ExchangeAdapter):
             _end_at_ms = end_ms if end_ms is not None else now_ts
             params["endAt"] = min(_end_at_ms, now_ts) // 1000
 
-        async def _call():
-            return await asyncio.wait_for(
-                client.fetch_ohlcv(
-                    symbol,
-                    timeframe,
-                    since=since,
-                    limit=limit,
-                    params=params,
-                ),
-                timeout=_FETCH_OHLCV_TIMEOUT,
-            )
+        async with self._limiter.slot():
+            async def _call():
+                return await asyncio.wait_for(
+                    client.fetch_ohlcv(
+                        symbol,
+                        timeframe,
+                        since=since,
+                        limit=limit,
+                        params=params,
+                    ),
+                    timeout=_FETCH_OHLCV_TIMEOUT,
+                )
 
-        try:
-            _t0 = time.perf_counter()
-            result = await self._resilience.retry_call(_call)
-            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-            return result
-        except RetryExhaustedError as exc:
-            self._throttle.record_error(error_type=exc.error_type)
-            if exc.error_type == "rate_limit":
+            try:
+                _t0 = time.perf_counter()
+                result = await self._resilience.retry_call(_call)
+                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+                return result
+            except RetryExhaustedError as exc:
+                self._throttle.record_error(error_type=exc.error_type)
+                if exc.error_type == "rate_limit":
+                    self._throttle.record_rate_limit_hit()
+                raise
+            except ExchangeCircuitOpenError:
+                from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+                EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ohlcv").inc()
+                self._throttle.record_error(error_type="rate_limit")
                 self._throttle.record_rate_limit_hit()
-            raise
-        except ExchangeCircuitOpenError:
-            from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-
-            EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ohlcv").inc()
-            self._throttle.record_error(error_type="rate_limit")
-            self._throttle.record_rate_limit_hit()
-            raise
-        except asyncio.TimeoutError:
-            self._throttle.record_error(error_type="timeout")
-            raise
+                raise
+            except asyncio.TimeoutError:
+                self._throttle.record_error(error_type="timeout")
+                raise
 
     async def fetch_trades(
         self,
         symbol: str,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        await self._limiter.acquire()
         client = await self._get_client()
+        async with self._limiter.slot():
+            async def _call():
+                return await asyncio.wait_for(
+                    client.fetch_trades(symbol, limit=limit),
+                    timeout=_FETCH_TRADES_TIMEOUT,
+                )
 
-        async def _call():
-            return await asyncio.wait_for(
-                client.fetch_trades(symbol, limit=limit),
-                timeout=_FETCH_TRADES_TIMEOUT,
-            )
-
-        try:
-            _t0 = time.perf_counter()
-            result = await self._resilience.retry_call(_call)
-            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-            return result
-        except RetryExhaustedError as exc:
-            self._throttle.record_error(error_type=exc.error_type)
-            if exc.error_type == "rate_limit":
+            try:
+                _t0 = time.perf_counter()
+                result = await self._resilience.retry_call(_call)
+                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+                return result
+            except RetryExhaustedError as exc:
+                self._throttle.record_error(error_type=exc.error_type)
+                if exc.error_type == "rate_limit":
+                    self._throttle.record_rate_limit_hit()
+                raise
+            except ExchangeCircuitOpenError:
+                from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+                EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_trades").inc()
+                self._throttle.record_error(error_type="rate_limit")
                 self._throttle.record_rate_limit_hit()
-            raise
-        except ExchangeCircuitOpenError:
-            from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-
-            EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_trades").inc()
-            self._throttle.record_error(error_type="rate_limit")
-            self._throttle.record_rate_limit_hit()
-            raise
+                raise
 
     async def load_markets(self) -> Dict[str, Any]:
         client = await self._get_client()
