@@ -46,8 +46,10 @@ def _rule_no_placeholder_credentials(config: "AppConfig") -> list[str]:
             )
 
     pg = config.integrations.postgres
-    if pg.enabled and pg.password and _has_placeholder(str(pg.password)):
+    if pg.enabled and pg.password and _has_placeholder(pg.password.get_secret_value()):
         errors.append(f"[{prefix}] integrations.postgres.password contains placeholder value")
+    if pg.enabled and pg.user and _has_placeholder(pg.user.get_secret_value()):
+        errors.append(f"[{prefix}] integrations.postgres.user contains placeholder value")
 
     # Devolver siempre la lista completa — la severidad la decide el caller.
     # En production: el loader eleva ConfigValidationError si hay errores.

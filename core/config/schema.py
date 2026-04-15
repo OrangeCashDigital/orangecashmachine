@@ -487,6 +487,11 @@ class RedisConfig(StrictBaseModel):
     password usa SecretStr — nunca aparece en logs ni en repr().
     Esto previene leakage accidental en tracebacks o --cfg job.
     Ref: Pydantic SecretStr — https://docs.pydantic.dev/latest/concepts/types/#secret-types
+
+    Nota: oc.env resuelve variables de entorno siempre como strings.
+    El model_validator normaliza enabled/port/db a sus tipos nativos
+    antes de la validación Pydantic para evitar coerción silenciosa.
+    Caso crítico: bool('False') == True — debe rechazarse explícitamente.
     """
 
     enabled: bool = False
@@ -497,6 +502,46 @@ class RedisConfig(StrictBaseModel):
     socket_timeout: int = Field(default=5, ge=1)
     retry_on_timeout: bool = True
     ttl_days: int = Field(default=90, ge=1, description="TTL del cursor store en días")
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_env_strings(cls, values: dict) -> dict:
+        """Normaliza strings de oc.env a tipos nativos antes de validación.
+
+        oc.env resuelve SIEMPRE como string. Sin esta normalización:
+            enabled='False' — Pydantic coerce str —> bool(\'False\') == True  (bug silencioso)
+            port='6379'    — Pydantic coerce str —> int OK, pero ge/le no aplica sobre str
+        Esta función hace el parse explícito con semejante semejante a lo que hace
+        pydantic-settings internamente para BaseSettings.
+        """
+        _BOOL_TRUE  = frozenset({"true",  "1", "yes", "on"})
+        _BOOL_FALSE = frozenset({"false", "0", "no",  "off"})
+
+        for field in ("enabled", "retry_on_timeout"):
+            v = values.get(field)
+            if isinstance(v, str):
+                lower = v.strip().lower()
+                if lower in _BOOL_TRUE:
+                    values[field] = True
+                elif lower in _BOOL_FALSE:
+                    values[field] = False
+                else:
+                    raise ValueError(
+                        f"RedisConfig.{field}: valor de entorno no reconocido: '{v}'. "
+                        f"Use true/false/1/0."
+                    )
+
+        for field in ("port", "db", "socket_timeout", "ttl_days"):
+            v = values.get(field)
+            if isinstance(v, str):
+                try:
+                    values[field] = int(v.strip())
+                except ValueError:
+                    raise ValueError(
+                        f"RedisConfig.{field}: se esperaba entero, se obtuvo: '{v}'"
+                    )
+
+        return values
 
 
 class KafkaConfig(StrictBaseModel):
@@ -518,7 +563,7 @@ class PostgresConfig(StrictBaseModel):
     enabled: bool = False
     host: str = "localhost"
     port: int = Field(default=5432, ge=1, le=65535)
-    user: Optional[str] = None
+    user: Optional[SecretStr] = None    # SecretStr: evita leak de usuario en logs/tracebacks
     password: Optional[SecretStr] = None
     database: Optional[str] = None
 
@@ -532,7 +577,7 @@ class PostgresConfig(StrictBaseModel):
                 "postgres.password no puede ser vacío cuando postgres.enabled=true. "
                 "Setear POSTGRES_PASSWORD en el entorno."
             )
-        if not self.user:
+        if not self.user or not self.user.get_secret_value():
             raise ValueError("postgres.user no puede ser vacío cuando postgres.enabled=true.")
         return self
 
@@ -585,7 +630,8 @@ class SafetyConfig(StrictBaseModel):
         default=True,
         description="Master safety switch. False solo en production.",
     )
-    prevent_full_reingestion: bool = True
+    prevent_full_reingestion: bool = False  # SafeOps default: permisivo en dev/test.
+    # production.yaml lo sobreescribe a True explícitamente (SSOT).
     require_explicit_start: bool = False
 
     # --- Paper trading / backfill guards ---

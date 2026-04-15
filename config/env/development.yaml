@@ -39,16 +39,11 @@ observability:
 # No sobrescribir aquí — un solo punto de verdad por entorno.
 
 integrations:
+  # Solo overrides especýficos de dev sobre base.yaml.
+  # host/port/db/enabled/kafka/postgres: heredados de base.yaml (SSOT).
+  # password: ünico campo que dev exige explícitamente desde entorno.
   redis:
-    enabled: ${oc.env:REDIS_ENABLED,true}
-    host: ${oc.env:REDIS_HOST,localhost}
-    port: ${oc.env:REDIS_PORT,6379}
-    db: ${oc.env:REDIS_DB,1}
     password: ${oc.env:REDIS_PASSWORD,""}
-  kafka:
-    enabled: false
-  postgres:
-    enabled: false
 
 datasets:
   ohlcv: true      # Bronze → Silver → Gold activo en dev

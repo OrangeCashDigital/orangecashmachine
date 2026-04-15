@@ -3,6 +3,13 @@
 # ==============================================================================
 # Solo: metadata, integrations de infraestructura, healthchecks, safety global.
 # Todo lo modular está en pipeline/, exchanges/, storage/, observability/, risk/
+#
+# ADVERTENCIA DE SEGURIDAD:
+#   ‘uv run python main.py --cfg job --resolve’ expone secretos en claro en stdout
+#   porque opera sobre el DictConfig de Hydra ANTES de la capa Pydantic/SecretStr.
+#   NUNCA ejecutar en producción ni redirigir su output a logs persistentes.
+#   Para inspección segura usar: ‘uv run python -c "from core.config.hydra_loader
+#   import load_appconfig_standalone; c=load_appconfig_standalone(); print(c)"’
 # ==============================================================================
 
 environment:
