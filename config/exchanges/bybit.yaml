@@ -3,3 +3,22 @@
 exchanges:
   bybit:
     enabled: false
+    resilience:
+      limits:
+        max_concurrency: 8
+        max_rate: 15
+      rate_limit:
+        max_attempts: 3
+        backoff_factor: 2.0
+        jitter: true
+        cap_seconds: 30.0
+      timeout:
+        max_attempts: 2
+        backoff_factor: 2.0
+        jitter: false
+        cap_seconds: 10.0
+      network:
+        max_attempts: 1
+        backoff_factor: 1.5
+        jitter: false
+        cap_seconds: 5.0
