@@ -148,8 +148,14 @@ class ResilienceLayer:
         self._exchange_id = exchange_id
         self._config = config or ResilienceConfig()
 
+        # failure_threshold: número de fallos consecutivos para abrir el breaker.
+        # Invariante de dominio: independiente de max_concurrency.
+        # 5 fallos consecutivos → breaker abierto (conservador para exchanges cripto).
+        _CB_FAILURE_THRESHOLD = getattr(
+            self._config, "cb_failure_threshold", 5
+        )
         circuit_config = CircuitConfig(
-            failure_threshold=self._config.limits.max_concurrency,
+            failure_threshold=_CB_FAILURE_THRESHOLD,
             recovery_timeout=120.0,
         )
         self._breaker = aioresilience.CircuitBreaker(
@@ -170,39 +176,71 @@ class ResilienceLayer:
         """
         Ejecuta una coroutine con retry y circuit breaker.
 
+        Selecciona automáticamente la retry policy según el tipo de error
+        clasificado en el primer intento fallido. Orden de decisión:
+
+          1. Circuit breaker abierto → CircuitBreakerOpenError inmediato (Fail-Fast)
+          2. Error clasificado       → policy específica (rate_limit/timeout/network)
+          3. Error desconocido       → re-raise sin retry (NonRetryable)
+
         Parameters
         ----------
-        coro_fn : callable que retorna una coroutine
-
-        Returns
-        -------
-        resultado de la coroutine
+        coro_fn : callable que retorna una coroutine (sin argumentos)
 
         Raises
         ------
-        RetryExhaustedError : cuando todos los retries fallan
-        CircuitBreakerOpenError : cuando el breaker está abierto
+        RetryExhaustedError     : todos los retries de la policy agotados
+        CircuitBreakerOpenError : breaker abierto — no se intenta la llamada
         """
         try:
             can_exec = await self._breaker.can_execute()
             if not can_exec:
                 raise CircuitBreakerOpenError(self._exchange_id)
-            return await self._retry_with_policy(coro_fn, self._policies["network"])
         except AioResilienceCBError:
             raise CircuitBreakerOpenError(self._exchange_id)
+
+        # Primer intento para clasificar el error y seleccionar policy.
+        # Si tiene éxito, retorna directamente (fast path — 0 overhead de retry).
+        try:
+            return await coro_fn()
+        except AioResilienceCBError:
+            raise CircuitBreakerOpenError(self._exchange_id)
+        except Exception as exc:
+            error_type = classify_error(exc)
+            if error_type == "unknown":
+                raise  # NonRetryable — re-raise sin envolver
+            # Seleccionar policy específica según tipo de error clasificado.
+            # rate_limit → backoff agresivo; timeout → backoff moderado; network → rápido
+            policy = self._policies.get(error_type, self._policies["network"])
+            return await self._retry_with_policy(coro_fn, policy, error_type)
 
     async def _retry_with_policy(
         self,
         coro_fn: Callable[[], Awaitable[T]],
         policy: RetryPolicy,
+        error_type: ErrorType,
     ) -> T:
-        """Wrapper que aplica retry policy."""
+        """
+        Aplica retry policy al callable dado.
+
+        El error_type ya fue clasificado por retry_call en el primer intento —
+        no se reclasifica aquí para evitar divergencia entre el tipo registrado
+        en el throttle y el tipo usado para seleccionar la policy.
+
+        Parameters
+        ----------
+        coro_fn    : callable sin argumentos que retorna coroutine
+        policy     : RetryPolicy seleccionada por retry_call
+        error_type : tipo ya clasificado (evita doble classify_error)
+        """
         try:
             return await policy.execute(coro_fn)
+        except AioResilienceCBError:
+            raise CircuitBreakerOpenError(self._exchange_id)
         except Exception as exc:
             if classify_error(exc) == "unknown":
                 raise
-            raise RetryExhaustedError(classify_error(exc), exc) from exc
+            raise RetryExhaustedError(error_type, exc) from exc
 
     async def call_with_policy(
         self,
