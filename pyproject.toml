@@ -57,6 +57,7 @@ dependencies = [
     "hydra-core>=1.3.2,<2.0",    # core/config/hydra_loader.py + main.py
 
     # ── Resiliencia ───────────────────────────────────────────────────
+    # pinned: only version available in registry — do not upgrade without verifying PyPI
     "aioresilience==0.2.1",
     "aiometer>=0.10.0",
     "pybreaker==1.4.1",
@@ -152,11 +153,3 @@ source_modules = [
     "infra",
 ]
 forbidden_modules = ["market_data.adapters.exchange.ccxt_adapter"]
-
-# =========================================================
-# SAFEGUARD: dependency pinning policy (engineering rule)
-# =========================================================
-# aioresilience is pinned because upstream versions are <=0.2.x
-# DO NOT upgrade without verifying availability in registry.
-# =========================================================
-
