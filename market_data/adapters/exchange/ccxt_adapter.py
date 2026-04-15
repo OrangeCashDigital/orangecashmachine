@@ -4,19 +4,22 @@ services/exchange/ccxt_adapter.py
 
 CCXT Exchange Adapter — única fuente de verdad del cliente ccxt.
 
-Responsabilidad
----------------
-• Construir y gestionar lifecycle del cliente ccxt async
-• Resolver credenciales desde ExchangeConfig o parámetros explícitos
-• Exponer interfaz limpia para fetchers y pipelines
-• NO contiene lógica de negocio  •  NO depende de AppConfig global
+Arquitectura de resiliencia (3 capas)
+-------------------------------------
+1. AdaptiveThrottle (cerebro) — decide concurrencia
+2. AdaptiveLimiter (músculo)  — aplica hard limit (aiometer)
+3. ResilienceLayer (protección) — retries + circuit breaker (aioresilience)
+
+Flujo: Throttle → Limiter → Resilience → ccxt.fetch_*()
 
 Módulos relacionados
 --------------------
-errors.py          — clases de excepción
-circuit_breaker.py — circuit breaker compartido por exchange
-throttle.py        — concurrencia adaptiva por pipeline
+errors.py     — clases de excepción
+limiter.py    — wrapper aiometer
+resilience.py — retry + circuit breaker
+throttle.py   — concurrencia adaptiva por pipeline
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,7 +29,6 @@ import time
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import ccxt.async_support as ccxt
-import pybreaker
 from loguru import logger
 
 from market_data.adapters.exchange.base import ExchangeAdapter
@@ -35,9 +37,17 @@ from market_data.adapters.exchange.errors import (
     ExchangeAdapterError,
     UnsupportedExchangeError,
     ExchangeConnectionError,
-    ExchangeCircuitOpenError,
 )
-from market_data.adapters.exchange.circuit_breaker import _get_breaker, get_breaker_state, breaker_call_async
+from market_data.adapters.exchange.limiter import (
+    AdaptiveLimiter,
+    get_or_create_limiter,
+    get_limiter_state,
+)
+from market_data.adapters.exchange.resilience import (
+    CircuitBreakerOpenError,
+    RetryExhaustedError,
+    ResilienceLayer,
+)
 from market_data.adapters.exchange.throttle import (
     AdaptiveThrottle,
     get_or_create_throttle,
@@ -45,19 +55,21 @@ from market_data.adapters.exchange.throttle import (
 )
 
 if TYPE_CHECKING:
-    from core.config.schema import ExchangeConfig
+    from core.config.schema import ExchangeConfig, ResilienceConfig
 
-# Backward-compat re-exports — los importadores existentes no necesitan cambios
 __all__ = [
     "CCXTAdapter",
     "ExchangeAdapterError",
     "UnsupportedExchangeError",
     "ExchangeConnectionError",
-    "ExchangeCircuitOpenError",
-    "get_breaker_state",
+    "CircuitBreakerOpenError",
+    "RetryExhaustedError",
     "AdaptiveThrottle",
+    "AdaptiveLimiter",
     "get_or_create_throttle",
+    "get_or_create_limiter",
     "get_throttle_state",
+    "get_limiter_state",
 ]
 
 
@@ -65,11 +77,11 @@ __all__ = [
 # Constants
 # ==========================================================
 
-_INIT_RETRIES          = 3
-_BACKOFF_BASE          = 2.0
-_LOAD_MARKETS_TIMEOUT  = 30.0
-_DEFAULT_EXCHANGE      = "binance"
-_MARKETS_CACHE_TTL     = 60.0   # segundos — reutilizar markets en reconnect
+_INIT_RETRIES = 3
+_BACKOFF_BASE = 2.0
+_LOAD_MARKETS_TIMEOUT = 30.0
+_DEFAULT_EXCHANGE = "binance"
+_MARKETS_CACHE_TTL = 60.0  # segundos — reutilizar markets en reconnect
 
 # Cache global de markets compartida entre instancias del mismo exchange.
 # Clave: "{exchange_id}:{default_type}" — cada combinación tiene su propio snapshot.
@@ -80,9 +92,9 @@ _GLOBAL_MARKETS_CACHE: Dict[str, Any] = {}
 _GLOBAL_MARKETS_CACHED_AT: Dict[str, float] = {}
 
 # Timeouts por operación (segundos)
-_FETCH_TICKER_TIMEOUT  = 10.0
-_FETCH_OHLCV_TIMEOUT   = 30.0
-_FETCH_TRADES_TIMEOUT  = 15.0
+_FETCH_TICKER_TIMEOUT = 10.0
+_FETCH_OHLCV_TIMEOUT = 30.0
+_FETCH_TRADES_TIMEOUT = 15.0
 
 
 class CCXTAdapter(ExchangeAdapter):
@@ -107,47 +119,55 @@ class CCXTAdapter(ExchangeAdapter):
 
     def __init__(
         self,
-        exchange_id:  Optional[str] = None,
-        api_key:      Optional[str] = None,
-        api_secret:   Optional[str] = None,
-        config:       Optional["ExchangeConfig"] = None,
+        exchange_id: Optional[str] = None,
+        api_key: Optional[str] = None,
+        api_secret: Optional[str] = None,
+        config: Optional["ExchangeConfig"] = None,
         default_type: Optional[str] = None,
     ) -> None:
 
-        self._exchange_id  = self._resolve_exchange_id(exchange_id, config)
+        self._exchange_id = self._resolve_exchange_id(exchange_id, config)
         self._default_type = default_type or self._resolve_default_type(config)
 
-        # Credenciales: config.ccxt_credentials() es la SSoT (schema.py).
-        # Path explícito solo para testing/scripts sin ExchangeConfig.
         if config is not None:
-            _creds         = config.ccxt_credentials()
-            self._api_key      = _creds.get("apiKey") or None
-            self._api_secret   = _creds.get("secret") or None
+            _creds = config.ccxt_credentials()
+            self._api_key = _creds.get("apiKey") or None
+            self._api_secret = _creds.get("secret") or None
             self._api_password = _creds.get("password") or None
+            self._resilience_config: Optional["ResilienceConfig"] = config.resilience
         else:
-            self._api_key      = api_key or None
-            self._api_secret   = api_secret or None
+            self._api_key = api_key or None
+            self._api_secret = api_secret or None
             self._api_password = None
+            self._resilience_config = None
 
-        self._client:            Optional[ccxt.Exchange] = None
-        self._init_lock:         asyncio.Lock            = asyncio.Lock()
-        self._markets_cache:     Optional[Dict[str, Any]] = None
+        self._client: Optional[ccxt.Exchange] = None
+        self._init_lock: asyncio.Lock = asyncio.Lock()
+        self._markets_cache: Optional[Dict[str, Any]] = None
         self._markets_cached_at: float = 0.0
-        # Circuit breaker compartido por exchange_id (singleton global).
-        # Spot y futures del mismo exchange comparten el mismo breaker —
-        # si bybit está degradado, ambos pipelines lo detectan juntos.
-        self._breaker = _get_breaker(self._exchange_id)
-        # Throttle singleton compartido por pipeline key "exchange:type:ohlcv".
-        # Registra latencias y errores reales para escalar concurrencia dinámicamente.
-        self._throttle = get_or_create_throttle(
-            exchange_id       = self._exchange_id,
-            market_type       = self._default_type or "spot",
-            dataset           = "ohlcv",
-            initial           = 5,
-            maximum           = 20,
-            latency_target_ms = 500,
+
+        self._limiter = get_or_create_limiter(
+            exchange_id=self._exchange_id,
+            max_concurrency=(self._resilience_config.limits.max_concurrency if self._resilience_config else 5),
+            max_rate=(self._resilience_config.limits.max_rate if self._resilience_config else 10.0),
         )
-        self._closed: bool = False  # idempotencia en close()
+
+        self._throttle = get_or_create_throttle(
+            exchange_id=self._exchange_id,
+            market_type=self._default_type or "spot",
+            dataset="ohlcv",
+            initial=self._limiter.max_concurrency,
+            maximum=self._limiter.max_concurrency * 2,
+            latency_target_ms=500,
+            limiter=self._limiter,
+        )
+
+        self._resilience = ResilienceLayer(
+            exchange_id=self._exchange_id,
+            config=self._resilience_config,
+        )
+
+        self._closed: bool = False
 
     # ----------------------------------------------------------
     # Lifecycle
@@ -214,32 +234,40 @@ class CCXTAdapter(ExchangeAdapter):
     # ----------------------------------------------------------
 
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
+        await self._limiter.acquire()
         client = await self._get_client()
         try:
+
             async def _call():
                 return await asyncio.wait_for(
                     client.fetch_ticker(symbol),
                     timeout=_FETCH_TICKER_TIMEOUT,
                 )
-            return await breaker_call_async(self._breaker, _call)
-        except pybreaker.CircuitBreakerError as exc:
+
+            _t0 = time.perf_counter()
+            result = await self._resilience.retry_call(_call)
+            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+            return result
+        except RetryExhaustedError as exc:
+            self._throttle.record_error(error_type=exc.error_type)
+            raise
+        except CircuitBreakerOpenError:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-            EXCHANGE_CIRCUIT_OPEN.labels(
-                exchange=self._exchange_id, operation="fetch_ticker"
-            ).inc()
-            raise ExchangeCircuitOpenError(
-                f"Circuit open for '{self._exchange_id}' — ticker unavailable"
-            ) from exc
+
+            EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ticker").inc()
+            self._throttle.record_error(error_type="rate_limit")
+            raise
 
     async def fetch_ohlcv(
         self,
-        symbol:      str,
-        timeframe:   str,
-        since:       Optional[int] = None,
-        limit:       int = 100,
+        symbol: str,
+        timeframe: str,
+        since: Optional[int] = None,
+        limit: int = 100,
         market_type: Optional[str] = None,
-        end_ms:      Optional[int] = None,
+        end_ms: Optional[int] = None,
     ) -> List[List[Any]]:
+        await self._limiter.acquire()
         client = await self._get_client()
         params: Dict[str, Any] = {}
         effective_type = market_type or self._default_type
@@ -250,62 +278,67 @@ class CCXTAdapter(ExchangeAdapter):
             since = None
         if _quirks.requires_end_at:
             now_ts = int(time.time() * 1000)
-            # endAt requerido: el exchange devuelve velas ANTERIORES a este timestamp.
-            # Se espera en SEGUNDOS (Unix), no milisegundos.
             _end_at_ms = end_ms if end_ms is not None else now_ts
             params["endAt"] = min(_end_at_ms, now_ts) // 1000
+
+        async def _call():
+            return await asyncio.wait_for(
+                client.fetch_ohlcv(
+                    symbol,
+                    timeframe,
+                    since=since,
+                    limit=limit,
+                    params=params,
+                ),
+                timeout=_FETCH_OHLCV_TIMEOUT,
+            )
+
         try:
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_ohlcv(
-                        symbol, timeframe,
-                        since=since, limit=limit, params=params,
-                    ),
-                    timeout=_FETCH_OHLCV_TIMEOUT,
-                )
-            try:
-                _t0_throttle = time.perf_counter()
-                result = await breaker_call_async(self._breaker, _call)
-                self._throttle.record_success(
-                    latency_ms=(time.perf_counter() - _t0_throttle) * 1000
-                )
-                return result
-            except asyncio.TimeoutError:
-                # Timeout de red — NO cuenta como fallo de breaker.
-                # Re-raise para que el fetcher lo trate como error transitorio.
-                self._throttle.record_error(error_type="timeout")
-                raise
-        except pybreaker.CircuitBreakerError as exc:
+            _t0 = time.perf_counter()
+            result = await self._resilience.retry_call(_call)
+            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+            return result
+        except RetryExhaustedError as exc:
+            self._throttle.record_error(error_type=exc.error_type)
+            raise
+        except CircuitBreakerOpenError:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-            EXCHANGE_CIRCUIT_OPEN.labels(
-                exchange=self._exchange_id, operation="fetch_ohlcv"
-            ).inc()
+
+            EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ohlcv").inc()
             self._throttle.record_error(error_type="rate_limit")
-            raise ExchangeCircuitOpenError(
-                f"Circuit open for '{self._exchange_id}' — ohlcv unavailable"
-            ) from exc
+            raise
+        except asyncio.TimeoutError:
+            self._throttle.record_error(error_type="timeout")
+            raise
 
     async def fetch_trades(
         self,
         symbol: str,
-        limit:  int = 100,
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
+        await self._limiter.acquire()
         client = await self._get_client()
+
+        async def _call():
+            return await asyncio.wait_for(
+                client.fetch_trades(symbol, limit=limit),
+                timeout=_FETCH_TRADES_TIMEOUT,
+            )
+
         try:
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_trades(symbol, limit=limit),
-                    timeout=_FETCH_TRADES_TIMEOUT,
-                )
-            return await breaker_call_async(self._breaker, _call)
-        except pybreaker.CircuitBreakerError as exc:
+            _t0 = time.perf_counter()
+            result = await self._resilience.retry_call(_call)
+            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+            return result
+        except RetryExhaustedError as exc:
+            self._throttle.record_error(error_type=exc.error_type)
+            raise
+        except CircuitBreakerOpenError:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-            EXCHANGE_CIRCUIT_OPEN.labels(
-                exchange=self._exchange_id, operation="fetch_trades"
-            ).inc()
-            raise ExchangeCircuitOpenError(
-                f"Circuit open for '{self._exchange_id}' — trades unavailable"
-            ) from exc
+
+            EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_trades").inc()
+            self._throttle.record_error(error_type="rate_limit")
+            raise
 
     async def load_markets(self) -> Dict[str, Any]:
         client = await self._get_client()
@@ -319,14 +352,17 @@ class CCXTAdapter(ExchangeAdapter):
 
     def parse8601(self, date_str: str) -> int:
         import ccxt as ccxt_sync
+
         return ccxt_sync.Exchange.parse8601(date_str)
 
     def iso8601(self, timestamp_ms: int) -> str:
         import ccxt as ccxt_sync
+
         return ccxt_sync.Exchange.iso8601(timestamp_ms)
 
     async def inspect_required_credentials(self) -> Dict[str, Any]:
         import ccxt as ccxt_sync
+
         if not hasattr(ccxt_sync, self._exchange_id):
             raise UnsupportedExchangeError(f"Exchange '{self._exchange_id}' not supported")
         exchange_class = getattr(ccxt_sync, self._exchange_id)
@@ -346,7 +382,7 @@ class CCXTAdapter(ExchangeAdapter):
     @staticmethod
     def _resolve_exchange_id(
         explicit: Optional[str],
-        config:   Optional["ExchangeConfig"],
+        config: Optional["ExchangeConfig"],
     ) -> str:
         if explicit:
             return explicit.lower()
@@ -376,9 +412,7 @@ class CCXTAdapter(ExchangeAdapter):
 
     async def _initialize(self) -> None:
         if not hasattr(ccxt, self._exchange_id):
-            raise UnsupportedExchangeError(
-                f"Exchange '{self._exchange_id}' not supported by ccxt"
-            )
+            raise UnsupportedExchangeError(f"Exchange '{self._exchange_id}' not supported by ccxt")
 
         exchange_class = getattr(ccxt, self._exchange_id)
         last_exc: Optional[Exception] = None
@@ -407,8 +441,7 @@ class CCXTAdapter(ExchangeAdapter):
                 global_key = f"{self._exchange_id}:{self._default_type or 'spot'}"
                 # Prioridad de cache: instancia > global > load_markets()
                 instance_valid = (
-                    self._markets_cache is not None
-                    and (now - self._markets_cached_at) < _MARKETS_CACHE_TTL
+                    self._markets_cache is not None and (now - self._markets_cached_at) < _MARKETS_CACHE_TTL
                 )
                 global_valid = (
                     global_key in _GLOBAL_MARKETS_CACHE
@@ -420,16 +453,18 @@ class CCXTAdapter(ExchangeAdapter):
                     latency = 0.0
                     logger.debug(
                         "Exchange connected (markets from instance cache) | {} cache_age={:.1f}s",
-                        self._exchange_id, now - self._markets_cached_at,
+                        self._exchange_id,
+                        now - self._markets_cached_at,
                     )
                 elif global_valid:
                     client.markets = copy.deepcopy(_GLOBAL_MARKETS_CACHE[global_key])
-                    self._markets_cache     = client.markets
+                    self._markets_cache = client.markets
                     self._markets_cached_at = now
                     latency = 0.0
                     logger.debug(
                         "Exchange connected (markets from global cache) | {} cache_age={:.1f}s",
-                        self._exchange_id, now - _GLOBAL_MARKETS_CACHED_AT[global_key],
+                        self._exchange_id,
+                        now - _GLOBAL_MARKETS_CACHED_AT[global_key],
                     )
                 else:
                     start = time.perf_counter()
@@ -438,15 +473,16 @@ class CCXTAdapter(ExchangeAdapter):
                         timeout=_LOAD_MARKETS_TIMEOUT,
                     )
                     latency = (time.perf_counter() - start) * 1000
-                    self._markets_cache                  = client.markets
-                    self._markets_cached_at              = time.perf_counter()
-                    _GLOBAL_MARKETS_CACHE[global_key]    = copy.deepcopy(client.markets)
+                    self._markets_cache = client.markets
+                    self._markets_cached_at = time.perf_counter()
+                    _GLOBAL_MARKETS_CACHE[global_key] = copy.deepcopy(client.markets)
                     _GLOBAL_MARKETS_CACHED_AT[global_key] = self._markets_cached_at
 
                 self._client = client
                 logger.info(
                     "Exchange connected | {} latency={:.1f}ms",
-                    self._exchange_id, latency,
+                    self._exchange_id,
+                    latency,
                 )
                 return
 
@@ -454,7 +490,8 @@ class CCXTAdapter(ExchangeAdapter):
                 last_exc = exc
                 logger.warning(
                     "load_markets timeout | {} attempt={}",
-                    self._exchange_id, attempt,
+                    self._exchange_id,
+                    attempt,
                 )
                 # Destruir cliente parcialmente inicializado — puede tener
                 # sockets abiertos o estado inconsistente tras cancel de wait_for.
@@ -466,10 +503,13 @@ class CCXTAdapter(ExchangeAdapter):
 
             except Exception as exc:
                 last_exc = exc
-                delay = (_BACKOFF_BASE ** attempt) + random.random()
+                delay = (_BACKOFF_BASE**attempt) + random.random()
                 logger.warning(
                     "Connection failed | {} attempt={} retry_in={:.1f}s error={}",
-                    self._exchange_id, attempt, delay, exc,
+                    self._exchange_id,
+                    attempt,
+                    delay,
+                    exc,
                 )
                 # Destruir cliente antes de reintentar — evita leaks de sesión.
                 try:
