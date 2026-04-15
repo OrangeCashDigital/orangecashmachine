@@ -32,7 +32,7 @@ from market_data.processing.pipelines._worker_pool import run_worker_pool
 
 from loguru import logger
 
-from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+from market_data.adapters.exchange import CCXTAdapter
 from market_data.storage.silver.derivatives_storage import DerivativesStorage
 from market_data.ingestion.rest.derivatives_fetcher import (
     FundingRateFetcher,

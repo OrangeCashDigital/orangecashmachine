@@ -36,7 +36,7 @@ from typing import Optional
 import pandas as pd
 from loguru import logger
 
-from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+from market_data.adapters.exchange import CCXTAdapter
 from market_data.storage.silver.trades_storage import TradesStorage
 from infra.state.factories import build_cursor_store
 

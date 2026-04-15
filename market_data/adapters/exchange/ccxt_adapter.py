@@ -20,6 +20,12 @@ resilience.py — retry + circuit breaker
 throttle.py   — concurrencia adaptiva por pipeline
 """
 
+# =============================================================================
+# INTERNAL MODULE — NO importar directamente desde consumidores externos.
+# Usar: from market_data.adapters.exchange import CCXTAdapter (API pública)
+# =============================================================================
+
+
 from __future__ import annotations
 
 import asyncio
@@ -37,6 +43,7 @@ from market_data.adapters.exchange.errors import (
     ExchangeAdapterError,
     UnsupportedExchangeError,
     ExchangeConnectionError,
+    ExchangeCircuitOpenError,
 )
 from market_data.adapters.exchange.limiter import (
     AdaptiveLimiter,
@@ -63,6 +70,7 @@ __all__ = [
     "UnsupportedExchangeError",
     "ExchangeConnectionError",
     "CircuitBreakerOpenError",
+    "ExchangeCircuitOpenError",
     "RetryExhaustedError",
     "AdaptiveThrottle",
     "AdaptiveLimiter",
@@ -250,12 +258,15 @@ class CCXTAdapter(ExchangeAdapter):
             return result
         except RetryExhaustedError as exc:
             self._throttle.record_error(error_type=exc.error_type)
+            if exc.error_type == "rate_limit":
+                self._throttle.record_rate_limit_hit()
             raise
-        except CircuitBreakerOpenError:
+        except ExchangeCircuitOpenError:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 
             EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ticker").inc()
             self._throttle.record_error(error_type="rate_limit")
+            self._throttle.record_rate_limit_hit()
             raise
 
     async def fetch_ohlcv(
@@ -300,12 +311,15 @@ class CCXTAdapter(ExchangeAdapter):
             return result
         except RetryExhaustedError as exc:
             self._throttle.record_error(error_type=exc.error_type)
+            if exc.error_type == "rate_limit":
+                self._throttle.record_rate_limit_hit()
             raise
-        except CircuitBreakerOpenError:
+        except ExchangeCircuitOpenError:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 
             EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ohlcv").inc()
             self._throttle.record_error(error_type="rate_limit")
+            self._throttle.record_rate_limit_hit()
             raise
         except asyncio.TimeoutError:
             self._throttle.record_error(error_type="timeout")
@@ -332,12 +346,15 @@ class CCXTAdapter(ExchangeAdapter):
             return result
         except RetryExhaustedError as exc:
             self._throttle.record_error(error_type=exc.error_type)
+            if exc.error_type == "rate_limit":
+                self._throttle.record_rate_limit_hit()
             raise
-        except CircuitBreakerOpenError:
+        except ExchangeCircuitOpenError:
             from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 
             EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_trades").inc()
             self._throttle.record_error(error_type="rate_limit")
+            self._throttle.record_rate_limit_hit()
             raise
 
     async def load_markets(self) -> Dict[str, Any]:

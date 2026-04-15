@@ -38,7 +38,7 @@ from prefect import task, get_run_logger
 from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
 from market_data.processing.pipelines.ohlcv_pipeline import OHLCVPipeline
-from market_data.adapters.exchange.ccxt_adapter import (
+from market_data.adapters.exchange import (
     CCXTAdapter,
     get_or_create_throttle,
     get_throttle_state,
@@ -291,12 +291,14 @@ async def run_historical_pipeline(
     log.info("── Pipeline metrics | exchange=%s ──────────────────────────", exchange_name)
     _log_pipeline_metrics(summary, "spot", log)
     log.info(
-        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms health=%.2f cooldown=%s ──",
         ts["key"],
         ts["concurrent"],
         ts["maximum"],
         ts["error_rate"] * 100,
         int(ts["p95_ms"]),
+        ts.get("health", 1.0),
+        ts.get("in_cooldown", False),
     )
 
     _raise_if_total_failure(summary, "Historical pipeline", exchange_name)
@@ -429,12 +431,14 @@ async def run_futures_pipeline(
     )
     _log_pipeline_metrics(summary, futures_market_type, log)
     log.info(
-        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms health=%.2f cooldown=%s ──",
         ts["key"],
         ts["concurrent"],
         ts["maximum"],
         ts["error_rate"] * 100,
         int(ts["p95_ms"]),
+        ts.get("health", 1.0),
+        ts.get("in_cooldown", False),
     )
 
     _raise_if_total_failure(summary, "Futures pipeline", exchange_name)
@@ -545,12 +549,14 @@ async def run_trades_pipeline(
         summary.total_rows,
     )
     log.info(
-        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms health=%.2f cooldown=%s ──",
         ts["key"],
         ts["concurrent"],
         ts["maximum"],
         ts["error_rate"] * 100,
         int(ts["p95_ms"]),
+        ts.get("health", 1.0),
+        ts.get("in_cooldown", False),
     )
 
     _raise_if_total_failure(summary, "Trades pipeline", exchange_name)
@@ -683,12 +689,14 @@ async def run_derivatives_pipeline(
         summary.total_rows,
     )
     log.info(
-        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms health=%.2f cooldown=%s ──",
         ts["key"],
         ts["concurrent"],
         ts["maximum"],
         ts["error_rate"] * 100,
         int(ts["p95_ms"]),
+        ts.get("health", 1.0),
+        ts.get("in_cooldown", False),
     )
 
     _raise_if_total_failure(summary, "Derivatives pipeline", exchange_name)
@@ -825,12 +833,14 @@ async def run_repair_pipeline(
     )
     _log_pipeline_metrics(summary, market_type, log)
     log.info(
-        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms ──",
+        "── Throttle state | key=%s concurrent=%s/%s error_rate=%.0f%% p95=%sms health=%.2f cooldown=%s ──",
         ts["key"],
         ts["concurrent"],
         ts["maximum"],
         ts["error_rate"] * 100,
         int(ts["p95_ms"]),
+        ts.get("health", 1.0),
+        ts.get("in_cooldown", False),
     )
 
     _raise_if_total_failure(summary, "Repair", exchange_name)
