@@ -3,7 +3,7 @@
 trading/risk/models.py
 =======================
 
-Modelos Pydantic de configuración de riesgo.
+Modelos Pydantic de configuracion de riesgo.
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
@@ -16,26 +16,27 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class PositionConfig(BaseModel):
-    """Límites de posición."""
+    """Limites de posicion."""
     max_position_pct:   float = Field(0.05, gt=0.0, le=1.0)
     max_open_positions: int   = Field(3,    ge=1)
+    max_open_trades:    int   = Field(3,    ge=1)
 
 
 class StopLossConfig(BaseModel):
-    """Configuración de stop-loss."""
+    """Configuracion de stop-loss."""
     enabled:     bool  = True
     default_pct: float = Field(0.02, gt=0.0, lt=1.0)
 
 
 class DrawdownConfig(BaseModel):
-    """Límites de drawdown."""
+    """Limites de drawdown."""
     max_daily_drawdown_pct: float = Field(0.05, gt=0.0, lt=1.0)
     max_total_drawdown_pct: float = Field(0.15, gt=0.0, lt=1.0)
     halt_on_breach:         bool  = True
 
 
 class OrderLimits(BaseModel):
-    """Límites de tamaño de orden en USD."""
+    """Limites de tamano de orden en USD."""
     min_order_usd: float = Field(10.0,   ge=0.0)
     max_order_usd: float = Field(1000.0, gt=0.0)
 
@@ -51,17 +52,17 @@ class OrderLimits(BaseModel):
 
 class SignalFilterConfig(BaseModel):
     """
-    Filtros aplicados a señales antes de llegar al RiskManager.
+    Filtros aplicados a senales antes de llegar al RiskManager.
 
-    Separado de RiskConfig (SRP) — la confianza mínima es una
-    concern de la señal, no de la gestión de riesgo financiero.
+    Separado de RiskConfig (SRP) -- la confianza minima es una
+    concern de la senal, no de la gestion de riesgo financiero.
     """
     min_confidence: float = Field(0.8, ge=0.0, le=1.0)
 
 
 class RiskConfig(BaseModel):
     """
-    Configuración completa de riesgo.
+    Configuracion completa de riesgo.
 
     Compatible con config/risk/risk.yaml:
         risk:
@@ -69,37 +70,47 @@ class RiskConfig(BaseModel):
           stop_loss: {...}
           drawdown:  {...}
           order:     {...}
-          signal_filter: {...}   # opcional — defaults si ausente
+          signal_filter: {...}
 
-    Uso desde YAML:
-        cfg = RiskConfig.from_yaml("config/risk/risk.yaml")
-
-    Uso directo:
-        cfg = RiskConfig()   # usa defaults
+    Shortcuts de construccion directa (tests y CLI):
+        RiskConfig(min_confidence=0.7)
+        RiskConfig(max_open_trades=2)
     """
-    position:      PositionConfig    = Field(default_factory=PositionConfig)
-    stop_loss:     StopLossConfig    = Field(default_factory=StopLossConfig)
-    drawdown:      DrawdownConfig    = Field(default_factory=DrawdownConfig)
-    order:         OrderLimits       = Field(default_factory=OrderLimits)
+    position:      PositionConfig     = Field(default_factory=PositionConfig)
+    stop_loss:     StopLossConfig     = Field(default_factory=StopLossConfig)
+    drawdown:      DrawdownConfig     = Field(default_factory=DrawdownConfig)
+    order:         OrderLimits        = Field(default_factory=OrderLimits)
     signal_filter: SignalFilterConfig = Field(default_factory=SignalFilterConfig)
 
-    # ------------------------------------------------------------------
-    # Backwards compat — delegado a signal_filter
-    # ------------------------------------------------------------------
+    model_config = {"populate_by_name": True}
+
+    def __init__(self, **data):
+        min_confidence  = data.pop("min_confidence",  None)
+        max_open_trades = data.pop("max_open_trades",  None)
+        super().__init__(**data)
+        if min_confidence is not None:
+            self.signal_filter = SignalFilterConfig(min_confidence=min_confidence)
+        if max_open_trades is not None:
+            self.position = PositionConfig(
+                max_position_pct   = self.position.max_position_pct,
+                max_open_positions = self.position.max_open_positions,
+                max_open_trades    = max_open_trades,
+            )
 
     @property
     def min_confidence(self) -> float:
-        """Alias legacy — usar signal_filter.min_confidence directamente."""
+        """SSOT: delegado a signal_filter.min_confidence."""
         return self.signal_filter.min_confidence
 
-    # ------------------------------------------------------------------
-    # Factories
-    # ------------------------------------------------------------------
+    @property
+    def max_open_trades(self) -> int:
+        """SSOT: delegado a position.max_open_trades."""
+        return self.position.max_open_trades
 
     @classmethod
     def from_yaml(cls, path: Union[str, Path]) -> "RiskConfig":
         """
-        Carga desde YAML. Soporta estructura con clave raíz ``risk:``.
+        Carga desde YAML. Soporta estructura con clave raiz ``risk:``.
 
         SafeOps: retorna defaults con warning ante cualquier error de I/O
         o parsing. Nunca lanza.
@@ -111,13 +122,13 @@ class RiskConfig(BaseModel):
             raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
             return cls.model_validate(cls._extract_root(raw))
         except FileNotFoundError:
-            logger.warning("RiskConfig: {} no encontrado — usando defaults", path)
+            logger.warning("RiskConfig: {} no encontrado -- usando defaults", path)
         except PermissionError:
-            logger.error("RiskConfig: sin permisos para leer {} — usando defaults", path)
+            logger.error("RiskConfig: sin permisos para leer {} -- usando defaults", path)
         except yaml.YAMLError as exc:
-            logger.error("RiskConfig: YAML inválido en {} | {} — usando defaults", path, exc)
+            logger.error("RiskConfig: YAML invalido en {} | {} -- usando defaults", path, exc)
         except Exception as exc:
-            logger.error("RiskConfig: error inesperado cargando {} | {} — usando defaults", path, exc)
+            logger.error("RiskConfig: error inesperado cargando {} | {} -- usando defaults", path, exc)
         return cls()
 
     @classmethod
@@ -125,16 +136,12 @@ class RiskConfig(BaseModel):
         """Carga desde dict (OmegaConf / Hydra compatible)."""
         return cls.model_validate(cls._extract_root(data))
 
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _extract_root(raw: object) -> dict:
         """
-        Extrae el bloque interior si el YAML/dict tiene clave raíz ``risk:``.
+        Extrae el bloque interior si el YAML/dict tiene clave raiz ``risk:``.
 
-        DRY: único punto de normalización para from_yaml y from_dict.
+        DRY: unico punto de normalizacion para from_yaml y from_dict.
         """
         if isinstance(raw, dict):
             return raw.get("risk", raw)

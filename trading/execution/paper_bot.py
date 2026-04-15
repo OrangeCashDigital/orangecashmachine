@@ -3,16 +3,16 @@
 trading/execution/paper_bot.py
 ================================
 
-Bot de paper trading mínimo.
+Bot de paper trading minimo.
 
-Regla de oro: NUNCA ejecuta órdenes reales.
-Lee señal → valida contra límites de risk → loguea la orden.
+Regla de oro: NUNCA ejecuta ordenes reales.
+Lee senal -> valida contra limites de risk -> loguea la orden.
 
-Diseño
+Diseno
 ------
 GoldStorage se inyecta en el constructor (data_source). Esto permite
-testear el bot sin Iceberg real — basta pasar un mock. El acoplamiento
-con la capa de storage queda en el punto de entrada (main/CLI), no aquí.
+testear el bot sin Iceberg real -- basta pasar un mock. El acoplamiento
+con la capa de storage queda en el punto de entrada (main/CLI), no aqui.
 
 Uso
 ---
@@ -37,15 +37,15 @@ from trading.strategies.base import BaseStrategy, Signal
 
 
 # =============================================================================
-# Protocol — contrato mínimo que PaperBot necesita del storage
+# Protocol -- contrato minimo que PaperBot necesita del storage
 # =============================================================================
 
 @runtime_checkable
 class GoldDataSource(Protocol):
     """
-    Contrato mínimo que PaperBot necesita del storage.
+    Contrato minimo que PaperBot necesita del storage.
 
-    Cualquier objeto con load_features() compatible es válido —
+    Cualquier objeto con load_features() compatible es valido --
     incluye GoldStorage real y mocks de tests.
     """
 
@@ -59,8 +59,8 @@ class GoldDataSource(Protocol):
         ...
 
 
-# RiskConfig canónica — SSOT en trading.risk.models (Pydantic, cargable desde YAML).
-# PaperBot accede a los límites via: risk.position, risk.signal_filter.
+# RiskConfig canonica -- SSOT en trading.risk.models (Pydantic, cargable desde YAML).
+# PaperBot accede a los limites via: risk.signal_filter y risk.position.
 from trading.risk.models import RiskConfig
 
 
@@ -70,11 +70,11 @@ from trading.risk.models import RiskConfig
 
 @dataclass
 class PaperOrder:
-    """Orden de paper trading — solo se loguea, nunca se ejecuta."""
+    """Orden de paper trading -- solo se loguea, nunca se ejecuta."""
     symbol:    str
-    side:      str          # "buy" | "sell"
+    side:      str
     price:     float
-    size_pct:  float        # % del capital asignado
+    size_pct:  float
     timestamp: datetime
     signal:    Signal
     reason:    str = ""
@@ -101,20 +101,15 @@ class PaperBot:
     """
     Bot de paper trading.
 
-    Consume señales de una estrategia, las valida contra límites de riesgo
-    y las registra como órdenes simuladas. Nunca toca dinero real.
+    Consume senales de una estrategia, las valida contra limites de riesgo
+    y las registra como ordenes simuladas. Nunca toca dinero real.
 
     Parameters
     ----------
     strategy    : BaseStrategy
-        Estrategia que genera las señales.
     data_source : GoldDataSource
-        Storage que provee los datos OHLCV+features. Se inyecta
-        explícitamente para mantener testabilidad.
     risk        : RiskConfig, optional
-        Límites de riesgo. Usa defaults si se omite.
     exchange    : str
-        Exchange de donde vienen los datos (default: "bybit").
     """
 
     def __init__(
@@ -138,14 +133,7 @@ class PaperBot:
     # =========================================================================
 
     def run_once(self) -> list[PaperOrder]:
-        """
-        Ejecuta un ciclo: carga datos → genera señales → valida → loguea.
-
-        Returns
-        -------
-        list[PaperOrder]
-            Órdenes generadas en este ciclo (puede estar vacía).
-        """
+        """Ejecuta un ciclo: carga datos -> genera senales -> valida -> loguea."""
         strategy = self.strategy
 
         df = self.data_source.load_features(
@@ -166,7 +154,7 @@ class PaperBot:
 
         if not signals:
             logger.debug(
-                "[PaperBot] Sin señales | symbol={} timeframe={}",
+                "[PaperBot] Sin senales | symbol={} timeframe={}",
                 strategy.symbol, strategy.timeframe,
             )
             return []
@@ -176,20 +164,14 @@ class PaperBot:
             order = self._evaluate_signal(signal)
             if order:
                 order.log()
-                self._open_trades.append(order)   # registrar posición abierta
+                self._open_trades.append(order)
                 self._order_log.append(order)
                 orders.append(order)
 
         return orders
 
     def close_trade(self, order: PaperOrder) -> None:
-        """
-        Marca una posición como cerrada.
-
-        En paper trading esto solo actualiza el contador interno —
-        no hay ejecución real. Llamar explícitamente cuando la estrategia
-        emita una señal contraria o se alcance stop/target.
-        """
+        """Marca una posicion como cerrada (solo actualiza el contador interno)."""
         if order in self._open_trades:
             self._open_trades.remove(order)
             logger.info(
@@ -219,23 +201,33 @@ class PaperBot:
     # =========================================================================
 
     def _evaluate_signal(self, signal: Signal) -> Optional[PaperOrder]:
-        """Valida la señal contra los límites de riesgo."""
+        """
+        Valida la senal contra los limites de riesgo.
+
+        Orden de checks (Fail-Fast -- del mas barato al mas costoso):
+          1. Senal accionable  (is_actionable)
+          2. Confianza minima  (signal_filter.min_confidence)  -- inclusivo
+          3. Limite de trades  (position.max_open_trades)
+        """
         if not signal.is_actionable:
             return None
 
-        if signal.confidence < self.risk.min_confidence:
+        if not signal.is_actionable:
+            return None
+
+        if signal.confidence < self.risk.signal_filter.min_confidence:
             logger.debug(
-                "[PaperBot] Rechazada — confianza insuficiente"
+                "[PaperBot] Rechazada -- confianza insuficiente"
                 " | confidence={:.0%} min={:.0%}",
-                signal.confidence, self.risk.min_confidence,
+                signal.confidence, self.risk.signal_filter.min_confidence,
             )
             return None
 
-        if len(self._open_trades) >= self.risk.position.max_open_positions:
+        if len(self._open_trades) >= self.risk.position.max_open_trades:
             logger.warning(
-                "[PaperBot] Rechazada — máximo trades abiertos"
+                "[PaperBot] Rechazada -- maximo trades abiertos"
                 " | open={} max={}",
-                len(self._open_trades), self.risk.position.max_open_positions,
+                len(self._open_trades), self.risk.position.max_open_trades,
             )
             return None
 

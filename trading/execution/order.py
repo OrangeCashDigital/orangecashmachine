@@ -24,7 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Literal, Optional
+from typing import Optional
 
 from trading.strategies.base import Signal
 
