@@ -29,9 +29,9 @@ from core.logging import bind_pipeline
 
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.core.transformers.transformer import OHLCVTransformer
-from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
-from market_data.adapters.exchange.resilience import (
-    CircuitBreakerOpenError,
+from market_data.adapters.exchange import (
+    CCXTAdapter,
+    ExchangeCircuitOpenError,
     RetryExhaustedError,
 )
 from market_data.observability.metrics import (
@@ -350,7 +350,7 @@ class HistoricalFetcherAsync:
             _status = "success"
             try:
                 raw = await self._fetch_chunk_with_retry(symbol, timeframe, since_ts, limit)
-            except CircuitBreakerOpenError:
+            except ExchangeCircuitOpenError:
                 _status = "circuit_open"
                 self._log.bind(symbol=symbol, timeframe=timeframe, chunk=chunk_idx).warning("Circuit open — aborting chunked download")
                 FETCH_CHUNKS_TOTAL.labels(
@@ -571,7 +571,7 @@ class HistoricalFetcherAsync:
                     self._exchange.fetch_ohlcv(symbol, timeframe, since, limit, end_ms=end_ms),
                     timeout=CHUNK_FETCH_TIMEOUT,
                 )
-            except CircuitBreakerOpenError:
+            except ExchangeCircuitOpenError:
                 # Circuit abierto — reintentar es inútil. Re-raise inmediato.
                 raise
             except _ccxt_async.AuthenticationError as exc:

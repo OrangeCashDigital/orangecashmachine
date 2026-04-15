@@ -53,7 +53,7 @@ from market_data.processing.strategies.backfill import BackfillStrategy
 from market_data.processing.strategies.incremental import IncrementalStrategy
 from market_data.processing.strategies.repair import RepairStrategy
 from market_data.core.transformers.transformer import OHLCVTransformer
-from market_data.adapters.exchange.ccxt_adapter import (
+from market_data.adapters.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
     get_breaker_state,
