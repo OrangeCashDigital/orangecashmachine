@@ -36,6 +36,8 @@ __all__ = [
     "ResilienceLayer",
     "RetryExhaustedError",
     "CircuitBreakerOpenError",
+    "register_resilience_layer",
+    "get_breaker_state",
 ]
 
 T = TypeVar("T")
@@ -250,3 +252,53 @@ class ResilienceLayer:
             return str(state) == "CircuitState.OPEN"
         except Exception:
             return False
+
+
+# ===========================================================================
+# Module-level registry — acceso a ResilienceLayer por exchange_id
+# ===========================================================================
+# SSOT: una sola instancia por exchange_id por proceso.
+# CCXTAdapter registra su capa en __init__ via register_resilience_layer().
+# Consumidores llaman get_breaker_state() sin acoplamiento directo al adapter.
+
+_layer_registry: dict[str, "ResilienceLayer"] = {}
+
+
+def register_resilience_layer(exchange_id: str, layer: "ResilienceLayer") -> None:
+    """
+    Registra una ResilienceLayer activa en el registry del proceso.
+
+    Llamado por CCXTAdapter.__init__ inmediatamente tras construir
+    su ResilienceLayer. Idempotente: sobreescribe si ya existe.
+
+    Parameters
+    ----------
+    exchange_id : identificador del exchange (ej. "bybit", "binance")
+    layer       : instancia de ResilienceLayer a registrar
+    """
+    _layer_registry[exchange_id] = layer
+
+
+def get_breaker_state(exchange_id: str) -> dict:
+    """
+    Retorna el estado del circuit breaker para un exchange dado.
+
+    Fail-Soft: si el exchange no esta registrado o el breaker no
+    responde, retorna estado "unknown" sin lanzar excepcion.
+
+    Parameters
+    ----------
+    exchange_id : identificador del exchange
+
+    Returns
+    -------
+    dict con keys: exchange_id, state, failure_count
+    """
+    layer = _layer_registry.get(exchange_id)
+    if layer is None:
+        return {
+            "exchange_id": exchange_id,
+            "state": "unknown",
+            "failure_count": 0,
+        }
+    return layer.breaker_state()
