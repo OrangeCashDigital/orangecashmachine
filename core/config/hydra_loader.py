@@ -66,7 +66,9 @@ from core.config.loader.snapshot import write_config_snapshot
 _HYDRA_INTERNAL: frozenset[str] = frozenset(
     {"_target_", "_recursive_", "_convert_", "hydra"}
 )
-_NULLABLE_KEYS: frozenset[str] = frozenset({"password", "user", "database"})
+# _NULLABLE_KEYS eliminado — reemplazado por _NULLABLE_PATHS en
+# core/config/layers/coercion.py (path-based, robusto ante campos nuevos).
+# Ver: OCP — Open/Closed Principle aplicado a campos nullable.
 
 # ---------------------------------------------------------------------------
 # Registro de módulos con @package no-global (Patrón B).
@@ -123,21 +125,8 @@ def strip_hydra_internals(raw: dict[str, Any]) -> None:
         raw.pop(key, None)
 
 
-def normalize_empty_strings(d: dict[str, Any]) -> None:
-    """Convierte ``""`` → ``None`` en campos nullable de forma recursiva.
-
-    Defensiva ante nodos YAML ``null`` (OmegaConf los convierte a None):
-    si el valor es None no hay nada que normalizar — se omite en silencio.
-    """
-    if d is None:  # nodo YAML null en el nivel razíz — nada que hacer
-        return
-    for k, v in d.items():
-        if isinstance(v, dict):
-            normalize_empty_strings(v)
-        elif v is None:
-            pass  # YAML null — ya es None, no se modifica
-        elif isinstance(v, str) and v == "" and k in _NULLABLE_KEYS:
-            d[k] = None
+# normalize_empty_strings eliminada — absorbida por coerce_scalar_values()
+# en core/config/layers/coercion.py (SSOT de coerción, L3 canónico).
 
 
 def _load_module(config_dir: Path, rel_path: str) -> Optional[DictConfig]:
@@ -176,6 +165,29 @@ def _load_module(config_dir: Path, rel_path: str) -> Optional[DictConfig]:
     for part in reversed(parts):
         wrapped = {part: wrapped}
     return OmegaConf.create(wrapped)
+
+
+def ensure_log_dir(log_dir_path: str) -> None:
+    """Crea el directorio de logs si no existe — bootstrap stage.
+
+    Separado de AppConfig.model_validator para mantener schema.py libre
+    de side effects (IO en validators viola SRP y dificulta testing).
+
+    Llamar desde el entrypoint DESPUÉS de que AppConfig esté construido:
+        app_config = pipeline.run()
+        ensure_log_dir(app_config.observability.logging.log_dir)
+
+    Args:
+        log_dir_path: Path del directorio de logs (str desde AppConfig).
+
+    Raises:
+        OSError: Si el directorio no puede crearse (permisos, disco lleno).
+                 Fail-fast — mejor error en startup que error silencioso en runtime.
+    """
+    from pathlib import Path
+    log_dir = Path(log_dir_path)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logger.debug("bootstrap | log_dir_ensured={}", log_dir)
 
 
 def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:

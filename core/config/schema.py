@@ -553,24 +553,7 @@ class KafkaConfig(StrictBaseModel):
     enabled: bool = False
     bootstrap_servers: str = "localhost:9092"
 
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_env_strings(cls, values: dict) -> dict:
-        """Normaliza strings de oc.env a tipos nativos (bool)."""
-        for field in ("enabled",):
-            v = values.get(field)
-            if isinstance(v, str):
-                lower = v.strip().lower()
-                if lower in _ENV_BOOL_TRUE:
-                    values[field] = True
-                elif lower in _ENV_BOOL_FALSE:
-                    values[field] = False
-                else:
-                    raise ValueError(
-                        f"KafkaConfig.{field}: valor de entorno no reconocido: {v!r}. "
-                        "Use true/false/1/0."
-                    )
-        return values
+    # coerce_env_strings eliminado — ver RedisConfig (mismo principio). (DRY, SRP)
 
 
 class PostgresConfig(StrictBaseModel):
@@ -589,32 +572,7 @@ class PostgresConfig(StrictBaseModel):
     password: Optional[SecretStr] = None
     database: Optional[str] = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_env_strings(cls, values: dict) -> dict:
-        """Normaliza strings de oc.env a tipos nativos (bool + int)."""
-        for field in ("enabled",):
-            v = values.get(field)
-            if isinstance(v, str):
-                lower = v.strip().lower()
-                if lower in _ENV_BOOL_TRUE:
-                    values[field] = True
-                elif lower in _ENV_BOOL_FALSE:
-                    values[field] = False
-                else:
-                    raise ValueError(
-                        f"PostgresConfig.{field}: valor de entorno no reconocido: {v!r}. "
-                        "Use true/false/1/0."
-                    )
-        port_v = values.get("port")
-        if isinstance(port_v, str):
-            try:
-                values["port"] = int(port_v)
-            except ValueError:
-                raise ValueError(
-                    f"PostgresConfig.port: valor no válido: {port_v!r}. Debe ser entero (1-65535)."
-                )
-        return values
+    # coerce_env_strings eliminado — ver RedisConfig (mismo principio). (DRY, SRP)
 
     @model_validator(mode="after")
     def validate_credentials_when_enabled(self) -> PostgresConfig:
@@ -646,32 +604,7 @@ class MetricsConfig(StrictBaseModel):
     exporter: str = "prometheus"
     port: int = Field(default=8000, ge=1, le=65535)
 
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_env_strings(cls, values: dict) -> dict:
-        """Normaliza strings de oc.env a tipos nativos (bool + int)."""
-        for field in ("enabled",):
-            v = values.get(field)
-            if isinstance(v, str):
-                lower = v.strip().lower()
-                if lower in _ENV_BOOL_TRUE:
-                    values[field] = True
-                elif lower in _ENV_BOOL_FALSE:
-                    values[field] = False
-                else:
-                    raise ValueError(
-                        f"MetricsConfig.{field}: valor de entorno no reconocido: {v!r}. "
-                        "Use true/false/1/0."
-                    )
-        port_v = values.get("port")
-        if isinstance(port_v, str):
-            try:
-                values["port"] = int(port_v)
-            except ValueError:
-                raise ValueError(
-                    f"MetricsConfig.port: valor no válido: {port_v!r}. Debe ser entero (1-65535)."
-                )
-        return values
+    # coerce_env_strings eliminado — ver RedisConfig (mismo principio). (DRY, SRP)
 
 
 class TracingConfig(StrictBaseModel):
@@ -679,24 +612,7 @@ class TracingConfig(StrictBaseModel):
 
     enabled: bool = False
 
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_env_strings(cls, values: dict) -> dict:
-        """Normaliza strings de oc.env a tipos nativos (bool)."""
-        for field in ("enabled",):
-            v = values.get(field)
-            if isinstance(v, str):
-                lower = v.strip().lower()
-                if lower in _ENV_BOOL_TRUE:
-                    values[field] = True
-                elif lower in _ENV_BOOL_FALSE:
-                    values[field] = False
-                else:
-                    raise ValueError(
-                        f"TracingConfig.{field}: valor de entorno no reconocido: {v!r}. "
-                        "Use true/false/1/0."
-                    )
-        return values
+    # coerce_env_strings eliminado — ver RedisConfig (mismo principio). (DRY, SRP)
 
 
 class ObservabilityConfig(StrictBaseModel):
@@ -835,16 +751,10 @@ class AppConfig(StrictBaseModel):
             raise ValueError("At least one exchange must be enabled.")
         return self
 
-    @model_validator(mode="after")
-    def ensure_log_dir(self) -> AppConfig:
-        """Crea log_dir si no existe — falla rápido antes de arrancar el pipeline.
-
-        Un log_dir inaccesible en runtime produce errores silenciosos difíciles
-        de diagnosticar. Mejor fallar aquí con mensaje claro.
-        """
-        log_dir = Path(self.observability.logging.log_dir)
-        log_dir.mkdir(parents=True, exist_ok=True)
-        return self
+    # ensure_log_dir eliminado del validator — side effect (IO) en schema validation
+    # viola SRP y dificulta testing unitario. Movido a bootstrap stage:
+    # core/config/hydra_loader.py::ensure_log_dir(app_config.observability.logging.log_dir)
+    # Llamar desde el entrypoint DESPUÉS de pipeline.run(). (SRP, testability)
 
     @model_validator(mode="after")
     def warn_if_no_datasets(self) -> AppConfig:

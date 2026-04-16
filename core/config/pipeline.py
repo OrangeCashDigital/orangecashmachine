@@ -41,7 +41,8 @@ from omegaconf import DictConfig, OmegaConf
 # Helpers de coerción importados desde hydra_loader (DRY — SSOT allí).
 # L3 los orquesta; la implementación vive junto a las constantes que usan
 # (_HYDRA_INTERNAL, _NULLABLE_KEYS) para evitar dependencia circular.
-from core.config.hydra_loader import strip_hydra_internals, normalize_empty_strings
+from core.config.hydra_loader import strip_hydra_internals
+from core.config.layers.coercion import coerce_scalar_values
 
 
 class ConfigStage(Enum):
