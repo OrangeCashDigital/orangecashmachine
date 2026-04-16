@@ -30,7 +30,7 @@ from pydantic import (
     model_validator,
 )
 
-from core.logging.config import LoggingConfig
+from core.observability.config import LoggingConfig
 
 CONFIG_PATH: Path = Path("config/settings.yaml")
 

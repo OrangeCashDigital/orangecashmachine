@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 """
-core/logging/config.py
-======================
+core/observability/config.py
+=============================
 
 LoggingConfig — schema de configuración de logging.
 
-Vive en core/logging para que el módulo sea autónomo:
+Vive en core/observability para que el módulo sea autónomo:
 core/config/schema.py importa desde aquí, no al revés.
 
 Campos nuevos v0.3.0
@@ -39,8 +39,8 @@ class LoggingConfig(BaseModel):
     format:    str  = "text"   # "text" | "json"
 
     # ── Loki (sink remoto) ────────────────────────────────────────────
-    loki_url:    Optional[str]       = None
-    loki_labels: dict[str, str]      = {}
+    loki_url:    Optional[str]  = None
+    loki_labels: dict[str, str] = {}
 
     @field_validator("level")
     @classmethod

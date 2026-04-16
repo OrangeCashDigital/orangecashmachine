@@ -25,7 +25,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.logging import bind_pipeline
+from core.observability import bind_pipeline
 from core.config.lineage import get_git_hash
 from core.config.run_registry import record_run
 from core.config.runtime import RunConfig
@@ -250,7 +250,7 @@ def run(
 
 
 if __name__ == "__main__":
-    from core.logging import bootstrap_logging, configure_logging
+    from core.observability import bootstrap_logging, configure_logging
 
     # Build centralized context using canonical resolver
     config, run_cfg, runtime_context = build_context()

@@ -11,7 +11,7 @@ import asyncio
 from typing import Optional
 
 import pandas as pd
-from core.logging import bind_pipeline
+from core.observability import bind_pipeline
 from market_data.ingestion.rest.ohlcv_fetcher import DEFAULT_CHUNK_LIMIT
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.adapters.exchange.exchange_quirks import get_quirks

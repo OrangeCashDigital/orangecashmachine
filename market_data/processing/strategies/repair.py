@@ -12,7 +12,7 @@ import time
 from typing import Optional
 
 import pandas as pd
-from core.logging import bind_pipeline
+from core.observability import bind_pipeline
 from market_data.processing.strategies.base import (
     PairResult,
     PipelineContext,

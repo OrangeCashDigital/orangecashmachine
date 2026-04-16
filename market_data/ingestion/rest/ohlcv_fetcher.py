@@ -25,7 +25,7 @@ from typing import List, Optional
 import pandas as pd
 import ccxt.async_support as _ccxt_async
 
-from core.logging import bind_pipeline
+from core.observability import bind_pipeline
 
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.core.transformers.transformer import OHLCVTransformer

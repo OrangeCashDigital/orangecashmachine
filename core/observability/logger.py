@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-core/logging/setup.py
+core/observability/logger.py
 =====================
 
 Sistema de logging centralizado para OrangeCashMachine v0.3.0.
@@ -51,12 +51,12 @@ from typing import Any, Optional
 
 from loguru import logger
 
-from core.logging.bootstrap import drain as _drain_bootstrap
-from core.logging.config import LoggingConfig
-from core.logging.filters import pipeline_filter
-from core.logging.formats import CONSOLE, FILE
-from core.logging.processors import build_processor_chain, process_event
-from core.logging.sinks import LokiSink, PrometheusLogSink
+from core.observability.bootstrap import drain as _drain_bootstrap
+from core.observability.config import LoggingConfig
+from core.observability.filters import pipeline_filter
+from core.observability.formats import CONSOLE, FILE
+from core.observability.processors import build_processor_chain, process_event
+from core.observability.sinks import LokiSink, PrometheusLogSink
 
 
 # ── Estado global ─────────────────────────────────────────────────────────────

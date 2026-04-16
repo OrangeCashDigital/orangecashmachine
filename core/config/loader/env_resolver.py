@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
 from core.config.env_vars import OCM_ENV as _OCM_ENV_VAR
-from core.logging.bootstrap import pre_log
+from core.observability.bootstrap import pre_log
 
 from loguru import logger
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 """tests/logging/test_filters.py — Unit tests para filtros de sinks."""
 
 import pytest
-from core.logging.filters import pipeline_filter, strict_pipeline_filter
+from core.observability.filters import pipeline_filter, strict_pipeline_filter
 
 
 def _record(name: str, extra: dict | None = None) -> dict:
@@ -28,7 +28,7 @@ def test_pipeline_filter_accepts_pipeline_modules(module):
     "core.config.loader",
     "main",
     "infra.observability.runtime",
-    "core.logging.setup",
+    "core.observability.logger",
 ])
 def test_pipeline_filter_rejects_non_pipeline_modules(module):
     assert pipeline_filter(_record(module)) is False

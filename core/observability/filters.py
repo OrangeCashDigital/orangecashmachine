@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-core/logging/filters.py
+core/observability/filters.py
 =======================
 
 Filtros reutilizables para sinks de Loguru.

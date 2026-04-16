@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-core/logging/sinks.py
+core/observability/sinks.py
 =====================
 
 Sinks remotos para el sistema de logging de OrangeCashMachine.
@@ -27,7 +27,7 @@ Ambos sinks son callables que aceptan el ``message`` de Loguru
 
 Ejemplo::
 
-    from core.logging.sinks import LokiSink, PrometheusLogSink
+    from core.observability.sinks import LokiSink, PrometheusLogSink
 
     loki = LokiSink(url="http://loki:3100/loki/api/v1/push",
                     labels={"env": "production"})

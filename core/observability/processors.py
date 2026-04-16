@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-core/logging/processors.py
+core/observability/processors.py
 ==========================
 
 Processor chain de structlog para OrangeCashMachine.
@@ -23,7 +23,7 @@ Chain estándar (orden de aplicación)::
 
 Uso
 ---
-    from core.logging.processors import build_processor_chain, process_event
+    from core.observability.processors import build_processor_chain, process_event
 
     chain = build_processor_chain()
     event_dict = process_event(chain, "info", {"event": "pipeline_started"})

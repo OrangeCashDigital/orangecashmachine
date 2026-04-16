@@ -33,7 +33,7 @@ import asyncio
 import time
 from typing import List, Literal, Optional
 
-from core.logging import bind_pipeline
+from core.observability import bind_pipeline
 
 _log = bind_pipeline("pipeline")
 
