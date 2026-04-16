@@ -40,9 +40,10 @@ from core.config.env_vars import (
     OCM_DEBUG,
     OCM_VALIDATE_ONLY,
     PUSHGATEWAY_URL,
-    TRUTHY_VALUES,
     default_debug_for,
 )
+
+from core.config.layers.coercion import BOOL_TRUE  # SSOT — única fuente de verdad para bool strings
 
 
 @dataclass(frozen=True)
@@ -83,7 +84,7 @@ class RunConfig:
 
         raw_debug = os.getenv(OCM_DEBUG)
         debug = (
-            raw_debug.lower() in TRUTHY_VALUES
+            raw_debug.lower() in BOOL_TRUE
             if raw_debug is not None
             else default_debug_for(env)
         )
@@ -92,7 +93,7 @@ class RunConfig:
         config_path = Path(raw_path) if raw_path else None
 
         validate_only: bool = (
-            os.getenv(OCM_VALIDATE_ONLY, "").lower() in TRUTHY_VALUES
+            os.getenv(OCM_VALIDATE_ONLY, "").lower() in BOOL_TRUE
         )
 
         pushgateway = os.getenv(PUSHGATEWAY_URL, "localhost:9091")
