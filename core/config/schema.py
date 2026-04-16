@@ -34,6 +34,12 @@ from core.logging.config import LoggingConfig
 
 CONFIG_PATH: Path = Path("config/settings.yaml")
 
+# Constantes de coerción para model_validators de oc.env string normalization.
+# oc.env resuelve SIEMPRE como string — estos sets son el contrato explícito.
+# Ref: https://omegaconf.readthedocs.io/en/latest/usage.html#environment-variable-resolver
+_ENV_BOOL_TRUE:  frozenset[str] = frozenset({"true",  "1", "yes", "on"})
+_ENV_BOOL_FALSE: frozenset[str] = frozenset({"false", "0", "no",  "off"})
+
 SYMBOL_REGEX: re.Pattern[str] = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+(:[A-Z0-9]+)?$")
 FUTURES_SYMBOL_REGEX: re.Pattern[str] = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+:[A-Z0-9]+$")
 
@@ -511,19 +517,16 @@ class RedisConfig(StrictBaseModel):
         oc.env resuelve SIEMPRE como string. Sin esta normalización:
             enabled='False' — Pydantic coerce str —> bool(\'False\') == True  (bug silencioso)
             port='6379'    — Pydantic coerce str —> int OK, pero ge/le no aplica sobre str
-        Esta función hace el parse explícito con semejante semejante a lo que hace
+        Esta función hace el parse explícito, análogo a lo que hace
         pydantic-settings internamente para BaseSettings.
         """
-        _BOOL_TRUE  = frozenset({"true",  "1", "yes", "on"})
-        _BOOL_FALSE = frozenset({"false", "0", "no",  "off"})
-
         for field in ("enabled", "retry_on_timeout"):
             v = values.get(field)
             if isinstance(v, str):
                 lower = v.strip().lower()
-                if lower in _BOOL_TRUE:
+                if lower in _ENV_BOOL_TRUE:
                     values[field] = True
-                elif lower in _BOOL_FALSE:
+                elif lower in _ENV_BOOL_FALSE:
                     values[field] = False
                 else:
                     raise ValueError(
