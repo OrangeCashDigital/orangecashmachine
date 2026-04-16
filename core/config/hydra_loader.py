@@ -117,13 +117,13 @@ if _packages_not_in_globs:
     )
 
 
-def _strip_hydra_internals(raw: dict[str, Any]) -> None:
+def strip_hydra_internals(raw: dict[str, Any]) -> None:
     """Elimina in-place los campos internos de Hydra del dict raíz."""
     for key in _HYDRA_INTERNAL:
         raw.pop(key, None)
 
 
-def _normalize_empty_strings(d: dict[str, Any]) -> None:
+def normalize_empty_strings(d: dict[str, Any]) -> None:
     """Convierte ``""`` → ``None`` en campos nullable de forma recursiva.
 
     Defensiva ante nodos YAML ``null`` (OmegaConf los convierte a None):
@@ -133,7 +133,7 @@ def _normalize_empty_strings(d: dict[str, Any]) -> None:
         return
     for k, v in d.items():
         if isinstance(v, dict):
-            _normalize_empty_strings(v)
+            normalize_empty_strings(v)
         elif v is None:
             pass  # YAML null — ya es None, no se modifica
         elif isinstance(v, str) and v == "" and k in _NULLABLE_KEYS:
@@ -202,6 +202,7 @@ def load_appconfig_from_hydra(
     cfg: DictConfig,
     *,
     env: str = "unknown",
+    run_id: Optional[str] = None,
     write_snapshot: bool = True,
 ) -> AppConfig:
     """Pipeline completo: DictConfig → AppConfig + snapshot de auditoría.
@@ -209,6 +210,8 @@ def load_appconfig_from_hydra(
     Args:
         cfg:            DictConfig compuesto por Hydra.
         env:            Nombre del entorno activo.
+        run_id:         ID del run (SSOT: generado por RunConfig o caller).
+                        Si None, se omite del snapshot pero no se fabrica aquí.
         write_snapshot: Si True (default), persiste el snapshot de auditoría.
 
     Returns:
@@ -216,14 +219,13 @@ def load_appconfig_from_hydra(
     """
     config = hydra_cfg_to_appconfig(cfg)
 
-    if write_snapshot:
+    if write_snapshot and run_id is not None:
         try:
             raw_json = json.dumps(
                 OmegaConf.to_container(cfg, resolve=True),
                 default=str,
             )
             config_hash = hashlib.sha256(raw_json.encode()).hexdigest()
-            run_id = config_hash[:12]
             write_config_snapshot(
                 config,
                 run_id=run_id,

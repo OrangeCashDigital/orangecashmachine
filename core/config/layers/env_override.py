@@ -28,15 +28,18 @@
 
 from __future__ import annotations
 
-import logging
 import os
 
+from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
-log = logging.getLogger(__name__)
-
 _OCM_PREFIX = "OCM_"
-_SEPARATOR = "__"
+_SEPARATOR  = "__"
+
+# Constantes locales — SSOT dentro de L2 para evitar dependencia circular con L4 (schema).
+# Deben mantenerse sincronizadas con schema._ENV_BOOL_TRUE / _ENV_BOOL_FALSE.
+_BOOL_TRUE:  frozenset[str] = frozenset({"1", "true",  "yes", "on"})
+_BOOL_FALSE: frozenset[str] = frozenset({"0", "false", "no",  "off"})
 
 
 def apply_env_overrides(cfg: DictConfig) -> tuple[DictConfig, int]:
@@ -60,9 +63,9 @@ def apply_env_overrides(cfg: DictConfig) -> tuple[DictConfig, int]:
         # Requiere al menos SECCIÓN + CLAVE (2 partes)
         if len(parts) < 2:
             skipped.append(key)
-            log.warning(
-                "[L2:EnvOverride] Clave malformada ignorada: %s "
-                "(formato esperado: OCM_SECCION__CLAVE o OCM_SECCION__SUBSECCION__CLAVE)",
+            logger.warning(
+                "config_l2_env_override | malformed_key={} "
+                "hint=expected_OCM_SECTION__KEY_or_OCM_SECTION__SUBSECTION__KEY",
                 key,
             )
             continue
@@ -75,10 +78,10 @@ def apply_env_overrides(cfg: DictConfig) -> tuple[DictConfig, int]:
             node = node.setdefault(part, {})
         node[parts[-1]] = value
 
-        log.debug("[L2:EnvOverride] %s → %s = %r", key, ".".join(parts), value)
+        logger.debug("config_l2_env_override | applied key={} path={} value={!r}", key, ".".join(parts), value)
 
     if skipped:
-        log.warning("[L2:EnvOverride] %d clave(s) malformada(s) ignoradas: %s", len(skipped), skipped)
+        logger.warning("config_l2_env_override | malformed_keys_count={} keys={}", len(skipped), skipped)
 
     if not overrides:
         return cfg, 0
@@ -87,7 +90,7 @@ def apply_env_overrides(cfg: DictConfig) -> tuple[DictConfig, int]:
     merged = OmegaConf.merge(cfg, override_cfg)
 
     mutation_count = _count_leaves(overrides)
-    log.info("[L2:EnvOverride] %d override(s) OCM_* aplicados", mutation_count)
+    logger.info("config_l2_env_override | ocm_overrides_applied={}", mutation_count)
 
     return merged, mutation_count  # type: ignore[return-value]
 
@@ -102,12 +105,10 @@ def _coerce_value(value: str) -> bool | int | float | str:
     Nota: usa _ENV_BOOL_TRUE/_ENV_BOOL_FALSE de schema.py como SSOT
     para el contrato de strings booleanos reconocidos.
     """
-    from core.config.schema import _ENV_BOOL_TRUE, _ENV_BOOL_FALSE
-
     lower = value.lower()
-    if lower in _ENV_BOOL_TRUE:
+    if lower in _BOOL_TRUE:
         return True
-    if lower in _ENV_BOOL_FALSE:
+    if lower in _BOOL_FALSE:
         return False
     try:
         return int(value)

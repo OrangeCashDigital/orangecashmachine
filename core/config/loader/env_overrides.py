@@ -7,7 +7,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 core/config/loader/env_overrides.py
 ===================================
 
-Environment override layer (Layer 0.5 en arquitectura de config).
+Environment override layer — path STANDALONE (sin Hydra).
+
+DUALIDAD INTENCIONAL — no consolidar sin entender esto:
+    core/config/layers/env_override.py  → path HYDRA:
+        Recibe DictConfig, retorna DictConfig mergeado.
+        Usado por ConfigPipeline._l2_env_override() dentro de @hydra.main.
+
+    core/config/loader/env_overrides.py → path STANDALONE (este archivo):
+        Recibe plain dict (post YamlLoader.merge), retorna plain dict.
+        Usado por load_appconfig_standalone() fuera de contexto Hydra.
 
 Responsabilidad:
     Aplicar overrides desde variables de entorno OCM_* sobre el dict

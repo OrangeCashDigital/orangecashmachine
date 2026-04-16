@@ -69,8 +69,10 @@ OCM_GOLD_PATH: str = "OCM_GOLD_PATH"
 """Override absoluto del root del gold layer."""
 
 OCM_EXCHANGE: str = "OCM_EXCHANGE"
-OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
 """Exchange default para scripts de research y loaders standalone."""
+
+OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
+"""Override absoluto del root del gold features layer (alias de OCM_GOLD_PATH por campo)."""
 
 # =============================================================================
 # Valores permitidos y helpers

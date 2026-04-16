@@ -22,7 +22,7 @@ class LoggingConfig:
     format: str = "text"
     log_dir: str = "logs"
     rotation: str = "1 day"
-    retention: str = "30 days"
+    retention: str = "14 days"  # SSOT: alineado con core/logging/config.py LoggingConfig
     console: bool = True
     file: bool = True
     pipeline: bool = True

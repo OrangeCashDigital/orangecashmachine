@@ -315,9 +315,21 @@ def _install_sinks(
     loki_url: Optional[str] = resolved.get("loki_url")
     if loki_url:
         _chain = build_processor_chain()
+        loki_labels: dict[str, str] = {
+            "env":     env,
+            "run_id":  run_id or "-",
+            "service": "orangecashmachine",
+            **resolved.get("loki_labels", {}),
+        }
+        # LokiSink se crea ANTES del closure para evitar referencia forward
+        loki_sink = LokiSink(url=loki_url, labels=loki_labels)
 
-        def _loki_loguru_sink(message: Any) -> None:
-            """Bridge Loguru → structlog processor chain → LokiSink."""
+        def _loki_loguru_sink(message: Any, _sink: LokiSink = loki_sink) -> None:
+            """Bridge Loguru → structlog processor chain → LokiSink.
+
+            _sink se captura por default arg (bind-at-definition) — evita
+            referencia forward sobre variable local del scope exterior.
+            """
             record = message.record
             event_dict: dict[str, Any] = {
                 "event":   record["message"],
@@ -333,26 +345,17 @@ def _install_sinks(
             }
             json_line = process_event(_chain, event_dict["level"], event_dict)
 
-            # LokiSink espera un objeto con .record — adaptamos
             class _Msg:
                 pass
 
             msg        = _Msg()
-            msg.record = {         # type: ignore[attr-defined]
+            msg.record = {  # type: ignore[attr-defined]
                 "level":   record["level"],
                 "time":    record["time"],
                 "message": json_line,
                 "extra":   record["extra"],
             }
-            loki_sink(msg)  # type: ignore[name-defined]
-
-        loki_labels: dict[str, str] = {
-            "env":     env,
-            "run_id":  run_id or "-",
-            "service": "orangecashmachine",
-            **resolved.get("loki_labels", {}),
-        }
-        loki_sink = LokiSink(url=loki_url, labels=loki_labels)
+            _sink(msg)
         ids.append(logger.add(
             _loki_loguru_sink,
             level="INFO",

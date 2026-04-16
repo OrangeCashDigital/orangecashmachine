@@ -39,6 +39,7 @@ Ejemplo::
 
 import json
 import time
+import sys
 from typing import Any, Optional
 
 import httpx
@@ -131,13 +132,11 @@ class LokiSink:
                 if resp.status_code < 300:
                     return
                 # Loki retornó error HTTP — reintentamos
-                import sys
                 print(
                     f"[LokiSink] HTTP {resp.status_code}: {resp.text[:200]}",
                     file=sys.stderr,
                 )
             except Exception as exc:
-                import sys
                 print(f"[LokiSink] attempt={attempt+1} error={exc}", file=sys.stderr)
 
             if attempt < self._max_retries - 1:

@@ -41,7 +41,7 @@ from omegaconf import DictConfig, OmegaConf
 # Helpers de coerción importados desde hydra_loader (DRY — SSOT allí).
 # L3 los orquesta; la implementación vive junto a las constantes que usan
 # (_HYDRA_INTERNAL, _NULLABLE_KEYS) para evitar dependencia circular.
-from core.config.hydra_loader import _strip_hydra_internals, _normalize_empty_strings
+from core.config.hydra_loader import strip_hydra_internals, normalize_empty_strings
 
 
 class ConfigStage(Enum):
@@ -172,8 +172,8 @@ class ConfigPipeline:
         """
         try:
             raw_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-            _strip_hydra_internals(raw_dict)   # muta in-place — no reasignar
-            _normalize_empty_strings(raw_dict)  # muta in-place — no reasignar
+            strip_hydra_internals(raw_dict)   # muta in-place — no reasignar
+            normalize_empty_strings(raw_dict)  # muta in-place — no reasignar
             logger.debug("config_pipeline_l3 | coerce=ok keys={}", list(raw_dict.keys()))
             self._record(ConfigStage.COERCED, ConfigStage.VALIDATED)
             return raw_dict  # type: ignore[return-value]
