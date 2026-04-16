@@ -553,6 +553,25 @@ class KafkaConfig(StrictBaseModel):
     enabled: bool = False
     bootstrap_servers: str = "localhost:9092"
 
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_env_strings(cls, values: dict) -> dict:
+        """Normaliza strings de oc.env a tipos nativos (bool)."""
+        for field in ("enabled",):
+            v = values.get(field)
+            if isinstance(v, str):
+                lower = v.strip().lower()
+                if lower in _ENV_BOOL_TRUE:
+                    values[field] = True
+                elif lower in _ENV_BOOL_FALSE:
+                    values[field] = False
+                else:
+                    raise ValueError(
+                        f"KafkaConfig.{field}: valor de entorno no reconocido: {v!r}. "
+                        "Use true/false/1/0."
+                    )
+        return values
+
 
 class PostgresConfig(StrictBaseModel):
     """Configuración de PostgreSQL (metadata / analytics — future-ready).
@@ -569,6 +588,33 @@ class PostgresConfig(StrictBaseModel):
     user: Optional[SecretStr] = None    # SecretStr: evita leak de usuario en logs/tracebacks
     password: Optional[SecretStr] = None
     database: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_env_strings(cls, values: dict) -> dict:
+        """Normaliza strings de oc.env a tipos nativos (bool + int)."""
+        for field in ("enabled",):
+            v = values.get(field)
+            if isinstance(v, str):
+                lower = v.strip().lower()
+                if lower in _ENV_BOOL_TRUE:
+                    values[field] = True
+                elif lower in _ENV_BOOL_FALSE:
+                    values[field] = False
+                else:
+                    raise ValueError(
+                        f"PostgresConfig.{field}: valor de entorno no reconocido: {v!r}. "
+                        "Use true/false/1/0."
+                    )
+        port_v = values.get("port")
+        if isinstance(port_v, str):
+            try:
+                values["port"] = int(port_v)
+            except ValueError:
+                raise ValueError(
+                    f"PostgresConfig.port: valor no válido: {port_v!r}. Debe ser entero (1-65535)."
+                )
+        return values
 
     @model_validator(mode="after")
     def validate_credentials_when_enabled(self) -> PostgresConfig:
@@ -600,11 +646,57 @@ class MetricsConfig(StrictBaseModel):
     exporter: str = "prometheus"
     port: int = Field(default=8000, ge=1, le=65535)
 
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_env_strings(cls, values: dict) -> dict:
+        """Normaliza strings de oc.env a tipos nativos (bool + int)."""
+        for field in ("enabled",):
+            v = values.get(field)
+            if isinstance(v, str):
+                lower = v.strip().lower()
+                if lower in _ENV_BOOL_TRUE:
+                    values[field] = True
+                elif lower in _ENV_BOOL_FALSE:
+                    values[field] = False
+                else:
+                    raise ValueError(
+                        f"MetricsConfig.{field}: valor de entorno no reconocido: {v!r}. "
+                        "Use true/false/1/0."
+                    )
+        port_v = values.get("port")
+        if isinstance(port_v, str):
+            try:
+                values["port"] = int(port_v)
+            except ValueError:
+                raise ValueError(
+                    f"MetricsConfig.port: valor no válido: {port_v!r}. Debe ser entero (1-65535)."
+                )
+        return values
+
 
 class TracingConfig(StrictBaseModel):
     """Configuración de distributed tracing (OpenTelemetry — future-ready)."""
 
     enabled: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_env_strings(cls, values: dict) -> dict:
+        """Normaliza strings de oc.env a tipos nativos (bool)."""
+        for field in ("enabled",):
+            v = values.get(field)
+            if isinstance(v, str):
+                lower = v.strip().lower()
+                if lower in _ENV_BOOL_TRUE:
+                    values[field] = True
+                elif lower in _ENV_BOOL_FALSE:
+                    values[field] = False
+                else:
+                    raise ValueError(
+                        f"TracingConfig.{field}: valor de entorno no reconocido: {v!r}. "
+                        "Use true/false/1/0."
+                    )
+        return values
 
 
 class ObservabilityConfig(StrictBaseModel):

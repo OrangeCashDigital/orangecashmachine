@@ -41,7 +41,7 @@ observability:
 integrations:
   # Solo overrides especýficos de dev sobre base.yaml.
   # host/port/db/enabled/kafka/postgres: heredados de base.yaml (SSOT).
-  # password: ünico campo que dev exige explícitamente desde entorno.
+  # password: único campo que dev exige explícitamente desde entorno.
   redis:
     password: ${oc.env:REDIS_PASSWORD,""}
 
