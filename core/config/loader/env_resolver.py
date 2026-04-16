@@ -11,7 +11,7 @@ import yaml
 from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
-from core.config.env_vars import OCM_ENV as _OCM_ENV_VAR
+from ..env_vars import OCM_ENV as _OCM_ENV_VAR
 from core.observability.bootstrap import pre_log
 
 from loguru import logger
@@ -167,3 +167,24 @@ def resolve_env(explicit_env: Optional[str] = None, config_dir: Optional[Path] =
 
     pre_log("config.env_resolved", source="default", value="development")
     return "development"
+
+
+# --------------------------------------------------
+# TEST UTILITIES
+# --------------------------------------------------
+def _reset_for_testing() -> None:
+    """Resetea el estado global del módulo para tests aislados.
+
+    Limpia los tres sets/dicts de estado mutable de módulo:
+      - _resolved_env_cache : caché de settings.yaml → entorno
+      - _DOTENV_LOADED_FILES: guard de idempotencia de archivos .env
+      - _DOTENV_INJECTED    : tracking de vars inyectadas por .env
+
+    REGLA: llamar ÚNICAMENTE desde fixtures de pytest (autouse=True).
+    Nunca llamar en código de producción — no está en __all__.
+
+    Principios: SafeOps (tests aislados), SSOT (un solo punto de reset).
+    """
+    _resolved_env_cache.clear()
+    _DOTENV_LOADED_FILES.clear()
+    _DOTENV_INJECTED.clear()

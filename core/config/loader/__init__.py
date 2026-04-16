@@ -18,6 +18,10 @@ Módulos internos activos:
 Módulos eliminados (eran dead code):
     watch, metrics, cache, audit, secret_masker,
     prefect_integration, validator
+
+Nota sobre _reset_for_testing:
+    env_resolver expone _reset_for_testing() para fixtures de pytest.
+    No está en __all__ — es API interna de test, nunca de producción.
 """
 
 from .env_resolver  import (
@@ -30,8 +34,6 @@ from .env_overrides import apply_env_overrides
 from .exceptions    import ConfigurationError, ConfigValidationError
 from .snapshot      import write_config_snapshot
 from .yaml_loader   import YamlLoader, compute_hash
-
-
 
 
 __all__ = [
