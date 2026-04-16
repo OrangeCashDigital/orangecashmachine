@@ -174,7 +174,7 @@ class ConfigPipeline:
         try:
             raw_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
             strip_hydra_internals(raw_dict)   # muta in-place — no reasignar
-            coerce_scalar_values(raw_dict)    # muta in-place — str→bool/int/float/None (SSOT: coercion.py)
+            coerce_scalar_values(raw_dict)    # muta in-place — str→bool/None (SSOT: coercion.py); int/float → Pydantic L4
             # normalize_empty_strings eliminada — absorbida por coerce_scalar_values() (DRY/SSOT)
             logger.debug("config_pipeline_l3 | coerce=ok keys={}", list(raw_dict.keys()))
             self._record(ConfigStage.COERCED, ConfigStage.VALIDATED)
