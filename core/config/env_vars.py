@@ -45,8 +45,9 @@ OCM_VALIDATE_ONLY: str = "OCM_VALIDATE_ONLY"
 """``"1"`` | ``"true"`` — valida config y sale sin ejecutar pipeline."""
 
 PUSHGATEWAY_URL: str = "PUSHGATEWAY_URL"
-PUSHGATEWAY_HOST_PORT: str = "PUSHGATEWAY_HOST_PORT"
-"""``"host:port"`` del Prometheus Pushgateway (default: ``"localhost:9091"``)."""
+"""URL completa del Prometheus Pushgateway.
+Leída por ``runtime.py``. ``PUSHGATEWAY_HOST_PORT`` fue eliminada (TD: variable huérfana).
+"""
 
 # =============================================================================
 # Credenciales — leídas por credentials.py
@@ -82,7 +83,8 @@ ALLOWED_ENVS: frozenset[str] = frozenset(
     {"development", "test", "staging", "production"}
 )
 
-TRUTHY_VALUES: frozenset[str] = frozenset({"1", "true", "yes"})
+# TRUTHY_VALUES eliminada — SSOT en core.config.layers.coercion.BOOL_TRUE
+# Importar desde allí: from core.config.layers.coercion import BOOL_TRUE
 
 _DEBUG_DEFAULTS: dict[str, bool] = {
     "development": True,
