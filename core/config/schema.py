@@ -37,8 +37,10 @@ CONFIG_PATH: Path = Path("config/settings.yaml")
 # Constantes de coerción para model_validators de oc.env string normalization.
 # oc.env resuelve SIEMPRE como string — estos sets son el contrato explícito.
 # Ref: https://omegaconf.readthedocs.io/en/latest/usage.html#environment-variable-resolver
-_ENV_BOOL_TRUE:  frozenset[str] = frozenset({"true",  "1", "yes", "on"})
-_ENV_BOOL_FALSE: frozenset[str] = frozenset({"false", "0", "no",  "off"})
+# _ENV_BOOL_TRUE/_ENV_BOOL_FALSE eliminadas — SSOT en layers/coercion.py
+# Importar con alias para no romper referencias internas residuales:
+from core.config.layers.coercion import BOOL_TRUE as _ENV_BOOL_TRUE   # noqa: E402
+from core.config.layers.coercion import BOOL_FALSE as _ENV_BOOL_FALSE  # noqa: E402
 
 SYMBOL_REGEX: re.Pattern[str] = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+(:[A-Z0-9]+)?$")
 FUTURES_SYMBOL_REGEX: re.Pattern[str] = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+:[A-Z0-9]+$")
@@ -215,11 +217,15 @@ class ExchangeConfig(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_credentials(self) -> ExchangeConfig:
-        """Valida credenciales según el entorno: error en prod, warning en dev."""
-        from core.config.loader.env_resolver import resolve_env
+        """Valida credenciales según el entorno: error en prod, warning en dev.
 
-        env = resolve_env()
-        is_prod = env == "production"
+        Lee OCM_ENV directamente desde os.environ para evitar el import circular
+        schema → env_resolver → schema. Fail-soft: entorno desconocido no es prod.
+        """
+        from core.config.env_vars import OCM_ENV as _OCM_ENV  # import local: solo constante str
+
+        env      = (os.environ.get(_OCM_ENV) or "development").strip().lower()
+        is_prod  = env == "production"
 
         if self.enabled and not self.has_credentials:
             msg = f"Exchange '{self.name.value}' is enabled but credentials are missing."
@@ -509,44 +515,10 @@ class RedisConfig(StrictBaseModel):
     retry_on_timeout: bool = True
     ttl_days: int = Field(default=90, ge=1, description="TTL del cursor store en días")
 
-    @model_validator(mode="before")
-    @classmethod
-    def coerce_env_strings(cls, values: dict) -> dict:
-        """Normaliza strings de oc.env a tipos nativos antes de validación.
-
-        oc.env resuelve SIEMPRE como string. Sin esta normalización:
-            enabled='False' — Pydantic coerce str —> bool(\'False\') == True  (bug silencioso)
-            port='6379'    — Pydantic coerce str —> int OK, pero ge/le no aplica sobre str
-        Esta función hace el parse explícito, análogo a lo que hace
-        pydantic-settings internamente para BaseSettings.
-        """
-        for field in ("enabled", "retry_on_timeout"):
-            v = values.get(field)
-            if isinstance(v, str):
-                lower = v.strip().lower()
-                if lower in _ENV_BOOL_TRUE:
-                    values[field] = True
-                elif lower in _ENV_BOOL_FALSE:
-                    values[field] = False
-                else:
-                    raise ValueError(
-                        f"RedisConfig.{field}: valor de entorno no reconocido: '{v}'. "
-                        f"Use true/false/1/0."
-                    )
-
-        for field in ("port", "db", "socket_timeout", "ttl_days"):
-            v = values.get(field)
-            if isinstance(v, str):
-                try:
-                    values[field] = int(v.strip())
-                except ValueError:
-                    raise ValueError(
-                        f"RedisConfig.{field}: se esperaba entero, se obtuvo: '{v}'"
-                    )
-
-        return values
-
-
+    # coerce_env_strings ELIMINADO — L3 (coerce_scalar_values) ya convierte
+    # strings a bool/int/float antes de que Pydantic vea el dict.
+    # Mantener este validator duplicaba coerción con constantes locales (DRY roto).
+    # Ver: config/layers/coercion.py — motor canónico único.
 class KafkaConfig(StrictBaseModel):
     """Configuración de Kafka (streaming — future-ready)."""
 

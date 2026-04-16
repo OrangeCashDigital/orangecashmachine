@@ -168,7 +168,7 @@ class ConfigPipeline:
         Responsabilidades (SSOT de coerción):
           - OmegaConf.to_container: resuelve interpolaciones, convierte a dict nativo
           - _strip_hydra_internals: elimina claves _hydra_* que Hydra inyecta
-          - _normalize_empty_strings: convierte "" → None en claves nullable (password, user, db)
+          - coerce_scalar_values: convierte "" → None, booleans y enteros (DRY/SSOT — coercion.py)
           - throw_on_missing=True: fail-fast si algún ${oc.env:VAR} no está seteado
         """
         try:

@@ -34,7 +34,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from loguru import logger
+# loguru importado de forma lazy para evitar circular:
+#   coercion → loguru → stdlib logging → core/logging/ → loguru
+# core/logging/ sombrea el stdlib logging — el import lazy rompe el ciclo.
+def _get_logger():  # noqa: ANN201
+    from loguru import logger as _logger  # lazy — solo al primer log
+    return _logger
 
 # ---------------------------------------------------------------------------
 # Constantes de coerción — SSOT para todo el sistema.
@@ -123,14 +128,14 @@ def coerce_scalar_values(
         # ── string vacío en campo nullable ────────────────────────────────
         if value == "" and (current_path in _NULLABLE_PATHS or (key,) in _NULLABLE_PATHS):
             d[key] = None
-            logger.debug("coerce_scalar | path={} '' → None", ".".join(current_path))
+            _get_logger().debug("coerce_scalar | path={} '' → None", ".".join(current_path))
             continue
 
         # ── intentar coerción de tipo ─────────────────────────────────────
         coerced = _coerce_string(value, current_path)
         if coerced is not value:   # identidad: cambió
             d[key] = coerced
-            logger.debug(
+            _get_logger().debug(
                 "coerce_scalar | path={} {!r} → {!r} ({})",
                 ".".join(current_path),
                 value,
