@@ -4,10 +4,16 @@ from __future__ import annotations
 core/config/structured/observability.py
 ========================================
 Hydra Structured Config para el bloque ``observability``.
+
+SSOT de tipos para Hydra. Solo define estructura y defaults.
+Pydantic (schema.py) es el validador de reglas de negocio.
+
+REGLA: este archivo y LoggingConfig en schema.py deben tener
+los mismos campos. Añadir un campo aquí sin añadirlo en schema.py
+produce campos fantasma en el DictConfig resuelto.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -20,7 +26,6 @@ class LoggingConfig:
     console: bool = True
     file: bool = True
     pipeline: bool = True
-    loki_url: Optional[str] = None
 
 
 @dataclass

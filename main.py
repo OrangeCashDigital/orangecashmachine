@@ -29,6 +29,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
 from typing import Callable
 
 import hydra
@@ -160,9 +161,7 @@ def run_application(
     runtime_context = RuntimeContext(
         app_config=config,
         run_config=run_cfg,
-        environment=run_cfg.env,
-        run_id=run_id,
-        started_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        started_at=datetime.now(timezone.utc),
     )
     result: object = pipeline_runner(config=config, run_cfg=run_cfg, runtime_context=runtime_context, debug=debug)
 

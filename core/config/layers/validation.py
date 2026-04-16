@@ -29,8 +29,8 @@ def validate_and_coerce(raw_dict: dict[str, Any]) -> Any:
         ValidationError: si tipos o estructura no son correctos.
         ConfigPipelineError: wrapeado por el pipeline con stage=VALIDATED.
     """
-    from core.config.models import AppConfig  # import tardío — evita circular
+    from core.config.schema import AppConfig  # SSOT — schema.py, no models
 
     app_config = AppConfig.model_validate(raw_dict)
-    logger.debug("[L4:Validation] AppConfig validado: env={}", app_config.environment.name)
+    logger.debug("config_pipeline_l4 | pydantic=ok env={}", app_config.environment.name)
     return app_config

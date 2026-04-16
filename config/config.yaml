@@ -22,6 +22,7 @@ defaults:
   # Módulos
   - pipeline/historical
   - pipeline/realtime
+  - pipeline/resample
   - exchanges/bybit
   - exchanges/kucoin
   - exchanges/kucoinfutures
