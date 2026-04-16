@@ -35,7 +35,7 @@ observability:
   tracing:
     enabled: false
 
-# storage.data_lake.path: viene de OCM_DATA_LAKE_PATH en .env (SSOT).
+# storage.data_lake.path: viene de OCM_STORAGE__DATA_LAKE__PATH en .env (SSOT).
 # No sobrescribir aquí — un solo punto de verdad por entorno.
 
 integrations:

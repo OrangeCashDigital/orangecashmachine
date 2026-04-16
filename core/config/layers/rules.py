@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from core.config.models import AppConfig
+    from core.config.schema import AppConfig  # SSOT — schema.py, no models
 
 
 class ConfigRuleViolation(RuntimeError):
@@ -56,7 +56,7 @@ def apply_business_rules(cfg: "AppConfig") -> None:
     _rule_max_backfill_production(cfg)
     _rule_require_confirmation_in_prod(cfg)
 
-    logger.debug("[L5:Rules] 5 reglas verificadas ✓")
+    logger.debug("config_pipeline_l5 | rules=ok rules_verified=5")
 
 
 # ------------------------------------------------------------------------------
