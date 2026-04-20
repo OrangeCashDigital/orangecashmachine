@@ -70,6 +70,9 @@ OCM_GOLD_PATH: str = "OCM_GOLD_PATH"
 OCM_EXCHANGE: str = "OCM_EXCHANGE"
 """Exchange default para scripts de research y loaders standalone."""
 
+OCM_MARKET_TYPE: str = "OCM_MARKET_TYPE"
+"""``"spot"`` | ``"swap"`` — tipo de mercado para research y loaders standalone."""
+
 OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
 """Override absoluto del root del gold features layer (alias de OCM_GOLD_PATH por campo)."""
 

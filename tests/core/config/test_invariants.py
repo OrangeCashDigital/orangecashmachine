@@ -44,7 +44,13 @@ from core.config.paths import (
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_SRC_DIRS  = [_REPO_ROOT / "core", _REPO_ROOT / "market_data"]
+_SRC_DIRS  = [
+    _REPO_ROOT / "core",
+    _REPO_ROOT / "market_data",
+    _REPO_ROOT / "data_platform",  # facade de acceso al lake
+    _REPO_ROOT / "infra",           # cursor_store y estado operacional
+    _REPO_ROOT / "research",        # scripts de investigación
+]
 
 
 def _all_py_files() -> list[Path]:
@@ -90,21 +96,46 @@ def _getenv_literals_in_codebase() -> set[str]:
             continue
 
         for node in ast.walk(tree):
-            # os.getenv("VAR") o os.getenv("VAR", default)
-            if isinstance(node, ast.Call):
+            val: str | None = None
+
+            # Pattern A: os.getenv("VAR") · environ.get("VAR")
+            if isinstance(node, ast.Call) and node.args:
                 func = node.func
-                is_getenv = (
+                is_simple = (
                     isinstance(func, ast.Attribute)
                     and func.attr in ("getenv", "get")
                     and isinstance(func.value, ast.Name)
                     and func.value.id in ("os", "environ")
                 )
-                if is_getenv and node.args:
+                # Pattern B: os.environ.get("VAR")  ← func.value es Attribute, no Name
+                is_environ_get = (
+                    isinstance(func, ast.Attribute)
+                    and func.attr == "get"
+                    and isinstance(func.value, ast.Attribute)
+                    and func.value.attr == "environ"
+                    and isinstance(func.value.value, ast.Name)
+                    and func.value.value.id == "os"
+                )
+                if is_simple or is_environ_get:
                     first = node.args[0]
                     if isinstance(first, ast.Constant) and isinstance(first.value, str):
                         val = first.value
-                        if pattern.match(val):
-                            found.add(val)
+
+            # Pattern C: os.environ["VAR"]  ← Subscript, no Call
+            elif isinstance(node, ast.Subscript):
+                tgt = node.value
+                if (
+                    isinstance(tgt, ast.Attribute)
+                    and tgt.attr == "environ"
+                    and isinstance(tgt.value, ast.Name)
+                    and tgt.value.id == "os"
+                ):
+                    slc = node.slice
+                    if isinstance(slc, ast.Constant) and isinstance(slc.value, str):
+                        val = slc.value
+
+            if val and pattern.match(val):
+                found.add(val)
     return found
 
 
@@ -148,6 +179,32 @@ def test_removed_env_vars_not_used_via_getenv_literal():
     )
 
 
+def _yaml_files() -> list[Path]:
+    """Todos los .yaml/.yml bajo conf/, core/ y market_data/."""
+    yamls: list[Path] = []
+    for d in _SRC_DIRS + [_REPO_ROOT / "conf"]:
+        if d.exists():
+            yamls.extend(d.rglob("*.yaml"))
+            yamls.extend(d.rglob("*.yml"))
+    return yamls
+
+
+def _oc_env_literals_in_yamls() -> set[str]:
+    """
+    Extrae VAR de interpolaciones Hydra/OmegaConf ``${oc.env:VAR}``
+    y ``${oc.env:VAR,default}`` en archivos YAML del proyecto.
+    """
+    found: set[str] = set()
+    pattern = re.compile(r'\$\{oc\.env:([A-Z][A-Z0-9_]+)(?:,[^}]*)?\}')
+    for fpath in _yaml_files():
+        try:
+            text = fpath.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        found.update(pattern.findall(text))
+    return found
+
+
 # ---------------------------------------------------------------------------
 # Invariante 2: SSoT — todo os.getenv literal está en env_vars.py
 # ---------------------------------------------------------------------------
@@ -157,7 +214,10 @@ def test_removed_env_vars_not_used_via_getenv_literal():
 _SYSTEM_VARS_ALLOWLIST: frozenset[str] = frozenset({
     "HOME", "PATH", "USER", "SHELL", "PWD",
     "PYTHONPATH", "VIRTUAL_ENV",
-    "REDIS_URL", "DATABASE_URL",       # infraestructura externa
+    # Redis — infraestructura externa, no propias de OCM
+    "REDIS_URL", "REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PASSWORD",
+    "CURSOR_TTL_DAYS",              # TTL operacional del cursor store
+    "DATABASE_URL",
     "PREFECT_API_URL", "PREFECT_API_KEY",
 })
 
@@ -173,6 +233,23 @@ def test_all_getenv_literals_declared_in_env_vars():
     undeclared = used_literals - declared_values - _SYSTEM_VARS_ALLOWLIST
     assert not undeclared, (
         "Env vars usadas como literal sin declarar en env_vars.py:\n"
+        + "\n".join(f"  - {v}" for v in sorted(undeclared))
+        + "\nSolución: añadir constante en core/config/env_vars.py"
+    )
+
+
+def test_all_oc_env_literals_declared_in_env_vars():
+    """
+    Toda var referenciada en YAML via ``${oc.env:VAR}`` debe estar declarada
+    en env_vars.py (SSoT). Cubre el vector Hydra/OmegaConf que el scanner
+    de AST no alcanza.
+    """
+    declared_values = _declared_env_var_values()
+    yaml_literals   = _oc_env_literals_in_yamls()
+
+    undeclared = yaml_literals - declared_values - _SYSTEM_VARS_ALLOWLIST
+    assert not undeclared, (
+        "Env vars en ${oc.env:VAR} (YAML) sin declarar en env_vars.py:\n"
         + "\n".join(f"  - {v}" for v in sorted(undeclared))
         + "\nSolución: añadir constante en core/config/env_vars.py"
     )
