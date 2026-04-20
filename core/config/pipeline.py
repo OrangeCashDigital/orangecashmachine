@@ -167,6 +167,11 @@ class ConfigPipeline:
             sorted(top_level_keys),
             required_keys,
         )
+        if logger.level("DEBUG").no <= logger._core.min_level:
+            logger.debug(
+                "config_pipeline_l1_snapshot\n{}",
+                OmegaConf.to_yaml(self._raw),
+            )
         self._record(ConfigStage.RAW, ConfigStage.ENV_MUTATED, 0)
         return self._raw
 
@@ -182,7 +187,7 @@ class ConfigPipeline:
         """
         try:
             from core.config.layers.env_override import apply_env_overrides
-            mutated, mutations = apply_env_overrides(cfg)
+            mutated, mutations = apply_env_overrides(cfg)  # os.environ: correcto en prod
             logger.debug("config_pipeline_l2 | ocm_overrides={}", mutations)
             self._record(ConfigStage.ENV_MUTATED, ConfigStage.COERCED, mutations)
             return mutated, mutations
