@@ -38,9 +38,12 @@ from typing import Any
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
-# Helpers de coerción importados desde hydra_loader (DRY — SSOT allí).
-# L3 los orquesta; la implementación vive junto a las constantes que usan
-# (_HYDRA_INTERNAL, _NULLABLE_KEYS) para evitar dependencia circular.
+# strip_hydra_internals — elimina claves _hydra_* del dict post-to_container.
+# Vive en hydra_loader.py junto a _HYDRA_INTERNAL (SSOT de la whitelist).
+#
+# coerce_scalar_values — motor canónico de coerción (L3 SSOT).
+# Vive en layers/coercion.py junto a BOOL_TRUE/BOOL_FALSE y _NULLABLE_PATHS.
+# Nota: _NULLABLE_KEYS eliminado — SSOT migrado a _NULLABLE_PATHS (path-based).
 from core.config.hydra_loader import strip_hydra_internals
 from core.config.layers.coercion import coerce_scalar_values
 
@@ -63,12 +66,15 @@ class ConfigTransition:
 
 
 class ConfigPipelineError(RuntimeError):
-    """Error de pipeline — indica en qué capa ocurrió el fallo."""
-    def __init__(self, stage: ConfigStage, message: str, cause: Exception | None = None) -> None:
+    """Error de pipeline — indica en qué capa ocurrió el fallo.
+
+    El chain de causa se delega al mecanismo nativo de Python
+    (``raise ... from exc`` — PEP 3134). No duplicar con
+    ``self.__cause__ = cause`` — redundante y fuente de confusión.
+    """
+    def __init__(self, stage: ConfigStage, message: str) -> None:
         self.stage = stage
         super().__init__(f"[ConfigPipeline:{stage.name}] {message}")
-        if cause:
-            self.__cause__ = cause
 
 
 class ConfigPipeline:
@@ -124,18 +130,45 @@ class ConfigPipeline:
     # ------------------------------------------------------------------
 
     def _l1_hydra_compose(self) -> DictConfig:
-        """
-        L1: Hydra compose.
-        La composición ya ocurrió en @hydra.main.
-        Este paso valida que el DictConfig sea usable y lo traza.
+        """L1: Hydra compose.
+
+        La composición ya ocurrió en ``@hydra.main``; este paso:
+          1. Verifica que el DictConfig sea accesible.
+          2. Valida estructura mínima: claves top-level requeridas (SRP — no lógica).
+          3. Traza claves presentes para diagnóstico.
+
+        Fail-fast aquí > ValidationError críptico en L4:
+            ``exchanges`` y ``pipeline`` son required sin default en AppConfig;
+            detectarlos en L1 produce mensaje accionable con stage=RAW.
         """
         try:
             top_level_keys = list(self._raw.keys())
-            logger.debug("config_pipeline_l1 | keys_count={} top_keys={}", len(top_level_keys), top_level_keys)
-            self._record(ConfigStage.RAW, ConfigStage.ENV_MUTATED)
-            return self._raw
         except Exception as exc:
-            raise ConfigPipelineError(ConfigStage.RAW, "DictConfig inaccesible", exc) from exc
+            raise ConfigPipelineError(
+                ConfigStage.RAW,
+                "Hydra compose output inválido o corrupto — DictConfig inaccesible",
+            ) from exc
+
+        required_keys = ["exchanges", "pipeline"]
+        missing = [k for k in required_keys if k not in self._raw]
+        if missing:
+            raise ConfigPipelineError(
+                ConfigStage.RAW,
+                (
+                    f"Missing required top-level keys: {missing}. "
+                    f"Present: {sorted(top_level_keys)}. "
+                    "Verificar config/base.yaml y defaults list en config.yaml."
+                ),
+            )
+
+        logger.debug(
+            "config_pipeline_l1 | keys_count={} top_keys={} required_ok={}",
+            len(top_level_keys),
+            sorted(top_level_keys),
+            required_keys,
+        )
+        self._record(ConfigStage.RAW, ConfigStage.ENV_MUTATED, 0)
+        return self._raw
 
     # ------------------------------------------------------------------
     # L2: OCM_* env override (mutation layer)
@@ -154,7 +187,7 @@ class ConfigPipeline:
             self._record(ConfigStage.ENV_MUTATED, ConfigStage.COERCED, mutations)
             return mutated, mutations
         except Exception as exc:
-            raise ConfigPipelineError(ConfigStage.ENV_MUTATED, str(exc), exc) from exc
+            raise ConfigPipelineError(ConfigStage.ENV_MUTATED, str(exc)) from exc
 
     # ------------------------------------------------------------------
     # L3: OmegaConf → dict (coercion layer)
@@ -168,7 +201,8 @@ class ConfigPipeline:
         Responsabilidades (SSOT de coerción):
           - OmegaConf.to_container: resuelve interpolaciones, convierte a dict nativo
           - _strip_hydra_internals: elimina claves _hydra_* que Hydra inyecta
-          - coerce_scalar_values: convierte "" → None, booleans y enteros (DRY/SSOT — coercion.py)
+          - coerce_scalar_values: convierte "" → None y booleans inequívocos (DRY/SSOT — coercion.py)
+            int/float delegados a Pydantic L4 — L3 no conoce el tipo de destino
           - throw_on_missing=True: fail-fast si algún ${oc.env:VAR} no está seteado
         """
         try:
@@ -183,7 +217,6 @@ class ConfigPipeline:
             raise ConfigPipelineError(
                 ConfigStage.COERCED,
                 "OmegaConf.to_container falló — variable de entorno faltante o interpolación rota",
-                exc,
             ) from exc
 
     # ------------------------------------------------------------------
@@ -203,7 +236,7 @@ class ConfigPipeline:
             self._record(ConfigStage.VALIDATED, ConfigStage.FROZEN)
             return app_config
         except Exception as exc:
-            raise ConfigPipelineError(ConfigStage.VALIDATED, str(exc), exc) from exc
+            raise ConfigPipelineError(ConfigStage.VALIDATED, str(exc)) from exc
 
     # ------------------------------------------------------------------
     # L5: Business rules (cross-field invariants)
@@ -221,7 +254,7 @@ class ConfigPipeline:
             logger.debug("config_pipeline_l5 | rules=ok")
             return app_config
         except Exception as exc:
-            raise ConfigPipelineError(ConfigStage.FROZEN, str(exc), exc) from exc
+            raise ConfigPipelineError(ConfigStage.FROZEN, str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Internal
