@@ -35,15 +35,13 @@ def serve_local() -> None:
     # Construcción del contexto único de ejecución
     run_cfg = RunConfig.from_env()
     config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
-    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid4().hex[:8]}"
     started_at = datetime.now(timezone.utc)
     runtime_context = RuntimeContext(
         app_config=config,
         run_config=run_cfg,
-        environment=run_cfg.env,
-        run_id=run_id,
         started_at=started_at,
     )
+    # run_id y environment son @property delegadas a run_config (SSOT)
     # Ejecutar el flow directamente con el runtime_context
     asyncio.run(market_data_flow(runtime_context))
 
@@ -61,15 +59,13 @@ def deploy_prod() -> None:
     # Construcción del contexto para ejecución real (test de despliegue)
     run_cfg = RunConfig.from_env()
     config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
-    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid4().hex[:8]}"
     started_at = datetime.now(timezone.utc)
     runtime_context = RuntimeContext(
         app_config=config,
         run_config=run_cfg,
-        environment=run_cfg.env,
-        run_id=run_id,
         started_at=started_at,
     )
+    # run_id y environment son @property delegadas a run_config (SSOT)
 
     print(
         "Desplegando market_data_flow con runtime_context (producción) para pruebas..."
