@@ -254,6 +254,7 @@ def load_appconfig_standalone(
     env: Optional[str] = None,
     config_dir: Optional[Path] = None,
     *,
+    run_id: Optional[str] = None,
     write_snapshot: Optional[bool] = None,
 ) -> AppConfig:
     """Carga AppConfig sin contexto Hydra activo.
@@ -268,6 +269,8 @@ def load_appconfig_standalone(
     Args:
         env:            Entorno activo. Si None, resuelto desde ``OCM_ENV``.
         config_dir:     Directorio de configs YAML. Si None, usa ``config/``.
+        run_id:         ID del run para el snapshot. Si None, snapshot omitido
+                        aunque write_snapshot=True (contrato explícito).
         write_snapshot: Si None, solo escribe snapshot en producción.
 
     Returns:
@@ -313,4 +316,9 @@ def load_appconfig_standalone(
         "load_appconfig_standalone | env={} config_dir={} snapshot={}",
         _env, _dir, _snapshot,
     )
-    return load_appconfig_from_hydra(cfg, env=_env, write_snapshot=_snapshot)
+    return load_appconfig_from_hydra(
+        cfg,
+        env=_env,
+        run_id=run_id,
+        write_snapshot=_snapshot,
+    )
