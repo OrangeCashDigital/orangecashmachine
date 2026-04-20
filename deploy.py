@@ -34,7 +34,12 @@ def serve_local() -> None:
     )
     # Construcción del contexto único de ejecución
     run_cfg = RunConfig.from_env()
-    config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
+    config = load_appconfig_standalone(
+        env=run_cfg.env,
+        config_dir=run_cfg.config_path,
+        run_id=run_cfg.run_id,  # deploy: run_id desde RunConfig
+        write_snapshot=False,   # deploy no es run auditado — snapshot omitido deliberadamente
+    )
     started_at = datetime.now(timezone.utc)
     runtime_context = RuntimeContext(
         app_config=config,
@@ -58,7 +63,12 @@ def deploy_prod() -> None:
 
     # Construcción del contexto para ejecución real (test de despliegue)
     run_cfg = RunConfig.from_env()
-    config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
+    config = load_appconfig_standalone(
+        env=run_cfg.env,
+        config_dir=run_cfg.config_path,
+        run_id=run_cfg.run_id,  # deploy: run_id desde RunConfig
+        write_snapshot=False,   # deploy no es run auditado — snapshot omitido deliberadamente
+    )
     started_at = datetime.now(timezone.utc)
     runtime_context = RuntimeContext(
         app_config=config,

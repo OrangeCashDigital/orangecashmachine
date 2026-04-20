@@ -50,7 +50,11 @@ def build_context():
     for local execution, without touching the flow implementation yet.
     """
     run_cfg = RunConfig.from_env()
-    config = load_appconfig_standalone(env=run_cfg.env, config_dir=run_cfg.config_path)
+    config = load_appconfig_standalone(
+        env=run_cfg.env,
+        config_dir=run_cfg.config_path,
+        run_id=run_cfg.run_id,  # SSOT: run_id generado por RunConfig
+    )
     started_at = datetime.now(timezone.utc)
     runtime_context = RuntimeContext(
         app_config=config,

@@ -203,7 +203,11 @@ def hydra_main(cfg: DictConfig) -> None:
     run_cfg = RunConfig.from_env(explicit_env=explicit_env)
 
     try:
-        config = load_appconfig_from_hydra(cfg, env=run_cfg.env)
+        config = load_appconfig_from_hydra(
+            cfg,
+            env=run_cfg.env,
+            run_id=run_cfg.run_id,  # SSOT: run_id generado por RunConfig
+        )
     except Exception as exc:
         logger.opt(exception=True).critical(
             "config_load_failed | type={} error={}", type(exc).__name__, exc

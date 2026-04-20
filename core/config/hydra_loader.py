@@ -229,6 +229,17 @@ def load_appconfig_from_hydra(
     Returns:
         AppConfig validado e inmutable.
     """
+    # Fail-fast: write_snapshot=True sin run_id es un contrato roto.
+    # El snapshot es la fuente de verdad de "qué config corrió este job";
+    # omitirlo silenciosamente impide reproducibilidad y auditoría.
+    # Si el caller no quiere snapshot, debe pasar write_snapshot=False explícitamente.
+    if write_snapshot and run_id is None:
+        raise ValueError(
+            "load_appconfig_from_hydra: write_snapshot=True requiere run_id. "
+            "Pasar run_id=run_cfg.run_id, o write_snapshot=False para omitir "
+            "el snapshot deliberadamente."
+        )
+
     config = hydra_cfg_to_appconfig(cfg)
 
     if write_snapshot and run_id is not None:
