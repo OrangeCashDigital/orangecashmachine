@@ -18,11 +18,12 @@ Categorías
 
 Nota sobre overrides de aplicación
 -----------------------------------
-Las variables OCM_PIPELINE__*, OCM_OBSERVABILITY__*, OCM_ENVIRONMENT__*
-son resueltas automáticamente por ``OcmSettings`` (pydantic-settings) via
-``env_prefix="OCM_"`` y ``env_nested_delimiter="__"``.
-``env_vars.py`` es el SSoT de los nombres de variables de entorno OCM_*
-— no se definen como constantes aquí para evitar duplicación y desincronía.
+Las variables OCM_PIPELINE__*, OCM_OBSERVABILITY__*, OCM_SECTION__KEY, etc.
+son aplicadas por apply_env_overrides() en core/config/layers/env_override.py
+(L2 del ConfigPipeline), usando el separador doble guión bajo (__).
+``env_vars.py`` es el SSOT de los nombres de variables de entorno OCM_*
+propias del proceso — las claves OCM_SECTION__KEY de L2 no se listan aquí
+porque cualquier clave del schema es un override válido por diseño.
 """
 
 # =============================================================================
