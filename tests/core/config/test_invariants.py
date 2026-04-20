@@ -62,21 +62,29 @@ def _all_py_files() -> list[Path]:
 
 
 def _declared_env_var_values() -> set[str]:
-    """Retorna los valores string de todas las constantes en env_vars.py."""
-    return {
-        v for v in vars(env_vars_module).values()
-        if isinstance(v, str) and v.replace("_", "").replace(".", "").isupper()
-        and len(v) > 1  # excluye strings vacíos y letras sueltas
-    }
+    """Autoridad única: el registro canónico _ENV_VAR_NAMES de env_vars.py.
+
+    Esta función es el único punto de contacto entre el sistema de tests
+    y el SSOT. No infiere, no itera vars(module), no usa heurística.
+
+    Invariante garantizado por env_vars.py en import-time:
+      _ENV_VAR_NAMES ≡ constantes UPPER_CASE del módulo
+    Por tanto, esta función es equivalente a la introspección del módulo
+    pero sin depender de reglas de naming implícitas.
+
+    Principio: Explicit over Implicit (PEP 20), SSOT, DRY.
+    """
+    return set(env_vars_module._ENV_VAR_NAMES)
 
 
 def _declared_env_var_names() -> set[str]:
-    """Retorna los nombres de constante exportadas (OCM_*, PUSHGATEWAY_URL, etc.)."""
-    return {
-        k for k, v in vars(env_vars_module).items()
-        if isinstance(v, str) and not k.startswith("_")
-        and k == k.upper()
-    }
+    """Alias de _declared_env_var_values() — misma fuente, semántica de nombres.
+
+    En OCM: nombre del atributo Python ≡ valor string (ej. OCM_ENV = "OCM_ENV").
+    Por diseño, la distinción nombre/valor colapsa al mismo conjunto.
+    Mantener función separada preserva la intención semántica en los tests.
+    """
+    return _declared_env_var_values()
 
 
 def _getenv_literals_in_codebase() -> set[str]:
@@ -85,6 +93,22 @@ def _getenv_literals_in_codebase() -> set[str]:
     pasados como primer argumento a os.getenv() / os.environ.get().
 
     Retorna solo strings que parecen env vars (UPPER_CASE con guiones bajos).
+
+    Patrones cubiertos
+    ------------------
+    A: os.getenv("VAR") · environ.get("VAR") · os.putenv("VAR", v)
+    B: os.environ.get("VAR") · os.environ.setdefault("VAR", v)
+    C: os.environ["VAR"]  (Subscript)
+
+    KNOWN LIMITS (límites arquitectónicos explícitos)
+    -------------------------------------------------
+    - No sigue aliases de import: ``import os as system; system.getenv(...)``
+    - No resuelve wrappers indirectos: ``get_env("VAR")`` si no llama os.getenv
+    - No sigue imports dinámicos ni __import__
+    - No analiza getattr(os, "environ") ni acceso por reflexión
+    - Hydra vars dinámicas (nombre construido en runtime) no son detectables
+    Estos casos requieren análisis estático con mypy/pyright o instrumentación
+    en runtime. Son riesgos documentados y aceptados conscientemente.
     """
     found: set[str] = set()
     pattern = re.compile(r'^[A-Z][A-Z0-9_]+$')
@@ -98,19 +122,19 @@ def _getenv_literals_in_codebase() -> set[str]:
         for node in ast.walk(tree):
             val: str | None = None
 
-            # Pattern A: os.getenv("VAR") · environ.get("VAR")
+            # Pattern A: os.getenv("VAR") · environ.get("VAR") · os.putenv("VAR", v)
             if isinstance(node, ast.Call) and node.args:
                 func = node.func
                 is_simple = (
                     isinstance(func, ast.Attribute)
-                    and func.attr in ("getenv", "get")
+                    and func.attr in ("getenv", "get", "putenv")
                     and isinstance(func.value, ast.Name)
                     and func.value.id in ("os", "environ")
                 )
-                # Pattern B: os.environ.get("VAR")  ← func.value es Attribute, no Name
+                # Pattern B: os.environ.get("VAR") · os.environ.setdefault("VAR", v)
                 is_environ_get = (
                     isinstance(func, ast.Attribute)
-                    and func.attr == "get"
+                    and func.attr in ("get", "setdefault")
                     and isinstance(func.value, ast.Attribute)
                     and func.value.attr == "environ"
                     and isinstance(func.value.value, ast.Name)
@@ -209,17 +233,41 @@ def _oc_env_literals_in_yamls() -> set[str]:
 # Invariante 2: SSoT — todo os.getenv literal está en env_vars.py
 # ---------------------------------------------------------------------------
 
-# Excepciones legítimas: vars del sistema operativo/infraestructura
-# que no son propias de OCM y no deben vivir en env_vars.py.
-_SYSTEM_VARS_ALLOWLIST: frozenset[str] = frozenset({
-    "HOME", "PATH", "USER", "SHELL", "PWD",
-    "PYTHONPATH", "VIRTUAL_ENV",
-    # Redis — infraestructura externa, no propias de OCM
-    "REDIS_URL", "REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PASSWORD",
-    "CURSOR_TTL_DAYS",              # TTL operacional del cursor store
-    "DATABASE_URL",
-    "PREFECT_API_URL", "PREFECT_API_KEY",
-})
+# ---------------------------------------------------------------------------
+# Infra Registry — política explícita de variables externas al dominio OCM.
+#
+# Estructura: dict[categoria -> frozenset[str]]
+# Política:
+#   "os"      → variables del sistema operativo. Nunca son dominio OCM.
+#   "redis"   → infraestructura de estado. Candidatas a infra_vars.py si
+#               el módulo infra crece lo suficiente.
+#   "prefect" → plataforma de orquestación externa. Sólo lectura desde OCM.
+#   "db"      → bases de datos genéricas. Externas al dominio OCM.
+#
+# Regla de crecimiento: si una categoría supera 8 entradas, es señal de
+# que debería existir un módulo dedicado (infra_vars.py, ops_vars.py).
+# Principio: OCP — abierto a extensión por categoría, cerrado a mezcla.
+# ---------------------------------------------------------------------------
+
+_INFRA_REGISTRY: dict[str, frozenset[str]] = {
+    "os": frozenset({
+        "HOME", "PATH", "USER", "SHELL", "PWD",
+        "PYTHONPATH", "VIRTUAL_ENV",
+    }),
+    "redis": frozenset({
+        "REDIS_URL", "REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PASSWORD",
+        "CURSOR_TTL_DAYS",
+    }),
+    "prefect": frozenset({
+        "PREFECT_API_URL", "PREFECT_API_KEY",
+    }),
+    "db": frozenset({
+        "DATABASE_URL",
+    }),
+}
+
+_SYSTEM_VARS_ALLOWLIST: frozenset[str] = frozenset().union(*_INFRA_REGISTRY.values())
+"""Unión derivada del registry. No editar directamente — editar _INFRA_REGISTRY."""
 
 
 def test_all_getenv_literals_declared_in_env_vars():

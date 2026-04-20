@@ -95,6 +95,51 @@ _DEBUG_DEFAULTS: dict[str, bool] = {
 }
 
 
+# =============================================================================
+# Registro canónico — consumido por test_invariants.py (SSoT sin heurística)
+# =============================================================================
+
+_ENV_VAR_NAMES: frozenset[str] = frozenset({
+    # Proceso
+    OCM_DEBUG, OCM_ENV, OCM_CONFIG_PATH, OCM_CONFIG_DIR,
+    OCM_VALIDATE_ONLY, PUSHGATEWAY_URL,
+    # Credenciales
+    OCM_API_KEY, OCM_API_SECRET,
+    # Storage / runtime
+    OCM_DATA_LAKE_PATH, OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH,
+    OCM_EXCHANGE, OCM_MARKET_TYPE,
+})
+"""Registro explícito de todos los nombres de env var propios de OCM.
+
+Es el ÚNICO lugar donde se decide qué cuenta como "env var declarada".
+Los tests consumen este frozenset directamente — sin inferencia por heurística.
+Principio: Explicit over Implicit (PEP 20), SSOT.
+"""
+
+# Guard de sincronía: falla en import si _ENV_VAR_NAMES diverge de las
+# constantes UPPER_CASE del módulo. Hace imposible olvidar actualizar
+# _ENV_VAR_NAMES al añadir una nueva variable.
+# Principio: Fail-Fast en el punto más temprano posible.
+_module_constants: frozenset[str] = frozenset(
+    v for k, v in globals().items()
+    if k == k.upper() and not k.startswith("_")
+    and isinstance(v, str) and k not in ("ALLOWED_ENVS",)
+)
+_missing_from_registry = _module_constants - _ENV_VAR_NAMES
+_missing_from_module   = _ENV_VAR_NAMES - _module_constants
+assert not _missing_from_registry, (
+    f"Constantes declaradas en env_vars.py pero ausentes de _ENV_VAR_NAMES:\n"
+    + "\n".join(f"  + {v}" for v in sorted(_missing_from_registry))
+    + "\nSolución: añadir a _ENV_VAR_NAMES en env_vars.py"
+)
+assert not _missing_from_module, (
+    f"Entradas en _ENV_VAR_NAMES sin constante correspondiente en env_vars.py:\n"
+    + "\n".join(f"  - {v}" for v in sorted(_missing_from_module))
+    + "\nSolución: declarar la constante o eliminar de _ENV_VAR_NAMES"
+)
+del _module_constants, _missing_from_registry, _missing_from_module
+
+
 def default_debug_for(env: str) -> bool:
     """Retorna el valor por defecto de debug según el entorno.
 
