@@ -45,9 +45,7 @@ OCM_VALIDATE_ONLY: str = "OCM_VALIDATE_ONLY"
 """``"1"`` | ``"true"`` — valida config y sale sin ejecutar pipeline."""
 
 PUSHGATEWAY_URL: str = "PUSHGATEWAY_URL"
-"""URL completa del Prometheus Pushgateway.
-Leída por ``runtime.py``. ``PUSHGATEWAY_HOST_PORT`` fue eliminada (TD: variable huérfana).
-"""
+"""URL completa del Prometheus Pushgateway."""
 
 # =============================================================================
 # Credenciales — leídas por credentials.py

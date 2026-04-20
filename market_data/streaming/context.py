@@ -99,11 +99,12 @@ class StreamingContext:
         tests de integración, scripts).
         """
         import os
+        from core.config import env_vars
         from core.config.loader.env_resolver import resolve_env
 
         env         = resolve_env()
-        _pgw_raw    = os.getenv("PUSHGATEWAY_HOST_PORT", "localhost:9091")
-        # Normalizar a host:port — la env var puede contener solo el puerto
+        _pgw_raw    = os.getenv(env_vars.PUSHGATEWAY_URL, "localhost:9091")
+        # Normalizar: acepta "host:port", solo puerto, o URL completa "http://host:port"
         pushgateway = _pgw_raw if ":" in _pgw_raw else f"localhost:{_pgw_raw}"
         run_id      = uuid.uuid4().hex[:12]
 
