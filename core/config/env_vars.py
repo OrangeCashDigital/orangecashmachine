@@ -21,7 +21,7 @@ Nota sobre overrides de aplicación
 Las variables OCM_PIPELINE__*, OCM_OBSERVABILITY__*, OCM_ENVIRONMENT__*
 son resueltas automáticamente por ``OcmSettings`` (pydantic-settings) via
 ``env_prefix="OCM_"`` y ``env_nested_delimiter="__"``.
-``OcmSettings`` en ``loader/env_overrides.py`` es el SSoT de esas variables
+``env_vars.py`` es el SSoT de los nombres de variables de entorno OCM_*
 — no se definen como constantes aquí para evitar duplicación y desincronía.
 """
 

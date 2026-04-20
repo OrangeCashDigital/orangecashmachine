@@ -10,7 +10,6 @@ Punto de entrada canónico:
 
 Módulos internos activos:
     env_resolver  — resolución de entorno y dotenv
-    env_overrides — OCM_* env vars sobre dict YAML
     yaml_loader   — carga y merge recursivo de YAML
     snapshot      — snapshot inmutable por run_id
     exceptions    — ConfigurationError, ConfigValidationError
@@ -30,7 +29,9 @@ from .env_resolver  import (
     load_dotenv_for_env,
     bootstrap_dotenv,
 )
-from .env_overrides import apply_env_overrides
+# apply_env_overrides migrado a layers/env_override.py (SSOT L2 del pipeline).
+# Re-exportado aquí para no romper imports externos que usen loader.
+from core.config.layers.env_override import apply_env_overrides
 from .exceptions    import ConfigurationError, ConfigValidationError
 from .snapshot      import write_config_snapshot
 from .yaml_loader   import YamlLoader, compute_hash
