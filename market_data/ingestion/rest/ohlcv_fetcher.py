@@ -210,7 +210,7 @@ class DownloadResult:
 # CursorStore import (aqui para evitar circular import)
 # ==========================================================
 
-from infra.state.cursor_store import CursorStore, InMemoryCursorStore
+from market_data.ports.state import CursorStorePort as CursorStore
 
 
 # ==========================================================
@@ -613,21 +613,66 @@ class HistoricalFetcherAsync:
                     continue
                 self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), err=str(exc)).warning("Network error — retrying")
                 await asyncio.sleep(wait)
+            except RetryExhaustedError as exc:
+                # El adapter (ResilienceLayer) ya agotó sus reintentos internos.
+                # No reintentar aquí — duplicar retries sobre retries ya agotados
+                # aumenta latencia sin beneficio y oculta la causa raíz real.
+                #
+                # Extraer original_exc: RetryExhaustedError envuelve la excepción
+                # real — loguarla expone la causa raíz (aiohttp, ccxt, OS error).
+                #
+                # Fail-Fast: re-raise inmediato como ChunkFetchError.
+                # El caller (paginator) decide si reintentar el chunk completo.
+                root_cause = exc.original_exc
+                self._log.bind(
+                    symbol     = symbol,
+                    timeframe  = timeframe,
+                    attempt    = attempt,
+                    error_type = exc.error_type,
+                    root_cause = type(root_cause).__name__,
+                    root_err   = str(root_cause),
+                ).warning(
+                    "Retry exhausted in adapter — failing chunk | "
+                    "error_type={} root_cause={} root_err={}",
+                    exc.error_type,
+                    type(root_cause).__name__,
+                    str(root_cause),
+                )
+                raise ChunkFetchError(
+                    f"{symbol}/{timeframe} retry exhausted ({exc.error_type}): "
+                    f"{type(root_cause).__name__}: {root_cause}"
+                ) from exc
             except Exception as exc:
-                # Fallback: error desconocido — loguear tipo completo.
+                # Fallback: error desconocido que escapó del adapter.
+                # Cubre: "Event loop is closed" (sesión aiohttp destruida),
+                # errores de infra inesperados, y bugs de ccxt no tipados.
                 last_exc = exc
                 err_str  = str(exc)
                 # "Event loop is closed" indica sesión aiohttp destruida —
-                # tratarlo igual que Session dead: reconectar antes de reintentar.
+                # reconectar antes de reintentar (idempotente, SafeOps).
                 is_loop_dead = "Event loop is closed" in err_str
                 if is_loop_dead and not session_reconnected:
-                    self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, err=err_str).warning("Loop dead — reconnecting")
+                    self._log.bind(
+                        symbol=symbol, timeframe=timeframe,
+                        attempt=attempt, err=err_str,
+                    ).warning("Loop dead — reconnecting")
                     await self._exchange.reconnect()
                     session_reconnected = True
                     continue
                 # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
-                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
-                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2)).warning("Fetch failed (unknown) | error_type={} err={}", type(exc).__name__, exc)
+                wait = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
+                self._log.bind(
+                    symbol     = symbol,
+                    timeframe  = timeframe,
+                    attempt    = attempt,
+                    wait_s     = round(wait, 2),
+                    error_type = type(exc).__name__,
+                    err        = err_str,
+                ).warning(
+                    "Fetch failed (unknown escape) | error_type={} err={}",
+                    type(exc).__name__,
+                    exc,
+                )
                 await asyncio.sleep(wait)
 
         raise ChunkFetchError(f"{symbol}/{timeframe} failed") from last_exc

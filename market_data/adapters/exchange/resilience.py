@@ -104,7 +104,20 @@ def classify_error(exc: Exception) -> ErrorType:
     if "not found" in exc_str or "404" in exc_str:
         return "unknown"
 
-    return "network"
+    # Heurística final: si el mensaje contiene indicadores de red/exchange
+    # transitorios, clasificar como "network". Caso contrario: "unknown".
+    #
+    # Fail-Fast por defecto: errores no reconocidos explícitamente NO se
+    # reintentarán — esto evita que bugs de código (ImportError, AttributeError)
+    # se enmascaren en retries silenciosos.
+    #
+    # Los errores de ccxt.NetworkError ya están cubiertos arriba via
+    # "connection" / "network" / "resolve" en exc_str.
+    _NETWORK_SIGNALS = ("ssl", "eof", "broken pipe", "reset by peer", "nodename")
+    if any(sig in exc_str for sig in _NETWORK_SIGNALS):
+        return "network"
+
+    return "unknown"
 
 
 def _build_retry_config(
