@@ -59,8 +59,15 @@ def _get_logger():  # noqa: ANN201
 # Sincronizadas con L2 env_override.py (_BOOL_TRUE/_BOOL_FALSE).
 # ---------------------------------------------------------------------------
 
-BOOL_TRUE:  frozenset[str] = frozenset({"1", "true",  "yes", "on"})
-BOOL_FALSE: frozenset[str] = frozenset({"0", "false", "no",  "off"})
+# "1" y "0" eliminados intencionalmente — son ambiguos sin contexto de schema:
+#   - redis.db="1"      → debe ser int 1 (Pydantic coerce en L4)
+#   - enabled="1"       → podría ser bool True (pero "true"/"yes" son más explícitos)
+#   - version="1"       → debe quedar str "1"
+# L3 solo coerciona lo que es inequívoco semánticamente sin conocer el tipo destino.
+# "true"/"false"/"yes"/"no"/"on"/"off" son inequívocamente booleanos en cualquier
+# contexto. "1"/"0" no lo son — delegar coerción al schema (L4, Pydantic, SSOT).
+BOOL_TRUE:  frozenset[str] = frozenset({"true",  "yes", "on"})
+BOOL_FALSE: frozenset[str] = frozenset({"false", "no",  "off"})
 
 # ---------------------------------------------------------------------------
 # Nullable paths — path-based (robusto ante campos nuevos).
