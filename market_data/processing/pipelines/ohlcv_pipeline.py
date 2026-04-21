@@ -60,11 +60,7 @@ from market_data.adapters.exchange import (
 )
 from market_data.adapters.exchange.throttle import AdaptiveThrottle
 from market_data.observability.metrics import FETCH_ABORTS_TOTAL
-from infra.state.cursor_store import (
-    CursorStore,
-    InMemoryCursorStore,
-    build_cursor_store_from_env,
-)
+from market_data.ports.state import CursorStorePort
 
 
 # ==============================================================================
