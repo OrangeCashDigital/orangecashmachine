@@ -28,6 +28,8 @@ from aioresilience import CircuitBreakerOpenError as AioResilienceCBError
 from aioresilience import RetryPolicy, RetryConfig
 from aioresilience.config import CircuitConfig
 
+import ccxt.async_support as _ccxt_async
+
 from core.config.schema import ResilienceConfig, ResilienceRetryPolicy
 
 __all__ = [
@@ -68,23 +70,60 @@ def classify_error(exc: Exception) -> ErrorType:
     """
     Traduce excepciones CCXT/Red a taxonomía canónica.
 
-    Esta es la única capa que conoce tanto aioresilience como CCXT.
+    SSOT de clasificación de errores para toda la capa de resiliencia.
 
-    Parameters
-    ----------
-    exc : excepción capturada
+    Estrategia: tipos primero, strings como fallback.
+    ─────────────────────────────────────────────────
+    isinstance() es robusto ante cambios de mensaje upstream (CCXT,
+    aiohttp, exchanges individuales). Los strings de error varían entre
+    versiones, idiomas de respuesta HTTP, y wrappers de exchange.
+
+    Orden de decisión
+    -----------------
+    1. Tipos CCXT conocidos        → clasificación exacta (inmutable)
+    2. asyncio.TimeoutError        → timeout
+    3. AioResilienceCBError        → circuit open (tratado como network)
+    4. Fallback por mensaje        → para excepciones sin tipo conocido
+       (aiohttp, OSError, wrappers genéricos de exchange)
+    5. _NETWORK_SIGNALS            → ssl/eof/pipe como red legítima
+    6. Default "unknown"           → Fail-Fast (NonRetryable)
 
     Returns
     -------
-    error_type : "rate_limit" | "timeout" | "network" | "unknown"
+    "rate_limit" | "timeout" | "network" | "unknown"
     """
+    # ── 1. Tipos CCXT — robusto, no depende de mensajes ──────────────────────
+    # RateLimitExceeded hereda de NetworkError en ccxt — debe ir primero.
+    if isinstance(exc, _ccxt_async.RateLimitExceeded):
+        return "rate_limit"
+
+    if isinstance(exc, (_ccxt_async.RequestTimeout, asyncio.TimeoutError)):
+        return "timeout"
+
+    # NetworkError es la clase base de todos los errores de red de ccxt:
+    # cubre ConnectionError, ExchangeNotAvailable, DDoSProtection, etc.
+    if isinstance(exc, _ccxt_async.NetworkError):
+        return "network"
+
+    # AuthenticationError, BadSymbol, NotSupported, etc. — permanentes.
+    if isinstance(exc, _ccxt_async.ExchangeError):
+        return "unknown"
+
+    # ── 2. Tipos stdlib y aioresilience ──────────────────────────────────────
+    if isinstance(exc, AioResilienceCBError):
+        # Circuit breaker de aioresilience — no es un error de red real,
+        # pero tratarlo como "network" permite que el caller lo maneje
+        # consistentemente. CircuitBreakerOpenError se lanza antes de
+        # llegar aquí en retry_call, pero si escapa, clasificar como network.
+        return "network"
+
+    # ── 3. Fallback por mensaje — para excepciones sin tipo ccxt ─────────────
+    # Cubre: aiohttp.ClientError, OSError, wrappers de exchange no tipados,
+    # y mensajes de error que no tienen clase específica en ccxt.
     exc_str = str(exc).lower()
 
     if "429" in exc_str or "rate limit" in exc_str or "ratelimit" in exc_str:
         return "rate_limit"
-
-    if isinstance(exc, asyncio.TimeoutError):
-        return "timeout"
 
     if "timeout" in exc_str or "timed out" in exc_str:
         return "timeout"
@@ -95,28 +134,23 @@ def classify_error(exc: Exception) -> ErrorType:
     if "500" in exc_str or "502" in exc_str or "503" in exc_str or "504" in exc_str:
         return "network"
 
-    if "circuit" in exc_str or isinstance(exc, AioResilienceCBError):
-        return "network"
-
     if "forbidden" in exc_str or "unauthorized" in exc_str:
         return "unknown"
 
     if "not found" in exc_str or "404" in exc_str:
         return "unknown"
 
-    # Heurística final: si el mensaje contiene indicadores de red/exchange
-    # transitorios, clasificar como "network". Caso contrario: "unknown".
-    #
-    # Fail-Fast por defecto: errores no reconocidos explícitamente NO se
-    # reintentarán — esto evita que bugs de código (ImportError, AttributeError)
-    # se enmascaren en retries silenciosos.
-    #
-    # Los errores de ccxt.NetworkError ya están cubiertos arriba via
-    # "connection" / "network" / "resolve" en exc_str.
+    # ── 4. Señales de red de bajo nivel ──────────────────────────────────────
+    # ssl handshake, eof, broken pipe, reset by peer, DNS nodename.
+    # No tienen clase propia — solo detectables por mensaje.
     _NETWORK_SIGNALS = ("ssl", "eof", "broken pipe", "reset by peer", "nodename")
     if any(sig in exc_str for sig in _NETWORK_SIGNALS):
         return "network"
 
+    # ── 5. Default Fail-Fast ──────────────────────────────────────────────────
+    # Errores no reconocidos explícitamente son NonRetryable.
+    # Esto previene que bugs de código (AttributeError, ImportError)
+    # se silencien en retries infinitos.
     return "unknown"
 
 
@@ -234,11 +268,24 @@ class ResilienceLayer:
         error_type: ErrorType,
     ) -> T:
         """
-        Aplica retry policy al callable dado.
+        Aplica retry policy al callable dado, con breaker check por intento.
 
         El error_type ya fue clasificado por retry_call en el primer intento —
         no se reclasifica aquí para evitar divergencia entre el tipo registrado
         en el throttle y el tipo usado para seleccionar la policy.
+
+        Breaker-aware
+        -------------
+        aioresilience.RetryPolicy.execute() no consulta el circuit breaker
+        entre reintentos — solo ejecuta el callable N veces con backoff.
+        Si el breaker se abre durante el loop (por fallos de otro worker
+        concurrente), los intentos restantes deben abortarse de inmediato.
+
+        Para implementar esto, envolvemos coro_fn con _breaker_guard que
+        verifica can_execute() antes de cada invocación. Si el breaker está
+        abierto, _breaker_guard lanza AioResilienceCBError, que aioresilience
+        trata como un fallo y eventualmente agota los retries, propagando
+        CircuitBreakerOpenError al caller.
 
         Parameters
         ----------
@@ -246,8 +293,21 @@ class ResilienceLayer:
         policy     : RetryPolicy seleccionada por retry_call
         error_type : tipo ya clasificado (evita doble classify_error)
         """
+        async def _breaker_guard() -> T:
+            """Verifica el breaker antes de cada intento. Fail-Fast si abierto."""
+            try:
+                can_exec = await self._breaker.can_execute()
+                if not can_exec:
+                    raise AioResilienceCBError(
+                        f"Circuit breaker open for {self._exchange_id} "
+                        f"(checked inside retry loop)"
+                    )
+            except AioResilienceCBError:
+                raise  # re-raise para que policy lo vea como fallo
+            return await coro_fn()
+
         try:
-            return await policy.execute(coro_fn)
+            return await policy.execute(_breaker_guard)
         except AioResilienceCBError:
             raise CircuitBreakerOpenError(self._exchange_id)
         except Exception as exc:
