@@ -61,6 +61,12 @@ from market_data.adapters.exchange import (
 from market_data.adapters.exchange.throttle import AdaptiveThrottle
 from market_data.observability.metrics import FETCH_ABORTS_TOTAL
 from market_data.ports.state import CursorStorePort
+from market_data.ports.gap_registry import GapRegistryPort
+from infra.state.cursor_store import (
+    build_cursor_store_from_env,
+    InMemoryCursorStore,
+)
+from infra.state.factories import build_gap_registry
 
 
 # ==============================================================================
@@ -72,7 +78,7 @@ def _build_storage(
     market_type:  str,
     redis_client=None,                    # no-op — Iceberg no usa Redis lock
     dry_run:      bool                 = False,
-    cursor_store: "CursorStore | None" = None,
+    cursor_store: "CursorStorePort | None" = None,
 ) -> "OHLCVStorage":
     """
     Factory de storage OHLCV.
@@ -123,7 +129,7 @@ class _ExchangeAbortError(Exception):
         super().__init__(f"Circuit open — aborting exchange={exchange_id}")
 
 
-def _build_cursor_store_safe() -> CursorStore:
+def _build_cursor_store_safe() -> CursorStorePort:
     """
     Construye CursorStore desde variables de entorno con fallback seguro.
 
@@ -213,7 +219,7 @@ class OHLCVPipeline:
         start_date:         str,
         exchange_client:    CCXTAdapter,
         max_concurrency:    int                        = DEFAULT_MAX_CONCURRENCY,
-        cursor_store:       Optional[CursorStore]      = None,
+        cursor_store:       Optional[CursorStorePort]  = None,
         backfill_mode:      bool                       = True,
         market_type:        str                        = "spot",
         dry_run:            bool                       = False,
@@ -271,14 +277,15 @@ class OHLCVPipeline:
         )
 
         self._ctx = PipelineContext(
-            fetcher     = fetcher,
-            storage     = silver,
-            bronze      = bronze,
-            cursor      = cursor,
-            quality     = quality,
-            exchange_id = self._exchange_id,
-            market_type = self.market_type,
-            start_date  = start_date,
+            fetcher      = fetcher,
+            storage      = silver,
+            bronze       = bronze,
+            cursor       = cursor,
+            quality      = quality,
+            exchange_id  = self._exchange_id,
+            market_type  = self.market_type,
+            start_date   = start_date,
+            gap_registry = build_gap_registry(),
         )
 
         self._strategies: dict[PipelineMode, PipelineStrategy] = {

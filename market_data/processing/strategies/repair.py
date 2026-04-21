@@ -105,8 +105,7 @@ class RepairStrategy(StrategyMixin):
                 # SafeOps: is_irrecoverable retorna False ante fallo Redis —
                 # el gap se reintentará, nunca se omite un gap sano por error.
                 try:
-                    from infra.state.factories import build_gap_registry
-                    _reg = build_gap_registry()
+                    _reg = ctx.gap_registry
                     if _reg is not None and _reg.is_irrecoverable(
                         exchange=ctx.exchange_id, symbol=symbol,
                         timeframe=timeframe, start_ms=gap.start_ms,
@@ -341,8 +340,7 @@ class RepairStrategy(StrategyMixin):
             # Notificar al GapRegistry que este gap fue sanado.
             # SafeOps: si Redis no está disponible, degrada silenciosamente.
             try:
-                from infra.state.factories import build_gap_registry
-                _registry = build_gap_registry()
+                _registry = ctx.gap_registry
                 if _registry is not None:
                     _registry.mark_healed(
                         exchange  = ctx.exchange_id,
@@ -373,8 +371,7 @@ class RepairStrategy(StrategyMixin):
                     gap=str(gap),
                 )
                 try:
-                    from infra.state.factories import build_gap_registry
-                    _registry = build_gap_registry()
+                    _registry = ctx.gap_registry
                     if _registry is not None:
                         _registry.mark_healed(
                             exchange     = ctx.exchange_id,
