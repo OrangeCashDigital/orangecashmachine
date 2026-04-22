@@ -552,18 +552,47 @@ class HistoricalFetcherAsync:
         end_ms:    Optional[int] = None,
     ) -> List[list]:
         """
-        Retry con clasificación tipada de errores ccxt.
+        Ejecuta fetch_ohlcv con manejo de reconexión de sesión aiohttp.
 
-        Jerarquía ccxt 4.x relevante:
-          BaseError
-          ├── NetworkError          — transitorios: timeout, conn reset, etc.
-          │   ├── RequestTimeout    — timeout de red
-          │   └── RateLimitExceeded — 429 (pesa doble en AdaptiveThrottle)
-          └── ExchangeError
-              └── AuthenticationError — fatal, no reintentar jamás
+        Arquitectura de responsabilidades
+        ----------------------------------
+        ResilienceLayer (CCXTAdapter interno) es el SSOT de retry para
+        errores de exchange y red (RateLimitExceeded, RequestTimeout,
+        NetworkError). Reintenta con política por tipo, backoff exponencial
+        y circuit breaker entre intentos.
+
+        Este método tiene una única responsabilidad residual: reconexión
+        de sesión aiohttp cuando la sesión subyacente muere ("Session is
+        closed", "Event loop is closed"). Estos errores escapan del adapter
+        porque son de infraestructura de transporte, no de exchange.
+
+        Flujo de decisión por excepción
+        --------------------------------
+        ExchangeCircuitOpenError  → Fail-Fast inmediato (breaker abierto)
+        AuthenticationError       → Fail-Fast inmediato (fatal, permanente)
+        RetryExhaustedError       → Fail-Fast inmediato (adapter ya agotó
+                                    todos sus reintentos — no duplicar)
+        Exception (session dead)  → reconectar una vez, continuar
+        Exception (otro escape)   → Fail-Fast inmediato (bug de infra,
+                                    no enmascarar con retries silenciosos)
+
+        Jerarquía ccxt 4.x relevante
+        -----------------------------
+        BaseError
+        ├── NetworkError          — reintentado por ResilienceLayer
+        │   ├── RequestTimeout    — reintentado por ResilienceLayer
+        │   └── RateLimitExceeded — reintentado por ResilienceLayer
+        └── ExchangeError
+            └── AuthenticationError — Fail-Fast aquí
+
+        Tech debt documentado
+        ----------------------
+        La lógica de reconexión debería vivir en CCXTAdapter.reconnect()
+        para que el adapter sea completamente self-contained. Una vez
+        migrada, este método puede simplificarse a una llamada directa
+        sin loop (single retry boundary).
         """
-        last_exc:           Optional[Exception] = None
-        session_reconnected: bool               = False
+        session_reconnected: bool = False
 
         for attempt in range(1, MAX_RETRIES + 1):
             try:
@@ -571,58 +600,33 @@ class HistoricalFetcherAsync:
                     self._exchange.fetch_ohlcv(symbol, timeframe, since, limit, end_ms=end_ms),
                     timeout=CHUNK_FETCH_TIMEOUT,
                 )
+
             except ExchangeCircuitOpenError:
-                # Circuit abierto — reintentar es inútil. Re-raise inmediato.
+                # Breaker abierto — el exchange está en outage confirmado.
+                # Reintentar es inútil y aumenta la presión sobre el exchange.
+                # Fail-Fast: re-raise inmediato, sin log adicional (el adapter
+                # ya lo registró en EXCHANGE_CIRCUIT_OPEN metric).
                 raise
+
             except _ccxt_async.AuthenticationError as exc:
-                # Fatal — credenciales inválidas o IP ban. No reintentar jamás.
-                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, err=str(exc)).error("Auth error — aborting")
+                # Fatal y permanente — credenciales inválidas o IP ban.
+                # No existe backoff útil: el problema no es transitorio.
+                self._log.bind(
+                    symbol    = symbol,
+                    timeframe = timeframe,
+                    attempt   = attempt,
+                    err       = str(exc),
+                ).error("Auth error — aborting fetch")
                 raise ChunkFetchError(f"{symbol}/{timeframe} auth failed") from exc
-            except _ccxt_async.RateLimitExceeded as exc:
-                last_exc = exc
-                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
-                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
-                try:
-                    breaker = getattr(self._exchange, "_breaker", None)
-                    if breaker is not None:
-                        breaker._inc_counter()
-                except Exception:
-                    pass
-                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2)).warning("Rate limit (429) — notified breaker")
-                await asyncio.sleep(wait)
-            except (_ccxt_async.RequestTimeout, asyncio.TimeoutError) as exc:
-                # Timeout de red — NO cuenta como fallo de breaker.
-                last_exc = exc
-                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
-                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
-                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), err=str(exc)).warning("Timeout — retrying")
-                await asyncio.sleep(wait)
-            except _ccxt_async.NetworkError as exc:
-                # Errores de red transitorios — conn reset, DNS, session muerta.
-                last_exc = exc
-                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
-                wait     = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
-                err_str  = str(exc)
-                is_session_dead = any(
-                    m in err_str for m in ("Session is closed", "Connection closed")
-                )
-                if is_session_dead and not session_reconnected:
-                    self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, err=str(exc)).warning("Session dead — reconnecting")
-                    await self._exchange.reconnect()
-                    session_reconnected = True
-                    continue
-                self._log.bind(symbol=symbol, timeframe=timeframe, attempt=attempt, wait_s=round(wait,2), err=str(exc)).warning("Network error — retrying")
-                await asyncio.sleep(wait)
+
             except RetryExhaustedError as exc:
-                # El adapter (ResilienceLayer) ya agotó sus reintentos internos.
-                # No reintentar aquí — duplicar retries sobre retries ya agotados
-                # aumenta latencia sin beneficio y oculta la causa raíz real.
+                # ResilienceLayer ya agotó todos sus reintentos internos
+                # para este error. Duplicar retries aquí no añade valor:
+                # aumenta latencia sin probabilidad real de recuperación.
                 #
-                # Extraer original_exc: RetryExhaustedError envuelve la excepción
-                # real — loguarla expone la causa raíz (aiohttp, ccxt, OS error).
-                #
-                # Fail-Fast: re-raise inmediato como ChunkFetchError.
-                # El caller (paginator) decide si reintentar el chunk completo.
+                # Extraemos original_exc para exponer la causa raíz real
+                # (aiohttp.ClientError, ccxt.NetworkError, OSError, etc.)
+                # en lugar del wrapper RetryExhaustedError.
                 root_cause = exc.original_exc
                 self._log.bind(
                     symbol     = symbol,
@@ -632,7 +636,7 @@ class HistoricalFetcherAsync:
                     root_cause = type(root_cause).__name__,
                     root_err   = str(root_cause),
                 ).warning(
-                    "Retry exhausted in adapter — failing chunk | "
+                    "Adapter retries exhausted — failing chunk | "
                     "error_type={} root_cause={} root_err={}",
                     exc.error_type,
                     type(root_cause).__name__,
@@ -642,40 +646,60 @@ class HistoricalFetcherAsync:
                     f"{symbol}/{timeframe} retry exhausted ({exc.error_type}): "
                     f"{type(root_cause).__name__}: {root_cause}"
                 ) from exc
+
             except Exception as exc:
-                # Fallback: error desconocido que escapó del adapter.
-                # Cubre: "Event loop is closed" (sesión aiohttp destruida),
-                # errores de infra inesperados, y bugs de ccxt no tipados.
-                last_exc = exc
-                err_str  = str(exc)
-                # "Event loop is closed" indica sesión aiohttp destruida —
-                # reconectar antes de reintentar (idempotente, SafeOps).
-                is_loop_dead = "Event loop is closed" in err_str
-                if is_loop_dead and not session_reconnected:
+                # Fallback para errores que escapan del adapter.
+                #
+                # Caso legítimo: sesión aiohttp destruida.
+                #   "Session is closed"    → ccxt.NetworkError wrapping aiohttp
+                #   "Event loop is closed" → sesión aiohttp destruida por asyncio
+                # Acción: reconectar una vez (idempotente) y continuar el loop.
+                #
+                # Cualquier otro escape es un bug de infraestructura o ccxt.
+                # Fail-Fast: no enmascarar bugs de código con retries silenciosos.
+                err_str         = str(exc)
+                is_session_dead = (
+                    "Session is closed"    in err_str
+                    or "Connection closed" in err_str
+                    or "Event loop is closed" in err_str
+                )
+                if is_session_dead and not session_reconnected:
                     self._log.bind(
-                        symbol=symbol, timeframe=timeframe,
-                        attempt=attempt, err=err_str,
-                    ).warning("Loop dead — reconnecting")
+                        symbol    = symbol,
+                        timeframe = timeframe,
+                        attempt   = attempt,
+                        err       = err_str,
+                    ).warning("Session dead — reconnecting once")
                     await self._exchange.reconnect()
                     session_reconnected = True
                     continue
-                # Full jitter (AWS): uniform(0, cap) — rompe re-colisiones post-burst
-                wait = random.uniform(0.0, min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS))
+
+                # Error desconocido que no es recuperable por reconexión.
+                # Re-raise inmediato: Fail-Fast preserva la causa raíz y
+                # evita latencia adicional sobre errores no recuperables.
                 self._log.bind(
                     symbol     = symbol,
                     timeframe  = timeframe,
                     attempt    = attempt,
-                    wait_s     = round(wait, 2),
                     error_type = type(exc).__name__,
                     err        = err_str,
-                ).warning(
-                    "Fetch failed (unknown escape) | error_type={} err={}",
+                ).error(
+                    "Unexpected error escaped adapter — failing chunk | "
+                    "error_type={} err={}",
                     type(exc).__name__,
-                    exc,
+                    err_str,
                 )
-                await asyncio.sleep(wait)
+                raise ChunkFetchError(
+                    f"{symbol}/{timeframe} unexpected error: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
 
-        raise ChunkFetchError(f"{symbol}/{timeframe} failed") from last_exc
+        # Único path aquí: el loop agotó MAX_RETRIES por reconexiones
+        # repetidas (session_reconnected=True pero la sesión sigue muriendo).
+        # Esto indica un problema de infraestructura persistente.
+        raise ChunkFetchError(
+            f"{symbol}/{timeframe} failed after {MAX_RETRIES} session reconnect attempts"
+        )
 
     # ======================================================
     # Validation
