@@ -384,25 +384,6 @@ class ResilienceLayer:
         except Exception:
             pass  # Fail-Soft — nunca interrumpir el flujo del caller
 
-    async def notify_rate_limit(self) -> None:
-        """
-        Notifica un evento de rate-limit (429) al circuit breaker.
-
-        API pública para que consumidores externos (p.ej. ohlcv_fetcher)
-        puedan registrar fallos sin acceder a _breaker directamente.
-
-        Diseño
-        ------
-        - SRP: ResilienceLayer es el único propietario del breaker.
-        - Encapsulamiento: elimina el hack breaker._inc_counter() en fetcher.
-        - Idempotente: on_failure() es seguro de llamar múltiples veces.
-        - Fail-Soft: si el breaker no responde, se absorbe silenciosamente
-          para no interferir con el flujo de retry del caller.
-        """
-        try:
-            await self._breaker.on_failure()
-        except Exception:
-            pass  # Fail-Soft — el breaker no puede interrumpir el retry loop
 
 
 # ===========================================================================
