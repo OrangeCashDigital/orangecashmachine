@@ -316,6 +316,15 @@ class CCXTAdapter(ExchangeAdapter):
             except asyncio.TimeoutError:
                 self._throttle.record_error(error_type="timeout")
                 raise
+            except ccxt.AuthenticationError as exc:
+                # Fatal permanente — credenciales inválidas o IP ban.
+                # No existe retry útil: el problema no es transitorio.
+                # Re-raise como ExchangeAdapterError para que el caller
+                # (ohlcv_fetcher) reciba un error tipado sin necesidad
+                # de importar ccxt directamente.
+                raise ExchangeAdapterError(
+                    f"Authentication failed for {self._exchange_id}: {exc}"
+                ) from exc
 
     async def fetch_trades(
         self,
@@ -410,11 +419,41 @@ class CCXTAdapter(ExchangeAdapter):
     # ----------------------------------------------------------
 
     async def _get_client(self) -> ccxt.Exchange:
-        if self._client is not None:
+        """
+        Retorna el cliente ccxt activo, inicializando o reconectando si necesario.
+
+        Política de sesión (SRP — CCXTAdapter es self-contained)
+        ---------------------------------------------------------
+        1. Cliente inexistente → inicializar (cold start)
+        2. Cliente existe, sesión sana → retornar directamente (fast path)
+        3. Cliente existe, sesión muerta → reconectar antes de retornar
+
+        La reconexión proactiva aquí elimina la necesidad de que
+        consumidores externos (ohlcv_fetcher, etc.) detecten y manejen
+        sesiones muertas — esa responsabilidad pertenece al adapter.
+
+        is_healthy() es O(1): no hace llamadas de red, solo inspecciona
+        session.closed. El overhead por llamada es negligible.
+        """
+        # Cold start: cliente nunca inicializado
+        if self._client is None:
+            async with self._init_lock:
+                if self._client is None:
+                    await self._initialize()
             return self._client
-        async with self._init_lock:
-            if self._client is None:
-                await self._initialize()
+
+        # Fast path: cliente existe y sesión sana
+        if await self.is_healthy():
+            return self._client
+
+        # Sesión muerta: reconectar proactivamente antes de la llamada.
+        # Esto evita que el error "Session is closed" salga del adapter
+        # y tenga que ser manejado por el caller.
+        logger.debug(
+            "Session dead before request — reconnecting proactively | {}",
+            self._exchange_id,
+        )
+        await self.reconnect()
         return self._client
 
     async def _initialize(self) -> None:
