@@ -18,7 +18,7 @@ exchanges:
         jitter: false
         cap_seconds: 10.0
       network:
-        max_attempts: 1
+        max_attempts: 3
         backoff_factor: 1.5
-        jitter: false
-        cap_seconds: 5.0
+        jitter: true
+        cap_seconds: 10.0

@@ -182,7 +182,7 @@ class ResilienceConfig(StrictBaseModel):
         )
     )
     network: ResilienceRetryPolicy = Field(
-        default_factory=lambda: ResilienceRetryPolicy(max_attempts=1, backoff_factor=1.5, jitter=False, cap_seconds=5.0)
+        default_factory=lambda: ResilienceRetryPolicy(max_attempts=3, backoff_factor=1.5, jitter=True,  cap_seconds=10.0)
     )
 
 
