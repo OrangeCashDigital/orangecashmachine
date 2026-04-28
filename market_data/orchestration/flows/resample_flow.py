@@ -48,8 +48,7 @@ from core.config.schema import AppConfig
 from core.config.runtime_context import RuntimeContext
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.processing.pipelines.resample_pipeline import ResamplePipeline
-from market_data.ports.observability import MetricsPusherPort  # noqa: F401  # TODO(ports): inject via resample_flow(pusher=MetricsPusherPort)
-from infra.observability.server        import push_metrics
+from market_data.ports.observability import MetricsPusherPort
 
 
 # ==============================================================================
@@ -57,6 +56,15 @@ from infra.observability.server        import push_metrics
 # (tests unitarios, ejecución directa sin Prefect).
 # En producción estos valores vienen de config.pipeline.resample (SSOT en YAML).
 # ==============================================================================
+
+class _NoopMetricsPusher:
+    """Sentinel no-op — activo cuando pusher=None llega al flow.
+
+    SafeOps: nunca lanza excepción.
+    """
+    def push(self, labels=None) -> None:
+        pass  # intencional
+
 
 _FALLBACK_TFS: List[str] = ["5m", "15m", "1h", "4h", "1d"]
 _FALLBACK_SOURCE_TF: str = "1m"
@@ -135,6 +143,7 @@ def timeframes_due(
 )
 async def resample_flow(
     runtime_context: Optional[RuntimeContext] = None,
+    pusher: Optional[MetricsPusherPort] = None,
 ) -> None:
     """
     Flow de resampling OHLCV.
@@ -222,12 +231,13 @@ async def resample_flow(
             )
 
     # ── 3. Push métricas ─────────────────────────────────────────────────────
+    _pusher: MetricsPusherPort = pusher if pusher is not None else _NoopMetricsPusher()
     if config.observability.metrics.enabled:
+        _gw = (
+            runtime_context.run_config.pushgateway
+            if hasattr(runtime_context, "run_config")
+            and runtime_context.run_config is not None
+            else "http://localhost:9091"
+        )
         for exc_cfg in config.exchanges:
-            push_metrics(
-                exchange = exc_cfg.name.value,
-                gateway  = runtime_context.run_config.pushgateway
-                           if hasattr(runtime_context, "run_config")
-                           and runtime_context.run_config is not None
-                           else "http://localhost:9091",
-            )
+            _pusher.push({"exchange": exc_cfg.name.value, "gateway": _gw})

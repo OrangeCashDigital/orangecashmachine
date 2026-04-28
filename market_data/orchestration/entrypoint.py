@@ -35,11 +35,18 @@ from market_data.orchestration.flows.batch_flow import market_data_flow
 from market_data.safety.execution_guard import ExecutionGuard, ExecutionStoppedError
 from market_data.safety import guard_context
 from market_data.orchestration.post_processing import PostProcessingService
-from market_data.ports.observability import MetricsPusherPort  # noqa: F401  # TODO(ports): inject via run(pusher=MetricsPusherPort)
-from infra.observability.server        import push_metrics
+from market_data.ports.observability import MetricsPusherPort
 from core.config.runtime_context import RuntimeContext
 
 _log = bind_pipeline("entrypoint")
+
+# Sentinel no-op — usado cuando run() recibe pusher=None
+# Evita importar infra en entrypoint; composition root inyecta el real.
+class _NoopPusher:
+    def push(self, labels=None) -> None:
+        pass
+
+_noop_pusher = _NoopPusher()
 
 
 def build_context():
@@ -90,6 +97,7 @@ def run(
     run_cfg: RunConfig,
     runtime_context: RuntimeContext | None = None,
     debug: bool = False,
+    pusher: MetricsPusherPort | None = None,
 ) -> int:
     """
     Ejecuta el pipeline en modo local.
@@ -216,9 +224,10 @@ def run(
         if exit_code != 130:
             # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
             PostProcessingService(config, run_id=run_id).execute()
+            _pusher = pusher if pusher is not None else _noop_pusher
             if config.observability.metrics.enabled:
                 for ex in config.exchanges:
-                    push_metrics(exchange=ex.name.value, gateway=run_cfg.pushgateway)
+                    _pusher.push({"exchange": ex.name.value, "gateway": run_cfg.pushgateway})
             else:
                 log.debug("metrics_push_skipped", reason="metrics.enabled=false")
         else:

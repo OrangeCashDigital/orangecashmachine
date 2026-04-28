@@ -54,8 +54,7 @@ from market_data.orchestration.tasks.batch_tasks import (
     run_derivatives_pipeline,
     run_repair_pipeline,
 )
-from market_data.ports.observability import MetricsPusherPort  # noqa: F401  # TODO(ports): inject via market_data_flow(pusher=MetricsPusherPort)
-from infra.observability.server        import push_metrics
+from market_data.ports.observability import MetricsPusherPort
 from market_data.safety import guard_context
 from market_data.safety.execution_guard import ExecutionGuard
 
@@ -63,6 +62,16 @@ from core.config.env_vars import PUSHGATEWAY_URL as _PUSHGATEWAY_URL
 
 # Leer el valor de la variable de entorno, no el nombre de la constante.
 # RunConfig.from_env() ya normaliza http(s):// → host:port.
+
+
+class _NoopMetricsPusher:
+    """Sentinel no-op — activo cuando pusher=None llega al flow.
+
+    Inyectado desde el composition root cuando métricas están
+    deshabilitadas. SafeOps: nunca lanza.
+    """
+    def push(self, labels=None) -> None:
+        pass  # intencional
 _PUSHGATEWAY: str = re.sub(
     r'^https?://', '',
     os.getenv(_PUSHGATEWAY_URL, 'localhost:9091'),
@@ -352,6 +361,7 @@ async def _consolidate_results(
 )
 async def market_data_flow(
     runtime_context: Optional[RuntimeContext] = None,
+    pusher: Optional[MetricsPusherPort] = None,
 ) -> None:
     """
     Flow principal de ingestión de datos de mercado.
@@ -528,9 +538,10 @@ async def market_data_flow(
                     probe.adapter = None
 
         # ── Push métricas por exchange ────────────────────────────────────────
+        _pusher: MetricsPusherPort = pusher if pusher is not None else _NoopMetricsPusher()
         if config.observability.metrics.enabled:
             for probe in probes:
-                push_metrics(exchange=probe.exchange, gateway=_PUSHGATEWAY)
+                _pusher.push({"exchange": probe.exchange, "gateway": _PUSHGATEWAY})
                 log.info("Metrics pushed | exchange=%s", probe.exchange)
         else:
             log.debug("metrics_push_skipped", reason="metrics.enabled=false")

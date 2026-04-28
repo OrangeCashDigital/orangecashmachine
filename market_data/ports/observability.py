@@ -3,13 +3,20 @@ from __future__ import annotations
 """
 market_data/ports/observability.py
 ====================================
-Puerto de métricas para el dominio market_data.
+Puerto DIP para push de métricas.
 
-El dominio declara QUÉ quiere observar (este protocolo).
-infra decide CÓMO se exporta: Prometheus, StatsD, Datadog, noop.
+Regla de arquitectura
+---------------------
+Este módulo NO importa nada de infra.*  ni de prometheus_client.
+Solo define el contrato (Protocol). Los adapters concretos viven en
+infra/observability/adapters.py y se inyectan desde el composition root.
 
-Regla: los flujos de orquestación (batch_flow, resample_flow)
-inyectan un MetricsPusher; NO importan infra.observability directamente.
+Principios aplicados
+---------------------
+- DIP   : dominio depende de abstracción, nunca de infra concreta.
+- ISP   : interfaz mínima — un solo método push().
+- OCP   : nuevos pusher (Datadog, OTel, NOOP) sin tocar el dominio.
+- SSOT  : un único lugar donde vive el contrato de métricas.
 """
 
 from typing import Any, Mapping, Optional, Protocol, runtime_checkable
@@ -17,22 +24,29 @@ from typing import Any, Mapping, Optional, Protocol, runtime_checkable
 
 @runtime_checkable
 class MetricsPusherPort(Protocol):
-    """Contrato de empuje de métricas al backend de observabilidad.
+    """Contrato de push de métricas para el dominio market_data.
 
-    Implementación de referencia: infra.observability.server.PrometheusPusher
-    Implementación noop (tests / entornos sin Prometheus): infra.observability.noop.NoopPusher
+    Implementaciones concretas
+    --------------------------
+    - PrometheusPusher  : push real a Pushgateway (infra/observability/adapters.py)
+    - NoopPusher        : no-op para tests y entornos sin Prometheus
+
+    Convención de labels
+    --------------------
+    El caller pasa un mapping con las claves que el adapter necesita.
+    Claves estándar usadas hoy:
+        exchange (str) : nombre del exchange, ej. "binance"
+        gateway  (str) : URL del Pushgateway, ej. "http://localhost:9091"
     """
 
-    def push(
-        self,
-        labels: Optional[Mapping[str, Any]] = None,
-    ) -> None:
-        """Envía las métricas actualmente registradas al gateway.
+    def push(self, labels: Optional[Mapping[str, Any]] = None) -> None:
+        """Empuja métricas al backend configurado.
+
+        Implementaciones deben ser SafeOps: nunca lanzar excepción al caller.
 
         Parameters
         ----------
-        labels:
-            Etiquetas adicionales de contexto (job, environment, etc.).
-            None → usa las etiquetas por defecto del pusher.
+        labels : mapping opcional con metadatos del push
+            ej. {"exchange": "binance", "gateway": "http://localhost:9091"}
         """
         ...

@@ -73,6 +73,7 @@ from core.config.schema import AppConfig
 from core.observability import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner
 from infra.observability.runtime import init_metrics_runtime
+from infra.observability.adapters import PrometheusPusher, NoopPusher
 from market_data.safety.environment_validator import (
     EnvironmentValidator,
     EnvironmentMismatchError,
@@ -163,7 +164,20 @@ def run_application(
         run_config=run_cfg,
         started_at=datetime.now(timezone.utc),
     )
-    result: object = pipeline_runner(config=config, run_cfg=run_cfg, runtime_context=runtime_context, debug=debug)
+    # Composition root — único lugar donde se decide qué pusher usar.
+    # DIP: el dominio (entrypoint.run) nunca importa infra directamente.
+    pusher = (
+        PrometheusPusher()
+        if config.observability.metrics.enabled
+        else NoopPusher()
+    )
+    result: object = pipeline_runner(
+        config=config,
+        run_cfg=run_cfg,
+        runtime_context=runtime_context,
+        debug=debug,
+        pusher=pusher,
+    )
 
     if not isinstance(result, int):
         log.error(
