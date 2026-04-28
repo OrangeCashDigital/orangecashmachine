@@ -124,6 +124,7 @@ exclude = ["tests/", ".venv/"]
 
 [tool.hatch.build.targets.wheel]
 packages = [
+    "platform",
     "core",
     "infra",
     "market_data",
@@ -140,7 +141,7 @@ packages = [
 # Ejecutar: uv run lint-imports
 # =============================================================================
 [tool.importlinter]
-root_packages = ["market_data", "core", "infra", "trading", "data_platform"]
+root_packages = ["market_data", "platform", "core", "infra", "trading", "data_platform"]
 
 # BC-01 — exchange adapter boundary
 # Ningun modulo externo importa ccxt_adapter directamente.
@@ -189,4 +190,11 @@ forbidden_modules = ["trading.execution"]
 name    = "BC-05: core has no business logic dependencies"
 type    = "forbidden"
 source_modules = ["core"]
+forbidden_modules = ["market_data", "trading", "data_platform", "infra"]
+
+# BC-06 — platform sin dependencias de negocio (igual que BC-05 para core)
+[[tool.importlinter.contracts]]
+name    = "BC-06: platform has no business logic dependencies"
+type    = "forbidden"
+source_modules = ["platform"]
 forbidden_modules = ["market_data", "trading", "data_platform", "infra"]
