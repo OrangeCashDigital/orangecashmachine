@@ -138,10 +138,14 @@ packages = [
 # Ejecutar: uv run lint-imports
 # =============================================================================
 [tool.importlinter]
-root_packages = ["market_data", "core", "infra"]
+root_packages = ["market_data", "core", "infra", "trading", "data_platform"]
 
+# BC-01 — exchange adapter boundary
+# Ningun modulo externo importa ccxt_adapter directamente.
+# Solo el __init__.py de adapters/exchange/ puede hacerlo (es la fachada).
+# ignore_imports excluye esa ruta legitima de la verificacion.
 [[tool.importlinter.contracts]]
-name    = "exchange adapter boundary — no direct ccxt_adapter imports"
+name    = "BC-01: no direct ccxt_adapter imports"
 type    = "forbidden"
 source_modules = [
     "market_data.ingestion",
@@ -153,3 +157,34 @@ source_modules = [
     "infra",
 ]
 forbidden_modules = ["market_data.adapters.exchange.ccxt_adapter"]
+ignore_imports = [
+    "market_data.adapters.exchange -> market_data.adapters.exchange.ccxt_adapter",
+]
+
+# BC-02 — market_data self-contained
+[[tool.importlinter.contracts]]
+name    = "BC-02: market_data no importa trading ni data_platform"
+type    = "forbidden"
+source_modules = ["market_data"]
+forbidden_modules = ["trading", "data_platform"]
+
+# BC-03 — signals no conoce execution
+[[tool.importlinter.contracts]]
+name    = "BC-03: signals isolated from execution"
+type    = "forbidden"
+source_modules = ["trading.strategies"]
+forbidden_modules = ["trading.execution", "trading.analytics"]
+
+# BC-04 — risk no conoce execution
+[[tool.importlinter.contracts]]
+name    = "BC-04: risk isolated from execution"
+type    = "forbidden"
+source_modules = ["trading.risk"]
+forbidden_modules = ["trading.execution"]
+
+# BC-05 — core sin dependencias de negocio
+[[tool.importlinter.contracts]]
+name    = "BC-05: core has no business logic dependencies"
+type    = "forbidden"
+source_modules = ["core"]
+forbidden_modules = ["market_data", "trading", "data_platform", "infra"]
