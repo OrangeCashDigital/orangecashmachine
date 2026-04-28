@@ -1,2 +1,2 @@
 """Shim: re-exporta desde platform.runtime.context"""
-from platform.runtime.context import *  # noqa: F401, F403
+from ocm_platform.runtime.context import *  # noqa: F401, F403

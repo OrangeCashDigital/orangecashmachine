@@ -1,2 +1,6 @@
-"""Shim: re-exporta desde platform.config.run_registry"""
-from platform.config.run_registry import *  # noqa: F401, F403
+"""Shim: alias de ocm_platform.config.run_registry via sys.modules."""
+import sys as _sys
+import importlib as _importlib
+
+_real = _importlib.import_module("ocm_platform.config.run_registry")
+_sys.modules[__name__] = _real

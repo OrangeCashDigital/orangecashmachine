@@ -6,4 +6,4 @@ mientras se actualizan los imports reales módulo a módulo.
 
 TEMPORAL: eliminar cuando todos los imports apunten a platform.*
 """
-from platform.config import *  # noqa: F401, F403
+from ocm_platform.config import *  # noqa: F401, F403

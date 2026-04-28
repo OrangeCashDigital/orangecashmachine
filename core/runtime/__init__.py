@@ -1,2 +1,2 @@
 """Shim runtime."""
-from platform.runtime import *  # noqa: F401, F403
+from ocm_platform.runtime import *  # noqa: F401, F403

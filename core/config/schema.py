@@ -1,2 +1,2 @@
 """Shim: re-exporta desde platform.config.schema"""
-from platform.config.schema import *  # noqa: F401, F403
+from ocm_platform.config.schema import *  # noqa: F401, F403

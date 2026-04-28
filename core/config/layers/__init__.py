@@ -1,2 +1,2 @@
 """Shim layers."""
-from platform.config.layers import *  # noqa: F401, F403
+from ocm_platform.config.layers import *  # noqa: F401, F403
