@@ -47,7 +47,7 @@ from pyiceberg.expressions import (
 )
 
 from market_data.storage.iceberg.catalog import get_catalog, ensure_silver_table
-from infra.state.cursor_store import CursorStore
+from market_data.ports.state import CursorStorePort as CursorStore
 
 
 # Columnas OHLCV en el orden del schema Iceberg

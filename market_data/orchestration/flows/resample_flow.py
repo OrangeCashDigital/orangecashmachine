@@ -48,7 +48,8 @@ from core.config.schema import AppConfig
 from core.config.runtime_context import RuntimeContext
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.processing.pipelines.resample_pipeline import ResamplePipeline
-from infra.observability.server import push_metrics
+from market_data.ports.observability import MetricsPusherPort  # noqa: F401  # TODO(ports): inject via resample_flow(pusher=MetricsPusherPort)
+from infra.observability.server        import push_metrics
 
 
 # ==============================================================================

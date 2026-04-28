@@ -46,7 +46,8 @@ from market_data.adapters.exchange import (
     ExchangeCircuitOpenError,
 )
 from market_data.storage.silver.derivatives_storage import DerivativesStorage
-from infra.state.factories import build_cursor_store
+from market_data.ports.state import CursorStorePort as CursorStore      # DIP — tipo abstracto
+from infra.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -137,7 +138,7 @@ class _BaseDerivativesFetcher:
 
         # Cursor store — degradación controlada si Redis no disponible
         try:
-            self._cursor = build_cursor_store()
+            self._cursor = _build_cursor_store()
         except Exception as exc:
             self._log.warning(
                 "CursorStore no disponible — usando storage fallback | error={}", exc

@@ -54,7 +54,8 @@ from market_data.orchestration.tasks.batch_tasks import (
     run_derivatives_pipeline,
     run_repair_pipeline,
 )
-from infra.observability.server import push_metrics
+from market_data.ports.observability import MetricsPusherPort  # noqa: F401  # TODO(ports): inject via market_data_flow(pusher=MetricsPusherPort)
+from infra.observability.server        import push_metrics
 from market_data.safety import guard_context
 from market_data.safety.execution_guard import ExecutionGuard
 

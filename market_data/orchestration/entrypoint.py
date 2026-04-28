@@ -35,7 +35,8 @@ from market_data.orchestration.flows.batch_flow import market_data_flow
 from market_data.safety.execution_guard import ExecutionGuard, ExecutionStoppedError
 from market_data.safety import guard_context
 from market_data.orchestration.post_processing import PostProcessingService
-from infra.observability.server import push_metrics
+from market_data.ports.observability import MetricsPusherPort  # noqa: F401  # TODO(ports): inject via run(pusher=MetricsPusherPort)
+from infra.observability.server        import push_metrics
 from core.config.runtime_context import RuntimeContext
 
 _log = bind_pipeline("entrypoint")

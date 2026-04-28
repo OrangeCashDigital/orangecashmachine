@@ -6,14 +6,19 @@ core/config/structured/observability.py
 Hydra Structured Config para el bloque ``observability``.
 
 SSOT de tipos para Hydra. Solo define estructura y defaults.
-Pydantic (schema.py) es el validador de reglas de negocio.
+Pydantic (schema.py / core/observability/config.py) es el
+validador de reglas de negocio.
 
-REGLA: este archivo y LoggingConfig en schema.py deben tener
-los mismos campos. Añadir un campo aquí sin añadirlo en schema.py
-produce campos fantasma en el DictConfig resuelto.
+REGLA: los campos de LoggingConfig AQUÍ y en
+core/observability/config.py::LoggingConfig deben ser idénticos.
+El test tests/config/test_structured_parity.py verifica esto en CI.
+
+Campos opcionales de Loki (loki_url, loki_labels): default None / {}
+para mantener compatibilidad con entornos sin Loki (dev, CI).
 """
 
 from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 
 @dataclass
@@ -22,10 +27,15 @@ class LoggingConfig:
     format: str = "text"
     log_dir: str = "logs"
     rotation: str = "1 day"
-    retention: str = "14 days"  # SSOT: alineado con core/logging/config.py LoggingConfig
+    retention: str = "14 days"
     console: bool = True
     file: bool = True
     pipeline: bool = True
+    # ── Loki (opcional) ───────────────────────────────────────────────────────
+    # Alineado con core/observability/config.py::LoggingConfig.
+    # None = Loki deshabilitado. Hydra valida tipo; Pydantic valida formato URL.
+    loki_url: Optional[str] = None
+    loki_labels: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
