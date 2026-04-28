@@ -21,10 +21,11 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Protocol, runtime_checkable
+from typing import Optional
 
 from loguru import logger
 
+from core.boundaries import FeatureSource  # SSOT — unica definicion del contrato
 from market_data.safety.execution_guard import ExecutionGuard
 from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderStatus
@@ -32,18 +33,6 @@ from trading.risk.manager import RiskManager
 from trading.risk.models import RiskConfig
 from trading.strategies.base import BaseStrategy
 from trading.strategies.registry import StrategyRegistry
-
-
-# ---------------------------------------------------------------------------
-# Protocol
-# ---------------------------------------------------------------------------
-
-@runtime_checkable
-class FeatureSource(Protocol):
-    """Contrato mínimo de la fuente de datos."""
-    def load_features(
-        self, exchange: str, symbol: str, timeframe: str, **kwargs
-    ): ...
 
 
 # ---------------------------------------------------------------------------

@@ -29,39 +29,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Protocol, runtime_checkable
+from typing import Optional
 
 from loguru import logger
 
-from trading.strategies.base import BaseStrategy, Signal
-
-
-# =============================================================================
-# Protocol -- contrato minimo que PaperBot necesita del storage
-# =============================================================================
-
-@runtime_checkable
-class GoldDataSource(Protocol):
-    """
-    Contrato minimo que PaperBot necesita del storage.
-
-    Cualquier objeto con load_features() compatible es valido --
-    incluye GoldStorage real y mocks de tests.
-    """
-
-    def load_features(
-        self,
-        exchange:  str,
-        symbol:    str,
-        timeframe: str,
-        **kwargs,
-    ):
-        ...
-
-
-# RiskConfig canonica -- SSOT en trading.risk.models (Pydantic, cargable desde YAML).
-# PaperBot accede a los limites via: risk.signal_filter y risk.position.
+# Protocolos canonicos — SSOT en core/boundaries.py.
+# PaperBot depende de abstracciones, no de implementaciones concretas. (DIP)
+from core.boundaries import FeatureSource, SignalProtocol
 from trading.risk.models import RiskConfig
+from trading.strategies.base import BaseStrategy
 
 
 # =============================================================================
@@ -115,7 +91,7 @@ class PaperBot:
     def __init__(
         self,
         strategy:    BaseStrategy,
-        data_source: GoldDataSource,
+        data_source: FeatureSource,
         risk:        Optional[RiskConfig] = None,
         exchange:    str = "bybit",
         market_type: str = "spot",
@@ -200,18 +176,15 @@ class PaperBot:
     # Internal
     # =========================================================================
 
-    def _evaluate_signal(self, signal: Signal) -> Optional[PaperOrder]:
+    def _evaluate_signal(self, signal: SignalProtocol) -> Optional[PaperOrder]:
         """
         Valida la senal contra los limites de riesgo.
 
         Orden de checks (Fail-Fast -- del mas barato al mas costoso):
           1. Senal accionable  (is_actionable)
           2. Confianza minima  (signal_filter.min_confidence)  -- inclusivo
-          3. Limite de trades  (position.max_open_trades)
+          3. Limite de trades  (position.max_open_positions)
         """
-        if not signal.is_actionable:
-            return None
-
         if not signal.is_actionable:
             return None
 
@@ -223,11 +196,11 @@ class PaperBot:
             )
             return None
 
-        if len(self._open_trades) >= self.risk.position.max_open_trades:
+        if len(self._open_trades) >= self.risk.position.max_open_positions:
             logger.warning(
                 "[PaperBot] Rechazada -- maximo trades abiertos"
                 " | open={} max={}",
-                len(self._open_trades), self.risk.position.max_open_trades,
+                len(self._open_trades), self.risk.position.max_open_positions,
             )
             return None
 

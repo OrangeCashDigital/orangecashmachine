@@ -35,10 +35,10 @@ from typing import Callable, Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
+from core.boundaries import SignalProtocol  # DIP — execution depende de abstraccion
 from market_data.safety.execution_guard import ExecutionGuard
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.risk.manager import RiskManager
-from trading.strategies.base import Signal
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ class OMS:
     # Public API
     # ------------------------------------------------------------------
 
-    def submit(self, signal: Signal) -> Optional[Order]:
+    def submit(self, signal: SignalProtocol) -> Optional[Order]:
         """
         Procesa una señal: valida riesgo → crea orden → ejecuta.
 

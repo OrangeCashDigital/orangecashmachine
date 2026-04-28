@@ -31,8 +31,8 @@ from typing import Optional
 
 from loguru import logger
 
+from core.boundaries import SignalProtocol  # DIP — risk depende de abstraccion
 from trading.risk.models import RiskConfig
-from trading.strategies.base import Signal
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ class RiskManager:
     # Public API
     # ------------------------------------------------------------------
 
-    def validate(self, signal: Signal) -> RiskDecision:
+    def validate(self, signal: SignalProtocol) -> RiskDecision:
         """
         Valida una señal. Retorna RiskDecision — nunca lanza.
 
@@ -187,7 +187,7 @@ class RiskManager:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _validate_internal(self, signal: Signal) -> RiskDecision:
+    def _validate_internal(self, signal: SignalProtocol) -> RiskDecision:
         cfg = self._config
 
         # Leer estado consistente bajo lock — atómico

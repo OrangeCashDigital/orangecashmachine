@@ -19,7 +19,6 @@ class PositionConfig(BaseModel):
     """Limites de posicion."""
     max_position_pct:   float = Field(0.05, gt=0.0, le=1.0)
     max_open_positions: int   = Field(3,    ge=1)
-    max_open_trades:    int   = Field(3,    ge=1)
 
 
 class StopLossConfig(BaseModel):
@@ -74,7 +73,7 @@ class RiskConfig(BaseModel):
 
     Shortcuts de construccion directa (tests y CLI):
         RiskConfig(min_confidence=0.7)
-        RiskConfig(max_open_trades=2)
+        RiskConfig(position=PositionConfig(max_open_positions=2))
     """
     position:      PositionConfig     = Field(default_factory=PositionConfig)
     stop_loss:     StopLossConfig     = Field(default_factory=StopLossConfig)
@@ -86,26 +85,15 @@ class RiskConfig(BaseModel):
 
     def __init__(self, **data):
         min_confidence  = data.pop("min_confidence",  None)
-        max_open_trades = data.pop("max_open_trades",  None)
         super().__init__(**data)
         if min_confidence is not None:
             self.signal_filter = SignalFilterConfig(min_confidence=min_confidence)
-        if max_open_trades is not None:
-            self.position = PositionConfig(
-                max_position_pct   = self.position.max_position_pct,
-                max_open_positions = self.position.max_open_positions,
-                max_open_trades    = max_open_trades,
-            )
 
     @property
     def min_confidence(self) -> float:
         """SSOT: delegado a signal_filter.min_confidence."""
         return self.signal_filter.min_confidence
 
-    @property
-    def max_open_trades(self) -> int:
-        """SSOT: delegado a position.max_open_trades."""
-        return self.position.max_open_trades
 
     @classmethod
     def from_yaml(cls, path: Union[str, Path]) -> "RiskConfig":

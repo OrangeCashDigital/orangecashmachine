@@ -5,6 +5,13 @@ tests/trading/test_paper_bot.py
 
 Tests unitarios de PaperBot.
 GoldStorage se reemplaza con un stub controlado — sin Iceberg real.
+
+Cambios respecto a versión anterior
+-------------------------------------
+- GoldDataSource (Protocol local eliminado) → FeatureSource de core.boundaries
+- RiskConfig(max_open_trades=N) → PositionConfig(max_open_positions=N)  (SSOT)
+- test_data_source_satisfies_protocol eliminado — el protocolo ahora vive
+  en core/boundaries y se testea allí, no desde paper_bot
 """
 from __future__ import annotations
 
@@ -14,7 +21,9 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 
-from trading.execution.paper_bot import GoldDataSource, PaperBot, PaperOrder, RiskConfig
+from core.boundaries import FeatureSource
+from trading.execution.paper_bot import PaperBot, PaperOrder
+from trading.risk.models import PositionConfig, RiskConfig
 from trading.strategies.base import Signal
 from trading.strategies.ema_crossover import EMACrossoverStrategy
 
@@ -61,8 +70,8 @@ def _make_signal(signal_type: str = "buy", confidence: float = 1.0) -> Signal:
 
 
 def _make_bot(df=None, risk=None) -> PaperBot:
-    """Crea un PaperBot con data_source stubbed."""
-    source   = MagicMock(spec=GoldDataSource)
+    """Crea un PaperBot con data_source stubbed via FeatureSource."""
+    source   = MagicMock(spec=FeatureSource)
     source.load_features.return_value = df if df is not None else _make_ohlcv()
     strategy = EMACrossoverStrategy(symbol="BTC/USDT", timeframe="1h")
     return PaperBot(
@@ -80,16 +89,10 @@ def test_paper_bot_instantiates():
 
 
 def test_paper_bot_uses_default_risk_when_not_provided():
-    source   = MagicMock(spec=GoldDataSource)
+    source   = MagicMock(spec=FeatureSource)
     strategy = EMACrossoverStrategy()
     bot      = PaperBot(strategy=strategy, data_source=source)
     assert isinstance(bot.risk, RiskConfig)
-
-
-def test_data_source_satisfies_protocol():
-    """GoldDataSource es un Protocol — el mock debe satisfacerlo."""
-    source = MagicMock(spec=GoldDataSource)
-    assert isinstance(source, GoldDataSource)
 
 
 # ── run_once — sin datos ──────────────────────────────────────────────────────
@@ -155,8 +158,12 @@ def test_evaluate_signal_rejects_hold():
     assert bot._evaluate_signal(signal) is None
 
 
-def test_evaluate_signal_rejects_when_max_open_trades_reached():
-    risk   = RiskConfig(max_open_trades=1, min_confidence=0.5)
+def test_evaluate_signal_rejects_when_max_open_positions_reached():
+    # SSOT: max_open_positions es el único límite — eliminado max_open_trades
+    risk   = RiskConfig(
+        position      = PositionConfig(max_open_positions=1),
+        min_confidence = 0.5,
+    )
     bot    = _make_bot(risk=risk)
     signal = _make_signal()
     order  = bot._evaluate_signal(signal)
