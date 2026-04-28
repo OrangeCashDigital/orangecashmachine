@@ -38,7 +38,7 @@ from ocm_platform.config.env_vars import (
     OCM_DATA_LAKE_PATH,
     OCM_GOLD_PATH,
 )
-from core.utils import repo_root
+from ocm_platform.utils import repo_root
 
 
 # ==========================================================
