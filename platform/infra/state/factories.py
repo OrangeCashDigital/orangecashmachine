@@ -30,7 +30,7 @@ un RedisCursorStore ya construido en su constructor.
 
 Uso
 ---
-    from infra.state.factories import (
+    from platform.infra.state.factories import (
         build_cursor_store,
         build_gap_registry,
         build_lateness_calibration_store,
@@ -51,11 +51,11 @@ from typing import Optional, TYPE_CHECKING
 
 from loguru import logger
 
-from infra.state.cursor_store import RedisCursorStore, build_cursor_store_from_env
+from platform.infra.state.cursor_store import RedisCursorStore, build_cursor_store_from_env
 
 if TYPE_CHECKING:
-    from infra.state.gap_registry import GapRegistry
-    from infra.state.lateness_calibration import LatenessCalibrationStore
+    from platform.infra.state.gap_registry import GapRegistry
+    from platform.infra.state.lateness_calibration import LatenessCalibrationStore
 
 
 def build_cursor_store(env: Optional[str] = None) -> RedisCursorStore:
@@ -89,7 +89,7 @@ def build_gap_registry(
     env : str, optional
         Entorno explícito. Si None, usa resolve_env().
     """
-    from infra.state.gap_registry import GapRegistry
+    from platform.infra.state.gap_registry import GapRegistry
 
     try:
         store = build_cursor_store_from_env(env=env)
@@ -117,7 +117,7 @@ def build_lateness_calibration_store(
     env : str, optional
         Entorno explícito. Si None, usa resolve_env().
     """
-    from infra.state.lateness_calibration import LatenessCalibrationStore
+    from platform.infra.state.lateness_calibration import LatenessCalibrationStore
 
     try:
         store = build_cursor_store_from_env(env=env)
@@ -151,7 +151,7 @@ def build_stream_publisher(
     stream_name : nombre lógico del stream (sin prefijo).
     env         : entorno explícito. Si None, usa resolve_env().
     """
-    from infra.state.redis_stream import RedisStreamPublisher
+    from platform.infra.state.redis_stream import RedisStreamPublisher
     from market_data.streaming.publisher import StreamPublisher
 
     try:
@@ -192,7 +192,7 @@ def build_stream_source(
     consumer_name : nombre de este worker dentro del consumer group.
     env           : entorno explícito. Si None, usa resolve_env().
     """
-    from infra.state.redis_stream import RedisStreamConsumer
+    from platform.infra.state.redis_stream import RedisStreamConsumer
     from market_data.streaming.source import StreamSource
 
     try:

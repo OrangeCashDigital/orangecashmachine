@@ -22,7 +22,7 @@ Principios aplicados
 
 from typing import Any, Mapping, Optional
 
-from infra.observability.server import push_metrics as _push_metrics
+from platform.infra.observability.server import push_metrics as _push_metrics
 
 
 class PrometheusPusher:

@@ -48,7 +48,7 @@ from typing import List, Optional
 
 from loguru import logger
 
-from infra.state.cursor_store import _encode, _retry, RedisCursorStore
+from platform.infra.state.cursor_store import _encode, _retry, RedisCursorStore
 
 _GAP_TTL_DAYS   = 90
 _GAP_TTL        = _GAP_TTL_DAYS * 86_400
@@ -367,5 +367,5 @@ def build_gap_registry_from_env(env: Optional[str] = None) -> Optional["GapRegis
         DeprecationWarning,
         stacklevel=2,
     )
-    from infra.state.factories import build_gap_registry
+    from platform.infra.state.factories import build_gap_registry
     return build_gap_registry(env=env)

@@ -10,11 +10,11 @@ REGLA: solo main.py / entrypoints importan de aquí.
 El dominio importa únicamente market_data.ports.state.CursorStorePort.
 """
 
-from infra.state.cursor_store import (
+from platform.infra.state.cursor_store import (
     CursorStore as RedisCursorStore,
     InMemoryCursorStore,
 )
-from infra.state.factories import build_cursor_store
+from platform.infra.state.factories import build_cursor_store
 
 __all__ = [
     "RedisCursorStore",

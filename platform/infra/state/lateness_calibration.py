@@ -53,7 +53,7 @@ from typing import Optional
 
 from loguru import logger
 
-from infra.state.cursor_store import _encode, _retry, RedisCursorStore
+from platform.infra.state.cursor_store import _encode, _retry, RedisCursorStore
 
 _CALIBRATION_TTL_DAYS = 7
 _CALIBRATION_TTL      = _CALIBRATION_TTL_DAYS * 86_400
@@ -217,5 +217,5 @@ def build_calibration_store_from_env(
         DeprecationWarning,
         stacklevel=2,
     )
-    from infra.state.factories import build_lateness_calibration_store
+    from platform.infra.state.factories import build_lateness_calibration_store
     return build_lateness_calibration_store(env=env)

@@ -424,7 +424,7 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
         Entorno explícito (ej: run_cfg.env). Si no se pasa,
         se resuelve via resolve_env() respetando OCM_ENV → settings.yaml → 'development'.
     """
-    from core.config.loader.env_resolver import resolve_env
+    from platform.config.loader.env_resolver import resolve_env
     return RedisCursorStore(
         host=os.getenv("REDIS_HOST", _DEFAULT_HOST),
         port=int(os.getenv("REDIS_PORT", str(_DEFAULT_PORT))),
