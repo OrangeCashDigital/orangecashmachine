@@ -18,6 +18,7 @@ from unittest.mock import patch
 import pytest
 
 import core.config.run_registry as rr
+import core.runtime.registry as _rr_impl  # SSOT: constantes viven en el módulo canónico
 
 
 # ---------------------------------------------------------------------------
@@ -29,8 +30,8 @@ def registry_paths(tmp_path, monkeypatch):
     """Redirige _DB_PATH y _JSONL_PATH a tmp_path para aislar tests."""
     db   = tmp_path / "run_registry.db"
     jsonl = tmp_path / "run_registry.jsonl"
-    monkeypatch.setattr(rr, "_DB_PATH",    db)
-    monkeypatch.setattr(rr, "_JSONL_PATH", jsonl)
+    monkeypatch.setattr(_rr_impl, "_DB_PATH",    db)
+    monkeypatch.setattr(_rr_impl, "_JSONL_PATH", jsonl)
     return db, jsonl
 
 
@@ -99,7 +100,7 @@ def test_record_run_extra_field(registry_paths):
 
 def test_record_run_sqlite_fail_falls_back_to_jsonl(registry_paths, caplog):
     _, jsonl = registry_paths
-    with patch.object(rr, "_ensure_db", side_effect=PermissionError("no write")):
+    with patch.object(_rr_impl, "_ensure_db", side_effect=PermissionError("no write")):
         run_id = _run()
     assert jsonl.exists()
     rec = json.loads(jsonl.read_text().strip())
@@ -109,7 +110,7 @@ def test_record_run_sqlite_fail_falls_back_to_jsonl(registry_paths, caplog):
 
 def test_record_run_sqlite_fail_logs_warning(registry_paths, caplog):
     import logging
-    with patch.object(rr, "_ensure_db", side_effect=OSError("disk full")):
+    with patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")):
         with caplog.at_level(logging.WARNING):
             _run()
     # loguru puede no integrarse con caplog; al menos verificamos que no lanza
@@ -122,7 +123,7 @@ def test_record_run_sqlite_fail_logs_warning(registry_paths, caplog):
 # ---------------------------------------------------------------------------
 
 def test_record_run_both_stores_fail_does_not_raise(registry_paths):
-    with patch.object(rr, "_ensure_db", side_effect=OSError("disk full")):
+    with patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")):
         with patch("builtins.open", side_effect=OSError("no space left")):
             run_id = _run()
     assert isinstance(run_id, str)  # sigue retornando run_id
@@ -181,6 +182,6 @@ def test_query_runs_exchanges_deserialized(registry_paths):
 
 def test_query_runs_sqlite_error_returns_empty(registry_paths):
     _run()
-    with patch.object(rr, "_ensure_db", side_effect=sqlite3.DatabaseError("corrupt")):
+    with patch.object(_rr_impl, "_ensure_db", side_effect=sqlite3.DatabaseError("corrupt")):
         result = rr.query_runs()
     assert result == []
