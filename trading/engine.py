@@ -21,15 +21,13 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 from loguru import logger
 
 from core.boundaries import FeatureSource  # SSOT — unica definicion del contrato
 from market_data.safety.execution_guard import ExecutionGuard
-from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderStatus
-from trading.risk.manager import RiskManager
 from trading.risk.models import RiskConfig
 from trading.strategies.base import BaseStrategy
 from trading.strategies.registry import StrategyRegistry
@@ -84,11 +82,11 @@ class TradingEngine:
     def __init__(
         self,
         strategy:    BaseStrategy,
-        oms:         OMS,
+        oms,                                  # OMS — importado lazy en build_paper
         data_source: FeatureSource,
         guard:       Optional[ExecutionGuard] = None,
         exchange:    str = "bybit",
-        market_type: str = "spot",        # default consistente con PaperBot
+        market_type: str = "spot",            # default consistente con PaperBot
     ) -> None:
         self._strategy    = strategy
         self._oms         = oms
@@ -150,7 +148,7 @@ class TradingEngine:
             s.symbol, len(signals),
         )
 
-        # Enviar al OMS — OrderStatus importado en top-level
+        # Enviar al OMS
         for signal in signals:
             order = self._oms.submit(signal)
             if order is None:
@@ -193,6 +191,8 @@ class TradingEngine:
         exchange:      str   = "bybit",
         market_type:   str   = "spot",
         guard:         Optional[ExecutionGuard] = None,
+        on_fill:       Optional[Callable[[Order], None]] = None,
+        on_reject:     Optional[Callable[[Order], None]] = None,
     ) -> "TradingEngine":
         """
         Factory para paper trading.
@@ -200,9 +200,16 @@ class TradingEngine:
         Construye: Strategy + RiskManager + PaperExecutor + OMS + Engine.
         Un único punto de ensamblaje — el caller no necesita conocer
         las dependencias internas. (DIP)
+
+        Parameters
+        ----------
+        on_fill   : callback(order) invocado por OMS al completar un fill.
+                    Uso principal: TradeTracker.on_fill para analytics.
+        on_reject : callback(order) invocado por OMS al rechazar una orden.
         """
         from trading.execution.oms import OMS
         from trading.execution.paper_executor import PaperExecutor
+        from trading.risk.manager import RiskManager
 
         strategy     = StrategyRegistry.get(strategy_name)(**strategy_cfg)
         risk_manager = RiskManager(
@@ -214,6 +221,8 @@ class TradingEngine:
             risk_manager = risk_manager,
             executor     = executor,
             guard        = guard,
+            on_fill      = on_fill,    # conecta OMS → TradeTracker (o cualquier observer)
+            on_reject    = on_reject,
         )
         return cls(
             strategy    = strategy,

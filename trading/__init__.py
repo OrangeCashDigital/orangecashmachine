@@ -16,6 +16,7 @@ Importar desde los submódulos directamente:
   execution/   — OMS + executors (paper, live)
   analytics/   — TradeTracker, PerformanceEngine
   engine.py    — TradingEngine (orquestador)
-  run_paper.py — entrypoint CLI paper trading
+
+El entrypoint CLI vive en app/run_paper.py (composition root).
 """
 __version__ = "0.2.0"

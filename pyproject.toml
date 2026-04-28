@@ -73,6 +73,7 @@ dependencies = [
 
 [project.scripts]
 ocm = "main:main"
+paper = "app.run_paper:main"
 
 [project.urls]
 Repository = "https://github.com/orangemusic/orangecashmachine"
@@ -129,6 +130,7 @@ packages = [
     "data_platform",
     "trading",
     "backtesting",
+    "app",
 ]
 
 # =============================================================================
