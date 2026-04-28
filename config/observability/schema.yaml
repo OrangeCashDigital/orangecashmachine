@@ -1,0 +1,35 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Observability: Schema (Structured Config base)
+# ==============================================================================
+#
+# PROPÓSITO: define la estructura completa del bloque observability con
+# defaults seguros. Los archivos logging.yaml y metrics.yaml sobreescriben
+# sus secciones respectivas via el defaults list de config.yaml.
+#
+# SSOT: los campos aquí deben ser idénticos a
+#   core/config/structured/observability.py::ObservabilityConfig
+# El test tests/config/test_structured_parity.py verifica paridad en CI.
+# ==============================================================================
+
+observability:
+
+  logging:
+    level: INFO
+    format: text
+    log_dir: logs
+    rotation: "1 day"
+    retention: "14 days"
+    console: true
+    file: true
+    pipeline: true
+    loki_url: null
+    loki_labels: {}
+
+  metrics:
+    enabled: false
+    exporter: prometheus
+    port: 8000
+
+  tracing:
+    enabled: false

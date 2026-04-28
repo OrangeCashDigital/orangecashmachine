@@ -17,6 +17,7 @@
 # ==============================================================================
 
 import pytest
+from pathlib import Path
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
@@ -31,9 +32,14 @@ def reset_hydra():
     GlobalHydra.instance().clear()
 
 
+# SSOT: ruta absoluta calculada desde __file__ — independiente del CWD.
+# initialize_config_dir() requiere ruta absoluta desde Hydra 1.2+.
+_CONFIG_DIR = str(Path(__file__).parent.parent.parent / "config")
+
+
 def _load_config(env: str, overrides: list[str] | None = None) -> dict:
     """Helper: carga config para un entorno dado y retorna plain dict."""
-    with initialize_config_dir(config_dir="../../config", version_base="1.3"):
+    with initialize_config_dir(config_dir=_CONFIG_DIR, version_base="1.3"):
         cfg = compose(
             config_name="config",
             overrides=[f"env={env}"] + (overrides or []),

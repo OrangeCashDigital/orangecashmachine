@@ -1,0 +1,44 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Pipeline: Schema (Structured Config base)
+# ==============================================================================
+#
+# PROPÓSITO: define la estructura completa del bloque pipeline con
+# defaults seguros. Los archivos historical.yaml, realtime.yaml y
+# resample.yaml sobreescriben sus secciones respectivas.
+#
+# SSOT: los campos aquí deben ser idénticos a
+#   core/config/structured/pipeline.py::PipelineConfig
+# ==============================================================================
+
+pipeline:
+
+  historical:
+    enabled: true
+    backfill_mode: false
+    timeframes:
+      - "1m"
+    exchanges:
+      - bybit
+    symbols:
+      - "BTC/USDT"
+    market_type: spot
+    batch_size: 1000
+    max_workers: 4
+
+  resample:
+    enabled: true
+    source_tf: "1m"
+    target_timeframes:
+      - "5m"
+      - "15m"
+      - "1h"
+      - "4h"
+      - "1d"
+
+  realtime:
+    enabled: false
+    symbols:
+      - "BTC/USDT"
+    exchanges:
+      - bybit
