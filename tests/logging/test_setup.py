@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import patch
 
-import core.observability.logger as _setup_mod
+import ocm_platform.observability.logger as _setup_mod
 from ocm_platform.observability.config import LoggingConfig
 from ocm_platform.observability.logger import (
     bootstrap_logging,

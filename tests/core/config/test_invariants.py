@@ -27,7 +27,7 @@ import re
 from pathlib import Path
 
 
-import core.config.env_vars as env_vars_module
+import ocm_platform.config.env_vars as env_vars_module
 from ocm_platform.config.env_vars import (
     OCM_DATA_LAKE_PATH,
     OCM_GOLD_PATH,
