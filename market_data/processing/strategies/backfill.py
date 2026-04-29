@@ -22,7 +22,11 @@ from market_data.processing.strategies.base import (
     StrategyMixin,
 )
 from market_data.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
-from market_data.ports.state import encode_cursor_key as _encode
+# encode_cursor_key de ports/state tiene firma (exchange, symbol, timeframe)
+# y es para uso de dominio (clave canónica legible).
+# Para Redis keys necesitamos codificación base64 de segmentos individuales
+# — importamos la función interna de cursor_store (1 arg, urlsafe base64).
+from ocm_platform.infra.state.cursor_store import encode_cursor_key as _encode
 
 _log = bind_pipeline("backfill")
 

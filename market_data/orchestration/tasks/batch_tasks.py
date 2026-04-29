@@ -74,6 +74,11 @@ async def managed_adapter(
     Ref: https://docs.prefect.io/latest/develop/write-tasks#task-retries
     """
     if injected is not None:
+        # SafeOps: el adapter puede haber sido conectado en un loop distinto
+        # (validate_exchange_connection corre en loop A; esta task en loop B).
+        # reconnect() cierra el cliente viejo y crea uno nuevo en el loop activo.
+        # Es idempotente y seguro — nunca lanza excepción en finally.
+        await injected.reconnect()
         yield injected
         return
 
