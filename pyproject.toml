@@ -69,11 +69,17 @@ dependencies = [
     "pyiceberg[pyarrow,sql-sqlite]>=0.8.1,<1.0",
     "duckdb>=1.5.1,<2.0",
     "pyspark>=4.1.1,<5.0",
+
+    # ── API Gateway ───────────────────────────────────────────────────
+    "fastapi>=0.111.0,<1.0",
+    "uvicorn[standard]>=0.14.0,<0.29.0",
+    "python-jose[cryptography]>=3.3.0,<4.0",
 ]
 
 [project.scripts]
 # SSOT de entrypoints CLI — Fail-Fast en install time si el target no existe.
 ocm    = "app.cli.market_data:main"   # market data pipeline (Hydra)
+ocm-api = "api.main:serve"               # FastAPI gateway
 live   = "app.cli.live:main"          # live trading ⚠️  capital real
 paper  = "app.cli.paper:main"         # paper trading
 deploy = "deploy:main"                # Prefect deployment runner
@@ -127,6 +133,7 @@ exclude = ["tests/", ".venv/"]
 
 [tool.hatch.build.targets.wheel]
 packages = [
+    "api",
     "ocm_platform",
     "core",
     "infra",
@@ -199,3 +206,18 @@ name    = "BC-07: portfolio isolated from execution"
 type    = "forbidden"
 source_modules = ["portfolio"]
 forbidden_modules = ["trading.execution", "trading.strategies"]
+
+# BC-08 — api es consumidor puro: no puede ser importado por nadie
+[[tool.importlinter.contracts]]
+name    = "BC-08: api is a pure consumer — no internal package imports api"
+type    = "forbidden"
+source_modules = [
+    "ocm_platform",
+    "market_data",
+    "trading",
+    "data_platform",
+    "domain",
+    "app",
+    "portfolio",
+]
+forbidden_modules = ["api"]
