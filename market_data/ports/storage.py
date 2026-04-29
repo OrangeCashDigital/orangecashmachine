@@ -68,11 +68,12 @@ class OHLCVStorage(Protocol):
 
     def save_ohlcv(
         self,
-        df:        pd.DataFrame,
-        symbol:    str,
-        timeframe: str,
-        mode:      str           = "append",
-        run_id:    Optional[str] = None,
+        df:              pd.DataFrame,
+        symbol:          str,
+        timeframe:       str,
+        mode:            str           = "append",
+        run_id:          Optional[str] = None,
+        skip_versioning: bool          = False,
     ) -> None:
         """
         Persiste un DataFrame OHLCV.

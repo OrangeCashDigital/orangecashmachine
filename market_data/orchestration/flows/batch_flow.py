@@ -227,7 +227,7 @@ def _launch_pipelines_for_exchange(
         )
     if not active:
         log.warning("No active datasets for exchange | exchange=%s", probe.exchange)
-        return ExchangeTasks([], [])
+        return ExchangeTasks(spot=[], repair=[], futures=[])
 
     log.info(
         "Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active)

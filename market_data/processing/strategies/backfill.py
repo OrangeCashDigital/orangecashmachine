@@ -22,10 +22,11 @@ from market_data.processing.strategies.base import (
     StrategyMixin,
 )
 from market_data.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
-# encode_cursor_key de ports/state tiene firma (exchange, symbol, timeframe)
-# y es para uso de dominio (clave canónica legible).
-# Para Redis keys necesitamos codificación base64 de segmentos individuales
-# — importamos la función interna de cursor_store (1 arg, urlsafe base64).
+# _encode: codifica UN segmento de clave Redis en base64 urlsafe.
+# Distinta de ports.state.encode_cursor_key (3 args, clave legible).
+# Se importa desde infra.state por necesidad de compatibilidad de schema
+# Redis — no hay forma de evitarlo sin duplicar lógica (DRY > pureza DIP).
+# SSOT: la función vive en cursor_store porque define el schema de claves.
 from ocm_platform.infra.state.cursor_store import encode_cursor_key as _encode
 
 _log = bind_pipeline("backfill")
@@ -369,7 +370,7 @@ class BackfillStrategy(StrategyMixin):
                     self._update_backfill_cursor(symbol, timeframe, oldest_in_chunk, ctx)
                 except Exception as exc:
                     PIPELINE_ERRORS.labels(
-                        exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                        exchange=ctx.exchange_id, error_type="fatal",
                     ).inc()
                     log.error(
                         "Backfill chunk save failed — cursor NO avanzado, abortando",
