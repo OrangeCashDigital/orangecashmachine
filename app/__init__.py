@@ -12,8 +12,11 @@ donde se ensamblan todas las dependencias antes de ejecutar.
 
 Entrypoints
 -----------
-  run_paper.py — CLI paper trading (Gold/Iceberg → TradingEngine)
+  run_market_data.py — CLI market data pipeline (Hydra → RuntimeContext → flow)
+  run_paper.py       — CLI paper trading (Gold/Iceberg → TradingEngine)
 
 Uso (después de instalar con uv):
-    uv run paper [--symbol ETH/USDT] [--dry-run] [--debug]
+    uv run ocm                                         # market data pipeline
+    uv run paper [--symbol ETH/USDT] [--dry-run]      # paper trading
+    uv run python deploy.py [--prod]                   # Prefect deployment
 """

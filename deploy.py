@@ -1,92 +1,97 @@
 """
-deploy.py — Registra el deployment de market_data_flow en Prefect 3.
+deploy.py
+=========
 
-Prefect 3 usa flow.serve() para desarrollo local o flow.deploy()
-para producción con work pools. Este script usa serve() para
+Registra y ejecuta el deployment de ``market_data_flow`` en Prefect 3.
+
+Prefect 3 usa ``flow.serve()`` para desarrollo local o ``flow.deploy()``
+para producción con work pools. Este script usa ``serve()`` para
 desarrollo — en producción Prefect Worker gestiona el scheduling.
 
 Uso
 ---
-  # Desarrollo local (bloqueante, corre en foreground):
-  uv run python deploy.py
+    # Desarrollo local (bloqueante, corre en foreground):
+    uv run python deploy.py
 
-  # Producción (registrar en work pool):
-  uv run python deploy.py --prod
+    # Modo producción (registra en work pool):
+    uv run python deploy.py --prod
+
+Principios: DRY · SSOT · KISS — build_context() como SSOT de construcción.
 """
-
 from __future__ import annotations
 
 import argparse
+import asyncio
+from datetime import datetime, timezone
+
+from market_data.orchestration.entrypoint import build_context
+from market_data.orchestration.flows.batch_flow import market_data_flow
+from ocm_platform.config.hydra_loader import load_appconfig_standalone
+from ocm_platform.runtime.context import RuntimeContext
+from ocm_platform.runtime.run_config import RunConfig
 
 
-def serve_local() -> None:
-    """Modo desarrollo: ejecuta el flow localmente con runtime_context."""
-    import asyncio
-    from market_data.orchestration.flows.batch_flow import market_data_flow
-    from ocm_platform.runtime.run_config import RunConfig
-    from ocm_platform.config.hydra_loader import load_appconfig_standalone
-    from ocm_platform.runtime.context import RuntimeContext
-    from datetime import datetime, timezone
-    from uuid import uuid4
+# ---------------------------------------------------------------------------
+# Context builder para deploy — análogo a build_context() pero sin Hydra
+# ---------------------------------------------------------------------------
 
-    print(
-        "Iniciando market_data_flow en modo serve (desarrollo) con runtime_context..."
-    )
-    # Construcción del contexto único de ejecución
+def _build_deploy_context() -> RuntimeContext:
+    """Construye RuntimeContext para ejecución de deploy.
+
+    Usa ``load_appconfig_standalone`` (sin Hydra) y omite snapshot de auditoría
+    — deploy no es un run auditado.
+
+    Returns:
+        :class:`RuntimeContext` inmutable listo para inyectar al flow.
+    """
     run_cfg = RunConfig.from_env()
-    config = load_appconfig_standalone(
+    config  = load_appconfig_standalone(
         env=run_cfg.env,
         config_dir=run_cfg.config_path,
-        run_id=run_cfg.run_id,  # deploy: run_id desde RunConfig
-        write_snapshot=False,   # deploy no es run auditado — snapshot omitido deliberadamente
+        run_id=run_cfg.run_id,   # SSOT: run_id desde RunConfig
+        write_snapshot=False,    # deploy no es run auditado — snapshot omitido
     )
-    started_at = datetime.now(timezone.utc)
-    runtime_context = RuntimeContext(
+    return RuntimeContext(
         app_config=config,
         run_config=run_cfg,
-        started_at=started_at,
+        started_at=datetime.now(timezone.utc),
     )
-    # run_id y environment son @property delegadas a run_config (SSOT)
-    # Ejecutar el flow directamente con el runtime_context
-    asyncio.run(market_data_flow(runtime_context))
+
+
+# ---------------------------------------------------------------------------
+# Modos de ejecución
+# ---------------------------------------------------------------------------
+
+def serve_local() -> None:
+    """Modo desarrollo: ejecuta el flow localmente con RuntimeContext canónico."""
+    ctx = _build_deploy_context()
+    print(
+        f"[deploy] serve_local | env={ctx.environment} run_id={ctx.run_id}"
+    )
+    asyncio.run(market_data_flow(ctx))
 
 
 def deploy_prod() -> None:
-    """Modo producción adaptado: registra deployment y ejecuta con runtime_context (prueba)."""
-    import asyncio
-    from market_data.orchestration.flows.batch_flow import market_data_flow
-    from ocm_platform.runtime.run_config import RunConfig
-    from ocm_platform.config.hydra_loader import load_appconfig_standalone
-    from ocm_platform.runtime.context import RuntimeContext
-    from datetime import datetime, timezone
-    from uuid import uuid4
-
-    # Construcción del contexto para ejecución real (test de despliegue)
-    run_cfg = RunConfig.from_env()
-    config = load_appconfig_standalone(
-        env=run_cfg.env,
-        config_dir=run_cfg.config_path,
-        run_id=run_cfg.run_id,  # deploy: run_id desde RunConfig
-        write_snapshot=False,   # deploy no es run auditado — snapshot omitido deliberadamente
-    )
-    started_at = datetime.now(timezone.utc)
-    runtime_context = RuntimeContext(
-        app_config=config,
-        run_config=run_cfg,
-        started_at=started_at,
-    )
-    # run_id y environment son @property delegadas a run_config (SSOT)
-
+    """Modo producción: registra deployment y ejecuta con RuntimeContext canónico."""
+    ctx = _build_deploy_context()
     print(
-        "Desplegando market_data_flow con runtime_context (producción) para pruebas..."
+        f"[deploy] deploy_prod | env={ctx.environment} run_id={ctx.run_id}"
     )
-    asyncio.run(market_data_flow(runtime_context))
+    asyncio.run(market_data_flow(ctx))
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="OrangeCashMachine — Prefect deployment runner",
+    )
     parser.add_argument(
-        "--prod", action="store_true", help="Registrar en work pool (producción)"
+        "--prod",
+        action="store_true",
+        help="Registrar en work pool (producción)",
     )
     args = parser.parse_args()
 
@@ -94,3 +99,7 @@ if __name__ == "__main__":
         deploy_prod()
     else:
         serve_local()
+
+
+if __name__ == "__main__":
+    main()

@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Optional
+
 
 from loguru import logger
 
@@ -202,7 +202,7 @@ def _build_engine(args: argparse.Namespace, tracker):
 # Main
 # ---------------------------------------------------------------------------
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """
     Punto de entrada principal.
 

@@ -1,8 +1,8 @@
 """
-main.py
-=======
+app/run_market_data.py
+======================
 
-Entrypoint principal de OrangeCashMachine.
+Entrypoint principal de OrangeCashMachine — market data pipeline.
 
 Flujo de ejecución::
 
@@ -10,21 +10,22 @@ Flujo de ejecución::
         ├── bootstrap_logging()
         ├── RunConfig.from_env()             → RunConfig (env, debug, run_id…)
         ├── load_appconfig_from_hydra(cfg)   → AppConfig (Pydantic validado)
-        ├── configure_logging(cfg, env, ...)
-        ├── setup_observability()            → MetricsRuntime (idempotente)
-        ├── EnvironmentValidator.check()
-        ├── validate_only? → sys.exit(0)
-        └── pipeline_runner()               → lógica de negocio
+        ├── run_application(config, run_cfg)
+        │       ├── configure_logging()
+        │       ├── setup_observability()    → MetricsRuntime (idempotente, fail-soft)
+        │       ├── EnvironmentValidator.check()
+        │       ├── validate_only? → sys.exit(0)
+        │       └── pipeline_runner(ctx, pusher)
+        └── sys.exit(exit_code)
 
 Uso CLI::
 
-    uv run python main.py                                          # development
-    uv run python main.py env=production                           # producción
-    uv run python main.py pipeline.historical.backfill_mode=true   # backfill
-    uv run python main.py pipeline.historical.max_concurrent_tasks=8
-    uv run python main.py --cfg job                                # ver config efectivo
+    uv run python app/run_market_data.py                                     # development
+    uv run python app/run_market_data.py env=production                      # producción
+    uv run python app/run_market_data.py pipeline.historical.backfill_mode=true
+    uv run python app/run_market_data.py --cfg job                           # ver config efectivo
 
-Principios: SOLID · KISS · DRY · SafeOps
+Principios: SOLID · KISS · DRY · SSOT · SafeOps
 """
 from __future__ import annotations
 
@@ -45,19 +46,23 @@ from ocm_platform.config.structured import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Hydra Structured Config registration — debe ocurrir antes de @hydra.main
+# ---------------------------------------------------------------------------
+
 def _register_structured_configs() -> None:
     """Registra Structured Configs en Hydra ConfigStore.
 
     Debe llamarse antes de que Hydra arranque. Establece los schemas
     que Hydra usa para validar tipos durante la composición del config.
 
-    Arquitectura:
-        Hydra Structured Config  → valida tipos (int, str, bool, Optional)
-        OmegaConf merge          → resuelve ${oc.env:...}
+    Arquitectura de validación en capas:
+        Hydra Structured Config  → valida tipos (int, str, bool)
+        OmegaConf merge          → resuelve ``${oc.env:VAR,default}``
         Pydantic                 → valida reglas de negocio (ge, le, regex…)
     """
     cs = ConfigStore.instance()
-    cs.store(group="pipeline", name="schema", node=PipelineConfig)
+    cs.store(group="pipeline",            name="schema", node=PipelineConfig)
     cs.store(group="pipeline/historical", name="schema", node=HistoricalConfig)
     cs.store(group="pipeline/resample",   name="schema", node=ResampleConfig)
     cs.store(group="observability",       name="schema", node=ObservabilityConfig)
@@ -65,40 +70,41 @@ def _register_structured_configs() -> None:
 
 _register_structured_configs()
 
+# Imports post-registration — Hydra requiere que ConfigStore esté listo primero
 import ocm_platform.config.loader as config_loader
 from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
+from ocm_platform.config.schema import AppConfig
 from ocm_platform.runtime.run_config import RunConfig
 from ocm_platform.runtime.context import RuntimeContext
-from ocm_platform.config.schema import AppConfig
 from ocm_platform.observability import bootstrap_logging, configure_logging
-from market_data.orchestration.entrypoint import run as default_pipeline_runner
 from ocm_platform.infra.observability.runtime import init_metrics_runtime
 from ocm_platform.infra.observability.adapters import PrometheusPusher, NoopPusher
+from market_data.orchestration.entrypoint import run as _default_pipeline_runner
+from market_data.ports.observability import MetricsPusherPort
 from market_data.safety.environment_validator import (
     EnvironmentValidator,
     EnvironmentMismatchError,
 )
 
+# Tipo del pipeline runner — explícito para mypy y legibilidad (OCP: inyectable en tests)
+PipelineRunner = Callable[[RuntimeContext, MetricsPusherPort | None], int]
 
 
 # ---------------------------------------------------------------------------
-# Observabilidad
+# Observabilidad — fail-soft: nunca bloquea el pipeline
 # ---------------------------------------------------------------------------
 
 def setup_observability(config: AppConfig, *, validate_only: bool = False) -> None:
     """Inicializa MetricsRuntime de forma idempotente y fail-soft.
 
-    No lanza excepciones — los errores de observabilidad no deben bloquear
-    el pipeline principal.
-
     Args:
-        config: Configuración validada de la aplicación.
-        validate_only: Si True, inicialización mínima sin exponer métricas.
+        config:        Configuración validada de la aplicación.
+        validate_only: Si ``True``, inicialización mínima sin exponer métricas.
     """
     try:
         init_metrics_runtime(config, validate_only=validate_only)
     except Exception as exc:
-        logger.warning("observability_init_failed | error={}", exc)
+        logger.warning("observability_init_failed", error=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -106,83 +112,79 @@ def setup_observability(config: AppConfig, *, validate_only: bool = False) -> No
 # ---------------------------------------------------------------------------
 
 def run_application(
-    config: AppConfig,
+    config:  AppConfig,
     run_cfg: RunConfig,
     *,
-    pipeline_runner: Callable[..., int] = default_pipeline_runner,
+    pipeline_runner: PipelineRunner = _default_pipeline_runner,
 ) -> int:
     """Ejecuta el ciclo de vida completo de la aplicación.
 
+    Construye :class:`RuntimeContext` canónico y lo inyecta al pipeline runner.
+    Es el único lugar donde se ensamblan config + run_cfg + pusher (Composition Root).
+
     Args:
-        config: Configuración Pydantic validada.
-        run_cfg: Configuración de proceso inmutable (env, debug, validate_only…).
-        pipeline_runner: Callable inyectable para tests.
+        config:          Configuración Pydantic validada.
+        run_cfg:         Configuración de proceso inmutable.
+        pipeline_runner: Runner inyectable — default es ``entrypoint.run``.
+                         Firma requerida: ``(ctx, pusher) -> int``.
 
     Returns:
-        Código de salida POSIX: 0 = éxito, 1 = error.
+        Código de salida POSIX: ``0`` = éxito, ``1`` = error.
     """
-    run_id = run_cfg.run_id
-    env = run_cfg.env
-    debug = run_cfg.debug
-    validate_only = run_cfg.validate_only
+    log = logger.bind(run_id=run_cfg.run_id, env=run_cfg.env)
 
-    # Bind antes del try — garantiza run_id en todos los logs incluso si
-    # configure_logging falla (fail-soft: el pipeline no debe bloquearse)
-    log = logger.bind(run_id=run_id, env=env)
-
+    # configure_logging fail-soft — un fallo de logging no mata el pipeline
     try:
         configure_logging(
             config.observability.logging,
-            env=env,
-            debug=debug,
-            run_id=run_id,
+            env=run_cfg.env,
+            debug=run_cfg.debug,
+            run_id=run_cfg.run_id,
         )
     except Exception as exc:
-        log.warning("logging_configure_failed | error={}", exc)
+        log.warning("logging_configure_failed", error=str(exc))
 
     log.info(
-        "application_starting | env={} run_id={} debug={} validate_only={}",
-        env, run_id, debug, validate_only,
+        "application_starting",
+        env=run_cfg.env,
+        run_id=run_cfg.run_id,
+        debug=run_cfg.debug,
+        validate_only=run_cfg.validate_only,
     )
 
-    setup_observability(config, validate_only=validate_only)
+    setup_observability(config, validate_only=run_cfg.validate_only)
 
+    # Fail-Fast en mismatch de entorno; Fail-Soft en errores inesperados del validator
     try:
         EnvironmentValidator().check(config, run_cfg)
     except EnvironmentMismatchError as exc:
-        log.critical("environment_validation_failed | error={}", exc)
+        log.critical("environment_validation_failed", error=str(exc))
         return 1
     except Exception as exc:
-        log.warning("environment_validator_skipped | error={}", exc)
+        log.warning("environment_validator_skipped", error=str(exc))
 
-    if validate_only:
-        log.info("validation_complete | status=ok")
+    if run_cfg.validate_only:
+        log.info("validation_complete", status="ok")
         return 0
 
-    runtime_context = RuntimeContext(
+    # Composition Root — único lugar donde se decide qué pusher usar.
+    # DIP: el dominio (entrypoint.run) nunca importa infra directamente.
+    ctx = RuntimeContext(
         app_config=config,
         run_config=run_cfg,
         started_at=datetime.now(timezone.utc),
     )
-    # Composition root — único lugar donde se decide qué pusher usar.
-    # DIP: el dominio (entrypoint.run) nunca importa infra directamente.
-    pusher = (
-        PrometheusPusher()
-        if config.observability.metrics.enabled
-        else NoopPusher()
+    pusher: MetricsPusherPort = (
+        PrometheusPusher() if config.observability.metrics.enabled else NoopPusher()
     )
-    result: object = pipeline_runner(
-        config=config,
-        run_cfg=run_cfg,
-        runtime_context=runtime_context,
-        debug=debug,
-        pusher=pusher,
-    )
+
+    result = pipeline_runner(ctx, pusher)
 
     if not isinstance(result, int):
         log.error(
-            "pipeline_runner_returned_non_int | type={} value={}",
-            type(result).__name__, result,
+            "pipeline_runner_returned_non_int",
+            type=type(result).__name__,
+            value=str(result),
         )
         return 1
 
@@ -211,10 +213,9 @@ def hydra_main(cfg: DictConfig) -> None:
     """
     bootstrap_logging()
 
-    env_block = cfg.get("environment", {})
-    # explicit_env: solo el valor que Hydra/CLI aporta — RunConfig resuelve OCM_ENV
-    explicit_env: str | None = env_block.get("name") or None
-    run_cfg = RunConfig.from_env(explicit_env=explicit_env)
+    env_block    = cfg.get("environment", {})
+    explicit_env = env_block.get("name") or None   # None → RunConfig resuelve OCM_ENV
+    run_cfg      = RunConfig.from_env(explicit_env=explicit_env)
 
     try:
         config = load_appconfig_from_hydra(
@@ -224,22 +225,23 @@ def hydra_main(cfg: DictConfig) -> None:
         )
     except Exception as exc:
         logger.opt(exception=True).critical(
-            "config_load_failed | type={} error={}", type(exc).__name__, exc
+            "config_load_failed",
+            type=type(exc).__name__,
+            error=str(exc),
         )
         sys.exit(1)
 
-    exit_code: int = run_application(config, run_cfg)
-    sys.exit(exit_code)
+    sys.exit(run_application(config, run_cfg))
 
 
 # ---------------------------------------------------------------------------
-# Main
+# CLI entry point (pyproject.toml scripts → ``ocm``)
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     """Punto de entrada del script ``ocm`` definido en pyproject.toml.
 
-    Exits:
+    Exit codes:
         0   — éxito o validate-only OK.
         1   — error de configuración o fallo del pipeline.
         130 — interrupción por teclado (SIGINT / Ctrl-C).
@@ -247,7 +249,7 @@ def main() -> None:
     try:
         hydra_main()  # type: ignore[call-arg]
     except KeyboardInterrupt:
-        logger.warning("execution_interrupted | signal=SIGINT")
+        logger.warning("execution_interrupted", signal="SIGINT")
         sys.exit(130)
     except (
         config_loader.ConfigurationError,
@@ -255,12 +257,16 @@ def main() -> None:
         EnvironmentMismatchError,
     ) as exc:
         logger.opt(exception=True).critical(
-            "config_failure | type={} error={}", type(exc).__name__, exc
+            "config_failure",
+            type=type(exc).__name__,
+            error=str(exc),
         )
         sys.exit(1)
     except Exception as exc:
         logger.opt(exception=True).critical(
-            "critical_failure | type={} error={}", type(exc).__name__, exc
+            "critical_failure",
+            type=type(exc).__name__,
+            error=str(exc),
         )
         sys.exit(1)
 
