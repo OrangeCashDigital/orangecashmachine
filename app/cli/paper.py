@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # Delegar al use case — este CLI solo reporta resultados
-    from app.use_cases.run_paper import execute
+    from app.use_cases.execute_paper import execute
     run_result = execute(args)
 
     if not run_result.success:

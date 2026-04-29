@@ -2,21 +2,25 @@
 """
 app/
 ====
-Composition root — entrypoints ejecutables de OrangeCashMachine.
+Composition Root — entrypoints ejecutables de OrangeCashMachine.
 
 Este paquete NO contiene lógica de negocio. Solo orquesta dominios
 y expone CLIs. Puede importar libremente de cualquier dominio.
 
-Principio: Composition Root Pattern (Fowler, PEAA) — un único lugar
-donde se ensamblan todas las dependencias antes de ejecutar.
+Estructura interna
+------------------
+  cli/              — thin CLI entrypoints (argparse, logging, exit codes)
+    live.py         — live trading ⚠️  capital real
+    paper.py        — paper trading
+    market_data.py  — market data pipeline (Hydra)
 
-Entrypoints
------------
-  run_market_data.py — CLI market data pipeline (Hydra → RuntimeContext → flow)
-  run_paper.py       — CLI paper trading (Gold/Iceberg → TradingEngine)
+  use_cases/        — Application Layer (orquestación, DI, flujos)
+    execute_live.py
+    execute_paper.py
+    rebalance.py
 
-Uso (después de instalar con uv):
-    uv run ocm                                         # market data pipeline
-    uv run paper [--symbol ETH/USDT] [--dry-run]      # paper trading
-    uv run python deploy.py [--prod]                   # Prefect deployment
+Flujo canónico:
+  cli/ → use_cases/ → trading/ → portfolio/ → domain/
+
+Principios: Composition Root (Fowler PEAA) · SRP · DIP
 """

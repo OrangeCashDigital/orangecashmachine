@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         args.market_type, args.strategy, args.capital,
     )
 
-    from app.use_cases.run_live import execute
+    from app.use_cases.execute_live import execute
     run_result = execute(args)
 
     if not run_result.success:

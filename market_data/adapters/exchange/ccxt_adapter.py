@@ -141,7 +141,11 @@ class CCXTAdapter(ExchangeAdapter):
             self._resilience_config = None
 
         self._client: Optional[ccxt.Exchange] = None
-        self._init_lock: asyncio.Lock = asyncio.Lock()
+        # asyncio.Lock lazy — se crea en el loop activo para evitar
+        # RuntimeError: Event loop is closed cuando el adapter se
+        # instancia fuera de un loop (ej. Prefect entre flow runs).
+        # Ref: docs.python.org/3/library/asyncio-sync.html
+        self._init_lock: Optional[asyncio.Lock] = None
         self._markets_cache: Optional[Dict[str, Any]] = None
         self._markets_cached_at: float = 0.0
 
@@ -173,6 +177,17 @@ class CCXTAdapter(ExchangeAdapter):
         self._closed: bool = False
 
     # ----------------------------------------------------------
+    # Sync primitives — lazy init (loop-safe)
+    # ----------------------------------------------------------
+
+    @property
+    def _lock(self) -> asyncio.Lock:
+        """asyncio.Lock lazy — creado en el loop activo corriente."""
+        if self._init_lock is None:
+            self._init_lock = asyncio.Lock()
+        return self._init_lock
+
+    # ----------------------------------------------------------
     # Lifecycle
     # ----------------------------------------------------------
 
@@ -180,13 +195,13 @@ class CCXTAdapter(ExchangeAdapter):
         """Inicializa cliente y carga mercados (idempotente)."""
         if self._client is not None:
             return
-        async with self._init_lock:
+        async with self._lock:
             if self._client is None:
                 await self._initialize()
 
     async def reconnect(self) -> None:
         """Fuerza reconexión cerrando el cliente actual (thread-safe)."""
-        async with self._init_lock:
+        async with self._lock:
             old_client = self._client
             self._client = None
             if old_client is not None:
@@ -221,7 +236,7 @@ class CCXTAdapter(ExchangeAdapter):
         if self._closed:
             return
         self._closed = True
-        async with self._init_lock:
+        async with self._lock:
             if self._client is None:
                 return
             try:
@@ -437,7 +452,7 @@ class CCXTAdapter(ExchangeAdapter):
         """
         # Cold start: cliente nunca inicializado
         if self._client is None:
-            async with self._init_lock:
+            async with self._lock:
                 if self._client is None:
                     await self._initialize()
             return self._client

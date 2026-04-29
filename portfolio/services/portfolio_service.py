@@ -20,7 +20,7 @@ No genera señales, no valida riesgo, no accede a exchanges.
 
 Thread-safety
 -------------
-Todas las mutaciones ocurren bajo _lock (threading.Lock).
+Delegada al PositionStore. InMemoryPositionStore usa threading.Lock.
 snapshot() devuelve una copia inmutable — el caller no puede
 corromper el estado interno.
 
@@ -29,59 +29,23 @@ SafeOps
 - open_position / close_position nunca lanzan — errores logueados.
 - snapshot() nunca lanza — retorna PortfolioState vacío en caso de error.
 
-Principios: SOLID · DDD · SafeOps · KISS
+Stores disponibles (OCP — mismo Protocol, intercambiables):
+  InMemoryPositionStore  → paper trading / tests
+  RedisPositionStore     → producción (cross-restart)
+
+Principios: SOLID · DDD · SafeOps · KISS · SRP
 """
 from __future__ import annotations
 
-import threading
 from datetime import datetime, timezone
 from typing import Optional
 
 from loguru import logger
 
+from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.models.position import PortfolioState, PositionSnapshot
 from portfolio.ports.position_store import PositionStore
 
-
-# ---------------------------------------------------------------------------
-# In-memory store — default para paper trading y tests
-# ---------------------------------------------------------------------------
-
-class InMemoryPositionStore:
-    """
-    Implementación in-memory de PositionStore.
-
-    Adecuada para paper trading y tests.
-    Para producción, reemplazar por RedisPositionStore (OCP — mismo Protocol).
-    """
-
-    def __init__(self) -> None:
-        self._positions: dict[str, PositionSnapshot] = {}
-        self._lock = threading.Lock()
-
-    def save(self, position: PositionSnapshot) -> None:
-        with self._lock:
-            self._positions[position.order_id] = position
-
-    def delete(self, order_id: str) -> None:
-        with self._lock:
-            self._positions.pop(order_id, None)
-
-    def get(self, order_id: str) -> Optional[PositionSnapshot]:
-        return self._positions.get(order_id)
-
-    def all(self) -> list[PositionSnapshot]:
-        with self._lock:
-            return list(self._positions.values())
-
-    def clear(self) -> None:
-        with self._lock:
-            self._positions.clear()
-
-
-# ---------------------------------------------------------------------------
-# PortfolioService
-# ---------------------------------------------------------------------------
 
 class PortfolioService:
     """
@@ -90,7 +54,9 @@ class PortfolioService:
     Parameters
     ----------
     capital_usd : float         — capital total del portfolio
-    store       : PositionStore — backend de persistencia (default: in-memory)
+    store       : PositionStore — backend de persistencia
+                                  default: InMemoryPositionStore (paper/tests)
+                                  producción: RedisPositionStore
     exchange    : str           — exchange principal (para logging)
     """
 
@@ -101,8 +67,9 @@ class PortfolioService:
         exchange:    str = "unknown",
     ) -> None:
         if capital_usd <= 0:
-            raise ValueError(f"PortfolioService: capital_usd debe ser positivo, recibido: {capital_usd}")
-
+            raise ValueError(
+                f"PortfolioService: capital_usd debe ser positivo, recibido: {capital_usd}"
+            )
         self._capital_usd = capital_usd
         self._store       = store or InMemoryPositionStore()
         self._exchange    = exchange
@@ -116,7 +83,7 @@ class PortfolioService:
         self,
         order_id:    str,
         symbol:      str,
-        side:        str,          # "long" | "short"
+        side:        str,
         entry_price: float,
         size_pct:    float,
         entry_at:    Optional[datetime] = None,
@@ -139,11 +106,11 @@ class PortfolioService:
             )
             self._store.save(position)
             self._log.info(
-                "Posición abierta | {} {} @ {:.4f} size={:.1%}",
-                side.upper(), symbol, entry_price, size_pct,
+                "position_opened | {} {} @ {:.4f} size={:.1%} order={}",
+                side.upper(), symbol, entry_price, size_pct, order_id,
             )
         except Exception as exc:
-            self._log.error("open_position error | order={} {}", order_id, exc)
+            self._log.error("open_position_error | order={} err={}", order_id, exc)
 
     def close_position(self, order_id: str) -> Optional[PositionSnapshot]:
         """
@@ -153,22 +120,22 @@ class PortfolioService:
 
         Returns
         -------
-        PositionSnapshot que fue cerrada, o None si no existía.
+        PositionSnapshot cerrada, o None si no existía.
         SafeOps: nunca lanza.
         """
         try:
             position = self._store.get(order_id)
             if position is None:
-                self._log.warning("close_position: order_id no encontrado | {}", order_id)
+                self._log.warning("close_position_not_found | order={}", order_id)
                 return None
             self._store.delete(order_id)
             self._log.info(
-                "Posición cerrada | {} {} order={}",
+                "position_closed | {} {} order={}",
                 position.side.upper(), position.symbol, order_id,
             )
             return position
         except Exception as exc:
-            self._log.error("close_position error | order={} {}", order_id, exc)
+            self._log.error("close_position_error | order={} err={}", order_id, exc)
             return None
 
     # ------------------------------------------------------------------
@@ -188,7 +155,7 @@ class PortfolioService:
                 capital_usd = self._capital_usd,
             )
         except Exception as exc:
-            self._log.error("snapshot error | {}", exc)
+            self._log.error("snapshot_error | {}", exc)
             return PortfolioState(
                 positions   = (),
                 capital_usd = self._capital_usd,

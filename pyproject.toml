@@ -72,8 +72,11 @@ dependencies = [
 ]
 
 [project.scripts]
-ocm = "main:main"
-paper = "app.run_paper:main"
+# SSOT de entrypoints CLI — Fail-Fast en install time si el target no existe.
+ocm    = "app.cli.market_data:main"   # market data pipeline (Hydra)
+live   = "app.cli.live:main"          # live trading ⚠️  capital real
+paper  = "app.cli.paper:main"         # paper trading
+deploy = "deploy:main"                # Prefect deployment runner
 
 [project.urls]
 Repository = "https://github.com/orangemusic/orangecashmachine"
@@ -141,7 +144,8 @@ packages = [
 # Ejecutar: uv run lint-imports
 # =============================================================================
 [tool.importlinter]
-root_packages = ["market_data", "ocm_platform", "core", "infra", "trading", "data_platform"]
+include_external_packages = true
+root_packages = ["market_data", "ocm_platform", "trading", "data_platform", "portfolio"]
 
 # BC-01 — exchange adapter boundary
 # Ningun modulo externo importa ccxt_adapter directamente.
@@ -156,8 +160,6 @@ source_modules = [
     "market_data.orchestration",
     "market_data.quality",
     "trading",
-    "core",
-    "infra",
 ]
 forbidden_modules = ["market_data.adapters.exchange.ccxt_adapter"]
 ignore_imports = [
@@ -187,14 +189,13 @@ forbidden_modules = ["trading.execution"]
 
 # BC-05 — core sin dependencias de negocio
 [[tool.importlinter.contracts]]
-name    = "BC-05: core has no business logic dependencies"
-type    = "forbidden"
-source_modules = ["core"]
-forbidden_modules = ["market_data", "trading", "data_platform", "infra"]
-
-# BC-06 — platform sin dependencias de negocio (igual que BC-05 para core)
-[[tool.importlinter.contracts]]
 name    = "BC-06: platform has no business logic dependencies"
 type    = "forbidden"
 source_modules = ["ocm_platform"]
 forbidden_modules = ["market_data", "trading", "data_platform", "infra"]
+
+[[tool.importlinter.contracts]]
+name    = "BC-07: portfolio isolated from execution"
+type    = "forbidden"
+source_modules = ["portfolio"]
+forbidden_modules = ["trading.execution", "trading.strategies"]
