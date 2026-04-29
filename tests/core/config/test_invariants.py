@@ -28,11 +28,11 @@ from pathlib import Path
 
 
 import core.config.env_vars as env_vars_module
-from core.config.env_vars import (
+from ocm_platform.config.env_vars import (
     OCM_DATA_LAKE_PATH,
     OCM_GOLD_PATH,
 )
-from core.config.paths import (
+from ocm_platform.config.paths import (
     bronze_ohlcv_root,
     data_lake_root,
     gold_features_root,

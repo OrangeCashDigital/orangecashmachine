@@ -15,12 +15,12 @@ import dataclasses
 
 import pytest
 
-from core.config.structured.observability import (
+from ocm_platform.config.structured.observability import (
     LoggingConfig as HydraLoggingConfig,
     MetricsConfig as HydraMetricsConfig,
 )
-from core.observability.config import LoggingConfig as PydanticLoggingConfig
-from core.config.schema import MetricsConfig as PydanticMetricsConfig
+from ocm_platform.observability.config import LoggingConfig as PydanticLoggingConfig
+from ocm_platform.config.schema import MetricsConfig as PydanticMetricsConfig
 
 
 def _hydra_fields(cls) -> set[str]:

@@ -23,9 +23,9 @@ def serve_local() -> None:
     """Modo desarrollo: ejecuta el flow localmente con runtime_context."""
     import asyncio
     from market_data.orchestration.flows.batch_flow import market_data_flow
-    from core.config.runtime import RunConfig
-    from core.config.hydra_loader import load_appconfig_standalone
-    from core.config.runtime_context import RuntimeContext
+    from ocm_platform.config.runtime import RunConfig
+    from ocm_platform.config.hydra_loader import load_appconfig_standalone
+    from ocm_platform.config.runtime_context import RuntimeContext
     from datetime import datetime, timezone
     from uuid import uuid4
 
@@ -55,9 +55,9 @@ def deploy_prod() -> None:
     """Modo producción adaptado: registra deployment y ejecuta con runtime_context (prueba)."""
     import asyncio
     from market_data.orchestration.flows.batch_flow import market_data_flow
-    from core.config.runtime import RunConfig
-    from core.config.hydra_loader import load_appconfig_standalone
-    from core.config.runtime_context import RuntimeContext
+    from ocm_platform.config.runtime import RunConfig
+    from ocm_platform.config.hydra_loader import load_appconfig_standalone
+    from ocm_platform.config.runtime_context import RuntimeContext
     from datetime import datetime, timezone
     from uuid import uuid4
 

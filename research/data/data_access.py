@@ -54,7 +54,7 @@ __all__ = [
 ]
 
 # Exchange por defecto para research
-from core.config.env_vars import OCM_EXCHANGE as _OCM_EXCHANGE, OCM_MARKET_TYPE as _OCM_MARKET_TYPE
+from ocm_platform.config.env_vars import OCM_EXCHANGE as _OCM_EXCHANGE, OCM_MARKET_TYPE as _OCM_MARKET_TYPE
 _DEFAULT_EXCHANGE: str = os.environ.get(_OCM_EXCHANGE, "kucoin")
 _DEFAULT_MARKET_TYPE: str = os.environ.get(_OCM_MARKET_TYPE, "spot")
 

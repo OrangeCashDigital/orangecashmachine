@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import patch
 
 import core.observability.logger as _setup_mod
-from core.observability.config import LoggingConfig
-from core.observability.logger import (
+from ocm_platform.observability.config import LoggingConfig
+from ocm_platform.observability.logger import (
     bootstrap_logging,
     configure_logging,
     bind_pipeline,

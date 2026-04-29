@@ -7,7 +7,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
-from core.observability.sinks import LokiSink, PrometheusLogSink, _LOG_COUNTER
+from ocm_platform.observability.sinks import LokiSink, PrometheusLogSink, _LOG_COUNTER
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

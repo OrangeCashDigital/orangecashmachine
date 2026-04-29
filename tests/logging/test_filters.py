@@ -3,7 +3,7 @@ from __future__ import annotations
 """tests/logging/test_filters.py — Unit tests para filtros de sinks."""
 
 import pytest
-from core.observability.filters import pipeline_filter, strict_pipeline_filter
+from ocm_platform.observability.filters import pipeline_filter, strict_pipeline_filter
 
 
 def _record(name: str, extra: dict | None = None) -> dict:

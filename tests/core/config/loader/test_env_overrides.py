@@ -15,7 +15,7 @@ Cambios respecto a versión anterior:
 
 import pytest
 from omegaconf import OmegaConf
-from core.config.layers.env_override import apply_env_overrides
+from ocm_platform.config.layers.env_override import apply_env_overrides
 
 
 @pytest.fixture

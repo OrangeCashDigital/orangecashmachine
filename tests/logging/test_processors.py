@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import pytest
-from core.observability.processors import (
+from ocm_platform.observability.processors import (
     build_processor_chain,
     process_event,
     _sanitize_secrets,

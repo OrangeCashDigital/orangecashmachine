@@ -14,7 +14,7 @@ import pytest
 from omegaconf import OmegaConf
 from unittest.mock import patch, MagicMock
 
-from core.config.hydra_loader import load_appconfig_from_hydra
+from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ def test_standalone_propagates_run_id_to_snapshot(tmp_path, minimal_cfg):
     que el hydra path — sin configuration drift entre flows.
     """
     import yaml
-    from core.config.hydra_loader import load_appconfig_standalone
+    from ocm_platform.config.hydra_loader import load_appconfig_standalone
 
     # Construir config_dir mínimo en tmp_path
     config_dir = tmp_path / "config"

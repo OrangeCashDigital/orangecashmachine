@@ -37,7 +37,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 from loguru import logger
 
-from core.config.structured import (
+from ocm_platform.config.structured import (
     PipelineConfig,
     HistoricalConfig,
     ObservabilityConfig,
@@ -66,14 +66,14 @@ def _register_structured_configs() -> None:
 _register_structured_configs()
 
 import core.config.loader as config_loader
-from core.config.hydra_loader import load_appconfig_from_hydra
-from core.config.runtime import RunConfig
-from core.config.runtime_context import RuntimeContext
-from core.config.schema import AppConfig
-from core.observability import bootstrap_logging, configure_logging
+from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
+from ocm_platform.config.runtime import RunConfig
+from ocm_platform.config.runtime_context import RuntimeContext
+from ocm_platform.config.schema import AppConfig
+from ocm_platform.observability import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner
-from infra.observability.runtime import init_metrics_runtime
-from infra.observability.adapters import PrometheusPusher, NoopPusher
+from ocm_platform.infra.observability.runtime import init_metrics_runtime
+from ocm_platform.infra.observability.adapters import PrometheusPusher, NoopPusher
 from market_data.safety.environment_validator import (
     EnvironmentValidator,
     EnvironmentMismatchError,

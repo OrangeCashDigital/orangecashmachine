@@ -5,14 +5,14 @@ from __future__ import annotations
 from unittest.mock import patch
 
 
-from core.config.paths import (
+from ocm_platform.config.paths import (
     _expand_env,
     _read_yaml_lake_path,
     data_lake_root,
     bronze_ohlcv_root,
     gold_features_root,
 )
-from core.config.env_vars import OCM_DATA_LAKE_PATH, OCM_GOLD_PATH
+from ocm_platform.config.env_vars import OCM_DATA_LAKE_PATH, OCM_GOLD_PATH
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 import pytest
 from omegaconf import OmegaConf
-from core.config.layers.env_override import apply_env_overrides
+from ocm_platform.config.layers.env_override import apply_env_overrides
 
 
 def test_env_override_applies_correctly():
