@@ -365,7 +365,7 @@ class IcebergStorage:
     def get_current_snapshot(self) -> Optional[dict]:
         # Expone el snapshot actual sin acceso directo a _table.
         # GoldStorage usa este metodo para anclar lineage antes del build.
-        # SafeOps: nunca lanza — retorna None si no hay snapshot aun.
+        # SafeOps: nunca lanza — retorna None si tabla nueva o Iceberg degradado.
         try:
             snap = self._table.current_snapshot()
             if snap is None:
@@ -374,7 +374,11 @@ class IcebergStorage:
                 "snapshot_id":  snap.snapshot_id,
                 "timestamp_ms": snap.timestamp_ms,
             }
-        except Exception:
+        except Exception as _snap_exc:
+            logger.debug(
+                "get_snapshot_info failed (tabla nueva o Iceberg no init)",
+                error=str(_snap_exc),
+            )
             return None
 
     def load_ohlcv(
@@ -465,7 +469,11 @@ class IcebergStorage:
                 "exchange":    self._exchange,
                 "market_type": self._market_type,
             }
-        except Exception:
+        except Exception as _ver_exc:
+            logger.debug(
+                "get_version_info failed (tabla nueva o Iceberg no init)",
+                error=str(_ver_exc),
+            )
             return None
 
     def find_partition_files(

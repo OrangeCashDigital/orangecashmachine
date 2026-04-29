@@ -113,8 +113,12 @@ class BackfillStrategy(StrategyMixin):
                     "Origin cache hit", origin=pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
                 )
                 return ts_ms
-        except Exception:
-            pass
+        except Exception as _cache_exc:
+            # SafeOps: Redis caído no cancela el backfill.
+            # debug (no warning) — es esperado tras reinicios del stack.
+            _log.bind(
+                exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+            ).debug("Origin cache read failed", error=str(_cache_exc))
 
         try:
             raw_data = await ctx.fetcher.fetch_chunk(
@@ -130,8 +134,11 @@ class BackfillStrategy(StrategyMixin):
                 _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
                     "Origin cached", origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
                 )
-            except Exception:
-                pass
+            except Exception as _cache_exc:
+                # SafeOps: fallo de escritura en cache no aborta el backfill.
+                _log.bind(
+                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                ).debug("Origin cache write failed", error=str(_cache_exc))
 
             return origin_ms
 

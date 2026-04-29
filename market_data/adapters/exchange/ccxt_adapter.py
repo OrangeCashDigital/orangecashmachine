@@ -208,8 +208,13 @@ class CCXTAdapter(ExchangeAdapter):
             if old_client is not None:
                 try:
                     await old_client.close()
-                except Exception:
-                    pass
+                except Exception as _close_exc:
+                    # SafeOps: cierre puede fallar si la sesión ya estaba rota.
+                    # debug — es ruido esperado, no un error accionable.
+                    logger.debug(
+                        "reconnect: old client close failed | {} | {}",
+                        self._exchange_id, _close_exc,
+                    )
             await self._initialize()
 
     async def is_healthy(self) -> bool:
@@ -565,8 +570,11 @@ class CCXTAdapter(ExchangeAdapter):
                 # sockets abiertos o estado inconsistente tras cancel de wait_for.
                 try:
                     await client.close()
-                except Exception:
-                    pass
+                except Exception as _close_exc:
+                    logger.debug(
+                        "_initialize: client close after cancel failed | {} | {}",
+                        self._exchange_id, _close_exc,
+                    )
                 client = None
 
             except Exception as exc:
@@ -582,8 +590,11 @@ class CCXTAdapter(ExchangeAdapter):
                 # Destruir cliente antes de reintentar — evita leaks de sesión.
                 try:
                     await client.close()
-                except Exception:
-                    pass
+                except Exception as _close_exc:
+                    logger.debug(
+                        "_initialize: client close before retry failed | {} | {}",
+                        self._exchange_id, _close_exc,
+                    )
                 client = None
                 await asyncio.sleep(delay)
 
