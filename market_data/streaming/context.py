@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ocm_platform.config.runtime_context import RuntimeContext
+    from ocm_platform.runtime.context import RuntimeContext
 
 
 @dataclass(frozen=True)

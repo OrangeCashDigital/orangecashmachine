@@ -45,7 +45,7 @@ from typing import List, Optional
 from prefect import flow, get_run_logger
 
 from ocm_platform.config.schema import AppConfig
-from ocm_platform.config.runtime_context import RuntimeContext
+from ocm_platform.runtime.context import RuntimeContext
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.processing.pipelines.resample_pipeline import ResamplePipeline
 from market_data.ports.observability import MetricsPusherPort

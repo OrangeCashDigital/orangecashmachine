@@ -67,8 +67,8 @@ _register_structured_configs()
 
 import core.config.loader as config_loader
 from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
-from ocm_platform.config.runtime import RunConfig
-from ocm_platform.config.runtime_context import RuntimeContext
+from ocm_platform.runtime.run_config import RunConfig
+from ocm_platform.runtime.context import RuntimeContext
 from ocm_platform.config.schema import AppConfig
 from ocm_platform.observability import bootstrap_logging, configure_logging
 from market_data.orchestration.entrypoint import run as default_pipeline_runner

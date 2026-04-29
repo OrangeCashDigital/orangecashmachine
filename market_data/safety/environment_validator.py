@@ -34,7 +34,7 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from ocm_platform.config.schema import AppConfig
-    from ocm_platform.config.runtime import RunConfig
+    from ocm_platform.runtime.run_config import RunConfig
 
 __all__ = ["EnvironmentValidator", "EnvironmentMismatchError"]
 

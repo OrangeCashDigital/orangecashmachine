@@ -39,7 +39,7 @@ from prefect import flow, get_run_logger
 from prefect.runtime import flow_run as _prefect_flow_run
 
 from ocm_platform.config.schema import AppConfig
-from ocm_platform.config.runtime_context import RuntimeContext
+from ocm_platform.runtime.context import RuntimeContext
 from market_data.orchestration.tasks.exchange_tasks import (
     ExchangeProbe,
     validate_exchange_connection,
