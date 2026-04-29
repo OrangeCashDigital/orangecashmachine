@@ -181,6 +181,77 @@ class TradingEngine:
     # ------------------------------------------------------------------
 
     @classmethod
+    def build_live(
+        cls,
+        strategy_name: str,
+        strategy_cfg:  dict,
+        data_source:   FeatureSource,
+        risk_config:   Optional[RiskConfig] = None,
+        capital_usd:   float = 10_000.0,
+        exchange:      str   = "bybit",
+        market_type:   str   = "spot",
+        guard:         Optional[ExecutionGuard] = None,
+        on_fill:       Optional[Callable[[Order], None]] = None,
+        on_reject:     Optional[Callable[[Order], None]] = None,
+    ) -> "TradingEngine":
+        """
+        Factory para live trading.
+
+        Construye: Strategy + RiskManager + LiveExecutor + OMS + Engine.
+        LiveExecutor envia ordenes reales al exchange via CCXT.
+
+        PRECAUCIÓN SafeOps
+        ------------------
+        - Requiere ExecutionGuard activo — build_live() falla si guard=None.
+          El guard es el kill switch de emergencia en produccion.
+        - RiskConfig obligatoria en live — no usa defaults permisivos.
+        - Separado de build_paper() (SRP) — sin condicional interno.
+
+        Parameters
+        ----------
+        on_fill   : callback(order) — TradeTracker + PortfolioService via composite.
+        on_reject : callback(order) — alerting / logging externo.
+        """
+        from trading.execution.oms import OMS
+        from trading.execution.live_executor import LiveExecutor
+        from trading.risk.manager import RiskManager
+
+        # Fail-Fast: guard obligatorio en live — sin kill switch no hay live trading
+        if guard is None:
+            raise ValueError(
+                "TradingEngine.build_live: guard es obligatorio en live trading. "
+                "Proporcionar un ExecutionGuard configurado."
+            )
+        # Fail-Fast: RiskConfig obligatoria en live — no defaults permisivos
+        if risk_config is None:
+            raise ValueError(
+                "TradingEngine.build_live: risk_config es obligatoria en live trading. "
+                "Los defaults de RiskConfig no son apropiados para capital real."
+            )
+
+        strategy     = StrategyRegistry.get(strategy_name)(**strategy_cfg)
+        risk_manager = RiskManager(
+            config      = risk_config,
+            capital_usd = capital_usd,
+        )
+        executor = LiveExecutor(exchange=exchange, market_type=market_type)
+        oms      = OMS(
+            risk_manager = risk_manager,
+            executor     = executor,
+            guard        = guard,
+            on_fill      = on_fill,
+            on_reject    = on_reject,
+        )
+        return cls(
+            strategy    = strategy,
+            oms         = oms,
+            data_source = data_source,
+            guard       = guard,
+            exchange    = exchange,
+            market_type = market_type,
+        )
+
+    @classmethod
     def build_paper(
         cls,
         strategy_name: str,
