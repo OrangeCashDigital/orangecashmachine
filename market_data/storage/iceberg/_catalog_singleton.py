@@ -16,9 +16,10 @@ SSOT: ocm_platform.config.paths.data_lake_root()
     iceberg_warehouse/ → data_lake_root().parent / "iceberg_warehouse"
 
 Precedencia de resolución (data_lake_root):
-    1. OCM_DATA_LAKE_PATH (env var)          — máxima prioridad
-    2. storage.data_lake.path (YAML)         — configurable por entorno
-    3. repo_root()/data_platform/data_lake   — fallback estructural
+    1. OCM_STORAGE__DATA_LAKE__PATH (env var) — canónica, L2-aligned
+    2. OCM_DATA_LAKE_PATH (env var)           — DEPRECATED: legacy
+    3. storage.data_lake.path (YAML)          — configurable por entorno
+    4. repo_root()/data_platform/data_lake    — fallback estructural
 
 Thread-safety
 -------------
@@ -66,7 +67,7 @@ def get_catalog() -> SqlCatalog:
             return _CATALOG
 
         # SSOT: data_lake_root() resuelve en orden:
-        #   OCM_DATA_LAKE_PATH → YAML → repo_root()/data_platform/data_lake
+        #   OCM_STORAGE__DATA_LAKE__PATH → OCM_DATA_LAKE_PATH (deprecated) → YAML → fallback
         lake     = data_lake_root()
         base     = lake.parent          # data_platform/ (o el parent del lake path)
         cat_path  = base / "iceberg_catalog"
