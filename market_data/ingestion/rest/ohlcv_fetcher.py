@@ -218,6 +218,7 @@ class DownloadResult:
 # ==========================================================
 
 from market_data.ports.state import CursorStorePort as CursorStore
+from ocm_platform.infra.state.cursor_store import InMemoryCursorStore
 
 
 # ==========================================================

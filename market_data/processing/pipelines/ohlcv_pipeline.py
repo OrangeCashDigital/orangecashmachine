@@ -483,8 +483,6 @@ class OHLCVPipeline:
         Nota: load_ohlcv está en el contrato OHLCVStorage — disponible en
         IcebergStorage sin necesidad de getattr.
         """
-        from market_data.processing.utils.gap_utils import scan_gaps
-        from market_data.quality.invariants.invariants import check_dataset_invariants
 
         written = [r for r in summary.results if r.success and r.rows > 0]
         if not written:
