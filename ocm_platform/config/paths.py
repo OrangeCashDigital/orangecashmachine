@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-core/config/paths.py
+ocm_platform/config/paths.py
 ====================
 
 Single Source of Truth para los paths del Data Lakehouse.
@@ -26,7 +26,6 @@ Diseño
 • Configurable por entorno sin cambiar código
 • Compatible con Docker (montar volumen + OCM_DATA_LAKE_PATH)
 • Las funciones son lazy — no leen disco en import time
-• core/utils.py delega aquí para mantener compatibilidad de imports
 """
 
 import os
@@ -41,7 +40,26 @@ from ocm_platform.config.env_vars import (
     OCM_DATA_LAKE_PATH,          # DEPRECATED — legacy, transicion controlada
     OCM_GOLD_PATH,
 )
-from ocm_platform.utils import repo_root
+def repo_root() -> Path:
+    """Devuelve la raíz del repositorio localizando el directorio .git.
+
+    Fail-Fast explícito: nunca usa parents[N] hardcodeado.
+    Robusto ante reubicación de archivos.
+
+    Returns:
+        Path absoluto a la raíz del repositorio.
+
+    Raises:
+        RuntimeError: Si no se encuentra .git en ningún ancestro.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / ".git").exists():
+            return parent
+    raise RuntimeError(
+        f"No se encontró .git subiendo desde {here}. "
+        "¿Estás ejecutando desde fuera del repositorio?"
+    )
 
 
 # ==========================================================
@@ -229,4 +247,5 @@ __all__ = [
     "bronze_ohlcv_root",
     "silver_ohlcv_root",
     "gold_features_root",
+    "repo_root",
 ]

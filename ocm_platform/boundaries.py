@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ocm_platform/boundaries.py
-==================
+===========================
 
 Contratos explícitos entre Bounded Contexts.
 
