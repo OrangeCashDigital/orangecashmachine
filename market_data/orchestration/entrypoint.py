@@ -37,8 +37,8 @@ from ocm_platform.runtime.run_config import RunConfig
 from ocm_platform.config.hydra_loader import load_appconfig_standalone
 from ocm_platform.runtime.context import RuntimeContext
 from market_data.orchestration.flows.batch_flow import market_data_flow
-from market_data.safety.execution_guard import ExecutionGuard, ExecutionStoppedError
-from market_data.safety import guard_context
+from ocm_platform.runtime.guard import ExecutionGuard, ExecutionStoppedError
+from ocm_platform.runtime import guard_context
 from market_data.orchestration.post_processing import PostProcessingService
 from market_data.ports.observability import MetricsPusherPort
 

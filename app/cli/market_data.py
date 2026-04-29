@@ -86,7 +86,7 @@ from ocm_platform.infra.observability.runtime import init_metrics_runtime
 from ocm_platform.infra.observability.adapters import PrometheusPusher, NoopPusher
 from market_data.orchestration.entrypoint import run as _default_pipeline_runner
 from market_data.ports.observability import MetricsPusherPort
-from market_data.safety.environment_validator import (
+from ocm_platform.runtime.environment_validator import (
     EnvironmentValidator,
     EnvironmentMismatchError,
 )

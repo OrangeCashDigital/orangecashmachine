@@ -55,8 +55,8 @@ from market_data.orchestration.tasks.batch_tasks import (
     run_repair_pipeline,
 )
 from market_data.ports.observability import MetricsPusherPort
-from market_data.safety import guard_context
-from market_data.safety.execution_guard import ExecutionGuard
+from ocm_platform.runtime import guard_context
+from ocm_platform.runtime.guard import ExecutionGuard
 
 from ocm_platform.config.env_vars import PUSHGATEWAY_URL as _PUSHGATEWAY_URL
 

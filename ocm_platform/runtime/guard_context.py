@@ -39,7 +39,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from market_data.safety.execution_guard import ExecutionGuard
+    from ocm_platform.runtime.guard import ExecutionGuard
 
 __all__ = ["set_guard", "get_guard"]
 

@@ -52,7 +52,7 @@ from ocm_platform.runtime.run_config import RunConfig
 from ocm_platform.runtime.context import RuntimeContext
 from ocm_platform.config.hydra_loader import load_appconfig_standalone
 
-from market_data.safety import guard_context
+from ocm_platform.runtime import guard_context
 from market_data.orchestration.entrypoint import build_context
 
 _log = bind_pipeline("market_data.main")
