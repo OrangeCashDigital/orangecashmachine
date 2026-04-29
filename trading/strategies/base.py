@@ -14,34 +14,12 @@ Principios
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Literal
 
 import pandas as pd
 
-
-SignalType = Literal["buy", "sell", "hold"]
-
-
-@dataclass
-class Signal:
-    """Señal de trading generada por una estrategia."""
-    symbol:     str
-    timeframe:  str
-    signal:     SignalType
-    price:      float
-    timestamp:  datetime
-    confidence: float = 1.0          # 0.0 – 1.0
-    metadata:   dict  = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(f"confidence must be in [0, 1], got {self.confidence}")
-
-    @property
-    def is_actionable(self) -> bool:
-        return self.signal in ("buy", "sell")
+# Signal vive en domain/ — re-exportado aquí para backwards compatibility.
+# Importar directamente desde domain.value_objects en código nuevo.
+from domain.value_objects.signal import Signal, SignalType  # noqa: F401
 
 
 class BaseStrategy(ABC):
