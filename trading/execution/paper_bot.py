@@ -5,29 +5,28 @@ trading/execution/paper_bot.py
 
 PaperBot — facade de conveniencia sobre TradingEngine para paper trading.
 
-Responsabilidad unica (SRP)
+Responsabilidad única (SRP)
 ---------------------------
 Proveer una API simple de alto nivel para ejecutar un ciclo de paper trading
-con una sola llamada. No contiene logica de negocio propia.
+con una sola llamada. No contiene lógica de negocio propia.
 
-Toda la logica real vive en las capas correctas:
+Toda la lógica real vive en las capas correctas:
   - Carga de datos   : FeatureSource (inyectado)
   - Estrategia       : BaseStrategy  (inyectado)
-  - Validacion risk  : RiskManager   (construido internamente via TradingEngine)
-  - Ejecucion        : PaperExecutor (construido internamente via TradingEngine)
+  - Validación risk  : RiskManager   (construido internamente via TradingEngine)
+  - Ejecución        : PaperExecutor (construido internamente via TradingEngine)
   - Ciclo completo   : TradingEngine (delegado en run_once)
 
 Cuando usar PaperBot vs TradingEngine directamente
 ---------------------------------------------------
-  PaperBot      : tests unitarios, scripts simples, exploracion interactiva.
-  TradingEngine : produccion, Prefect tasks, integracion con TradeTracker.
+  PaperBot      : tests unitarios, scripts simples, exploración interactiva.
+  TradingEngine : producción, Prefect tasks, integración con TradeTracker.
 
 Principios: SOLID (SRP, DIP, OCP) · KISS · DRY · SafeOps
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from loguru import logger
@@ -43,24 +42,36 @@ from trading.strategies.base import BaseStrategy
 # Value object — orden simulada observable
 # =============================================================================
 
-@dataclass
 class PaperOrder:
     """
     Snapshot observable de una orden paper aceptada.
 
-    Inmutable semanticamente — representa un fill simulado en el momento
+    Inmutable semánticamente — representa un fill simulado en el momento
     en que la orden fue aceptada por el OMS.
 
     Nota: wrappea Order del OMS para mantener compatibilidad de API
     con tests y callers existentes que usan PaperBot directamente.
     """
-    symbol:    str
-    side:      str
-    price:     float
-    size_pct:  float
-    timestamp: datetime
-    signal:    SignalProtocol
-    reason:    str = ""
+
+    __slots__ = ("symbol", "side", "price", "size_pct", "timestamp", "signal", "reason")
+
+    def __init__(
+        self,
+        symbol:    str,
+        side:      str,
+        price:     float,
+        size_pct:  float,
+        timestamp: datetime,
+        signal:    SignalProtocol,
+        reason:    str = "",
+    ) -> None:
+        self.symbol    = symbol
+        self.side      = side
+        self.price     = price
+        self.size_pct  = size_pct
+        self.timestamp = timestamp
+        self.signal    = signal
+        self.reason    = reason
 
     def log(self) -> None:
         logger.info(
@@ -77,10 +88,9 @@ class PaperOrder:
 
     @classmethod
     def from_order(cls, order: Order) -> "PaperOrder":
-        """
-        Factory: construye PaperOrder desde Order del OMS.
+        """Factory: construye PaperOrder desde Order del OMS.
 
-        Punto unico de conversion OMS → API observable de PaperBot.
+        Punto único de conversión OMS → API observable de PaperBot.
         """
         return cls(
             symbol    = order.symbol,
@@ -89,6 +99,12 @@ class PaperOrder:
             size_pct  = order.size_pct,
             timestamp = order.fill_timestamp,
             signal    = order.signal,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"PaperOrder(symbol={self.symbol!r}, side={self.side!r}, "
+            f"price={self.price:.2f}, size_pct={self.size_pct:.1%})"
         )
 
 
@@ -100,16 +116,16 @@ class PaperBot:
     """
     Facade de paper trading sobre TradingEngine.
 
-    Responsabilidad unica: proveer una API simple que oculta el ensamblaje
+    Responsabilidad única: proveer una API simple que oculta el ensamblaje
     interno de TradingEngine + RiskManager + PaperExecutor + OMS.
 
-    No contiene logica de negocio — todo se delega al engine.
+    No contiene lógica de negocio — todo se delega al engine.
 
     Parameters
     ----------
     strategy    : BaseStrategy  — estrategia de trading a ejecutar.
     data_source : FeatureSource — fuente de datos Gold (DIP).
-    risk        : RiskConfig, optional — limites de riesgo (defaults seguros).
+    risk        : RiskConfig, optional — límites de riesgo (defaults seguros).
     exchange    : str — exchange de origen.
     market_type : str — tipo de mercado ("spot" | "linear" | "inverse").
     capital_usd : float — capital virtual para sizing (default: 10_000).
@@ -134,8 +150,8 @@ class PaperBot:
         self._open_trades: list[PaperOrder] = []
         self._order_log:   list[PaperOrder] = []
 
-        # Engine interno — toda la logica de negocio vive aqui
-        # on_fill callback conecta OMS → estado observable de PaperBot
+        # Engine interno — toda la lógica de negocio vive aquí.
+        # on_fill callback conecta OMS → estado observable de PaperBot.
         self._engine = TradingEngine.build_paper(
             strategy_name = strategy.name,
             strategy_cfg  = self._strategy_cfg(strategy),
@@ -153,11 +169,10 @@ class PaperBot:
     # =========================================================================
 
     def run_once(self) -> list[PaperOrder]:
-        """
-        Ejecuta un ciclo completo delegando al TradingEngine.
+        """Ejecuta un ciclo completo delegando al TradingEngine.
 
-        Retorna las ordenes generadas en este ciclo (subset de order_history).
-        SafeOps: nunca lanza — errores se loguean y retornan lista vacia.
+        Retorna las órdenes generadas en este ciclo (subset de order_history).
+        SafeOps: nunca lanza — errores se loguean y retornan lista vacía.
         """
         snapshot_before = len(self._order_log)
         try:
@@ -168,11 +183,11 @@ class PaperBot:
             self._log.error("run_once error | {}", exc)
             return []
 
-        # Ordenes generadas en este ciclo = delta del log desde antes del run
+        # Órdenes generadas en este ciclo = delta del log desde antes del run
         return list(self._order_log[snapshot_before:])
 
     def close_trade(self, order: PaperOrder) -> None:
-        """Marca una posicion como cerrada en el libro interno."""
+        """Marca una posición como cerrada en el libro interno."""
         if order in self._open_trades:
             self._open_trades.remove(order)
             self._log.info(
@@ -183,7 +198,7 @@ class PaperBot:
 
     @property
     def order_history(self) -> list[PaperOrder]:
-        """Historial completo de ordenes aceptadas. Append-only."""
+        """Historial completo de órdenes aceptadas. Append-only."""
         return list(self._order_log)
 
     @property
@@ -204,33 +219,27 @@ class PaperBot:
     # Private
     # =========================================================================
 
+    def _evaluate_signal(self, signal: SignalProtocol) -> Optional[PaperOrder]:
+        """Evalúa una señal contra las reglas de riesgo sin ejecutar el ciclo.
 
-    def _evaluate_signal(self, signal) -> "Optional[PaperOrder]":
-        """
-        Evalúa una señal contra las reglas de riesgo sin ejecutar el ciclo.
+        Accede al RiskManager vía el engine interno para no duplicar lógica
+        (DRY · SRP). Usado por tests unitarios para verificar el filtro de
+        riesgo con señales sintéticas sin pasar por run_once().
 
-        Delega a RiskManager.validate() via el engine interno — sin duplicar
-        lógica de negocio (DIP · DRY · SRP).
-
-        Usado por tests unitarios para verificar el filtro de riesgo
-        directamente, sin pasar por run_once() ni cargar datos.
-
-        Returns
-        -------
-        PaperOrder  : orden simulada si la señal es aprobada.
-        None        : si es rechazada por cualquier regla de riesgo.
+        TODO: cuando TradingEngine exponga `engine.validate_signal(signal)`,
+        reemplazar `self._engine._oms._risk` por esa API pública.
+        Ref: Law of Demeter — acceso a 3 niveles privados es una deuda técnica.
 
         SafeOps: nunca lanza — errores se convierten en None.
         """
         try:
-            risk_manager = self._engine._oms._risk
+            risk_manager = self._engine._oms._risk   # TODO: exponer via engine
             decision     = risk_manager.validate(signal)
             if decision.rejected:
                 self._log.debug(
                     "_evaluate_signal rechazada | reason={}", decision.reason
                 )
                 return None
-            from datetime import datetime, timezone
             return PaperOrder(
                 symbol    = signal.symbol,
                 side      = signal.signal,
@@ -246,8 +255,7 @@ class PaperBot:
             return None
 
     def _on_fill(self, order: Order) -> None:
-        """
-        Callback OMS → PaperBot.
+        """Callback OMS → PaperBot.
 
         Llamado por TradingEngine/OMS cuando una orden es llenada.
         Convierte Order del OMS en PaperOrder observable y actualiza estado.
@@ -264,11 +272,10 @@ class PaperBot:
 
     @staticmethod
     def _strategy_cfg(strategy: BaseStrategy) -> dict:
-        """
-        Extrae la configuracion de la estrategia para TradingEngine.build_paper.
+        """Extrae la configuración de la estrategia para TradingEngine.build_paper.
 
-        Usa atributos estandar de BaseStrategy. Extensible via __dict__
-        sin romper la interfaz. (OCP)
+        Usa atributos estándar de BaseStrategy. Extensible sin romper la
+        interfaz — nuevos atributos se añaden a la lista sin modificar callers. (OCP)
         """
         cfg: dict = {}
         for attr in ("symbol", "timeframe", "fast_period", "slow_period"):

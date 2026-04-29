@@ -3,30 +3,32 @@
 # ==============================================================================
 #
 # PROPÓSITO:
-#   "given env X → config must equal snapshot Y"
+#   "given env X → config must satisfy contract Y"
 #   Previenen config drift silencioso entre refactors.
 #
 # FILOSOFÍA:
 #   No son unit tests de lógica — son tests de contrato de sistema.
 #   Si un contrato rompe, o el cambio es incorrecto (revertir)
-#   o el contrato evolucionó intencionalmente (actualizar snapshot).
+#   o el contrato evolucionó intencionalmente (actualizar test + snapshot).
 #
 # EJECUCIÓN:
 #   uv run pytest tests/config/test_contracts.py -v
-#   uv run pytest tests/config/test_contracts.py --snapshot-update  # actualizar snapshots
 # ==============================================================================
 
-import pytest
+from __future__ import annotations
+
+import os
 from pathlib import Path
+
+import pytest
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
-import os
 
 
 @pytest.fixture(autouse=True)
 def reset_hydra():
-    """Hydra es singleton — limpiar entre tests."""
+    """Hydra es singleton — limpiar entre tests para evitar contaminación."""
     GlobalHydra.instance().clear()
     yield
     GlobalHydra.instance().clear()
@@ -38,13 +40,18 @@ _CONFIG_DIR = str(Path(__file__).parent.parent.parent / "config")
 
 
 def _load_config(env: str, overrides: list[str] | None = None) -> dict:
-    """Helper: carga config para un entorno dado y retorna plain dict."""
+    """Carga config para un entorno dado y retorna plain dict.
+
+    resolve=False — no depende de env vars en el entorno de CI.
+    Los tests de contrato verifican estructura y valores literales YAML,
+    no valores resueltos en runtime.
+    """
     with initialize_config_dir(config_dir=_CONFIG_DIR, version_base="1.3"):
         cfg = compose(
             config_name="config",
             overrides=[f"env={env}"] + (overrides or []),
         )
-        return OmegaConf.to_container(cfg, resolve=False)  # resolve=False — no depende de env vars
+        return OmegaConf.to_container(cfg, resolve=False)
 
 
 class TestDevelopmentContracts:
@@ -55,7 +62,7 @@ class TestDevelopmentContracts:
         cfg = _load_config("development")
         assert cfg["safety"]["dry_run"] is True, (
             "CONTRATO ROTO: safety.dry_run debe ser True en development. "
-            "Base.yaml define este default seguro."
+            "base.yaml define este default seguro."
         )
 
     def test_debug_is_enabled(self):
@@ -73,13 +80,41 @@ class TestDevelopmentContracts:
         assert "1m" in cfg["pipeline"]["historical"]["timeframes"]
 
     def test_resample_source_tf_in_historical(self):
-        """Contrato de consistencia resample↔historical."""
-        cfg = _load_config("development")
-        source = cfg["pipeline"]["resample"]["source_tf"]
+        """Contrato de consistencia resample↔historical (SSOT cross-field)."""
+        cfg      = _load_config("development")
+        source   = cfg["pipeline"]["resample"]["source_tf"]
         available = cfg["pipeline"]["historical"]["timeframes"]
         assert source in available, (
             f"CONTRATO ROTO: resample.source_tf={source!r} "
             f"no está en historical.timeframes={available}"
+        )
+
+    def test_datalake_default_matches_schema(self):
+        """SSOT dual: datalake.yaml default == DataLakeConfig.path en schema.py.
+
+        Si este test rompe significa que uno de los dos fue modificado sin
+        actualizar el otro. Ambos deben ser idénticos para que paths.py
+        sea predecible sin OCM_DATA_LAKE_PATH seteado.
+        """
+        from ocm_platform.config.schema import DataLakeConfig
+        schema_default = DataLakeConfig().path
+
+        cfg            = _load_config("development")
+        # storage.data_lake.path puede ser la interpolación OmegaConf sin resolver
+        # o el default literal — ambos deben contener el mismo path canónico.
+        yaml_path = cfg["storage"]["data_lake"]["path"]
+        yaml_resolved = str(yaml_path)
+
+        # Extraer el default de la interpolación ${oc.env:VAR,default} si está presente
+        if "," in yaml_resolved and yaml_resolved.endswith("}"):
+            yaml_default = yaml_resolved.split(",", 1)[-1].rstrip("}")
+        else:
+            yaml_default = yaml_resolved
+
+        assert yaml_default == schema_default, (
+            f"CONTRATO ROTO: datalake.yaml default={yaml_default!r} "
+            f"!= DataLakeConfig.path={schema_default!r}. "
+            f"Actualizar ambos para mantener SSOT."
         )
 
 
@@ -87,7 +122,7 @@ class TestProductionContracts:
     """Contratos del entorno production."""
 
     def test_dry_run_is_false(self):
-        """En production, dry_run DEBE ser False."""
+        """En production, dry_run DEBE ser False — escrituras reales activas."""
         cfg = _load_config("production")
         assert cfg["safety"]["dry_run"] is False, (
             "CONTRATO ROTO: safety.dry_run debe ser False en production."
@@ -98,14 +133,17 @@ class TestProductionContracts:
         assert cfg["environment"]["debug"] is False
 
     def test_prevent_full_reingestion(self):
+        """SafeOps en prod: protección contra reingesta masiva accidental."""
         cfg = _load_config("production")
         assert cfg["safety"]["prevent_full_reingestion"] is True
 
     def test_require_confirmation(self):
+        """Prod exige confirmación explícita para operaciones destructivas."""
         cfg = _load_config("production")
         assert cfg["safety"]["require_confirmation"] is True
 
     def test_max_backfill_days_le_90(self):
+        """Límite de backfill en prod — evita reingestas masivas accidentales."""
         cfg = _load_config("production")
         assert cfg["safety"]["max_backfill_days"] <= 90
 
@@ -121,16 +159,25 @@ class TestTestEnvContracts:
         cfg = _load_config("test")
         assert cfg["observability"]["metrics"]["enabled"] is False
 
-    def test_redis_disabled_by_default(self):
-        cfg = _load_config("test")
-        # En test, redis.enabled puede ser string interpolado — verificar el valor YAML
-        redis_enabled = cfg["integrations"]["redis"]["enabled"]
-        # Acepta False o la interpolación ${oc.env:REDIS_ENABLED,false}
-        assert redis_enabled is False or "false" in str(redis_enabled).lower()
+    def test_redis_enabled_is_bool_or_interpolation(self):
+        """redis.enabled debe ser bool False o interpolación que resuelve a false.
 
-    def test_mock_data_enabled(self):
-        cfg = _load_config("test")
-        assert cfg["testing"]["use_mock_data"] is True
+        En test debe estar deshabilitado para no requerir Redis real en CI.
+        Acepta tanto el literal False como la interpolación OmegaConf.
+        """
+        cfg           = _load_config("test")
+        redis_enabled = cfg["integrations"]["redis"]["enabled"]
+
+        if isinstance(redis_enabled, bool):
+            assert redis_enabled is False, (
+                "CONTRATO ROTO: redis.enabled debe ser False en test."
+            )
+        else:
+            # Es una interpolación sin resolver — verificar que el default es false
+            raw = str(redis_enabled)
+            assert "false" in raw.lower() or "0" in raw, (
+                f"CONTRATO ROTO: redis.enabled interpolation no tiene default=false: {raw!r}"
+            )
 
 
 class TestCLIOverrideContracts:

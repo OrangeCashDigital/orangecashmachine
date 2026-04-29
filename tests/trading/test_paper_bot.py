@@ -24,7 +24,7 @@ import pandas as pd
 
 from ocm_platform.boundaries import FeatureSource
 from trading.execution.paper_bot import PaperBot, PaperOrder
-from trading.risk.models import PositionConfig, RiskConfig, SignalFilterConfig, SignalFilterConfig
+from trading.risk.models import PositionConfig, RiskConfig, SignalFilterConfig
 from trading.strategies.base import Signal
 from trading.strategies.ema_crossover import EMACrossoverStrategy
 
@@ -78,7 +78,9 @@ def _make_bot(df=None, risk=None) -> PaperBot:
     return PaperBot(
         strategy    = strategy,
         data_source = source,
-        risk        = risk or RiskConfig(min_confidence=0.5),
+        risk        = risk or RiskConfig(
+            signal_filter = SignalFilterConfig(min_confidence=0.5),
+        ),
     )
 
 
@@ -132,10 +134,10 @@ def test_run_once_registers_open_trade():
 
 def test_run_once_no_signal_no_order():
     """DataFrame plano → sin cruce → sin orden."""
-    df         = _make_ohlcv(n=50)
+    df          = _make_ohlcv(n=50)
     df["close"] = 45_000.0
     df["open"]  = 45_000.0
-    bot        = _make_bot(df=df)
+    bot         = _make_bot(df=df)
     assert bot.run_once() == []
 
 
@@ -147,10 +149,10 @@ def test_run_once_rejects_signal_below_min_confidence():
     """
     RiskManager rechaza señales cuya confianza es inferior al umbral.
 
-    Nota: EMACrossoverStrategy siempre emite confidence=1.0.
-    Este test verifica el rechazo via _evaluate_signal con señal sintética
-    de baja confianza — que es la superficie testeable correcta para este
-    comportamiento. run_once() con EMA nunca puede generar confidence < 1.0.
+    Usa _evaluate_signal como superficie testeable controlada para
+    verificar el filtro de confianza con señales sintéticas.
+    EMACrossoverStrategy siempre emite confidence=1.0 por lo que
+    no es posible verificar este rechazo via run_once() con datos reales.
     """
     bot    = _make_bot(risk=RiskConfig(
         signal_filter = SignalFilterConfig(min_confidence=0.9),
@@ -160,11 +162,7 @@ def test_run_once_rejects_signal_below_min_confidence():
 
 
 def test_run_once_accepts_signal_at_default_min_confidence():
-    """
-    Señal con confianza suficiente (default) → orden generada.
-
-    Verifica que el umbral de confianza no bloquea señales válidas.
-    """
+    """Señal con confianza suficiente → orden generada."""
     bot = _make_bot(df=_make_crossover_df())
     assert len(bot.run_once()) == 1
 
@@ -173,9 +171,6 @@ def test_run_once_rejects_when_max_open_positions_reached():
     """
     RiskManager debe rechazar nuevas señales cuando se alcanza el límite
     de posiciones abiertas simultáneas.
-
-    Primer run_once: genera orden, ocupa el único slot disponible.
-    Segundo run_once: RiskManager rechaza la señal → resultado vacío.
     """
     risk = RiskConfig(
         position = PositionConfig(max_open_positions=1),
