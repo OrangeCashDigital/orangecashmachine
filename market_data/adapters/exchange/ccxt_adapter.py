@@ -374,18 +374,12 @@ class CCXTAdapter(ExchangeAdapter):
         return (self._markets_cache or {}).get(symbol)
 
     def parse8601(self, date_str: str) -> int:
-        import ccxt as ccxt_sync
-
         return ccxt_sync.Exchange.parse8601(date_str)
 
     def iso8601(self, timestamp_ms: int) -> str:
-        import ccxt as ccxt_sync
-
         return ccxt_sync.Exchange.iso8601(timestamp_ms)
 
     async def inspect_required_credentials(self) -> Dict[str, Any]:
-        import ccxt as ccxt_sync
-
         if not hasattr(ccxt_sync, self._exchange_id):
             raise UnsupportedExchangeError(f"Exchange '{self._exchange_id}' not supported")
         exchange_class = getattr(ccxt_sync, self._exchange_id)
