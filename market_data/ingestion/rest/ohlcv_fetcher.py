@@ -25,7 +25,7 @@ from typing import List, Optional
 import pandas as pd
 from ocm_platform.observability import bind_pipeline
 
-from market_data.storage.storage_protocol import OHLCVStorage
+from market_data.ports.storage import OHLCVStorage
 from market_data.processing.transformer import OHLCVTransformer
 from market_data.adapters.exchange import (
     CCXTAdapter,

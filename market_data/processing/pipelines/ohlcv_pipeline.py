@@ -39,7 +39,7 @@ _log = bind_pipeline("pipeline")
 
 from market_data.quality.pipeline import QualityPipeline
 from market_data.storage.bronze.bronze_storage import BronzeStorage
-from market_data.storage.storage_protocol import OHLCVStorage
+from market_data.ports.storage import OHLCVStorage
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.processing.pipelines._worker_pool import run_worker_pool
 from market_data.processing.strategies.base import (

@@ -35,7 +35,7 @@ Principios aplicados
 --------------------
 DIP  — consumidores importan desde ports/, nunca desde adapters/
 OCP  — agregar un nuevo backend no modifica este contrato
-SSOT — definición única del contrato; storage_protocol.py es shim hacia aquí
+SSOT — definición única del contrato OHLCVStorage
 """
 from __future__ import annotations
 
