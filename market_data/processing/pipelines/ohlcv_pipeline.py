@@ -59,7 +59,7 @@ from market_data.adapters.exchange import (
     get_breaker_state,
 )
 from market_data.adapters.exchange.throttle import AdaptiveThrottle
-from market_data.observability.metrics import FETCH_ABORTS_TOTAL
+from market_data.observability.metrics import FETCH_ABORTS_TOTAL, ACTIVE_PAIRS
 from market_data.ports.state import CursorStorePort
 from market_data.ports.gap_registry import GapRegistryPort
 from ocm_platform.infra.state.cursor_store import (
@@ -597,6 +597,7 @@ class OHLCVPipeline:
         error en el semáforo) y lo convierte en PairResult con error,
         garantizando que el worker pool nunca pierda un resultado.
         """
+        ACTIVE_PAIRS.labels(exchange=self._exchange_id).inc()
         try:
             result = await strategy.execute_pair(
                 symbol    = symbol,
@@ -674,3 +675,11 @@ class OHLCVPipeline:
             )
             self._feed_throttle(result)
             return result
+        finally:
+            # SafeOps — dec garantizado en todo path de salida:
+            # éxito, CancelledError, AbortError, o excepción inesperada.
+            # Sin finally, cualquier raise deja el gauge incrementado para siempre.
+            try:
+                ACTIVE_PAIRS.labels(exchange=self._exchange_id).dec()
+            except Exception:
+                pass  # métricas son best-effort
