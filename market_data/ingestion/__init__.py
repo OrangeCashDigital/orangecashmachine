@@ -2,5 +2,5 @@
 market_data/ingestion
 =====================
 Capa de ingestión: descarga de datos desde exchanges vía REST y WebSocket.
-Depende de: services/exchange, market_data/core, market_data/storage
+Depende de: services/exchange, market_data/storage
 """
