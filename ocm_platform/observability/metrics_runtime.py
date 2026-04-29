@@ -136,7 +136,7 @@ class MetricsRuntime:
 
         job = f"ocm_pipeline_{exchange}"
         try:
-            from ocm_platform.infra.observability.server import PIPELINE_LAST_RUN, PIPELINE_HEARTBEAT
+            from ocm_platform.observability.prometheus import PIPELINE_LAST_RUN, PIPELINE_HEARTBEAT
             PIPELINE_LAST_RUN.labels(exchange=exchange).set(_time.time())
             PIPELINE_HEARTBEAT.labels(exchange=exchange).inc()
             push_to_gateway(self.gateway, job=job, registry=self.registry, timeout=5)

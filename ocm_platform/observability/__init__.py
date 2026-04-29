@@ -31,3 +31,19 @@ __all__ = [
     "pre_log",
     "drain",
 ]
+
+# ── Metrics runtime + Prometheus ─────────────────────────────────────────────
+from ocm_platform.observability.prometheus import (
+    push_metrics,
+    start_metrics_server,
+)
+from ocm_platform.observability.metrics_runtime import (
+    MetricsRuntime,
+    MetricsMode,
+    init_metrics_runtime,
+    get_metrics_runtime,
+)
+from ocm_platform.observability.pushers import (
+    PrometheusPusher,
+    NoopPusher,
+)
