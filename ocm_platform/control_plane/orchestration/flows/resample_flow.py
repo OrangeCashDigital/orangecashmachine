@@ -1,5 +1,5 @@
 """
-market_data/orchestration/flows/resample_flow.py
+ocm_platform/control_plane/orchestration/flows/resample_flow.py
 =================================================
 
 Flow Prefect de resampling OHLCV.

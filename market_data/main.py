@@ -54,7 +54,7 @@ from ocm_platform.config.hydra_loader import load_appconfig_standalone
 from ocm_platform.config import env_vars
 
 from ocm_platform.runtime import guard_context
-from market_data.orchestration.entrypoint import build_context
+from ocm_platform.control_plane.orchestration.entrypoint import build_context
 
 _log = bind_pipeline("market_data.main")
 
@@ -105,7 +105,7 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
     - Excepciones del flow se capturan — el loop nunca muere por 1 run fallido.
     - guard.record_error() activa kill switch si hay errores consecutivos.
     """
-    from market_data.orchestration.flows.batch_flow import market_data_flow
+    from ocm_platform.control_plane.orchestration.flows.batch_flow import market_data_flow
 
     log = _log.bind(component="ingestion_loop")
     log.info("ingestion_loop_started", interval_s=_INGESTION_INTERVAL_S)

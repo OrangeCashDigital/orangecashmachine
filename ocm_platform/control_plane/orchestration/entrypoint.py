@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-market_data/orchestration/entrypoint.py
+ocm_platform/control_plane/orchestration/entrypoint.py
 ========================================
 
 Entrypoint LOCAL — solo para desarrollo y debug.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-market_data/orchestration/post_processing.py
+ocm_platform/control_plane/orchestration/post_processing.py
 ============================================
 
 Post-procesado tras ingestión: Gold build.
