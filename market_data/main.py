@@ -51,6 +51,7 @@ from ocm_platform.runtime.guard import ExecutionGuard, ExecutionStoppedError
 from ocm_platform.runtime.run_config import RunConfig
 from ocm_platform.runtime.context import RuntimeContext
 from ocm_platform.config.hydra_loader import load_appconfig_standalone
+from ocm_platform.config import env_vars
 
 from ocm_platform.runtime import guard_context
 from market_data.orchestration.entrypoint import build_context
@@ -61,9 +62,9 @@ _log = bind_pipeline("market_data.main")
 # Configuración del servicio — leída de env vars con defaults sensatos
 # ---------------------------------------------------------------------------
 
-_HOST:             str   = os.getenv("MARKET_DATA_HOST",          "0.0.0.0")
-_PORT:             int   = int(os.getenv("MARKET_DATA_PORT",      "8001"))
-_INGESTION_INTERVAL_S: float = float(os.getenv("INGESTION_INTERVAL_S", "300"))  # 5 min entre runs
+_HOST:             str   = os.getenv(env_vars.MARKET_DATA_HOST,   "0.0.0.0")
+_PORT:             int   = int(os.getenv(env_vars.MARKET_DATA_PORT, "8001"))
+_INGESTION_INTERVAL_S: float = float(os.getenv(env_vars.INGESTION_INTERVAL_S, "300"))  # 5 min entre runs
 _SERVICE_NAME:     str   = "market-data-service"
 _VERSION:          str   = "1.0.0"
 

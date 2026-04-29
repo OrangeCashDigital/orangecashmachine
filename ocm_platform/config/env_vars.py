@@ -88,6 +88,15 @@ OCM_MARKET_TYPE: str = "OCM_MARKET_TYPE"
 """``"spot"`` | ``"swap"`` — tipo de mercado para research y loaders standalone."""
 
 OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
+# ── Market-data server ────────────────────────────────────────────────────────
+MARKET_DATA_HOST: str = "MARKET_DATA_HOST"
+"""Interfaz de escucha del servidor HTTP de market data. Default: 0.0.0.0"""
+
+MARKET_DATA_PORT: str = "MARKET_DATA_PORT"
+"""Puerto TCP del servidor HTTP de market data. Default: 8001"""
+
+INGESTION_INTERVAL_S: str = "INGESTION_INTERVAL_S"
+"""Segundos entre ciclos de ingestión del loop principal. Default: 300"""
 """Override absoluto del root del gold features layer (alias de OCM_GOLD_PATH por campo)."""
 
 # =============================================================================
@@ -123,6 +132,7 @@ _ENV_VAR_NAMES: frozenset[str] = frozenset({
     OCM_STORAGE__DATA_LAKE__PATH,
     OCM_DATA_LAKE_PATH,          # DEPRECATED — legacy, transicion controlada
     OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH,
+    MARKET_DATA_HOST, MARKET_DATA_PORT, INGESTION_INTERVAL_S,
     OCM_EXCHANGE, OCM_MARKET_TYPE,
 })
 """Registro explícito de todos los nombres de env var propios de OCM.
