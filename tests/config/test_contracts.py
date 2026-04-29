@@ -9,7 +9,7 @@
 # FILOSOFÍA:
 #   No son unit tests de lógica — son tests de contrato de sistema.
 #   Si un contrato rompe, o el cambio es incorrecto (revertir)
-#   o el contrato evolucionó intencionalmente (actualizar test + snapshot).
+#   o el contrato evolucionó intencionalmente (actualizar test).
 #
 # EJECUCIÓN:
 #   uv run pytest tests/config/test_contracts.py -v
@@ -17,26 +17,49 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 from hydra import compose, initialize_config_dir
+from hydra.core.config_store import ConfigStore
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
+
+
+# SSOT: ruta absoluta calculada desde __file__ — independiente del CWD.
+# initialize_config_dir() requiere ruta absoluta desde Hydra 1.2+.
+_CONFIG_DIR = str(Path(__file__).parent.parent.parent / "config")
+
+
+def _register_structured_configs() -> None:
+    """Registra Structured Configs en el ConfigStore de Hydra.
+
+    SSOT de registro: replicado desde app/cli/market_data.py.
+    Necesario en tests porque compose() no pasa por el entrypoint
+    de la aplicación — el ConfigStore estaría vacío sin esta llamada.
+
+    Idempotente: ConfigStore.store() no lanza si ya existe.
+    """
+    from ocm_platform.config.structured import (
+        PipelineConfig,
+        HistoricalConfig,
+        ResampleConfig,
+        ObservabilityConfig,
+    )
+    cs = ConfigStore.instance()
+    cs.store(group="pipeline",            name="schema", node=PipelineConfig)
+    cs.store(group="pipeline/historical", name="schema", node=HistoricalConfig)
+    cs.store(group="pipeline/resample",   name="schema", node=ResampleConfig)
+    cs.store(group="observability",       name="schema", node=ObservabilityConfig)
 
 
 @pytest.fixture(autouse=True)
 def reset_hydra():
     """Hydra es singleton — limpiar entre tests para evitar contaminación."""
     GlobalHydra.instance().clear()
+    _register_structured_configs()   # registrar ANTES de cada compose()
     yield
     GlobalHydra.instance().clear()
-
-
-# SSOT: ruta absoluta calculada desde __file__ — independiente del CWD.
-# initialize_config_dir() requiere ruta absoluta desde Hydra 1.2+.
-_CONFIG_DIR = str(Path(__file__).parent.parent.parent / "config")
 
 
 def _load_config(env: str, overrides: list[str] | None = None) -> dict:
@@ -81,8 +104,8 @@ class TestDevelopmentContracts:
 
     def test_resample_source_tf_in_historical(self):
         """Contrato de consistencia resample↔historical (SSOT cross-field)."""
-        cfg      = _load_config("development")
-        source   = cfg["pipeline"]["resample"]["source_tf"]
+        cfg       = _load_config("development")
+        source    = cfg["pipeline"]["resample"]["source_tf"]
         available = cfg["pipeline"]["historical"]["timeframes"]
         assert source in available, (
             f"CONTRATO ROTO: resample.source_tf={source!r} "
@@ -99,17 +122,14 @@ class TestDevelopmentContracts:
         from ocm_platform.config.schema import DataLakeConfig
         schema_default = DataLakeConfig().path
 
-        cfg            = _load_config("development")
-        # storage.data_lake.path puede ser la interpolación OmegaConf sin resolver
-        # o el default literal — ambos deben contener el mismo path canónico.
-        yaml_path = cfg["storage"]["data_lake"]["path"]
-        yaml_resolved = str(yaml_path)
+        cfg       = _load_config("development")
+        yaml_path = str(cfg["storage"]["data_lake"]["path"])
 
-        # Extraer el default de la interpolación ${oc.env:VAR,default} si está presente
-        if "," in yaml_resolved and yaml_resolved.endswith("}"):
-            yaml_default = yaml_resolved.split(",", 1)[-1].rstrip("}")
+        # Extraer el default de la interpolación ${oc.env:VAR,default} si está sin resolver
+        if "," in yaml_path and yaml_path.endswith("}"):
+            yaml_default = yaml_path.split(",", 1)[-1].rstrip("}")
         else:
-            yaml_default = yaml_resolved
+            yaml_default = yaml_path
 
         assert yaml_default == schema_default, (
             f"CONTRATO ROTO: datalake.yaml default={yaml_default!r} "
@@ -143,7 +163,6 @@ class TestProductionContracts:
         assert cfg["safety"]["require_confirmation"] is True
 
     def test_max_backfill_days_le_90(self):
-        """Límite de backfill en prod — evita reingestas masivas accidentales."""
         cfg = _load_config("production")
         assert cfg["safety"]["max_backfill_days"] <= 90
 
@@ -162,8 +181,8 @@ class TestTestEnvContracts:
     def test_redis_enabled_is_bool_or_interpolation(self):
         """redis.enabled debe ser bool False o interpolación que resuelve a false.
 
-        En test debe estar deshabilitado para no requerir Redis real en CI.
-        Acepta tanto el literal False como la interpolación OmegaConf.
+        En test no debe requerir Redis real en CI.
+        Acepta el literal False o la interpolación OmegaConf sin resolver.
         """
         cfg           = _load_config("test")
         redis_enabled = cfg["integrations"]["redis"]["enabled"]
@@ -173,10 +192,9 @@ class TestTestEnvContracts:
                 "CONTRATO ROTO: redis.enabled debe ser False en test."
             )
         else:
-            # Es una interpolación sin resolver — verificar que el default es false
             raw = str(redis_enabled)
-            assert "false" in raw.lower() or "0" in raw, (
-                f"CONTRATO ROTO: redis.enabled interpolation no tiene default=false: {raw!r}"
+            assert "false" in raw.lower() or raw == "0", (
+                f"CONTRATO ROTO: redis.enabled interpolation sin default=false: {raw!r}"
             )
 
 

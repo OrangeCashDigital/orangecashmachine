@@ -86,18 +86,18 @@ def test_stable_converts_path():
 # ── bootstrap_logging ─────────────────────────────────────────────────────────
 
 def test_bootstrap_logging_is_idempotent():
-    with patch("core.observability.logger._install_sinks", return_value=([], None)) as mock:
-        with patch("core.observability.logger._replay_bootstrap_buffer"):
-            with patch("core.observability.logger._install_stdlib_bridge"):
+    with patch("ocm_platform.observability.logger._install_sinks", return_value=([], None)) as mock:
+        with patch("ocm_platform.observability.logger._replay_bootstrap_buffer"):
+            with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
                 bootstrap_logging()
                 bootstrap_logging()  # segunda llamada — no-op
                 assert mock.call_count == 1
 
 
 def test_bootstrap_logging_sets_done_flag():
-    with patch("core.observability.logger._install_sinks", return_value=([], None)):
-        with patch("core.observability.logger._replay_bootstrap_buffer"):
-            with patch("core.observability.logger._install_stdlib_bridge"):
+    with patch("ocm_platform.observability.logger._install_sinks", return_value=([], None)):
+        with patch("ocm_platform.observability.logger._replay_bootstrap_buffer"):
+            with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
                 bootstrap_logging()
                 assert _setup_mod._BOOTSTRAP_DONE is True
 
@@ -106,16 +106,16 @@ def test_bootstrap_logging_sets_done_flag():
 
 def test_configure_logging_skips_if_hash_unchanged():
     cfg = LoggingConfig()
-    with patch("core.observability.logger._install_sinks", return_value=([], None)) as mock:
-        with patch("core.observability.logger._install_stdlib_bridge"):
+    with patch("ocm_platform.observability.logger._install_sinks", return_value=([], None)) as mock:
+        with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
             configure_logging(cfg, env="development")
             configure_logging(cfg, env="development")  # mismo hash → skip
             assert mock.call_count == 1
 
 
 def test_configure_logging_reconfigures_on_change():
-    with patch("core.observability.logger._install_sinks", return_value=([], None)) as mock:
-        with patch("core.observability.logger._install_stdlib_bridge"):
+    with patch("ocm_platform.observability.logger._install_sinks", return_value=([], None)) as mock:
+        with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
             configure_logging(LoggingConfig(level="INFO"),  env="development")
             configure_logging(LoggingConfig(level="DEBUG"), env="development")
             assert mock.call_count == 2
@@ -128,9 +128,9 @@ def test_is_logging_configured_false_initially():
 
 
 def test_is_logging_configured_true_after_both():
-    with patch("core.observability.logger._install_sinks", return_value=([], None)):
-        with patch("core.observability.logger._replay_bootstrap_buffer"):
-            with patch("core.observability.logger._install_stdlib_bridge"):
+    with patch("ocm_platform.observability.logger._install_sinks", return_value=([], None)):
+        with patch("ocm_platform.observability.logger._replay_bootstrap_buffer"):
+            with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
                 bootstrap_logging()
                 configure_logging(LoggingConfig(), env="development")
                 assert is_logging_configured() is True

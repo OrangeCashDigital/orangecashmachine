@@ -65,7 +65,7 @@ def test_write_snapshot_false_without_run_id_ok(minimal_cfg):
 
 def test_write_snapshot_with_run_id_calls_writer(minimal_cfg):
     """write_snapshot=True + run_id válido debe llamar write_config_snapshot."""
-    with patch("core.config.hydra_loader.write_config_snapshot") as mock_write:
+    with patch("ocm_platform.config.hydra_loader.write_config_snapshot") as mock_write:
         load_appconfig_from_hydra(
             minimal_cfg,
             env="test",
@@ -106,7 +106,7 @@ def test_standalone_propagates_run_id_to_snapshot(tmp_path, minimal_cfg):
     }))
     (config_dir / "env").mkdir()
 
-    with patch("core.config.hydra_loader.write_config_snapshot") as mock_write:
+    with patch("ocm_platform.config.hydra_loader.write_config_snapshot") as mock_write:
         load_appconfig_standalone(
             env="test",
             config_dir=config_dir,
