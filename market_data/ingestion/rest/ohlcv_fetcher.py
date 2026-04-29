@@ -143,32 +143,45 @@ def overlap_for_timeframe(timeframe: str, exchange: str | None = None) -> int:
     return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
 
 
-# Cache del store de calibración — se inicializa una vez por proceso.
-# Evita reconstruir la conexión Redis en cada llamada a overlap_for_timeframe().
-# None significa "no inicializado aún" o "Redis no disponible".
-_CALIBRATION_STORE = None
-_CALIBRATION_STORE_INITIALIZED = False
+class _LazyCalibrationStore:
+    """
+    Singleton lazy del store de calibración de lateness.
+
+    Encapsula el estado mutable sin globals ni global statements.
+    SafeOps: _get() nunca lanza — si Redis falla, retorna None
+    y overlap_for_timeframe() usa el fallback hardcoded.
+
+    Inicialización diferida: se construye solo en la primera llamada
+    a _get(), no en import time, para evitar conexiones Redis en tests
+    y en procesos que no usan calibración empírica.
+    """
+
+    def __init__(self) -> None:
+        self._store = None
+        self._initialized = False
+
+    def _get(self, exchange: str, timeframe: str) -> "int | None":
+        try:
+            if not self._initialized:
+                from ocm_platform.infra.state.factories import build_lateness_calibration_store
+                self._store = build_lateness_calibration_store()
+                self._initialized = True
+            if self._store is None:
+                return None
+            return self._store.get_lateness_ms(exchange, timeframe)
+        except Exception:
+            return None
 
 
-def _get_calibrated_lateness_ms(exchange: str, timeframe: str) -> int | None:
+_calibration_store = _LazyCalibrationStore()
+
+
+def _get_calibrated_lateness_ms(exchange: str, timeframe: str) -> "int | None":
     """
     Lee lateness_ms calibrado desde Redis. None si no disponible.
-
-    El store se inicializa una vez por proceso (lazy singleton).
-    SafeOps: nunca lanza — si Redis falla, overlap_for_timeframe()
-    usa el hardcoded como fallback sin interrumpir el pipeline.
+    SafeOps: nunca lanza — fallback a hardcoded si Redis no disponible.
     """
-    global _CALIBRATION_STORE, _CALIBRATION_STORE_INITIALIZED
-    try:
-        if not _CALIBRATION_STORE_INITIALIZED:
-            from ocm_platform.infra.state.factories import build_lateness_calibration_store
-            _CALIBRATION_STORE = build_lateness_calibration_store()
-            _CALIBRATION_STORE_INITIALIZED = True
-        if _CALIBRATION_STORE is None:
-            return None
-        return _CALIBRATION_STORE.get_lateness_ms(exchange, timeframe)
-    except Exception:
-        return None
+    return _calibration_store._get(exchange, timeframe)
 
 OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
@@ -521,8 +534,7 @@ class HistoricalFetcherAsync:
         # (cursor + Iceberg evitan reingestas) y el usuario puede acortar
         # con una fecha ISO explícita en config.pipeline.historical.start_date.
         _lookback_days = self._auto_lookback_days
-        import time as _time
-        _auto_since_ms = int((_time.time() - _lookback_days * 86400) * 1000)
+        _auto_since_ms = int((time.time() - _lookback_days * 86400) * 1000)
         self._log.bind(
             symbol=symbol, timeframe=timeframe,
             lookback_days=_lookback_days,
@@ -665,4 +677,3 @@ def _sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df.sort_values("timestamp")
 
 
-from market_data.processing.utils.timeframe import timeframe_to_ms  # noqa: E402,F811
