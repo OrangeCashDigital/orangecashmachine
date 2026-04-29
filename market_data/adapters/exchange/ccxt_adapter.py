@@ -60,6 +60,7 @@ from market_data.adapters.exchange.throttle import (
     get_or_create_throttle,
     get_throttle_state,
 )
+from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 
 if TYPE_CHECKING:
     from ocm_platform.config.schema import ExchangeConfig, ResilienceConfig
@@ -271,10 +272,7 @@ class CCXTAdapter(ExchangeAdapter):
                     self._throttle.record_rate_limit_hit()
                 raise
             except ExchangeCircuitOpenError:
-                from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-                EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ticker").inc()
-                self._throttle.record_error(error_type="rate_limit")
-                self._throttle.record_rate_limit_hit()
+                self._handle_circuit_open("fetch_ticker")
                 raise
 
     async def fetch_ohlcv(
@@ -323,10 +321,7 @@ class CCXTAdapter(ExchangeAdapter):
                     self._throttle.record_rate_limit_hit()
                 raise
             except ExchangeCircuitOpenError:
-                from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-                EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_ohlcv").inc()
-                self._throttle.record_error(error_type="rate_limit")
-                self._throttle.record_rate_limit_hit()
+                self._handle_circuit_open("fetch_ohlcv")
                 raise
             except asyncio.TimeoutError:
                 self._throttle.record_error(error_type="timeout")
@@ -365,10 +360,7 @@ class CCXTAdapter(ExchangeAdapter):
                     self._throttle.record_rate_limit_hit()
                 raise
             except ExchangeCircuitOpenError:
-                from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
-                EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation="fetch_trades").inc()
-                self._throttle.record_error(error_type="rate_limit")
-                self._throttle.record_rate_limit_hit()
+                self._handle_circuit_open("fetch_trades")
                 raise
 
     async def load_markets(self) -> Dict[str, Any]:
@@ -405,6 +397,27 @@ class CCXTAdapter(ExchangeAdapter):
             [k for k, v in required.items() if v],
         )
         return {k: v for k, v in required.items() if v}
+
+    # ----------------------------------------------------------
+    # Internal helpers
+    # ----------------------------------------------------------
+
+    def _handle_circuit_open(self, operation: str) -> None:
+        """
+        Registra métricas y ajusta throttle cuando el circuit breaker está abierto.
+
+        Extraído para eliminar triplicación en fetch_ticker / fetch_ohlcv /
+        fetch_trades. SafeOps: nunca lanza excepción (las métricas son
+        best-effort; el raise lo hace el caller).
+        """
+        try:
+            EXCHANGE_CIRCUIT_OPEN.labels(
+                exchange=self._exchange_id, operation=operation
+            ).inc()
+            self._throttle.record_error(error_type="rate_limit")
+            self._throttle.record_rate_limit_hit()
+        except Exception:
+            pass  # métricas son best-effort — nunca bloquear el raise
 
     # ----------------------------------------------------------
     # Credential resolvers (privados — SRP)

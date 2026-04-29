@@ -1,32 +1,26 @@
-# -*- coding: utf-8 -*-
 """
 market_data/observability/__init__.py
-======================================
+=======================================
 
-Fachada pública de métricas de dominio market_data.
+Fachada pública del subsistema de métricas de dominio.
 
-Re-exporta los contadores y helpers más usados para que los callers
-no necesiten conocer la estructura interna del módulo.
+Importar desde aquí — no desde metrics.py directamente.
+Esto permite reorganizar metrics.py sin romper callers (OCP).
 
-Uso
----
-    from market_data.observability import ROWS_INGESTED, PIPELINE_ERRORS
-    from market_data.observability import record_exchange_probe_metrics
-
-Principios: OCP · SSOT · DRY
+Nombres canónicos: los de metrics.py. Este archivo NO renombra.
 """
 from market_data.observability.metrics import (
     # ── Pipeline ─────────────────────────────────────────────
     ROWS_INGESTED,
     PAIR_DURATION,
     PIPELINE_ERRORS,
-    ACTIVE_PAIRS,
+    ACTIVE_PAIRS,                    # nombre real en metrics.py
     QUALITY_DECISIONS,
     # ── Fetch ────────────────────────────────────────────────
     FETCH_ABORTS_TOTAL,
     FETCH_CHUNK_DURATION,
     FETCH_CHUNKS_TOTAL,
-    FETCH_CHUNK_ERRORS_TOTAL,
+    FETCH_CHUNK_ERRORS_TOTAL,        # nombre real en metrics.py
     # ── Exchange ─────────────────────────────────────────────
     EXCHANGE_LATENCY,
     EXCHANGE_CLOCK_DRIFT,
@@ -35,7 +29,7 @@ from market_data.observability.metrics import (
     CANDLE_DELAY_MS,
     # ── Storage ──────────────────────────────────────────────
     STORAGE_WRITE_DURATION,
-    STORAGE_PARTITION_SIZE_ROWS,
+    STORAGE_PARTITION_SIZE_ROWS,     # nombre real en metrics.py
     # ── Write lock ───────────────────────────────────────────
     WRITE_LOCK_WAIT_DURATION,
     WRITE_LOCK_CONFLICTS,
