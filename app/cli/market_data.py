@@ -73,6 +73,10 @@ _register_structured_configs()
 
 # Imports post-registration — Hydra requiere que ConfigStore esté listo primero
 import ocm_platform.config.loader as config_loader
+from ocm_platform.config.loader.exceptions import (
+    ConfigurationError,
+    ConfigValidationError,
+)
 from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
 from ocm_platform.config.schema import AppConfig
 from ocm_platform.runtime.run_config import RunConfig
@@ -256,8 +260,8 @@ def main() -> None:
         logger.warning("execution_interrupted", signal="SIGINT")
         sys.exit(130)
     except (
-        config_loader.ConfigurationError,
-        config_loader.ConfigValidationError,
+        ConfigurationError,
+        ConfigValidationError,
         EnvironmentMismatchError,
     ) as exc:
         logger.opt(exception=True).critical(
