@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-app/run_live.py
+app/cli/live.py
 ================
 
 Entrypoint CLI para live trading con capital real.

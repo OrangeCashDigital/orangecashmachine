@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-app/run_paper.py
+app/cli/paper.py
 ================
 
 Entrypoint CLI para paper trading con datos reales de Gold (Iceberg).
@@ -21,7 +21,7 @@ Uso
     uv run paper --dry-run
 
     # o directamente:
-    uv run python app/run_paper.py --dry-run
+    uv run python app/cli/paper.py --dry-run
 
 Exit codes
 ----------
@@ -87,7 +87,7 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 # Builder y data source — delegados al use case (SRP)
 # ---------------------------------------------------------------------------
-# La lógica de ensamblaje vive en app/use_cases/run_paper.py.
+# La lógica de ensamblaje vive en app/use_cases/execute_paper.py.
 # Este CLI solo parsea args, configura logging y reporta resultados.
 
 

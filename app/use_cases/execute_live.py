@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-app/use_cases/run_live.py
-==========================
+app/use_cases/execute_live.py
+==============================
 
 Use case: ejecutar un ciclo de live trading.
 
@@ -10,8 +10,8 @@ Responsabilidad
 Ensamblar las dependencias para live trading y ejecutar un ciclo:
   GoldData → TradingEngine(live) → TradeTracker → PortfolioService(Redis)
 
-Diferencias vs run_paper.py
-----------------------------
+Diferencias vs execute_paper.py
+--------------------------------
   - LiveExecutor en lugar de PaperExecutor
   - RedisPositionStore en lugar de InMemoryPositionStore
   - guard obligatorio — sin kill switch no hay live trading
@@ -32,6 +32,7 @@ import argparse
 from dataclasses import dataclass
 from typing import Optional
 
+import redis as redis_lib
 from loguru import logger
 
 
@@ -68,7 +69,7 @@ def build_live_engine(args: argparse.Namespace, tracker):
 
     Fail-Fast:
     - guard construido y validado antes de llamar a build_live()
-    - risk_config explícita — no defaults
+    - risk_config explícita — no defaults permisivos
 
     Returns
     -------
@@ -84,13 +85,13 @@ def build_live_engine(args: argparse.Namespace, tracker):
     from portfolio.services.portfolio_service import PortfolioService
     from portfolio.infra.redis_store import RedisPositionStore
 
-    # Construir guard — obligatorio en live
+    # Fail-Fast: guard obligatorio en live — sin kill switch no hay ejecución
     guard = ExecutionGuard(
-        max_errors      = args.max_errors,
-        error_window_s  = 300,   # ventana de 5 min para contar errores
+        max_errors     = args.max_errors,
+        error_window_s = 300,   # ventana de 5 min para contar errores
     )
 
-    # RiskConfig explícita — no defaults
+    # RiskConfig explícita — no defaults permisivos en live
     risk_config = RiskConfig(
         position      = PositionConfig(
             max_position_pct   = args.max_risk_pct,
@@ -105,13 +106,12 @@ def build_live_engine(args: argparse.Namespace, tracker):
         ),
     )
 
-    # RedisPositionStore para persistencia cross-restart
-    import redis as redis_lib
+    # RedisPositionStore — persistencia cross-restart obligatoria en live
     redis_client = redis_lib.Redis(
-        host            = args.redis_host,
-        port            = args.redis_port,
-        db              = args.redis_db,
-        socket_timeout  = 3,
+        host             = args.redis_host,
+        port             = args.redis_port,
+        db               = args.redis_db,
+        socket_timeout   = 3,
         decode_responses = False,
     )
 
@@ -126,10 +126,25 @@ def build_live_engine(args: argparse.Namespace, tracker):
         exchange    = args.exchange,
     )
 
-    # on_fill composite: TradeTracker + PortfolioService
-    def on_fill_composite(order):
+    # SSOT del tracking buy→sell: mismo patrón que execute_paper.py.
+    # portfolio.close_position requiere el order_id del BUY (key de apertura),
+    # no el del SELL — sin este mapeo las posiciones nunca cierran (bug silencioso).
+    _open_order_ids: dict[str, str] = {}   # symbol → buy_order_id
+
+    def on_fill_composite(order) -> None:
+        """Callback OMS → TradeTracker + PortfolioService.
+
+        1. TradeTracker — siempre primero (analytics independiente de portfolio).
+        2. Portfolio    — sincroniza estado de posición abierta/cerrada.
+
+        Resuelve buy_order_id en SELL via _open_order_ids — evita cerrar
+        una posición con el ID del SELL order (bug silencioso de posiciones
+        que nunca cierran en Redis).
+        """
         tracker.on_fill(order)
+
         if order.side == OrderSide.BUY:
+            _open_order_ids[order.symbol] = order.order_id
             portfolio.open_position(
                 order_id    = order.order_id,
                 symbol      = order.symbol,
@@ -139,7 +154,15 @@ def build_live_engine(args: argparse.Namespace, tracker):
                 entry_at    = order.fill_timestamp,
             )
         elif order.side == OrderSide.SELL:
-            portfolio.close_position(order.order_id)
+            buy_order_id = _open_order_ids.pop(order.symbol, None)
+            if buy_order_id is not None:
+                portfolio.close_position(buy_order_id)
+            else:
+                logger.warning(
+                    "on_fill_composite | SELL sin BUY previo registrado | "
+                    "symbol={} sell_order_id={}",
+                    order.symbol, order.order_id,
+                )
 
     data_source = GoldLoaderAdapter(exchange=args.exchange)
 
@@ -172,6 +195,10 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
     Ejecuta un ciclo de live trading.
 
     SafeOps: nunca lanza — errores retornados en LiveRunResult.
+
+    Returns
+    -------
+    LiveRunResult con todo lo necesario para que el CLI loguee y salga.
     """
     from trading.analytics.trade_tracker import TradeTracker
     from trading.analytics.performance import PerformanceEngine
@@ -181,7 +208,10 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
     try:
         engine, portfolio = build_live_engine(args, tracker)
     except Exception as exc:
-        logger.error("Error construyendo engine live | {} — {}", type(exc).__name__, exc)
+        logger.error(
+            "Error construyendo engine live | {} — {}",
+            type(exc).__name__, exc,
+        )
         return LiveRunResult(success=False, error=str(exc))
 
     logger.info("Engine live listo | {}", engine)
@@ -190,17 +220,22 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
     try:
         engine_result = engine.run_once()
     except Exception as exc:
-        logger.error("Error en run_once live | {} — {}", type(exc).__name__, exc)
+        logger.error(
+            "Error en run_once live | {} — {}",
+            type(exc).__name__, exc,
+        )
         return LiveRunResult(success=False, error=str(exc))
 
     trades      = tracker.closed_trades
-    performance = PerformanceEngine.summarize(trades, capital_usd=args.capital) if trades else None
-    open_pos    = tracker.open_positions
+    performance = (
+        PerformanceEngine.summarize(trades, capital_usd=args.capital)
+        if trades else None
+    )
 
     return LiveRunResult(
         success        = True,
         engine_result  = engine_result,
         performance    = performance,
-        open_positions = open_pos,
+        open_positions = tracker.open_positions,
         oms_summary    = engine.oms_summary,
     )
