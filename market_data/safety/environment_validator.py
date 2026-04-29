@@ -33,8 +33,8 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from core.config.schema import AppConfig
-    from core.config.runtime import RunConfig
+    from ocm_platform.config.schema import AppConfig
+    from ocm_platform.config.runtime import RunConfig
 
 __all__ = ["EnvironmentValidator", "EnvironmentMismatchError"]
 

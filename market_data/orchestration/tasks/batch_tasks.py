@@ -35,7 +35,7 @@ from collections.abc import Sequence
 
 from prefect import task, get_run_logger
 
-from core.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
+from ocm_platform.config.schema import AppConfig, ExchangeConfig, PIPELINE_TASK_TIMEOUT
 from market_data.orchestration.tasks.exchange_tasks import ExchangeProbe
 from market_data.processing.pipelines.ohlcv_pipeline import OHLCVPipeline
 from market_data.adapters.exchange import (

@@ -17,8 +17,8 @@ Principios: SOLID · KISS · DIP (inyección de dependencias)
 
 from typing import Optional
 
-from core.config.schema import AppConfig
-from core.observability import bind_pipeline
+from ocm_platform.config.schema import AppConfig
+from ocm_platform.observability import bind_pipeline
 from market_data.storage.gold.gold_storage import GoldStorage
 
 _log = bind_pipeline("post_processing")

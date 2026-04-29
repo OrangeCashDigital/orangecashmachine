@@ -16,7 +16,7 @@ from typing import Optional
 
 from pyiceberg.catalog.sql import SqlCatalog
 
-from core.utils import repo_root
+from ocm_platform.utils import repo_root
 
 _CATALOG: Optional[SqlCatalog] = None
 

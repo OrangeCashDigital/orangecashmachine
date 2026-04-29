@@ -52,7 +52,7 @@ from typing import List, Optional
 
 import pandas as pd
 
-from core.observability import bind_pipeline
+from ocm_platform.observability import bind_pipeline
 from market_data.processing.utils.timeframe import (
     timeframe_to_ms,
     VALID_TIMEFRAMES,

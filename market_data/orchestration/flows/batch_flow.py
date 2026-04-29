@@ -38,8 +38,8 @@ from typing import List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run as _prefect_flow_run
 
-from core.config.schema import AppConfig
-from core.config.runtime_context import RuntimeContext
+from ocm_platform.config.schema import AppConfig
+from ocm_platform.config.runtime_context import RuntimeContext
 from market_data.orchestration.tasks.exchange_tasks import (
     ExchangeProbe,
     validate_exchange_connection,
@@ -58,7 +58,7 @@ from market_data.ports.observability import MetricsPusherPort
 from market_data.safety import guard_context
 from market_data.safety.execution_guard import ExecutionGuard
 
-from core.config.env_vars import PUSHGATEWAY_URL as _PUSHGATEWAY_URL
+from ocm_platform.config.env_vars import PUSHGATEWAY_URL as _PUSHGATEWAY_URL
 
 # Leer el valor de la variable de entorno, no el nombre de la constante.
 # RunConfig.from_env() ya normaliza http(s):// → host:port.

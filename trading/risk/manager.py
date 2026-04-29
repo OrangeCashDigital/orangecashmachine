@@ -31,7 +31,7 @@ from typing import Optional
 
 from loguru import logger
 
-from core.boundaries import SignalProtocol  # DIP — risk depende de abstraccion
+from ocm_platform.boundaries import SignalProtocol  # DIP — risk depende de abstraccion
 from trading.risk.models import RiskConfig
 
 

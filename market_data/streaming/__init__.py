@@ -21,7 +21,7 @@ Uso completo — Fase 3
         EventRouter, PrefectTriggerHandler,
         StreamPublisher, StreamSource,
     )
-    from infra.state.factories import build_stream_publisher, build_stream_source
+    from ocm_platform.infra.state.factories import build_stream_publisher, build_stream_source
 
     router = EventRouter(handlers=[PrefectTriggerHandler()])
     pub    = build_stream_publisher(stream_name="ohlcv")

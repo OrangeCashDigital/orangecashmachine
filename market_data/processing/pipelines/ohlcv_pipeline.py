@@ -33,7 +33,7 @@ import asyncio
 import time
 from typing import List, Literal, Optional
 
-from core.observability import bind_pipeline
+from ocm_platform.observability import bind_pipeline
 
 _log = bind_pipeline("pipeline")
 
@@ -62,11 +62,11 @@ from market_data.adapters.exchange.throttle import AdaptiveThrottle
 from market_data.observability.metrics import FETCH_ABORTS_TOTAL
 from market_data.ports.state import CursorStorePort
 from market_data.ports.gap_registry import GapRegistryPort
-from infra.state.cursor_store import (
+from ocm_platform.infra.state.cursor_store import (
     build_cursor_store_from_env,
     InMemoryCursorStore,
 )
-from infra.state.factories import build_gap_registry
+from ocm_platform.infra.state.factories import build_gap_registry
 
 
 # ==============================================================================

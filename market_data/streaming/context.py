@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.config.runtime_context import RuntimeContext
+    from ocm_platform.config.runtime_context import RuntimeContext
 
 
 @dataclass(frozen=True)
@@ -99,8 +99,8 @@ class StreamingContext:
         tests de integración, scripts).
         """
         import os
-        from core.config import env_vars
-        from core.config.loader.env_resolver import resolve_env
+        from ocm_platform.config import env_vars
+        from ocm_platform.config.loader.env_resolver import resolve_env
 
         env         = resolve_env()
         _pgw_raw    = os.getenv(env_vars.PUSHGATEWAY_URL, "localhost:9091")

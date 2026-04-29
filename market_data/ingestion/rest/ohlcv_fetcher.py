@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import pandas as pd
-from core.observability import bind_pipeline
+from ocm_platform.observability import bind_pipeline
 
 from market_data.storage.storage_protocol import OHLCVStorage
 from market_data.core.transformers.transformer import OHLCVTransformer
@@ -161,7 +161,7 @@ def _get_calibrated_lateness_ms(exchange: str, timeframe: str) -> int | None:
     global _CALIBRATION_STORE, _CALIBRATION_STORE_INITIALIZED
     try:
         if not _CALIBRATION_STORE_INITIALIZED:
-            from infra.state.factories import build_lateness_calibration_store
+            from ocm_platform.infra.state.factories import build_lateness_calibration_store
             _CALIBRATION_STORE = build_lateness_calibration_store()
             _CALIBRATION_STORE_INITIALIZED = True
         if _CALIBRATION_STORE is None:

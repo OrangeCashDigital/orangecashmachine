@@ -30,7 +30,7 @@ from aioresilience.config import CircuitConfig
 
 import ccxt.async_support as _ccxt_async
 
-from core.config.schema import ResilienceConfig, ResilienceRetryPolicy
+from ocm_platform.config.schema import ResilienceConfig, ResilienceRetryPolicy
 
 __all__ = [
     "ErrorType",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.config.lineage import get_git_hash as _get_git_hash
+from ocm_platform.config.lineage import get_git_hash as _get_git_hash
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import numpy as np

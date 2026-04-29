@@ -62,7 +62,7 @@ from market_data.adapters.exchange.throttle import (
 )
 
 if TYPE_CHECKING:
-    from core.config.schema import ExchangeConfig, ResilienceConfig
+    from ocm_platform.config.schema import ExchangeConfig, ResilienceConfig
 
 # Símbolos definidos en este módulo.
 # Las clases de resiliencia, throttle y limiter se re-exportan desde

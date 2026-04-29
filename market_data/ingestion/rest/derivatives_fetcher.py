@@ -47,7 +47,7 @@ from market_data.adapters.exchange import (
 )
 from market_data.storage.silver.derivatives_storage import DerivativesStorage
 from market_data.ports.state import CursorStorePort as CursorStore      # DIP — tipo abstracto
-from infra.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
+from ocm_platform.infra.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
 
 # ---------------------------------------------------------------------------
 # Constants
