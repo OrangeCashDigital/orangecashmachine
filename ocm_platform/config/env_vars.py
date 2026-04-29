@@ -62,8 +62,21 @@ OCM_API_SECRET: str = "OCM_API_SECRET"
 # Storage — leídas por core/config/paths.py
 # =============================================================================
 
+OCM_STORAGE__DATA_LAKE__PATH: str = "OCM_STORAGE__DATA_LAKE__PATH"
+"""Override absoluto del root del data lake.
+
+Convencion: separador __ alineado con apply_env_overrides() (L2).
+  OCM_STORAGE__DATA_LAKE__PATH=/var/lib/ocm/data_lake
+
+Reemplaza OCM_DATA_LAKE_PATH (legacy). Ver migracion en paths.py.
+"""
+
 OCM_DATA_LAKE_PATH: str = "OCM_DATA_LAKE_PATH"
-"""Override absoluto del root del data lake."""
+"""DEPRECATED — usar OCM_STORAGE__DATA_LAKE__PATH.
+
+Mantenida durante transicion controlada. paths.py emite DeprecationWarning
+si esta variable esta presente en el entorno. Eliminar en siguiente release.
+"""
 
 OCM_GOLD_PATH: str = "OCM_GOLD_PATH"
 """Override absoluto del root del gold layer."""
@@ -107,7 +120,9 @@ _ENV_VAR_NAMES: frozenset[str] = frozenset({
     # Credenciales
     OCM_API_KEY, OCM_API_SECRET,
     # Storage / runtime
-    OCM_DATA_LAKE_PATH, OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH,
+    OCM_STORAGE__DATA_LAKE__PATH,
+    OCM_DATA_LAKE_PATH,          # DEPRECATED — legacy, transicion controlada
+    OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH,
     OCM_EXCHANGE, OCM_MARKET_TYPE,
 })
 """Registro explícito de todos los nombres de env var propios de OCM.

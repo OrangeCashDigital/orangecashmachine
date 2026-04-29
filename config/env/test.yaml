@@ -25,9 +25,12 @@ observability:
   metrics:
     enabled: false
 
+# storage.data_lake.path: usa OCM_STORAGE__DATA_LAKE__PATH (SSOT).
+# El default de test apunta a test_data_lake para aislar datos de CI.
+# Setear OCM_STORAGE__DATA_LAKE__PATH en el entorno de test para override.
 storage:
   data_lake:
-    path: ${oc.env:TEST_DATA_LAKE_PATH,data_platform/test_data_lake}
+    path: ${oc.env:OCM_STORAGE__DATA_LAKE__PATH,data_platform/test_data_lake}
 
 integrations:
   redis:

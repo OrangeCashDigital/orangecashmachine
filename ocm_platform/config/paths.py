@@ -8,11 +8,13 @@ Single Source of Truth para los paths del Data Lakehouse.
 
 Orden de resolución para data_lake_root()
 ------------------------------------------
-1. OCM_DATA_LAKE_PATH (env var) — override absoluto, máxima prioridad
-2. storage.data_lake.path del YAML mergeado — configurable por entorno
-   • base.yaml     → data_platform/data_lake
-   • settings.yaml → data_platform/local_data_lake  (en development)
-3. repo_root() / "data_platform" / "data_lake" — fallback seguro
+1. OCM_STORAGE__DATA_LAKE__PATH (env var) — canónica, L2-aligned, máxima prioridad
+2. OCM_DATA_LAKE_PATH (env var)           — DEPRECATED: legacy, emite DeprecationWarning
+3. storage.data_lake.path del YAML mergeado — configurable por entorno
+   • base.yaml            → data_platform/data_lake
+   • env/{env}.yaml       → override por entorno
+   • storage/datalake.yaml → SSOT del path anchor (Hydra compose)
+4. repo_root() / "data_platform" / "data_lake" — fallback estructural seguro
 
 Uso
 ---
@@ -35,7 +37,8 @@ from typing import Optional
 from ocm_platform.config.env_vars import (
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
-    OCM_DATA_LAKE_PATH,
+    OCM_STORAGE__DATA_LAKE__PATH,
+    OCM_DATA_LAKE_PATH,          # DEPRECATED — legacy, transicion controlada
     OCM_GOLD_PATH,
 )
 from ocm_platform.utils import repo_root
@@ -49,13 +52,43 @@ def data_lake_root() -> Path:
     """Raíz del Data Lake. Configurable por entorno, sin hardcode.
 
     Resolución (en orden de prioridad):
-    1. OCM_DATA_LAKE_PATH — override absoluto via env var
-    2. storage.data_lake.path del YAML mergeado
-    3. repo_root() / data_platform / data_lake — fallback seguro
+    1. OCM_STORAGE__DATA_LAKE__PATH — variable canónica (L2-aligned)
+    2. OCM_DATA_LAKE_PATH           — DEPRECATED: legacy, emite warning
+    3. storage.data_lake.path del YAML mergeado (base → env → datalake)
+    4. repo_root() / data_platform / data_lake — fallback estructural seguro
+
+    Contrato de transición:
+        Si OCM_DATA_LAKE_PATH está presente y OCM_STORAGE__DATA_LAKE__PATH
+        no lo está, se usa el valor legacy con DeprecationWarning visible.
+        Si ambas están presentes, OCM_STORAGE__DATA_LAKE__PATH tiene prioridad
+        y se emite warning de variable redundante.
     """
-    env_override = os.getenv(OCM_DATA_LAKE_PATH)
-    if env_override:
-        return Path(env_override).resolve()
+    import warnings
+
+    canonical = os.getenv(OCM_STORAGE__DATA_LAKE__PATH)
+    legacy    = os.getenv(OCM_DATA_LAKE_PATH)
+
+    if canonical and legacy and canonical != legacy:
+        warnings.warn(
+            f"OCM_DATA_LAKE_PATH y OCM_STORAGE__DATA_LAKE__PATH están ambas definidas "
+            f"con valores distintos. OCM_STORAGE__DATA_LAKE__PATH tiene prioridad. "
+            f"Eliminar OCM_DATA_LAKE_PATH del entorno.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    if canonical:
+        return Path(canonical).resolve()
+
+    if legacy:
+        warnings.warn(
+            "OCM_DATA_LAKE_PATH está deprecada. "
+            "Usar OCM_STORAGE__DATA_LAKE__PATH en su lugar. "
+            "Será eliminada en el próximo release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return Path(legacy).resolve()
 
     yaml_path = _read_yaml_lake_path()
     if yaml_path:
@@ -164,8 +197,12 @@ def _read_yaml_lake_path() -> Optional[str]:
 
         env = resolve_env()
 
+        # Orden de merge: base → env/{env} → storage/datalake (SSOT Hydra)
+        # storage/datalake.yaml tiene @package _global_ — su storage.data_lake.path
+        # es el mismo valor que Hydra resuelve en AppConfig.storage.data_lake.path.
+        # settings.yaml NO se incluye — es solo para environment.default_env.
         data: dict = {}
-        for fname in ("base.yaml", f"env/{env}.yaml", "settings.yaml"):
+        for fname in ("base.yaml", f"env/{env}.yaml", "storage/datalake.yaml"):
             fpath = config_dir / fname
             chunk = YamlLoader.load(fpath, required=False)
             if chunk:

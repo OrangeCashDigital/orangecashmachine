@@ -5,14 +5,15 @@
 #
 # SSOT del path base del data platform.
 #
-# paths.py resuelve desde aquí:
+# paths.py resuelve desde aquí (nivel 3 de la cadena):
 #   iceberg_warehouse/ → data_lake_root().parent / "iceberg_warehouse"
 #   iceberg_catalog/   → data_lake_root().parent / "iceberg_catalog"
 #
 # PRECEDENCIA de resolución (paths.py::data_lake_root):
-#   1. OCM_DATA_LAKE_PATH (env var)          — override absoluto, máxima prioridad
-#   2. storage.data_lake.path (este YAML)    — configurable por entorno
-#   3. repo_root()/data_platform/data_lake   — fallback estructural
+#   1. OCM_STORAGE__DATA_LAKE__PATH (env var)  — canónica, L2-aligned, máx prioridad
+#   2. OCM_DATA_LAKE_PATH (env var)            — DEPRECATED: legacy, DeprecationWarning
+#   3. storage.data_lake.path (este YAML)      — configurable por entorno via Hydra
+#   4. repo_root()/data_platform/data_lake     — fallback estructural
 #
 # DEFAULT: "data_platform/data_lake" — alineado con DataLakeConfig.path en
 # schema.py (SSOT dual: YAML + Pydantic siempre deben coincidir).
@@ -20,11 +21,11 @@
 # REGLA: el default aquí NUNCA debe diferir del default en schema.py.
 # Si se cambia uno, cambiar el otro. Test: tests/config/test_contracts.py.
 #
-# Setear en .env (dev) o como variable de entorno del sistema (prod):
-#   OCM_DATA_LAKE_PATH=data_platform/data_lake   # dev
-#   OCM_DATA_LAKE_PATH=/var/lib/ocm/data_lake    # prod
+# Setear en .env (dev) o como variable del sistema (prod):
+#   OCM_STORAGE__DATA_LAKE__PATH=data_platform/data_lake   # dev
+#   OCM_STORAGE__DATA_LAKE__PATH=/var/lib/ocm/data_lake    # prod
 # ==============================================================================
 
 storage:
   data_lake:
-    path: ${oc.env:OCM_DATA_LAKE_PATH,data_platform/data_lake}
+    path: ${oc.env:OCM_STORAGE__DATA_LAKE__PATH,data_platform/data_lake}

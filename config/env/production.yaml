@@ -29,8 +29,9 @@ observability:
   tracing:
     enabled: false
 
-# storage.data_lake.path: viene de OCM_DATA_LAKE_PATH en el entorno (SSOT).
+# storage.data_lake.path: viene de OCM_STORAGE__DATA_LAKE__PATH en el entorno (SSOT).
 # En producción setear como variable del sistema, no como default en YAML.
+# DEPRECATED: OCM_DATA_LAKE_PATH ya no es la variable canónica.
 
 integrations:
   redis:

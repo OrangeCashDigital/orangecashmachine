@@ -182,6 +182,6 @@ class EnvironmentValidator:
             )
             raise EnvironmentMismatchError(
                 f"Production storage path '{path_str}' contains a development fragment. "
-                "Set OCM_DATA_LAKE_PATH to a production path "
+                "Set OCM_STORAGE__DATA_LAKE__PATH to a production path "
                 "(e.g. /var/lib/orangecashmachine/data_platform/data_lake)."
             )
