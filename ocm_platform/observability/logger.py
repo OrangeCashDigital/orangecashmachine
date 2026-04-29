@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 """
-core/observability/logger.py
-=====================
+ocm_platform/observability/logger.py
+======================================
 
-Sistema de logging centralizado para OrangeCashMachine v0.3.0.
+Sistema de logging centralizado para OrangeCashMachine.
 
 Arquitectura
 ------------
@@ -29,7 +29,7 @@ Arquitectura
 
 Ciclo de vida
 -------------
-1. ``bootstrap_logging()``  — Fase 1, antes de AppConfig. Idempotente.
+1. ``bootstrap_logging()``  — Fase 1, antes de AppConfig. Thread-safe, idempotente.
 2. ``configure_logging()``  — Fase 2, con LoggingConfig validado. Hash-guarded.
 
 Exports públicos
@@ -47,7 +47,7 @@ import logging as std_logging
 import sys
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -59,16 +59,35 @@ from ocm_platform.observability.processors import build_processor_chain, process
 from ocm_platform.observability.sinks import LokiSink, PrometheusLogSink
 
 
-# ── Estado global ─────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Estado global — protegido por _CONFIG_LOCK en toda operación de escritura
+# ---------------------------------------------------------------------------
 
-_BOOTSTRAP_DONE:  bool          = False
-_CONFIG_HASH:     Optional[str] = None
-_ACTIVE_SINK_IDS: list[int]     = []
-_ACTIVE_LOKI:     Optional[LokiSink] = None
-_CONFIG_LOCK = Lock()
+_BOOTSTRAP_DONE:  bool              = False
+_CONFIG_HASH:     str | None        = None
+_ACTIVE_SINK_IDS: list[int]         = []
+_ACTIVE_LOKI:     LokiSink | None   = None
+_CONFIG_LOCK                        = Lock()
 
 
-# ── InterceptHandler (stdlib → loguru) ───────────────────────────────────────
+# ---------------------------------------------------------------------------
+# _LokiMessage — envelope para el bridge Loguru → LokiSink
+# ---------------------------------------------------------------------------
+# Definido a nivel de módulo: evitar crear una clase nueva por cada evento
+# de log que pase por el sink de Loki (era O(n_events) creaciones de clase).
+
+class _LokiMessage:
+    """Envelope mínimo que LokiSink espera recibir en su __call__."""
+
+    __slots__ = ("record",)
+
+    def __init__(self, record: dict[str, Any]) -> None:
+        self.record = record
+
+
+# ---------------------------------------------------------------------------
+# InterceptHandler — redirige stdlib logging → loguru
+# ---------------------------------------------------------------------------
 
 class InterceptHandler(std_logging.Handler):
     """Redirige logs del stdlib a loguru.
@@ -96,25 +115,39 @@ class InterceptHandler(std_logging.Handler):
         )
 
 
-# ── Config resolver ───────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Loggers ruidosos — silenciados a WARNING para proteger Loki y archivos locales
+# ---------------------------------------------------------------------------
+# ccxt loguea responses HTTP completos (1-3 MB por línea).
+
+_NOISY_LOGGERS: tuple[str, ...] = (
+    "ccxt",
+    "ccxt.async_support",
+    "ccxt.async_support.base.exchange",
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers privados
+# ---------------------------------------------------------------------------
 
 def _resolve_config(
-    cfg: Optional[LoggingConfig],
+    cfg: LoggingConfig | None,
     debug: bool,
-    log_dir: Optional[Path],
+    log_dir: Path | None,
 ) -> dict[str, Any]:
     """Construye el dict de configuración efectiva.
 
     Args:
-        cfg:     LoggingConfig Pydantic, o None para defaults de bootstrap.
-        debug:   Si True, fuerza nivel DEBUG.
+        cfg:     LoggingConfig Pydantic, o ``None`` para defaults de bootstrap.
+        debug:   Si ``True``, fuerza nivel DEBUG.
         log_dir: Override del directorio de logs (solo en bootstrap).
 
     Returns:
         Dict con todas las claves necesarias para instalar sinks.
     """
     if cfg:
-        resolved_log_dir: Optional[Path] = (
+        resolved_log_dir: Path | None = (
             Path(cfg.log_dir) if (cfg.file or cfg.pipeline) and cfg.log_dir else None
         )
         return {
@@ -142,10 +175,8 @@ def _resolve_config(
     }
 
 
-# ── Context patcher ───────────────────────────────────────────────────────────
-
-def _make_patcher(run_id: Optional[str], env: str):
-    """Crea un patcher que inyecta run_id, service y env en cada record.
+def _make_patcher(run_id: str | None, env: str):
+    """Crea un patcher que inyecta ``run_id``, ``service`` y ``env`` en cada record.
 
     Args:
         run_id: ID del proceso. Usa ``"-"`` si None.
@@ -158,49 +189,35 @@ def _make_patcher(run_id: Optional[str], env: str):
 
     def _patch(record: dict[str, Any]) -> None:
         extra = record["extra"]
-        extra.setdefault("run_id",   _run_id)
-        extra.setdefault("service",  "orangecashmachine")
-        extra.setdefault("env",      env)
+        extra.setdefault("run_id",  _run_id)
+        extra.setdefault("service", "orangecashmachine")
+        extra.setdefault("env",     env)
 
     return _patch
 
-
-# ── Bootstrap buffer replay ───────────────────────────────────────────────────
 
 def _replay_bootstrap_buffer() -> None:
     """Re-emite al pipeline de loguru los eventos capturados en Fase 0."""
     entries = _drain_bootstrap()
     if not entries:
         return
-
     for entry in entries:
         ts    = entry.get("ts", "?")
         event = entry.get("event", "?")
         rest  = {k: v for k, v in entry.items() if k not in ("ts", "event")}
         logger.bind(phase="pre_init", pre_init_ts=ts, **rest).debug(event)
-
     logger.bind(phase="pre_init").debug(
         "logging.bootstrap_drained | events={}", len(entries)
     )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
 def _ensure_log_dir(log_dir: Path) -> None:
-    """Crea el directorio de logs si no existe. Fail-soft."""
+    """Crea el directorio de logs si no existe. Fail-Soft."""
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
         logger.warning("log_dir_creation_failed | error={}", exc)
 
-
-# Loggers de terceros con volumen excesivo en DEBUG — silenciados al nivel WARNING.
-# ccxt loguea responses HTTP completos (1-3 MB por línea) que rompen Loki.
-_NOISY_LOGGERS: tuple[str, ...] = (
-    "ccxt",
-    "ccxt.async_support",
-    "ccxt.async_support.base.exchange",
-)
 
 def _install_stdlib_bridge() -> None:
     """Instala InterceptHandler como único handler del stdlib.
@@ -224,28 +241,26 @@ def _stable(obj: Any) -> Any:
     return obj
 
 
-# ── Sink installer ────────────────────────────────────────────────────────────
-
 def _install_sinks(
     resolved: dict[str, Any],
     debug: bool,
-    run_id: Optional[str],
+    run_id: str | None,
     env: str,
-) -> tuple[list[int], Optional[LokiSink]]:
+) -> tuple[list[int], LokiSink | None]:
     """Registra todos los sinks según la configuración resuelta.
 
     Args:
         resolved: Dict producido por :func:`_resolve_config`.
-        debug:    Si True, activa ``diagnose=True`` en consola.
+        debug:    Si ``True``, activa ``diagnose=True`` en consola.
         run_id:   ID del proceso (para labels de Loki).
         env:      Entorno activo (para labels de Loki).
 
     Returns:
-        Tupla (lista de IDs de sinks loguru, instancia LokiSink o None).
+        Tupla ``(lista de IDs de sinks loguru, instancia LokiSink o None)``.
     """
-    ids:       list[int]          = []
-    loki_sink: Optional[LokiSink] = None
-    log_dir:   Optional[Path]     = resolved.get("log_dir")
+    ids:       list[int]        = []
+    loki_sink: LokiSink | None  = None
+    log_dir:   Path | None      = resolved.get("log_dir")
 
     # ── Consola ───────────────────────────────────────────────────────
     if resolved["console"]:
@@ -269,7 +284,6 @@ def _install_sinks(
     if log_dir:
         _ensure_log_dir(log_dir)
 
-        # system.log — todos los niveles, JSON
         ids.append(logger.add(
             log_dir / "system_{time:YYYY-MM-DD}.log",
             rotation=resolved["rotation"],
@@ -280,7 +294,6 @@ def _install_sinks(
         ))
 
         if resolved["file"]:
-            # ocm.log — nivel configurado, formato legible
             ids.append(logger.add(
                 log_dir / "orangecashmachine_{time:YYYY-MM-DD}.log",
                 rotation=resolved["rotation"],
@@ -289,7 +302,6 @@ def _install_sinks(
                 level=resolved["level"],
                 format=FILE,
             ))
-            # errors.log — WARNING+, retención extendida
             ids.append(logger.add(
                 log_dir / "errors_{time:YYYY-MM-DD}.log",
                 rotation=resolved["rotation"],
@@ -300,7 +312,6 @@ def _install_sinks(
             ))
 
         if resolved["pipeline"]:
-            # pipeline.log — JSON, solo módulos de pipeline
             ids.append(logger.add(
                 log_dir / "pipeline_{time:YYYY-MM-DD}.log",
                 rotation=resolved["rotation"],
@@ -312,7 +323,7 @@ def _install_sinks(
             ))
 
     # ── Loki (sink remoto) ────────────────────────────────────────────
-    loki_url: Optional[str] = resolved.get("loki_url")
+    loki_url: str | None = resolved.get("loki_url")
     if loki_url:
         _chain = build_processor_chain()
         loki_labels: dict[str, str] = {
@@ -321,16 +332,17 @@ def _install_sinks(
             "service": "orangecashmachine",
             **resolved.get("loki_labels", {}),
         }
-        # LokiSink se crea ANTES del closure para evitar referencia forward
         loki_sink = LokiSink(url=loki_url, labels=loki_labels)
 
         def _loki_loguru_sink(message: Any, _sink: LokiSink = loki_sink) -> None:
             """Bridge Loguru → structlog processor chain → LokiSink.
 
-            _sink se captura por default arg (bind-at-definition) — evita
-            referencia forward sobre variable local del scope exterior.
+            ``_sink`` se captura por default arg (bind-at-definition) para
+            evitar referencia forward sobre variable local del scope exterior.
+            ``_LokiMessage`` es de nivel de módulo: no se crea una clase nueva
+            por cada evento (era O(n_events) en la versión anterior).
             """
-            record = message.record
+            record     = message.record
             event_dict: dict[str, Any] = {
                 "event":   record["message"],
                 "level":   record["level"].name.lower(),
@@ -344,18 +356,13 @@ def _install_sinks(
                 },
             }
             json_line = process_event(_chain, event_dict["level"], event_dict)
-
-            class _Msg:
-                pass
-
-            msg        = _Msg()
-            msg.record = {  # type: ignore[attr-defined]
+            _sink(_LokiMessage({
                 "level":   record["level"],
                 "time":    record["time"],
                 "message": json_line,
                 "extra":   record["extra"],
-            }
-            _sink(msg)
+            }))
+
         ids.append(logger.add(
             _loki_loguru_sink,
             level="INFO",
@@ -365,33 +372,42 @@ def _install_sinks(
     return ids, loki_sink
 
 
-# ── Bootstrap (Fase 1) ────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Bootstrap — Fase 1: antes de AppConfig
+# ---------------------------------------------------------------------------
 
 def bootstrap_logging(
     debug: bool = False,
-    run_id: Optional[str] = None,
+    run_id: str | None = None,
     env: str = "development",
 ) -> None:
     """Configuración mínima de logging — Fase 1, antes de AppConfig.
 
-    Idempotente: llamadas adicionales son no-op.
+    Thread-safe e idempotente: llamadas concurrentes o adicionales son no-op.
 
     Args:
         debug:  Activa nivel DEBUG y diagnósticos en consola.
-        run_id: ID del proceso. Si None usa ``"-"``.
+        run_id: ID del proceso. Si ``None`` usa ``"-"``.
         env:    Entorno activo para contexto en logs.
     """
     global _BOOTSTRAP_DONE, _ACTIVE_SINK_IDS, _ACTIVE_LOKI
 
+    # Fast-path sin lock para el caso común (ya inicializado)
     if _BOOTSTRAP_DONE:
         return
 
-    resolved = _resolve_config(None, debug, None)
+    with _CONFIG_LOCK:
+        # Double-checked locking: otro hilo pudo haber inicializado
+        # entre el check sin lock y la adquisición del lock.
+        if _BOOTSTRAP_DONE:
+            return
 
-    logger.remove()
-    logger.configure(patcher=_make_patcher(run_id, env))
-    _ACTIVE_SINK_IDS, _ACTIVE_LOKI = _install_sinks(resolved, debug, run_id, env)
-    _BOOTSTRAP_DONE = True
+        resolved = _resolve_config(None, debug, None)
+
+        logger.remove()
+        logger.configure(patcher=_make_patcher(run_id, env))
+        _ACTIVE_SINK_IDS, _ACTIVE_LOKI = _install_sinks(resolved, debug, run_id, env)
+        _BOOTSTRAP_DONE = True
 
     logger.bind(phase="init").debug(
         "logging_initialized | level={}", resolved["level"]
@@ -400,13 +416,15 @@ def bootstrap_logging(
     _install_stdlib_bridge()
 
 
-# ── Configure (Fase 2) ────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Configure — Fase 2: con LoggingConfig Pydantic validado
+# ---------------------------------------------------------------------------
 
 def configure_logging(
     cfg: LoggingConfig,
     env: str,
     debug: bool = False,
-    run_id: Optional[str] = None,
+    run_id: str | None = None,
 ) -> None:
     """Reconfigura logging con LoggingConfig Pydantic validado.
 
@@ -415,7 +433,7 @@ def configure_logging(
     Args:
         cfg:    Configuración de logging validada por Pydantic.
         env:    Entorno activo.
-        debug:  Si True, fuerza nivel DEBUG.
+        debug:  Si ``True``, fuerza nivel DEBUG.
         run_id: ID del proceso para contexto en logs y labels Loki.
     """
     global _CONFIG_HASH, _ACTIVE_SINK_IDS, _ACTIVE_LOKI
@@ -432,7 +450,6 @@ def configure_logging(
 
         _CONFIG_HASH = new_hash
 
-        # Cerrar LokiSink anterior para liberar conexión HTTP
         if _ACTIVE_LOKI is not None:
             try:
                 _ACTIVE_LOKI.close()
@@ -446,6 +463,7 @@ def configure_logging(
         _ACTIVE_SINK_IDS, _ACTIVE_LOKI = _install_sinks(resolved, debug, run_id, env)
         _install_stdlib_bridge()
 
+    # Log fuera del lock — el logger ya está activo
     logger.bind(phase="reconfigure").debug(
         "logging_reconfigured | level={} loki={}",
         resolved["level"],
@@ -453,21 +471,23 @@ def configure_logging(
     )
 
 
-# ── Helpers públicos ──────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# API pública
+# ---------------------------------------------------------------------------
 
 def bind_pipeline(
     component: str,
-    exchange:  Optional[str] = None,
-    dataset:   Optional[str] = None,
+    exchange:  str | None = None,
+    dataset:   str | None = None,
     **extra: Any,
-):
+) -> "loguru.Logger":
     """Retorna un logger con contexto de pipeline pre-enlazado.
 
     Args:
         component: Nombre del componente (e.g. ``"ohlcv_fetcher"``).
         exchange:  Nombre del exchange, si aplica.
         dataset:   Tipo de dataset, si aplica.
-        **extra:   Contexto adicional.
+        **extra:   Contexto adicional arbitrario.
 
     Returns:
         Logger de loguru con contexto fijo.
@@ -481,7 +501,7 @@ def bind_pipeline(
 
 
 def is_logging_configured() -> bool:
-    """True si bootstrap y configure_logging ya fueron ejecutados."""
+    """``True`` si bootstrap y configure_logging ya fueron ejecutados."""
     return _BOOTSTRAP_DONE and _CONFIG_HASH is not None
 
 

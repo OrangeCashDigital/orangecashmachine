@@ -6,13 +6,19 @@ market_data/orchestration/entrypoint.py
 
 Entrypoint LOCAL — solo para desarrollo y debug.
 
-En producción el flow es disparado por Prefect Server/Worker
-via deployment. Este archivo NO forma parte del path de producción.
+En producción el flow es disparado por Prefect Server/Worker via deployment.
+Este archivo NO forma parte del path de producción.
 
 Responsabilidad
 ---------------
-Orquestar arranque del flow local + post-procesado.
-No conoce detalles de storage ni de features.
+- Construir un :class:`RuntimeContext` canónico (SSOT).
+- Orquestar arranque del flow local, post-procesado y registro de run.
+- No conoce detalles de storage ni de features.
+
+Contrato de run_id
+------------------
+``run_id`` proviene siempre de ``RuntimeContext.run_id`` (delegado a
+``RunConfig.run_id``). No se genera un segundo UUID en este módulo.
 """
 
 import asyncio
@@ -21,7 +27,6 @@ import json
 import signal
 import sys
 import time as _time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -30,100 +35,110 @@ from ocm_platform.runtime.lineage import get_git_hash
 from ocm_platform.runtime.registry import record_run
 from ocm_platform.runtime.run_config import RunConfig
 from ocm_platform.config.hydra_loader import load_appconfig_standalone
-from ocm_platform.config.schema import AppConfig
+from ocm_platform.runtime.context import RuntimeContext
 from market_data.orchestration.flows.batch_flow import market_data_flow
 from market_data.safety.execution_guard import ExecutionGuard, ExecutionStoppedError
 from market_data.safety import guard_context
 from market_data.orchestration.post_processing import PostProcessingService
 from market_data.ports.observability import MetricsPusherPort
-from ocm_platform.runtime.context import RuntimeContext
 
 _log = bind_pipeline("entrypoint")
 
-# Sentinel no-op — usado cuando run() recibe pusher=None
-# Evita importar infra en entrypoint; composition root inyecta el real.
-class _NoopPusher:
-    def push(self, labels=None) -> None:
+
+# ---------------------------------------------------------------------------
+# No-op pusher — implementa el puerto para evitar None-checks en runtime
+# ---------------------------------------------------------------------------
+
+class _NoopPusher(MetricsPusherPort):
+    """Implementación vacía de MetricsPusherPort para cuando no hay pusher real."""
+
+    def push(self, labels: dict | None = None) -> None:  # noqa: D102
         pass
 
-_noop_pusher = _NoopPusher()
+
+_NOOP_PUSHER = _NoopPusher()
 
 
-def build_context():
-    """Central context builder.
+# ---------------------------------------------------------------------------
+# Context builder — SSOT único para construcción de RuntimeContext
+# ---------------------------------------------------------------------------
 
-    Reads configuration via the Hydra standalone path and builds the runtime
-    context by resolving AppConfig and RunConfig in a single place.
-    This function unifies the two startup paths into one canonical entry point
-    for local execution, without touching the flow implementation yet.
+def build_context() -> RuntimeContext:
+    """Construye el RuntimeContext canónico para ejecución local.
+
+    Lee la configuración vía Hydra standalone y resuelve RunConfig desde
+    el entorno. Es el único lugar donde se construye RuntimeContext —
+    no hay segundas rutas de construcción.
+
+    Returns:
+        :class:`RuntimeContext` inmutable listo para inyectar al flow.
     """
     run_cfg = RunConfig.from_env()
-    config = load_appconfig_standalone(
+    app_config = load_appconfig_standalone(
         env=run_cfg.env,
         config_dir=run_cfg.config_path,
         run_id=run_cfg.run_id,  # SSOT: run_id generado por RunConfig
     )
-    started_at = datetime.now(timezone.utc)
-    runtime_context = RuntimeContext(
-        app_config=config,
+    return RuntimeContext(
+        app_config=app_config,
         run_config=run_cfg,
-        started_at=started_at,
+        started_at=datetime.now(timezone.utc),
     )
-    # run_id y environment son @property delegadas a run_config (SSOT)
-    return config, run_cfg, runtime_context
 
+
+# ---------------------------------------------------------------------------
+# Flow local runner
+# ---------------------------------------------------------------------------
 
 async def _run_flow_local(
-    config: AppConfig,
-    run_cfg: RunConfig,
-    runtime_context: RuntimeContext | None,
+    ctx: RuntimeContext,
     guard: ExecutionGuard,
 ) -> None:
-    config_dir = str(Path("config").resolve())
-    log = _log.bind(mode="local", env=run_cfg.env, config_dir=config_dir)
+    """Lanza market_data_flow con el RuntimeContext inyectado.
 
-    guard.check()  # verifica kill switch antes de lanzar el flow
+    Args:
+        ctx:   RuntimeContext canónico — nunca None.
+        guard: ExecutionGuard activo para kill-switch.
+    """
+    config_dir = str(Path("config").resolve())
+    log = _log.bind(mode="local", env=ctx.environment, config_dir=config_dir)
+
+    guard.check()  # verifica kill-switch antes de lanzar el flow
     log.info("flow_launching", flow="market_data_flow")
-    # Si no hay runtime_context, construirlo a partir del entrypoint
-    if runtime_context is None:
-        _, _, runtime_context = build_context()
-    await market_data_flow(runtime_context)
+    await market_data_flow(ctx)
     log.info("flow_completed", flow="market_data_flow")
     # PostProcessingService se ejecuta en el finally de run() — fuera del timeout
 
 
+# ---------------------------------------------------------------------------
+# Función principal de ejecución
+# ---------------------------------------------------------------------------
+
 def run(
-    config: AppConfig,
-    run_cfg: RunConfig,
-    runtime_context: RuntimeContext | None = None,
-    debug: bool = False,
+    ctx: RuntimeContext,
     pusher: MetricsPusherPort | None = None,
 ) -> int:
-    """
-    Ejecuta el pipeline en modo local.
+    """Ejecuta el pipeline en modo local.
 
-    Parameters
-    ----------
-    config  : AppConfig
-        Configuración de aplicación ya cargada y validada.
-    run_cfg : RunConfig
-        Runtime ya resuelto por main.py — no se recrea aquí.
-    debug   : bool
-        Flag de debug resuelto por RunConfig.
+    Args:
+        ctx:    RuntimeContext canónico — construido por :func:`build_context`.
+        pusher: Implementación de MetricsPusherPort. Si None se usa el no-op.
 
-    Returns
-    -------
-    int
-        0 → éxito, 1 → error crítico, 130 → interrumpido (SIGINT).
+    Returns:
+        Código de salida: ``0`` → éxito, ``1`` → error crítico,
+        ``130`` → interrumpido (SIGINT/SIGTERM).
     """
-    log = _log.bind(mode="local", env=run_cfg.env)
+    config  = ctx.app_config
+    run_cfg = ctx.run_config
+    run_id  = ctx.run_id  # SSOT — siempre de RunConfig vía RuntimeContext
+    log     = _log.bind(mode="local", env=ctx.environment)
 
     guard = ExecutionGuard(
         max_errors=config.pipeline.max_consecutive_errors,
         max_runtime_s=config.pipeline.timeouts.historical_pipeline,
     )
     guard.start()
-    guard_context.set_guard(guard)  # disponible para batch_flow sin pasar por Prefect
+    guard_context.set_guard(guard)
     log.debug(
         "execution_guard_started",
         max_errors=guard.max_errors,
@@ -132,35 +147,31 @@ def run(
 
     git_hash = get_git_hash()
     config_hash = hashlib.sha256(
-        json.dumps(config.model_dump(mode="json"), sort_keys=True, default=str).encode()
+        json.dumps(
+            config.model_dump(mode="json"), sort_keys=True, default=str
+        ).encode()
     ).hexdigest()[:12]
 
     log.info(
         "pipeline_starting",
         exchanges=config.exchange_names,
+        run_id=run_id,
         git_hash=git_hash,
         config_hash=config_hash,
     )
 
-    timeout = config.pipeline.timeouts.historical_pipeline
-    # SSoT: usar el run_id del RuntimeContext si ya fue resuelto por
-    # entrypoint/main.py. Generar uno nuevo solo si run() se invoca
-    # en aislamiento (tests, CLI directo sin contexto previo).
-    run_id = (
-        runtime_context.run_id
-        if runtime_context is not None
-        else f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
-    )
+    timeout   = config.pipeline.timeouts.historical_pipeline
     exit_code = 0
-    _t0 = _time.monotonic()
+    _t0       = _time.monotonic()
+
     # ── Event loop explícito para shutdown graceful vía SIGINT/SIGTERM ──────
     # asyncio.run(wait_for(...)) no permite cancelar el task raíz antes de
     # cerrar el loop: las tareas hijas en vuelo terminan como Exception en
     # lugar de CancelledError, produciendo logs "Strategy fallida" espurios.
     # Con loop explícito instalamos signal handlers que cancelan el task raíz
     # limpiamente y esperan a que todas las coroutines terminen su finally.
-    loop = asyncio.new_event_loop()
-    main_task: "asyncio.Task[None] | None" = None
+    loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
+    main_task: asyncio.Task[None] | None = None
 
     def _request_shutdown(sig: int) -> None:
         sig_name = signal.Signals(sig).name
@@ -178,7 +189,7 @@ def run(
 
             main_task = loop.create_task(
                 asyncio.wait_for(
-                    _run_flow_local(config, run_cfg, runtime_context, guard=guard),
+                    _run_flow_local(ctx, guard=guard),
                     timeout=timeout,
                 )
             )
@@ -188,7 +199,7 @@ def run(
             log.error("pipeline_timeout", timeout_s=timeout)
             exit_code = 1
         except asyncio.CancelledError:
-            # Cancelación limpia vía signal handler — exit_code ya seteado en 130
+            # Cancelación limpia vía signal handler — exit_code ya seteado
             pass
         except ExecutionStoppedError as exc:
             log.critical("pipeline_stopped_by_guard", reason=str(exc))
@@ -212,29 +223,33 @@ def run(
                 )
             loop.close()
             asyncio.set_event_loop(None)
+
     finally:
         _duration = _time.monotonic() - _t0
-        _result = {0: "success", 1: "error", 130: "interrupted"}.get(
+        _result   = {0: "success", 1: "error", 130: "interrupted"}.get(
             exit_code, "unknown"
         )
+
         guard.stop()
-        guard_context.set_guard(None)  # limpiar contexto de proceso
+        guard_context.set_guard(None)
         _guard_summary = guard.summary()
         log.info("execution_guard_summary", **_guard_summary)
+
         if exit_code != 130:
             # Post-processing fuera del timeout: Gold con datos parciales > Gold vacío
             PostProcessingService(config, run_id=run_id).execute()
-            _pusher = pusher if pusher is not None else _noop_pusher
+            _pusher = pusher if pusher is not None else _NOOP_PUSHER
             if config.observability.metrics.enabled:
                 for ex in config.exchanges:
                     _pusher.push({"exchange": ex.name.value, "gateway": run_cfg.pushgateway})
             else:
                 log.debug("metrics_push_skipped", reason="metrics.enabled=false")
         else:
-            log.debug("metrics_push_skipped", reason="SIGINT")
+            log.debug("metrics_push_skipped", reason="SIGINT/SIGTERM")
+
         # record_run al final del ciclo de vida: captura duración real incluyendo
         # post-processing y push de métricas. Envuelto en try para que un fallo
-        # de persistencia no corte el log de cierre.
+        # de persistencia no corte el log de cierre (Fail-Soft).
         try:
             record_run(
                 run_id=run_id,
@@ -247,32 +262,35 @@ def run(
                 extra={"guard": _guard_summary},
             )
             log.info(
-                "run_recorded | run_id={} result={} duration_s={:.1f}",
-                run_id,
-                _result,
-                _duration,
+                "run_recorded",
+                run_id=run_id,
+                result=_result,
+                duration_s=round(_duration, 1),
             )
         except Exception as _rec_exc:
-            log.warning("record_run_failed | run_id={} error={}", run_id, _rec_exc)
+            log.warning(
+                "record_run_failed",
+                run_id=run_id,
+                error=str(_rec_exc),
+            )
+
         log.info("shutdown_complete", exit_code=exit_code)
 
     return exit_code
 
 
+# ---------------------------------------------------------------------------
+# __main__ — ejecución directa para desarrollo
+# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
     from ocm_platform.observability import bootstrap_logging, configure_logging
 
-    # Build centralized context using canonical resolver
-    config, run_cfg, runtime_context = build_context()
-    bootstrap_logging(debug=run_cfg.debug, env=run_cfg.env)
+    ctx = build_context()
+    bootstrap_logging(debug=ctx.debug, env=ctx.environment)
     configure_logging(
-        cfg=config.observability.logging, env=run_cfg.env, debug=run_cfg.debug
+        cfg=ctx.app_config.observability.logging,
+        env=ctx.environment,
+        debug=ctx.debug,
     )
-    sys.exit(
-        run(
-            config=config,
-            run_cfg=run_cfg,
-            runtime_context=runtime_context,
-            debug=run_cfg.debug,
-        )
-    )
+    sys.exit(run(ctx))
