@@ -169,7 +169,14 @@ class _LazyCalibrationStore:
             if self._store is None:
                 return None
             return self._store.get_lateness_ms(exchange, timeframe)
-        except Exception:
+        except Exception as _cal_exc:
+            # SafeOps: calibration store no disponible → caller usa DEFAULT_OVERLAP_BARS.
+            # debug, no warning — es esperado en entornos sin datos de calibración.
+            import logging as _logging
+            _logging.getLogger(__name__).debug(
+                "Lateness calibration unavailable exchange=%s tf=%s err=%s",
+                exchange, timeframe, _cal_exc,
+            )
             return None
 
 
@@ -336,7 +343,14 @@ class HistoricalFetcherAsync:
         _exchange_name = getattr(self._exchange, "_exchange_id", None)
         try:
             _pair_overlap = overlap_for_timeframe(timeframe, exchange=_exchange_name)
-        except Exception:
+        except Exception as _ovl_exc:
+            # SafeOps: overlap_for_timeframe falla → fallback a DEFAULT_OVERLAP_BARS.
+            # debug — el fallback es seguro y el pipeline no se interrumpe.
+            import logging as _logging
+            _logging.getLogger(__name__).debug(
+                "overlap_for_timeframe failed exchange=%s tf=%s err=%s — using default",
+                _exchange_name, timeframe, _ovl_exc,
+            )
             _pair_overlap = self._overlap
         _effective_overlap = _pair_overlap
 

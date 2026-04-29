@@ -54,8 +54,12 @@ class CoinMarketCapAdapter(DataProviderAdapter):
         if self._session is not None and not self._session.closed:
             try:
                 await self._session.close()
-            except Exception:
-                pass
+            except Exception as _sess_exc:
+                # SafeOps: sesión ya cerrada o rota — ignorar, limpiar referencia.
+                import logging as _logging
+                _logging.getLogger(__name__).debug(
+                    "CoinMarketCapAdapter.close: session.close() failed: %s", _sess_exc,
+                )
         self._session = None
 
     async def fetch_global_metrics(self) -> Dict[str, Any]:

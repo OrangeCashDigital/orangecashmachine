@@ -276,7 +276,13 @@ class GoldStorage:
                 ):
                     result.append(entry.snapshot_id)
             return result
-        except Exception:
+        except Exception as _snap_exc:
+            # SafeOps: error leyendo snapshots Iceberg → retorna lista vacía.
+            # Tabla nueva (sin snapshots aún) es el caso más común.
+            logger.debug(
+                "list_snapshots_for failed — retornando vacío",
+                error=str(_snap_exc),
+            )
             return []
 
 
