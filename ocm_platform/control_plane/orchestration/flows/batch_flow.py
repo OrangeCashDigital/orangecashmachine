@@ -40,14 +40,14 @@ from prefect.runtime import flow_run as _prefect_flow_run
 
 from ocm_platform.config.schema import AppConfig
 from ocm_platform.runtime.context import RuntimeContext
-from market_data.orchestration.tasks.exchange_tasks import (
+from ocm_platform.control_plane.orchestration.tasks.exchange_tasks import (
     ExchangeProbe,
     validate_exchange_connection,
 )
 
 if TYPE_CHECKING:
     pass
-from market_data.orchestration.tasks.batch_tasks import (
+from ocm_platform.control_plane.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
     run_futures_pipeline,
     run_trades_pipeline,

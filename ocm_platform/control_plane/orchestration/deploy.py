@@ -24,8 +24,8 @@ import argparse
 import asyncio
 from datetime import datetime, timezone
 
-from market_data.orchestration.entrypoint import build_context
-from market_data.orchestration.flows.batch_flow import market_data_flow
+from ocm_platform.control_plane.orchestration.entrypoint import build_context
+from ocm_platform.control_plane.orchestration.flows.batch_flow import market_data_flow
 from ocm_platform.config.hydra_loader import load_appconfig_standalone
 from ocm_platform.runtime.context import RuntimeContext
 from ocm_platform.runtime.run_config import RunConfig

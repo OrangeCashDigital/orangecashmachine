@@ -36,10 +36,10 @@ from ocm_platform.runtime.registry import record_run
 from ocm_platform.runtime.run_config import RunConfig
 from ocm_platform.config.hydra_loader import load_appconfig_standalone
 from ocm_platform.runtime.context import RuntimeContext
-from market_data.orchestration.flows.batch_flow import market_data_flow
+from ocm_platform.control_plane.orchestration.flows.batch_flow import market_data_flow
 from ocm_platform.runtime.guard import ExecutionGuard, ExecutionStoppedError
 from ocm_platform.runtime import guard_context
-from market_data.orchestration.post_processing import PostProcessingService
+from ocm_platform.control_plane.orchestration.post_processing import PostProcessingService
 from market_data.ports.observability import MetricsPusherPort
 
 _log = bind_pipeline("entrypoint")
