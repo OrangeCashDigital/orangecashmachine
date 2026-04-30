@@ -14,15 +14,12 @@ from typing import Optional
 # (devuelven el candle más reciente en lugar del más antiguo).
 # 2017-01-01 UTC cubre la historia relevante de todos los exchanges soportados.
 # Ajustar por exchange en exchange_quirks si es necesario.
-import pandas as _pd_const
-_ORIGIN_FALLBACK_MS: int = int(_pd_const.Timestamp("2017-01-01", tz="UTC").value // 1_000_000)
-del _pd_const
 
 import pandas as pd
 from ocm_platform.observability import bind_pipeline
 from market_data.ingestion.rest.ohlcv_fetcher import DEFAULT_CHUNK_LIMIT
 from market_data.processing.utils.timeframe import timeframe_to_ms
-from market_data.adapters.exchange.exchange_quirks import get_quirks
+from market_data.adapters.exchange.exchange_quirks import get_origin_fallback_ms, get_quirks
 from market_data.processing.strategies.base import (
     PairResult,
     PipelineContext,
@@ -151,7 +148,7 @@ class BackfillStrategy(StrategyMixin):
                     "since=1 not supported, falling back to 2017-01-01",
                     returned_origin=pd.Timestamp(origin_ms, unit='ms', tz='UTC').isoformat(),
                 )
-                origin_ms = _ORIGIN_FALLBACK_MS
+                origin_ms = get_origin_fallback_ms(ctx.exchange_id)
 
             try:
                 ctx.cursor.set_raw(cache_key, str(origin_ms), _BACKFILL_TTL_SECONDS)
