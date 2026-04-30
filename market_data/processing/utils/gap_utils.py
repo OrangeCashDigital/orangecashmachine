@@ -21,6 +21,7 @@ class GapRange:
     start_ms: int
     end_ms:   int
     expected: int
+    run_id:   str = ""  # lineage: run que detectó este gap (SSOT con run_registry)
 
     def __str__(self) -> str:
         start = pd.Timestamp(self.start_ms, unit="ms", tz="UTC").isoformat()
