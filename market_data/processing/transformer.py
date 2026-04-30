@@ -427,7 +427,10 @@ class OHLCVTransformer:
                     LineageStatus.PARTIAL if len(df) < original_rows
                     else LineageStatus.SUCCESS
                 ),
-                params    = {"timeframe": timeframe},
+                params    = {
+                    "timeframe":    timeframe,
+                    "rows_removed": original_rows - len(df),
+                },
             ))
 
         return df

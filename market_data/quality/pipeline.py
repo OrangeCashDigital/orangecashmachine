@@ -61,28 +61,33 @@ class QualityPipeline:
 
     def run(
         self,
-        df:        pd.DataFrame,
-        symbol:    str,
-        timeframe: str,
-        exchange:  str,
-        run_id:    str | None = None,
+        df:           pd.DataFrame,
+        symbol:       str,
+        timeframe:    str,
+        exchange:     str,
+        run_id:       str | None = None,
+        rows_removed: int = 0,
     ) -> QualityPipelineResult:
         checker = DataQualityChecker(timeframe=timeframe, exchange=exchange)
         report  = checker.check(df, symbol=symbol)
         result  = self._policy.evaluate(report)
 
         # Gap scan post-ingesta: detecta huecos temporales silenciosos.
-        # Corre siempre, independiente del resultado de calidad.
-        # Warning únicamente — no bloquea el pipeline (datos parciales > sin datos).
-        _gaps = scan_gaps(df, timeframe)
+        # rows_removed: velas CORRUPT eliminadas upstream (transformer).
+        # Los gaps causados por nuestra propia remoción no son dato faltante
+        # del exchange — se descuentan del conteo para evitar falsos positivos.
+        # Ref: Mangala (2022) — distinguir "pipeline-induced gaps" de "source gaps".
+        _gaps_raw = scan_gaps(df, timeframe)
+        _gaps     = _gaps_raw[rows_removed:] if rows_removed > 0 else _gaps_raw
         if _gaps:
             _high   = sum(1 for g in _gaps if g.severity == "high")
             _medium = sum(1 for g in _gaps if g.severity == "medium")
             _low    = len(_gaps) - _high - _medium
             _lvl    = logger.warning if _high > 0 else logger.info
+            _suffix = f" (excluded {rows_removed} pipeline-removed)" if rows_removed else ""
             _lvl(
-                "Gap scan | total={} high={} medium={} low={} | {}/{} exchange={}",
-                len(_gaps), _high, _medium, _low, symbol, timeframe, exchange,
+                "Gap scan | total={} high={} medium={} low={}{} | {}/{} exchange={}",
+                len(_gaps), _high, _medium, _low, _suffix, symbol, timeframe, exchange,
             )
             # Métricas Prometheus — permite alertas y dashboards por severidad.
             for _sev, _cnt in (("high", _high), ("medium", _medium), ("low", _low)):
