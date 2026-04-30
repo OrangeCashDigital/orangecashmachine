@@ -1,6 +1,6 @@
 """
-app/cli/market_data.py
-======================
+app/cli/main.py
+================
 
 Entrypoint principal de OrangeCashMachine — market data pipeline.
 
@@ -20,10 +20,10 @@ Flujo de ejecución::
 
 Uso CLI::
 
-    uv run python app/cli/market_data.py                                     # development
-    uv run python app/cli/market_data.py env=production                      # producción
-    uv run python app/cli/market_data.py pipeline.historical.backfill_mode=true
-    uv run python app/cli/market_data.py --cfg job                           # ver config efectivo
+    uv run python -m app.cli.main                                        # development
+    uv run python -m app.cli.main env=production                         # producción
+    uv run python -m app.cli.main pipeline.historical.backfill_mode=true
+    uv run python -m app.cli.main --cfg job                              # ver config efectivo
 
 Principios: SOLID · KISS · DRY · SSOT · SafeOps
 """
