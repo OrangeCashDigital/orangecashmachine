@@ -4,11 +4,19 @@ market_data/processing/strategies/backfill.py
 
 Strategy de backfill histórico completo hacia atrás.
 """
-
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Optional
+
+# Timestamp mínimo de fallback para exchanges que no soportan since=1
+# (devuelven el candle más reciente en lugar del más antiguo).
+# 2017-01-01 UTC cubre la historia relevante de todos los exchanges soportados.
+# Ajustar por exchange en exchange_quirks si es necesario.
+import pandas as _pd_const
+_ORIGIN_FALLBACK_MS: int = int(_pd_const.Timestamp("2017-01-01", tz="UTC").value // 1_000_000)
+del _pd_const
 
 import pandas as pd
 from ocm_platform.observability import bind_pipeline
@@ -129,6 +137,22 @@ class BackfillStrategy(StrategyMixin):
 
             origin_ms = int(raw_data[0][0])
 
+            # Sanity check: algunos exchanges (KuCoin) ignoran since=1 y
+            # devuelven la vela más reciente. Si origin_ms está dentro de
+            # las últimas 24h, el exchange no soporta since=1 → usar epoch
+            # fallback (2017-01-01) como origen efectivo.
+            _now_ms = int(time.time() * 1000)
+            _one_day_ms = 86_400_000
+            if origin_ms > _now_ms - _one_day_ms:
+                _log.bind(
+                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
+                ).info(
+                    "Origin discovery: exchange returned near-now ts — "
+                    "since=1 not supported, falling back to 2017-01-01",
+                    returned_origin=pd.Timestamp(origin_ms, unit='ms', tz='UTC').isoformat(),
+                )
+                origin_ms = _ORIGIN_FALLBACK_MS
+
             try:
                 ctx.cursor.set_raw(cache_key, str(origin_ms), _BACKFILL_TTL_SECONDS)
                 _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe).debug(
@@ -167,7 +191,7 @@ class BackfillStrategy(StrategyMixin):
         Si start_date es posterior a origin_ms, el rango efectivo es [start_date, oldest_known].
         Si start_date es anterior a origin_ms, el rango efectivo es [origin_ms, oldest_known].
         """
-        start_date_ms = self._parse_start_date_ms(ctx.start_date)
+        start_date_ms = self._parse_start_date_ms(ctx.start_date, origin_ms)
 
         # A. Cursor Redis — reanuda desde donde se detuvo, respetando floor
         try:
@@ -225,23 +249,18 @@ class BackfillStrategy(StrategyMixin):
             )
 
     @staticmethod
-    def _parse_start_date_ms(start_date: str) -> int:
+    def _parse_start_date_ms(start_date: str, origin_ms: Optional[int] = None) -> int:
         """Convierte start_date ISO 8601 a milliseconds epoch.
 
-        'auto' no está soportado en backfill — backfill requiere un floor
-        explícito para que el rango sea determinístico y reproducible.
-        Si llega aquí es un error de config: el caller debe resolver 'auto'
-        a un timestamp concreto antes de invocar esta estrategia.
-        Ref: HistoricalConfig.validate_start_date — acepta 'auto' como
-        literal válido, pero delega la resolución al fetcher (modo incremental).
-        En backfill el fetcher ya lanza MissingStartDateError si candidate
-        es None — este guard es una segunda línea de defensa.
+        Si start_date == 'auto', resuelve al inicio del exchange (origin_ms).
+        Requiere origin_ms cuando start_date == 'auto'.
         """
         if start_date == "auto":
-            raise ValueError(
-                "start_date='auto' no es válido en BackfillStrategy. "
-                "Configurar un ISO 8601 explícito, e.g. '2021-01-01T00:00:00Z'."
-            )
+            if origin_ms is None:
+                raise ValueError(
+                    "start_date='auto' requiere origin_ms — llamar después de _discover_origin()."
+                )
+            return origin_ms
         # pd.Timestamp maneja Z, +00:00 y naive sin ambigüedad
         return int(pd.Timestamp(start_date, tz="UTC").value // 1_000_000)
 
@@ -277,7 +296,7 @@ class BackfillStrategy(StrategyMixin):
         last_end    = None
         log         = _log.bind(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, mode="backfill")
 
-        start_date_ms_pg = self._parse_start_date_ms(ctx.start_date)
+        start_date_ms_pg = self._parse_start_date_ms(ctx.start_date, origin_ms)
         effective_origin_pg = max(start_date_ms_pg, origin_ms)
 
         for _ in range(_MAX_BACKFILL_CHUNKS):

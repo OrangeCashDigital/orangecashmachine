@@ -418,12 +418,36 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
     """
     Construye un RedisCursorStore desde variables de entorno.
 
+    Garantiza que el .env del proyecto esté cargado antes de leer las vars,
+    de forma que REDIS_PASSWORD y demás credenciales estén siempre disponibles
+    independientemente de si el proceso fue arrancado con las vars pre-exportadas
+    o no (p.ej. llamadas directas desde scripts, tests, Prefect workers).
+
+    El .env se carga con override=False para respetar vars ya exportadas en el
+    entorno del proceso (ENV > .env — principio de menor sorpresa).
+
     Parameters
     ----------
     env : str | None
         Entorno explícito (ej: run_cfg.env). Si no se pasa,
         se resuelve via resolve_env() respetando OCM_ENV → settings.yaml → 'development'.
     """
+    try:
+        from dotenv import load_dotenv as _load_dotenv
+        import pathlib as _pathlib
+        # Buscar .env desde la raíz del proyecto (2 niveles arriba de este módulo)
+        _env_path = _pathlib.Path(__file__).parent.parent.parent.parent / ".env"
+        if _env_path.exists():
+            _load_dotenv(dotenv_path=_env_path, override=False)
+            logger.debug("build_cursor_store_from_env: .env cargado | path={}", _env_path)
+        else:
+            logger.debug("build_cursor_store_from_env: .env no encontrado en {}", _env_path)
+    except ImportError:
+        logger.warning(
+            "python-dotenv no disponible — REDIS_PASSWORD puede estar ausente. "
+            "Instala python-dotenv o exporta las vars manualmente."
+        )
+
     from ocm_platform.config.loader.env_resolver import resolve_env
     return RedisCursorStore(
         host=os.getenv("REDIS_HOST", _DEFAULT_HOST),
