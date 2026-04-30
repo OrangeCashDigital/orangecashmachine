@@ -61,6 +61,8 @@ EXCHANGE_QUIRKS: dict[str, ExchangeQuirks] = {
     ),
     "bybit": ExchangeQuirks(
         origin_fallback_date = "2021-04-01",  # Bybit spot lanzó en Abril 2021
+        # NOTE: si backfill produce datos ralos o gaps antes de Oct 2021,
+        # ajustar a "2021-10-01" — los primeros meses tuvieron pocos pares.
     ),
     "bybit_futures": ExchangeQuirks(
         origin_fallback_date = "2019-10-01",  # Bybit USDT perpetuals: Oct 2019
