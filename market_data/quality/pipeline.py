@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Optional
 
 import pandas as pd
 from loguru import logger
@@ -11,6 +10,10 @@ from loguru import logger
 from market_data.quality.validators.data_quality import DataQualityChecker, DataQualityReport
 from market_data.observability.metrics import QUALITY_GAPS_TOTAL, PIPELINE_ERRORS
 from market_data.processing.utils.gap_utils import scan_gaps
+from market_data.quality.anomaly_registry import AnomalyRegistry, _registry
+from market_data.lineage.tracker import (
+    LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
+)
 from market_data.quality.policies.data_quality_policy import (
     DataQualityPolicy, PolicyResult, QualityDecision, default_policy,
 )
@@ -40,40 +43,11 @@ class QualityPipelineResult:
 
 
 # ----------------------------------------------------------
-# Known Anomaly Registry
+# Anomaly Registry
 # ----------------------------------------------------------
-# Cache thread-safe de anomalías ya reportadas.
-# Evita repetir el mismo WARNING en cada ejecución incremental
-# cuando el dato problemático ya está en Silver y no cambiará.
-# Key: (exchange, symbol, timeframe, reason_prefix)
+# Delegado a market_data.quality.anomaly_registry (SQLite persistente).
+# _registry importado arriba como singleton de módulo.
 # ----------------------------------------------------------
-
-_AnomalyKey = Tuple[str, str, str, str]
-
-class _AnomalyRegistry:
-    """Registro en memoria de anomalías ya logueadas en esta sesión."""
-
-    def __init__(self) -> None:
-        self._seen: set[_AnomalyKey] = set()
-        self._lock = threading.Lock()
-
-    def is_new(self, exchange: str, symbol: str, timeframe: str, reason: str) -> bool:
-        """Retorna True si esta anomalía no había sido vista antes y la registra."""
-        # Normalizar el reason a su prefijo (e.g. "price_outliers_mad" sin el conteo)
-        reason_key = reason.split("(")[0].strip()
-        key: _AnomalyKey = (exchange, symbol, timeframe, reason_key)
-        with self._lock:
-            if key in self._seen:
-                return False
-            self._seen.add(key)
-            return True
-
-    def clear(self) -> None:
-        with self._lock:
-            self._seen.clear()
-
-
-_registry = _AnomalyRegistry()
 
 
 class QualityPipeline:
@@ -91,6 +65,7 @@ class QualityPipeline:
         symbol:    str,
         timeframe: str,
         exchange:  str,
+        run_id:    str | None = None,
     ) -> QualityPipelineResult:
         checker = DataQualityChecker(timeframe=timeframe, exchange=exchange)
         report  = checker.check(df, symbol=symbol)
@@ -119,11 +94,24 @@ class QualityPipeline:
 
         if result.decision == QualityDecision.REJECT:
             tier = DataTier.REJECTED
-            PIPELINE_ERRORS.labels(exchange=exchange, error_type="quality_reject").inc()  # TD-07
+            PIPELINE_ERRORS.labels(exchange=exchange, error_type="quality_reject").inc()
             logger.warning(
                 "QualityPipeline REJECT | {}/{} exchange={} score={:.1f} reasons={}",
                 symbol, timeframe, exchange, result.score, result.reasons,
             )
+            if run_id is not None:
+                lineage_tracker.record(LineageEvent(
+                    run_id        = run_id,
+                    layer         = PipelineLayer.SILVER,
+                    exchange      = exchange,
+                    symbol        = symbol,
+                    timeframe     = timeframe,
+                    rows_in       = len(df),
+                    rows_out      = 0,
+                    status        = LineageStatus.FAILED,
+                    quality_score = result.score,
+                    params        = {"reasons": result.reasons},
+                ))
 
         elif result.decision == QualityDecision.ACCEPT_WITH_FLAGS:
             tier = DataTier.FLAGGED
@@ -151,6 +139,25 @@ class QualityPipeline:
                 "QualityPipeline ACCEPT | {}/{} exchange={} score={:.1f}",
                 symbol, timeframe, exchange, result.score,
             )
+
+        # Lineage QUALITY para CLEAN y FLAGGED (REJECT ya registrado arriba)
+        if run_id is not None and tier != DataTier.REJECTED:
+            lineage_tracker.record(LineageEvent(
+                run_id        = run_id,
+                layer         = PipelineLayer.SILVER,
+                exchange      = exchange,
+                symbol        = symbol,
+                timeframe     = timeframe,
+                rows_in       = len(df),
+                rows_out      = len(df),
+                status        = (
+                    LineageStatus.PARTIAL
+                    if tier == DataTier.FLAGGED
+                    else LineageStatus.SUCCESS
+                ),
+                quality_score = result.score,
+                params        = {"tier": tier.value, "reasons": result.reasons},
+            ))
 
         return QualityPipelineResult(df=df, report=report, policy=result, tier=tier)
 
