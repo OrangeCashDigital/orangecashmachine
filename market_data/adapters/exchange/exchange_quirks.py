@@ -60,6 +60,9 @@ EXCHANGE_QUIRKS: dict[str, ExchangeQuirks] = {
         origin_fallback_date = "2020-01-01",  # KuCoin Futures lanzó en 2020
     ),
     "bybit": ExchangeQuirks(
+        origin_fallback_date = "2021-04-01",  # Bybit spot lanzó en Abril 2021
+    ),
+    "bybit_futures": ExchangeQuirks(
         origin_fallback_date = "2019-10-01",  # Bybit USDT perpetuals: Oct 2019
     ),
 }
@@ -72,16 +75,29 @@ def get_quirks(exchange_id: str) -> ExchangeQuirks:
     return EXCHANGE_QUIRKS.get(exchange_id, _DEFAULT_QUIRKS)
 
 
-def get_origin_fallback_ms(exchange_id: str) -> int:
+def get_origin_fallback_ms(exchange_id: str, market_type: str = "spot") -> int:
     """
     Timestamp mínimo de historia disponible para el exchange (epoch ms).
 
     Usado en _discover_origin() cuando since=1 no está soportado y el
     exchange devuelve un candle near-now en lugar del más antiguo.
 
-    La fecha de fallback es específica por exchange (SSOT en ExchangeQuirks)
-    y cae de forma conservadora a 2017-01-01 para exchanges no registrados.
+    La clave de lookup es `exchange_id` para spot y `exchange_id + "_futures"`
+    para cualquier market_type no-spot (futures, swap, perpetual).
+    Cae de forma conservadora a 2017-01-01 para exchanges no registrados.
+
+    Parameters
+    ----------
+    exchange_id : str
+        ID del exchange (e.g. "bybit", "kucoin").
+    market_type : str
+        Tipo de mercado del pipeline (e.g. "spot", "futures", "swap").
+        Default "spot" — compatible con todas las llamadas existentes.
     """
     import pandas as _pd
-    date_str = get_quirks(exchange_id).origin_fallback_date
+    _is_futures = market_type.lower() not in ("spot", "")
+    lookup_key  = f"{exchange_id}_futures" if _is_futures else exchange_id
+    # Fallback a exchange_id base si la clave compuesta no existe
+    quirks    = EXCHANGE_QUIRKS.get(lookup_key) or get_quirks(exchange_id)
+    date_str  = quirks.origin_fallback_date
     return int(_pd.Timestamp(date_str, tz="UTC").value // 1_000_000)

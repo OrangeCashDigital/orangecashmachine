@@ -148,7 +148,7 @@ class BackfillStrategy(StrategyMixin):
                     "since=1 not supported, falling back to 2017-01-01",
                     returned_origin=pd.Timestamp(origin_ms, unit='ms', tz='UTC').isoformat(),
                 )
-                origin_ms = get_origin_fallback_ms(ctx.exchange_id)
+                origin_ms = get_origin_fallback_ms(ctx.exchange_id, ctx.market_type)
 
             try:
                 ctx.cursor.set_raw(cache_key, str(origin_ms), _BACKFILL_TTL_SECONDS)
