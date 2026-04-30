@@ -68,7 +68,13 @@ class QualityPipeline:
         run_id:       str | None = None,
         rows_removed: int = 0,
     ) -> QualityPipelineResult:
-        checker = DataQualityChecker(timeframe=timeframe, exchange=exchange)
+        # rows_removed propagado al checker para que _check_gaps pueda
+        # distinguir gaps de pipeline vs gaps reales de fuente (SSOT).
+        checker = DataQualityChecker(
+            timeframe=timeframe,
+            exchange=exchange,
+            rows_removed=rows_removed,
+        )
         report  = checker.check(df, symbol=symbol)
         result  = self._policy.evaluate(report)
 

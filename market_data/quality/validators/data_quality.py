@@ -103,13 +103,20 @@ class DataQualityError(Exception):
 
 
 class DataQualityChecker:
-    def __init__(self, timeframe, exchange="unknown"):
+    def __init__(self, timeframe, exchange="unknown", rows_removed: int = 0):
         self._timeframe          = timeframe
         self._exchange           = exchange
         self._tf_ms              = _TF_MS.get(timeframe)
         self._flatline_threshold = _FLATLINE_THRESHOLD_BY_TF.get(timeframe, _FLATLINE_THRESHOLD_DEFAULT)
+        # Velas CORRUPT removidas upstream: permite distinguir gaps de pipeline
+        # vs gaps de fuente real. Fail-soft: max(0,...) si over-corrección.
+        self._rows_removed       = max(0, int(rows_removed))
 
-    def check(self, df, symbol):
+    def check(self, df, symbol, rows_removed: int = 0):
+        # rows_removed override: permite que el caller propague contexto
+        # pipeline sin necesidad de reinstanciar el checker (DRY).
+        if rows_removed:
+            self._rows_removed = max(0, int(rows_removed))
         report = DataQualityReport(
             symbol=symbol,
             timeframe=self._timeframe,
@@ -177,6 +184,13 @@ class DataQualityChecker:
         n     = int(mask.sum())
         if n == 0:
             return
+        # ── Compensación por remoción upstream ──────────────────────────
+        # Velas CORRUPT eliminadas en Silver crean gaps artificiales.
+        # Se descuentan ANTES de calcular pct/sev para no penalizar
+        # fuentes limpias con falsos positivos (SafeOps / Fail-Fast real).
+        n = max(0, n - self._rows_removed)
+        if n == 0:
+            return  # gap completamente explicado por remoción upstream
         pct     = n / len(ts_s)
         sev     = "critical" if pct >= _CRITICAL_GAP_PCT else "warning"
         missing = int((diffs[mask] / self._tf_ms).sum() - n)
