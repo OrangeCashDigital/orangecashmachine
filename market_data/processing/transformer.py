@@ -37,6 +37,9 @@ from market_data.processing.validation.candle_validator import (
     CandleValidator,
     ValidationSummary,
 )
+from market_data.lineage.tracker import (
+    LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
+)
 
 
 class OHLCVTransformer:
@@ -325,10 +328,11 @@ class OHLCVTransformer:
     @classmethod
     def transform(
         cls,
-        df: pd.DataFrame,
-        symbol: str = "unknown",
+        df:        pd.DataFrame,
+        symbol:    str = "unknown",
         timeframe: str = "unknown",
-        exchange: str = "unknown",
+        exchange:  str = "unknown",
+        run_id:    str | None = None,
     ) -> pd.DataFrame:
         """
         Pipeline completo de transformación OHLCV.
@@ -406,5 +410,24 @@ class OHLCVTransformer:
             len(df), original_rows,
             dict(df["quality_flag"].value_counts()),
         )
+
+        # ── Lineage SILVER ───────────────────────────────────────────────────
+        # rows_in=original_rows captura pérdida real por velas CORRUPT.
+        # Fail-soft: si lineage_tracker falla, el pipeline continúa (SafeOps).
+        if run_id is not None:
+            lineage_tracker.record(LineageEvent(
+                run_id    = run_id,
+                layer     = PipelineLayer.SILVER,
+                exchange  = exchange,
+                symbol    = symbol,
+                timeframe = timeframe,
+                rows_in   = original_rows,
+                rows_out  = len(df),
+                status    = (
+                    LineageStatus.PARTIAL if len(df) < original_rows
+                    else LineageStatus.SUCCESS
+                ),
+                params    = {"timeframe": timeframe},
+            ))
 
         return df
