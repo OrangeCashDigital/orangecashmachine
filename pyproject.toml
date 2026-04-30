@@ -78,7 +78,7 @@ dependencies = [
 
 [project.scripts]
 # SSOT de entrypoints CLI — Fail-Fast en install time si el target no existe.
-ocm    = "app.cli.market_data:main"   # market data pipeline (Hydra)
+ocm    = "app.cli.main:main"   # market data pipeline (Hydra)
 ocm-api = "api.main:serve"               # FastAPI gateway
 live   = "app.cli.live:main"          # live trading ⚠️  capital real
 paper  = "app.cli.paper:main"         # paper trading
