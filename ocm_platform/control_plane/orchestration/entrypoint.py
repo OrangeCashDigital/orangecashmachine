@@ -41,21 +41,15 @@ from ocm_platform.runtime.guard import ExecutionGuard, ExecutionStoppedError
 from ocm_platform.runtime import guard_context
 from ocm_platform.control_plane.orchestration.post_processing import PostProcessingService
 from market_data.ports.observability import MetricsPusherPort
+from ocm_platform.observability.pushers import NoopPusher as _NoopPusher
 
 _log = bind_pipeline("entrypoint")
 
 
 # ---------------------------------------------------------------------------
-# No-op pusher — implementa el puerto para evitar None-checks en runtime
+# Pusher no-op — alias del canónico en pushers.py (DRY · SSOT)
+# _NoopPusher importado arriba como alias; instancia módulo-nivel inmutable.
 # ---------------------------------------------------------------------------
-
-class _NoopPusher(MetricsPusherPort):
-    """Implementación vacía de MetricsPusherPort para cuando no hay pusher real."""
-
-    def push(self, labels: dict | None = None) -> None:  # noqa: D102
-        pass
-
-
 _NOOP_PUSHER = _NoopPusher()
 
 
@@ -285,6 +279,7 @@ def run(
 
 if __name__ == "__main__":
     from ocm_platform.observability import bootstrap_logging, configure_logging
+    from ocm_platform.observability.pushers import PrometheusPusher
 
     ctx = build_context()
     bootstrap_logging(debug=ctx.debug, env=ctx.environment)
@@ -293,4 +288,18 @@ if __name__ == "__main__":
         env=ctx.environment,
         debug=ctx.debug,
     )
-    sys.exit(run(ctx))
+
+    # Composition root: elegir pusher según config (DIP · SSOT).
+    # PrometheusPusher cuando metrics.enabled=True; NoopPusher en dev/CI
+    # para no crear dependencias de red innecesarias en entornos sin pushgateway.
+    _metrics_cfg = ctx.app_config.observability.metrics
+    if _metrics_cfg.enabled:
+        _entry_pusher: MetricsPusherPort = PrometheusPusher()
+        _log.info("metrics_pusher_selected", pusher="PrometheusPusher",
+                  gateway=ctx.run_config.pushgateway)
+    else:
+        _entry_pusher = _NOOP_PUSHER
+        _log.debug("metrics_pusher_selected", pusher="NoopPusher",
+                   reason="metrics.enabled=false")
+
+    sys.exit(run(ctx, pusher=_entry_pusher))

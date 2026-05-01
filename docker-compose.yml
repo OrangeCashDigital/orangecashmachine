@@ -539,7 +539,7 @@ services:
       loki:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/ready || exit 1"]
+      test: ["CMD", "/bin/sh", "-c", "grep -q 2378 /proc/net/tcp6"]
       interval: 15s
       timeout: 5s
       retries: 3
