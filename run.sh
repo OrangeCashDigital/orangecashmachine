@@ -19,6 +19,7 @@ if [[ -z "$MODE" ]]; then
   echo "  live   → live trading ⚠️  capital real"            >&2
   echo "  paper  → paper trading"                             >&2
   echo "  deploy → desplegar flows a Prefect"                 >&2
+  echo "  dagster → arrancar Dagster UI (dev)"                  >&2
   exit 1
 fi
 
@@ -30,6 +31,7 @@ case "$MODE" in
   live)   exec uv run python -m app.cli.live    "$@" ;;
   paper)  exec uv run python -m app.cli.paper   "$@" ;;
   deploy) exec uv run python -m ocm_platform.control_plane.orchestration.deploy --deploy "$@" ;;
+  dagster) exec uv run dagster dev -f dagster_defs.py --port "${DAGSTER_PORT:-3001}" "$@" ;;
   *)
     echo "[run.sh] ERROR: Modo desconocido '${MODE}'." >&2
     echo "  Válidos: ocm | live | paper | deploy"      >&2

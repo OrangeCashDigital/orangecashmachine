@@ -39,6 +39,7 @@ from dagster_assets.resources import OCMResource
 from dagster_assets.bronze_ohlcv import BRONZE_OHLCV_ASSETS
 from dagster_assets.repair_ohlcv import REPAIR_OHLCV_ASSETS
 from dagster_assets.resample_ohlcv import RESAMPLE_OHLCV_ASSETS
+from dagster_assets.asset_checks import ALL_ASSET_CHECKS
 
 # ==============================================================================
 # Jobs — agrupan assets para ejecución coordinada
@@ -97,9 +98,12 @@ defs = Definitions(
     resources = {
         # DIP: los assets no construyen AppConfig directamente.
         # OCMResource es el único punto de acceso al RuntimeContext.
-        "ocm": OCMResource(),
+        "ocm": OCMResource(env="development"),
     },
+    asset_checks = ALL_ASSET_CHECKS,
     jobs      = [ingestion_job, bronze_only_job],
+    # Schedules ACTIVOS — Prefect schedule desactivado en parallel.
+    # SSOT: dagster_defs.py es la única fuente de schedules activos.
     schedules = [bronze_schedule, ingestion_schedule],
 )
 
