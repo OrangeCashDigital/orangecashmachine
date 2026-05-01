@@ -1,40 +1,36 @@
-# ==========================================================
-# OrangeCashMachine – Core Infrastructure
-# ==========================================================
+# ==============================================================================
+# OrangeCashMachine — Core Infrastructure
+# ==============================================================================
 #
 # Arquitectura de redes
 # ---------------------
-# ocm_internal : red privada entre servicios (sin acceso externo)
-# ocm_public   : expone puertos al host para acceso local/dev
+# ocm_internal : red privada entre servicios (sin acceso externo directo)
+# ocm_public   : expone puertos al host para acceso local/dev/ops
 #
-# Redis está en AMBAS redes para que:
-#   • los servicios internos (Prefect, market-data) lo alcancen
-#   • el pipeline local (fuera de Docker) lo alcance vía localhost
-#
-# Prometheus, Grafana, Alertmanager y Pushgateway en ocm_public
-# porque exponen UI o endpoints de ingesta desde el host.
-# Postgres solo en ocm_internal — nunca expuesto al exterior.
+# Redis está en AMBAS redes:
+#   • servicios internos (Dagster, market-data) lo alcanzan via ocm_internal
+#   • pipeline local (fuera de Docker) lo alcanza via localhost:6379
 #
 # Estado de servicios
 # -------------------
-# ✅ postgres        : activo — metadata de Prefect
-# ✅ prefect-server  : activo — orquestador
-# ✅ redis           : activo — cursor store + cache
-# ✅ prometheus      : activo — métricas
-# ✅ grafana         : activo — visualización
-# ✅ alertmanager    : activo — enrutamiento de alertas
-# ✅ pushgateway     : activo — recepción de métricas push
-# ✅ loki            : activo — agregación de logs
-# ✅ promtail        : activo — agente de recolección de logs
-# 🔕 market-data    : deshabilitado — corre en máquina local
-#                     rehabilitar para despliegue distribuido
-# ==========================================================
+# ✅ dagster        : orquestador — reemplaza Prefect
+# ✅ redis          : cursor store + cache
+# ✅ prometheus     : métricas
+# ✅ grafana        : visualización
+# ✅ alertmanager   : enrutamiento de alertas
+# ✅ pushgateway    : recepción de métricas push
+# ✅ loki           : agregación de logs
+# ✅ promtail       : agente de recolección de logs
+# ✅ config-guard   : init container — valida configs antes de arrancar
+# 🔕 market-data   : perfil [microservices] — corre en host por defecto
+# 🔕 trading        : perfil [microservices]
+# 🔕 portfolio      : perfil [microservices]
+# ==============================================================================
 
-# ==========================================================
-# EXTENSIONS (Librería Pro)
-# ==========================================================
+# ==============================================================================
+# Extensiones YAML — reutilización DRY
+# ==============================================================================
 
-# Reutilización de configuración común para logging y variables de entorno
 x-logging: &default-logging
   driver: json-file
   options:
@@ -45,7 +41,13 @@ x-common-env: &common-env
   PYTHONUNBUFFERED: "1"
   OCM_CONFIG_DIR: /app/config
   OCM_ENV: ${OCM_ENV:-production}
-  LOG_LEVEL: ${LOG_LEVEL:-debug}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+x-redis-env: &redis-env
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_DB: "1"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
 
 networks:
   ocm_internal:
@@ -56,20 +58,11 @@ networks:
 
 services:
 
-  # --------------------------------------------------------
-  # POSTGRES — Metadata store de Prefect
-  # --------------------------------------------------------
-  # --------------------------------------------------------
-  # CONFIG GUARD — Init container de validación de configs
-  #
-  # Protege el arranque desde cero (boot, docker compose up).
-  # Si un archivo crítico falta o está vacío, falla explícitamente
-  # antes de que prometheus o alertmanager intenten arrancar.
-  #
-  # ⚠️  No detecta cambios en caliente: un bind mount activo
-  # mantiene el inode del archivo original aunque se borre del host.
-  # Para integridad en runtime se requeriría un sidecar o cron.
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
+  # CONFIG-GUARD — Init container: valida archivos de config antes de arrancar.
+  # Fail-Fast: si un archivo crítico falta o está vacío, aborta antes de que
+  # prometheus/alertmanager intenten levantar con config rota.
+  # ────────────────────────────────────────────────────────────────────────────
   config-guard:
     image: busybox:1.36
     container_name: ocm_config_guard
@@ -78,12 +71,8 @@ services:
       sh -c '
         set -e
         check() {
-          if [ ! -f "$1" ]; then
-            echo "MISSING: $1"; exit 1
-          fi
-          if [ ! -s "$1" ]; then
-            echo "EMPTY: $1"; exit 1
-          fi
+          if [ ! -f "$1" ]; then echo "MISSING: $1"; exit 1; fi
+          if [ ! -s "$1" ]; then echo "EMPTY: $1";   exit 1; fi
           echo "OK: $1"
         }
         check /config/prometheus.yml
@@ -100,64 +89,10 @@ services:
     networks:
       - ocm_internal
 
-  postgres:
-    image: postgres:15.6-alpine
-    container_name: ocm_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: prefect
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
-      POSTGRES_DB: prefect
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U prefect"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    logging: *default-logging
-    networks:
-      - ocm_internal
-
-  # --------------------------------------------------------
-  # PREFECT SERVER — Orquestador de pipelines
-  # --------------------------------------------------------
-  prefect-server:
-    image: prefecthq/prefect:2.19.5-python3.11
-    container_name: ocm_prefect_server
-    init: true
-    restart: unless-stopped
-    command: >
-      prefect server start
-      --host 0.0.0.0
-      --port 4200
-    ports:
-      - "${PREFECT_HOST_PORT:-4200}:4200"
-    environment:
-      <<: *common-env
-      PREFECT_API_DATABASE_CONNECTION_URL: >-
-        postgresql+asyncpg://prefect:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/prefect
-    volumes:
-      - prefect_data:/prefect
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(\"http://localhost:4200/api/health\")"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
   # REDIS — Cursor store + cache
-  # SEGURIDAD: REDIS_PASSWORD requerido
-  # --------------------------------------------------------
+  # Expuesto en ocm_public: pipeline local (fuera de Docker) accede por host.
+  # ────────────────────────────────────────────────────────────────────────────
   redis:
     image: redis:7.2-alpine
     container_name: ocm_redis
@@ -185,9 +120,83 @@ services:
       - ocm_internal
       - ocm_public
 
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
+  # DAGSTER — Asset catalog + scheduler + UI
+  #
+  # Imagen propia (Dockerfile.dagster) — multi-stage build.
+  # NO hace pip install en runtime: deps instaladas en build time.
+  # Puerto: 3001
+  # DAGSTER_HOME: volumen persistente — historial de runs sobrevive reinicios.
+  # ────────────────────────────────────────────────────────────────────────────
+  dagster:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+      target: runtime
+    image: ocm_dagster:latest
+    container_name: ocm_dagster
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${DAGSTER_HOST_PORT:-3001}:3001"
+    environment:
+      <<: [*common-env, *redis-env]
+      DAGSTER_HOME: /dagster_home
+      BYBIT_API_KEY: ${BYBIT_API_KEY:-}
+      BYBIT_API_SECRET: ${BYBIT_API_SECRET:-}
+      KUCOIN_API_KEY: ${KUCOIN_API_KEY:-}
+      KUCOIN_API_SECRET: ${KUCOIN_API_SECRET:-}
+      KUCOIN_PASSPHRASE: ${KUCOIN_PASSPHRASE:-}
+      OCM_STORAGE__DATA_LAKE__PATH: ${OCM_STORAGE__DATA_LAKE__PATH:-/app/data_platform/data_lake}
+      PUSHGATEWAY_URL: http://pushgateway:9091
+    volumes:
+      - dagster_home:/dagster_home
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data_platform:/app/data_platform
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:3001/health')\" 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1500M
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # PUSHGATEWAY — Recepción de métricas push desde pipelines
+  # ────────────────────────────────────────────────────────────────────────────
+  pushgateway:
+    image: prom/pushgateway:v1.8.0
+    container_name: ocm_pushgateway
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${PUSHGATEWAY_HOST_PORT:-9091}:9091"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+  # ────────────────────────────────────────────────────────────────────────────
   # PROMETHEUS — Recolección de métricas
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.51.2
     container_name: ocm_prometheus
@@ -227,9 +236,43 @@ services:
       - ocm_internal
       - ocm_public
 
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
+  # ALERTMANAGER — Enrutamiento y deduplicación de alertas
+  # ────────────────────────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: ocm_alertmanager
+    init: true
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "${ALERTMANAGER_HOST_PORT:-9093}:9093"
+    volumes:
+      - type: bind
+        source: ./infra/monitoring/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      config-guard:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+  # ────────────────────────────────────────────────────────────────────────────
   # GRAFANA — Visualización de métricas
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:10.4.2
     container_name: ocm_grafana
@@ -263,221 +306,9 @@ services:
       - ocm_internal
       - ocm_public
 
-  # --------------------------------------------------------
-  # ALERTMANAGER — Enrutamiento y deduplicación de alertas
-  # --------------------------------------------------------
-  alertmanager:
-    image: prom/alertmanager:v0.27.0
-    container_name: ocm_alertmanager
-    init: true
-    restart: unless-stopped
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-    ports:
-      - "${ALERTMANAGER_HOST_PORT:-9093}:9093"
-    volumes:
-      - type: bind
-        source: ./infra/monitoring/alertmanager.yml
-        target: /etc/alertmanager/alertmanager.yml
-        read_only: true
-        bind:
-          create_host_path: false
-    depends_on:
-      config-guard:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/healthy || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-  # --------------------------------------------------------
-  # PUSHGATEWAY — Recepción de métricas push desde pipelines
-  # --------------------------------------------------------
-  pushgateway:
-    image: prom/pushgateway:v1.8.0
-    container_name: ocm_pushgateway
-    init: true
-    restart: unless-stopped
-    ports:
-      - "${PUSHGATEWAY_HOST_PORT:-9091}:9091"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/-/healthy || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-  # --------------------------------------------------------
-  # MARKET-DATA-SERVICE — Ingesta OHLCV + HTTP API :8001
-  #
-  # Proceso independiente: corre aunque trading-service
-  # o portfolio-service estén caídos.
-  #
-  # Entrypoint: market_data/main.py (FastAPI + ingestion loop)
-  # Boundary:   no importa trading/ ni portfolio/ — solo ocm_platform
-  # --------------------------------------------------------
-  market-data:
-    profiles: [microservices]
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ocm_market_data
-    init: true
-    restart: on-failure:5
-    depends_on:
-      prefect-server:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      <<: *common-env
-      PREFECT_API_URL: http://prefect-server:4200/api
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_DB: "1"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
-      MARKET_DATA_HOST: "0.0.0.0"
-      MARKET_DATA_PORT: "8001"
-      INGESTION_INTERVAL_S: "${INGESTION_INTERVAL_S:-300}"
-    ports:
-      - "${MARKET_DATA_HOST_PORT:-8001}:8001"
-    volumes:
-      - ./config:/app/config:ro
-      - ./logs:/app/logs
-      - ./data_platform:/app/data_platform
-    working_dir: /app
-    command: python -m market_data.main
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: "1.5"
-          memory: 1500M
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-  # --------------------------------------------------------
-  # TRADING-SERVICE — Estrategias + señales + ejecución :8002
-  #
-  # Consume OHLCV de market-data-service vía HTTP.
-  # No importa market_data/ directamente — boundary via red.
-  # --------------------------------------------------------
-  trading:
-    profiles: [microservices]
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ocm_trading
-    init: true
-    restart: on-failure:5
-    depends_on:
-      market-data:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      <<: *common-env
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_DB: "1"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
-      MARKET_DATA_URL: http://market-data:8001
-      TRADING_HOST: "0.0.0.0"
-      TRADING_PORT: "8002"
-    ports:
-      - "${TRADING_HOST_PORT:-8002}:8002"
-    volumes:
-      - ./config:/app/config:ro
-      - ./logs:/app/logs
-      - ./data_platform:/app/data_platform
-    working_dir: /app
-    command: python -m trading.main
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-  # --------------------------------------------------------
-  # PORTFOLIO-SERVICE — Posiciones + PnL + risk :8003
-  #
-  # Consume fills de trading-service vía Redis Stream.
-  # No importa trading/ ni market_data/ directamente.
-  # --------------------------------------------------------
-  portfolio:
-    profiles: [microservices]
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ocm_portfolio
-    init: true
-    restart: on-failure:5
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      <<: *common-env
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_DB: "1"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
-      PORTFOLIO_HOST: "0.0.0.0"
-      PORTFOLIO_PORT: "8003"
-    ports:
-      - "${PORTFOLIO_HOST_PORT:-8003}:8003"
-    volumes:
-      - ./config:/app/config:ro
-      - ./logs:/app/logs
-    working_dir: /app
-    command: python -m portfolio.main
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8003/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
   # LOKI — Agregación de logs estructurados
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
   loki:
     image: grafana/loki:3.0.0
     container_name: ocm_loki
@@ -508,10 +339,10 @@ services:
       - ocm_internal
       - ocm_public
 
-  # --------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
   # PROMTAIL — Agente de recolección de logs
-  # Lee ./logs/ del host + containers Docker
-  # --------------------------------------------------------
+  # Lee ./logs/ del host + containers Docker via Docker socket.
+  # ────────────────────────────────────────────────────────────────────────────
   promtail:
     image: grafana/promtail:3.0.0
     container_name: ocm_promtail
@@ -519,7 +350,7 @@ services:
     restart: unless-stopped
     command: -config.file=/etc/promtail/promtail.yml
     environment:
-      OCM_ENV: ${OCM_ENV:-development}
+      OCM_ENV: ${OCM_ENV:-production}
     volumes:
       - type: bind
         source: ./infra/monitoring/promtail/promtail.yml
@@ -548,11 +379,141 @@ services:
     networks:
       - ocm_public
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # MICROSERVICES — perfil opcional [microservices]
+  # Levantar con: docker compose --profile microservices up
+  # Por defecto corren en el host durante desarrollo.
+  # ────────────────────────────────────────────────────────────────────────────
+
+  market-data:
+    profiles: [microservices]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: ocm_market_data:latest
+    container_name: ocm_market_data
+    init: true
+    restart: on-failure:5
+    depends_on:
+      dagster:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: [*common-env, *redis-env]
+      MARKET_DATA_HOST: "0.0.0.0"
+      MARKET_DATA_PORT: "8001"
+      INGESTION_INTERVAL_S: "${INGESTION_INTERVAL_S:-300}"
+      DAGSTER_URL: http://dagster:3001
+    ports:
+      - "${MARKET_DATA_HOST_PORT:-8001}:8001"
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data_platform:/app/data_platform
+    command: python -m market_data.main
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1500M
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+  trading:
+    profiles: [microservices]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: ocm_trading:latest
+    container_name: ocm_trading
+    init: true
+    restart: on-failure:5
+    depends_on:
+      market-data:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: [*common-env, *redis-env]
+      MARKET_DATA_URL: http://market-data:8001
+      TRADING_HOST: "0.0.0.0"
+      TRADING_PORT: "8002"
+    ports:
+      - "${TRADING_HOST_PORT:-8002}:8002"
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data_platform:/app/data_platform
+    command: python -m trading.main
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+  portfolio:
+    profiles: [microservices]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: ocm_portfolio:latest
+    container_name: ocm_portfolio
+    init: true
+    restart: on-failure:5
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      <<: [*common-env, *redis-env]
+      PORTFOLIO_HOST: "0.0.0.0"
+      PORTFOLIO_PORT: "8003"
+    ports:
+      - "${PORTFOLIO_HOST_PORT:-8003}:8003"
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    command: python -m portfolio.main
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
 volumes:
-  postgres_data:
-    name: ocm_postgres_data
-  prefect_data:
-    name: ocm_prefect_data
+  dagster_home:
+    name: ocm_dagster_home
   redis_data:
     name: ocm_redis_data
   grafana_data:
