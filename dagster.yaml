@@ -1,18 +1,71 @@
 # dagster.yaml
-# =============
-# Configuración de Dagster para OrangeCashMachine.
+# ============
+# Configuración declarativa de Dagster para OrangeCashMachine.
 #
-# concurrency.default_op_concurrency_limit reemplaza _PIPELINE_SEMAPHORE
-# del batch_flow — mismo valor (4), ahora declarativo y configurable.
+# SSOT: este archivo es la única fuente de verdad para:
+#   - límites de concurrencia por tipo de asset
+#   - coordinación de runs
+#   - retención de logs
 #
-# SSOT: este archivo es la única fuente de verdad para límites de
-# concurrencia en Dagster. No hay semáforos manuales.
+# Concurrencia por concurrency_key (definido en cada asset via tags):
+#   bronze_ingestion : IO-bound, rate-limited por exchange — límite bajo
+#   silver_resample  : CPU-bound, local — puede paralelizar más
+#   repair_gaps      : secuencial por diseño — límite 1
+#
+# El default_op_concurrency_limit actúa como fallback para ops
+# sin concurrency_key explícito.
+#
+# Ref: https://docs.dagster.io/guides/limiting-concurrency-in-data-pipelines
 
 concurrency:
   default_op_concurrency_limit: 4
+
+  # Límites por concurrency_key — SSOT de throttling por perfil
+  # Estos keys deben coincidir exactamente con los tags de los assets.
+  # Ver dagster_assets/bronze_ohlcv.py, resample_ohlcv.py, repair_ohlcv.py
+  pools:
+    bronze_ingestion:
+      run_limit: 2    # máx 2 runs paralelos de ingesta bronze
+                      # conservador: respeta rate-limits de exchange
+    silver_resample:
+      run_limit: 4    # CPU-bound local — puede paralelizar más
+    repair_gaps:
+      run_limit: 1    # secuencial: repair modifica estado — no paralelizable
 
 run_coordinator:
   module: dagster.core.run_coordinator
   class: QueuedRunCoordinator
   config:
-    max_concurrent_runs: 2
+    max_concurrent_runs: 2    # máx runs activos simultáneos (schedule level)
+    tag_concurrency_limits:
+      # Límite adicional por tag de run — segunda capa de control
+      # Evita que un exchange monopolice todos los slots
+      - key: "exchange"
+        value: "bybit"
+        limit: 1
+      - key: "exchange"
+        value: "kucoin"
+        limit: 1
+      - key: "exchange"
+        value: "kucoin_futures"
+        limit: 1
+
+# Retención de logs de eventos — evita crecimiento ilimitado del SQLite
+run_storage:
+  module: dagster.core.storage.runs
+  class: SqliteRunStorage
+  config:
+    base_dir: "${DAGSTER_HOME}/storage"
+
+event_log_storage:
+  module: dagster.core.storage.event_log
+  class: SqliteEventLogStorage
+  config:
+    base_dir: "${DAGSTER_HOME}/storage"
+
+# Retención: 30 días de runs, 7 días de logs de schedules
+retention:
+  schedule:
+    purge_after_days: 7
+  sensor:
+    purge_after_days: 7
