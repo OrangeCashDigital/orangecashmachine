@@ -99,9 +99,10 @@ class TestTradeRecord:
         assert "LOSS" in str(_make_trade(-0.05))
 
     def test_frozen_immutable(self):
+        """dataclass(frozen=True) lanza AttributeError (FrozenInstanceError es subclase)."""
         trade = _make_trade(0.05)
-        with pytest.raises(Exception):
-            trade.pnl_pct = 0.99  # type: ignore
+        with pytest.raises(AttributeError):
+            trade.pnl_pct = 0.99  # type: ignore[misc]
 
 
 # ── TradeTracker ───────────────────────────────────────────────────────────────
@@ -223,7 +224,7 @@ class TestPerformanceEngine:
         trades = self._trades([0.05, -0.02])
         curve = PerformanceEngine.equity_curve(trades)
         assert curve[0] == 1.0
-        assert len(curve) == 3  # 1 inicial + 1 por trade
+        assert len(curve) == 3  # punto inicial + un punto por trade (2 trades → 3 puntos)
 
     def test_equity_curve_empty(self):
         assert PerformanceEngine.equity_curve([]) == [1.0]

@@ -77,16 +77,24 @@ class _MockConsumer:
 
 
 class _MockConsumerNoDLQ:
-    """Consumer sin send_to_dlq — verifica degradación controlada."""
+    """Consumer sin send_to_dlq — verifica degradación controlada (SafeOps)."""
 
-    def __init__(self, messages: List[Tuple[str, Dict]] = None) -> None:
-        self._messages = list(messages or [])
-        self._acked:   List[str] = []
+    def __init__(
+        self,
+        messages:   List[Tuple[str, Dict]] = None,
+        batch_size: int                    = 5,
+    ) -> None:
+        self._messages   = list(messages or [])
+        self._acked:     List[str] = []
+        self._batch_size = batch_size
 
     def consume(self) -> List[Tuple[str, Dict]]:
         if not self._messages:
             return []
-        batch, self._messages = self._messages[:5], self._messages[5:]
+        batch, self._messages = (
+            self._messages[:self._batch_size],
+            self._messages[self._batch_size:],
+        )
         return batch
 
     def ack(self, entry_id: str) -> bool:
@@ -198,12 +206,13 @@ class TestStreamSource:
         assert consumer._consume_calls == 3
 
     def test_run_stops_on_max_errors(self):
+        """max_errors=3 debe detener el loop antes de agotar max_iterations=100."""
         bad_messages = [("x-0", {"bad": "data"})] * 5
-        consumer = _MockConsumer(bad_messages * 20)
-        router   = EventRouter(handlers=[_OKHandler()])
-        source   = StreamSource(consumer=consumer, router=router, max_errors=3)
+        consumer     = _MockConsumer(bad_messages * 20)
+        router       = EventRouter(handlers=[_OKHandler()])
+        source       = StreamSource(consumer=consumer, router=router, max_errors=3)
         source.run(max_iterations=100)
-        assert True
+        assert consumer._consume_calls < 100  # detuvo anticipadamente por max_errors
 
 
 # --------------------------------------------------

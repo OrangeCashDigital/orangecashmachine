@@ -147,20 +147,35 @@ def test_run_once_no_signal_no_order():
 
 def test_run_once_rejects_signal_below_min_confidence():
     """
-    RiskManager rechaza señales cuya confianza es inferior al umbral.
+    RiskManager rechaza señales con confianza inferior al umbral mínimo.
 
-    Usa _evaluate_signal como superficie testeable controlada para
-    verificar el filtro de confianza con señales sintéticas.
-    EMACrossoverStrategy siempre emite confidence=1.0 por lo que
-    no es posible verificar este rechazo via run_once() con datos reales.
+    Verificado via run_once() con API pública (SRP — PaperBot es facade).
+    Construimos el bot con ema_crossover (único en StrategyRegistry) y
+    reemplazamos generate_signals en la instancia viva post-construcción.
+    No se accede a ningún método privado del bot.
     """
-    bot    = _make_bot(risk=RiskConfig(
-        signal_filter = SignalFilterConfig(min_confidence=0.9),
-    ))
-    signal = _make_signal(confidence=0.5)
-    assert bot._evaluate_signal(signal) is None
+    bot = _make_bot(
+        df   = _make_crossover_df(),
+        risk = RiskConfig(
+            signal_filter = SignalFilterConfig(min_confidence=0.9),
+        ),
+    )
 
+    # Instance-level patch: sustituye generate_signals solo en esta instancia.
+    # bot._engine._strategy es la estrategia real construida por TradingEngine.
+    def _low_confidence(df):
+        return [Signal(
+            symbol     = "BTC/USDT",
+            timeframe  = "1h",
+            signal     = "buy",
+            price      = float(df.iloc[-1]["close"]),
+            timestamp  = datetime(2024, 1, 1, tzinfo=timezone.utc),
+            confidence = 0.5,
+        )]
 
+    bot._engine._strategy.generate_signals = _low_confidence
+
+    assert bot.run_once() == []
 def test_run_once_accepts_signal_at_default_min_confidence():
     """Señal con confianza suficiente → orden generada."""
     bot = _make_bot(df=_make_crossover_df())
