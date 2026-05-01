@@ -127,7 +127,6 @@ packages = [
     "data_platform",
     "trading",
     "backtesting",
-    "app",
 ]
 
 # =============================================================================
@@ -136,7 +135,7 @@ packages = [
 # =============================================================================
 [tool.importlinter]
 include_external_packages = true
-root_packages = ["market_data", "ocm_platform", "trading", "data_platform", "portfolio"]
+root_packages = ["market_data", "ocm_platform", "trading", "data_platform", "portfolio", "app"]
 
 [[tool.importlinter.contracts]]
 name    = "BC-01: no direct ccxt_adapter imports"

@@ -13,7 +13,7 @@ y despacharlo a todos los handlers registrados en orden.
 
 Desacoplamiento
 ---------------
-El router NO importa PrefectTriggerHandler directamente.
+El router NO importa DispatchHandler directamente.
 Los handlers se inyectan en el constructor — el caller decide
 qué handlers activar. Esto permite:
   - tests sin dependencias externas

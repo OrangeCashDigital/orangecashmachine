@@ -241,7 +241,6 @@ def _oc_env_literals_in_yamls() -> set[str]:
 #   "os"      → variables del sistema operativo. Nunca son dominio OCM.
 #   "redis"   → infraestructura de estado. Candidatas a infra_vars.py si
 #               el módulo infra crece lo suficiente.
-#   "prefect" → plataforma de orquestación externa. Sólo lectura desde OCM.
 #   "db"      → bases de datos genéricas. Externas al dominio OCM.
 #
 # Regla de crecimiento: si una categoría supera 8 entradas, es señal de

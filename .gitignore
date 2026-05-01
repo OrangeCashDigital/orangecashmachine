@@ -32,7 +32,11 @@ refactor.sh
 # Lakehouse local de desarrollo (path resuelto por settings.yaml / LOCAL_DATA_LAKE_PATH)
 data_platform/local_data_lake/
 logs/
-infra/
+# infra/monitoring/ contiene configs versionables — no ignorar
+# Ignorar solo artefactos generados dentro de infra/
+infra/data/
+infra/tmp/
+infra/cache/
 *.bak
 .prefectignore
 *.obsolete

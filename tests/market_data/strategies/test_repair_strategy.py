@@ -176,6 +176,9 @@ def _make_df(n_rows: int = 10, start_ms: int = 0) -> pd.DataFrame:
     })
 
 
+class _SentinelType: pass
+_SENTINEL = _SentinelType()
+
 def _make_ctx(
     df:              Optional[pd.DataFrame] = None,
     raise_on_load:   bool                   = False,
@@ -206,9 +209,6 @@ def _make_ctx(
 
 
 # Sentinel para distinguir "no pasado" de None
-class _SentinelType: pass
-_SENTINEL = _SentinelType()
-
 
 def _make_gap(
     start_ms: int,

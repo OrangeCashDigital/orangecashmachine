@@ -1,0 +1,27 @@
+groups:
+  - name: ocm_pipeline
+    interval: 1m
+    rules:
+      - alert: PipelineDown
+        expr: absent(ocm_pipeline_runs_total)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OCM pipeline sin métricas por 10 minutos"
+
+      - alert: HighFetchErrors
+        expr: rate(ocm_fetch_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tasa de errores elevada {{ $value }}"
+
+      - alert: CircuitBreakerOpen
+        expr: ocm_exchange_circuit_open > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker abierto en {{ $labels.exchange }}"
