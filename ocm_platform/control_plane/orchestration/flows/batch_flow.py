@@ -31,6 +31,7 @@ import os
 import re
 
 import asyncio
+from dataclasses import dataclass
 import time
 from pathlib import Path
 from typing import List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
@@ -287,6 +288,66 @@ async def _validate_exchanges(
 # Evita saturar rate limits cuando hay múltiples exchanges en paralelo.
 # Valor 4: conservador para la config actual (3 exchanges × 1 símbolo).
 # Ajustar si se escala a más exchanges o símbolos.
+# ══════════════════════════════════════════════════════════════════════════
+# Domain model — StageResult
+# ══════════════════════════════════════════════════════════════════════════
+@dataclass
+class _StageResult:
+    """
+    Modelo de dominio para el resultado de un nodo del grafo de ejecución.
+
+    Principios
+    ----------
+    SRP  — encapsula estado (ok/failed) sin mezclar lógica de orchestration
+    OCP  — añadir nodo N = crear otro _StageResult, sin tocar lógica central
+    DIP  — el grafo depende de esta abstracción, no de ints primitivos
+
+    Semántica
+    ---------
+    has_success() — True si al menos un pipeline del nodo completó OK.
+                    Usado por repair para evaluar dependencia PARTIAL_SUCCESS
+                    sin acceder a ints directamente (encapsulación real).
+    merge()       — acumulación SSOT: un único punto de suma al final del grafo.
+                    OCP: añadir nodo = añadir .merge() a la cadena.
+    """
+    ok:     int = 0
+    failed: int = 0
+
+    def has_success(self) -> bool:
+        """True si al menos un pipeline del nodo completó sin error."""
+        return self.ok > 0
+
+    def merge(self, other: "_StageResult") -> "_StageResult":
+        """Suma dos resultados de nodo — SSOT de agregación."""
+        return _StageResult(ok=self.ok + other.ok, failed=self.failed + other.failed)
+
+
+async def _run_stage(
+    name:    str,
+    futures: "list[asyncio.Future]",
+    log,
+) -> "_StageResult":
+    """
+    Ejecuta un nodo del grafo y retorna su StageResult.
+
+    Encapsula el patrón repetido en los 3 nodos:
+      log.info → _consolidate_results → StageResult
+
+    KISS — elimina duplicación sin sacrificar claridad.
+    SafeOps — si futures está vacío, retorna StageResult vacío
+              sin tocar _consolidate_results (never call with empty list).
+
+    Returns
+    -------
+    _StageResult con ok/failed del nodo. Si futures está vacío, (0, 0).
+    """
+    if not futures:
+        return _StageResult()
+    log.info("Graph node: %s | tasks=%s", name, len(futures))
+    ok, failed = await _consolidate_results(futures, log)
+    return _StageResult(ok=ok, failed=failed)
+
+
 _PIPELINE_SEMAPHORE = asyncio.Semaphore(4)
 
 
@@ -462,7 +523,6 @@ async def market_data_flow(
         return
 
     flow_start = time.monotonic()
-    ok = failed = 0
     try:
         # ── Grafo de dependencias explícito ─────────────────────────────────
         #
@@ -486,39 +546,35 @@ async def market_data_flow(
         #
         # Extensión futura: añadir nodo al grafo sin tocar nodos existentes.
 
-        # Nodo 1: spot — sin dependencias, siempre ejecuta
-        ok_spot = fail_spot = 0
-        if spot_futures:
-            log.info("Graph node: spot | tasks=%s", len(spot_futures))
-            ok_spot, fail_spot = await _consolidate_results(spot_futures, log)
-            ok     += ok_spot
-            failed += fail_spot
+        # ── Nodo 1: spot — sin dependencias, siempre ejecuta ────────────────
+        spot_result = await _run_stage("spot", spot_futures, log)
 
-        # Nodo 2: futures — sin dependencias, independiente de spot
+        # ── Nodo 2: futures — sin dependencias, independiente de spot ────────
         # Razón: API swap != API spot; fallo de spot no implica fallo de futures.
-        if futures_futures:
-            log.info("Graph node: futures | tasks=%s", len(futures_futures))
-            ok_f, fail_f = await _consolidate_results(futures_futures, log)
-            ok     += ok_f
-            failed += fail_f
+        futures_result = await _run_stage("futures", futures_futures, log)
 
-        # Nodo 3: repair — dependencia PARTIAL_SUCCESS(spot)
+        # ── Nodo 3: repair — dependencia PARTIAL_SUCCESS(spot) ───────────────
         # Solo ejecuta si spot escribió al menos 1 serie exitosa.
-        # Si ok_spot == 0, no hay datos que reparar — skip con log explícito.
+        # Si spot falló completamente, no hay datos que reparar — skip explícito.
+        repair_result = _StageResult()
         if repair_futures:
-            if ok_spot == 0 and spot_futures:
+            if not spot_result.has_success() and spot_futures:
                 log.warning(
                     "Graph node: repair skipped"
                     " — spot failed completely, no data to repair"
                     " | spot_ok=%s spot_failed=%s",
-                    ok_spot,
-                    fail_spot,
+                    spot_result.ok,
+                    spot_result.failed,
                 )
             else:
-                log.info("Graph node: repair | tasks=%s", len(repair_futures))
-                ok_r, fail_r = await _consolidate_results(repair_futures, log)
-                ok     += ok_r
-                failed += fail_r
+                repair_result = await _run_stage("repair", repair_futures, log)
+
+        # ── Agregación final — SSOT + OCP ────────────────────────────────────
+        # OCP: añadir nodo N = crear otro _StageResult + añadirlo a la cadena.
+        # SSOT: un único punto de suma — sin acumuladores dispersos.
+        final_result = spot_result.merge(futures_result).merge(repair_result)
+        ok     = final_result.ok
+        failed = final_result.failed
 
         if failed > 0 and ok == 0:
             raise RuntimeError(f"All {failed} pipelines failed — aborting flow.")
