@@ -18,6 +18,11 @@ from market_data.processing.strategies.base import (
     PipelineContext,
     PipelineMode,
     StrategyMixin,
+    classify_error,
+)
+from market_data.processing.exceptions import (
+    ChunkFetchError,
+    NoDataAvailableError,
 )
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.adapters.exchange.exchange_quirks import get_quirks
@@ -288,7 +293,6 @@ class RepairStrategy(StrategyMixin):
             if not collected_raw:
                 # El exchange no tiene datos para este rango — no es un fallo de red.
                 # Distinguir de ChunkFetchError para no contaminar métricas de error.
-                from market_data.processing.exceptions import NoDataAvailableError
                 log.warning("Gap heal: exchange sin datos para el rango", gap=str(gap))
                 raise NoDataAvailableError(
                     f"Exchange returned no data for gap {gap} "
@@ -309,7 +313,6 @@ class RepairStrategy(StrategyMixin):
                     gap_start=str(gap_start), gap_end=str(gap_end),
                     collected_raw=len(collected_raw),
                 )
-                from market_data.processing.exceptions import NoDataAvailableError
                 raise NoDataAvailableError(
                     f"Exchange returned data but none within gap window {gap} "
                     f"(symbol={symbol}, timeframe={timeframe})"
@@ -356,10 +359,6 @@ class RepairStrategy(StrategyMixin):
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            from market_data.processing.exceptions import (
-                ChunkFetchError, NoDataAvailableError,
-            )
-            from market_data.processing.strategies.base import classify_error
             if isinstance(exc, NoDataAvailableError):
                 # No es un fallo — el exchange no tiene datos para este rango
                 # (p.ej. gap pre-origin: el exchange no existía aún).
