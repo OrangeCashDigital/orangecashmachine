@@ -45,8 +45,6 @@ from ocm_platform.control_plane.orchestration.tasks.exchange_tasks import (
     validate_exchange_connection,
 )
 
-if TYPE_CHECKING:
-    pass
 from ocm_platform.control_plane.orchestration.tasks.batch_tasks import (
     run_historical_pipeline,
     run_futures_pipeline,

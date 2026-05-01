@@ -157,21 +157,33 @@ def _update_throttle_from_summary(throttle, summary) -> None:
 
 def _log_pipeline_metrics(summary, market_type: str, log) -> None:
     """
-    Emite métricas por par/timeframe en formato estructurado.
+    Emite métricas por par en formato estructurado.
+
+    Compatible con OHLCVPipeline (tiene .timeframe), TradesPipeline y
+    DerivativesPipeline (sin .timeframe). Usa getattr con fallback "-"
+    para mantener compatibilidad polimórfica — DRY, sin sobrecargas.
 
     Símbolos de estado:
       ✓ → éxito
       ↷ → skipped (datos ya al día)
       ✗ → error
     """
-    for r in sorted(summary.results, key=lambda x: (x.symbol, x.timeframe)):
-        status = "✓" if r.success else ("↷" if r.skipped else "✗")
+    def _sort_key(r) -> tuple:
+        # dataset solo existe en DerivativesResult — fallback "" para los demás
+        dataset   = getattr(r, "dataset",   "")
+        timeframe = getattr(r, "timeframe", "")
+        return (r.symbol, dataset, timeframe)
+
+    for r in sorted(summary.results, key=_sort_key):
+        status    = "✓" if r.success else ("↷" if r.skipped else "✗")
+        timeframe = getattr(r, "timeframe", "-")
+        dataset   = getattr(r, "dataset",   "")
+        pair_tag  = f"{dataset}/{r.symbol}/{timeframe}" if dataset else f"{r.symbol}/{timeframe}"
         log.info(
-            "  %s %s/%s/%s | rows=%s duration=%sms error=%s",
+            "  %s %s/%s | rows=%s duration=%sms error=%s",
             status,
             market_type,
-            r.symbol,
-            r.timeframe,
+            pair_tag,
             r.rows,
             r.duration_ms,
             r.error or "-",
