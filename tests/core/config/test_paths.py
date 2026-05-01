@@ -46,6 +46,8 @@ def test_expand_env_no_placeholders():
 # ---------------------------------------------------------------------------
 
 def test_data_lake_root_env_override(monkeypatch, tmp_path):
+    # Limpiar SSOT var para aislar el test de env real del proceso
+    monkeypatch.delenv("OCM_STORAGE__DATA_LAKE__PATH", raising=False)
     monkeypatch.setenv(OCM_DATA_LAKE_PATH, str(tmp_path))
     result = data_lake_root()
     assert result == tmp_path.resolve()
@@ -63,6 +65,7 @@ def test_data_lake_root_fallback(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_bronze_ohlcv_root_suffix(monkeypatch, tmp_path):
+    monkeypatch.delenv("OCM_STORAGE__DATA_LAKE__PATH", raising=False)
     monkeypatch.setenv(OCM_DATA_LAKE_PATH, str(tmp_path))
     assert bronze_ohlcv_root() == tmp_path.resolve() / "bronze" / "ohlcv"
 
@@ -74,6 +77,7 @@ def test_gold_features_root_env_override(monkeypatch, tmp_path):
 
 
 def test_gold_features_root_derived(monkeypatch, tmp_path):
+    monkeypatch.delenv("OCM_STORAGE__DATA_LAKE__PATH", raising=False)
     monkeypatch.setenv(OCM_DATA_LAKE_PATH, str(tmp_path))
     monkeypatch.delenv(OCM_GOLD_PATH, raising=False)
     assert gold_features_root() == tmp_path.resolve() / "gold" / "features" / "ohlcv"

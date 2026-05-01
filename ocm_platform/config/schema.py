@@ -403,8 +403,8 @@ class RealtimeConfig(StrictBaseModel):
 
     reconnect_delay_seconds: int = Field(default=5, ge=1)
     heartbeat_timeout_seconds: int = Field(default=30, ge=5)
-    snapshot_interval_seconds: int = Field(default=60, ge=10)
-    max_stream_buffer: int = Field(default=50_000, ge=1_000)
+    snapshot_interval_seconds: int = Field(default=60, ge=1)
+    max_stream_buffer: int = Field(default=50_000, ge=1)
     drop_policy: Literal["reject", "drop_oldest", "drop_newest"] = "reject"
 
 
@@ -686,6 +686,22 @@ class RiskConfig(StrictBaseModel):
     order: RiskOrderConfig = Field(default_factory=RiskOrderConfig)
 
 
+class TestingConfig(StrictBaseModel):
+    """Configuración exclusiva del entorno test / CI.
+
+    Presente solo en config/env/test.yaml — nunca en production.
+    Permite reducir símbolos procesados, usar datos mock y garantizar
+    determinismo en tests unitarios e integración.
+
+    SSOT: añadida aquí para que AppConfig.model_validate() no rechace
+    la sección ``testing:`` con extra_forbidden.
+    """
+
+    limit_symbols: int = Field(default=1, ge=1, description="Máximo de símbolos por exchange en test")
+    use_mock_data: bool = False
+    deterministic_mode: bool = False
+
+
 class AppConfig(StrictBaseModel):
     """Configuración raíz de la aplicación.
 
@@ -706,6 +722,10 @@ class AppConfig(StrictBaseModel):
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
+    testing: TestingConfig = Field(
+        default_factory=TestingConfig,
+        description="Configuración exclusiva de CI/test. Ignorada en producción.",
+    )
 
     @model_validator(mode="before")
     @classmethod

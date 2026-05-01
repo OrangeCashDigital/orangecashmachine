@@ -14,8 +14,8 @@ pipeline:
     timeframes: [1m]
 
   realtime:
-    max_stream_buffer: 100
-    snapshot_interval_seconds: 5
+    max_stream_buffer: 1000
+    snapshot_interval_seconds: 10
 
 observability:
   logging:

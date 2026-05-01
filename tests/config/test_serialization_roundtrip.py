@@ -56,7 +56,7 @@ def runtime_context() -> RuntimeContext:
     """
     run_cfg = RunConfig.from_env()
     app_config = load_appconfig_standalone(
-        env="development",
+        env="test",
         config_dir=_CONFIG_DIR,
         run_id=run_cfg.run_id,
         write_snapshot=False,
