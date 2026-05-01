@@ -209,7 +209,7 @@ class RepairStrategy(StrategyMixin):
             raise
 
         except Exception as exc:
-            result.error       = str(exc)
+            result.error       = str(exc) or type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             error_type = "transient" if result.is_transient_error else "fatal"
             PIPELINE_ERRORS.labels(exchange=ctx.exchange_id, error_type=error_type).inc()
