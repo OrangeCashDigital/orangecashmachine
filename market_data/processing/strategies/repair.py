@@ -158,6 +158,12 @@ class RepairStrategy(StrategyMixin):
             partial_count = 0
             for _res in heal_results:
                 if isinstance(_res, BaseException):
+                    # CancelledError es señal de control del runtime — nunca se traga.
+                    # Re-propagar inmediatamente para respetar la cancellation chain.
+                    if isinstance(_res, asyncio.CancelledError):
+                        raise _res
+                    # Exception en un gap individual → fail-soft.
+                    # Los gaps son independientes: loguear, contar y continuar.
                     _log.bind(
                         exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
                     ).error("Gap heal: excepción inesperada en gather",

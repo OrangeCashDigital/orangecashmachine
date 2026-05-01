@@ -104,7 +104,7 @@ class _LokiMessage:
 class InterceptHandler(std_logging.Handler):
     """Redirige logs del stdlib a loguru.
 
-    Captura librerías de terceros (SQLAlchemy, httpx, prefect, uvicorn)
+    Captura librerías de terceros (SQLAlchemy, httpx, uvicorn)
     y los unifica en el pipeline de loguru.
     """
 
