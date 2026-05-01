@@ -358,6 +358,10 @@ async def _consolidate_results(
     description="Ingesta de datos de mercado: OHLCV histórico por exchange y timeframe.",
     log_prints=True,
     retries=0,
+    # Protección contra acumulación de backlog.
+    # 55 s < 60 s (intervalo del schedule) → Prefect cancela el run
+    # antes del siguiente tick. Sin esto, runs lentos se acumulan en cola.
+    timeout_seconds=55,
 )
 async def market_data_flow(
     runtime_context: Optional[RuntimeContext] = None,

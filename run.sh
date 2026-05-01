@@ -29,7 +29,7 @@ case "$MODE" in
   ocm)    exec uv run python -m app.cli.main    "$@" ;;
   live)   exec uv run python -m app.cli.live    "$@" ;;
   paper)  exec uv run python -m app.cli.paper   "$@" ;;
-  deploy) exec uv run python deploy.py          "$@" ;;
+  deploy) exec uv run python -m ocm_platform.control_plane.orchestration.deploy --deploy "$@" ;;
   *)
     echo "[run.sh] ERROR: Modo desconocido '${MODE}'." >&2
     echo "  Válidos: ocm | live | paper | deploy"      >&2

@@ -101,7 +101,7 @@ class RuntimeContext:
         - ``datetime`` → ISO 8601 con timezone.
         """
         return {
-            "app_config": self.app_config.model_dump(),
+            "app_config": self.app_config.model_dump(mode="json"),
             "run_config": self.run_config.to_dict(),
             "started_at": self.started_at.isoformat(),
         }
