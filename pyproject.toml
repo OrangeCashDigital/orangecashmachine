@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "orangecashmachine"
-version = "0.2.0"
-description = "Pipeline profesional de ingestión, procesamiento y almacenamiento de datos de mercado cripto — soporta OHLCV, trades, orderbook y derivados con arquitectura medallion (Bronze/Silver/Gold), orquestación Prefect, data lakehouse Iceberg/DuckDB y observabilidad Prometheus"
+version = "0.3.0"
+description = "Pipeline profesional de ingestión, procesamiento y almacenamiento de datos de mercado cripto — arquitectura medallion (Bronze/Silver/Gold), orquestación Dagster, data lakehouse Iceberg/DuckDB, observabilidad Prometheus"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "orangemusic" }]
 requires-python = ">=3.11,<3.13"
 keywords = [
     "trading", "algorithmic-trading", "market-data", "crypto",
-    "data-pipeline", "data-lakehouse", "iceberg", "prefect",
+    "data-pipeline", "data-lakehouse", "iceberg", "dagster",
     "ccxt", "ohlcv", "quant",
 ]
 classifiers = [
@@ -29,16 +29,14 @@ classifiers = [
 
 dependencies = [
     # ── Orquestación ──────────────────────────────────────────────────
-    "prefect==2.19.5",
     "dagster>=1.7.0,<2.0",
     "dagster-webserver>=1.7.0,<2.0",
-    "griffe==0.32.3",             # requerido por prefect 2.x — no actualizar sin verificar
     # ── Validación y tipado ───────────────────────────────────────────
     "pydantic==2.8.2",
     "pydantic-settings>=2.13.1,<3.0",
     "pandera==0.19.3",
     # ── Procesamiento de datos ────────────────────────────────────────
-    "numpy>=1.26.4,<2.0",         # <2.0 evita breaking changes en downstream
+    "numpy>=1.26.4,<2.0",
     "pandas==2.2.2",
     "pyarrow==16.1.0",            # fijado — pyiceberg 0.8.1 requiere esta versión exacta
     # ── Exchanges ─────────────────────────────────────────────────────
@@ -46,15 +44,14 @@ dependencies = [
     # ── Logging y observabilidad ──────────────────────────────────────
     "loguru==0.7.2",
     "structlog>=24.1.0,<25.0",
-    "httpx>=0.27.0,<1.0",             # sink Loki — push HTTP
+    "httpx>=0.27.0,<1.0",
     "prometheus-client>=0.20.0,<1.0",
     # ── Configuración ─────────────────────────────────────────────────
     "pyyaml==6.0.2",
     "python-dotenv>=1.0,<3.0",
-    "hydra-core>=1.3.2,<2.0",    # core/config/hydra_loader.py + main.py
+    "hydra-core>=1.3.2,<2.0",
     # ── Resiliencia ───────────────────────────────────────────────────
-    # pinned: only version available in registry — do not upgrade without verifying PyPI
-    "aioresilience==0.2.1",
+    "aioresilience==0.2.1",       # pinned: only version in registry
     "aiometer>=0.10.0",
     "pybreaker==1.4.1",
     # ── Estado y coordinación ─────────────────────────────────────────
@@ -71,11 +68,10 @@ dependencies = [
 
 [project.scripts]
 # SSOT de entrypoints CLI — Fail-Fast en install time si el target no existe.
-ocm    = "app.cli.main:main"   # market data pipeline (Hydra)
-ocm-api = "api.main:serve"               # FastAPI gateway
-live   = "app.cli.live:main"          # live trading ⚠️  capital real
-paper  = "app.cli.paper:main"         # paper trading
-deploy = "deploy:main"                # Prefect deployment runner
+ocm     = "app.cli.main:main"    # market data pipeline (Hydra)
+ocm-api = "api.main:serve"       # FastAPI gateway
+live    = "app.cli.live:main"    # live trading ⚠️  capital real
+paper   = "app.cli.paper:main"   # paper trading
 
 [project.urls]
 Repository = "https://github.com/orangemusic/orangecashmachine"
@@ -111,11 +107,8 @@ log_cli_level = "DEBUG"
 line-length = 120
 
 [tool.ruff.lint]
-# E402: "module level import not at top of file"
-# Falso positivo masivo en este codebase: el patrón from __future__ import annotations
-# seguido de un docstring hace que ruff reporte todos los imports como E402.
-# Es un patrón intencional y correcto — no indica código mal estructurado.
-# Ref: https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file/
+# E402: falso positivo con from __future__ import annotations + docstring.
+# Patrón intencional — no indica código mal estructurado.
 ignore = ["E402"]
 
 [tool.mypy]
@@ -138,19 +131,13 @@ packages = [
 ]
 
 # =============================================================================
-# import-linter — enforcement de boundary market_data.adapters.exchange
-# Regla: ningún consumidor externo puede importar ccxt_adapter directamente.
-# Solo market_data.adapters.exchange (el propio módulo) tiene ese permiso.
+# import-linter — boundary enforcement
 # Ejecutar: uv run lint-imports
 # =============================================================================
 [tool.importlinter]
 include_external_packages = true
 root_packages = ["market_data", "ocm_platform", "trading", "data_platform", "portfolio"]
 
-# BC-01 — exchange adapter boundary
-# Ningun modulo externo importa ccxt_adapter directamente.
-# Solo el __init__.py de adapters/exchange/ puede hacerlo (es la fachada).
-# ignore_imports excluye esa ruta legitima de la verificacion.
 [[tool.importlinter.contracts]]
 name    = "BC-01: no direct ccxt_adapter imports"
 type    = "forbidden"
@@ -166,28 +153,24 @@ ignore_imports = [
     "market_data.adapters.exchange -> market_data.adapters.exchange.ccxt_adapter",
 ]
 
-# BC-02 — market_data self-contained
 [[tool.importlinter.contracts]]
 name    = "BC-02: market_data no importa trading ni data_platform"
 type    = "forbidden"
 source_modules = ["market_data"]
 forbidden_modules = ["trading", "data_platform"]
 
-# BC-03 — signals no conoce execution
 [[tool.importlinter.contracts]]
 name    = "BC-03: signals isolated from execution"
 type    = "forbidden"
 source_modules = ["trading.strategies"]
 forbidden_modules = ["trading.execution", "trading.analytics"]
 
-# BC-04 — risk no conoce execution
 [[tool.importlinter.contracts]]
 name    = "BC-04: risk isolated from execution"
 type    = "forbidden"
 source_modules = ["trading.risk"]
 forbidden_modules = ["trading.execution"]
 
-# BC-05 — core sin dependencias de negocio
 [[tool.importlinter.contracts]]
 name    = "BC-06: platform has no business logic dependencies"
 type    = "forbidden"
@@ -200,9 +183,8 @@ type    = "forbidden"
 source_modules = ["portfolio"]
 forbidden_modules = ["trading.execution", "trading.strategies"]
 
-# BC-08 — api es consumidor puro: no puede ser importado por nadie
 [[tool.importlinter.contracts]]
-name    = "BC-08: api is a pure consumer — no internal package imports api"
+name    = "BC-08: api is a pure consumer"
 type    = "forbidden"
 source_modules = [
     "ocm_platform",
