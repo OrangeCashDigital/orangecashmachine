@@ -1,31 +1,42 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 """
 market_data/streaming/consumer.py
 ===================================
 
-PrefectTriggerHandler — handler que dispara un Prefect flow run
-a partir de un EventPayload + StreamingContext opcional.
+DispatchHandler — handler que despacha un EventPayload al orquestador activo.
 
 Responsabilidad
 ---------------
-Recibir un EventPayload normalizado y disparar el flow de ingesta
-vía Prefect API. NO contiene lógica de negocio — solo orquestación.
+Recibir un EventPayload normalizado y disparar la ingesta en el
+orquestador activo (Dagster desde v0.3). NO contiene lógica de negocio.
+
+Historial
+---------
+v0.1–0.2 : stub nombrado PrefectTriggerHandler (orquestador: Prefect).
+v0.3+    : renombrado a DispatchHandler. Prefect eliminado como dependencia.
+           PrefectTriggerHandler se mantiene como alias para compatibilidad
+           de tests — marcado deprecated, se eliminará en v0.4.
 
 Contrato
 --------
-  handler = PrefectTriggerHandler()
-  handler = PrefectTriggerHandler(context=streaming_ctx)
+  handler = DispatchHandler()
+  handler = DispatchHandler(context=streaming_ctx)
   ok: bool = handler.handle(event)
 
-Cambios Fase 2
---------------
-- Acepta StreamingContext opcional en constructor (DI).
-- Si se provee, usa ctx.deployment y ctx.run_id en el dispatch.
-- Si no, usa defaults seguros (comportamiento Fase 1 preservado).
-- Backward compatible: tests de Fase 1 pasan sin modificación.
+Fases de implementación
+-----------------------
+  Fase 1/2 (actual): _dispatch() loguea y retorna True (stub seguro).
+  Fase 3: reemplazar _dispatch() con llamada real a Dagster run API:
 
-Principios: SRP · DI · SafeOps (nunca lanza al caller)
+      from dagster import DagsterRunStatus
+      # via dagster-graphql o REST API:
+      # POST /graphql → launchRun mutation con asset selection
+
+El caller (EventRouter) no cambia entre fases — SRP garantizado.
+
+Principios: SRP · DI · SafeOps (nunca lanza al caller) · OCP
 """
 
 from typing import Optional, Protocol, runtime_checkable
@@ -35,74 +46,79 @@ from loguru import logger
 from market_data.streaming.payloads import EventPayload
 
 
-# --------------------------------------------------
-# Contrato público
-# --------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contrato público — EventHandler protocol
+# ---------------------------------------------------------------------------
 
 @runtime_checkable
 class EventHandler(Protocol):
-    """Contrato mínimo que cualquier handler de eventos debe cumplir."""
+    """Contrato mínimo que cualquier handler de eventos debe cumplir.
+
+    Cualquier clase con un método handle(EventPayload) -> bool
+    satisface este protocolo (structural subtyping).
+    No hay herencia requerida — DIP puro.
+    """
 
     def handle(self, event: EventPayload) -> bool:
         """Procesa el evento. Retorna True si fue aceptado, False si falló."""
         ...
 
 
-# --------------------------------------------------
-# Implementación: PrefectTriggerHandler
-# --------------------------------------------------
+# ---------------------------------------------------------------------------
+# DispatchHandler — implementación activa
+# ---------------------------------------------------------------------------
 
-class PrefectTriggerHandler:
+class DispatchHandler:
     """
-    Handler que dispara un Prefect flow run para el evento dado.
+    Handler que despacha un EventPayload al orquestador activo.
 
     Parámetros
     ----------
-    deployment_name : str
-        Nombre del deployment Prefect. Fallback si no hay StreamingContext.
+    run_name : str
+        Nombre del job/run Dagster a disparar. Usado en Fase 3.
+        En el stub actual solo aparece en los logs.
     context : StreamingContext | None
-        Contexto ligero de streaming. Si se provee, sus valores tienen
-        prioridad sobre deployment_name. Inyectado por DI — el handler
-        no lo construye internamente.
+        Contexto ligero de streaming. Inyectado por DI — el handler
+        no construye contexto internamente (DIP).
+        Si se provee, sus valores tienen prioridad sobre run_name.
 
-    Fases
-    -----
-    Fase 1/2 (stub): _dispatch() loguea y retorna True.
-    Fase 3: reemplazar _dispatch() con llamada real a Prefect API.
-    El caller (EventRouter) no necesita cambios entre fases.
+    SafeOps
+    -------
+    handle() captura cualquier excepción en _dispatch() y retorna False.
+    El caller (EventRouter) nunca recibe una excepción de este handler.
     """
+
+    _DEFAULT_RUN_NAME: str = "ocm_bronze_only_job"
 
     def __init__(
         self,
-        deployment_name: str = "market_data_ingestion/default",
+        run_name: str = _DEFAULT_RUN_NAME,
         context: Optional["StreamingContext"] = None,  # type: ignore[name-defined]  # noqa: F821
     ) -> None:
-        # Importación local — evita circular en módulos que importan
-        # consumer antes que context esté disponible en el paquete.
         if context is not None:
             from market_data.streaming.context import StreamingContext
             if not isinstance(context, StreamingContext):
                 raise TypeError(
                     f"context debe ser StreamingContext, recibió {type(context)}"
                 )
-        self._deployment = (
-            context.deployment if context is not None else deployment_name
+        self._run_name = (
+            context.deployment if context is not None else run_name
         )
-        self._context    = context
+        self._context = context
         self._log = logger.bind(
-            handler     = "PrefectTriggerHandler",
-            deployment  = self._deployment,
+            handler  = "DispatchHandler",
+            run_name = self._run_name,
         )
 
     def handle(self, event: EventPayload) -> bool:
         """
-        Dispara el flow. SafeOps: nunca lanza al caller.
+        Despacha el evento. SafeOps: nunca lanza al caller.
 
         Returns
         -------
         bool
-            True  — trigger emitido (o simulado en stub)
-            False — fallo no recuperable al emitir el trigger
+            True  — dispatch emitido (o simulado en stub)
+            False — fallo no recuperable
         """
         try:
             return self._dispatch(event)
@@ -112,24 +128,35 @@ class PrefectTriggerHandler:
                 exchange = event.exchange,
                 symbol   = event.symbol,
                 error    = str(exc),
-            ).error("PrefectTriggerHandler.handle failed")
+            ).error("DispatchHandler.handle failed")
             return False
 
     def _dispatch(self, event: EventPayload) -> bool:
         """
-        Lógica de dispatch.
+        Lógica de dispatch — stub de Fase 1/2.
 
-        Fase 1/2 (stub): loguea y retorna True.
-        Fase 3: reemplazar con:
+        Fase 3: reemplazar con llamada real a Dagster API.
+        Ejemplo usando dagster-graphql (launchRun mutation):
 
-            from prefect.deployments import run_deployment
-            run_deployment(
-                name=self._deployment,
-                parameters={
-                    "event":   event.to_dict(),
-                    "context": self._context.to_dict() if self._context else {},
+            import httpx
+            resp = httpx.post(
+                f"{dagster_url}/graphql",
+                json={
+                    "query": LAUNCH_RUN_MUTATION,
+                    "variables": {
+                        "jobName": self._run_name,
+                        "runConfigData": {"ops": {}},
+                        "tags": [
+                            {"key": "exchange", "value": event.exchange},
+                            {"key": "symbol",   "value": event.symbol},
+                        ],
+                    },
                 },
+                timeout=5.0,
             )
+            resp.raise_for_status()
+
+        El caller no cambia — solo esta función interna.
         """
         run_id = self._context.run_id if self._context is not None else "no-context"
         self._log.bind(
@@ -139,6 +166,41 @@ class PrefectTriggerHandler:
             timeframe = event.timeframe,
             bars      = len(event.bars),
             run_id    = run_id,
-        ).info("prefect_trigger_dispatched [stub]")
-        # TODO Fase 3: llamada real a Prefect API
+        ).info("dispatch_triggered [stub]")
+        # TODO Fase 3: llamada real a Dagster run API
         return True
+
+
+# ---------------------------------------------------------------------------
+# Alias de compatibilidad — deprecated desde v0.3
+# ---------------------------------------------------------------------------
+# PrefectTriggerHandler se mantiene para no romper imports existentes
+# en tests y código legacy. Se eliminará en v0.4.
+#
+# MIGRATION: reemplazar todas las ocurrencias de:
+#   PrefectTriggerHandler()  →  DispatchHandler()
+#   PrefectTriggerHandler(context=ctx)  →  DispatchHandler(context=ctx)
+#   PrefectTriggerHandler(deployment_name=x)  →  DispatchHandler(run_name=x)
+
+import warnings as _warnings
+
+
+class PrefectTriggerHandler(DispatchHandler):
+    """Alias deprecated de DispatchHandler. Eliminar en v0.4.
+
+    Usar DispatchHandler directamente.
+    """
+
+    def __init__(
+        self,
+        deployment_name: str = DispatchHandler._DEFAULT_RUN_NAME,
+        context: Optional["StreamingContext"] = None,  # type: ignore[name-defined]  # noqa: F821
+    ) -> None:
+        _warnings.warn(
+            "PrefectTriggerHandler está deprecated desde v0.3. "
+            "Usar DispatchHandler(run_name=..., context=...) en su lugar. "
+            "Se eliminará en v0.4.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(run_name=deployment_name, context=context)

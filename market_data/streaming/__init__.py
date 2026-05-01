@@ -1,50 +1,59 @@
+# -*- coding: utf-8 -*-
 """
 market_data/streaming
 ======================
 
-Primitivas event-driven para ingesta streaming (Fase 3).
+Primitivas event-driven para ingesta streaming.
 
 Exports públicos
 ----------------
-  EventPayload          — payload normalizado de un batch OHLCV
-  OHLCVBar              — una vela individual
-  EventHandler          — protocolo de handler (contrato)
-  PrefectTriggerHandler — handler que dispara flows Prefect
-  EventRouter           — fan-out de eventos a handlers
-  StreamingContext      — contexto ligero serializable (sin AppConfig)
-  StreamPublisher       — producer-side: EventPayload → Redis Stream
-  StreamSource          — consumer-side: Redis Stream → EventRouter → ACK
+  EventPayload     — payload normalizado de un batch OHLCV
+  OHLCVBar         — una vela individual
+  EventHandler     — protocolo de handler (contrato, structural subtyping)
+  DispatchHandler  — handler que dispara el orquestador activo (Dagster v0.3+)
+  EventRouter      — fan-out de eventos a múltiples handlers
+  StreamingContext — contexto ligero serializable (sin AppConfig)
+  StreamPublisher  — producer-side: EventPayload → Redis Stream
+  StreamSource     — consumer-side: Redis Stream → EventRouter → ACK
 
-Uso completo — Fase 3
-----------------------
+Deprecated (eliminar en v0.4)
+------------------------------
+  PrefectTriggerHandler — alias de DispatchHandler, naming legacy Prefect
+
+Uso completo
+------------
     from market_data.streaming import (
-        EventRouter, PrefectTriggerHandler,
+        EventRouter, DispatchHandler,
         StreamPublisher, StreamSource,
     )
-    from ocm_platform.infra.state.factories import build_stream_publisher, build_stream_source
 
-    router = EventRouter(handlers=[PrefectTriggerHandler()])
+    router = EventRouter(handlers=[DispatchHandler()])
     pub    = build_stream_publisher(stream_name="ohlcv")
     source = build_stream_source(router=router, stream_name="ohlcv")
 
-    pub.publish(event)      # producer
-    source.run()            # consumer loop (blocking)
+    pub.publish(event)   # producer
+    source.run()         # consumer loop (blocking)
+
+Principios: SRP · DIP · OCP
 """
 
 from market_data.streaming.payloads  import EventPayload, OHLCVBar
 from market_data.streaming.context   import StreamingContext
-from market_data.streaming.consumer  import EventHandler, PrefectTriggerHandler
+from market_data.streaming.consumer  import EventHandler, DispatchHandler, PrefectTriggerHandler
 from market_data.streaming.router    import EventRouter
 from market_data.streaming.publisher import StreamPublisher
 from market_data.streaming.source    import StreamSource
 
 __all__ = [
+    # Activos
     "EventPayload",
     "OHLCVBar",
     "StreamingContext",
     "EventHandler",
-    "PrefectTriggerHandler",
+    "DispatchHandler",
     "EventRouter",
     "StreamPublisher",
     "StreamSource",
+    # Deprecated — eliminar en v0.4
+    "PrefectTriggerHandler",
 ]
