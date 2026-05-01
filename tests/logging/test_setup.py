@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-"""tests/logging/test_setup.py — Unit tests para bootstrap y configure."""
+"""
+tests/logging/test_setup.py
+============================
+
+Unit tests para bootstrap, configure_logging y helpers de logger.py.
+
+Invariantes críticos:
+  • bootstrap_logging() es idempotente — segunda llamada no reinstala sinks
+  • configure_logging() skippea si el hash de config no cambia
+  • _resolve_config() produce un dict canónico con defaults correctos
+  • setup_logging() está eliminada — cualquier llamada lanza RuntimeError
+"""
 
 import pytest
 from unittest.mock import patch
@@ -43,12 +54,22 @@ def reset_global_state():
 # ── _resolve_config ───────────────────────────────────────────────────────────
 
 def test_resolve_config_defaults():
+    """
+    _resolve_config(None) produce los defaults canónicos del sistema.
+
+    Nota: 'pipeline' fue eliminado en v0.2.0 (bug fix #10 — sink redundante).
+    El dict resultante NO contiene esa clave — si reaparece, es una regresión.
+    """
     resolved = _resolve_config(None, False, None)
-    assert resolved["level"]    == "INFO"
-    assert resolved["console"]  is True
-    assert resolved["file"]     is True
-    assert resolved["pipeline"] is True
+    assert resolved["level"]   == "INFO"
+    assert resolved["console"] is True
+    assert resolved["file"]    is True
     assert resolved["loki_url"] is None
+    # Invariante de eliminación: 'pipeline' no debe estar en el dict
+    assert "pipeline" not in resolved, (
+        "'pipeline' reapareció en _resolve_config — el sink pipeline_*.log "
+        "fue eliminado en v0.2.0 por ser subconjunto redundante de app_*.log."
+    )
 
 
 def test_resolve_config_debug_forces_debug_level():
@@ -65,6 +86,7 @@ def test_resolve_config_from_logging_config():
 
 
 def test_resolve_config_debug_overrides_cfg_level():
+    """debug=True debe ganar sobre cualquier level en LoggingConfig."""
     cfg = LoggingConfig(level="ERROR")
     resolved = _resolve_config(cfg, True, None)
     assert resolved["level"] == "DEBUG"
@@ -90,7 +112,7 @@ def test_bootstrap_logging_is_idempotent():
         with patch("ocm_platform.observability.logger._replay_bootstrap_buffer"):
             with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
                 bootstrap_logging()
-                bootstrap_logging()  # segunda llamada — no-op
+                bootstrap_logging()  # segunda llamada — debe ser no-op
                 assert mock.call_count == 1
 
 
@@ -105,15 +127,17 @@ def test_bootstrap_logging_sets_done_flag():
 # ── configure_logging ─────────────────────────────────────────────────────────
 
 def test_configure_logging_skips_if_hash_unchanged():
+    """Misma config → mismo hash → _install_sinks llamado solo una vez."""
     cfg = LoggingConfig()
     with patch("ocm_platform.observability.logger._install_sinks", return_value=([], None)) as mock:
         with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
             configure_logging(cfg, env="development")
-            configure_logging(cfg, env="development")  # mismo hash → skip
+            configure_logging(cfg, env="development")
             assert mock.call_count == 1
 
 
 def test_configure_logging_reconfigures_on_change():
+    """Config diferente → hash diferente → reinstalación de sinks."""
     with patch("ocm_platform.observability.logger._install_sinks", return_value=([], None)) as mock:
         with patch("ocm_platform.observability.logger._install_stdlib_bridge"):
             configure_logging(LoggingConfig(level="INFO"),  env="development")
