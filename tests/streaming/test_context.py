@@ -4,7 +4,7 @@ tests/streaming/test_context.py
 
 Tests de contrato para StreamingContext.
 
-Sin dependencias externas — no necesita Redis, Prefect ni AppConfig.
+Sin dependencias externas — no necesita Redis, Dagster ni AppConfig.
 """
 
 from __future__ import annotations

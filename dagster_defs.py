@@ -78,7 +78,7 @@ bronze_only_job = define_asset_job(
 # ==============================================================================
 #
 # Dagster no está diseñado para schedules sub-minuto.
-# bronze_schedule corre cada minuto como el schedule original de Prefect.
+# bronze_schedule corre cada minuto — misma cadencia que el pipeline anterior.
 # ingestion_schedule corre cada 5 minutos (pipeline completo).
 # Ajustar cron_schedule según rate-limits reales del exchange.
 

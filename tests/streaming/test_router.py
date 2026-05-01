@@ -4,7 +4,7 @@ tests/streaming/test_router.py
 
 Tests unitarios de EventRouter y DispatchHandler.
 
-Sin dependencias externas — no necesita Redis, Prefect ni config.
+Sin dependencias externas — no necesita Redis, Dagster ni config real.
 """
 
 from __future__ import annotations
