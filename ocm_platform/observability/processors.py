@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-core/observability/processors.py
-==========================
+ocm_platform/observability/processors.py
+==========================================
 
 Processor chain de structlog para OrangeCashMachine.
 
@@ -16,39 +16,48 @@ Chain estándar (orden de aplicación)::
 
     1. merge_contextvars      — contexto de asyncio/threading
     2. add_log_level          — nivel como string ("info", "error")
-    3. add_timestamp          — ISO 8601 UTC
-    4. inject_service_context — service, version constantes
+    3. add_timestamp          — ISO 8601 UTC con milliseconds
+    4. inject_service_context — service, version (SSOT: importlib.metadata)
     5. sanitize_secrets       — redacta campos sensibles
     6. JSONRenderer           — serializa a JSON string
 
-Uso
----
-    from ocm_platform.observability.processors import build_processor_chain, process_event
-
-    chain = build_processor_chain()
-    event_dict = process_event(chain, "info", {"event": "pipeline_started"})
+SSOT de versión
+---------------
+La versión del servicio se lee desde ``importlib.metadata`` en tiempo de
+importación — la única fuente de verdad es ``pyproject.toml``.
+Si el paquete no está instalado (desarrollo sin ``pip install -e .``),
+el fallback es ``"unknown"`` — nunca una versión hardcoded divergente.
 """
 
 import re
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from typing import Any
 
 import structlog
 from structlog.types import EventDict, Processor
 
+
 # ── Constantes ────────────────────────────────────────────────────────────────
 
-_SERVICE   = "orangecashmachine"
-_VERSION   = "0.3.0"
+_SERVICE = "orangecashmachine"
 
-# Campos cuyo valor se redacta si contienen datos sensibles
+# SSOT: versión leída de pyproject.toml via importlib.metadata.
+# Fallback "unknown" para entornos de desarrollo sin install.
+try:
+    _VERSION: str = _pkg_version(_SERVICE)
+except PackageNotFoundError:
+    _VERSION = "unknown"
+
+# Campos cuyo valor se redacta si contienen datos sensibles.
 _SECRET_KEYS: frozenset[str] = frozenset({
     "api_key", "api_secret", "api_password", "password",
     "secret", "token", "passphrase", "authorization",
     "credential", "private_key",
 })
 
-# Patrón para detectar valores que parecen secrets aunque la clave no esté listada
+# Patrón para detectar valores que parecen secrets aunque la clave no esté listada.
 _SECRET_PATTERN = re.compile(
     r"(?i)(key|secret|token|password|passphrase|credential|auth)",
 )
@@ -59,9 +68,9 @@ _REDACTED = "**REDACTED**"
 # ── Processors individuales ───────────────────────────────────────────────────
 
 def _add_timestamp(
-    logger: Any, method: str, event_dict: EventDict
+    logger: Any, method: str, event_dict: EventDict,
 ) -> EventDict:
-    """Añade timestamp ISO 8601 UTC si no existe."""
+    """Añade timestamp ISO 8601 UTC con milliseconds si no existe."""
     event_dict.setdefault(
         "timestamp",
         datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
@@ -70,22 +79,22 @@ def _add_timestamp(
 
 
 def _inject_service_context(
-    logger: Any, method: str, event_dict: EventDict
+    logger: Any, method: str, event_dict: EventDict,
 ) -> EventDict:
-    """Inyecta service y version como campos fijos."""
+    """Inyecta service y version como campos fijos (SSOT: importlib.metadata)."""
     event_dict.setdefault("service", _SERVICE)
     event_dict.setdefault("version", _VERSION)
     return event_dict
 
 
 def _sanitize_secrets(
-    logger: Any, method: str, event_dict: EventDict
+    logger: Any, method: str, event_dict: EventDict,
 ) -> EventDict:
     """Redacta valores de campos que puedan contener secretos.
 
-    Recorre el evento completo (un nivel de profundidad).
-    Regla: si la clave está en _SECRET_KEYS o coincide con
-    _SECRET_PATTERN, el valor se reemplaza por _REDACTED.
+    Recorre el evento un nivel de profundidad.
+    Regla: si la clave está en ``_SECRET_KEYS`` o coincide con
+    ``_SECRET_PATTERN``, el valor se reemplaza por ``_REDACTED``.
     """
     for key in list(event_dict.keys()):
         if key in _SECRET_KEYS or _SECRET_PATTERN.search(key):

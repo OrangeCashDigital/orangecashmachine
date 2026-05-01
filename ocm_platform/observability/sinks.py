@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-core/observability/sinks.py
-=====================
+ocm_platform/observability/sinks.py
+=====================================
 
 Sinks remotos para el sistema de logging de OrangeCashMachine.
 
@@ -10,40 +10,32 @@ Sinks implementados
 -------------------
 LokiSink
     Envía logs estructurados (JSON) al endpoint push de Loki via HTTP.
-    Estrategia: best-effort con reintentos exponenciales (3 intentos).
-    Fail-soft: nunca propaga excepciones al caller — un fallo de Loki
-    no debe interrumpir el pipeline.
+    Estrategia: best-effort con reintentos no-bloqueantes en hilo daemon.
+    Fail-soft: nunca propaga excepciones al caller.
+
+    Diseño de reintentos
+    ~~~~~~~~~~~~~~~~~~~~~
+    ``time.sleep()`` en un sink síncrono bloquea el hilo que emite el log.
+    En contexto asyncio ese hilo es el event loop — bloqueo catastrófico.
+    Solución: el primer intento es síncrono (ruta feliz, <5ms típico).
+    Los reintentos se delegan a un hilo daemon via ``threading.Timer``,
+    que usa ``threading.Event.wait()`` como backoff interrumpible.
+    El pipeline nunca espera a Loki.
 
 PrometheusLogSink
     Incrementa contadores Prometheus por nivel de log.
     Permite alertas en Grafana sobre tasas de ERROR/CRITICAL.
-    Usa el registro global de prometheus_client (compatible con
-    el MetricsRuntime existente).
-
-Integración con Loguru
-----------------------
-Ambos sinks son callables que aceptan el ``message`` de Loguru
-(objeto con atributos .record) y se registran con ``logger.add()``.
-
-Ejemplo::
-
-    from ocm_platform.observability.sinks import LokiSink, PrometheusLogSink
-
-    loki = LokiSink(url="http://loki:3100/loki/api/v1/push",
-                    labels={"env": "production"})
-    logger.add(loki, level="INFO", serialize=True)
-
-    prom = PrometheusLogSink()
-    logger.add(prom, level="DEBUG")
+    Fail-soft: la excepción se descarta silenciosamente.
 """
 
 import json
-import time
 import sys
+import threading
 from typing import Any, Optional
 
 import httpx
 from prometheus_client import Counter
+
 
 # ── Prometheus counter ────────────────────────────────────────────────────────
 
@@ -59,21 +51,26 @@ _LOG_COUNTER: Counter = Counter(
 class LokiSink:
     """Sink Loguru → Loki via HTTP push (Protobuf-free, JSON snappy-free).
 
-    Loki acepta el endpoint ``/loki/api/v1/push`` con Content-Type
-    ``application/json``. Este sink usa ese formato para evitar
-    dependencias de protobuf o snappy.
+    Loki acepta ``/loki/api/v1/push`` con ``Content-Type: application/json``.
+    Este sink usa ese formato para evitar dependencias de protobuf o snappy.
 
-    Reintentos
-    ----------
-    Hasta ``max_retries`` intentos con backoff exponencial base 2s.
-    Si todos fallan, el error se imprime a stderr y se descarta.
+    Reintentos no-bloqueantes
+    -------------------------
+    El primer intento HTTP es síncrono. Si falla, los reintentos restantes
+    se ejecutan en un ``threading.Timer`` daemon con backoff exponencial
+    usando ``threading.Event.wait()`` (interrumpible, no bloquea el caller).
+    El pipeline nunca espera a Loki.
 
     Args:
-        url:        Endpoint push de Loki.
-        labels:     Labels estáticos adicionales (env, run_id, etc.).
-        timeout:    Timeout HTTP en segundos (default 5).
-        max_retries: Número máximo de reintentos (default 3).
+        url:         Endpoint push de Loki.
+        labels:      Labels estáticos (env, run_id, service, etc.).
+        timeout:     Timeout HTTP en segundos (default 5.0).
+        max_retries: Intentos totales incluyendo el primero (default 3).
     """
+
+    # Backoff base en segundos. Intento N usa: _BACKOFF_BASE ** (N-1).
+    # Con max_retries=3: 1s, 2s — total máximo 3s en hilos daemon.
+    _BACKOFF_BASE: float = 2.0
 
     def __init__(
         self,
@@ -83,22 +80,22 @@ class LokiSink:
         timeout: float = 5.0,
         max_retries: int = 3,
     ) -> None:
-        self._url        = url
-        self._labels     = labels or {}
-        self._timeout    = timeout
-        self._max_retries = max_retries
-        self._client     = httpx.Client(timeout=timeout)
+        self._url         = url
+        self._labels      = labels or {}
+        self._timeout     = timeout
+        self._max_retries = max(1, max_retries)
+        self._client      = httpx.Client(timeout=timeout)
+        # Evento de shutdown: permite interrumpir waits pendientes en close()
+        self._shutdown    = threading.Event()
 
     def __call__(self, message: Any) -> None:
-        """Recibe un mensaje de Loguru y lo envía a Loki."""
+        """Recibe un mensaje de Loguru y lo envía a Loki (no-bloqueante)."""
         record: dict[str, Any] = message.record
+        extra:  dict[str, Any] = record.get("extra", {})
 
-        # Extraer campos del record de Loguru
-        level    = record["level"].name.lower()
-        ts_ns    = str(int(record["time"].timestamp() * 1e9))
-        extra    = record.get("extra", {})
+        level  = record["level"].name.lower()
+        ts_ns  = str(int(record["time"].timestamp() * 1e9))
 
-        # Construir labels: base + extra relevante + estáticos del config
         labels = {
             "level":   level,
             "service": extra.get("service", "orangecashmachine"),
@@ -106,44 +103,58 @@ class LokiSink:
             "run_id":  extra.get("run_id", "-"),
             **self._labels,
         }
-
-        # Payload formato Loki JSON push
         payload = {
-            "streams": [
-                {
-                    "stream": labels,
-                    "values": [[ts_ns, record["message"]]],
-                }
-            ]
+            "streams": [{
+                "stream": labels,
+                "values": [[ts_ns, record["message"]]],
+            }]
         }
+        # Primer intento síncrono — ruta feliz sin overhead de hilos
+        success = self._attempt(payload)
+        if not success and self._max_retries > 1:
+            self._schedule_retry(payload, attempt=1)
 
-        self._push(payload)
+    def _attempt(self, payload: dict[str, Any]) -> bool:
+        """Ejecuta un único intento HTTP. Retorna True si exitoso."""
+        try:
+            resp = self._client.post(
+                self._url,
+                content=json.dumps(payload),
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code < 300:
+                return True
+            print(
+                f"[LokiSink] HTTP {resp.status_code}: {resp.text[:200]}",
+                file=sys.stderr,
+            )
+        except Exception as exc:
+            print(f"[LokiSink] error: {exc}", file=sys.stderr)
+        return False
 
-    def _push(self, payload: dict[str, Any]) -> None:
-        """Envía el payload a Loki con reintentos exponenciales."""
-        body = json.dumps(payload)
-        for attempt in range(self._max_retries):
-            try:
-                resp = self._client.post(
-                    self._url,
-                    content=body,
-                    headers={"Content-Type": "application/json"},
-                )
-                if resp.status_code < 300:
-                    return
-                # Loki retornó error HTTP — reintentamos
-                print(
-                    f"[LokiSink] HTTP {resp.status_code}: {resp.text[:200]}",
-                    file=sys.stderr,
-                )
-            except Exception as exc:
-                print(f"[LokiSink] attempt={attempt+1} error={exc}", file=sys.stderr)
+    def _schedule_retry(self, payload: dict[str, Any], attempt: int) -> None:
+        """Programa el siguiente reintento en un hilo daemon no-bloqueante."""
+        if self._shutdown.is_set() or attempt >= self._max_retries:
+            return
 
-            if attempt < self._max_retries - 1:
-                time.sleep(2 ** attempt)  # 1s, 2s, 4s
+        delay = self._BACKOFF_BASE ** (attempt - 1)  # 1s, 2s, 4s…
+
+        def _retry() -> None:
+            # wait() con timeout es interrumpible por shutdown.set()
+            self._shutdown.wait(timeout=delay)
+            if self._shutdown.is_set():
+                return
+            success = self._attempt(payload)
+            if not success:
+                self._schedule_retry(payload, attempt + 1)
+
+        t = threading.Timer(0, _retry)
+        t.daemon = True
+        t.start()
 
     def close(self) -> None:
-        """Cierra el cliente HTTP. Llamado al remover el sink."""
+        """Señaliza shutdown e interrumpe reintentos pendientes. Cierra el cliente HTTP."""
+        self._shutdown.set()
         self._client.close()
 
 
@@ -154,6 +165,7 @@ class PrometheusLogSink:
 
     Incrementa ``ocm_log_events_total{level, service}`` en cada log.
     Permite alertas en Grafana: e.g. tasa de ERROR > umbral → alerta.
+    Fail-soft: excepciones se descartan silenciosamente.
 
     Args:
         service: Valor del label ``service`` (default "orangecashmachine").

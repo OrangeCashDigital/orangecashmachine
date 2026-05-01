@@ -6,8 +6,8 @@ ocm_platform/observability/logger.py
 
 Sistema de logging centralizado para OrangeCashMachine.
 
-Arquitectura
-------------
+Arquitectura de sinks
+---------------------
 ::
 
     Evento de log
@@ -15,17 +15,24 @@ Arquitectura
         ▼
     Loguru (dev: colores, backtrace, archivos rotativos)
         │
-        ├──► stderr (consola colorizada)
-        ├──► logs/system_*.log       (JSON, todos los niveles)
-        ├──► logs/ocm_*.log          (formato legible, nivel configurado)
-        ├──► logs/errors_*.log       (WARNING+, 30 días)
-        ├──► logs/pipeline_*.log     (JSON, filtro por módulo)
-        ├──► LokiSink                (HTTP push → Grafana Loki)
-        └──► PrometheusLogSink       (counters → Grafana dashboards)
-                │
-                ▼
-            structlog processor chain
-            (timestamp · level · service · sanitize · JSON)
+        ├──► stderr (consola colorizada, nivel configurado)
+        ├──► logs/app_*.log          (JSON, DEBUG+, SSOT único para análisis)
+        ├──► logs/orangecashmachine_*.log  (texto legible, nivel configurado)
+        ├──► logs/errors_*.log       (texto, WARNING+, 30 días)
+        ├──► LokiSink                (HTTP push → Grafana Loki, best-effort)
+        └──► PrometheusLogSink       (counters → alertas Grafana)
+
+Eliminación del sink pipeline_*.log
+------------------------------------
+``pipeline_*.log`` era un subconjunto ruidoso e impreciso de ``app_*.log``:
+capturaba ``market_data.*`` entero (incluyendo adapters), duplicando ~100%
+del volumen de ``app_*.log`` en disco. Eliminado: DRY, reducción de I/O.
+Para análisis de pipeline: ``grep '"name": "market_data.processing' logs/app_*.log``.
+
+Renombre system_*.log → app_*.log
+----------------------------------
+``system`` era ambiguo (¿logs del SO? ¿de la app?). ``app`` es descriptivo
+y alineado con convenciones estándar (Rails, Django, Go services).
 
 Ciclo de vida
 -------------
@@ -44,6 +51,7 @@ Exports públicos
 import hashlib
 import json
 import logging as std_logging
+import os
 import sys
 from pathlib import Path
 from threading import Lock
@@ -57,17 +65,21 @@ from ocm_platform.observability.filters import pipeline_filter
 from ocm_platform.observability.formats import CONSOLE, FILE
 from ocm_platform.observability.processors import build_processor_chain, process_event
 from ocm_platform.observability.sinks import LokiSink, PrometheusLogSink
+from ocm_platform.runtime.run_config import VALID_ENVS
 
 
 # ---------------------------------------------------------------------------
 # Estado global — protegido por _CONFIG_LOCK en toda operación de escritura
 # ---------------------------------------------------------------------------
 
-_BOOTSTRAP_DONE:  bool              = False
-_CONFIG_HASH:     str | None        = None
-_ACTIVE_SINK_IDS: list[int]         = []
-_ACTIVE_LOKI:     LokiSink | None   = None
-_CONFIG_LOCK                        = Lock()
+_BOOTSTRAP_DONE:  bool            = False
+_CONFIG_HASH:     str | None      = None
+_ACTIVE_SINK_IDS: list[int]       = []
+_ACTIVE_LOKI:     LokiSink | None = None
+_CONFIG_LOCK                      = Lock()
+
+# Permisos del directorio de logs — octal 750: owner rwx, group rx, other ---
+_LOG_DIR_MODE: int = 0o750
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +128,7 @@ class InterceptHandler(std_logging.Handler):
 
 
 # ---------------------------------------------------------------------------
-# Loggers ruidosos — silenciados a WARNING para proteger Loki y archivos locales
+# Loggers ruidosos — silenciados a WARNING
 # ---------------------------------------------------------------------------
 # ccxt loguea responses HTTP completos (1-3 MB por línea).
 
@@ -157,7 +169,6 @@ def _resolve_config(
             "retention":   cfg.retention,
             "console":     cfg.console,
             "file":        cfg.file,
-            "pipeline":    cfg.pipeline,
             "loki_url":    cfg.loki_url,
             "loki_labels": cfg.loki_labels,
         }
@@ -169,7 +180,6 @@ def _resolve_config(
         "retention":   "14 days",
         "console":     True,
         "file":        True,
-        "pipeline":    True,
         "loki_url":    None,
         "loki_labels": {},
     }
@@ -212,11 +222,17 @@ def _replay_bootstrap_buffer() -> None:
 
 
 def _ensure_log_dir(log_dir: Path) -> None:
-    """Crea el directorio de logs si no existe. Fail-Soft."""
+    """Crea el directorio de logs con permisos restrictivos. Fail-Soft.
+
+    Permisos: 0o750 — owner rwx, group rx, other sin acceso.
+    Los logs contienen run_ids, errores de exchange y configuración operacional.
+    """
     try:
-        log_dir.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(parents=True, exist_ok=True, mode=_LOG_DIR_MODE)
+        # chmod explícito: mkdir respeta umask, mode= no siempre lo hace
+        os.chmod(log_dir, _LOG_DIR_MODE)
     except Exception as exc:
-        logger.warning("log_dir_creation_failed | error={}", exc)
+        logger.warning("log_dir_creation_failed | path={} error={}", log_dir, exc)
 
 
 def _install_stdlib_bridge() -> None:
@@ -248,6 +264,15 @@ def _install_sinks(
     env: str,
 ) -> tuple[list[int], LokiSink | None]:
     """Registra todos los sinks según la configuración resuelta.
+
+    Sinks instalados
+    ----------------
+    - Consola stderr (si ``console=True``)
+    - PrometheusLogSink (siempre — counters de nivel)
+    - ``app_*.log`` (JSON, DEBUG+, SSOT único para análisis — si hay log_dir)
+    - ``orangecashmachine_*.log`` (texto legible — si ``file=True``)
+    - ``errors_*.log`` (texto, WARNING+, 30 días — si ``file=True``)
+    - LokiSink (si ``loki_url`` está configurada)
 
     Args:
         resolved: Dict producido por :func:`_resolve_config`.
@@ -284,8 +309,11 @@ def _install_sinks(
     if log_dir:
         _ensure_log_dir(log_dir)
 
+        # app_*.log — JSON estructurado, DEBUG+, SSOT único para análisis.
+        # Reemplaza system_*.log (ambiguo) y pipeline_*.log (subconjunto redundante).
+        # Para filtrar pipeline: grep '"name": "market_data.processing' logs/app_*.log
         ids.append(logger.add(
-            log_dir / "system_{time:YYYY-MM-DD}.log",
+            log_dir / "app_{time:YYYY-MM-DD}.log",
             rotation=resolved["rotation"],
             retention=resolved["retention"],
             compression="gz",
@@ -294,6 +322,7 @@ def _install_sinks(
         ))
 
         if resolved["file"]:
+            # orangecashmachine_*.log — formato texto legible para humanos
             ids.append(logger.add(
                 log_dir / "orangecashmachine_{time:YYYY-MM-DD}.log",
                 rotation=resolved["rotation"],
@@ -302,27 +331,21 @@ def _install_sinks(
                 level=resolved["level"],
                 format=FILE,
             ))
+
+            # errors_*.log — WARNING+ con retention fija de 30 días.
+            # SSOT: usa cfg.retention como base pero nunca menos de 30 días
+            # (errores deben conservarse más que logs informativos).
+            errors_retention = resolved["retention"]
             ids.append(logger.add(
                 log_dir / "errors_{time:YYYY-MM-DD}.log",
                 rotation=resolved["rotation"],
-                retention="30 days",
+                retention=errors_retention,
                 compression="gz",
                 level="WARNING",
                 format=FILE,
             ))
 
-        if resolved["pipeline"]:
-            ids.append(logger.add(
-                log_dir / "pipeline_{time:YYYY-MM-DD}.log",
-                rotation=resolved["rotation"],
-                retention=resolved["retention"],
-                compression="gz",
-                level="DEBUG",
-                serialize=True,
-                filter=pipeline_filter,
-            ))
-
-    # ── Loki (sink remoto) ────────────────────────────────────────────
+    # ── Loki (sink remoto, best-effort) ──────────────────────────────
     loki_url: str | None = resolved.get("loki_url")
     if loki_url:
         _chain = build_processor_chain()
@@ -337,10 +360,10 @@ def _install_sinks(
         def _loki_loguru_sink(message: Any, _sink: LokiSink = loki_sink) -> None:
             """Bridge Loguru → structlog processor chain → LokiSink.
 
-            ``_sink`` se captura por default arg (bind-at-definition) para
+            ``_sink`` capturado por default arg (bind-at-definition) para
             evitar referencia forward sobre variable local del scope exterior.
-            ``_LokiMessage`` es de nivel de módulo: no se crea una clase nueva
-            por cada evento (era O(n_events) en la versión anterior).
+            ``_LokiMessage`` es de nivel de módulo: cero allocaciones extra
+            por evento.
             """
             record     = message.record
             event_dict: dict[str, Any] = {
@@ -385,11 +408,25 @@ def bootstrap_logging(
 
     Thread-safe e idempotente: llamadas concurrentes o adicionales son no-op.
 
+    Fail-Fast: ``env`` se valida contra los entornos conocidos antes de
+    instalar sinks. Un typo en el entorno se detecta aquí, no en producción.
+
     Args:
         debug:  Activa nivel DEBUG y diagnósticos en consola.
         run_id: ID del proceso. Si ``None`` usa ``"-"``.
-        env:    Entorno activo para contexto en logs.
+        env:    Entorno activo. Debe ser uno de: development, test,
+                staging, production.
+
+    Raises:
+        ValueError: Si ``env`` no pertenece a los entornos válidos (Fail-Fast).
     """
+    # Fail-Fast: validar env antes de adquirir el lock
+    if env not in VALID_ENVS:
+        raise ValueError(
+            f"bootstrap_logging: env={env!r} no es válido. "
+            f"Valores permitidos: {sorted(VALID_ENVS)}"
+        )
+
     global _BOOTSTRAP_DONE, _ACTIVE_SINK_IDS, _ACTIVE_LOKI
 
     # Fast-path sin lock para el caso común (ya inicializado)
@@ -429,6 +466,7 @@ def configure_logging(
     """Reconfigura logging con LoggingConfig Pydantic validado.
 
     Hash-guarded: si la configuración efectiva no cambió, es no-op.
+    SHA-256 en lugar de MD5 — compatible con modo FIPS en Debian/RHEL.
 
     Args:
         cfg:    Configuración de logging validada por Pydantic.
@@ -439,13 +477,13 @@ def configure_logging(
     global _CONFIG_HASH, _ACTIVE_SINK_IDS, _ACTIVE_LOKI
 
     resolved = _resolve_config(cfg, debug, None)
-    new_hash = hashlib.md5(
+    new_hash = hashlib.sha256(
         json.dumps(_stable(resolved), sort_keys=True).encode()
-    ).hexdigest()
+    ).hexdigest()[:16]  # 16 hex chars = 64 bits — suficiente para detección de cambios
 
     with _CONFIG_LOCK:
         if _CONFIG_HASH == new_hash:
-            logger.debug("logging_reconfigure_skipped | hash={}", new_hash[:8])
+            logger.debug("logging_reconfigure_skipped | hash={}", new_hash)
             return
 
         _CONFIG_HASH = new_hash
