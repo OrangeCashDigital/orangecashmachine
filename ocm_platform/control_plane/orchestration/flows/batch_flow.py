@@ -190,18 +190,37 @@ class ExchangeTasks(NamedTuple):
     """
     Listas de futures separadas por nodo del grafo de dependencias.
 
-    Nodos
-    -----
-    spot    : OHLCV spot — sin dependencias, siempre ejecuta
-    repair  : gap healing — dependencia PARTIAL_SUCCESS(spot)
-    futures : OHLCV swap/future + derivatives — sin dependencias, independiente de spot
+    Nodos activos
+    -------------
+    spot            : OHLCV spot — sin dependencias, siempre ejecuta
+    futures         : OHLCV swap/future + derivatives — independiente de spot
+    repair          : gap healing — PARTIAL_SUCCESS(spot)
+
+    Nodos OCP (listos para activar — stub [] hasta implementar task)
+    ----------------------------------------------------------------
+    backfill        : descarga histórica full — sin dependencias
+    reconciliation  : reconcilia Silver vs Bronze — PARTIAL_SUCCESS(spot)
+    validation      : valida integridad post-ingestion — PARTIAL_SUCCESS(spot|futures)
+    feature_eng     : computa features desde Silver — PARTIAL_SUCCESS(spot)
+
+    Principio OCP
+    -------------
+    Añadir nodo N:
+      1. Campo nuevo aquí (List[asyncio.Future], default=[])
+      2. _launch_pipelines_for_exchange: popula el campo si el task existe
+      3. market_data_flow: _run_stage("N", tasks.N, log) + .merge()
+    Cero cambios en _StageResult, _run_stage, _consolidate_results.
 
     Ref: Etikyala (2023), Kumar (2025) — dependency-satisfaction execution model
     """
 
-    spot:    List[asyncio.Future]  # nodo 1: spot (independiente)
-    repair:  List[asyncio.Future]  # nodo 3: repair (dep: PARTIAL_SUCCESS spot)
-    futures: List[asyncio.Future]  # nodo 2: futures + derivatives (independiente)
+    spot:           List[asyncio.Future]  # nodo 1: spot (independiente)
+    futures:        List[asyncio.Future]  # nodo 2: futures + derivatives (independiente)
+    repair:         List[asyncio.Future]  # nodo 3: PARTIAL_SUCCESS(spot)
+    backfill:       List[asyncio.Future]  # nodo 4: sin dependencias (stub [])
+    reconciliation: List[asyncio.Future]  # nodo 5: PARTIAL_SUCCESS(spot) (stub [])
+    validation:     List[asyncio.Future]  # nodo 6: PARTIAL_SUCCESS(spot|futures) (stub [])
+    feature_eng:    List[asyncio.Future]  # nodo 7: PARTIAL_SUCCESS(spot) (stub [])
 
 
 def _launch_pipelines_for_exchange(
@@ -215,7 +234,10 @@ def _launch_pipelines_for_exchange(
     exc_cfg = config.get_exchange(probe.exchange)
     if exc_cfg is None:
         log.warning("Exchange config not found | exchange=%s", probe.exchange)
-        return ExchangeTasks(spot=[], repair=[], futures=[])
+        return ExchangeTasks(
+            spot=[], futures=[], repair=[],
+            backfill=[], reconciliation=[], validation=[], feature_eng=[],
+        )
 
     active, skipped = _filter_active_datasets(requested, probe)
     if skipped:
@@ -226,7 +248,10 @@ def _launch_pipelines_for_exchange(
         )
     if not active:
         log.warning("No active datasets for exchange | exchange=%s", probe.exchange)
-        return ExchangeTasks(spot=[], repair=[], futures=[])
+        return ExchangeTasks(
+            spot=[], futures=[], repair=[],
+            backfill=[], reconciliation=[], validation=[], feature_eng=[],
+        )
 
     log.info(
         "Launching pipelines | exchange=%s datasets=%s", probe.exchange, sorted(active)
@@ -250,7 +275,15 @@ def _launch_pipelines_for_exchange(
         *_launch_futures_pipelines(config, exc_cfg, probe, active, log),
         *_launch_derivative_pipelines(config, exc_cfg, probe, active, log),
     ]
-    return ExchangeTasks(spot=spot_tasks, repair=repair_tasks, futures=futures_tasks)
+    return ExchangeTasks(
+        spot           = spot_tasks,
+        futures        = futures_tasks,
+        repair         = repair_tasks,
+        backfill       = [],   # stub — activar cuando BackfillTask exista
+        reconciliation = [],   # stub — activar cuando ReconciliationTask exista
+        validation     = [],   # stub — activar cuando ValidationTask exista
+        feature_eng    = [],   # stub — activar cuando FeatureEngTask exista
+    )
 
 
 async def _validate_exchanges(
@@ -298,28 +331,65 @@ class _StageResult:
 
     Principios
     ----------
-    SRP  — encapsula estado (ok/failed) sin mezclar lógica de orchestration
-    OCP  — añadir nodo N = crear otro _StageResult, sin tocar lógica central
-    DIP  — el grafo depende de esta abstracción, no de ints primitivos
+    SRP  — encapsula estado (ok/failed/executed) sin mezclar lógica de orchestration.
+    OCP  — añadir nodo N = crear otro _StageResult, sin tocar lógica central.
+    DIP  — el grafo depende de esta abstracción, no de ints primitivos.
 
-    Semántica
-    ---------
-    has_success() — True si al menos un pipeline del nodo completó OK.
-                    Usado por repair para evaluar dependencia PARTIAL_SUCCESS
-                    sin acceder a ints directamente (encapsulación real).
+    Semántica de `executed`
+    -----------------------
+    False → nodo NO lanzado (futures vacío — ningún par configurado para este stage).
+    True  → nodo lanzado, independientemente del ratio ok/failed.
+
+    Distinguir "no ejecutado" de "ejecutado con cero resultados" es crítico para:
+      - métricas (no contaminar dashboards con nodos vacíos como "all_failed")
+      - logs (SKIPPED vs ALL_FAILED comunican causas distintas)
+      - dependencias entre nodos (repair solo depende de executed + has_success)
+
+    Métodos públicos
+    ----------------
+    has_success() — True si el nodo fue lanzado y al menos 1 pipeline completó OK.
+                    Semántica PARTIAL_SUCCESS: repair corre aunque haya fallos
+                    siempre que haya algún éxito.
+    status        — str canónico para logs/métricas (SSOT — un único punto de verdad).
     merge()       — acumulación SSOT: un único punto de suma al final del grafo.
                     OCP: añadir nodo = añadir .merge() a la cadena.
     """
-    ok:     int = 0
-    failed: int = 0
+    ok:       int  = 0
+    failed:   int  = 0
+    executed: bool = False   # False = nodo no lanzado (futures vacío)
 
     def has_success(self) -> bool:
-        """True si al menos un pipeline del nodo completó sin error."""
-        return self.ok > 0
+        """True si el nodo fue lanzado y al menos 1 pipeline completó sin error."""
+        return self.executed and self.ok > 0
+
+    @property
+    def status(self) -> str:
+        """Estado canónico del nodo — SSOT para logs y métricas.
+
+        SKIPPED    — nodo no lanzado (sin pares configurados para este stage).
+        ALL_OK     — todos los pipelines del nodo completaron sin error.
+        PARTIAL    — mezcla de éxitos y fallos (Fail-Soft: el flow continúa).
+        ALL_FAILED — todos los pipelines fallaron (candidato a Fail-Fast).
+        """
+        if not self.executed:
+            return "SKIPPED"
+        if self.failed == 0:
+            return "ALL_OK"
+        if self.ok > 0:
+            return "PARTIAL"
+        return "ALL_FAILED"
 
     def merge(self, other: "_StageResult") -> "_StageResult":
-        """Suma dos resultados de nodo — SSOT de agregación."""
-        return _StageResult(ok=self.ok + other.ok, failed=self.failed + other.failed)
+        """Suma dos resultados de nodo — SSOT de agregación.
+
+        executed se propaga con OR: si cualquiera de los dos nodos fue lanzado,
+        el resultado agregado refleja que hubo actividad real.
+        """
+        return _StageResult(
+            ok       = self.ok     + other.ok,
+            failed   = self.failed + other.failed,
+            executed = self.executed or other.executed,
+        )
 
 
 async def _run_stage(
@@ -342,10 +412,13 @@ async def _run_stage(
     _StageResult con ok/failed del nodo. Si futures está vacío, (0, 0).
     """
     if not futures:
-        return _StageResult()
-    log.info("Graph node: %s | tasks=%s", name, len(futures))
+        # executed=False (default) — nodo no lanzado, distinto de "lanzado sin resultados"
+        return _StageResult(executed=False)
+    log.info("Graph node: %s | tasks=%s | status=launching", name, len(futures))
     ok, failed = await _consolidate_results(futures, log)
-    return _StageResult(ok=ok, failed=failed)
+    result = _StageResult(ok=ok, failed=failed, executed=True)
+    log.info("Graph node: %s | status=%s | ok=%s | failed=%s", name, result.status, ok, failed)
+    return result
 
 
 _PIPELINE_SEMAPHORE = asyncio.Semaphore(4)
@@ -503,19 +576,29 @@ async def market_data_flow(
 
     # SSoT: _launch_pipelines_for_exchange centraliza filtrado, validación de
     # capabilities y separación de stages. El flow solo acumula y ejecuta.
-    spot_futures:    List[asyncio.Future] = []
-    repair_futures:  List[asyncio.Future] = []
-    futures_futures: List[asyncio.Future] = []
+    spot_futures:           List[asyncio.Future] = []
+    futures_futures:        List[asyncio.Future] = []
+    repair_futures:         List[asyncio.Future] = []
+    backfill_futures:       List[asyncio.Future] = []
+    reconciliation_futures: List[asyncio.Future] = []
+    validation_futures:     List[asyncio.Future] = []
+    feature_eng_futures:    List[asyncio.Future] = []
 
     for probe in probes:
         tasks = _launch_pipelines_for_exchange(config, probe, requested, log)
         spot_futures.extend(tasks.spot)
-        repair_futures.extend(tasks.repair)
         futures_futures.extend(tasks.futures)
+        repair_futures.extend(tasks.repair)
+        backfill_futures.extend(tasks.backfill)
+        reconciliation_futures.extend(tasks.reconciliation)
+        validation_futures.extend(tasks.validation)
+        feature_eng_futures.extend(tasks.feature_eng)
 
-    # Total para el summary — incluye los 3 nodos del grafo
+    # Total para el summary — incluye todos los nodos del grafo
     pipeline_futures: List[asyncio.Future] = (
-        spot_futures + repair_futures + futures_futures
+        spot_futures + futures_futures + repair_futures
+        + backfill_futures + reconciliation_futures
+        + validation_futures + feature_eng_futures
     )
 
     if not pipeline_futures:
@@ -530,14 +613,14 @@ async def market_data_flow(
         #
         #   spot    ──────────────────────────────────────────► (siempre)
         #   futures ──────────────────────────────────────────► (siempre, independiente)
-        #   repair  ── depende de spot con PARTIAL_SUCCESS ───► (si ok_spot > 0)
+        #   repair  ── depende de spot con PARTIAL_SUCCESS ───► (si spot_result.has_success() > 0)
         #
         # spot y futures son semánticamente independientes: usan APIs distintas
         # (spot vs swap), storage separado y cursores independientes.
         # Un fallo de spot NO debe bloquear futures.
         #
         # repair tiene dependencia semántica real: opera sobre datos escritos
-        # por spot. Si spot falló completamente (ok_spot == 0), no hay datos
+        # por spot. Si spot falló completamente (spot_result.has_success() == 0), no hay datos
         # que reparar — skip seguro y explícito.
         #
         # Ref: Etikyala (2023) — "dependencies satisfied, not previous stage complete"
@@ -569,10 +652,79 @@ async def market_data_flow(
             else:
                 repair_result = await _run_stage("repair", repair_futures, log)
 
+        # ── Nodo 4: backfill — sin dependencias (paralelo a spot/futures) ────
+        # Descarga histórica completa de gaps largos.
+        # Independiente de spot: usa cursores propios, storage propio.
+        # Stub []: activa sin tocar nodos existentes cuando BackfillTask exista.
+        backfill_result = await _run_stage("backfill", backfill_futures, log)
+
+        # ── Nodo 5: reconciliation — PARTIAL_SUCCESS(spot) ───────────────────
+        # Reconcilia Silver vs Bronze: detecta registros huérfanos.
+        # Dependencia semántica: necesita datos escritos por spot.
+        # Stub []: activa sin tocar nodos existentes cuando ReconciliationTask exista.
+        reconciliation_result = _StageResult()
+        if reconciliation_futures:
+            if not spot_result.has_success() and spot_futures:
+                log.warning(
+                    "Graph node: reconciliation skipped"
+                    " — spot failed completely, no data to reconcile"
+                    " | spot_ok=%s spot_failed=%s",
+                    spot_result.ok,
+                    spot_result.failed,
+                )
+            else:
+                reconciliation_result = await _run_stage(
+                    "reconciliation", reconciliation_futures, log
+                )
+
+        # ── Nodo 6: validation — PARTIAL_SUCCESS(spot OR futures) ───────────
+        # Valida integridad de Silver post-ingestion (schema, gaps, freshness).
+        # Depende de que haya escrito algo — spot o futures.
+        # Stub []: activa sin tocar nodos existentes cuando ValidationTask exista.
+        validation_result = _StageResult()
+        any_data_written = spot_result.has_success() or futures_result.has_success()
+        if validation_futures:
+            if not any_data_written:
+                log.warning(
+                    "Graph node: validation skipped"
+                    " — no data written by spot or futures"
+                )
+            else:
+                validation_result = await _run_stage(
+                    "validation", validation_futures, log
+                )
+
+        # ── Nodo 7: feature_eng — PARTIAL_SUCCESS(spot) ─────────────────────
+        # Computa features desde Silver (EMA, RSI, vol) hacia feature store.
+        # Dependencia semántica: necesita Silver escrito por spot.
+        # Stub []: activa sin tocar nodos existentes cuando FeatureEngTask exista.
+        feature_eng_result = _StageResult()
+        if feature_eng_futures:
+            if not spot_result.has_success() and spot_futures:
+                log.warning(
+                    "Graph node: feature_eng skipped"
+                    " — spot failed completely, no features to compute"
+                    " | spot_ok=%s spot_failed=%s",
+                    spot_result.ok,
+                    spot_result.failed,
+                )
+            else:
+                feature_eng_result = await _run_stage(
+                    "feature_eng", feature_eng_futures, log
+                )
+
         # ── Agregación final — SSOT + OCP ────────────────────────────────────
-        # OCP: añadir nodo N = crear otro _StageResult + añadirlo a la cadena.
+        # OCP: añadir nodo N = _StageResult() + _run_stage() + .merge()
         # SSOT: un único punto de suma — sin acumuladores dispersos.
-        final_result = spot_result.merge(futures_result).merge(repair_result)
+        final_result = (
+            spot_result
+            .merge(futures_result)
+            .merge(repair_result)
+            .merge(backfill_result)
+            .merge(reconciliation_result)
+            .merge(validation_result)
+            .merge(feature_eng_result)
+        )
         ok     = final_result.ok
         failed = final_result.failed
 
