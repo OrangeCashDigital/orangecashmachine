@@ -60,7 +60,13 @@ def make_repair_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
             f"Depende de bronze_ohlcv_{exchange_name}_{market_type} "
             f"(semántica PARTIAL_SUCCESS)."
         ),
-        tags        = {"dagster/concurrency_key": "exchange_repair"},
+        tags        = {
+            # SSOT: key debe coincidir exactamente con pools.repair_gaps
+            # en dagster.yaml. run_limit=1 — repair es secuencial por diseño.
+            "dagster/concurrency_key": "repair_gaps",
+            "exchange":               exchange_name,
+            "market_type":            market_type,
+        },
         metadata    = {
             "exchange":    exchange_name,
             "market_type": market_type,

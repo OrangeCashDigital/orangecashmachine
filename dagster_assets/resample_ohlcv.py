@@ -38,6 +38,13 @@ def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
             "layer":       "silver",
             "source_tf":   "1m",
         },
+        tags        = {
+            # SSOT: key debe coincidir con pools.silver_resample en dagster.yaml.
+            # CPU-bound local — run_limit=4 permite más paralelismo que bronze.
+            "dagster/concurrency_key": "silver_resample",
+            "exchange":               exchange_name,
+            "market_type":            market_type,
+        },
     )
     def _resample_asset(
         context,

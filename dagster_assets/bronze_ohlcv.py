@@ -72,7 +72,13 @@ def make_bronze_ohlcv_asset(exchange_name: str, market_type: str):
         ),
         # Concurrencia declarativa — reemplaza _PIPELINE_SEMAPHORE manual.
         # Dagster limita cuántos de estos assets corren simultáneamente.
-        tags        = {"dagster/concurrency_key": "exchange_ingestion"},
+        tags        = {
+            # SSOT: key debe coincidir exactamente con pools.bronze_ingestion
+            # en dagster.yaml — de lo contrario el pool no tiene efecto.
+            "dagster/concurrency_key": "bronze_ingestion",
+            "exchange":               exchange_name,
+            "market_type":            market_type,
+        },
         metadata    = {
             "exchange":    exchange_name,
             "market_type": market_type,
