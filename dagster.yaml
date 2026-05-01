@@ -1,0 +1,18 @@
+# dagster.yaml
+# =============
+# Configuración de Dagster para OrangeCashMachine.
+#
+# concurrency.default_op_concurrency_limit reemplaza _PIPELINE_SEMAPHORE
+# del batch_flow — mismo valor (4), ahora declarativo y configurable.
+#
+# SSOT: este archivo es la única fuente de verdad para límites de
+# concurrencia en Dagster. No hay semáforos manuales.
+
+concurrency:
+  default_op_concurrency_limit: 4
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 2
