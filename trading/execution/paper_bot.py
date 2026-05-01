@@ -31,7 +31,7 @@ from typing import Optional
 
 from loguru import logger
 
-from ocm_platform.boundaries import FeatureSource, SignalProtocol
+from domain.boundaries import FeatureSource, SignalProtocol
 from trading.engine import TradingEngine
 from trading.execution.order import Order
 from trading.risk.models import RiskConfig

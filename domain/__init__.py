@@ -15,3 +15,22 @@ Submódulos
   entities/       — tipos con identidad y ciclo de vida
   events/         — domain events publicados entre bounded contexts
 """
+
+# =============================================================================
+# Boundary contracts — cross-BC protocols (DIP · OCP · SSOT)
+# =============================================================================
+from domain.boundaries import (
+    FeatureSource,
+    SignalProtocol,
+    FillHandler,
+    TradeHistory,
+    RiskGate,
+)
+
+__all__ = [
+    "FeatureSource",
+    "SignalProtocol",
+    "FillHandler",
+    "TradeHistory",
+    "RiskGate",
+]
