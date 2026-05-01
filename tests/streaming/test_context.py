@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 from market_data.streaming.context import StreamingContext
-from market_data.streaming.consumer import PrefectTriggerHandler
+from market_data.streaming.consumer import DispatchHandler
 from market_data.streaming.payloads import (
     EventPayload, OHLCVBar,
     SchemaVersionError,
@@ -110,14 +110,14 @@ class TestStreamingContext:
 
 
 # --------------------------------------------------
-# PrefectTriggerHandler con StreamingContext
+# DispatchHandler con StreamingContext
 # --------------------------------------------------
 
-class TestPrefectTriggerHandlerWithContext:
+class TestDispatchHandlerWithContext:
 
     def test_handle_with_context_returns_true(self):
         ctx     = _make_ctx()
-        handler = PrefectTriggerHandler(context=ctx)
+        handler = DispatchHandler(context=ctx)
         assert handler.handle(_make_event()) is True
 
     def test_deployment_taken_from_context(self):
@@ -132,20 +132,20 @@ class TestPrefectTriggerHandlerWithContext:
         assert handler._deployment == "my_flow/prod"
 
     def test_no_context_uses_deployment_name(self):
-        handler = PrefectTriggerHandler(deployment_name="explicit/deploy")
+        handler = DispatchHandler(run_name="explicit/deploy")
         assert handler._deployment == "explicit/deploy"
 
     def test_invalid_context_type_raises(self):
         with pytest.raises(TypeError):
-            PrefectTriggerHandler(context="not-a-context")  # type: ignore
+            DispatchHandler(context="not-a-context")  # type: ignore
 
     def test_backward_compat_no_context(self):
         """Fase 1 tests: handler sin contexto sigue funcionando."""
-        handler = PrefectTriggerHandler()
+        handler = DispatchHandler()
         assert handler.handle(_make_event()) is True
 
     def test_handle_never_raises_with_context(self):
         ctx     = _make_ctx()
-        handler = PrefectTriggerHandler(context=ctx)
+        handler = DispatchHandler(context=ctx)
         handler._dispatch = lambda e: (_ for _ in ()).throw(RuntimeError("boom"))
         assert handler.handle(_make_event()) is False

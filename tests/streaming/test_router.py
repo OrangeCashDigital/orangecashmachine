@@ -2,7 +2,7 @@
 tests/streaming/test_router.py
 ================================
 
-Tests unitarios de EventRouter y PrefectTriggerHandler.
+Tests unitarios de EventRouter y DispatchHandler.
 
 Sin dependencias externas — no necesita Redis, Prefect ni config.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from market_data.streaming.payloads import EventPayload, OHLCVBar
-from market_data.streaming.consumer import PrefectTriggerHandler, EventHandler
+from market_data.streaming.consumer import DispatchHandler, EventHandler
 from market_data.streaming.router import EventRouter
 
 
@@ -41,25 +41,25 @@ def _make_event(event_id: str = "evt-001") -> EventPayload:
 
 
 # --------------------------------------------------
-# PrefectTriggerHandler
+# DispatchHandler
 # --------------------------------------------------
 
-class TestPrefectTriggerHandler:
+class TestDispatchHandler:
     def test_handle_returns_true_on_valid_event(self):
-        handler = PrefectTriggerHandler()
+        handler = DispatchHandler()
         result = handler.handle(_make_event())
         assert result is True
 
     def test_handle_never_raises(self):
         """SafeOps: handle() nunca lanza aunque _dispatch falle."""
-        handler = PrefectTriggerHandler()
+        handler = DispatchHandler()
         # Forzar fallo en dispatch
         handler._dispatch = lambda e: (_ for _ in ()).throw(RuntimeError("simulated"))
         result = handler.handle(_make_event())
         assert result is False
 
     def test_implements_event_handler_protocol(self):
-        handler = PrefectTriggerHandler()
+        handler = DispatchHandler()
         assert isinstance(handler, EventHandler)
 
 
@@ -112,7 +112,7 @@ class TestEventRouter:
         assert router.route({"malformed": True}) is False
 
     def test_route_with_prefect_handler(self):
-        router = EventRouter(handlers=[PrefectTriggerHandler()])
+        router = EventRouter(handlers=[DispatchHandler()])
         assert router.route(_make_event()) is True
 
     def test_multiple_handlers_fanout(self):
