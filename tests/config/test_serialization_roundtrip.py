@@ -81,8 +81,9 @@ def serialized(runtime_context: RuntimeContext) -> dict:
 class TestJsonSafety:
     """El dict producido por to_dict() debe ser serializable con json.dumps.
 
-    Prefect usa orjson internamente, pero json.dumps estándar es el mínimo
-    garantizable sin dependencia de orjson en el entorno de test.
+    Dagster serializa RuntimeContext como JSON al construir OCMResource.
+    json.dumps estándar es el mínimo garantizable en CI sin dependencias
+    de orjson u otros serializadores custom.
     """
 
     def test_to_dict_is_json_serializable(self, serialized: dict) -> None:

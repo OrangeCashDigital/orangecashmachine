@@ -16,8 +16,7 @@ Historial
 ---------
 v0.1–0.2 : stub nombrado PrefectTriggerHandler (orquestador: Prefect).
 v0.3+    : renombrado a DispatchHandler. Prefect eliminado como dependencia.
-           PrefectTriggerHandler se mantiene como alias para compatibilidad
-           de tests — marcado deprecated, se eliminará en v0.4.
+           PrefectTriggerHandler eliminado en v0.4 — usar DispatchHandler.
 
 Contrato
 --------
@@ -171,36 +170,3 @@ class DispatchHandler:
         return True
 
 
-# ---------------------------------------------------------------------------
-# Alias de compatibilidad — deprecated desde v0.3
-# ---------------------------------------------------------------------------
-# PrefectTriggerHandler se mantiene para no romper imports existentes
-# en tests y código legacy. Se eliminará en v0.4.
-#
-# MIGRATION: reemplazar todas las ocurrencias de:
-#   PrefectTriggerHandler()  →  DispatchHandler()
-#   PrefectTriggerHandler(context=ctx)  →  DispatchHandler(context=ctx)
-#   PrefectTriggerHandler(deployment_name=x)  →  DispatchHandler(run_name=x)
-
-import warnings as _warnings
-
-
-class PrefectTriggerHandler(DispatchHandler):
-    """Alias deprecated de DispatchHandler. Eliminar en v0.4.
-
-    Usar DispatchHandler directamente.
-    """
-
-    def __init__(
-        self,
-        deployment_name: str = DispatchHandler._DEFAULT_RUN_NAME,
-        context: Optional["StreamingContext"] = None,  # type: ignore[name-defined]  # noqa: F821
-    ) -> None:
-        _warnings.warn(
-            "PrefectTriggerHandler está deprecated desde v0.3. "
-            "Usar DispatchHandler(run_name=..., context=...) en su lugar. "
-            "Se eliminará en v0.4.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(run_name=deployment_name, context=context)

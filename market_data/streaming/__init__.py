@@ -16,9 +16,6 @@ Exports públicos
   StreamPublisher  — producer-side: EventPayload → Redis Stream
   StreamSource     — consumer-side: Redis Stream → EventRouter → ACK
 
-Deprecated (eliminar en v0.4)
-------------------------------
-  PrefectTriggerHandler — alias de DispatchHandler, naming legacy Prefect
 
 Uso completo
 ------------
@@ -39,7 +36,7 @@ Principios: SRP · DIP · OCP
 
 from market_data.streaming.payloads  import EventPayload, OHLCVBar
 from market_data.streaming.context   import StreamingContext
-from market_data.streaming.consumer  import EventHandler, DispatchHandler, PrefectTriggerHandler
+from market_data.streaming.consumer  import EventHandler, DispatchHandler
 from market_data.streaming.router    import EventRouter
 from market_data.streaming.publisher import StreamPublisher
 from market_data.streaming.source    import StreamSource
@@ -54,6 +51,4 @@ __all__ = [
     "EventRouter",
     "StreamPublisher",
     "StreamSource",
-    # Deprecated — eliminar en v0.4
-    "PrefectTriggerHandler",
 ]
