@@ -213,7 +213,7 @@ class PairResult:
     @property
     def success(self) -> bool:
         """True si el par se procesó sin error y sin skip."""
-        return not self.error and not self.skipped
+        return self.error is None and not self.skipped
 
     @property
     def is_transient_error(self) -> bool:
