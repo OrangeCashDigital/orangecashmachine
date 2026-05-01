@@ -44,6 +44,27 @@ _MAX_HEALABLE_GAP_CANDLES: int = 43_200
 _GAP_CONCURRENCY: int = 4
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Módulo-level constants — SSOT para umbrales y límites de _heal_gap
+# ══════════════════════════════════════════════════════════════════════════
+# Umbral de cobertura para considerar un gap "completamente sanado".
+# < threshold → PARTIAL heal (métricas y logs lo distinguen).
+# SSOT: este valor se usa en _heal_gap (heal_type) y en execute_pair (fill_ratio check).
+_FULL_HEAL_THRESHOLD: float = 0.95
+
+# Tamaño de chunk por llamada al exchange.
+# Separado de _LARGE_GAP_LOG_THRESHOLD — misma magnitud, semántica distinta.
+_FETCH_CHUNK_SIZE: int = 1_000
+
+# Techo de seguridad: máximo de chunks paginados por gap.
+# 200 chunks × 1000 velas = 200k velas máximo por gap — suficiente para ~8 meses en 1m.
+# Extraído del método para ser accesible en tests de paginación.
+_MAX_GAP_CHUNKS: int = 200
+
+# Gap con más de este número de velas esperadas dispara log.info de diagnóstico.
+# Distinto de _FETCH_CHUNK_SIZE: es un umbral de observabilidad, no de protocolo.
+_LARGE_GAP_LOG_THRESHOLD: int = 1_000
+
 class RepairStrategy(StrategyMixin):
     _mode = PipelineMode.REPAIR
 
