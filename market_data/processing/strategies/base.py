@@ -202,7 +202,7 @@ class PairResult:
     exchange_id:  str  = ""
     rows:         int  = 0
     skipped:      bool = False
-    error:        str  = ""
+    error:        str | None = None
     error_type:   str  = ""
     duration_ms:  int  = 0
     gaps_found:   int  = 0
