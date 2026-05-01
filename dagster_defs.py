@@ -10,7 +10,7 @@ SSOT de definiciones — Definitions es el único lugar donde se ensamblan:
 
 Uso
 ---
-  # Iniciar Dagster UI (equivalente a Prefect Server):
+  # Iniciar Dagster UI:
   uv run dagster dev -f dagster_defs.py
 
   # Materializar todos los assets manualmente:
@@ -21,25 +21,36 @@ Uso
 
 Concurrencia
 ------------
-Los tags dagster/concurrency_key limitan ejecuciones paralelas.
-Configurar en dagster.yaml (ver abajo en DAGSTER_YAML_TEMPLATE).
+Configurada declarativamente en dagster.yaml — SSOT de límites.
+Los tags dagster/concurrency_key en cada asset activan los pools.
+  bronze_ingestion → pools.bronze_ingestion (run_limit=2)
+  silver_resample  → pools.silver_resample  (run_limit=4)
+  repair_gaps      → pools.repair_gaps      (run_limit=1)
 
-Principios: SSOT · OCP · DIP · KISS
+Entorno
+-------
+OCMResource lee OCM_ENV del entorno. No hay hardcoding de env aquí.
+Fail-Fast: si OCM_ENV no está definido o es inválido, el resource
+falla en setup_for_execution() antes de materializar cualquier asset.
+
+Principios: SSOT · OCP · DIP · KISS · Fail-Fast
 """
 from __future__ import annotations
 
+import os
+
 from dagster import (
+    AssetSelection,
     Definitions,
     ScheduleDefinition,
     define_asset_job,
-    AssetSelection,
 )
 
-from dagster_assets.resources import OCMResource
 from dagster_assets.bronze_ohlcv import BRONZE_OHLCV_ASSETS
 from dagster_assets.repair_ohlcv import REPAIR_OHLCV_ASSETS
 from dagster_assets.resample_ohlcv import RESAMPLE_OHLCV_ASSETS
 from dagster_assets.asset_checks import ALL_ASSET_CHECKS
+from dagster_assets.resources import OCMResource
 
 # ==============================================================================
 # Jobs — agrupan assets para ejecución coordinada
@@ -47,50 +58,54 @@ from dagster_assets.asset_checks import ALL_ASSET_CHECKS
 
 # Job principal: ingesta completa bronze → repair → resample
 ingestion_job = define_asset_job(
-    name      = "ocm_ingestion_job",
-    selection = AssetSelection.groups("bronze", "silver"),
+    name        = "ocm_ingestion_job",
+    selection   = AssetSelection.groups("bronze", "silver"),
     description = (
         "Job completo de ingesta OCM: "
         "bronze (exchange) → repair (gaps) → silver (resample)."
     ),
 )
 
-# Job solo bronze — útil para smoke-test o diagnóstico
+# Job solo bronze — útil para smoke-test o diagnóstico rápido
 bronze_only_job = define_asset_job(
-    name      = "ocm_bronze_only_job",
-    selection = AssetSelection.groups("bronze"),
+    name        = "ocm_bronze_only_job",
+    selection   = AssetSelection.groups("bronze"),
     description = "Solo ingesta desde exchanges — sin repair ni resample.",
 )
 
 # ==============================================================================
-# Schedules — equivalente al schedule de Prefect (cada minuto)
+# Schedules
 # ==============================================================================
-
-# NOTA: Prefect corría market_data_flow cada 60s.
+#
 # Dagster no está diseñado para schedules sub-minuto.
-# Recomendación: 1m para bronze (incremental), 5m para repair.
-# Ajustar según el exchange rate-limit real.
+# bronze_schedule corre cada minuto como el schedule original de Prefect.
+# ingestion_schedule corre cada 5 minutos (pipeline completo).
+# Ajustar cron_schedule según rate-limits reales del exchange.
 
 bronze_schedule = ScheduleDefinition(
-    name             = "ocm_bronze_1min",
-    job              = bronze_only_job,
-    cron_schedule    = "* * * * *",   # cada minuto — igual que Prefect
-    description      = "Ingesta incremental OHLCV desde exchanges cada minuto.",
+    name          = "ocm_bronze_1min",
+    job           = bronze_only_job,
+    cron_schedule = "* * * * *",
+    description   = "Ingesta incremental OHLCV desde exchanges cada minuto.",
 )
 
 ingestion_schedule = ScheduleDefinition(
-    name             = "ocm_ingestion_5min",
-    job              = ingestion_job,
-    cron_schedule    = "*/5 * * * *",  # cada 5 minutos — bronze + repair + resample
-    description      = "Pipeline completo OCM cada 5 minutos.",
+    name          = "ocm_ingestion_5min",
+    job           = ingestion_job,
+    cron_schedule = "*/5 * * * *",
+    description   = "Pipeline completo OCM cada 5 minutos.",
 )
 
 # ==============================================================================
 # Definitions root — SSOT
 # ==============================================================================
+#
+# OCMResource.env vacío → delega a RunConfig.from_env() → lee OCM_ENV.
+# SSOT: el entorno activo es siempre OCM_ENV, nunca hardcodeado aquí.
+# Fail-Fast: entorno inválido explota en setup_for_execution(), no mid-run.
 
 defs = Definitions(
-    assets   = [
+    assets = [
         *BRONZE_OHLCV_ASSETS,
         *REPAIR_OHLCV_ASSETS,
         *RESAMPLE_OHLCV_ASSETS,
@@ -98,30 +113,10 @@ defs = Definitions(
     resources = {
         # DIP: los assets no construyen AppConfig directamente.
         # OCMResource es el único punto de acceso al RuntimeContext.
-        "ocm": OCMResource(env="development"),
+        # env="" → lee OCM_ENV del entorno (SSOT, no hardcoding).
+        "ocm": OCMResource(env=os.environ.get("OCM_ENV", "")),
     },
     asset_checks = ALL_ASSET_CHECKS,
-    jobs      = [ingestion_job, bronze_only_job],
-    # Schedules ACTIVOS — Prefect schedule desactivado en parallel.
-    # SSOT: dagster_defs.py es la única fuente de schedules activos.
-    schedules = [bronze_schedule, ingestion_schedule],
+    jobs         = [ingestion_job, bronze_only_job],
+    schedules    = [bronze_schedule, ingestion_schedule],
 )
-
-
-# ==============================================================================
-# DAGSTER_YAML_TEMPLATE
-# ==============================================================================
-# Crear dagster.yaml en la raíz del proyecto con este contenido
-# para activar concurrencia declarativa (Fase 3).
-#
-# cat > dagster.yaml << 'YAML'
-# concurrency:
-#   default_op_concurrency_limit: 4   # reemplaza _PIPELINE_SEMAPHORE = asyncio.Semaphore(4)
-#
-# run_coordinator:
-#   module: dagster.core.run_coordinator
-#   class: QueuedRunCoordinator
-#   config:
-#     max_concurrent_runs: 2          # max runs paralelos del schedule
-#
-# YAML
