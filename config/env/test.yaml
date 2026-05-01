@@ -54,3 +54,10 @@ testing:
   limit_symbols: 1
   use_mock_data: true
   deterministic_mode: true
+
+# Habilitar bybit en test — load_appconfig_standalone filtra exchanges con
+# enabled: false. Sin al menos uno activo, validate_exchanges() lanza ValueError.
+# En producción los exchanges se controlan por exchanges/*.yaml + env override.
+exchanges:
+  bybit:
+    enabled: true
