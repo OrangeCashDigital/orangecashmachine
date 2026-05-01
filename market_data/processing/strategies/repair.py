@@ -418,13 +418,14 @@ class RepairStrategy(StrategyMixin):
                     exchange=ctx.exchange_id, error_type="transient"
                 ).inc()
             else:
+                _is_transient = classify_error(exc)
                 log.error("Gap heal: error inesperado",
                     error_type=type(exc).__name__,
                     error=str(exc),
-                    is_transient=classify_error(exc),
+                    is_transient=_is_transient,
                 )
                 PIPELINE_ERRORS.labels(
                     exchange=ctx.exchange_id,
-                    error_type="transient" if classify_error(exc) else "fatal",
+                    error_type="transient" if _is_transient else "fatal",
                 ).inc()
             return False, 0, 0.0
