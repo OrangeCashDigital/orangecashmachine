@@ -40,6 +40,8 @@ from dagster import (
 )
 
 from dagster_assets.resources import OCMResource
+from market_data.adapters.exchange import CCXTAdapter
+from market_data.processing.pipelines.ohlcv_pipeline import OHLCVPipeline
 
 
 # ==============================================================================
@@ -92,8 +94,6 @@ def make_bronze_ohlcv_asset(exchange_name: str, market_type: str):
         4. Ejecutar pipeline.run(mode="incremental").
         5. Retornar Output con metadata de linaje.
         """
-        from market_data.adapters.exchange import CCXTAdapter
-        from market_data.processing.pipelines.ohlcv_pipeline import OHLCVPipeline
 
         runtime_ctx = ocm.runtime_context
         app_cfg     = runtime_ctx.app_config
