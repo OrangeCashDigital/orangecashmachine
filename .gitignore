@@ -33,3 +33,6 @@ refactor.sh
 data_platform/local_data_lake/
 logs/
 infra/
+deploy.py.obsolete
+*.bak
+.prefectignore
