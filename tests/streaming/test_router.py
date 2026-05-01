@@ -111,7 +111,7 @@ class TestEventRouter:
         router = EventRouter(handlers=[_OKHandler()])
         assert router.route({"malformed": True}) is False
 
-    def test_route_with_prefect_handler(self):
+    def test_route_with_dispatch_handler(self):
         router = EventRouter(handlers=[DispatchHandler()])
         assert router.route(_make_event()) is True
 

@@ -16,13 +16,13 @@ Desacoplamiento
 El router NO importa PrefectTriggerHandler directamente.
 Los handlers se inyectan en el constructor — el caller decide
 qué handlers activar. Esto permite:
-  - tests sin Prefect
-  - múltiples handlers (Prefect + alertas + ML) sin cambiar el router
+  - tests sin dependencias externas
+  - múltiples handlers (Dagster + alertas + ML) sin cambiar el router
   - sustitución de handlers en Fase 3 sin tocar este módulo
 
 Contrato
 --------
-  router = EventRouter(handlers=[PrefectTriggerHandler()])
+  router = EventRouter(handlers=[DispatchHandler()])
   ok: bool = router.route(event)
 
 Principios: SRP · DI · OCP · SafeOps
@@ -50,9 +50,9 @@ class EventRouter:
     Uso
     ---
         from market_data.streaming.router import EventRouter
-        from market_data.streaming.consumer import PrefectTriggerHandler
+        from market_data.streaming.consumer import DispatchHandler
 
-        router = EventRouter(handlers=[PrefectTriggerHandler()])
+        router = EventRouter(handlers=[DispatchHandler()])
         ok = router.route(event_payload)
     """
 

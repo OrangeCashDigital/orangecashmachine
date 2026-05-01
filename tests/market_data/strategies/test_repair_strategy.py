@@ -829,7 +829,7 @@ class TestGapRange:
         assert gap.duration_ms == 4000
 
     def test_str_representation(self):
-   gap = GapRange(start_ms=0, end_ms=_TF_MS, expected=1)
+        gap = GapRange(start_ms=0, end_ms=_TF_MS, expected=1)
         s   = str(gap)
         assert "Gap[" in s
         assert "expected=1" in s

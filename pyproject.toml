@@ -144,7 +144,6 @@ type    = "forbidden"
 source_modules = [
     "market_data.ingestion",
     "market_data.processing",
-    "market_data.orchestration",
     "market_data.quality",
     "trading",
 ]

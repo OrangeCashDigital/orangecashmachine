@@ -125,15 +125,15 @@ class TestDispatchHandlerWithContext:
             env="production", run_id="x" * 12, pushgateway="gw:9091",
             deployment="my_flow/prod", created_at="2026-01-01T00:00:00+00:00",
         )
-        handler = PrefectTriggerHandler(
-            deployment_name="ignored/default",
+        handler = DispatchHandler(
+            run_name="ignored/default",
             context=ctx,
         )
-        assert handler._deployment == "my_flow/prod"
+        assert handler._run_name == "my_flow/prod"
 
     def test_no_context_uses_deployment_name(self):
         handler = DispatchHandler(run_name="explicit/deploy")
-        assert handler._deployment == "explicit/deploy"
+        assert handler._run_name == "explicit/deploy"
 
     def test_invalid_context_type_raises(self):
         with pytest.raises(TypeError):

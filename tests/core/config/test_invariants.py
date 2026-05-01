@@ -258,9 +258,6 @@ _INFRA_REGISTRY: dict[str, frozenset[str]] = {
         "REDIS_URL", "REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PASSWORD",
         "CURSOR_TTL_DAYS",
     }),
-    "prefect": frozenset({
-        "PREFECT_API_URL", "PREFECT_API_KEY",
-    }),
     "db": frozenset({
         "DATABASE_URL",
     }),
