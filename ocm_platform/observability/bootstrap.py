@@ -14,7 +14,7 @@ Thread-safety
 -------------
 ``_buffer`` y ``_active`` son estado global mutable. ``_lock`` protege
 todas las operaciones de escritura — ``pre_log()`` y ``drain()`` pueden
-llamarse desde hilos concurrentes durante el bootstrap de Prefect.
+llamarse desde hilos concurrentes durante el bootstrap del proceso.
 
 Ciclo de vida::
 

@@ -156,7 +156,7 @@ class RunConfig:
     def to_dict(self) -> dict[str, Any]:
         """Serializa a dict JSON-safe.
 
-        ``Path`` → ``str`` para sobrevivir round-trip JSON (Prefect workers).
+        ``Path`` → ``str`` para sobrevivir round-trip JSON (Dagster / OCMResource).
         ``None`` permanece ``None``.
         """
         d = asdict(self)

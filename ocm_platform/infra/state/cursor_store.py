@@ -421,7 +421,7 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
     Garantiza que el .env del proyecto esté cargado antes de leer las vars,
     de forma que REDIS_PASSWORD y demás credenciales estén siempre disponibles
     independientemente de si el proceso fue arrancado con las vars pre-exportadas
-    o no (p.ej. llamadas directas desde scripts, tests, Prefect workers).
+    o no (p.ej. llamadas directas desde scripts, tests, Dagster workers).
 
     El .env se carga con override=False para respetar vars ya exportadas en el
     entorno del proceso (ENV > .env — principio de menor sorpresa).

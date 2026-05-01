@@ -6,15 +6,16 @@ Contexto de proceso para ExecutionGuard.
 
 Problema que resuelve
 ---------------------
-Prefect no puede serializar ExecutionGuard como parámetro de @flow
-(contiene threading.Lock y threading.Event). El guard debe vivir en
-el proceso, no en la firma de Prefect.
+ExecutionGuard contiene threading.Lock y threading.Event: no es
+serializable a JSON y no puede pasarse como parámetro de un asset
+o job de Dagster. El guard debe vivir en el proceso, no en la firma
+del orquestador.
 
 Solución
 --------
 Un módulo con estado de proceso: el guard se registra antes de
 asyncio.run() y se consume desde cualquier coroutine en el mismo
-proceso sin pasar por la firma de Prefect.
+proceso sin pasar por el orquestador.
 
 Garantías
 ---------
@@ -28,7 +29,7 @@ Uso
     # entrypoint.py — antes de asyncio.run()
     guard_context.set_guard(guard)
 
-    # batch_flow.py — dentro del flow, sin parámetros Prefect
+    # pipeline — dentro del asset, sin pasar el guard por parámetro
     guard = guard_context.get_guard()
     if guard:
         guard.record_error("pipeline_failures")

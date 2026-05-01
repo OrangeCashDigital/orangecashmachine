@@ -14,9 +14,9 @@ produce mensajes de 10-50 KB con datos sensibles en tránsito.
 
 Para el path event-driven solo se necesita:
   - env           → qué entorno está activo
-  - run_id        → trazabilidad cruzada OCM ↔ Prefect
+  - run_id        → trazabilidad cruzada OCM ↔ Dagster
   - pushgateway   → dónde empujar métricas
-  - deployment    → qué deployment de Prefect disparar
+  - deployment    → qué job de Dagster disparar
 
 StreamingContext es serializable, inmutable y no contiene
 credenciales ni config pesada.
@@ -50,7 +50,7 @@ class StreamingContext:
     env             : Entorno activo (development | staging | production).
     run_id          : Identificador único del run OCM (trazabilidad).
     pushgateway     : host:port del Prometheus Pushgateway.
-    deployment      : Nombre del deployment Prefect a disparar.
+    deployment      : Nombre del job Dagster a disparar (ocm_bronze_only_job u otro).
     created_at      : Momento de construcción (UTC ISO 8601).
     context_version : Versión del schema de este contexto.
     """

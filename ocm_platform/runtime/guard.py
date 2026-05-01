@@ -20,7 +20,7 @@ eres cancelable.
 Primitiva: threading.Event
     - Thread-safe sin locks adicionales
     - Observable con .is_set() desde cualquier contexto (sync y async)
-    - Compatible con asyncio.run() + threads de Prefect
+    - Compatible con asyncio.run() + Dagster workers y threads
 
 Triggers de stop (en orden de prioridad)
 -----------------------------------------

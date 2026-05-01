@@ -20,7 +20,7 @@ Toda la lógica real vive en las capas correctas:
 Cuando usar PaperBot vs TradingEngine directamente
 ---------------------------------------------------
   PaperBot      : tests unitarios, scripts simples, exploración interactiva.
-  TradingEngine : producción, Prefect tasks, integración con TradeTracker.
+  TradingEngine : producción, Dagster assets, integración con TradeTracker.
 
 Principios: SOLID (SRP, DIP, OCP) · KISS · DRY · SafeOps
 """

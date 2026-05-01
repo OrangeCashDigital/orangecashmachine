@@ -8,7 +8,7 @@ Entrypoint del market-data-service como proceso independiente.
 Responsabilidad
 ---------------
 Exponer market_data como microservicio autónomo:
-  - Pipeline de ingesta (Prefect flow) corriendo en background loop
+  - Pipeline de ingesta corriendo en background loop (asyncio)
   - HTTP API mínima: /health, /ready, /ohlcv/{exchange}/{symbol}/{timeframe}
 
 Arquitectura

@@ -89,11 +89,11 @@ class RuntimeContext:
         return self.run_config.debug
 
     # ------------------------------------------------------------------
-    # Serialización para Prefect / workers
+    # Serialización para Dagster / workers
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Serializa para pasar a Prefect flows.
+        """Serializa para pasar a Dagster assets / OCMResource.
 
         Garantiza JSON-safety:
         - ``AppConfig`` → ``model_dump()`` (Pydantic v2, siempre disponible).
@@ -108,7 +108,7 @@ class RuntimeContext:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RuntimeContext:
-        """Reconstruye desde dict (deserialización Prefect).
+        """Reconstruye desde dict (deserialización Dagster / OCMResource).
 
         Args:
             data: Dict producido por :meth:`to_dict`.

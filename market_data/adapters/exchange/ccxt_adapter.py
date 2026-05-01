@@ -144,7 +144,7 @@ class CCXTAdapter(ExchangeAdapter):
         self._client: Optional[ccxt.Exchange] = None
         # asyncio.Lock lazy — se crea en el loop activo para evitar
         # RuntimeError: Event loop is closed cuando el adapter se
-        # instancia fuera de un loop (ej. Prefect entre flow runs).
+        # instancia fuera de un loop (ej. entre materializaciones Dagster).
         # Ref: docs.python.org/3/library/asyncio-sync.html
         self._init_lock: Optional[asyncio.Lock] = None
         self._markets_cache: Optional[Dict[str, Any]] = None

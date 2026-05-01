@@ -24,7 +24,7 @@ Precedencia de resolución (data_lake_root):
 Thread-safety
 -------------
 _LOCK garantiza que el singleton se construya exactamente una vez
-incluso bajo carga concurrente (Prefect workers, asyncio tasks).
+incluso bajo carga concurrente (Dagster workers, asyncio tasks).
 
 Ref: https://py.iceberg.apache.org/configuration/#sql-catalog
 """

@@ -108,7 +108,7 @@ class TradingEngine:
         """
         Ejecuta un ciclo: datos → señales → OMS.
 
-        Thread-safe. Sincrónico — para uso en Prefect tasks o loops.
+        Thread-safe. Sincrónico — para uso en Dagster assets o loops.
         """
         s      = self._strategy
         result = EngineResult(symbol=s.symbol, timeframe=s.timeframe)
