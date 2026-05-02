@@ -38,6 +38,7 @@ from ocm_platform.observability import bind_pipeline
 _log = bind_pipeline("pipeline")
 
 from market_data.quality.pipeline import QualityPipeline
+from market_data.processing.utils.gap_utils import scan_gaps
 from market_data.storage.bronze.bronze_storage import BronzeStorage
 from market_data.ports.storage import OHLCVStorage
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage

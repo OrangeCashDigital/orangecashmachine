@@ -35,6 +35,7 @@ import time
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import ccxt.async_support as ccxt
+import ccxt as ccxt_sync  # sync — parse8601, iso8601, inspect_required_credentials
 from loguru import logger
 
 from market_data.adapters.exchange.base import ExchangeAdapter

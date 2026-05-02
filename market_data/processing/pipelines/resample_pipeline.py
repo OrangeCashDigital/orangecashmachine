@@ -46,6 +46,8 @@ Ref: Pandas resample docs — https://pandas.pydata.org/docs/reference/resamplin
 """
 from __future__ import annotations
 
+import asyncio
+
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional
