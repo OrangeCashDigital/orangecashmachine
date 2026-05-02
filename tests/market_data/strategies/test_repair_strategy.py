@@ -286,7 +286,6 @@ class TestExecutePairHealing:
     async def test_healed_count_full_fill(self):
         """Gap con fill_ratio >= 0.95 → healed_count=1, gaps_partial=0."""
         # DataFrame con 1 gap: vela 0 → vela 5 (gap de 4 velas)
-        gap_start_ms = 0
         gap_end_ms   = 5 * _TF_MS
 
         rows_before = [
@@ -321,7 +320,6 @@ class TestExecutePairHealing:
     @pytest.mark.asyncio
     async def test_partial_count_low_fill_ratio(self):
         """Gap con fill_ratio < 0.95 → gaps_partial=1, healed_count=0."""
-        gap_start_ms = 0
         gap_end_ms   = 20 * _TF_MS  # expected=19
 
         rows_before = [
@@ -369,7 +367,6 @@ class TestExecutePairHealing:
             "volume": [1000.0, 1000.0],
         })
 
-        fetcher  = _FetcherStub(chunks=[])  # no debe llamarse nunca
         strategy = RepairStrategy()
         ctx      = _make_ctx(df=df, chunks=[])
 
