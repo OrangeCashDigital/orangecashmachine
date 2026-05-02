@@ -248,7 +248,7 @@ class CandleValidator:
         if v == 0:
             violations.append("S1")
 
-        if h == l:
+        if h == low_:
             violations.append("S2")
 
         if prev_timestamp_ms is not None:
