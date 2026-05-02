@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from ocm_platform.infra.state.utils import (  # noqa: E402
-    encode_redis_key as _encode_util,
-    redis_retry      as _retry_util,
-    _RETRY_ATTEMPTS  as _RETRY_ATTEMPTS_DEFAULT,
-    _RETRY_BASE_MS   as _RETRY_BASE_MS_DEFAULT,
-)
 
 import asyncio
 import base64
