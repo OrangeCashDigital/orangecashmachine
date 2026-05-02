@@ -45,6 +45,7 @@ KISS     — sin clases, sin decoradores, sin estado
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Callable, TypeVar
 
@@ -69,7 +70,7 @@ def redis_retry(
     Ejecuta ``fn`` con reintentos exponenciales ante fallos transitorios Redis.
 
     Solo para contextos síncronos (healthcheck, workers, tests).
-    En contextos async usar la variante async en cursor_store (_retry_async).
+    En contextos async usar ``redis_retry_async`` (mismo módulo).
 
     Política
     --------
@@ -137,7 +138,6 @@ async def redis_retry_async(
     redis.exceptions.ConnectionError | redis.exceptions.TimeoutError
         Si se agotan los reintentos.
     """
-    import asyncio
     last_exc: Exception = RuntimeError("redis_retry_async: no attempts made")
     for attempt in range(attempts):
         try:

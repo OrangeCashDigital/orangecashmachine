@@ -135,7 +135,8 @@ def build_gap_registry(
                 "build_gap_registry: Redis no disponible — registry deshabilitado"
             )
             return None
-        return GapRegistry(RedisGapStore(store._client))
+        env = store._env_raw  # str sin codificar — GapRegistry lo recibe directamente
+        return GapRegistry(RedisGapStore(store._client), env=env)
     except Exception as exc:
         logger.warning("build_gap_registry: no se pudo inicializar | error={}", exc)
         return None

@@ -89,7 +89,7 @@ class GapRegistry:
 
     Patrón de uso
     -------------
-    registry = GapRegistry(cursor_store)
+    registry = GapRegistry(store=gap_store_port, env=env_str)
 
     # Al detectar un gap:
     registry.register(exchange, symbol, timeframe, start_ms, end_ms, expected, gap_seconds)
@@ -104,9 +104,9 @@ class GapRegistry:
     gaps = registry.list_pending(exchange)
     """
 
-    def __init__(self, store: GapStorePort) -> None:
+    def __init__(self, store: GapStorePort, env: str) -> None:
         self._store = store
-        self._env   = store._env
+        self._env   = env
 
     # ----------------------------------------------------------
     # Write
