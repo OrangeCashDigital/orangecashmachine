@@ -86,22 +86,11 @@ async def _retry_async(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RE
     """
     Versión async de _retry: usa asyncio.sleep en lugar de time.sleep.
     Evita bloquear el event loop cuando Redis está caído o lento.
-    Solo reintenta en ConnectionError y TimeoutError — el resto propaga inmediato.
+
+    Delegado a retry.redis_retry_async — SSOT.
     """
-    last_exc: Exception = RuntimeError("no attempts")
-    for attempt in range(attempts):
-        try:
-            return fn()
-        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
-            last_exc = exc
-            if attempt < attempts - 1:
-                wait = (base_ms * (2 ** attempt)) / 1000.0
-                logger.warning(
-                    "Redis retry {}/{} in {:.0f}ms | error={}",
-                    attempt + 1, attempts, base_ms * (2 ** attempt), exc,
-                )
-                await asyncio.sleep(wait)
-    raise last_exc
+    from ocm_platform.infra.state.retry import redis_retry_async
+    return await redis_retry_async(fn, attempts=attempts, base_ms=base_ms)
 
 
 def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS):

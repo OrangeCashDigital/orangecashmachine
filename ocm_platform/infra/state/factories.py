@@ -25,8 +25,11 @@ para evitar circulares. Esto:
 
 Solución
 --------
-Las factories viven aquí. Los módulos de dominio solo reciben
-un RedisCursorStore ya construido en su constructor.
+Las factories viven aquí. Los módulos de dominio reciben
+el store port ya construido en su constructor:
+  GapRegistry         → GapStorePort (RedisGapStore)
+  LatenessCalibration → GapStorePort (RedisGapStore)
+  LatenessCalibration también recibe env:str explícitamente.
 
 Uso
 ---
@@ -161,7 +164,8 @@ def build_lateness_calibration_store(
                 "Redis no disponible — calibración deshabilitada"
             )
             return None
-        return LatenessCalibrationStore(store)
+        env = store._env_raw  # str sin codificar — LatenessCalibrationStore lo recibe directamente
+        return LatenessCalibrationStore(RedisGapStore(store._client), env=env)
     except Exception as exc:
         logger.warning(
             "build_lateness_calibration_store: no se pudo inicializar | error={}", exc

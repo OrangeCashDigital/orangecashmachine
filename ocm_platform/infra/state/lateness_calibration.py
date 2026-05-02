@@ -53,7 +53,7 @@ from typing import Optional
 
 from loguru import logger
 
-from ocm_platform.infra.state.cursor_store import RedisCursorStore
+from ocm_platform.infra.state.gap_store    import GapStorePort
 from ocm_platform.infra.state.encoding import encode_redis_key as _encode
 from ocm_platform.infra.state.retry    import redis_retry      as _retry
 
@@ -77,7 +77,7 @@ class LatenessCalibrationStore:
 
     Patrón de uso
     -------------
-    store = LatenessCalibrationStore(cursor_store)
+    store = LatenessCalibrationStore(store=gap_store_port, env=env_str)
 
     # Desde el job de calibración externo:
     store.set(exchange, timeframe, lateness_ms=p99, p95_ms=p95,
@@ -88,9 +88,9 @@ class LatenessCalibrationStore:
     # None si no hay calibración — usar hardcoded
     """
 
-    def __init__(self, store: RedisCursorStore) -> None:
+    def __init__(self, store: GapStorePort, env: str) -> None:
         self._store = store
-        self._env   = store._env
+        self._env   = env
 
     def set(
         self,
@@ -129,7 +129,7 @@ class LatenessCalibrationStore:
                 "window_hours":  window_hours,
                 "source":        source,
             })
-            _retry(lambda: self._store._client.set(key, payload, ex=_CALIBRATION_TTL))
+            _retry(lambda: self._store.set(key, payload, ex=_CALIBRATION_TTL))
             logger.info(
                 "LatenessCalibration: calibración persistida | "
                 "exchange={} timeframe={} lateness_ms={} p95_ms={} samples={} source={}",
@@ -157,7 +157,7 @@ class LatenessCalibrationStore:
         """
         key = _cal_key(self._env, exchange, timeframe)
         try:
-            raw = _retry(lambda: self._store._client.get(key))
+            raw = _retry(lambda: self._store.get(key))
             if raw is None:
                 return None
             data = json.loads(raw)
@@ -178,7 +178,7 @@ class LatenessCalibrationStore:
         """Obtiene el payload completo de calibración. None si no existe."""
         key = _cal_key(self._env, exchange, timeframe)
         try:
-            raw = _retry(lambda: self._store._client.get(key))
+            raw = _retry(lambda: self._store.get(key))
             if raw is None:
                 return None
             return json.loads(raw)
@@ -193,7 +193,7 @@ class LatenessCalibrationStore:
         """Elimina calibración (útil para tests o reset manual)."""
         key = _cal_key(self._env, exchange, timeframe)
         try:
-            return bool(_retry(lambda: self._store._client.delete(key)))
+            return bool(_retry(lambda: self._store.delete(key)))
         except Exception as exc:
             logger.warning(
                 "LatenessCalibration.delete failed | exchange={} timeframe={} error={}",

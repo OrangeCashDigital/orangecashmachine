@@ -106,3 +106,50 @@ def redis_retry(
                 )
                 time.sleep(wait_s)
     raise last_exc
+
+
+async def redis_retry_async(
+    fn:       "Callable[[], _T]",
+    attempts: int   = _RETRY_ATTEMPTS,
+    base_ms:  float = _RETRY_BASE_MS,
+) -> "_T":
+    """
+    Ejecuta ``fn`` con reintentos exponenciales ante fallos transitorios Redis.
+
+    Versión async: usa ``asyncio.sleep`` — no bloquea el event loop.
+    Solo para contextos async (pipelines, tareas Prefect).
+    En contextos síncronos usar ``redis_retry``.
+
+    Política
+    --------
+    - Reintenta únicamente ConnectionError y TimeoutError (fallos transitorios).
+    - Backoff exponencial: base_ms × 2^attempt milisegundos.
+    - Lanza la última excepción si se agotan los intentos (Fail-Fast).
+
+    Parameters
+    ----------
+    fn       : callable sin argumentos que retorna un valor (sync o async).
+    attempts : número máximo de intentos (default 3).
+    base_ms  : tiempo base de espera en ms (default 50 ms).
+
+    Raises
+    ------
+    redis.exceptions.ConnectionError | redis.exceptions.TimeoutError
+        Si se agotan los reintentos.
+    """
+    import asyncio
+    last_exc: Exception = RuntimeError("redis_retry_async: no attempts made")
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
+            last_exc = exc
+            if attempt < attempts - 1:
+                wait_s = (base_ms * (2 ** attempt)) / 1000.0
+                logger.warning(
+                    "Redis async retry {}/{} in {:.0f}ms | error={}",
+                    attempt + 1, attempts, base_ms * (2 ** attempt), exc,
+                )
+                await asyncio.sleep(wait_s)
+    raise last_exc
+
