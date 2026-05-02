@@ -56,21 +56,21 @@ from typing import Protocol, runtime_checkable
 @runtime_checkable
 class _PublisherBackend(Protocol):
     """Mínimo contrato que RedisStreamPublisher satisface."""
-    def publish(self, event: dict) -> None: ...
+    def publish(self, event: dict) -> Optional[str]: ...
 
 @runtime_checkable
 class _ConsumerBackend(Protocol):
     """Mínimo contrato que RedisStreamConsumer satisface."""
-    def ensure_group(self) -> None: ...
-    def read(self, count: int = 1, block_ms: int = 0) -> list: ...
-    def ack(self, message_id: str) -> None: ...
+    def ensure_group(self) -> bool: ...
+    def consume(self) -> list: ...
+    def ack(self, entry_id: str) -> bool: ...
 
 class _StreamPublisherAdapter:
     """Wrapper mínimo — satisface el contrato sin importar market_data."""
     def __init__(self, publisher: _PublisherBackend) -> None:
         self._publisher = publisher
-    def publish(self, event: dict) -> None:
-        self._publisher.publish(event)
+    def publish(self, event: dict) -> Optional[str]:
+        return self._publisher.publish(event)
 
 class _StreamSourceAdapter:
     """Wrapper mínimo — satisface el contrato sin importar market_data."""
@@ -194,7 +194,7 @@ def build_stream_publisher(
             )
             return None
         infra = RedisStreamPublisher(
-            client      = store._pool and store._client or _get_redis_client(store),
+            client      = _get_redis_client(store),
             stream_name = stream_name,
         )
         return _StreamPublisherAdapter(publisher=infra)
