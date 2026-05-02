@@ -30,6 +30,14 @@ __all__ = [
     "setup_logging",
     "pre_log",
     "drain",
+    "push_metrics",
+    "start_metrics_server",
+    "MetricsRuntime",
+    "MetricsMode",
+    "init_metrics_runtime",
+    "get_metrics_runtime",
+    "PrometheusPusher",
+    "NoopPusher",
 ]
 
 # ── Metrics runtime + Prometheus ─────────────────────────────────────────────

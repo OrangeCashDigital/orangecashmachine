@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from market_data.quality.anomaly_registry import _AnomalyRegistry
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
@@ -10,7 +14,7 @@ from loguru import logger
 from market_data.quality.validators.data_quality import DataQualityChecker, DataQualityReport
 from market_data.observability.metrics import QUALITY_GAPS_TOTAL, PIPELINE_ERRORS
 from market_data.processing.utils.gap_utils import scan_gaps
-from market_data.quality.anomaly_registry import AnomalyRegistry, _registry
+from market_data.quality.anomaly_registry import _registry
 from market_data.lineage.tracker import (
     LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
 )

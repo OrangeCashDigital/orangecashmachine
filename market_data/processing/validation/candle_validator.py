@@ -211,23 +211,23 @@ class CandleValidator:
         if len(candle) < 6:
             return ("C0", f"Malformed candle: expected 6 fields, got {len(candle)}")
 
-        ts, o, h, l, c, v = candle[0], candle[1], candle[2], candle[3], candle[4], candle[5]
+        ts, o, h, low_, c, v = candle[0], candle[1], candle[2], candle[3], candle[4], candle[5]
 
         if not isinstance(ts, (int, float)) or ts <= 0:
             return ("C1", f"Invalid timestamp: {ts!r}")
 
-        for name, val in (("open", o), ("high", h), ("low", l), ("close", c), ("volume", v)):
+        for name, val in (("open", o), ("high", h), ("low", low_), ("close", c), ("volume", v)):
             if val is None or (isinstance(val, float) and math.isnan(val)):
                 return ("C2", f"NaN/None in '{name}': {val!r}")
 
-        if h < l:
-            return ("C3", f"high ({h}) < low ({l})")
+        if h < low_:
+            return ("C3", f"high ({h}) < low ({low_})")
 
-        if not (l <= c <= h):
-            return ("C4", f"close ({c}) outside [low={l}, high={h}]")
+        if not (low_ <= c <= h):
+            return ("C4", f"close ({c}) outside [low={low_}, high={h}]")
 
-        if not (l <= o <= h):
-            return ("C5", f"open ({o}) outside [low={l}, high={h}]")
+        if not (low_ <= o <= h):
+            return ("C5", f"open ({o}) outside [low={low_}, high={h}]")
 
         if v < 0:
             return ("C6", f"Negative volume: {v}")
@@ -243,7 +243,7 @@ class CandleValidator:
     ) -> List[str]:
         """Retorna lista de códigos SUSPECT violados (vacía si ninguno)."""
         violations: List[str] = []
-        ts, _o, h, l, _c, v = candle[0], candle[1], candle[2], candle[3], candle[4], candle[5]
+        ts, _o, h, low_, _c, v = candle[0], candle[1], candle[2], candle[3], candle[4], candle[5]
 
         if v == 0:
             violations.append("S1")

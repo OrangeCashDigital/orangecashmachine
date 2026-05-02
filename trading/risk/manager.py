@@ -195,8 +195,6 @@ class RiskManager:
             halted = self._halted
             halt_r = self._halt_reason
             opens  = self._open_positions
-            daily  = self._daily_pnl_pct
-            total  = self._total_pnl_pct
 
         # Checks de solo-lectura — fuera del lock (no mutan estado)
         # ----------------------------------------------------------------
