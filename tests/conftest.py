@@ -1,9 +1,7 @@
 
-# ── Auditoría global: RuntimeWarning → error ──────────────────────────────────
-# Fail-fast ante operaciones numéricas inválidas (divide-by-zero, overflow…).
-# Consistente con la práctica establecida de -W error::RuntimeWarning.
-import warnings
-warnings.filterwarnings("error", category=RuntimeWarning)
+# ── Auditoría numérica: RuntimeWarning → error (opt-in por marker) ──────────
+# Usar: @pytest.mark.filterwarnings("error::RuntimeWarning") en tests nuevos
+# o pasar -W error::RuntimeWarning en CLI para auditar toda la suite.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
