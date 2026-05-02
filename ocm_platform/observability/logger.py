@@ -58,10 +58,10 @@ from threading import Lock
 from typing import Any
 
 from loguru import logger
+import loguru  # noqa: F401 — loguru.Logger en type hint
 
 from ocm_platform.observability.bootstrap import drain as _drain_bootstrap
 from ocm_platform.observability.config import LoggingConfig
-from ocm_platform.observability.filters import pipeline_filter
 from ocm_platform.observability.formats import CONSOLE, FILE
 from ocm_platform.observability.processors import build_processor_chain, process_event
 from ocm_platform.observability.sinks import LokiSink, PrometheusLogSink
