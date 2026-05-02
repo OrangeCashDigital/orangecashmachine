@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from ocm_platform.infra.state.utils import (  # noqa: E402
+    encode_redis_key as _encode_util,
+    redis_retry      as _retry_util,
+    _RETRY_ATTEMPTS  as _RETRY_ATTEMPTS_DEFAULT,
+    _RETRY_BASE_MS   as _RETRY_BASE_MS_DEFAULT,
+)
+
 import asyncio
 import base64
 import os
@@ -107,21 +114,11 @@ def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS)
     """
     Versión síncrona — solo para contextos no-async (healthcheck, tests).
     En pipelines async usar _retry_async.
+
+    Delegado a utils.redis_retry — SSOT.
     """
-    last_exc: Exception = RuntimeError("no attempts")
-    for attempt in range(attempts):
-        try:
-            return fn()
-        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
-            last_exc = exc
-            if attempt < attempts - 1:
-                wait = (base_ms * (2 ** attempt)) / 1000.0
-                logger.warning(
-                    "Redis retry {}/{} in {:.0f}ms | error={}",
-                    attempt + 1, attempts, base_ms * (2 ** attempt), exc,
-                )
-                time.sleep(wait)
-    raise last_exc
+    from ocm_platform.infra.state.utils import redis_retry
+    return redis_retry(fn, attempts=attempts, base_ms=base_ms)
 
 
 class RedisCursorStore:
@@ -371,8 +368,12 @@ class InMemoryCursorStore:
 
 
 def encode_cursor_key(value: str) -> str:
-    """Codifica un segmento de clave Redis en base64 urlsafe (sin padding)."""
-    return base64.urlsafe_b64encode(value.encode()).decode().rstrip("=")
+    """Codifica un segmento de clave Redis en base64 urlsafe (sin padding).
+
+    Delegado a utils.encode_redis_key — SSOT.
+    """
+    from ocm_platform.infra.state.utils import encode_redis_key
+    return encode_redis_key(value)
 
 
 _encode = encode_cursor_key  # alias interno — no eliminar: usado por RedisCursorStore
