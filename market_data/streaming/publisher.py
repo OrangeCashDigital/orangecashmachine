@@ -22,12 +22,30 @@ Principios: SRP · DI · SafeOps · wire/domain separation · observabilidad
 """
 
 import json
-from typing import Dict, Optional
+from typing import Dict, Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
 from market_data.streaming.metrics  import StreamMetrics
 from market_data.streaming.payloads import EventPayload
+
+
+
+# ---------------------------------------------------------------------------
+# RedisPublisherProtocol — contrato del publisher inyectado (DIP)
+# ---------------------------------------------------------------------------
+
+@runtime_checkable
+class RedisPublisherProtocol(Protocol):
+    """Contrato mínimo que cualquier publisher Redis debe cumplir.
+
+    Permite sustituir el publisher en tests sin dependencia de Redis real.
+    Structural subtyping — no requiere herencia.
+    """
+
+    def publish(self, fields: Dict[str, str]) -> Optional[str]:
+        """Publica fields al stream. Retorna entry_id o None si falla."""
+        ...
 
 
 class StreamPublisher:
@@ -42,7 +60,7 @@ class StreamPublisher:
 
     def __init__(
         self,
-        publisher,
+        publisher:   RedisPublisherProtocol,
         stream_name: str = "ohlcv",
     ) -> None:
         self._publisher = publisher
