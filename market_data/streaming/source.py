@@ -67,6 +67,7 @@ class StreamSource:
     dedup_max_size : int                 — tamaño máximo L1 (memoria).
     dedup_store    : RedisCursorStore | None — si se provee, activa L2 persistente.
     dedup_ttl_days : int                 — TTL de event_ids en Redis (L2).
+      poll_interval_s: float               — sleep entre polls vacíos (evita CPU spin).
     """
 
     def __init__(
@@ -151,6 +152,10 @@ class StreamSource:
                         recovered_pending = p_pending,
                         iteration         = iteration,
                     ).info("batch_processed")
+
+                if processed == 0 and failed == 0:
+                    # Stream vacío — backoff para evitar CPU spin
+                    time.sleep(self._poll_interval_s)
 
                 consecutive_errors = 0 if failed == 0 else consecutive_errors + 1
 
