@@ -30,11 +30,8 @@ Principios: SRP · OCP · DIP · SafeOps · SSOT
 from __future__ import annotations
 
 import asyncio
-from typing import Generator
 
 from dagster import (
-    AssetExecutionContext,
-    AssetKey,
     Output,
     asset,
 )

@@ -72,7 +72,6 @@ def _register_structured_configs() -> None:
 _register_structured_configs()
 
 # Imports post-registration — Hydra requiere que ConfigStore esté listo primero
-import ocm_platform.config.loader as config_loader
 from ocm_platform.config.loader.exceptions import (
     ConfigurationError,
     ConfigValidationError,
