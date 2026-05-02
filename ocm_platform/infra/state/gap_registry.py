@@ -48,7 +48,7 @@ from typing import List, Optional
 
 from loguru import logger
 
-from ocm_platform.infra.state.cursor_store import _encode, _retry, RedisCursorStore
+from ocm_platform.infra.state.gap_store import GapStorePort, RedisGapStore
 
 _GAP_TTL_DAYS   = 90
 _GAP_TTL        = _GAP_TTL_DAYS * 86_400
@@ -102,7 +102,7 @@ class GapRegistry:
     gaps = registry.list_pending(exchange)
     """
 
-    def __init__(self, store: RedisCursorStore) -> None:
+    def __init__(self, store: GapStorePort) -> None:
         self._store = store
         self._env   = store._env
 

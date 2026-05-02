@@ -85,6 +85,7 @@ from typing import Optional, TYPE_CHECKING
 from loguru import logger
 
 from ocm_platform.infra.state.cursor_store import RedisCursorStore, build_cursor_store_from_env
+from ocm_platform.infra.state.gap_store    import RedisGapStore
 
 if TYPE_CHECKING:
     from ocm_platform.infra.state.gap_registry import GapRegistry
@@ -131,7 +132,7 @@ def build_gap_registry(
                 "build_gap_registry: Redis no disponible — registry deshabilitado"
             )
             return None
-        return GapRegistry(store)
+        return GapRegistry(RedisGapStore(store._client))
     except Exception as exc:
         logger.warning("build_gap_registry: no se pudo inicializar | error={}", exc)
         return None
@@ -252,7 +253,7 @@ def _get_redis_client(store: "RedisCursorStore"):
     RedisCursorStore expone _client internamente. Si la interfaz
     cambia, este helper es el único punto a actualizar.
     """
-    return store  # caller usa store.get/set/delete — no ._client
+    return store._client  # redis.Redis — solo para RedisStream{Publisher,Consumer}
 
 
 # ---------------------------------------------------------------------------

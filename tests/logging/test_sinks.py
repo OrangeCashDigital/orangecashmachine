@@ -174,7 +174,8 @@ class TestLokiSink:
         with patch.object(sink, "_attempt") as mock_attempt:
             sink._schedule_retry(_PAYLOAD, attempt=3)  # == max_retries → stop
             # El Timer tiene delay — dar tiempo suficiente para que se ejecute si hubiera bug
-            import time; time.sleep(0.05)
+            import time
+            time.sleep(0.05)
             mock_attempt.assert_not_called()
 
     def test_schedule_retry_stops_when_shutdown(self):
@@ -184,7 +185,8 @@ class TestLokiSink:
 
         with patch.object(sink, "_attempt") as mock_attempt:
             sink._schedule_retry(_PAYLOAD, attempt=1)
-            import time; time.sleep(0.05)
+            import time
+            time.sleep(0.05)
             mock_attempt.assert_not_called()
 
     # ── __call__ — integración síncrona del primer intento ───────────────────

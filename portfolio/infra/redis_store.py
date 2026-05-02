@@ -247,22 +247,4 @@ class RedisPositionStore:
             count = "?"
         return f"RedisPositionStore(exchange={self._exchange!r} positions={count})"
 
-    # ── Redis ops públicos — DIP / encapsulación ─────────────────────────────
-    # gap_registry y cualquier caller deben usar estos métodos,
-    # nunca ._client directamente.  Cambia de backend → cambia aquí solo.
-
-    def get(self, key: str):
-        return self._client.get(key)
-
-    def set(self, key: str, value, ex: int | None = None) -> None:
-        self._client.set(key, value, ex=ex)
-
-    def setex(self, key: str, ttl: int, value) -> None:
-        self._client.setex(key, ttl, value)
-
-    def delete(self, key: str) -> bool:
-        return bool(self._client.delete(key))
-
-    def exists(self, key: str) -> bool:
-        return bool(self._client.exists(key))
 
