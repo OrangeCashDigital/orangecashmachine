@@ -36,7 +36,7 @@ class FeatureEngineer:
 
         df["return_1"]        = df["close"].pct_change()
         _safe_close            = df["close"].replace(0, float("nan"))
-    df["log_return"]      = np.log(_safe_close / _safe_close.shift(1))
+        df["log_return"]      = np.log(_safe_close / _safe_close.shift(1))
         df["volatility_20"]   = df["log_return"].rolling(20, min_periods=5).std()
         df["high_low_spread"] = (df["high"] - df["low"]) / df["close"].replace(0, np.nan)
 
@@ -55,4 +55,38 @@ class FeatureEngineer:
             "Features calculados | {}/{} rows={} features={}",
             symbol, timeframe, len(df), FEATURE_COLUMNS,
         )
+        df = self._sanitize_features(df)
         return df
+
+    @staticmethod
+    def _sanitize_features(df: "pd.DataFrame") -> "pd.DataFrame":
+        """Convierte ±inf → NaN y registra conteo para auditoría.
+
+        Semántica NaN de FeatureEngineer:
+          • close=0 o prev_close=0  → NaN  (retorno indefinido)
+          • ventana rolling corta   → NaN  (min_periods no alcanzado)
+          • ±inf por división       → NaN  (sanitizados aquí)
+        Los NaN se PROPAGAN; el caller (QualityPipeline) decide si imputa,
+        dropa o los trata como señal de calidad. SSOT de política NaN: caller.
+
+        Fail-soft: nunca lanza excepción.
+        """
+        import numpy as np
+        from loguru import logger as _log
+
+        numeric  = df.select_dtypes(include="number")
+        inf_mask = np.isinf(numeric)
+        n_inf    = int(inf_mask.values.sum())
+
+        if n_inf:
+            _log.warning(
+                "FeatureEngineer._sanitize_features: ±inf→NaN | count={}",
+                n_inf,
+            )
+            df = df.copy()
+            df[numeric.columns] = numeric.replace(
+                [np.inf, -np.inf], float("nan")
+            )
+
+        return df
+
