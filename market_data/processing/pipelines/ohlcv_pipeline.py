@@ -77,7 +77,6 @@ from ocm_platform.infra.state.factories import build_gap_registry
 def _build_storage(
     exchange:     str,
     market_type:  str,
-    redis_client=None,                    # no-op — Iceberg no usa Redis lock
     dry_run:      bool                 = False,
     cursor_store: "CursorStorePort | None" = None,
 ) -> "OHLCVStorage":
@@ -85,7 +84,7 @@ def _build_storage(
     Factory de storage OHLCV.
 
     IcebergStorage es el único backend activo.
-    redis_client se mantiene en firma por compatibilidad — no se usa internamente.
+    cursor_store se pasa directamente — IcebergStorage gestiona su propio acceso.
     """
     _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
         "storage_factory | IcebergStorage"
@@ -252,7 +251,6 @@ class OHLCVPipeline:
         silver  = _build_storage(
             exchange     = self._exchange_id,
             market_type  = self.market_type,
-            redis_client = getattr(cursor, '_client', None),
             dry_run      = dry_run,
             cursor_store = cursor,
         )
