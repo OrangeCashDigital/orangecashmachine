@@ -16,7 +16,7 @@ Para el path event-driven solo se necesita:
   - env           → qué entorno está activo
   - run_id        → trazabilidad cruzada OCM ↔ Dagster
   - pushgateway   → dónde empujar métricas
-  - deployment    → qué job de Dagster disparar
+  - job_name      → qué job de Dagster disparar
 
 StreamingContext es serializable, inmutable y no contiene
 credenciales ni config pesada.
@@ -50,7 +50,7 @@ class StreamingContext:
     env             : Entorno activo (development | staging | production).
     run_id          : Identificador único del run OCM (trazabilidad).
     pushgateway     : host:port del Prometheus Pushgateway.
-    deployment      : Nombre del job Dagster a disparar (ocm_bronze_only_job u otro).
+    job_name        : Nombre del job Dagster a disparar (ocm_bronze_only_job u otro).
     created_at      : Momento de construcción (UTC ISO 8601).
     context_version : Versión del schema de este contexto.
     """
@@ -58,9 +58,9 @@ class StreamingContext:
     env:             str
     run_id:          str
     pushgateway:     str
-    deployment:      str
+    job_name:        str
     created_at:      str
-    context_version: int = 1  # SSoT: CONTEXT_SCHEMA_VERSION de payloads.py
+    context_version: int = 2  # SSoT: CONTEXT_SCHEMA_VERSION de payloads.py
 
     # --------------------------------------------------
     # Constructors
@@ -70,7 +70,7 @@ class StreamingContext:
     def from_runtime(
         cls,
         ctx: "RuntimeContext",
-        deployment: str = "market_data_ingestion/default",
+        job_name: str = "ocm_bronze_only_job",
     ) -> "StreamingContext":
         """
         Construye un StreamingContext a partir de un RuntimeContext completo.
@@ -83,14 +83,14 @@ class StreamingContext:
             env         = ctx.environment,
             run_id      = ctx.run_id,
             pushgateway = ctx.pushgateway,
-            deployment  = deployment,
+            job_name    = job_name,
             created_at  = datetime.now(timezone.utc).isoformat(),
         )
 
     @classmethod
     def from_env(
         cls,
-        deployment: str = "market_data_ingestion/default",
+        job_name: str = "ocm_bronze_only_job",
     ) -> "StreamingContext":
         """
         Construye un StreamingContext desde variables de entorno.
@@ -112,7 +112,7 @@ class StreamingContext:
             env         = env,
             run_id      = run_id,
             pushgateway = pushgateway,
-            deployment  = deployment,
+            job_name    = job_name,
             created_at  = datetime.now(timezone.utc).isoformat(),
         )
 
@@ -122,22 +122,32 @@ class StreamingContext:
 
         Valida context_version — falla explícitamente si el schema
         es incompatible en lugar de producir datos corruptos.
+
+        Backward compat
+        ---------------
+        v1 usaba la clave "deployment" (naming Prefect legacy).
+        v2+ usa "job_name" (nombre correcto en Dagster).
+        from_dict acepta ambas claves para no romper payloads en tránsito.
         """
         from market_data.streaming.payloads import (
             CONTEXT_SCHEMA_VERSION,
             SchemaVersionError,
         )
         version = int(data.get("context_version", 1))
-        if version != CONTEXT_SCHEMA_VERSION:
+        if version > CONTEXT_SCHEMA_VERSION:
             raise SchemaVersionError(
                 f"StreamingContext schema v{version} incompatible "
                 f"con v{CONTEXT_SCHEMA_VERSION} esperada."
             )
+        # v1 legacy: clave "deployment"; v2+: clave "job_name"
+        job_name = str(
+            data.get("job_name") or data.get("deployment", "ocm_bronze_only_job")
+        )
         return cls(
             env             = str(data["env"]),
             run_id          = str(data["run_id"]),
             pushgateway     = str(data["pushgateway"]),
-            deployment      = str(data["deployment"]),
+            job_name        = job_name,
             created_at      = str(data["created_at"]),
             context_version = version,
         )
@@ -153,6 +163,6 @@ class StreamingContext:
             "env":             self.env,
             "run_id":          self.run_id,
             "pushgateway":     self.pushgateway,
-            "deployment":      self.deployment,
+            "job_name":        self.job_name,
             "created_at":      self.created_at,
         }

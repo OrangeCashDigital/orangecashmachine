@@ -28,7 +28,7 @@ def _make_ctx(env: str = "development") -> StreamingContext:
         env         = env,
         run_id      = "abc123def456",
         pushgateway = "localhost:9091",
-        deployment  = "market_data_ingestion/default",
+        job_name    = "market_data_ingestion/default",
         created_at  = "2026-04-08T00:00:00+00:00",
     )
 
@@ -60,7 +60,7 @@ class TestStreamingContext:
 
     def test_to_dict_keys(self):
         d = _make_ctx().to_dict()
-        assert set(d.keys()) == {"context_version", "env", "run_id", "pushgateway", "deployment", "created_at"}
+        assert set(d.keys()) == {"context_version", "env", "run_id", "pushgateway", "job_name", "created_at"}
 
     def test_to_dict_no_credentials(self):
         """El dict serializado no debe contener campos sensibles."""
@@ -74,7 +74,7 @@ class TestStreamingContext:
             "env": 123,            # int → str
             "run_id": "abc",
             "pushgateway": "h:9091",
-            "deployment": "dep/x",
+            "job_name": "dep/x",
             "created_at": "2026-01-01T00:00:00+00:00",
         }
         ctx = StreamingContext.from_dict(d)
@@ -120,18 +120,18 @@ class TestDispatchHandlerWithContext:
         handler = DispatchHandler(context=ctx)
         assert handler.handle(_make_event()) is True
 
-    def test_deployment_taken_from_context(self):
+    def test_job_name_taken_from_context(self):
         ctx = StreamingContext(
             env="production", run_id="x" * 12, pushgateway="gw:9091",
-            deployment="my_flow/prod", created_at="2026-01-01T00:00:00+00:00",
+            job_name="my_flow/prod", created_at="2026-01-01T00:00:00+00:00",
         )
         handler = DispatchHandler(
             run_name="ignored/default",
             context=ctx,
         )
-        assert handler._run_name == "my_flow/prod"
+        assert handler._run_name == "my_flow/prod"  # job_name del contexto
 
-    def test_no_context_uses_deployment_name(self):
+    def test_no_context_uses_run_name_default(self):
         handler = DispatchHandler(run_name="explicit/deploy")
         assert handler._run_name == "explicit/deploy"
 

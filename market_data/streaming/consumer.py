@@ -101,7 +101,7 @@ class DispatchHandler:
                     f"context debe ser StreamingContext, recibió {type(context)}"
                 )
         self._run_name = (
-            context.deployment if context is not None else run_name
+            context.job_name if context is not None else run_name
         )
         self._context = context
         self._log = logger.bind(

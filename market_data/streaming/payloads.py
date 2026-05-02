@@ -51,7 +51,7 @@ class OHLCVBar:
 # Versiones de schema — SSoT de compatibilidad
 # --------------------------------------------------
 PAYLOAD_SCHEMA_VERSION: int = 1
-CONTEXT_SCHEMA_VERSION: int = 1
+CONTEXT_SCHEMA_VERSION: int = 2
 
 
 class SchemaVersionError(ValueError):
