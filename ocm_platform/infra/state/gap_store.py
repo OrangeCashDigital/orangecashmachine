@@ -22,10 +22,30 @@ OCP: InMemoryGapStore para tests sin Redis real.
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, List, Optional, Protocol, runtime_checkable
 
 
-# ── Protocolo público ────────────────────────────────────────────────────────
+# ── Protocolo de pipeline ────────────────────────────────────────────────────
+
+@runtime_checkable
+class PipelinePort(Protocol):
+    """
+    Contrato mínimo de pipeline para GapRegistry.
+
+    GapRegistry usa exclusivamente get(), set() y execute() sobre
+    el pipeline — estas tres operaciones forman el contrato verificable
+    en tiempo de análisis estático.
+
+    DIP: GapRegistry depende de PipelinePort, no de redis.Pipeline
+    ni de _InMemoryPipeline directamente.
+    """
+
+    def get(self, key: str) -> "PipelinePort": ...
+    def set(self, key: str, value: Any, ex: Optional[int] = None) -> "PipelinePort": ...
+    def execute(self) -> List[Any]: ...
+
+
+# ── Protocolo de store ───────────────────────────────────────────────────────
 
 @runtime_checkable
 class GapStorePort(Protocol):
@@ -38,7 +58,7 @@ class GapStorePort(Protocol):
     def exists(self, key: str) -> bool: ...
     def ttl(self, key: str) -> int: ...
     def scan(self, cursor: int, match: str, count: int) -> tuple: ...
-    def pipeline(self) -> Any: ...
+    def pipeline(self) -> PipelinePort: ...
 
 
 # ── Implementación Redis ─────────────────────────────────────────────────────
@@ -77,8 +97,8 @@ class RedisGapStore:
     def scan(self, cursor: int, match: str, count: int) -> tuple:
         return self._client.scan(cursor=cursor, match=match, count=count)
 
-    def pipeline(self) -> Any:
-        return self._client.pipeline()
+    def pipeline(self) -> PipelinePort:
+        return self._client.pipeline()  # type: ignore[return-value]  # redis.Pipeline satisface PipelinePort estructuralmente
 
 
 # ── Implementación en memoria (tests sin Redis) ──────────────────────────────
@@ -126,7 +146,7 @@ class InMemoryGapStore:
         keys = [k for k in self._data if fnmatch.fnmatch(k, match.replace("*", "?*"))]
         return (0, keys)
 
-    def pipeline(self) -> "_InMemoryPipeline":
+    def pipeline(self) -> PipelinePort:
         return _InMemoryPipeline(self)
 
 
@@ -141,11 +161,11 @@ class _InMemoryPipeline:
         self._store = store
         self._cmds: list = []
 
-    def get(self, key: str) -> "_InMemoryPipeline":
+    def get(self, key: str) -> "PipelinePort":
         self._cmds.append(("get", key))
         return self
 
-    def set(self, key: str, value: Any, ex: Optional[int] = None) -> "_InMemoryPipeline":
+    def set(self, key: str, value: Any, ex: Optional[int] = None) -> "PipelinePort":
         self._cmds.append(("set", key, value, ex))
         return self
 
