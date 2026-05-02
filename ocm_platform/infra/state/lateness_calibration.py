@@ -54,10 +54,8 @@ from typing import Optional
 from loguru import logger
 
 from ocm_platform.infra.state.cursor_store import RedisCursorStore
-from ocm_platform.infra.state.utils import (
-    encode_redis_key as _encode,
-    redis_retry      as _retry,
-)
+from ocm_platform.infra.state.encoding import encode_redis_key as _encode
+from ocm_platform.infra.state.retry    import redis_retry      as _retry
 
 _CALIBRATION_TTL_DAYS = 7
 _CALIBRATION_TTL      = _CALIBRATION_TTL_DAYS * 86_400

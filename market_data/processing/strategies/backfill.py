@@ -32,7 +32,7 @@ from market_data.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
 # Se importa desde infra.state por necesidad de compatibilidad de schema
 # Redis — no hay forma de evitarlo sin duplicar lógica (DRY > pureza DIP).
 # SSOT: la función vive en cursor_store porque define el schema de claves.
-from ocm_platform.infra.state.utils import encode_redis_key as _encode
+from ocm_platform.infra.state.encoding import encode_redis_key as _encode
 
 _log = bind_pipeline("backfill")
 

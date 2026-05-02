@@ -111,7 +111,7 @@ def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS)
 
     Delegado a utils.redis_retry — SSOT.
     """
-    from ocm_platform.infra.state.utils import redis_retry
+    from ocm_platform.infra.state.retry import redis_retry
     return redis_retry(fn, attempts=attempts, base_ms=base_ms)
 
 
@@ -366,7 +366,7 @@ def encode_cursor_key(value: str) -> str:
 
     Delegado a utils.encode_redis_key — SSOT.
     """
-    from ocm_platform.infra.state.utils import encode_redis_key
+    from ocm_platform.infra.state.encoding import encode_redis_key
     return encode_redis_key(value)
 
 

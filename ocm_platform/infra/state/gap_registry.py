@@ -48,10 +48,8 @@ from typing import List, Optional
 
 from loguru import logger
 
-from ocm_platform.infra.state.utils import (
-    encode_redis_key as _encode,
-    redis_retry      as _retry,
-)
+from ocm_platform.infra.state.encoding import encode_redis_key as _encode
+from ocm_platform.infra.state.retry    import redis_retry      as _retry
 from ocm_platform.infra.state.gap_store    import GapStorePort
 
 _GAP_TTL_DAYS   = 90
