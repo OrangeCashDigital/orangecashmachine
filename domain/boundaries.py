@@ -135,3 +135,20 @@ class RiskGate(Protocol):
         reason es '' si approved=True.
         """
         ...
+
+
+# ── AnomalyRegistryProtocol ──────────────────────────────────────────────────
+# Contrato público para registros de anomalías.
+# La implementación concreta (_AnomalyRegistry / SQLite) vive en
+# market_data.quality.anomaly_registry — desacoplada vía este protocolo.
+
+from typing import Protocol, runtime_checkable
+
+@runtime_checkable
+class AnomalyRegistryProtocol(Protocol):
+    """Contrato mínimo que debe satisfacer cualquier registro de anomalías."""
+
+    def register(self, key: str, payload: dict) -> None: ...
+    def stats(self) -> dict: ...
+    def wipe(self) -> None: ...
+

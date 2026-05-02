@@ -252,7 +252,7 @@ def _get_redis_client(store: "RedisCursorStore"):
     RedisCursorStore expone _client internamente. Si la interfaz
     cambia, este helper es el único punto a actualizar.
     """
-    return store._client
+    return store  # caller usa store.get/set/delete — no ._client
 
 
 # ---------------------------------------------------------------------------

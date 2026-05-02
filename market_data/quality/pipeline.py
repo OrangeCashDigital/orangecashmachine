@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from market_data.quality.anomaly_registry import _AnomalyRegistry
+from domain.boundaries import AnomalyRegistryProtocol
 
 from dataclasses import dataclass
 from enum import Enum
@@ -58,7 +56,7 @@ class QualityPipeline:
     def __init__(
         self,
         policy:   Optional[DataQualityPolicy] = None,
-        registry: Optional[_AnomalyRegistry]  = None,
+        registry: AnomalyRegistryProtocol | None = None,
     ) -> None:
         self._policy   = policy or default_policy
         self._registry = registry or _registry  # shared by default, injectable for tests

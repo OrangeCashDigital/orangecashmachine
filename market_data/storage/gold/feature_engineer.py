@@ -35,7 +35,8 @@ class FeatureEngineer:
         df = df.copy().sort_values("timestamp").reset_index(drop=True)
 
         df["return_1"]        = df["close"].pct_change()
-        df["log_return"]      = np.log(df["close"].replace(0, float("nan")) / df["close"].shift(1))
+        _safe_close            = df["close"].replace(0, float("nan"))
+    df["log_return"]      = np.log(_safe_close / _safe_close.shift(1))
         df["volatility_20"]   = df["log_return"].rolling(20, min_periods=5).std()
         df["high_low_spread"] = (df["high"] - df["low"]) / df["close"].replace(0, np.nan)
 

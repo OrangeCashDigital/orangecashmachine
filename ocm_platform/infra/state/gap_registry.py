@@ -129,7 +129,7 @@ class GapRegistry:
         """
         key = _gap_key(self._env, exchange, symbol, timeframe, start_ms)
         try:
-            existing = _retry(lambda: self._store._client.get(key))
+            existing = _retry(lambda: self._store.get(key))
             if existing is not None:
                 logger.debug(
                     "GapRegistry: gap ya registrado | key={}", key
@@ -148,7 +148,7 @@ class GapRegistry:
                 "source":          source,
                 "repair_attempts": 0,
             })
-            _retry(lambda: self._store._client.set(key, payload, ex=_GAP_TTL))
+            _retry(lambda: self._store.set(key, payload, ex=_GAP_TTL))
             logger.info(
                 "GapRegistry: gap registrado | exchange={} symbol={} "
                 "timeframe={} start_ms={} expected={}",
@@ -185,7 +185,7 @@ class GapRegistry:
         """
         key = _gap_key(self._env, exchange, symbol, timeframe, start_ms)
         try:
-            deleted = bool(_retry(lambda: self._store._client.delete(key)))
+            deleted = bool(_retry(lambda: self._store.delete(key)))
             if deleted:
                 logger.info(
                     "GapRegistry: gap sanado — eliminado | exchange={} "
@@ -200,7 +200,7 @@ class GapRegistry:
                     self._env, exchange, symbol, timeframe, start_ms,
                     prefix="irrecoverable",
                 )
-                _retry(lambda: self._store._client.setex(
+                _retry(lambda: self._store.setex(
                     irr_key, self._IRRECOVERABLE_TTL_S, b"1",
                 ))
                 logger.info(
@@ -234,7 +234,7 @@ class GapRegistry:
             prefix="irrecoverable",
         )
         try:
-            return bool(_retry(lambda: self._store._client.exists(irr_key)))
+            return bool(_retry(lambda: self._store.exists(irr_key)))
         except Exception:
             return False
 
@@ -251,14 +251,14 @@ class GapRegistry:
         """
         key = _gap_key(self._env, exchange, symbol, timeframe, start_ms)
         try:
-            raw = _retry(lambda: self._store._client.get(key))
+            raw = _retry(lambda: self._store.get(key))
             if raw is None:
                 return -1
             data = json.loads(raw)
             data["repair_attempts"] = data.get("repair_attempts", 0) + 1
-            ttl = _retry(lambda: self._store._client.ttl(key))
+            ttl = _retry(lambda: self._store.ttl(key))
             ttl = ttl if ttl > 0 else _GAP_TTL
-            _retry(lambda: self._store._client.set(key, json.dumps(data), ex=ttl))
+            _retry(lambda: self._store.set(key, json.dumps(data), ex=ttl))
             return data["repair_attempts"]
         except Exception as exc:
             logger.warning(
@@ -282,12 +282,12 @@ class GapRegistry:
         try:
             cursor = 0
             while True:
-                scan_result = self._store._client.scan(
+                scan_result = self._store.scan(
                     cursor=cursor, match=pattern, count=_SCAN_COUNT
                 )
                 cursor, keys = scan_result[0], scan_result[1]
                 if keys:
-                    pipe   = self._store._client.pipeline()
+                    pipe   = self._store.pipeline()
                     for k in keys:
                         pipe.get(k)
                     values = pipe.execute()
@@ -318,7 +318,7 @@ class GapRegistry:
         try:
             cursor = 0
             while True:
-                scan_result = self._store._client.scan(
+                scan_result = self._store.scan(
                     cursor=cursor, match=pattern, count=_SCAN_COUNT
                 )
                 cursor, keys = scan_result[0], scan_result[1]
@@ -342,7 +342,7 @@ class GapRegistry:
         """Obtiene un gap específico por clave. None si no existe."""
         key = _gap_key(self._env, exchange, symbol, timeframe, start_ms)
         try:
-            raw = _retry(lambda: self._store._client.get(key))
+            raw = _retry(lambda: self._store.get(key))
             if raw is None:
                 return None
             return json.loads(raw)
