@@ -131,11 +131,19 @@ class InMemoryGapStore:
 
 
 class _InMemoryPipeline:
-    """Pipeline mínimo para InMemoryGapStore."""
+    """Pipeline mínimo para InMemoryGapStore.
+
+    Soporta get() y set() — las únicas ops que GapRegistry usa
+    sobre el pipeline (list_pending y operaciones atómicas).
+    """
 
     def __init__(self, store: InMemoryGapStore) -> None:
         self._store = store
         self._cmds: list = []
+
+    def get(self, key: str) -> "_InMemoryPipeline":
+        self._cmds.append(("get", key))
+        return self
 
     def set(self, key: str, value: Any, ex: Optional[int] = None) -> "_InMemoryPipeline":
         self._cmds.append(("set", key, value, ex))
@@ -144,7 +152,9 @@ class _InMemoryPipeline:
     def execute(self) -> list:
         results = []
         for cmd in self._cmds:
-            if cmd[0] == "set":
+            if cmd[0] == "get":
+                results.append(self._store.get(cmd[1]))
+            elif cmd[0] == "set":
                 self._store.set(cmd[1], cmd[2], ex=cmd[3])
                 results.append(True)
         self._cmds.clear()
