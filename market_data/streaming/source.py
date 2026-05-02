@@ -18,7 +18,8 @@ Principios: SRP · DI · SafeOps · at-least-once · self-healing
            · idempotencia persistente · observabilidad
 """
 
-from typing import Dict, List, Optional, Tuple
+import time
+from typing import Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 from loguru import logger
 
@@ -28,6 +29,28 @@ from market_data.streaming.payloads import EventPayload, SchemaVersionError
 from market_data.streaming.router   import EventRouter
 
 _MAX_RETRIES_BEFORE_DLQ: int = 3
+_DEFAULT_POLL_INTERVAL_S: float = 0.1  # sleep entre polls vacíos — evita CPU spin
+
+
+# ---------------------------------------------------------------------------
+# RedisConsumerProtocol — contrato del consumer inyectado (DIP)
+# ---------------------------------------------------------------------------
+
+@runtime_checkable
+class RedisConsumerProtocol(Protocol):
+    """Contrato mínimo que cualquier consumer Redis debe cumplir.
+
+    Permite sustituir el consumer en tests sin dependencia de Redis real.
+    Structural subtyping — no requiere herencia.
+    """
+
+    def consume(self) -> List[Tuple[str, Dict]]:
+        """Lee el siguiente batch de mensajes. Retorna lista de (entry_id, fields)."""
+        ...
+
+    def ack(self, entry_id: str) -> None:
+        """Confirma procesamiento de un mensaje."""
+        ...
 
 
 class StreamSource:
@@ -48,14 +71,15 @@ class StreamSource:
 
     def __init__(
         self,
-        consumer,
-        router:         EventRouter,
-        max_errors:     int  = 10,
-        stream_name:    str  = "ohlcv",
-        claim_idle_ms:  int  = 60_000,
-        dedup_max_size: int  = 10_000,
-        dedup_store          = None,
-        dedup_ttl_days: int  = 7,
+        consumer:          RedisConsumerProtocol,
+        router:            EventRouter,
+        max_errors:        int   = 10,
+        stream_name:       str   = "ohlcv",
+        claim_idle_ms:     int   = 60_000,
+        dedup_max_size:    int   = 10_000,
+        dedup_store                = None,
+        dedup_ttl_days:    int   = 7,
+        poll_interval_s:   float = _DEFAULT_POLL_INTERVAL_S,
     ) -> None:
         self._consumer      = consumer
         self._router        = router
@@ -63,6 +87,7 @@ class StreamSource:
         self._claim_idle_ms = claim_idle_ms
         self._metrics       = StreamMetrics(stream_name=stream_name)
         self._log           = logger.bind(component="StreamSource")
+        self._poll_interval_s = poll_interval_s
         self._retry_counts: Dict[str, int] = {}
 
         # Deduplicación: L1 solo o L1+L2 según dedup_store
