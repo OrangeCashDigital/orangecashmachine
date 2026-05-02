@@ -29,9 +29,8 @@ Principios: DIP · SRP · Fail-Fast · SafeOps · SSOT
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Generator
 
-from dagster import ConfigurableResource, InitResourceContext
+from dagster import ConfigurableResource
 
 from ocm_platform.config.hydra_loader import load_appconfig_standalone
 from ocm_platform.runtime.run_config import RunConfig

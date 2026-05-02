@@ -34,7 +34,7 @@ Principios: inmutable · construido una sola vez · propagado hacia abajo.
 import os
 import re
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 

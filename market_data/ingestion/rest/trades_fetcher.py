@@ -38,7 +38,6 @@ from loguru import logger
 
 from market_data.adapters.exchange import CCXTAdapter
 from market_data.storage.silver.trades_storage import TradesStorage
-from market_data.ports.state import CursorStorePort as CursorStore      # DIP — tipo abstracto
 from ocm_platform.infra.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
 
 # ---------------------------------------------------------------------------

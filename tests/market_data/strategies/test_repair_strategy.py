@@ -40,7 +40,6 @@ _heal_gap:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -49,13 +48,10 @@ import pytest
 
 from market_data.processing.strategies.repair import RepairStrategy
 from market_data.processing.strategies.base import (
-    PairResult,
     PipelineContext,
-    PipelineMode,
 )
 from market_data.processing.exceptions import (
     ChunkFetchError,
-    NoDataAvailableError,
 )
 from market_data.processing.utils.gap_utils import GapRange
 

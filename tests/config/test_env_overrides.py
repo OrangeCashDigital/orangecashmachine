@@ -1,6 +1,5 @@
 """tests/config/test_env_overrides.py — smoke tests con env= explícito (sin acoplamiento global)."""
 
-import pytest
 from omegaconf import OmegaConf
 from ocm_platform.config.layers.env_override import apply_env_overrides
 

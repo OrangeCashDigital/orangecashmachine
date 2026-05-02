@@ -172,9 +172,9 @@ def register_deployment() -> None:
     deployment.apply()
 
     print(f"✓ Deployment registrado: ocm-market-data-{env}")
-    print(f"  Pool:     ocm-process")
-    print(f"  Schedule: cada 1 minuto")
-    print(f"  Timeout:  55 s por run")
+    print("  Pool:     ocm-process")
+    print("  Schedule: cada 1 minuto")
+    print("  Timeout:  55 s por run")
     print(f"  Env:      {env}")
     print()
     print("  ⚠️  Concurrencia: configurar en el Work Pool:")

@@ -47,19 +47,14 @@ from market_data.adapters.exchange.errors import (
     ExchangeCircuitOpenError,
 )
 from market_data.adapters.exchange.limiter import (
-    AdaptiveLimiter,
     get_or_create_limiter,
-    get_limiter_state,
 )
 from market_data.adapters.exchange.resilience import (
-    CircuitBreakerOpenError,
     RetryExhaustedError,
     ResilienceLayer,
 )
 from market_data.adapters.exchange.throttle import (
-    AdaptiveThrottle,
     get_or_create_throttle,
-    get_throttle_state,
 )
 from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 

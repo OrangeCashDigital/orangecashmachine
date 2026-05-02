@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 from omegaconf import OmegaConf
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
 

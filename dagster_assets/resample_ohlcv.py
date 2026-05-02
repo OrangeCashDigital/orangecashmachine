@@ -12,7 +12,6 @@ Principios: DIP · OCP · SSOT · SafeOps
 """
 from __future__ import annotations
 
-import asyncio
 
 from dagster import AssetIn, Output, asset
 

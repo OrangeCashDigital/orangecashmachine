@@ -88,9 +88,9 @@ def data_lake_root() -> Path:
 
     if canonical and legacy and canonical != legacy:
         warnings.warn(
-            f"OCM_DATA_LAKE_PATH y OCM_STORAGE__DATA_LAKE__PATH están ambas definidas "
-            f"con valores distintos. OCM_STORAGE__DATA_LAKE__PATH tiene prioridad. "
-            f"Eliminar OCM_DATA_LAKE_PATH del entorno.",
+            "OCM_DATA_LAKE_PATH y OCM_STORAGE__DATA_LAKE__PATH están ambas definidas "
+            "con valores distintos. OCM_STORAGE__DATA_LAKE__PATH tiene prioridad. "
+            "Eliminar OCM_DATA_LAKE_PATH del entorno.",
             UserWarning,
             stacklevel=2,
         )

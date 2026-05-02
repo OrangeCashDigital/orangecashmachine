@@ -39,8 +39,6 @@ CONFIG_PATH: Path = Path("config/settings.yaml")
 # Ref: https://omegaconf.readthedocs.io/en/latest/usage.html#environment-variable-resolver
 # _ENV_BOOL_TRUE/_ENV_BOOL_FALSE eliminadas — SSOT en layers/coercion.py
 # Importar con alias para no romper referencias internas residuales:
-from ocm_platform.config.layers.coercion import BOOL_TRUE as _ENV_BOOL_TRUE   # noqa: E402
-from ocm_platform.config.layers.coercion import BOOL_FALSE as _ENV_BOOL_FALSE  # noqa: E402
 
 SYMBOL_REGEX: re.Pattern[str] = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+(:[A-Z0-9]+)?$")
 FUTURES_SYMBOL_REGEX: re.Pattern[str] = re.compile(r"^[A-Z0-9]+/[A-Z0-9]+:[A-Z0-9]+$")

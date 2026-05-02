@@ -154,12 +154,12 @@ _module_constants: frozenset[str] = frozenset(
 _missing_from_registry = _module_constants - _ENV_VAR_NAMES
 _missing_from_module   = _ENV_VAR_NAMES - _module_constants
 assert not _missing_from_registry, (
-    f"Constantes declaradas en env_vars.py pero ausentes de _ENV_VAR_NAMES:\n"
+    "Constantes declaradas en env_vars.py pero ausentes de _ENV_VAR_NAMES:\n"
     + "\n".join(f"  + {v}" for v in sorted(_missing_from_registry))
     + "\nSolución: añadir a _ENV_VAR_NAMES en env_vars.py"
 )
 assert not _missing_from_module, (
-    f"Entradas en _ENV_VAR_NAMES sin constante correspondiente en env_vars.py:\n"
+    "Entradas en _ENV_VAR_NAMES sin constante correspondiente en env_vars.py:\n"
     + "\n".join(f"  - {v}" for v in sorted(_missing_from_module))
     + "\nSolución: declarar la constante o eliminar de _ENV_VAR_NAMES"
 )

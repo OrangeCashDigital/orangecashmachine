@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from loguru import logger
 
-from trading.execution.order import Order, OrderStatus
+from trading.execution.order import Order
 
 
 class LiveExecutor:

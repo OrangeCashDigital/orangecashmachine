@@ -29,7 +29,6 @@ from __future__ import annotations
 import asyncio
 
 from dagster import (
-    AssetExecutionContext,
     AssetIn,
     Output,
     asset,

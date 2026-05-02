@@ -36,11 +36,9 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
@@ -48,9 +46,7 @@ from fastapi.responses import JSONResponse
 
 from ocm_platform.observability import bind_pipeline, bootstrap_logging, configure_logging
 from ocm_platform.runtime.guard import ExecutionGuard, ExecutionStoppedError
-from ocm_platform.runtime.run_config import RunConfig
 from ocm_platform.runtime.context import RuntimeContext
-from ocm_platform.config.hydra_loader import load_appconfig_standalone
 from ocm_platform.config import env_vars
 
 from ocm_platform.runtime import guard_context
@@ -341,7 +337,6 @@ async def get_ohlcv(
     JSON con lista de candles: [{timestamp, open, high, low, close, volume}]
     """
     import pandas as pd
-    from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 
     # Normalizar symbol (el router puede URL-decodear %2F → /)
     symbol_norm = symbol.replace("%2F", "/").replace("%2f", "/")

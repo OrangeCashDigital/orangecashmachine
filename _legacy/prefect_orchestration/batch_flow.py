@@ -34,7 +34,7 @@ import asyncio
 from dataclasses import dataclass
 import time
 from pathlib import Path
-from typing import List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
+from typing import List, NamedTuple, Optional, Set, Tuple
 
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run as _prefect_flow_run
