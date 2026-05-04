@@ -63,6 +63,7 @@ from market_data.adapters.exchange import (
 from market_data.adapters.exchange.throttle import AdaptiveThrottle
 from market_data.observability.metrics import FETCH_ABORTS_TOTAL, ACTIVE_PAIRS
 from market_data.ports.state import CursorStorePort
+from market_data.ports.input.pipeline_trigger import PipelineTriggerPort
 from ocm_platform.infra.state.cursor_store import (
     build_cursor_store_from_env,
     InMemoryCursorStore,
@@ -181,7 +182,7 @@ def _classify_pair_error(result: PairResult) -> str:
 # OHLCVPipeline
 # ==============================================================================
 
-class OHLCVPipeline:
+class OHLCVPipeline(PipelineTriggerPort):
     """
     Pipeline unificado de ingestion OHLCV.
 
