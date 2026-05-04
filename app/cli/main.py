@@ -83,7 +83,7 @@ from ocm_platform.runtime.context import RuntimeContext
 from ocm_platform.observability import bootstrap_logging, configure_logging
 from ocm_platform.observability.metrics_runtime import init_metrics_runtime
 from ocm_platform.observability.pushers import PrometheusPusher, NoopPusher
-from ocm_platform.control_plane.orchestration.entrypoint import run as _default_pipeline_runner
+from market_data.processing.pipelines.ohlcv_pipeline import OHLCVPipeline as _default_pipeline_runner
 from market_data.ports.observability import MetricsPusherPort
 from ocm_platform.runtime.environment_validator import (
     EnvironmentValidator,

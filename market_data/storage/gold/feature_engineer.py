@@ -1,92 +1,66 @@
+"""
+market_data/storage/gold/feature_engineer.py
+=============================================
+DEPRECATED desde v2.0.0 — tombstone.
+
+Por qué fue deprecado
+---------------------
+1. Capa incorrecta: storage/ no debe computar features (viola SRP).
+   Feature engineering pertenece a la capa Gold, no al storage.
+
+2. DRY: duplicaba lógica de gold/transformer.py con VWAP incorrecto
+   (acumulado vs rolling) — dos SSOT son cero SSOT.
+
+Migración
+---------
+Antes:
+    from market_data.storage.gold.feature_engineer import FeatureEngineer
+    result = FeatureEngineer().compute(df, symbol="BTC/USDT", timeframe="1h")
+
+Ahora:
+    from market_data.gold.transformer import GoldTransformer
+    result = GoldTransformer.transform(df, symbol="BTC/USDT",
+                                       timeframe="1h", exchange="binance")
+
+Eliminación programada: v3.0.0
+"""
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
-from loguru import logger
+import warnings
 
-FEATURE_COLUMNS = [
-    "return_1",
-    "log_return",
-    "volatility_20",
-    "high_low_spread",
-    "vwap",
-]
+# Columnas que el caller podría referenciar — re-exportadas para no romper
+# código que hace `from feature_engineer import FEATURE_COLUMNS`.
+from market_data.gold.transformer import FEATURE_COLUMNS, VERSION as _GT_VERSION  # noqa: F401
+
+_DEPRECATED_MSG = (
+    "FeatureEngineer está DEPRECATED desde v2.0.0. "
+    "Usar market_data.gold.transformer.GoldTransformer. "
+    "Eliminado en v3.0.0."
+)
 
 
 class FeatureEngineer:
-    # Versión semántica del set de features.
-    # Incrementar cuando cambien los indicadores o su cálculo — permite
-    # detectar en el manifest de Gold qué versión de features produjo cada dataset.
-    VERSION = "1.1.0"  # 1.1.0: vwap rolling-20 (tp*vol) en lugar de acumulado desde t=0
+    """
+    DEPRECATED. Ver docstring del módulo.
+
+    Esta clase es un shim de compatibilidad — delega a GoldTransformer.
+    Emite DeprecationWarning en cada llamada a compute().
+    """
+
+    VERSION = f"1.1.0-deprecated (→ GoldTransformer {_GT_VERSION})"
 
     def compute(
         self,
-        df:        pd.DataFrame,
+        df:        "pd.DataFrame",
         symbol:    str = "",
         timeframe: str = "",
-    ) -> pd.DataFrame:
-        if df is None or df.empty or len(df) < 2:
-            logger.warning(
-                "FeatureEngineer: DataFrame vacio o insuficiente | {}/{}",
-                symbol, timeframe,
-            )
-            return df
+    ) -> "pd.DataFrame":
+        warnings.warn(_DEPRECATED_MSG, DeprecationWarning, stacklevel=2)
 
-        df = df.copy().sort_values("timestamp").reset_index(drop=True)
-
-        df["return_1"]        = df["close"].pct_change()
-        _safe_close            = df["close"].replace(0, float("nan"))
-        df["log_return"]      = np.log(_safe_close / _safe_close.shift(1))
-        df["volatility_20"]   = df["log_return"].rolling(20, min_periods=5).std()
-        df["high_low_spread"] = (df["high"] - df["low"]) / df["close"].replace(0, np.nan)
-
-        # VWAP rolling 20 periodos — VWAP acumulado desde t=0 no tiene
-        # significado financiero en series multi-sesion (produce señal falsa
-        # en backtesting con timeframes diarios/semanales).
-        # Typical-price weighted rolling es la convención estándar.
-        _tp  = (df["high"] + df["low"] + df["close"]) / 3
-        _vol = df["volume"].replace(0, np.nan)
-        df["vwap"] = (
-            (_tp * _vol).rolling(20, min_periods=5).sum()
-            / _vol.rolling(20, min_periods=5).sum()
+        from market_data.gold.transformer import GoldTransformer
+        return GoldTransformer.transform(
+            df,
+            symbol    = symbol,
+            timeframe = timeframe,
+            exchange  = "unknown",  # FeatureEngineer no tenía exchange — degradación segura
         )
-
-        logger.debug(
-            "Features calculados | {}/{} rows={} features={}",
-            symbol, timeframe, len(df), FEATURE_COLUMNS,
-        )
-        df = self._sanitize_features(df)
-        return df
-
-    @staticmethod
-    def _sanitize_features(df: "pd.DataFrame") -> "pd.DataFrame":
-        """Convierte ±inf → NaN y registra conteo para auditoría.
-
-        Semántica NaN de FeatureEngineer:
-          • close=0 o prev_close=0  → NaN  (retorno indefinido)
-          • ventana rolling corta   → NaN  (min_periods no alcanzado)
-          • ±inf por división       → NaN  (sanitizados aquí)
-        Los NaN se PROPAGAN; el caller (QualityPipeline) decide si imputa,
-        dropa o los trata como señal de calidad. SSOT de política NaN: caller.
-
-        Fail-soft: nunca lanza excepción.
-        """
-        import numpy as np
-        from loguru import logger as _log
-
-        numeric  = df.select_dtypes(include="number")
-        inf_mask = np.isinf(numeric)
-        n_inf    = int(inf_mask.values.sum())
-
-        if n_inf:
-            _log.warning(
-                "FeatureEngineer._sanitize_features: ±inf→NaN | count={}",
-                n_inf,
-            )
-            df = df.copy()
-            df[numeric.columns] = numeric.replace(
-                [np.inf, -np.inf], float("nan")
-            )
-
-        return df
-
