@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 market_data/storage/gold/gold_storage.py
 =========================================
@@ -9,7 +10,7 @@ Particionado : exchange / market_type / symbol / timeframe / ts_month
 
 Responsabilidad
 ---------------
-Leer Silver (Iceberg), calcular features via FeatureEngineer, y persistir
+Leer Silver (Iceberg), calcular features via GoldTransformer, y persistir
 el dataset enriquecido en gold.features con overwrite atómico por dataset.
 
 Versionado
@@ -19,13 +20,16 @@ snapshot que reemplaza los datos del dataset (exchange/symbol/market_type/
 timeframe). El snapshot anterior queda accesible para reproducibilidad
 mediante GoldLoader con time travel (snapshot_id o as_of).
 
-Esto reemplaza el sistema de _versions/ con archivos JSON: más limpio,
-sin estado en filesystem, reproducibilidad garantizada por Iceberg.
-
 Lineage
 -------
 silver_snapshot_id y silver_snapshot_ms se capturan ANTES del load —
 anclan el manifest al punto exacto en el tiempo que Gold usó como fuente.
+
+Principios
+----------
+DIP   — depende de GoldTransformer (dominio), nunca del shim FeatureEngineer.
+SSOT  — GoldTransformer es la única fuente de feature engineering.
+SRP   — GoldStorage orquesta; GoldTransformer transforma.
 """
 from __future__ import annotations
 
@@ -36,7 +40,7 @@ import pyarrow as pa
 from loguru import logger
 from pyiceberg.expressions import And, EqualTo
 
-from market_data.storage.gold.feature_engineer import FeatureEngineer
+from market_data.gold.transformer import GoldTransformer, VERSION as _TRANSFORMER_VERSION
 from market_data.storage.iceberg.catalog import ensure_gold_table, get_catalog
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 
@@ -77,13 +81,14 @@ class GoldStorage:
         # un path de filesystem. Ya no tiene efecto — Gold usa Iceberg.
         gold_path: object = None,
     ) -> None:
-        self._dry_run  = dry_run
-        self._engineer = FeatureEngineer()
+        self._dry_run            = dry_run
+        self._engineer_version   = _TRANSFORMER_VERSION
         ensure_gold_table()
         self._table = get_catalog().load_table("gold.features")
         logger.info(
-            "GoldStorage ready | backend=iceberg dry_run={}",
+            "GoldStorage ready | backend=iceberg dry_run={} transformer_version={}",
             self._dry_run,
+            self._engineer_version,
         )
 
     # =========================================================================
@@ -152,8 +157,13 @@ class GoldStorage:
             )
             df = df.dropna(subset=["timestamp"]).reset_index(drop=True)
 
-        # ── Feature engineering ───────────────────────────────────────────────
-        df = self._engineer.compute(df, symbol=symbol, timeframe=timeframe)
+        # ── Feature engineering — GoldTransformer (estático, sin estado) ──────
+        df = GoldTransformer.transform(
+            df,
+            symbol    = symbol,
+            timeframe = timeframe,
+            exchange  = exchange,
+        )
 
         # ── DRY RUN ───────────────────────────────────────────────────────────
         if self._dry_run:
@@ -171,25 +181,22 @@ class GoldStorage:
             market_type        = market_type,
             timeframe          = timeframe,
             run_id             = run_id,
-            engineer_version   = getattr(self._engineer, "VERSION", "unknown"),
+            engineer_version   = self._engineer_version,
             silver_snapshot_id = _snap_id,
             silver_snapshot_ms = _snap_ms,
         )
 
         # ── Overwrite atómico — reemplaza solo este dataset ───────────────────
-        # snapshot_properties inyecta la identidad del dataset en el snapshot
-        # para que list_versions() pueda filtrar por dataset sin scan de datos.
-        # Las properties se persisten en summary.additional_properties (pyiceberg).
         self._table.overwrite(
             pa.Table.from_pandas(
                 prepared,
                 schema         = self._table.schema().as_arrow(),
                 preserve_index = False,
             ),
-            overwrite_filter     = _dataset_filter(
+            overwrite_filter    = _dataset_filter(
                 exchange, symbol, market_type, timeframe,
             ),
-            snapshot_properties  = {
+            snapshot_properties = {
                 "ocm.exchange":    exchange,
                 "ocm.symbol":      symbol,
                 "ocm.market_type": market_type,
@@ -258,8 +265,7 @@ class GoldStorage:
         en orden cronológico.
 
         Filtra por ocm.* properties inyectadas en cada overwrite().
-        Snapshots anteriores a esta feature (sin properties) se omiten
-        — no hay forma de verificar su dataset sin scan de datos.
+        Snapshots anteriores a esta feature (sin properties) se omiten.
         """
         try:
             result = []
@@ -277,8 +283,6 @@ class GoldStorage:
                     result.append(entry.snapshot_id)
             return result
         except Exception as _snap_exc:
-            # SafeOps: error leyendo snapshots Iceberg → retorna lista vacía.
-            # Tabla nueva (sin snapshots aún) es el caso más común.
             logger.debug(
                 "list_snapshots_for failed — retornando vacío",
                 error=str(_snap_exc),
@@ -335,7 +339,6 @@ def _prepare_gold_df(
     df["silver_snapshot_id"] = silver_snapshot_id
     df["silver_snapshot_ms"] = silver_snapshot_ms
 
-    # Garantizar que todas las columnas Gold existen (features pueden ser NaN)
     for col in _GOLD_COLS:
         if col not in df.columns:
             df[col] = None

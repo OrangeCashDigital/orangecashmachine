@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 tests/storage/test_gold_storage.py
 ====================================
@@ -9,7 +10,13 @@ Estrategia de aislamiento
 • GoldStorage: dry_run=True — verifica lógica sin escribir en Iceberg.
 • GoldLoader:  tests de construcción e invariantes de interfaz sin I/O real.
 • Build completo (Silver→features→Gold) requiere Iceberg poblado — queda
-  para tests de integración. Aquí solo se testea la capa de lógica pura.
+  para tests de integración.
+
+Principios
+----------
+DIP  — GoldStorage ya no expone _engineer; se testea comportamiento observable.
+SRP  — cada test verifica una sola propiedad.
+SSOT — engineer_version es el string canónico de GoldTransformer.VERSION.
 """
 from __future__ import annotations
 
@@ -19,6 +26,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from market_data.gold.transformer import VERSION as TRANSFORMER_VERSION
 from market_data.storage.gold.gold_storage import GoldStorage, _prepare_gold_df
 from data_platform.loaders.gold_loader import (
     GoldLoader,
@@ -58,13 +66,13 @@ def test_gold_storage_instantiates(gold):
     assert gold._dry_run is True
 
 
-def test_gold_storage_has_feature_engineer(gold):
-    from market_data.storage.gold.feature_engineer import FeatureEngineer
-    assert isinstance(gold._engineer, FeatureEngineer)
+def test_gold_storage_engineer_version_matches_transformer(gold):
+    """engineer_version debe coincidir con GoldTransformer.VERSION — SSOT."""
+    assert gold._engineer_version == TRANSFORMER_VERSION
 
 
 def test_gold_storage_engineer_version_is_semver(gold):
-    parts = gold._engineer.VERSION.split(".")
+    parts = gold._engineer_version.split(".")
     assert len(parts) == 3 and all(p.isdigit() for p in parts)
 
 
@@ -74,33 +82,29 @@ def test_build_dry_run_returns_dataframe_with_features(gold):
     """dry_run debe retornar el DataFrame con features calculados, sin escribir."""
     silver_df = _make_silver_df(30)
 
-    with patch.object(
-        gold._engineer.__class__, "compute", wraps=gold._engineer.compute
-    ) as mock_compute:
-        # Mockear IcebergStorage dentro de build()
-        mock_silver = MagicMock()
-        mock_silver.get_current_snapshot.return_value = {
-            "snapshot_id": 12345,
-            "timestamp_ms": 1_700_000_000_000,
-        }
-        mock_silver.load_ohlcv.return_value = silver_df
+    mock_silver = MagicMock()
+    mock_silver.get_current_snapshot.return_value = {
+        "snapshot_id": 12345,
+        "timestamp_ms": 1_700_000_000_000,
+    }
+    mock_silver.load_ohlcv.return_value = silver_df
 
-        with patch(
-            "market_data.storage.gold.gold_storage.IcebergStorage",
-            return_value=mock_silver,
-        ):
-            result = gold.build(
-                exchange="bybit",
-                symbol="BTC/USDT",
-                market_type="spot",
-                timeframe="1h",
-            )
+    with patch(
+        "market_data.storage.gold.gold_storage.IcebergStorage",
+        return_value=mock_silver,
+    ):
+        result = gold.build(
+            exchange="bybit",
+            symbol="BTC/USDT",
+            market_type="spot",
+            timeframe="1h",
+        )
 
     assert result is not None
     assert len(result) == 30
     assert "vwap" in result.columns
     assert "return_1" in result.columns
-    assert mock_compute.called
+    assert "log_return" in result.columns
 
 
 def test_build_dry_run_returns_none_when_silver_empty(gold):
@@ -124,7 +128,7 @@ def test_build_dry_run_returns_none_when_silver_empty(gold):
 
 
 def test_build_dry_run_returns_none_when_silver_raises(gold):
-    """build() retorna None si Silver.load_ohlcv() falla."""
+    """build() retorna None si Silver.load_ohlcv() falla — fail-soft."""
     mock_silver = MagicMock()
     mock_silver.get_current_snapshot.return_value = {}
     mock_silver.load_ohlcv.side_effect = RuntimeError("Iceberg scan failed")
@@ -151,14 +155,14 @@ def test_prepare_gold_df_adds_identity_columns():
         df,
         exchange="bybit", symbol="BTC/USDT",
         market_type="spot", timeframe="1h",
-        run_id="test-run", engineer_version="1.1.0",
+        run_id="test-run", engineer_version="2.0.0",
         silver_snapshot_id=999, silver_snapshot_ms=1_700_000_000_000,
     )
     assert (result["exchange"] == "bybit").all()
     assert (result["symbol"] == "BTC/USDT").all()
     assert (result["market_type"] == "spot").all()
     assert (result["timeframe"] == "1h").all()
-    assert (result["engineer_version"] == "1.1.0").all()
+    assert (result["engineer_version"] == "2.0.0").all()
     assert (result["silver_snapshot_id"] == 999).all()
 
 
@@ -168,7 +172,7 @@ def test_prepare_gold_df_timestamp_is_microseconds_utc():
         df,
         exchange="bybit", symbol="BTC/USDT",
         market_type="spot", timeframe="1h",
-        run_id=None, engineer_version="1.1.0",
+        run_id=None, engineer_version="2.0.0",
         silver_snapshot_id=0, silver_snapshot_ms=0,
     )
     assert str(result["timestamp"].dtype) == "datetime64[us, UTC]"
@@ -180,7 +184,7 @@ def test_prepare_gold_df_run_id_empty_string_when_none():
         df,
         exchange="bybit", symbol="BTC/USDT",
         market_type="spot", timeframe="1h",
-        run_id=None, engineer_version="1.1.0",
+        run_id=None, engineer_version="2.0.0",
         silver_snapshot_id=0, silver_snapshot_ms=0,
     )
     assert (result["run_id"] == "").all()
@@ -192,7 +196,7 @@ def test_prepare_gold_df_preserves_row_count():
         df,
         exchange="kucoin", symbol="ETH/USDT",
         market_type="spot", timeframe="4h",
-        run_id="r1", engineer_version="1.1.0",
+        run_id="r1", engineer_version="2.0.0",
         silver_snapshot_id=1, silver_snapshot_ms=1,
     )
     assert len(result) == 20
