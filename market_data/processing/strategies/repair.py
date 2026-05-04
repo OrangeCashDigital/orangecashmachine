@@ -24,7 +24,7 @@ from market_data.processing.exceptions import (
     ChunkFetchError,
     NoDataAvailableError,
 )
-from market_data.processing.utils.timeframe import timeframe_to_ms
+from domain.value_objects.timeframe import timeframe_to_ms
 from market_data.adapters.exchange.exchange_quirks import get_quirks
 from market_data.observability.metrics import (
     ROWS_INGESTED, PIPELINE_ERRORS,

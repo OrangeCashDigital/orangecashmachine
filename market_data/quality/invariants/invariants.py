@@ -32,7 +32,7 @@ from typing import Dict, List
 
 import pandas as pd
 
-from market_data.processing.utils.timeframe import timeframe_to_ms
+from domain.value_objects.timeframe import timeframe_to_ms
 
 
 # ==========================================================

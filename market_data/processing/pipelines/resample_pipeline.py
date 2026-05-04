@@ -55,12 +55,12 @@ from typing import List, Optional
 import pandas as pd
 
 from ocm_platform.observability import bind_pipeline
-from market_data.processing.utils.timeframe import (
+from domain.value_objects.timeframe import (
     timeframe_to_ms,
     VALID_TIMEFRAMES,
     InvalidTimeframeError,
 )
-from market_data.processing.utils.timeframe import align_to_grid
+from domain.value_objects.timeframe import align_to_grid
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 
 _log = bind_pipeline("resample_pipeline")
