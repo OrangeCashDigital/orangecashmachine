@@ -32,7 +32,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.quality.schemas.ohlcv_schema import validate_ohlcv
-from domain.value_objects.timeframe import align_to_grid
+from market_data.processing.utils.grid_alignment import align_to_grid
 from market_data.processing.validation.candle_validator import (
     CandleValidator,
     ValidationSummary,
@@ -149,9 +149,7 @@ class OHLCVTransformer:
         removed = before - len(df)
 
         if removed > 0:
-            logger.warning(
-                f"Removed {removed} duplicate OHLCV rows"
-            )
+            logger.warning("Removed {} duplicate OHLCV rows", removed)
 
         return df
 
@@ -300,9 +298,7 @@ class OHLCVTransformer:
         removed = before - len(df)
 
         if removed > 0:
-            logger.warning(
-                f"Removed {removed} NaN rows (post-validator)"
-            )
+            logger.warning("Removed {} NaN rows (post-validator)", removed)
 
         return df
 

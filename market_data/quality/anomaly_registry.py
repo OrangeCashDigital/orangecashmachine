@@ -254,3 +254,7 @@ class AnomalyRegistry:
 # Injectable en tests via QualityPipeline(registry=AnomalyRegistry(db_path=tmp_path))
 
 _registry = AnomalyRegistry()
+
+# Alias público del singleton — SSOT, injectable en tests.
+# _registry se mantiene por compatibilidad interna; callers externos usan default_registry.
+default_registry: AnomalyRegistry = _registry

@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from ocm_platform.runtime.lineage import get_git_hash as _get_git_hash
+def _get_git_hash() -> str:
+    """Retorna el git hash del HEAD actual. Fail-soft: retorna "unknown" si falla."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=2,
+        )
+        return result.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import numpy as np
@@ -112,11 +122,7 @@ class DataQualityChecker:
         # vs gaps de fuente real. Fail-soft: max(0,...) si over-corrección.
         self._rows_removed       = max(0, int(rows_removed))
 
-    def check(self, df, symbol, rows_removed: int = 0):
-        # rows_removed override: permite que el caller propague contexto
-        # pipeline sin necesidad de reinstanciar el checker (DRY).
-        if rows_removed:
-            self._rows_removed = max(0, int(rows_removed))
+    def check(self, df: "pd.DataFrame", symbol: str) -> "DataQualityReport":
         report = DataQualityReport(
             symbol=symbol,
             timeframe=self._timeframe,

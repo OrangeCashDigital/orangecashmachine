@@ -340,13 +340,14 @@ class CCXTAdapter(ExchangeAdapter):
     async def fetch_trades(
         self,
         symbol: str,
-        limit: int = 100,
+        since:  Optional[int] = None,
+        limit:  int = 1_000,
     ) -> List[Dict[str, Any]]:
         client = await self._get_client()
         async with self._limiter.slot():
             async def _call():
                 return await asyncio.wait_for(
-                    client.fetch_trades(symbol, limit=limit),
+                    client.fetch_trades(symbol, since=since, limit=limit),
                     timeout=_FETCH_TRADES_TIMEOUT,
                 )
 

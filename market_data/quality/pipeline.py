@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from domain.boundaries import AnomalyRegistryProtocol
+from market_data.ports.quality import AnomalyRegistryPort
 
 from dataclasses import dataclass
 from enum import Enum
@@ -12,7 +12,7 @@ from loguru import logger
 from market_data.quality.validators.data_quality import DataQualityChecker, DataQualityReport
 from market_data.observability.metrics import QUALITY_GAPS_TOTAL, PIPELINE_ERRORS
 from market_data.processing.utils.gap_utils import scan_gaps
-from market_data.quality.anomaly_registry import _registry
+from market_data.quality.anomaly_registry import default_registry
 from market_data.lineage.tracker import (
     LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
 )
@@ -48,7 +48,7 @@ class QualityPipelineResult:
 # Anomaly Registry
 # ----------------------------------------------------------
 # Delegado a market_data.quality.anomaly_registry (SQLite persistente).
-# _registry importado arriba como singleton de módulo.
+# default_registry importado arriba como singleton de módulo (SSOT).
 # ----------------------------------------------------------
 
 
@@ -56,10 +56,10 @@ class QualityPipeline:
     def __init__(
         self,
         policy:   Optional[DataQualityPolicy] = None,
-        registry: AnomalyRegistryProtocol | None = None,
+        registry: AnomalyRegistryPort | None = None,
     ) -> None:
         self._policy   = policy or default_policy
-        self._registry = registry or _registry  # shared by default, injectable for tests
+        self._registry = registry or default_registry  # shared by default, injectable for tests
 
     def run(
         self,
