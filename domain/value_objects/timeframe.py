@@ -1,154 +1,177 @@
 # -*- coding: utf-8 -*-
 """
 domain/value_objects/timeframe.py
-===================================
+==================================
 
-Timeframe — value object canónico para intervalos temporales.
+Value object canónico de Timeframe para OrangeCashMachine.
 
-Por qué existe
---------------
-En todo OCM, timeframe se pasaba como str desnudo: "1h", "4h", "1d".
-Esto permite valores ilegales en tiempo de construcción, hace que
-la validación se repita en cada capa (DRY violation) y elimina la
-capacidad de derivar propiedades (segundos, periodos/año) sin SSOT.
+SSOT único de:
+  - representación de timeframes válidos (Timeframe enum)
+  - conversión a milisegundos (timeframe_to_ms)
+  - validación de formato (InvalidTimeframeError, VALID_TIMEFRAMES)
 
-Este enum resuelve los tres problemas:
-  - Fail-Fast en construcción: Timeframe("5x") → ValueError inmediato
-  - SSOT de segundos por periodo y factor de anualización (crypto 24/7)
-  - Comparable, hashable, serializable como str canónico
+Regla de dependencias
+---------------------
+Este módulo NO importa desde market_data/, trading/, ni ningún
+bounded context. Solo stdlib. Es el núcleo del Shared Kernel.
 
-Compatibilidad
---------------
-Timeframe("1h") == "1h"   → False  (son tipos distintos, usar .value)
-str(Timeframe.H1)         → "1h"   (via __str__)
-Timeframe.H1.value        → "1h"   (acceso directo al str canónico)
+Compatibilidad str
+------------------
+Timeframe hereda de str para comparar directamente con strings externos:
+    Timeframe.H1 == "1h"   → True
+    f"tf={Timeframe.H1}"   → "tf=1h"
+Elimina casting explícito en paths de filesystem y manifests JSON.
 
-Uso en pipelines existentes
-----------------------------
-    # Antes (frágil):
-    timeframe: str = "1h"
+Migración desde legacy
+----------------------
+Antes:  from market_data.processing.utils.timeframe import timeframe_to_ms
+Ahora:  from domain.value_objects.timeframe import timeframe_to_ms
 
-    # Ahora (fail-fast):
-    timeframe: Timeframe = Timeframe.H1
+El legacy (market_data/processing/utils/timeframe.py) redirige aquí
+como tombstone — no rompe imports existentes durante la migración.
 
-    # Para inyectar en APIs externas que esperan str:
-    adapter.fetch_ohlcv(timeframe=Timeframe.H1.value)
-
-Principios: DDD · SSOT · Fail-Fast · KISS · OCP
+Principios: DDD · SSOT · Fail-Fast · OCP · KISS
 """
 from __future__ import annotations
 
 from enum import Enum
 
+# ===========================================================================
+# Tabla canónica de unidades → milisegundos
+# SSOT: única definición en todo el sistema.
+# ===========================================================================
+
+_UNIT_MS: dict[str, int] = {
+    "m": 60_000,
+    "h": 3_600_000,
+    "d": 86_400_000,
+    "w": 604_800_000,
+}
+
+
+# ===========================================================================
+# Timeframe — value object canónico
+# ===========================================================================
 
 class Timeframe(str, Enum):
     """
-    Intervalos temporales canónicos soportados por OCM.
+    Timeframes soportados por OCM.
 
-    Hereda de str para que isinstance(tf, str) sea True —
-    compatibilidad con APIs externas que esperan str sin casting explícito.
-    El valor del enum ES el string canónico (e.g. Timeframe.H1 == "1h").
-
-    Propiedades derivadas
-    ---------------------
-    seconds       — segundos por periodo (para cálculos de offset)
-    periods_per_year — factor de anualización crypto 24/7 (365d × 24h × ...)
-    is_intraday   — True para timeframes < 1d
-
-    Extensión (OCP)
-    ---------------
-    Agregar "3d", "2w" etc. no modifica el contrato existente —
-    solo añadir el miembro y los cases en los dicts internos.
+    Hereda de str: Timeframe.H1 == "1h" es True sin .value.
+    OCP: añadir un timeframe nuevo no modifica el contrato existente.
     """
-
     M1  = "1m"
     M5  = "5m"
     M15 = "15m"
     M30 = "30m"
     H1  = "1h"
+    H2  = "2h"
     H4  = "4h"
+    H6  = "6h"
     H8  = "8h"
+    H12 = "12h"
     D1  = "1d"
     W1  = "1w"
 
-    # ------------------------------------------------------------------
-    # Derivadas — SSOT de constantes temporales
-    # ------------------------------------------------------------------
+    def __str__(self) -> str:
+        # Python 3.11+ cambió str(StrEnum) al nombre del miembro.
+        # Forzamos el valor para compatibilidad con f-strings y paths.
+        return self.value
 
     @property
     def seconds(self) -> int:
-        """Segundos por periodo. Usado para calcular offsets y ventanas."""
-        _MAP: dict[str, int] = {
-            "1m":    60,
-            "5m":   300,
-            "15m":  900,
-            "30m": 1_800,
-            "1h":  3_600,
-            "4h": 14_400,
-            "8h": 28_800,
-            "1d": 86_400,
-            "1w": 604_800,
-        }
-        return _MAP[self.value]
+        """Duración del timeframe en segundos."""
+        return timeframe_to_ms(self.value) // 1000
 
     @property
-    def periods_per_year(self) -> int:
-        """
-        Periodos por año calendario (crypto 24/7, 365 días).
-
-        SSOT del factor de anualización — reemplaza _ANNUALIZATION_MAP
-        disperso en gold/transformer.py y otros módulos.
-
-        Calculado como: 365 * 24 * 3600 / seconds
-        Valores almacenados explícitamente para claridad y evitar
-        errores de redondeo en divisiones enteras.
-        """
-        _MAP: dict[str, int] = {
-            "1m":  525_600,
-            "5m":  105_120,
-            "15m":  35_040,
-            "30m":  17_520,
-            "1h":    8_760,
-            "4h":    2_190,
-            "8h":    1_095,
-            "1d":      365,
-            "1w":       52,
-        }
-        return _MAP[self.value]
-
-    @property
-    def is_intraday(self) -> bool:
-        """True si el timeframe es menor a un día completo."""
-        return self.seconds < 86_400
-
-    # ------------------------------------------------------------------
-    # Conversión y representación
-    # ------------------------------------------------------------------
-
-    def __str__(self) -> str:
-        return self.value
-
-    def __repr__(self) -> str:
-        return f"Timeframe({self.value!r})"
+    def milliseconds(self) -> int:
+        """Duración del timeframe en milisegundos."""
+        return timeframe_to_ms(self.value)
 
     @classmethod
     def from_str(cls, value: str) -> "Timeframe":
         """
-        Construye un Timeframe desde string. Fail-Fast si inválido.
+        Construye un Timeframe desde string.
 
-        Preferir sobre Timeframe(value) cuando el string viene de input
-        externo y se quiere un error explícito con mensaje claro.
+        Fail-Fast: lanza InvalidTimeframeError si el valor no es válido.
 
-        Raises
-        ------
-        ValueError
-            Si value no corresponde a ningún Timeframe soportado.
+        Examples
+        --------
+        >>> Timeframe.from_str("1h")
+        <Timeframe.H1: '1h'>
+        >>> Timeframe.from_str("99x")
+        InvalidTimeframeError: Timeframe inválido: '99x'. Válidos: [...]
         """
         try:
             return cls(value)
         except ValueError:
-            valid = [tf.value for tf in cls]
-            raise ValueError(
-                f"Timeframe inválido: {value!r}. "
-                f"Valores soportados: {valid}"
-            ) from None
+            raise InvalidTimeframeError(value)
+
+
+# Frozenset de strings para validación rápida O(1).
+# Compatible con código legacy que valida con `if tf in VALID_TIMEFRAMES`.
+VALID_TIMEFRAMES: frozenset[str] = frozenset(tf.value for tf in Timeframe)
+
+
+# ===========================================================================
+# Exceptions
+# ===========================================================================
+
+class InvalidTimeframeError(ValueError):
+    """
+    Timeframe no reconocido o con formato inválido.
+
+    Fail-Fast: lanzada en construcción, no en runtime tardío.
+    """
+
+    def __init__(self, timeframe: str) -> None:
+        super().__init__(
+            f"Timeframe inválido: '{timeframe}'. "
+            f"Válidos: {sorted(VALID_TIMEFRAMES)}"
+        )
+        self.timeframe = timeframe
+
+
+# ===========================================================================
+# API pública — conversión a milisegundos
+# ===========================================================================
+
+def timeframe_to_ms(timeframe: str) -> int:
+    """
+    Convierte un timeframe string a milisegundos.
+
+    Acepta tanto strings crudos ("1h") como instancias de Timeframe
+    (Timeframe.H1) porque Timeframe hereda de str.
+
+    Parameters
+    ----------
+    timeframe : str
+        Ej: "1m", "4h", "1d"
+
+    Returns
+    -------
+    int
+        Duración en milisegundos.
+
+    Raises
+    ------
+    InvalidTimeframeError
+        Si el formato es inválido o la unidad no está soportada.
+
+    Examples
+    --------
+    >>> timeframe_to_ms("1m")
+    60000
+    >>> timeframe_to_ms("4h")
+    14400000
+    >>> timeframe_to_ms(Timeframe.H1)
+    3600000
+    """
+    try:
+        quantity = int(timeframe[:-1])
+        unit     = timeframe[-1]
+        if unit not in _UNIT_MS:
+            raise InvalidTimeframeError(timeframe)
+        return quantity * _UNIT_MS[unit]
+    except (ValueError, IndexError):
+        raise InvalidTimeframeError(timeframe)
