@@ -7,11 +7,12 @@ Contratos (puertos) del bounded context market_data.
 
 Exports públicos
 ----------------
-OHLCVStorage      — contrato de storage OHLCV (Silver layer)
-CursorStorePort   — contrato de persistencia de cursores de ingesta
-MetricsPusherPort — contrato de empuje de métricas al backend
-ExchangeAdapter   — contrato de adapters de exchange
-encode_cursor_key — función pura de codificación de claves de cursor
+AnomalyRegistryPort — contrato de registro de anomalías de calidad
+CursorStorePort     — contrato de persistencia de cursores de ingesta
+encode_cursor_key   — función pura de codificación de claves de cursor
+ExchangeAdapter     — contrato de adapters de exchange
+MetricsPusherPort   — contrato de empuje de métricas al backend
+OHLCVStorage        — contrato de storage OHLCV (Silver layer)
 
 Arquitectura
 ------------
@@ -26,15 +27,17 @@ application/ → importa desde ports/ y domain/
 adapters/  → importa desde ports/ para declarar qué implementa
 """
 
-from market_data.ports.storage import OHLCVStorage
-from market_data.ports.state import CursorStorePort, encode_cursor_key
-from market_data.ports.observability import MetricsPusherPort
 from market_data.ports.exchange import ExchangeAdapter
+from market_data.ports.observability import MetricsPusherPort
+from market_data.ports.quality import AnomalyRegistryPort
+from market_data.ports.state import CursorStorePort, encode_cursor_key
+from market_data.ports.storage import OHLCVStorage
 
 __all__ = [
-    "OHLCVStorage",
+    "AnomalyRegistryPort",
     "CursorStorePort",
     "encode_cursor_key",
-    "MetricsPusherPort",
     "ExchangeAdapter",
+    "MetricsPusherPort",
+    "OHLCVStorage",
 ]

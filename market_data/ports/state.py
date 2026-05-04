@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 market_data/ports/state.py
 ==========================
@@ -16,6 +14,7 @@ define la semántica de las claves, no al backend de storage.
 Movida desde infra.state.cursor_store para eliminar la
 dependencia inversa.
 """
+from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
 
