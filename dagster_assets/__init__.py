@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-dagster_assets/
-===============
+dagster_assets/ — DEPRECATED. Usa infrastructure/dagster/assets/.
 
-Asset catalog de OrangeCashMachine en Dagster.
-
-Arquitectura
-------------
-Fase 1 — Wrapper: los assets envuelven OHLCVPipeline sin modificarlo.
-Fase 2 — DAG explícito: deps declarativas bronze → silver → gold.
-Fase 3 — Concurrencia declarativa: elimina _PIPELINE_SEMAPHORE manual.
-
-Principios: DIP · OCP · SSOT · Clean Architecture
+Re-exporta para compatibilidad con imports existentes en tests.
 """
+import warnings
+warnings.warn(
+    "dagster_assets/ está deprecated. Usa infrastructure.dagster.assets",
+    DeprecationWarning,
+    stacklevel=2,
+)
+from infrastructure.dagster.assets import (  # noqa: F401
+    BRONZE_OHLCV_ASSETS,
+    REPAIR_OHLCV_ASSETS,
+    RESAMPLE_OHLCV_ASSETS,
+    ALL_ASSET_CHECKS,
+)
