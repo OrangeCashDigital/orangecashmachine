@@ -30,9 +30,17 @@ from market_data.application.use_cases.pipeline_orchestrator import (
     PipelineRequest,
     PipelineMode,
 )
+from market_data.application.use_cases.resample_ohlcv import (
+    ResampleUseCase,
+    ResampleRequest,
+    ResampleUseCaseResult,
+)
 
 __all__ = [
     "PipelineOrchestrator",
     "PipelineRequest",
     "PipelineMode",
+    "ResampleUseCase",
+    "ResampleRequest",
+    "ResampleUseCaseResult",
 ]
