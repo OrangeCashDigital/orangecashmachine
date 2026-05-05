@@ -26,7 +26,8 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+
+from market_data.domain.value_objects.ohlcv_batch import OHLCVBatch
 
 
 # ===========================================================================
@@ -84,13 +85,6 @@ class CandleReceived(DomainEvent):
     run_id:       str   = ""
 
 
-# ---------------------------------------------------------------------------
-# Candle tuple type alias
-# (timestamp_ms, open, high, low, close, volume)
-# ---------------------------------------------------------------------------
-CandleTuple = Tuple[int, float, float, float, float, float]
-
-
 @dataclass(frozen=True)
 class OHLCVBatchReceived(DomainEvent):
     """
@@ -104,36 +98,26 @@ class OHLCVBatchReceived(DomainEvent):
 
     Fields
     ------
-    exchange      : identificador del exchange
-    symbol        : par de trading
-    timeframe     : resolución canónica
-    candles       : tuplas (timestamp_ms, open, high, low, close, volume)
-                    inmutables → tuple-of-tuples, no list
-    source        : "rest" | "replay"
-    run_id        : correlación con LineageTracker
-    chunk_index   : índice del chunk en un backfill (0-based)
-    total_chunks  : total de chunks esperados (None si desconocido)
+    batch : OHLCVBatch — payload completo: velas + metadatos de contexto
+            (exchange, symbol, timeframe, source, run_id, chunk_index,
+             total_chunks están todos en el VO — sin duplicación)
+
+    Properties delegadas
+    --------------------
+    row_count     → batch.count
+    is_last_chunk → batch.is_last_chunk
     """
-    exchange:     str                        = ""
-    symbol:       str                        = ""
-    timeframe:    str                        = ""
-    candles:      Tuple[CandleTuple, ...]    = field(default_factory=tuple)
-    source:       str                        = "rest"
-    run_id:       str                        = ""
-    chunk_index:  int                        = 0
-    total_chunks: Optional[int]              = None
+    batch: OHLCVBatch = field(default_factory=OHLCVBatch)
 
     @property
     def row_count(self) -> int:
         """Número de velas en el batch."""
-        return len(self.candles)
+        return self.batch.count
 
     @property
     def is_last_chunk(self) -> bool:
         """True si este es el último chunk de un backfill."""
-        if self.total_chunks is None:
-            return False
-        return self.chunk_index >= self.total_chunks - 1
+        return self.batch.is_last_chunk
 
 
 # ===========================================================================
@@ -143,6 +127,5 @@ class OHLCVBatchReceived(DomainEvent):
 __all__ = [
     "DomainEvent",
     "CandleReceived",
-    "CandleTuple",
     "OHLCVBatchReceived",
 ]

@@ -25,7 +25,6 @@ from market_data.domain.events._lineage import (    # noqa: F401
 )
 from market_data.domain.events.ingestion import (   # noqa: F401
     CandleReceived,
-    CandleTuple,
     DomainEvent,
     OHLCVBatchReceived,
 )
@@ -38,6 +37,5 @@ __all__ = [
     # Ingestion
     "DomainEvent",
     "CandleReceived",
-    "CandleTuple",
     "OHLCVBatchReceived",
 ]

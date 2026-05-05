@@ -34,7 +34,7 @@ from market_data.quality.anomaly_registry import default_registry
 from market_data.quality.validators.data_quality import DataQualityChecker
 
 
-# Columnas esperadas en las candle-tuples (SSOT con CandleTuple)
+# Columnas del DataFrame OHLCV — SSOT con OHLCVBatch.candles
 _CANDLE_COLS = ("timestamp", "open", "high", "low", "close", "volume")
 
 
@@ -87,7 +87,7 @@ class QualityPipelineConsumer(BaseConsumer):
             logger.error(
                 "QualityPipelineConsumer: unhandled error | "
                 "exchange={} symbol={} timeframe={} event_id={} err={}",
-                event.exchange, event.symbol, event.timeframe,
+                event.batch.exchange, event.batch.symbol, event.batch.timeframe,
                 event.event_id[:8], exc,
             )
 
@@ -106,20 +106,20 @@ class QualityPipelineConsumer(BaseConsumer):
             logger.debug(
                 "QualityPipelineConsumer: empty batch — skipping | "
                 "exchange={} symbol={} timeframe={}",
-                event.exchange, event.symbol, event.timeframe,
+                event.batch.exchange, event.batch.symbol, event.batch.timeframe,
             )
             return
 
         # --- Quality check ---
         checker = DataQualityChecker(
-            timeframe=event.timeframe,
-            exchange=event.exchange,
+            timeframe=event.batch.timeframe,
+            exchange=event.batch.exchange,
             registry=self._registry,
         )
-        report = checker.check(df, symbol=event.symbol)
+        report = checker.check(df, symbol=event.batch.symbol)
 
         # --- Lineage record ---
-        run_id = event.run_id or self._tracker.new_run_id()
+        run_id = event.batch.run_id or self._tracker.new_run_id()
         status = LineageStatus.SUCCESS if report.is_clean else LineageStatus.PARTIAL
 
         quality_score = getattr(report, "score", None)
@@ -127,23 +127,23 @@ class QualityPipelineConsumer(BaseConsumer):
         self._tracker.record(LineageEvent(
             run_id        = run_id,
             layer         = PipelineLayer.SILVER,
-            exchange      = event.exchange,
-            symbol        = event.symbol,
-            timeframe     = event.timeframe,
+            exchange      = event.batch.exchange,
+            symbol        = event.batch.symbol,
+            timeframe     = event.batch.timeframe,
             rows_in       = len(df),
             rows_out      = len(df),
             status        = status,
             quality_score = quality_score,
             params        = {
-                "source":      event.source,
-                "chunk_index": event.chunk_index,
+                "source":      event.batch.source,
+                "chunk_index": event.batch.chunk_index,
             },
         ))
 
         logger.info(
             "QualityPipelineConsumer: ✔ | {}/{} exchange={} rows={} "
             "clean={} score={} run={}",
-            event.symbol, event.timeframe, event.exchange,
+            event.batch.symbol, event.batch.timeframe, event.batch.exchange,
             len(df), report.is_clean, quality_score, run_id[:8],
         )
 
@@ -153,10 +153,13 @@ class QualityPipelineConsumer(BaseConsumer):
 
     @staticmethod
     def _to_dataframe(event: OHLCVBatchReceived) -> pd.DataFrame:
-        """Convierte candle-tuples a DataFrame OHLCV estándar."""
-        if not event.candles:
+        """Convierte OHLCVBatch a DataFrame OHLCV estándar."""
+        if event.batch.is_empty:
             return pd.DataFrame(columns=_CANDLE_COLS)
-        return pd.DataFrame(list(event.candles), columns=_CANDLE_COLS)
+        return pd.DataFrame(
+            [c.to_tuple() for c in event.batch.candles],
+            columns=_CANDLE_COLS,
+        )
 
 
 __all__ = ["QualityPipelineConsumer"]
