@@ -60,7 +60,10 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
     ) -> AssetCheckResult:
 
         ocm.build_runtime_context()
-        storage = IcebergStorage(exchange=exchange_name, market_type=market_type)
+        storage = IcebergStorageFactory().get_storage(
+            exchange    = exchange_name,
+            market_type = market_type,
+        )
         count   = storage.count()
 
         if count == 0:
@@ -158,7 +161,10 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
         import time
 
         ocm.build_runtime_context()
-        storage    = IcebergStorage(exchange=exchange_name, market_type=market_type)
+        storage    = IcebergStorageFactory().get_storage(
+            exchange    = exchange_name,
+            market_type = market_type,
+        )
         last_ts_ms = storage.get_last_timestamp()
 
         if last_ts_ms is None:
@@ -217,7 +223,10 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
                 description = "Sin símbolos — skip",
             )
 
-        storage   = IcebergStorage(exchange=exchange_name, market_type=market_type)
+        storage   = IcebergStorageFactory().get_storage(
+            exchange    = exchange_name,
+            market_type = market_type,
+        )
         tf        = app_cfg.pipeline.historical.timeframes[0]
         symbol    = symbols[0]
         df        = storage.load_ohlcv(symbol=symbol, timeframe=tf)

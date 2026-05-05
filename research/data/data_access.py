@@ -69,32 +69,32 @@ _storage_factory = IcebergStorageFactory()
 def _get_storage(
     exchange:    Optional[str] = None,
     market_type: Optional[str] = None,
-) -> IcebergStorage:
+) -> "OHLCVStorage":
     """
-    Devuelve IcebergStorage para el exchange dado, lazy singleton.
+    Retorna OHLCVStorage para (exchange, market_type) via factory.
 
-    La tabla silver.ohlcv es global — el exchange filtra via pushdown.
-    Cache keyed por (exchange, market_type).
+    DIP  : depende del port OHLCVStorage, no de IcebergStorage.
+    SSOT : el cache lo gestiona IcebergStorageFactory — no hay cache local.
+    KISS : sin lógica de cache duplicada — la factory ya lo resuelve.
     """
     exc = (exchange or _DEFAULT_EXCHANGE).lower()
     mkt = (market_type or _DEFAULT_MARKET_TYPE).lower()
-    key = f"{exc}:{mkt}"
-
-    if key not in _iceberg_cache:
-        _iceberg_cache[key] = IcebergStorage(exchange=exc, market_type=mkt)
-        logger.debug("IcebergStorage initialized | exchange={} market_type={}", exc, mkt)
-
-    return _iceberg_cache[key]
+    storage = _storage_factory.get_storage(exchange=exc, market_type=mkt)
+    logger.debug("Storage resolved | exchange={} market_type={}", exc, mkt)
+    return storage
 
 
 def _reset_storage(exchange: Optional[str] = None) -> None:
-    """Reset cache — uso exclusivo en tests."""
-    if exchange is None:
-        _iceberg_cache.clear()
-    else:
-        for k in list(_iceberg_cache):
-            if k.startswith(exchange.lower()):
-                del _iceberg_cache[k]
+    """
+    Reset del cache de storage — uso exclusivo en tests.
+
+    Delega al cache interno de IcebergStorageFactory (SSOT).
+    """
+    _storage_factory._cache.clear()
+    logger.debug(
+        "Storage cache reset | scope={}",
+        exchange or "all",
+    )
 
 
 # ==========================================================
