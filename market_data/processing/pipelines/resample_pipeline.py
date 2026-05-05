@@ -11,11 +11,11 @@ datos Silver 1m almacenados en Iceberg, sin contactar al exchange.
 
 Diseño
 ------
-- Fuente única de verdad: Silver 1m  (IcebergStorage.load_ohlcv)
-- Destino:               Silver Nt   (IcebergStorage.save_ohlcv, mismo catalog)
+- Fuente única de verdad: Silver 1m  (OHLCVStorage.load_ohlcv)
+- Destino:               Silver Nt   (OHLCVStorage.save_ohlcv, mismo catalog)
 - Agregación:            align_to_grid  (open/high/low/close/volume)
 - Ventana de lectura:    configurable via lookback_candles (default: 2× período)
-- Idempotencia:          append con dedup nativo de IcebergStorage._normalize_df
+- Idempotencia:          append con dedup nativo del adaptador de storage
 
 Principios
 ----------
@@ -61,7 +61,6 @@ from market_data.processing.utils.timeframe import (
     InvalidTimeframeError,
 )
 from market_data.processing.utils.timeframe import align_to_grid
-from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 
 _log = bind_pipeline("resample_pipeline")
 
@@ -249,8 +248,8 @@ class ResamplePipeline:
     """
     Pipeline de resampling OHLCV local.
 
-    Lee Silver 1m desde IcebergStorage, produce y persiste los TF
-    target configurados. Sin acceso al exchange — 100% local.
+    Lee Silver 1m vía OHLCVStorage (DIP: storage inyectado), produce
+    y persiste los TF target. Sin acceso al exchange — 100% local.
 
     Parámetros
     ----------
@@ -258,7 +257,8 @@ class ResamplePipeline:
     timeframes   : lista de TF target (ej: ["5m", "1h", "1d"])
     exchange     : nombre del exchange (ej: "bybit")
     market_type  : tipo de mercado (ej: "spot")
-    dry_run      : si True, lee pero no escribe en Iceberg
+    storage      : instancia OHLCVStorage inyectada (DIP)
+    dry_run      : si True, lee pero no escribe
     """
 
     def __init__(
@@ -266,6 +266,7 @@ class ResamplePipeline:
         symbols:     List[str],
         timeframes:  List[str],
         exchange:    str,
+        storage:     object,
         market_type: str  = "spot",
         dry_run:     bool = False,
     ) -> None:
@@ -273,6 +274,10 @@ class ResamplePipeline:
             raise ValueError("symbols no puede estar vac\xedo")
         if not timeframes:
             raise ValueError("timeframes no puede estar vac\xedo")
+        if storage is None:
+            raise ValueError(
+                "ResamplePipeline.storage no puede ser None — inyectar OHLCVStorage (DIP)"
+            )
         _validate_targets(timeframes)   # Fail-Fast
 
         self._symbols     = symbols
@@ -281,13 +286,9 @@ class ResamplePipeline:
         self._market_type = market_type.lower()
         self._dry_run     = dry_run
 
-        # Storage de lectura (1m source) y escritura (target TFs).
-        # Misma instancia — misma tabla Iceberg, distinto timeframe en el filtro.
-        self._storage = IcebergStorage(
-            exchange     = self._exchange,
-            market_type  = self._market_type,
-            dry_run      = dry_run,
-        )
+        # DIP: storage inyectado — no se instancia aquí (Clean Architecture).
+        # Misma instancia para lectura (source 1m) y escritura (targets).
+        self._storage = storage
         self._log = bind_pipeline(
             "resample_pipeline",
             exchange    = self._exchange,
