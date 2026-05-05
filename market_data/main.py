@@ -71,12 +71,13 @@ _VERSION:          str   = "1.0.0"
 
 class _ServiceState:
     """Estado mutable del proceso. Un único instancia por proceso (singleton)."""
-    guard:    Optional[ExecutionGuard] = None
-    ctx:      Optional[RuntimeContext] = None
-    started:  float                    = 0.0
-    healthy:  bool                     = False
-    last_run: Optional[float]          = None
-    last_result: str                   = "pending"
+    guard:           Optional[ExecutionGuard]   = None
+    ctx:             Optional[RuntimeContext]   = None
+    storage_factory: Optional[object]          = None  # StorageFactoryPort — inyectado en lifespan
+    started:         float                     = 0.0
+    healthy:         bool                      = False
+    last_run:        Optional[float]           = None
+    last_result:     str                       = "pending"
 
 _state = _ServiceState()
 
@@ -188,6 +189,12 @@ async def _lifespan(app: FastAPI):
     )
     guard.start()
     guard_context.set_guard(guard)
+
+    # ── Wiring de adaptadores outbound (composition root — DIP) ─────────────
+    # StorageFactoryPort: una factory cacheada por (exchange, market_type).
+    # Ningún handler instancia adaptadores — todos consumen el port (DIP).
+    from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+    _state.storage_factory = IcebergStorageFactory()
 
     _state.guard   = guard
     _state.ctx     = ctx
@@ -342,9 +349,13 @@ async def get_ohlcv(
     symbol_norm = symbol.replace("%2F", "/").replace("%2f", "/")
 
     try:
-        # IcebergStorage satisface OHLCVStorage Protocol — DIP via port
-        storage = await asyncio.to_thread(
-            _get_storage, exchange, symbol_norm, timeframe
+        # StorageFactoryPort inyectado en startup — DIP.
+        # get_storage(exchange) retorna instancia cacheada o crea una nueva.
+        if _state.storage_factory is None:
+            raise RuntimeError("storage_factory_not_initialized")
+        storage = _state.storage_factory.get_storage(
+            exchange    = exchange,
+            market_type = "spot",      # TODO: exponer como query param si se necesita futures
         )
 
         ts_start = pd.Timestamp(start, tz="UTC") if start else None
@@ -396,15 +407,8 @@ async def get_ohlcv(
         raise HTTPException(status_code=500, detail=f"storage_error:{type(exc).__name__}")
 
 
-def _get_storage(exchange: str, symbol: str, timeframe: str):
-    """
-    Instancia IcebergStorage para el par dado.
-
-    Separado de la coroutine para ejecutarse en thread (I/O bloqueante).
-    SafeOps: si no existe la tabla, load_ohlcv retorna None — no lanza.
-    """
-    from market_data.storage.iceberg.iceberg_storage import IcebergStorage
-    return IcebergStorage(exchange=exchange, market_type="spot")
+# _get_storage() eliminado — IcebergStorage se instancia en lifespan (composition root).
+# El handler get_ohlcv consume OHLCVStorage via _state.storage (DIP · SRP · Hexagonal).
 
 
 # ---------------------------------------------------------------------------
