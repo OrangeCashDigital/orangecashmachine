@@ -1,45 +1,25 @@
 # -*- coding: utf-8 -*-
 """
 market_data/ports/
-==================
+===================
 
-Contratos (puertos) del bounded context market_data.
+Todos los puertos (contratos DIP) del bounded context market_data.
 
-Exports públicos
-----------------
-AnomalyRegistryPort — contrato de registro de anomalías de calidad
-CursorStorePort     — contrato de persistencia de cursores de ingesta
-encode_cursor_key   — función pura de codificación de claves de cursor
-ExchangeAdapter     — contrato de adapters de exchange
-MetricsPusherPort   — contrato de empuje de métricas al backend
-OHLCVStorage        — contrato de storage OHLCV (Silver layer)
-
-Arquitectura
-------------
-Los consumidores (domain, application) importan SIEMPRE desde ports/.
-Los adapters concretos (outbound/) implementan estos contratos.
-Esta separación garantiza DIP y permite inyección de mocks en tests.
-
-Regla de dependencias
----------------------
-ports/     → NO importa desde adapters/, application/ ni domain/
-application/ → importa desde ports/ y domain/
-adapters/  → importa desde ports/ para declarar qué implementa
+Inbound (driving)           : EventConsumerPort, MarketDataSourcePort
+Outbound (driven)           : EventPublisherPort, AnomalyRegistryPort,
+                               LineagePort, StoragePort
 """
-
-from market_data.ports.exchange import ExchangeAdapter
-from market_data.ports.observability import MetricsPusherPort
-from market_data.ports.quality import AnomalyRegistryPort
-from market_data.ports.state import CursorStorePort, encode_cursor_key
-from market_data.ports.storage import OHLCVStorage
-from market_data.ports.storage_factory import StorageFactoryPort
+from market_data.ports.inbound.event_consumer   import EventConsumerPort, Handler  # noqa
+from market_data.ports.outbound.event_publisher import EventPublisherPort            # noqa
+from market_data.ports.outbound.anomaly_registry import AnomalyRegistryPort          # noqa
+from market_data.ports.outbound.lineage          import LineagePort                  # noqa
+from market_data.ports.market_data_source        import MarketDataSourcePort         # noqa
 
 __all__ = [
+    "Handler",
+    "EventConsumerPort",
+    "EventPublisherPort",
     "AnomalyRegistryPort",
-    "CursorStorePort",
-    "encode_cursor_key",
-    "ExchangeAdapter",
-    "MetricsPusherPort",
-    "OHLCVStorage",
-    "StorageFactoryPort",
+    "LineagePort",
+    "MarketDataSourcePort",
 ]
