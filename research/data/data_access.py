@@ -7,7 +7,7 @@ API de acceso a datos OHLCV y features para research y backtesting.
 
 Fuente de datos
 ---------------
-• OHLCV  → IcebergStorage (tabla silver.ohlcv)
+• OHLCV  → IcebergStorageFactory → OHLCVStorage (tabla silver.ohlcv)
 • Features → GoldLoader (parquet gold/features/)
 
 Uso
@@ -22,7 +22,7 @@ Principios
 ----------
 • KISS   — API simple: get_ohlcv(symbol, timeframe)
 • SafeOps — errores explícitos, nunca silenciosos
-• Cache  — IcebergStorage singleton por exchange (tabla compartida)
+• Cache  — gestionado por IcebergStorageFactory (DIP · SSOT)
 """
 
 from __future__ import annotations

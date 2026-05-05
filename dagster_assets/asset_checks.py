@@ -15,7 +15,7 @@ Semántica de severidad (Dagster 1.7+ API):
 
 Principios:
   OCP  : make_bronze_checks extensible por exchange/market sin modificar código
-  DIP  : IcebergStorage y scan_gaps inyectados vía imports (mockables en tests)
+  DIP  : storage vía IcebergStorageFactory (port), scan_gaps importado (mockables en tests)
   SSOT : ALL_ASSET_CHECKS es la única lista registrada en Definitions
 """
 
