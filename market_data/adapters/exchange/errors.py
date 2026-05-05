@@ -1,45 +1,33 @@
+# -*- coding: utf-8 -*-
 """
-services/exchange/errors.py
-============================
-Excepciones del layer de exchange.
+market_data/adapters/exchange/errors.py
+=========================================
 
-Taxonomía de errores
---------------------
-Cada excepción declara `is_transient: bool` como atributo de clase.
+FACADE — backward-compatibility re-export.
 
-  is_transient=True  → retry seguro (red, rate limit, cooldown)
-  is_transient=False → fallo permanente (exchange no soportado, config inválida)
+Todos los tipos han migrado a:
+    market_data.domain.exceptions
 
-Separadas del adapter para que los consumidores puedan importar
-solo los tipos de error sin arrastrar toda la infraestructura ccxt.
+Este módulo se mantiene para no romper imports existentes (OCP).
+Los nuevos consumidores deben importar desde market_data.domain.exceptions.
+
+Semántica de `is_transient`
+----------------------------
+Conservada en domain/exceptions como atributo de clase — no se pierde
+ninguna información al migrar desde este módulo.
+
+TODO: deprecar en la siguiente major version.
 """
-from __future__ import annotations
+from market_data.domain.exceptions import (  # noqa: F401
+    ExchangeAdapterError,
+    UnsupportedExchangeError,
+    ExchangeConnectionError,
+    ExchangeCircuitOpenError,
+)
 
-
-class ExchangeAdapterError(Exception):
-    """
-    Base adapter error.
-    `is_transient=False` por defecto — asumir permanente si no se especifica.
-    """
-    is_transient: bool = False
-
-
-class UnsupportedExchangeError(ExchangeAdapterError):
-    """Exchange no soportado por ccxt. Config inválida — permanente."""
-    is_transient: bool = False
-
-
-class ExchangeConnectionError(ExchangeAdapterError):
-    """
-    Fallo de conexión tras retries.
-    Transitorio: la red o el exchange pueden recuperarse.
-    """
-    is_transient: bool = True
-
-
-class ExchangeCircuitOpenError(ExchangeAdapterError):
-    """
-    Circuit breaker abierto — exchange en cooldown.
-    Transitorio: el breaker se cerrará tras reset_timeout.
-    """
-    is_transient: bool = True
+__all__ = [
+    "ExchangeAdapterError",
+    "UnsupportedExchangeError",
+    "ExchangeConnectionError",
+    "ExchangeCircuitOpenError",
+]

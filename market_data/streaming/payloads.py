@@ -1,23 +1,68 @@
-from __future__ import annotations
-
-"""Event payload definitions for streaming ingestion.
-
-Wire format contract
---------------------
-Redis Streams entrega todos los campos como strings. from_dict() es
-responsable de normalizar el wire format — los callers (StreamSource,
-tests) no deben conocer el encoding interno.
-
-Principios: SRP · immutability · wire/domain separation
+# -*- coding: utf-8 -*-
 """
+market_data/streaming/payloads.py
+===================================
+
+Wire format contract para streaming de ingestión OHLCV.
+
+Responsabilidad
+---------------
+Definir los tipos de datos que viajan por Redis Streams entre el productor
+(pipeline de ingestión) y el consumidor (streaming layer).
+
+Wire format
+-----------
+Redis Streams entrega todos los campos como strings. `from_dict()` normaliza
+el wire format — los callers (StreamSource, tests) no conocen el encoding
+interno (SRP · Tell Don't Ask).
+
+Tipos
+-----
+OHLCVBar     — vela OHLCV inmutable: (ts, open, high, low, close, volume)
+EventPayload — lote de velas con metadatos de contexto (exchange, symbol, tf)
+
+Versiones de schema
+-------------------
+PAYLOAD_SCHEMA_VERSION — versión actual del wire format de EventPayload
+CONTEXT_SCHEMA_VERSION — versión del contexto de streaming (StreamingContext)
+
+Principios
+----------
+SRP         — solo define tipos wire; no valida reglas de negocio
+Immutability — frozen=True en ambos dataclasses
+DIP         — SchemaVersionError importada desde domain (no definida aquí)
+SSOT        — versiones de schema declaradas como constantes de módulo
+"""
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+# SchemaVersionError migrada a domain/exceptions — importar desde allí (DIP · SSOT)
+from market_data.domain.exceptions import SchemaVersionError  # noqa: F401
+
+
+# ---------------------------------------------------------------------------
+# Versiones de schema — SSOT
+# ---------------------------------------------------------------------------
+
+PAYLOAD_SCHEMA_VERSION: int = 1
+CONTEXT_SCHEMA_VERSION: int = 2
+
+
+# ---------------------------------------------------------------------------
+# OHLCVBar — vela OHLCV inmutable
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class OHLCVBar:
+    """
+    Vela OHLCV en formato wire.
+
+    Identidad: (ts, open, high, low, close, volume) — valor completo.
+    Inmutable: frozen=True garantiza que no se modifica en tránsito.
+    """
     ts:     int
     open:   float
     high:   float
@@ -47,27 +92,34 @@ class OHLCVBar:
         )
 
 
-# --------------------------------------------------
-# Versiones de schema — SSoT de compatibilidad
-# --------------------------------------------------
-PAYLOAD_SCHEMA_VERSION: int = 1
-CONTEXT_SCHEMA_VERSION: int = 2
-
-
-class SchemaVersionError(ValueError):
-    """El payload tiene una versión de schema incompatible."""
-
+# ---------------------------------------------------------------------------
+# EventPayload — lote de velas con contexto de streaming
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class EventPayload:
+    """
+    Lote de velas OHLCV con metadatos de contexto.
+
+    Serialización
+    -------------
+    to_dict()   → dict Python (para Redis Streams o tests)
+    from_dict() → instancia (desde wire format o dict Python)
+
+    Compatibilidad
+    --------------
+    from_dict() acepta tanto wire format (valores string de Redis Streams)
+    como dict Python ya deserializado. La normalización ocurre aquí,
+    no en los callers (SRP · Tell Don't Ask).
+    """
     event_id:       str
     exchange:       str
     symbol:         str
     timeframe:      str
     batch_start_ts: int
     bars:           List[OHLCVBar]
-    event_version:  int                  = PAYLOAD_SCHEMA_VERSION
-    meta:           Dict[str, Any] | None = None
+    event_version:  int                   = PAYLOAD_SCHEMA_VERSION
+    meta:           Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -86,9 +138,9 @@ class EventPayload:
         """
         Construye un EventPayload desde un dict.
 
-        Acepta tanto wire format (Redis Streams — valores string) como
-        dict Python ya deserializado. La normalización ocurre aquí,
-        no en los callers.
+        Fail-fast: lanza SchemaVersionError si la versión es incompatible.
+        No intenta migrar versiones desconocidas — eso es responsabilidad
+        del consumer con un migrator explícito.
         """
         version = int(data.get("event_version", 1))
         if version != PAYLOAD_SCHEMA_VERSION:
@@ -119,3 +171,12 @@ class EventPayload:
             event_version  = version,
             meta           = meta_raw,
         )
+
+
+__all__ = [
+    "OHLCVBar",
+    "EventPayload",
+    "SchemaVersionError",       # re-export para backward-compat
+    "PAYLOAD_SCHEMA_VERSION",
+    "CONTEXT_SCHEMA_VERSION",
+]

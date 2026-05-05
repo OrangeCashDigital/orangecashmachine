@@ -19,21 +19,31 @@ MarketDataError                     ← raíz del BC
 │   └── ChunkRejectedError          ← chunk rechazado por schema/validación
 ├── QualityError                    ← violación de calidad de datos
 │   ├── SchemaValidationError       ← schema Silver/Gold no satisfecho
-│   └── AnomalyDetectedError        ← anomalía estadística detectada
+│   ├── AnomalyDetectedError        ← anomalía estadística detectada
+│   └── SchemaVersionError          ← payload con versión de schema incompatible
 ├── PipelineError                   ← fallo de orquestación de pipeline
 │   ├── MissingStartDateError       ← cursor sin fecha de inicio definida
 │   └── CursorError                 ← fallo de cursor/estado de avance
 └── ExchangeAdapterError            ← fallo en capa de adaptador exchange
     ├── UnsupportedExchangeError    ← exchange no soportado por CCXT/OCM
-    ├── ExchangeConnectionError     ← fallo de red/conexión al exchange
-    └── ExchangeCircuitOpenError    ← circuit breaker abierto
+    ├── ExchangeConnectionError     ← fallo de red/conexión al exchange (transitorio)
+    └── ExchangeCircuitOpenError    ← circuit breaker abierto (transitorio)
+
+Atributo `is_transient`
+-----------------------
+Las subclases de ExchangeAdapterError declaran `is_transient: bool` como
+atributo de clase. Permite que ResilienceLayer decida si hacer retry
+sin importar la clase concreta (OCP · DIP).
+
+  is_transient=True  → retry seguro (red, rate limit, cooldown)
+  is_transient=False → fallo permanente (config inválida, exchange no soportado)
 
 Principios
 ----------
 SSOT   — única fuente de verdad para excepciones del BC
 DIP    — capas superiores importan desde aquí, nunca desde infra/adapters
 OCP    — agregar subclases no modifica la jerarquía existente
-DRY    — no duplicar definiciones entre exceptions.py y processing/exceptions.py
+DRY    — elimina duplicación entre exceptions.py y processing/exceptions.py
 Clean Architecture — excepciones de dominio no dependen de frameworks externos
 """
 from __future__ import annotations
@@ -122,6 +132,18 @@ class AnomalyDetectedError(QualityError):
     """Anomalía estadística detectada en el dataset (outlier, drift, gap)."""
 
 
+class SchemaVersionError(QualityError):
+    """
+    El payload tiene una versión de schema incompatible con la esperada.
+
+    Fail-fast: un consumer no puede procesar un payload de versión
+    desconocida sin riesgo de corrupción silenciosa.
+
+    Anteriormente definida en streaming/payloads.py como subclase de
+    ValueError — migrada aquí para SSOT y jerarquía correcta (DDD).
+    """
+
+
 # ===========================================================================
 # Pipeline / Orquestación
 # ===========================================================================
@@ -148,24 +170,45 @@ class CursorError(PipelineError):
 # ===========================================================================
 
 class ExchangeAdapterError(MarketDataError):
-    """Fallo en la capa de adaptador de exchange (CCXT wrapper)."""
+    """
+    Fallo en la capa de adaptador de exchange (CCXT wrapper).
+
+    Atributo de clase `is_transient`
+    ---------------------------------
+    Permite que ResilienceLayer inspeccione si debe reintentar
+    sin hacer isinstance() contra subclases concretas (OCP · DIP).
+
+    is_transient=False por defecto — asumir permanente si no se especifica.
+    """
+    is_transient: bool = False
 
 
 class UnsupportedExchangeError(ExchangeAdapterError):
-    """El exchange solicitado no está soportado por CCXT o por OCM."""
+    """
+    El exchange solicitado no está soportado por CCXT o por OCM.
+
+    Permanente: no tiene sentido reintentar con la misma config.
+    """
+    is_transient: bool = False
 
 
 class ExchangeConnectionError(ExchangeAdapterError):
-    """Fallo de red o conexión al conectar con el exchange."""
+    """
+    Fallo de red o conexión al conectar con el exchange.
+
+    Transitorio: la red o el exchange pueden recuperarse.
+    """
+    is_transient: bool = True
 
 
 class ExchangeCircuitOpenError(ExchangeAdapterError):
     """
-    Circuit breaker abierto — demasiados fallos consecutivos.
+    Circuit breaker abierto — exchange en cooldown tras fallos consecutivos.
 
-    Fail-fast: mientras el circuit esté abierto, las llamadas al
-    exchange se rechazan inmediatamente sin intentar la conexión.
+    Transitorio: el breaker se cerrará tras reset_timeout.
+    Fail-fast: mientras esté abierto, las llamadas se rechazan inmediatamente.
     """
+    is_transient: bool = True
 
 
 # ===========================================================================
@@ -190,6 +233,7 @@ __all__ = [
     "QualityError",
     "SchemaValidationError",
     "AnomalyDetectedError",
+    "SchemaVersionError",
     # Pipeline
     "PipelineError",
     "MissingStartDateError",
