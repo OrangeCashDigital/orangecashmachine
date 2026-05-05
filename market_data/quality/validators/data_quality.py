@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from domain.value_objects.timeframe import timeframe_to_ms
+from market_data.processing.utils.timeframe import timeframe_to_ms
 
 _TF_MS = {tf: timeframe_to_ms(tf) for tf in ["1m", "5m", "15m", "1h", "4h", "1d"]}
 _MAD_THRESHOLD              = 3.5

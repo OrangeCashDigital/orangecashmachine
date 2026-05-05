@@ -678,7 +678,7 @@ class HistoricalFetcherAsync:
 # Helpers
 # ==========================================================
 
-from domain.value_objects.timeframe import timeframe_to_ms  # noqa: E402
+from market_data.processing.utils.timeframe import timeframe_to_ms  # noqa: E402
 
 
 def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:

@@ -47,7 +47,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Tuple
 
-from domain.value_objects.timeframe import timeframe_to_ms
+from market_data.processing.utils.timeframe import timeframe_to_ms
 
 
 # ── Tipos públicos ────────────────────────────────────────────────────────────

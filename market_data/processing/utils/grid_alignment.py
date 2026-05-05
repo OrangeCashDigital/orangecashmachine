@@ -51,7 +51,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from domain.value_objects.timeframe import timeframe_to_ms
+from market_data.processing.utils.timeframe import timeframe_to_ms
 
 
 def align_to_grid(

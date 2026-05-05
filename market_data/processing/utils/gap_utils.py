@@ -13,7 +13,7 @@ from typing import List
 
 import pandas as pd
 
-from domain.value_objects.timeframe import timeframe_to_ms
+from market_data.processing.utils.timeframe import timeframe_to_ms
 
 
 @dataclass(frozen=True)
