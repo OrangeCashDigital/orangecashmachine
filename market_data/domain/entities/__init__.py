@@ -12,33 +12,28 @@ Un VO es definido por su valor — sin identidad propia.
 
 Entidades presentes
 -------------------
-ValidationResult  — resultado de validar una Candle (identidad por candle)
-ValidationSummary — agrega resultados de validate_batch para métricas
-DataTier          — clasificación de calidad de un dataset Silver
+DataTier — clasificación de tier de calidad de un dataset Silver
+
+Nota sobre ValidationResult / ValidationSummary
+------------------------------------------------
+Viven en market_data.processing.validation.candle_validator.
+No son entidades de dominio — son resultados de una operación
+de processing layer. El dominio no depende de ellos.
 
 Nota sobre OHLCVBar
 --------------------
-OHLCVBar (streaming/payloads.py) era re-exportado aquí anteriormente.
-Eliminado: era una dependencia del dominio hacia infraestructura (streaming),
-violando DIP. El dominio usa Candle (domain/value_objects/candle.py).
-Los adapters de streaming usan OHLCVBar en su propia capa.
+Eliminado: era una dependencia del dominio hacia infraestructura
+(streaming), violando DIP.
 
 Principios
 ----------
-DIP    — el dominio no depende de infraestructura (streaming, pandas, CCXT)
-SSOT   — re-exports desde owners canónicos; sin duplicar código
-OCP    — agregar entidades no modifica consumidores existentes
-DDD    — separación clara entre entidades (identidad) y VOs (valor)
+DIP  — el dominio no depende de infraestructura (processing, pandas, CCXT)
+SSOT — tipos definidos aquí, no re-exportados desde otras capas
+DDD  — separación clara entre entidades (identidad) y VOs (valor)
 """
 from __future__ import annotations
 
 from enum import Enum
-
-# ValidationResult / ValidationSummary — resultado de validación con identidad por candle
-from market_data.processing.validation.candle_validator import (  # noqa: F401
-    ValidationResult,
-    ValidationSummary,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -60,8 +55,4 @@ class DataTier(str, Enum):
     REJECTED = "rejected"
 
 
-__all__ = [
-    "ValidationResult",
-    "ValidationSummary",
-    "DataTier",
-]
+__all__ = ["DataTier"]

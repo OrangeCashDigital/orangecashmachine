@@ -5,46 +5,26 @@ market_data/domain/services/__init__.py
 
 Servicios de dominio del bounded context market_data.
 
-Servicios presentes
--------------------
-DataQualityPolicy     — política de calidad: dado un QualityReport, decide
-QualityDecision       — enum de decisión (ACCEPT / ACCEPT_WITH_FLAGS / REJECT)
-PolicyResult          — resultado estructurado de aplicar la política
-QualityPipeline       — orquestador: checker → policy → gaps → lineage
-QualityPipelineResult — resultado completo del pipeline de calidad
+Estado actual
+-------------
+Este submódulo está reservado para Domain Services puros (DDD):
+lógica de negocio que coordina múltiples VOs/entidades sin I/O.
 
-Sobre Domain Services (DDD)
-----------------------------
-Un Domain Service implementa lógica de negocio que no pertenece
-naturalmente a una sola entidad. Estos servicios coordinan múltiples
-reglas, entidades y ports para producir decisiones de negocio.
+Los servicios actualmente identificados como candidatos
+(DataQualityPolicy, QualityPipeline) viven en market_data.quality
+porque orquestan I/O, registros SQLite y lineage — no son
+servicios de dominio puros sino application services.
+
+Importar directamente desde sus ubicaciones canónicas:
+  from market_data.quality.pipeline import QualityPipeline
+  from market_data.quality.policies.data_quality_policy import DataQualityPolicy
 
 Principios
 ----------
-SRP    — cada servicio tiene una única responsabilidad de orquestación
-DIP    — servicios dependen de puertos (ABCs/Protocols), no de infra
-SSOT   — re-exports desde owners; sin duplicar lógica
+DIP    — el dominio no importa desde quality ni processing
+SSOT   — cada tipo vive en un único lugar
+KISS   — no crear indirecciones que no añaden valor
 """
 from __future__ import annotations
 
-from market_data.quality.policies.data_quality_policy import (  # noqa: F401
-    DataQualityPolicy,
-    QualityDecision,
-    PolicyResult,
-    default_policy,
-)
-from market_data.quality.pipeline import (  # noqa: F401
-    QualityPipeline,
-    QualityPipelineResult,
-    default_quality_pipeline,
-)
-
-__all__ = [
-    "DataQualityPolicy",
-    "QualityDecision",
-    "PolicyResult",
-    "default_policy",
-    "QualityPipeline",
-    "QualityPipelineResult",
-    "default_quality_pipeline",
-]
+__all__: list = []
