@@ -20,23 +20,23 @@ MarketDataError                     ← raíz del BC
 ├── QualityError                    ← violación de calidad de datos
 │   ├── SchemaValidationError       ← schema Silver/Gold no satisfecho
 │   ├── AnomalyDetectedError        ← anomalía estadística detectada
-│   └── SchemaVersionError          ← payload con versión de schema incompatible
+│   ├── SchemaVersionError          ← payload con versión de schema incompatible
+│   └── DataQualityError            ← fallo genérico en checks de calidad
 ├── PipelineError                   ← fallo de orquestación de pipeline
 │   ├── MissingStartDateError       ← cursor sin fecha de inicio definida
 │   └── CursorError                 ← fallo de cursor/estado de avance
 └── ExchangeAdapterError            ← fallo en capa de adaptador exchange
     ├── UnsupportedExchangeError    ← exchange no soportado por CCXT/OCM
-    ├── ExchangeConnectionError     ← fallo de red/conexión al exchange (transitorio)
+    ├── ExchangeConnectionError     ← fallo de red/conexión (transitorio)
     └── ExchangeCircuitOpenError    ← circuit breaker abierto (transitorio)
 
 Atributo `is_transient`
 -----------------------
-Las subclases de ExchangeAdapterError declaran `is_transient: bool` como
-atributo de clase. Permite que ResilienceLayer decida si hacer retry
-sin importar la clase concreta (OCP · DIP).
+Subclases de ExchangeAdapterError declaran `is_transient: bool`.
+Permite que ResilienceLayer decida retry sin isinstance() (OCP · DIP).
 
   is_transient=True  → retry seguro (red, rate limit, cooldown)
-  is_transient=False → fallo permanente (config inválida, exchange no soportado)
+  is_transient=False → fallo permanente (config inválida, no soportado)
 
 Principios
 ----------
@@ -138,9 +138,16 @@ class SchemaVersionError(QualityError):
 
     Fail-fast: un consumer no puede procesar un payload de versión
     desconocida sin riesgo de corrupción silenciosa.
+    """
 
-    Anteriormente definida en streaming/payloads.py como subclase de
-    ValueError — migrada aquí para SSOT y jerarquía correcta (DDD).
+
+class DataQualityError(QualityError):
+    """
+    Fallo genérico durante los checks de calidad de datos.
+
+    Base para errores no clasificables en SchemaValidationError
+    ni AnomalyDetectedError. Permite captura amplia con un solo
+    `except DataQualityError` sin silenciar errores no relacionados.
     """
 
 
@@ -173,11 +180,10 @@ class ExchangeAdapterError(MarketDataError):
     """
     Fallo en la capa de adaptador de exchange (CCXT wrapper).
 
-    Atributo de clase `is_transient`
-    ---------------------------------
+    Atributo `is_transient`
+    -----------------------
     Permite que ResilienceLayer inspeccione si debe reintentar
-    sin hacer isinstance() contra subclases concretas (OCP · DIP).
-
+    sin isinstance() contra subclases concretas (OCP · DIP).
     is_transient=False por defecto — asumir permanente si no se especifica.
     """
     is_transient: bool = False
@@ -186,7 +192,6 @@ class ExchangeAdapterError(MarketDataError):
 class UnsupportedExchangeError(ExchangeAdapterError):
     """
     El exchange solicitado no está soportado por CCXT o por OCM.
-
     Permanente: no tiene sentido reintentar con la misma config.
     """
     is_transient: bool = False
@@ -195,7 +200,6 @@ class UnsupportedExchangeError(ExchangeAdapterError):
 class ExchangeConnectionError(ExchangeAdapterError):
     """
     Fallo de red o conexión al conectar con el exchange.
-
     Transitorio: la red o el exchange pueden recuperarse.
     """
     is_transient: bool = True
@@ -234,6 +238,7 @@ __all__ = [
     "SchemaValidationError",
     "AnomalyDetectedError",
     "SchemaVersionError",
+    "DataQualityError",
     # Pipeline
     "PipelineError",
     "MissingStartDateError",

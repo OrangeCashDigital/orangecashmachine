@@ -8,7 +8,7 @@ Value Objects canónicos del bounded context market_data.
 Value Objects (DDD)
 -------------------
 Tipos inmutables definidos por su valor, sin identidad de negocio.
-Dos VOs con los mismos campos son equivalentes.
+Dos VOs con los mismos campos son equivalentes (equality por valor).
 
 Contenido
 ---------
@@ -19,6 +19,7 @@ VALID_TIMEFRAMES      — frozenset[str] para validación O(1)
 align_to_grid         — alineación de timestamp al grid del timeframe
 RawCandle             — tipo alias para vela CCXT cruda (6-tupla tipada)
 QualityLabel          — clasificación de calidad de vela (CLEAN/SUSPECT/CORRUPT)
+GapRange              — rango temporal de un gap detectado en un dataset
 
 Anti-Corruption Layer (ACL)
 ----------------------------
@@ -27,9 +28,7 @@ vía el ACL intermedio en processing/utils/timeframe.py. Ningún módulo de
 market_data importa desde domain/ directamente — toda dependencia del
 Shared Kernel pasa por ese ACL (DIP · OCP).
 
-RawCandle y QualityLabel son nativos de este BC — definidos aquí como SSOT.
-candle_validator.py los importa desde aquí (DIP correcto: validator depende
-del dominio, no al revés).
+RawCandle, QualityLabel y GapRange son nativos de este BC — SSOT aquí.
 
 Principios
 ----------
@@ -40,8 +39,12 @@ KISS   — sin lógica de negocio; solo tipos y conversiones puras
 """
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
 from enum import Enum
 from typing import Tuple
+
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Timeframe — desde Shared Kernel vía ACL existente
@@ -54,9 +57,10 @@ from market_data.processing.utils.timeframe import (  # noqa: F401
     align_to_grid,
 )
 
+
 # ---------------------------------------------------------------------------
 # RawCandle — tipo alias canónico para vela CCXT cruda
-# SSOT: definido aquí; candle_validator.py importa desde aquí.
+# SSOT: definido aquí; candle_validator.py importa desde aquí (DIP).
 # ---------------------------------------------------------------------------
 
 RawCandle = Tuple[int, float, float, float, float, float]
@@ -74,7 +78,7 @@ Vela CCXT en formato raw: [timestamp_ms, open, high, low, close, volume].
 
 # ---------------------------------------------------------------------------
 # QualityLabel — clasificación de calidad de una vela OHLCV
-# SSOT: definido aquí; candle_validator.py importa desde aquí.
+# SSOT: definido aquí; candle_validator.py importa desde aquí (DIP).
 # ---------------------------------------------------------------------------
 
 class QualityLabel(str, Enum):
@@ -94,6 +98,61 @@ class QualityLabel(str, Enum):
 
 
 # ---------------------------------------------------------------------------
+# GapRange — rango temporal de un gap detectado en un dataset OHLCV
+# SSOT: definido aquí; gap_utils.py importa desde aquí (DIP).
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class GapRange:
+    """
+    Rango temporal de un gap (hueco) detectado en un dataset OHLCV.
+
+    Immutable (frozen=True) — los gaps son hechos históricos, no se modifican.
+
+    Attributes
+    ----------
+    start_ms : timestamp Unix ms del último punto de datos antes del gap
+    end_ms   : timestamp Unix ms del primer punto de datos después del gap
+    expected : número de velas faltantes en el rango
+    run_id   : run que detectó este gap (correlación de lineage, SSOT)
+
+    Properties
+    ----------
+    duration_ms : duración total del gap en milisegundos
+    severity    : clasificación (low / medium / high) según velas faltantes
+    """
+    start_ms: int
+    end_ms:   int
+    expected: int
+    run_id:   str = ""
+
+    def __str__(self) -> str:
+        start = pd.Timestamp(self.start_ms, unit="ms", tz="UTC").isoformat()
+        end   = pd.Timestamp(self.end_ms,   unit="ms", tz="UTC").isoformat()
+        return f"Gap[{start} → {end} expected={self.expected}]"
+
+    @property
+    def duration_ms(self) -> int:
+        """Duración total del gap en milisegundos."""
+        return self.end_ms - self.start_ms
+
+    @property
+    def severity(self) -> str:
+        """
+        Clasificación del gap por número de velas faltantes.
+
+        low    : 1–2  velas (ruido normal, exchange maintenance)
+        medium : 3–10 velas (degradación notable)
+        high   : >10  velas (pérdida significativa de datos)
+        """
+        if self.expected <= 2:
+            return "low"
+        elif self.expected <= 10:
+            return "medium"
+        return "high"
+
+
+# ---------------------------------------------------------------------------
 # __all__ — API pública explícita
 # ---------------------------------------------------------------------------
 
@@ -104,7 +163,9 @@ __all__ = [
     "InvalidTimeframeError",
     "VALID_TIMEFRAMES",
     "align_to_grid",
-    # Candle domain types (nativos de este BC)
+    # Candle domain types
     "RawCandle",
     "QualityLabel",
+    # Gap domain type
+    "GapRange",
 ]
