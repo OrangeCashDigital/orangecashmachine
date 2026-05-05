@@ -44,21 +44,30 @@ class IcebergStorageFactory:
     """
 
     def __init__(self) -> None:
-        self._cache: dict[tuple[str, str], OHLCVStorage] = {}
+        # Clave de cache: (exchange, market_type, dry_run)
+        # dry_run=True y dry_run=False son instancias semánticamente distintas
+        # (escrituras habilitadas vs deshabilitadas) — no deben compartir cache.
+        self._cache: dict[tuple[str, str, bool], OHLCVStorage] = {}
 
     def get_storage(
         self,
         exchange:    str,
-        market_type: str = "spot",
+        market_type: str  = "spot",
+        dry_run:     bool = False,
     ) -> OHLCVStorage:
         """
-        Retorna IcebergStorage para (exchange, market_type), creándola si no existe.
+        Retorna IcebergStorage para (exchange, market_type, dry_run), creándola
+        si no existe en cache.
 
         Fail-Fast: lanza RuntimeError si IcebergStorage no puede inicializarse.
-        El caller (handler HTTP) recibe 500 limpio en lugar de AttributeError
-        críptico.
+        El caller recibe 500 limpio en lugar de AttributeError críptico.
+
+        Cache key
+        ---------
+        Incluye dry_run porque IcebergStorage con dry_run=True no persiste datos
+        — son instancias semánticamente distintas que no deben compartir estado.
         """
-        key = (exchange, market_type)
+        key = (exchange, market_type, dry_run)
         if key not in self._cache:
             # Import lazy — adaptador concreto no se carga en import time (DIP)
             from market_data.storage.iceberg.iceberg_storage import IcebergStorage
@@ -66,11 +75,13 @@ class IcebergStorageFactory:
                 self._cache[key] = IcebergStorage(
                     exchange    = exchange,
                     market_type = market_type,
+                    dry_run     = dry_run,
                 )
             except Exception as exc:
                 raise RuntimeError(
-                    f"IcebergStorageFactory: no se pudo crear storage "
-                    f"para exchange={exchange!r} market_type={market_type!r}: {exc}"
+                    f"IcebergStorageFactory: no se pudo crear storage para "
+                    f"exchange={exchange!r} market_type={market_type!r} "
+                    f"dry_run={dry_run}: {exc}"
                 ) from exc
         return self._cache[key]
 

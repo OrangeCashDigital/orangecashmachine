@@ -87,8 +87,9 @@ class DataPlatform:
 
     def _get_storage(self) -> OHLCVStorageProtocol:
         if self._storage is None:
-            from market_data.storage.iceberg.iceberg_storage import IcebergStorage
-            self._storage = IcebergStorage(
+            # DIP: consumir adaptador via factory, nunca importar IcebergStorage
+            from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+            self._storage = IcebergStorageFactory().get_storage(
                 exchange    = self._exchange,
                 market_type = self._market_type,
             )

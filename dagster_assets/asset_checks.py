@@ -30,7 +30,7 @@ from dagster import (
 from dagster_assets.resources import OCMResource
 
 from market_data.processing.utils.gap_utils import scan_gaps
-from market_data.storage.iceberg.iceberg_storage import IcebergStorage
+from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 
 _REQUIRED_COLS = frozenset({"timestamp", "open", "high", "low", "close", "volume"})
 
@@ -114,7 +114,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
                 description = "Sin símbolos — skip",
             )
 
-        storage = IcebergStorage(exchange=exchange_name, market_type=market_type)
+        storage = IcebergStorageFactory().get_storage(exchange=exchange_name, market_type=market_type)
         tf      = app_cfg.pipeline.historical.timeframes[0]
         df      = storage.load_ohlcv(symbol=symbols[0], timeframe=tf)
 

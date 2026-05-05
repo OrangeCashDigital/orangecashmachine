@@ -33,7 +33,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 from loguru import logger
 
-from market_data.storage.iceberg.iceberg_storage import IcebergStorage
+from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 from data_platform.loaders.gold_loader import GoldLoader
 from data_platform.ohlcv_utils import (
     DataNotFoundError,
@@ -59,10 +59,11 @@ _DEFAULT_EXCHANGE: str = os.environ.get(_OCM_EXCHANGE, "kucoin")
 _DEFAULT_MARKET_TYPE: str = os.environ.get(_OCM_MARKET_TYPE, "spot")
 
 # ==========================================================
-# IcebergStorage cache — singleton por (exchange, market_type)
+# Storage factory — singleton por (exchange, market_type)
+# Cache gestionado por IcebergStorageFactory (DIP · SSOT)
 # ==========================================================
 
-_iceberg_cache: Dict[str, IcebergStorage] = {}
+_storage_factory = IcebergStorageFactory()
 
 
 def _get_storage(

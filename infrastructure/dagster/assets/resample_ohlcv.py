@@ -57,7 +57,7 @@ def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
         declarativo en Dagster (dep explícita sobre repair).
         """
         from market_data.processing.pipelines.resample_pipeline import ResamplePipeline
-        from market_data.storage.iceberg.iceberg_storage import IcebergStorage
+        from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 
         runtime_ctx = ocm.runtime_context
         app_cfg     = runtime_ctx.app_config
@@ -87,10 +87,10 @@ def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
             f"market={market_type} {source_tf}→{targets}"
         )
 
-        storage = IcebergStorage(
-            exchange     = exchange_name,
-            market_type  = market_type,
-            dry_run      = app_cfg.safety.dry_run,
+        storage = IcebergStorageFactory().get_storage(
+            exchange    = exchange_name,
+            market_type = market_type,
+            dry_run     = app_cfg.safety.dry_run,
         )
 
         total_rows = 0

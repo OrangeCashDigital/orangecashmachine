@@ -58,7 +58,8 @@ class StorageFactoryPort(Protocol):
     def get_storage(
         self,
         exchange:    str,
-        market_type: str = "spot",
+        market_type: str  = "spot",
+        dry_run:     bool = False,
     ) -> OHLCVStorage:
         """
         Retorna (o crea) una instancia de OHLCVStorage para el par dado.
@@ -67,6 +68,8 @@ class StorageFactoryPort(Protocol):
         ----------
         exchange    : nombre canónico del exchange ("bybit", "kucoin", ...)
         market_type : tipo de mercado ("spot" | "futures" | ...)
+        dry_run     : True = no persiste datos (tests / safety mode).
+                      Las instancias dry_run y no-dry_run no comparten cache.
 
         Returns
         -------
