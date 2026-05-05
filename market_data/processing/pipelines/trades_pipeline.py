@@ -30,7 +30,7 @@ from market_data.ports.input.pipeline_trigger import PipelineTriggerPort
 from loguru import logger
 
 from market_data.adapters.exchange import CCXTAdapter
-from market_data.ingestion.rest.trades_fetcher import TradesFetcher
+from market_data.adapters.inbound.rest.trades_fetcher import TradesFetcher
 from market_data.storage.silver.trades_storage import TradesStorage
 
 # ---------------------------------------------------------------------------

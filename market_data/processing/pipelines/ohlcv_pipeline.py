@@ -257,7 +257,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         )
         quality = QualityPipeline()
 
-        from market_data.ingestion.rest.ohlcv_fetcher import HistoricalFetcherAsync
+        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
         # overlap NO se resuelve globalmente aquí.
         # Razón: un único max() sobre todos los timeframes produciría
         # solapamiento excesivo en timeframes largos (ej: overlap de 1m
