@@ -5,24 +5,28 @@ market_data/domain/entities/__init__.py
 
 Entidades del bounded context market_data.
 
+Entidades vs Value Objects (DDD)
+---------------------------------
+Una Entity tiene identidad explícita que persiste en el tiempo.
+Un VO es definido por su valor — sin identidad propia.
+
 Entidades presentes
 -------------------
-OHLCVBar         — vela OHLCV inmutable del layer de streaming
-ValidationResult — resultado de validar una vela cruda (identidad por candle)
+ValidationResult  — resultado de validar una Candle (identidad por candle)
 ValidationSummary — agrega resultados de validate_batch para métricas
-DataTier          — clasificación de tier de calidad de un dataset Silver
+DataTier          — clasificación de calidad de un dataset Silver
 
-Nota sobre identidad (DDD)
---------------------------
-En DDD, una Entity tiene identidad explícita que persiste en el tiempo.
-OHLCVBar tiene identidad por (exchange, symbol, timeframe, timestamp).
-ValidationResult tiene identidad por (candle,) — inmutable por frozen=True.
-DataTier es un enum — value object de clasificación, re-exportado aquí
-porque es el resultado de negocio de QualityPipeline.
+Nota sobre OHLCVBar
+--------------------
+OHLCVBar (streaming/payloads.py) era re-exportado aquí anteriormente.
+Eliminado: era una dependencia del dominio hacia infraestructura (streaming),
+violando DIP. El dominio usa Candle (domain/value_objects/candle.py).
+Los adapters de streaming usan OHLCVBar en su propia capa.
 
 Principios
 ----------
-SSOT   — re-exports desde owners actuales; sin duplicar código
+DIP    — el dominio no depende de infraestructura (streaming, pandas, CCXT)
+SSOT   — re-exports desde owners canónicos; sin duplicar código
 OCP    — agregar entidades no modifica consumidores existentes
 DDD    — separación clara entre entidades (identidad) y VOs (valor)
 """
@@ -30,10 +34,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-# OHLCVBar — entidad de streaming con identidad por (exchange, symbol, tf, ts)
-from market_data.streaming.payloads import OHLCVBar  # noqa: F401
-
-# ValidationResult — resultado de validación con identidad por candle
+# ValidationResult / ValidationSummary — resultado de validación con identidad por candle
 from market_data.processing.validation.candle_validator import (  # noqa: F401
     ValidationResult,
     ValidationSummary,
@@ -42,16 +43,15 @@ from market_data.processing.validation.candle_validator import (  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # DataTier — clasificación de tier de calidad de un dataset Silver
-# Definida aquí como tipo de dominio; quality/pipeline.py importa desde aquí.
 # ---------------------------------------------------------------------------
 
 class DataTier(str, Enum):
     """
     Tier de calidad de un dataset Silver producido por QualityPipeline.
 
-    CLEAN    — ACCEPT: sin issues; dato confiable para downstream
-    FLAGGED  — ACCEPT_WITH_FLAGS: anomalías presentes, usable con precaución
-    REJECTED — REJECT: datos inutilizables, no se escriben en Silver
+    CLEAN    — sin issues; dato confiable para downstream
+    FLAGGED  — anomalías presentes, usable con precaución
+    REJECTED — datos inutilizables, no se escriben en Silver
 
     str-compatible: DataTier.CLEAN == "clean" → True.
     """
@@ -61,7 +61,6 @@ class DataTier(str, Enum):
 
 
 __all__ = [
-    "OHLCVBar",
     "ValidationResult",
     "ValidationSummary",
     "DataTier",

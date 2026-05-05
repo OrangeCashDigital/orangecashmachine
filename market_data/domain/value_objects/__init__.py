@@ -10,27 +10,30 @@ Value Objects (DDD)
 Tipos inmutables definidos por su valor, sin identidad de negocio.
 Dos VOs con los mismos campos son equivalentes (equality por valor).
 
-Contenido
----------
+Catálogo
+--------
 Timeframe             — enum canónico de timeframes válidos (str-compatible)
 timeframe_to_ms       — conversión timeframe → milisegundos (O(1), tabla)
 InvalidTimeframeError — excepción Fail-Fast de timeframe inválido
 VALID_TIMEFRAMES      — frozenset[str] para validación O(1)
 align_to_grid         — alineación de timestamp al grid del timeframe
-RawCandle             — tipo alias para vela CCXT cruda (6-tupla tipada)
-QualityLabel          — clasificación de calidad de vela (CLEAN/SUSPECT/CORRUPT)
+Candle                — vela OHLCV inmutable con invariantes de dominio
+Symbol                — par de trading (base/quote), formato canónico
+OHLCVBatch            — lote inmutable de Candle con metadatos de contexto
+RawCandle             — tipo alias para wire format CCXT (6-tupla tipada)
+QualityLabel          — clasificación de calidad (CLEAN/SUSPECT/CORRUPT)
 GapRange              — rango temporal de un gap detectado en un dataset
 
 Principios
 ----------
-DIP    — dependencia hacia abstracciones; infra nunca define tipos de dominio
+DDD    — VOs puros: inmutables, definidos por valor, sin identidad
 SSOT   — un único punto de definición para cada VO
+DIP    — infra nunca define tipos de dominio; dominio no depende de infra
 OCP    — agregar VOs aquí no modifica consumidores existentes
-KISS   — sin lógica de negocio; solo tipos y conversiones puras
+KISS   — sin lógica de negocio compleja; tipos y conversiones puras
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Tuple
@@ -38,8 +41,7 @@ from typing import Tuple
 import pandas as pd
 
 # ---------------------------------------------------------------------------
-# Timeframe — SSOT directo desde domain/value_objects/timeframe.py
-# (ya no pasa por processing/utils — ese módulo es ahora el shim)
+# Timeframe — SSOT en domain/value_objects/timeframe.py
 # ---------------------------------------------------------------------------
 from market_data.domain.value_objects.timeframe import (  # noqa: F401
     Timeframe,
@@ -49,28 +51,30 @@ from market_data.domain.value_objects.timeframe import (  # noqa: F401
     align_to_grid,
 )
 
+# ---------------------------------------------------------------------------
+# Candle — VO de vela OHLCV con invariantes de dominio
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.candle import Candle  # noqa: F401
 
 # ---------------------------------------------------------------------------
-# RawCandle — tipo alias canónico para vela CCXT cruda
+# Symbol — VO de par de trading
 # ---------------------------------------------------------------------------
+from market_data.domain.value_objects.symbol import Symbol  # noqa: F401
 
+# ---------------------------------------------------------------------------
+# OHLCVBatch — VO de lote de velas con metadatos
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.ohlcv_batch import OHLCVBatch  # noqa: F401
+
+# ---------------------------------------------------------------------------
+# RawCandle — tipo alias canónico para wire format CCXT crudo
+# Usado solo en la frontera ACL (adapters inbound); el dominio usa Candle.
+# ---------------------------------------------------------------------------
 RawCandle = Tuple[int, float, float, float, float, float]
-"""
-Vela CCXT en formato raw: [timestamp_ms, open, high, low, close, volume].
-
-  timestamp_ms : int   — Unix epoch en milisegundos
-  open         : float — precio de apertura
-  high         : float — precio máximo
-  low          : float — precio mínimo
-  close        : float — precio de cierre
-  volume       : float — volumen negociado en el período
-"""
-
 
 # ---------------------------------------------------------------------------
 # QualityLabel — clasificación de calidad de una vela OHLCV
 # ---------------------------------------------------------------------------
-
 class QualityLabel(str, Enum):
     """
     Clasificación de calidad de una vela OHLCV.
@@ -85,11 +89,9 @@ class QualityLabel(str, Enum):
     SUSPECT = "suspect"
     CORRUPT = "corrupt"
 
-
 # ---------------------------------------------------------------------------
 # GapRange — rango temporal de un gap detectado en un dataset OHLCV
 # ---------------------------------------------------------------------------
-
 @dataclass(frozen=True)
 class GapRange:
     """
@@ -99,15 +101,15 @@ class GapRange:
 
     Attributes
     ----------
-    start_ms : timestamp Unix ms del último punto de datos antes del gap
-    end_ms   : timestamp Unix ms del primer punto de datos después del gap
+    start_ms : timestamp Unix ms del último punto antes del gap
+    end_ms   : timestamp Unix ms del primer punto después del gap
     expected : número de velas faltantes en el rango
     run_id   : run que detectó este gap (correlación de lineage)
 
     Properties
     ----------
     duration_ms : duración total del gap en milisegundos
-    severity    : clasificación (low / medium / high) según velas faltantes
+    severity    : low / medium / high según velas faltantes
     """
     start_ms: int
     end_ms:   int
@@ -121,18 +123,10 @@ class GapRange:
 
     @property
     def duration_ms(self) -> int:
-        """Duración total del gap en milisegundos."""
         return self.end_ms - self.start_ms
 
     @property
     def severity(self) -> str:
-        """
-        Clasificación del gap por número de velas faltantes.
-
-        low    : 1–2  velas (ruido normal)
-        medium : 3–10 velas (degradación notable)
-        high   : >10  velas (pérdida significativa)
-        """
         if self.expected <= 2:
             return "low"
         elif self.expected <= 10:
@@ -143,17 +137,21 @@ class GapRange:
 # ---------------------------------------------------------------------------
 # __all__
 # ---------------------------------------------------------------------------
-
 __all__ = [
-    # Timeframe (SSOT en domain/value_objects/timeframe.py)
+    # Timeframe
     "Timeframe",
     "timeframe_to_ms",
     "InvalidTimeframeError",
     "VALID_TIMEFRAMES",
     "align_to_grid",
-    # Candle domain types
+    # Market data VOs
+    "Candle",
+    "Symbol",
+    "OHLCVBatch",
+    # Wire format alias (ACL boundary)
     "RawCandle",
+    # Quality
     "QualityLabel",
-    # Gap domain type
+    # Gap
     "GapRange",
 ]
