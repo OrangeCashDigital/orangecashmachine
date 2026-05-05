@@ -32,6 +32,7 @@ from market_data.ports.observability import MetricsPusherPort
 from market_data.ports.quality import AnomalyRegistryPort
 from market_data.ports.state import CursorStorePort, encode_cursor_key
 from market_data.ports.storage import OHLCVStorage
+from market_data.ports.storage_factory import StorageFactoryPort
 
 __all__ = [
     "AnomalyRegistryPort",
@@ -40,4 +41,5 @@ __all__ = [
     "ExchangeAdapter",
     "MetricsPusherPort",
     "OHLCVStorage",
+    "StorageFactoryPort",
 ]
