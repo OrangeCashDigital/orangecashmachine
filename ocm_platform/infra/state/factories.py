@@ -52,7 +52,7 @@ from __future__ import annotations
 
 # ---------------------------------------------------------------------------
 # Protocols locales — DIP: factories no depende de market_data.*
-# Los callers (market_data.streaming) implementan estos contratos.
+# Los callers (market_data.infrastructure.streaming) implementan estos contratos.
 # ---------------------------------------------------------------------------
 from typing import Protocol, runtime_checkable
 
