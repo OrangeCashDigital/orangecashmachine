@@ -1,5 +1,5 @@
 """
-Tests unitarios para dagster_assets.asset_checks.make_bronze_checks.
+Tests unitarios para infrastructure.dagster.assets.asset_checks.make_bronze_checks.
 
 Principios:
   OCP      : make_bronze_checks extensible sin modificar código existente

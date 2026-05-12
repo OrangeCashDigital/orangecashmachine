@@ -1,5 +1,5 @@
 """
-Tests unitarios para dagster_assets.bronze_ohlcv.make_bronze_ohlcv_asset.
+Tests unitarios para infrastructure.dagster.assets.bronze_ohlcv.make_bronze_ohlcv_asset.
 
 Principios:
   OCP      : factory extensible por exchange/market_type sin modificar código

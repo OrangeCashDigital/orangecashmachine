@@ -1,5 +1,5 @@
 """
-Tests unitarios para dagster_assets.resources.OCMResource.
+Tests unitarios para infrastructure.dagster.resources.OCMResource.
 
 Principios:
   DIP  : RuntimeContext mockeado completo — el test no depende de su implementación
