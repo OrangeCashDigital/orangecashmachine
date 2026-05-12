@@ -70,7 +70,7 @@ class IcebergStorageFactory:
         key = (exchange, market_type, dry_run)
         if key not in self._cache:
             # Import lazy — adaptador concreto no se carga en import time (DIP)
-            from market_data.storage.iceberg.iceberg_storage import IcebergStorage
+            from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
             try:
                 self._cache[key] = IcebergStorage(
                     exchange    = exchange,

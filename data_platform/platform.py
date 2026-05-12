@@ -209,7 +209,7 @@ class DataPlatform:
         -------
         List de dicts con keys: exchange, symbol, market_type, timeframe.
         """
-        from market_data.storage.iceberg.catalog import get_catalog
+        from market_data.infrastructure.storage.iceberg.catalog import get_catalog
         try:
             table   = get_catalog().load_table("gold.features")
             seen:   set = set()

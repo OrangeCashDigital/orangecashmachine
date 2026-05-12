@@ -34,7 +34,7 @@ from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from loguru import logger
 
 from market_data.adapters.outbound.exchange import CCXTAdapter
-from market_data.storage.silver.derivatives_storage import DerivativesStorage
+from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
 from market_data.adapters.inbound.rest.derivatives_fetcher import (
     FundingRateFetcher,
     OpenInterestFetcher,
@@ -161,7 +161,7 @@ class DerivativesPipeline(PipelineTriggerPort):
         # Catalog — inyectado o resuelto desde entorno (SafeOps)
         _catalog = getattr(exchange_client, '_catalog', None)
         if _catalog is None and not dry_run:
-            from market_data.storage.iceberg.catalog import get_catalog
+            from market_data.infrastructure.storage.iceberg.catalog import get_catalog
             _catalog = get_catalog()
         self._fetchers: dict[str, object] = {}
         if "funding_rate" in datasets:

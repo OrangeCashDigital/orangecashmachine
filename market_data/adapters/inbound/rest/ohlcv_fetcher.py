@@ -26,7 +26,7 @@ import pandas as pd
 from ocm_platform.observability import bind_pipeline
 
 from market_data.ports.outbound.storage import OHLCVStorage
-from market_data.processing.transformer import OHLCVTransformer
+from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,

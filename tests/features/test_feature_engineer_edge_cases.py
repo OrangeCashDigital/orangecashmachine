@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_data.storage.gold.feature_engineer import FeatureEngineer
+from market_data.infrastructure.storage.gold.feature_engineer import FeatureEngineer
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 

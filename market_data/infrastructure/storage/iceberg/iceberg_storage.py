@@ -46,7 +46,7 @@ from pyiceberg.expressions import (
     LessThanOrEqual,
 )
 
-from market_data.storage.iceberg.catalog import get_catalog, ensure_silver_table
+from market_data.infrastructure.storage.iceberg.catalog import get_catalog, ensure_silver_table
 from market_data.ports.outbound.state import CursorStorePort as CursorStore
 
 

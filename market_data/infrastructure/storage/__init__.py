@@ -25,8 +25,8 @@ los consumidores dependen del puerto (DIP), no de la implementación.
 Principios: SOLID · KISS · DRY · SafeOps
 """
 
-from market_data.storage.silver.trades_storage import TradesStorage
-from market_data.storage.silver.derivatives_storage import (
+from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
+from market_data.infrastructure.storage.silver.derivatives_storage import (
     DerivativesStorage,
     SUPPORTED_DATASETS,
 )

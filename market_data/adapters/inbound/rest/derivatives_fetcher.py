@@ -45,7 +45,7 @@ from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
 )
-from market_data.storage.silver.derivatives_storage import DerivativesStorage
+from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
 from ocm_platform.infra.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
 
 # ---------------------------------------------------------------------------

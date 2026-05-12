@@ -40,7 +40,7 @@ from typing import List
 
 import pandas as pd
 
-from market_data.processing.validation.candle_validator import (
+from market_data.domain.value_objects.candle_validator import (
     ValidationResult,
 )
 

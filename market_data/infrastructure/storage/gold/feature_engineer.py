@@ -14,11 +14,11 @@ Por qué fue deprecado
 Migración
 ---------
 Antes:
-    from market_data.storage.gold.feature_engineer import FeatureEngineer
+    from market_data.infrastructure.storage.gold.feature_engineer import FeatureEngineer
     result = FeatureEngineer().compute(df, symbol="BTC/USDT", timeframe="1h")
 
 Ahora:
-    from market_data.storage.gold.transformer import GoldTransformer
+    from market_data.infrastructure.storage.gold.transformer import GoldTransformer
     result = GoldTransformer.transform(df, symbol="BTC/USDT",
                                        timeframe="1h", exchange="binance")
 
@@ -30,7 +30,7 @@ import warnings
 
 # Columnas que el caller podría referenciar — re-exportadas para no romper
 # código que hace `from feature_engineer import FEATURE_COLUMNS`.
-from market_data.storage.gold.transformer import FEATURE_COLUMNS, VERSION as _GT_VERSION  # noqa: F401
+from market_data.infrastructure.storage.gold.transformer import FEATURE_COLUMNS, VERSION as _GT_VERSION  # noqa: F401
 
 _DEPRECATED_MSG = (
     "FeatureEngineer está DEPRECATED desde v2.0.0. "
@@ -57,7 +57,7 @@ class FeatureEngineer:
     ) -> "pd.DataFrame":
         warnings.warn(_DEPRECATED_MSG, DeprecationWarning, stacklevel=2)
 
-        from market_data.storage.gold.transformer import GoldTransformer
+        from market_data.infrastructure.storage.gold.transformer import GoldTransformer
         return GoldTransformer.transform(
             df,
             symbol    = symbol,

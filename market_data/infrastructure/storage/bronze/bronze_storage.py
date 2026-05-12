@@ -31,7 +31,7 @@ import pandas as pd
 import pyarrow as pa
 from loguru import logger
 
-from market_data.storage.iceberg.catalog import ensure_bronze_table, get_catalog
+from market_data.infrastructure.storage.iceberg.catalog import ensure_bronze_table, get_catalog
 
 # Columnas mínimas requeridas en el DataFrame de entrada
 REQUIRED_COLUMNS: frozenset[str] = frozenset(

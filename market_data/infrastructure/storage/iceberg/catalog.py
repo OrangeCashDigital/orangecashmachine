@@ -7,7 +7,7 @@ Facade pública del paquete iceberg — reexporta toda la API pública.
 
 Consumers importan desde aquí sin conocer la estructura interna:
 
-    from market_data.storage.iceberg.catalog import get_catalog, ensure_bronze_table
+    from market_data.infrastructure.storage.iceberg.catalog import get_catalog, ensure_bronze_table
 
 Estructura interna (SRP):
     _catalog_singleton.py → singleton SqlCatalog
@@ -19,15 +19,15 @@ Ref: https://iceberg.apache.org/spec/
 """
 from __future__ import annotations
 
-from market_data.storage.iceberg._catalog_singleton import get_catalog
-from market_data.storage.iceberg.schemas import (
+from market_data.infrastructure.storage.iceberg._catalog_singleton import get_catalog
+from market_data.infrastructure.storage.iceberg.schemas import (
     BRONZE_SCHEMA,
     SILVER_SCHEMA,
     GOLD_SCHEMA,
     TRADES_SCHEMA,
     DERIVATIVES_SCHEMA,
 )
-from market_data.storage.iceberg.bootstrap import (
+from market_data.infrastructure.storage.iceberg.bootstrap import (
     ensure_bronze_table,
     ensure_silver_table,
     ensure_gold_table,

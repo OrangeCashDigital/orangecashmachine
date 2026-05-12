@@ -40,9 +40,9 @@ _log = bind_pipeline("pipeline")
 from market_data.quality.pipeline import QualityPipeline
 from market_data.quality.invariants.invariants import check_dataset_invariants
 from market_data.processing.utils.gap_utils import scan_gaps
-from market_data.storage.bronze.bronze_storage import BronzeStorage
+from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
 from market_data.ports.outbound.storage import OHLCVStorage
-from market_data.storage.iceberg.iceberg_storage import IcebergStorage
+from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.processing.pipelines._worker_pool import run_worker_pool
 from market_data.processing.strategies.base import (
     PairResult,
@@ -54,7 +54,7 @@ from market_data.processing.strategies.base import (
 from market_data.processing.strategies.backfill import BackfillStrategy
 from market_data.processing.strategies.incremental import IncrementalStrategy
 from market_data.processing.strategies.repair import RepairStrategy
-from market_data.processing.transformer import OHLCVTransformer
+from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,

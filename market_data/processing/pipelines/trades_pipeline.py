@@ -31,7 +31,7 @@ from loguru import logger
 
 from market_data.adapters.outbound.exchange import CCXTAdapter
 from market_data.adapters.inbound.rest.trades_fetcher import TradesFetcher
-from market_data.storage.silver.trades_storage import TradesStorage
+from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
 
 # ---------------------------------------------------------------------------
 # Types
@@ -140,7 +140,7 @@ class TradesPipeline(PipelineTriggerPort):
         # Catalog inyectado o construido desde entorno (SafeOps)
         _catalog = getattr(exchange_client, '_catalog', None)
         if _catalog is None and not dry_run:
-            from market_data.storage.iceberg.catalog import get_catalog
+            from market_data.infrastructure.storage.iceberg.catalog import get_catalog
             _catalog = get_catalog()
         storage = TradesStorage(
             exchange    = self._exchange_id,

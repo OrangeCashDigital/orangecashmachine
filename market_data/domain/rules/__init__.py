@@ -19,7 +19,7 @@ market_data.quality.invariants — operan sobre DataFrames y pertenecen
 a la capa de quality/application.
 
 Importar directamente desde sus ubicaciones canónicas:
-  from market_data.processing.validation import CandleValidator
+  from market_data.domain.value_objects.candle_validator import CandleValidator
   from market_data.quality.invariants.invariants import check_dataset_invariants
 
 Principios

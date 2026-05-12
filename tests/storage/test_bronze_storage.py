@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_data.storage.bronze.bronze_storage import (
+from market_data.infrastructure.storage.bronze.bronze_storage import (
     BronzeStorage,
     BronzeStorageError,
     REQUIRED_COLUMNS,

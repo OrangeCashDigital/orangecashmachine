@@ -40,7 +40,7 @@ from data_platform.ohlcv_utils import (
     DataReadError,
     VersionNotFoundError,
 )
-from market_data.storage.iceberg.catalog import ensure_gold_table, get_catalog
+from market_data.infrastructure.storage.iceberg.catalog import ensure_gold_table, get_catalog
 
 # Re-exportar aliases semánticos para compatibilidad con imports existentes
 GoldLoaderError     = DataNotFoundError
