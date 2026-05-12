@@ -1,5 +1,5 @@
 """
-market_data/ports/input/pipeline_trigger.py
+market_data/ports/inbound/pipeline_trigger.py
 ============================================
 Puerto de ENTRADA al sistema de market data.
 
@@ -36,9 +36,9 @@ class PipelineTriggerPort(ABC):
 
     Implementaciones actuales
     -------------------------
-    - OHLCVPipeline       (processing/pipelines/ohlcv_pipeline.py)
-    - DerivativesPipeline (processing/pipelines/derivatives_pipeline.py)
-    - TradesPipeline      (processing/pipelines/trades_pipeline.py)
+    - OHLCVPipeline       (application/pipelines/ohlcv_pipeline.py)
+    - DerivativesPipeline (application/pipelines/derivatives_pipeline.py)
+    - TradesPipeline      (application/pipelines/trades_pipeline.py)
 
     Implementar este port requiere solo añadir la herencia:
         class OHLCVPipeline(PipelineTriggerPort):

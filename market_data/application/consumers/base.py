@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/pipeline/consumers/base.py
+market_data/application/consumers/base.py
 ========================================
 
 BaseConsumer — clase base para todos los consumers del event bus.
