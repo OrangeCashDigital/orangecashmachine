@@ -11,7 +11,7 @@ Este submódulo está reservado para reglas de dominio puras (sin I/O,
 sin pandas, sin dependencias de infraestructura).
 
 Las reglas de validación de velas (CandleValidator, CandleNormalizer)
-viven en market_data.processing.validation — tienen dependencias de
+viven en market_data.domain.value_objects — tienen dependencias de
 processing layer (pandas, Silver schema) y no pertenecen al dominio puro.
 
 Las invariantes de dataset (check_dataset_invariants) viven en

@@ -30,7 +30,7 @@ def _record(name: str, extra: dict | None = None) -> dict:
     # Un representante real por cada prefijo de _PIPELINE_MODULES
     "market_data.ingestion.rest.ohlcv_fetcher",
     "market_data.processing.pipelines.ohlcv_pipeline",
-    "market_data.storage.silver.trades_storage",
+    "market_data.infrastructure.storage.silver.trades_storage",
     "market_data.quality.validators.ohlcv_validator",
     "market_data.adapters.outbound.exchange.ccxt_adapter",
     "ocm_platform.control_plane.orchestration.entrypoint",

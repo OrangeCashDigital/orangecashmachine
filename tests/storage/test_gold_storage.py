@@ -90,7 +90,7 @@ def test_build_dry_run_returns_dataframe_with_features(gold):
     mock_silver.load_ohlcv.return_value = silver_df
 
     with patch(
-        "market_data.storage.gold.gold_storage.IcebergStorage",
+        "market_data.infrastructure.storage.gold.gold_storage.IcebergStorage",
         return_value=mock_silver,
     ):
         result = gold.build(
@@ -114,7 +114,7 @@ def test_build_dry_run_returns_none_when_silver_empty(gold):
     mock_silver.load_ohlcv.return_value = pd.DataFrame()
 
     with patch(
-        "market_data.storage.gold.gold_storage.IcebergStorage",
+        "market_data.infrastructure.storage.gold.gold_storage.IcebergStorage",
         return_value=mock_silver,
     ):
         result = gold.build(
@@ -134,7 +134,7 @@ def test_build_dry_run_returns_none_when_silver_raises(gold):
     mock_silver.load_ohlcv.side_effect = RuntimeError("Iceberg scan failed")
 
     with patch(
-        "market_data.storage.gold.gold_storage.IcebergStorage",
+        "market_data.infrastructure.storage.gold.gold_storage.IcebergStorage",
         return_value=mock_silver,
     ):
         result = gold.build(

@@ -16,7 +16,7 @@ DataTier — clasificación de tier de calidad de un dataset Silver
 
 Nota sobre ValidationResult / ValidationSummary
 ------------------------------------------------
-Viven en market_data.processing.validation.candle_validator.
+Viven en market_data.domain.value_objects.candle_validator.
 No son entidades de dominio — son resultados de una operación
 de processing layer. El dominio no depende de ellos.
 

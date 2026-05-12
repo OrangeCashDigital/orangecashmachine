@@ -19,7 +19,7 @@ domain/
 
 Ubicaciones canónicas fuera de domain/ (no son dominio puro)
 -------------------------------------------------------------
-  CandleValidator, CandleNormalizer → market_data.processing.validation
+  CandleValidator, CandleNormalizer → market_data.domain.value_objects
   check_dataset_invariants          → market_data.quality.invariants.invariants
   DataQualityPolicy, QualityPipeline → market_data.quality
 

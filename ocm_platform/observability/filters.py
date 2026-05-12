@@ -29,7 +29,7 @@ from typing import Any
 _PIPELINE_MODULES: tuple[str, ...] = (
     "market_data.ingestion.",
     "market_data.processing.",
-    "market_data.storage.",
+    "market_data.infrastructure.storage.",
     "market_data.quality.",
     "market_data.adapters.",
     "ocm_platform.control_plane.",

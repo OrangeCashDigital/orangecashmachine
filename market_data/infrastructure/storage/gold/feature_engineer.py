@@ -34,7 +34,7 @@ from market_data.infrastructure.storage.gold.transformer import FEATURE_COLUMNS,
 
 _DEPRECATED_MSG = (
     "FeatureEngineer está DEPRECATED desde v2.0.0. "
-    "Usar market_data.storage.gold.transformer.GoldTransformer. "
+    "Usar market_data.infrastructure.storage.gold.transformer.GoldTransformer. "
     "Eliminado en v3.0.0."
 )
 

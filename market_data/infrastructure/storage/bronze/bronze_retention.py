@@ -26,13 +26,13 @@ SafeOps
 Uso
 ---
     # Ver qué se expiraría (sin modificar nada)
-    python -m market_data.storage.bronze.bronze_retention
+    python -m market_data.infrastructure.storage.bronze.bronze_retention
 
     # Ejecutar expiración real
-    python -m market_data.storage.bronze.bronze_retention --execute
+    python -m market_data.infrastructure.storage.bronze.bronze_retention --execute
 
     # Retención agresiva (3 días)
-    python -m market_data.storage.bronze.bronze_retention --days 3 --execute
+    python -m market_data.infrastructure.storage.bronze.bronze_retention --days 3 --execute
 """
 from __future__ import annotations
 
