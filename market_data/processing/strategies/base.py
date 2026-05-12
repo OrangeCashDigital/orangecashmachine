@@ -416,7 +416,7 @@ class StrategyMixin:
         total:     int,
         ctx:       "PipelineContext",
     ) -> "PairResult":
-        from market_data.observability.metrics import PIPELINE_ERRORS  # evita circular
+        from market_data.infrastructure.observability.metrics import PIPELINE_ERRORS  # evita circular
 
         result     = PairResult(
             symbol=symbol, timeframe=timeframe,

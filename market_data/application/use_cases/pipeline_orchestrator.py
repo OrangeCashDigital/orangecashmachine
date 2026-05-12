@@ -53,7 +53,7 @@ from typing import Any, Literal, Optional
 
 from loguru import logger
 
-from market_data.ports.input.pipeline_trigger import (
+from market_data.ports.inbound.pipeline_trigger import (
     PipelineTriggerPort,
     PipelineModeStr,
 )

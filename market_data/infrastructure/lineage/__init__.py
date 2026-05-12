@@ -1,4 +1,4 @@
-from market_data.lineage.tracker import (
+from market_data.infrastructure.lineage.tracker import (
     LineageTracker,
     LineageEvent,
     PipelineLayer,

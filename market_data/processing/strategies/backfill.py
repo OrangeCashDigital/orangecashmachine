@@ -26,7 +26,7 @@ from market_data.processing.strategies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from market_data.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
+from market_data.infrastructure.observability.metrics import ROWS_INGESTED, PIPELINE_ERRORS
 # _encode: codifica UN segmento de clave Redis en base64 urlsafe.
 # Distinta de ports.state.encode_cursor_key (3 args, clave legible).
 # Se importa desde infra.state por necesidad de compatibilidad de schema

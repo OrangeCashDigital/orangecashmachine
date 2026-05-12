@@ -373,7 +373,7 @@ class ResamplePipeline:
         5. save_ohlcv(result, symbol, target_tf)
         6. Emitir métricas Prometheus
         """
-        from market_data.observability.metrics import (  # evita import circular en módulo
+        from market_data.infrastructure.observability.metrics import (  # evita import circular en módulo
             RESAMPLE_ROWS_TOTAL,
             RESAMPLE_DURATION_MS,
         )

@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 
-from market_data.adapters.data_providers.base import DataProviderAdapter
+from market_data.adapters.inbound.data_providers.base import DataProviderAdapter
 
 # Timeouts por operación (segundos)
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30.0, connect=10.0)

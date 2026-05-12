@@ -50,7 +50,7 @@ from loguru import logger
 
 # dominio
 from market_data.domain.entities import DataTier
-from market_data.lineage.tracker import (
+from market_data.infrastructure.lineage.tracker import (
     LineageEvent,
     LineageStatus,
     PipelineLayer,
@@ -70,7 +70,7 @@ from market_data.quality.validators.data_quality import (
 )
 
 # infra / utils
-from market_data.observability.metrics import PIPELINE_ERRORS, QUALITY_GAPS_TOTAL
+from market_data.infrastructure.observability.metrics import PIPELINE_ERRORS, QUALITY_GAPS_TOTAL
 from market_data.processing.utils.gap_utils import scan_gaps
 
 

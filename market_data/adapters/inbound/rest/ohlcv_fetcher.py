@@ -32,7 +32,7 @@ from market_data.adapters.outbound.exchange import (
     ExchangeCircuitOpenError,
     RetryExhaustedError,
 )
-from market_data.observability.metrics import (
+from market_data.infrastructure.observability.metrics import (
     FETCH_CHUNK_DURATION,
     FETCH_CHUNKS_TOTAL,
     CANDLE_DELAY_MS,

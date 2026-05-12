@@ -26,7 +26,7 @@ from market_data.processing.exceptions import (
 )
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.adapters.outbound.exchange.exchange_quirks import get_quirks
-from market_data.observability.metrics import (
+from market_data.infrastructure.observability.metrics import (
     ROWS_INGESTED, PIPELINE_ERRORS,
     REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED, REPAIR_GAPS_SKIPPED,
 )

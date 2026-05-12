@@ -93,7 +93,7 @@ def align_to_grid(
 
     if drifted > 0:
         try:
-            from market_data.observability.metrics import TIMESTAMP_DRIFT_CORRECTED
+            from market_data.infrastructure.observability.metrics import TIMESTAMP_DRIFT_CORRECTED
             TIMESTAMP_DRIFT_CORRECTED.labels(
                 exchange=exchange,
                 symbol=symbol,
@@ -109,7 +109,7 @@ def align_to_grid(
     collisions = int(df.duplicated(subset="timestamp", keep=False).sum())
     if collisions > 0:
         try:
-            from market_data.observability.metrics import TIMESTAMP_GRID_COLLISIONS
+            from market_data.infrastructure.observability.metrics import TIMESTAMP_GRID_COLLISIONS
             TIMESTAMP_GRID_COLLISIONS.labels(
                 exchange=exchange,
                 symbol=symbol,

@@ -61,9 +61,9 @@ from market_data.adapters.outbound.exchange import (
     get_breaker_state,
 )
 from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
-from market_data.observability.metrics import FETCH_ABORTS_TOTAL, ACTIVE_PAIRS
+from market_data.infrastructure.observability.metrics import FETCH_ABORTS_TOTAL, ACTIVE_PAIRS
 from market_data.ports.state import CursorStorePort
-from market_data.ports.input.pipeline_trigger import PipelineTriggerPort
+from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from ocm_platform.infra.state.cursor_store import (
     build_cursor_store_from_env,
     InMemoryCursorStore,

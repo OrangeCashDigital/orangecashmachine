@@ -37,7 +37,7 @@ from market_data.processing.validation.candle_validator import (
     CandleValidator,
     ValidationSummary,
 )
-from market_data.lineage.tracker import (
+from market_data.infrastructure.lineage.tracker import (
     LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
 )
 

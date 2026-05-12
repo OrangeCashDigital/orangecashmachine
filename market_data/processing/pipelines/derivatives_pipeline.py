@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
 from market_data.processing.pipelines._worker_pool import run_worker_pool
-from market_data.ports.input.pipeline_trigger import PipelineTriggerPort
+from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 
 from loguru import logger
 

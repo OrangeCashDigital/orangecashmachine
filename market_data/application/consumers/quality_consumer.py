@@ -27,7 +27,7 @@ from market_data.domain.events import (
     PipelineLayer,
 )
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
-from market_data.lineage.tracker import lineage_tracker as _default_tracker
+from market_data.infrastructure.lineage.tracker import lineage_tracker as _default_tracker
 from market_data.application.consumers.base import BaseConsumer
 from market_data.ports.event_bus import EventBusPort
 from market_data.quality.anomaly_registry import default_registry

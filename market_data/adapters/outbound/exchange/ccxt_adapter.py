@@ -56,7 +56,7 @@ from market_data.adapters.outbound.exchange.resilience import (
 from market_data.adapters.outbound.exchange.throttle import (
     get_or_create_throttle,
 )
-from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
+from market_data.infrastructure.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 
 if TYPE_CHECKING:
     from ocm_platform.config.schema import ExchangeConfig, ResilienceConfig

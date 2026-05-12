@@ -9,7 +9,7 @@ Esto permite reorganizar metrics.py sin romper callers (OCP).
 
 Nombres canónicos: los de metrics.py. Este archivo NO renombra.
 """
-from market_data.observability.metrics import (
+from market_data.infrastructure.observability.metrics import (
     # ── Pipeline ─────────────────────────────────────────────
     ROWS_INGESTED,
     PAIR_DURATION,

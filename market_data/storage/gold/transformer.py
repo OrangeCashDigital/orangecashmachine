@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from market_data.lineage.tracker import (
+from market_data.infrastructure.lineage.tracker import (
     LineageEvent,
     LineageStatus,
     PipelineLayer,
