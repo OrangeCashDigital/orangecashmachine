@@ -26,8 +26,8 @@ Principios aplicados
 from __future__ import annotations
 
 import pandas as pd
-import pandera as pa
-from pandera import Column, Check, DataFrameSchema
+import pandera.pandas as pa
+from pandera.pandas import Column, Check, DataFrameSchema
 from loguru import logger
 
 from market_data.processing.utils.timeframe import timeframe_to_ms, InvalidTimeframeError
