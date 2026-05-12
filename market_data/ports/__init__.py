@@ -1,25 +1,14 @@
-# -*- coding: utf-8 -*-
-"""
-market_data/ports/
-===================
-
-Todos los puertos (contratos DIP) del bounded context market_data.
-
-Inbound (driving)           : EventConsumerPort, MarketDataSourcePort
-Outbound (driven)           : EventPublisherPort, AnomalyRegistryPort,
-                               LineagePort, StoragePort
-"""
-from market_data.ports.inbound.event_consumer   import EventConsumerPort, Handler  # noqa
-from market_data.ports.outbound.event_publisher import EventPublisherPort            # noqa
-from market_data.ports.outbound.anomaly_registry import AnomalyRegistryPort          # noqa
-from market_data.ports.outbound.lineage          import LineagePort                  # noqa
-from market_data.ports.market_data_source        import MarketDataSourcePort         # noqa
-
-__all__ = [
-    "Handler",
-    "EventConsumerPort",
-    "EventPublisherPort",
-    "AnomalyRegistryPort",
-    "LineagePort",
-    "MarketDataSourcePort",
-]
+# ports/__init__.py
+# Bounded context: market_data — Puertos Hexagonales
+#
+# INBOUND  (driving/primary)  : ports/inbound/
+#   — Interfaces que el exterior usa para ACTIVAR la aplicación.
+#   — Implementadas por: application/use_cases/, application/consumers/
+#
+# OUTBOUND (driven/secondary) : ports/outbound/
+#   — Interfaces que la aplicación usa para LLAMAR servicios externos.
+#   — Implementadas por: adapters/outbound/, infrastructure/
+#
+# Importar siempre desde el submódulo:
+#   from market_data.ports.outbound.storage import OHLCVStorage
+#   from market_data.ports.inbound.event_consumer import EventConsumerPort

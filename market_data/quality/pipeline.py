@@ -56,7 +56,7 @@ from market_data.infrastructure.lineage.tracker import (
     PipelineLayer,
     lineage_tracker,
 )
-from market_data.ports.quality import AnomalyRegistryPort
+from market_data.ports.outbound.quality import AnomalyRegistryPort
 from market_data.quality.anomaly_registry import default_registry
 from market_data.quality.policies.data_quality_policy import (
     DataQualityPolicy,

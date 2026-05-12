@@ -39,7 +39,7 @@ from typing import DefaultDict, Set, Type
 from loguru import logger
 
 from market_data.domain.events.ingestion import DomainEvent
-from market_data.ports.event_bus import Handler
+from market_data.ports.outbound.event_bus import Handler
 
 
 class InMemoryEventBus:

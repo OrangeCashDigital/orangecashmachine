@@ -41,7 +41,7 @@ from market_data.quality.pipeline import QualityPipeline
 from market_data.quality.invariants.invariants import check_dataset_invariants
 from market_data.processing.utils.gap_utils import scan_gaps
 from market_data.storage.bronze.bronze_storage import BronzeStorage
-from market_data.ports.storage import OHLCVStorage
+from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.processing.pipelines._worker_pool import run_worker_pool
 from market_data.processing.strategies.base import (
@@ -62,7 +62,7 @@ from market_data.adapters.outbound.exchange import (
 )
 from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
 from market_data.infrastructure.observability.metrics import FETCH_ABORTS_TOTAL, ACTIVE_PAIRS
-from market_data.ports.state import CursorStorePort
+from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from ocm_platform.infra.state.cursor_store import (
     build_cursor_store_from_env,

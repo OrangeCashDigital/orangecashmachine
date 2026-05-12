@@ -54,7 +54,7 @@ from typing import Any, List, Optional
 
 from loguru import logger
 
-from market_data.ports.storage_factory import StorageFactoryPort
+from market_data.ports.outbound.storage_factory import StorageFactoryPort
 
 
 # =============================================================================

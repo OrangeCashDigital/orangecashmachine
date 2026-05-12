@@ -30,9 +30,9 @@ from typing import List, Protocol, runtime_checkable
 from ocm_platform.observability import bind_pipeline
 
 # ── Ports (contratos) — nunca importar implementaciones concretas aquí ──────
-from market_data.ports.storage import OHLCVStorage
-from market_data.ports.state import CursorStorePort as CursorStore
-from market_data.ports.gap_registry import GapRegistryPort
+from market_data.ports.outbound.storage import OHLCVStorage
+from market_data.ports.outbound.state import CursorStorePort as CursorStore
+from market_data.ports.outbound.gap_registry import GapRegistryPort
 
 _log = bind_pipeline("base")
 

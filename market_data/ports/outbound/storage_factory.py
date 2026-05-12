@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from market_data.ports.storage import OHLCVStorage
+from market_data.ports.outbound.storage import OHLCVStorage
 
 
 @runtime_checkable

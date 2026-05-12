@@ -14,10 +14,10 @@ con los imports existentes mientras se migran progresivamente.
 Migración
 ---------
 Actualizar todos los imports a:
-    from market_data.ports.exchange import ExchangeAdapter
+    from market_data.ports.outbound.exchange import ExchangeAdapter
 
 Una vez completada la migración, este archivo puede eliminarse.
 """
-from market_data.ports.exchange import ExchangeAdapter  # noqa: F401
+from market_data.ports.outbound.exchange import ExchangeAdapter  # noqa: F401
 
 __all__ = ["ExchangeAdapter"]

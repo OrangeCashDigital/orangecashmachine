@@ -25,7 +25,7 @@ from typing import List, Optional
 import pandas as pd
 from ocm_platform.observability import bind_pipeline
 
-from market_data.ports.storage import OHLCVStorage
+from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.processing.transformer import OHLCVTransformer
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
@@ -224,7 +224,7 @@ class DownloadResult:
 # CursorStore import (aqui para evitar circular import)
 # ==========================================================
 
-from market_data.ports.state import CursorStorePort as CursorStore
+from market_data.ports.outbound.state import CursorStorePort as CursorStore
 from ocm_platform.infra.state.cursor_store import InMemoryCursorStore
 
 

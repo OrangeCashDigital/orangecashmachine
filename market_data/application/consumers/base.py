@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from typing import ClassVar, Type
 
 from market_data.domain.events.ingestion import DomainEvent
-from market_data.ports.event_bus import EventBusPort
+from market_data.ports.outbound.event_bus import EventBusPort
 
 
 class BaseConsumer(ABC):

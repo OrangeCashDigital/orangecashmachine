@@ -26,7 +26,7 @@ Principios: DIP · SRP · SSOT · SafeOps · Lazy init
 """
 from __future__ import annotations
 
-from market_data.ports.storage import OHLCVStorage
+from market_data.ports.outbound.storage import OHLCVStorage
 
 
 class IcebergStorageFactory:
