@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/processing/pipelines/_worker_pool.py
+market_data/application/pipelines/_worker_pool.py
 =================================================
 
 Worker pool genérico producer/consumer para pipelines de ingestion.

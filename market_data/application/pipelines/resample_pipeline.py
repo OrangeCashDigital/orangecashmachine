@@ -1,5 +1,5 @@
 """
-market_data/processing/pipelines/resample_pipeline.py
+market_data/application/pipelines/resample_pipeline.py
 ======================================================
 
 Pipeline de resampling OHLCV local.

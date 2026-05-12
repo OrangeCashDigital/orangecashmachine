@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/pipeline/consumers/quality_consumer.py
+market_data/application/consumers/quality_consumer.py
 ====================================================
 
 Consumer que ejecuta el pipeline de calidad sobre lotes OHLCV.

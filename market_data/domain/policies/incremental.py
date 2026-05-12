@@ -1,5 +1,5 @@
 """
-market_data/processing/strategies/incremental.py
+market_data/domain/policies/incremental.py
 =================================================
 Strategy de ingestión incremental hacia adelante.
 El boilerplate de timing/errores/métricas vive en StrategyMixin.

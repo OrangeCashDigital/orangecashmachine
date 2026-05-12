@@ -1,5 +1,5 @@
 """
-market_data/processing/pipelines/ohlcv_pipeline.py
+market_data/application/pipelines/ohlcv_pipeline.py
 ================================================
 
 Pipeline de ingestion OHLCV (candles agregados por timeframe).

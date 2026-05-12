@@ -26,7 +26,7 @@ Con PipelineOrchestrator:
 
 Relación con PipelineTriggerPort
 ---------------------------------
-PipelineTriggerPort (ports/input/) define el contrato abstracto
+PipelineTriggerPort (ports/inbound/) define el contrato abstracto
 que los pipelines implementan. PipelineOrchestrator construye e
 invoca cualquier PipelineTriggerPort concreto.
 

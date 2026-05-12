@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/processing/pipelines/derivatives_pipeline.py
+market_data/application/pipelines/derivatives_pipeline.py
 =========================================================
 
 Pipeline de ingestion de derivados.

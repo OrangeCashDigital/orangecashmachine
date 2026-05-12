@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/processing/pipelines/trades_pipeline.py
+market_data/application/pipelines/trades_pipeline.py
 ====================================================
 
 Pipeline de ingestion de trades (tick data).

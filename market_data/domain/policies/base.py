@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/processing/strategies/base.py
+market_data/domain/policies/base.py
 ==========================================
 
 Contrato central del sistema de pipeline unificado.
