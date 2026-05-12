@@ -32,7 +32,7 @@ def _record(name: str, extra: dict | None = None) -> dict:
     "market_data.processing.pipelines.ohlcv_pipeline",
     "market_data.storage.silver.trades_storage",
     "market_data.quality.validators.ohlcv_validator",
-    "market_data.adapters.exchange.ccxt_adapter",
+    "market_data.adapters.outbound.exchange.ccxt_adapter",
     "ocm_platform.control_plane.orchestration.entrypoint",
 ])
 def test_pipeline_filter_accepts_pipeline_modules(module):

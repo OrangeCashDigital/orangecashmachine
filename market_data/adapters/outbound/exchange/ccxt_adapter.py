@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 
 # Símbolos definidos en este módulo.
 # Las clases de resiliencia, throttle y limiter se re-exportan desde
-# market_data.adapters.exchange.__init__ — no desde aquí.
+# market_data.adapters.outbound.exchange.__init__ — no desde aquí.
 __all__ = [
     "CCXTAdapter",
 ]

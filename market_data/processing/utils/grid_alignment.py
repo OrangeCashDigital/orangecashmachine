@@ -14,7 +14,7 @@ Separación de timeframe.py
 --------------------------
 align_to_grid fue separada de timeframe.py porque necesita:
   1. pandas (dependencia de datos)
-  2. market_data.observability.metrics (Prometheus)
+  2. market_data.infrastructure.observability.metrics (Prometheus)
 
 Estas dependencias son de application layer, no de dominio puro.
 timeframe.py es un value object: solo define qué es un timeframe

@@ -302,7 +302,7 @@ class TestExecutePairHealing:
         ctx         = _make_ctx(df=df, chunks=[gap_candles])
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             result = await strategy.execute_pair(
@@ -336,7 +336,7 @@ class TestExecutePairHealing:
         ctx         = _make_ctx(df=df, chunks=[gap_candles])
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             result = await strategy.execute_pair(
@@ -440,7 +440,7 @@ class TestExecutePairHealing:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             # No debe propagar — gather con return_exceptions=True
@@ -475,7 +475,7 @@ class TestExecutePairHealing:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             with pytest.raises(asyncio.CancelledError):
@@ -579,7 +579,7 @@ class TestHealGap:
         ctx      = self._forward_ctx(chunks=[])
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             # _heal_gap debe retornar (False, 0, 0.0) — NoDataAvailableError atrapada
@@ -600,7 +600,7 @@ class TestHealGap:
         ctx         = self._forward_ctx(chunks=[far_candles])
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             result = await strategy._heal_gap(
@@ -629,7 +629,7 @@ class TestHealGap:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             result = await strategy._heal_gap(
@@ -659,7 +659,7 @@ class TestHealGap:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             healed, rows, fill_ratio = await strategy._heal_gap(
@@ -690,7 +690,7 @@ class TestHealGap:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             await strategy._heal_gap(
@@ -721,7 +721,7 @@ class TestHealGap:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             # No debe lanzar aunque gap_registry sea None
@@ -755,7 +755,7 @@ class TestHealGap:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             result = await strategy._heal_gap(
@@ -790,7 +790,7 @@ class TestHealGap:
         )
 
         with patch(
-            "market_data.adapters.exchange.exchange_quirks.get_quirks"
+            "market_data.adapters.outbound.exchange.exchange_quirks.get_quirks"
         ) as mock_quirks:
             mock_quirks.return_value.backward_pagination = False
             with pytest.raises(asyncio.CancelledError):
