@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-dagster_assets/resample_ohlcv.py
+infrastructure/dagster/assets/resample_ohlcv.py
 ==================================
 
 Asset de resampling OHLCV: 1m Silver → 5m/15m/1h/4h/1d Silver.
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dagster import AssetIn, Output, asset
 
-from dagster_assets.resources import OCMResource
+from infrastructure.dagster.resources import OCMResource
 from market_data.application import ResampleUseCase, ResampleRequest
 from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 

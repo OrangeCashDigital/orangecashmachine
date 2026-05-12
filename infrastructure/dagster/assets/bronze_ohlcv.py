@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-dagster_assets/bronze_ohlcv.py
+infrastructure/dagster/assets/bronze_ohlcv.py
 ================================
 
 Asset de ingesta OHLCV: exchange → Bronze → Silver.

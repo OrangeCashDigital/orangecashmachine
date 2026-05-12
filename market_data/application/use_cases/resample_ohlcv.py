@@ -13,7 +13,7 @@ storage via StorageFactoryPort.
 
 Por qué existe esta capa
 ------------------------
-Sin esta capa, los inbound adapters (dagster_assets/, resample_flow.py)
+Sin esta capa, los inbound adapters (infrastructure/dagster/assets/, resample_flow.py)
 deben conocer:
   - Cómo extraer símbolos y targets desde AppConfig
   - Cómo construir storage via factory con dry_run correcto

@@ -70,9 +70,9 @@ class TestMakeBronzeOhlcvAsset:
 
         summary = _make_summary(total_rows=0, ok=0, failed=1, status="failed")
 
-        with patch("dagster_assets.bronze_ohlcv.CCXTAdapter"), \
-             patch("dagster_assets.bronze_ohlcv.OHLCVPipeline") as mock_pipeline, \
-             patch("dagster_assets.bronze_ohlcv.asyncio.run") as mock_run:
+        with patch("infrastructure.dagster.assets.bronze_ohlcv.CCXTAdapter"), \
+             patch("infrastructure.dagster.assets.bronze_ohlcv.OHLCVPipeline") as mock_pipeline, \
+             patch("infrastructure.dagster.assets.bronze_ohlcv.asyncio.run") as mock_run:
 
             mock_pipeline.return_value.run = MagicMock(return_value=summary)  # asyncio.run mockeado — no se awaita
             mock_run.side_effect = [summary, None]
@@ -91,9 +91,9 @@ class TestMakeBronzeOhlcvAsset:
 
         summary = _make_summary(total_rows=42, ok=1, failed=0, status="ok")
 
-        with patch("dagster_assets.bronze_ohlcv.CCXTAdapter"), \
-             patch("dagster_assets.bronze_ohlcv.OHLCVPipeline") as mock_pipeline, \
-             patch("dagster_assets.bronze_ohlcv.asyncio.run") as mock_run:
+        with patch("infrastructure.dagster.assets.bronze_ohlcv.CCXTAdapter"), \
+             patch("infrastructure.dagster.assets.bronze_ohlcv.OHLCVPipeline") as mock_pipeline, \
+             patch("infrastructure.dagster.assets.bronze_ohlcv.asyncio.run") as mock_run:
 
             mock_pipeline.return_value.run = MagicMock(return_value=summary)  # asyncio.run mockeado — no se awaita
             mock_run.side_effect = [summary, None]
@@ -116,9 +116,9 @@ class TestMakeBronzeOhlcvAsset:
 
         summary = _make_summary(total_rows=10, ok=1, failed=1, status="partial")
 
-        with patch("dagster_assets.bronze_ohlcv.CCXTAdapter"), \
-             patch("dagster_assets.bronze_ohlcv.OHLCVPipeline") as mock_pipeline, \
-             patch("dagster_assets.bronze_ohlcv.asyncio.run") as mock_run:
+        with patch("infrastructure.dagster.assets.bronze_ohlcv.CCXTAdapter"), \
+             patch("infrastructure.dagster.assets.bronze_ohlcv.OHLCVPipeline") as mock_pipeline, \
+             patch("infrastructure.dagster.assets.bronze_ohlcv.asyncio.run") as mock_run:
 
             mock_pipeline.return_value.run = MagicMock(return_value=summary)  # asyncio.run mockeado — no se awaita
             mock_run.side_effect = [summary, None]

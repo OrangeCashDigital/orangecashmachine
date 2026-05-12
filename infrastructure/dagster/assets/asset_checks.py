@@ -1,4 +1,4 @@
-# dagster_assets/asset_checks.py
+# infrastructure/dagster/assets/asset_checks.py
 """
 Asset checks para el bronze layer de OHLCV.
 

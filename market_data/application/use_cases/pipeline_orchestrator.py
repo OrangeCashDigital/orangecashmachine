@@ -14,7 +14,7 @@ SSOT de la lógica de selección e instanciación de pipelines.
 
 Por qué existe esta capa
 ------------------------
-Sin esta capa, dagster_assets/ y main.py deben conocer:
+Sin esta capa, infrastructure/dagster/assets/ y main.py deben conocer:
   - Qué clase concreta instanciar (OHLCVPipeline vs TradesPipeline)
   - Cómo construir CCXTAdapter con credentials y resilience
   - Qué modo pasarle (incremental/backfill/repair)

@@ -38,9 +38,9 @@ class TestOCMResource:
         """env='test' se reenvía como explicit_env a RunConfig.from_env()."""
         resource = OCMResource(env="test")
 
-        with patch("dagster_assets.resources.RunConfig.from_env") as mock_run, \
-             patch("dagster_assets.resources.load_appconfig_standalone") as mock_cfg, \
-             patch("dagster_assets.resources.RuntimeContext") as mock_ctx_cls:
+        with patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run, \
+             patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg, \
+             patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls:
 
             mock_run.return_value   = _make_run_mock(env="test")
             mock_cfg.return_value   = MagicMock()
@@ -56,9 +56,9 @@ class TestOCMResource:
         """env='' delega la resolución a RunConfig.from_env() (lee OCM_ENV)."""
         resource = OCMResource(env="")
 
-        with patch("dagster_assets.resources.RunConfig.from_env") as mock_run, \
-             patch("dagster_assets.resources.load_appconfig_standalone") as mock_cfg, \
-             patch("dagster_assets.resources.RuntimeContext") as mock_ctx_cls:
+        with patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run, \
+             patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg, \
+             patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls:
 
             mock_run.return_value     = _make_run_mock(env="development", run_id="xyz")
             mock_cfg.return_value     = MagicMock()
@@ -73,9 +73,9 @@ class TestOCMResource:
         """build_runtime_context() genera contexto fresco por llamada (no cacheado)."""
         resource = OCMResource(env="test")
 
-        with patch("dagster_assets.resources.RunConfig.from_env") as mock_run, \
-             patch("dagster_assets.resources.load_appconfig_standalone") as mock_cfg, \
-             patch("dagster_assets.resources.RuntimeContext") as mock_ctx_cls:
+        with patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run, \
+             patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg, \
+             patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls:
 
             mock_run.side_effect = [
                 _make_run_mock(run_id="id1"),

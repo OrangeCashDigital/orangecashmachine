@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-dagster_assets/resources.py
+infrastructure/dagster/resources.py
 ============================
 
 Recursos Dagster para OrangeCashMachine.

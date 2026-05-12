@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-dagster_assets/partitions.py
+infrastructure/dagster/assets/partitions.py
 ============================
 
 SSOT de definiciones de partición para OrangeCashMachine.

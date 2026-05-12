@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-dagster_assets/repair_ohlcv.py
+infrastructure/dagster/assets/repair_ohlcv.py
 ================================
 
 Asset de reparación de gaps OHLCV en Silver.
