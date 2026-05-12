@@ -42,7 +42,7 @@ from typing import Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
-from market_data.streaming.payloads import EventPayload
+from market_data.infrastructure.streaming.payloads import EventPayload
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ class DispatchHandler:
         context: Optional["StreamingContext"] = None,  # type: ignore[name-defined]  # noqa: F821
     ) -> None:
         if context is not None:
-            from market_data.streaming.context import StreamingContext
+            from market_data.infrastructure.streaming.context import StreamingContext
             if not isinstance(context, StreamingContext):
                 raise TypeError(
                     f"context debe ser StreamingContext, recibió {type(context)}"

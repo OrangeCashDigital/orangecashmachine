@@ -292,7 +292,7 @@ class PipelineOrchestrator:
         OHLCVPipeline usa su configuración interna.
         """
         from market_data.processing.pipelines.ohlcv_pipeline import OHLCVPipeline
-        from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
         adapter_kwargs: dict = {
             "exchange_id": request.exchange,
@@ -328,7 +328,7 @@ class PipelineOrchestrator:
     ) -> PipelineTriggerPort:
         """Construye TradesPipeline. Import lazy (DIP)."""
         from market_data.processing.pipelines.trades_pipeline import TradesPipeline
-        from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
         adapter_kwargs: dict = {
             "exchange_id": request.exchange,
@@ -354,7 +354,7 @@ class PipelineOrchestrator:
     ) -> PipelineTriggerPort:
         """Construye DerivativesPipeline. Import lazy (DIP)."""
         from market_data.processing.pipelines.derivatives_pipeline import DerivativesPipeline
-        from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
         adapter_kwargs: dict = {
             "exchange_id": request.exchange,

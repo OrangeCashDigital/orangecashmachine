@@ -55,12 +55,12 @@ from market_data.processing.strategies.backfill import BackfillStrategy
 from market_data.processing.strategies.incremental import IncrementalStrategy
 from market_data.processing.strategies.repair import RepairStrategy
 from market_data.processing.transformer import OHLCVTransformer
-from market_data.adapters.exchange import (
+from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
     get_breaker_state,
 )
-from market_data.adapters.exchange.throttle import AdaptiveThrottle
+from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
 from market_data.observability.metrics import FETCH_ABORTS_TOTAL, ACTIVE_PAIRS
 from market_data.ports.state import CursorStorePort
 from market_data.ports.input.pipeline_trigger import PipelineTriggerPort

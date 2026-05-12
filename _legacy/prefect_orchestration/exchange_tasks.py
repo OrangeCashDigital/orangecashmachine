@@ -29,12 +29,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from market_data.adapters.exchange import CCXTAdapter
+    from market_data.adapters.outbound.exchange import CCXTAdapter
 
 from prefect import task, get_run_logger
 
 from ocm_platform.config.schema import ExchangeConfig, EXCHANGE_TASK_TIMEOUT
-from market_data.adapters.exchange import CCXTAdapter
+from market_data.adapters.outbound.exchange import CCXTAdapter
 from market_data.observability.metrics import record_exchange_probe_metrics
 
 

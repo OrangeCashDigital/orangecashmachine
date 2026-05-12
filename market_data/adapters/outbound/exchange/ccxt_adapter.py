@@ -22,7 +22,7 @@ throttle.py   — concurrencia adaptiva por pipeline
 
 # =============================================================================
 # INTERNAL MODULE — NO importar directamente desde consumidores externos.
-# Usar: from market_data.adapters.exchange import CCXTAdapter (API pública)
+# Usar: from market_data.adapters.outbound.exchange import CCXTAdapter (API pública)
 # =============================================================================
 
 
@@ -38,22 +38,22 @@ import ccxt.async_support as ccxt
 import ccxt as ccxt_sync  # sync — parse8601, iso8601, inspect_required_credentials
 from loguru import logger
 
-from market_data.adapters.exchange.base import ExchangeAdapter
-from market_data.adapters.exchange.exchange_quirks import get_quirks
-from market_data.adapters.exchange.errors import (
+from market_data.adapters.outbound.exchange.base import ExchangeAdapter
+from market_data.adapters.outbound.exchange.exchange_quirks import get_quirks
+from market_data.adapters.outbound.exchange.errors import (
     ExchangeAdapterError,
     UnsupportedExchangeError,
     ExchangeConnectionError,
     ExchangeCircuitOpenError,
 )
-from market_data.adapters.exchange.limiter import (
+from market_data.adapters.outbound.exchange.limiter import (
     get_or_create_limiter,
 )
-from market_data.adapters.exchange.resilience import (
+from market_data.adapters.outbound.exchange.resilience import (
     RetryExhaustedError,
     ResilienceLayer,
 )
-from market_data.adapters.exchange.throttle import (
+from market_data.adapters.outbound.exchange.throttle import (
     get_or_create_throttle,
 )
 from market_data.observability.metrics import EXCHANGE_CIRCUIT_OPEN
@@ -168,7 +168,7 @@ class CCXTAdapter(ExchangeAdapter):
         )
         # Registrar en registry de proceso para que get_breaker_state() funcione.
         # Idempotente: sobreescribe si ya existe (misma instancia en reconnect).
-        from market_data.adapters.exchange.resilience import register_resilience_layer
+        from market_data.adapters.outbound.exchange.resilience import register_resilience_layer
         register_resilience_layer(self._exchange_id, self._resilience)
 
         self._closed: bool = False

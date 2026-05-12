@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from market_data.streaming.payloads import EventPayload, OHLCVBar
-from market_data.streaming.consumer import DispatchHandler, EventHandler
-from market_data.streaming.router import EventRouter
+from market_data.infrastructure.streaming.payloads import EventPayload, OHLCVBar
+from market_data.infrastructure.streaming.consumer import DispatchHandler, EventHandler
+from market_data.infrastructure.streaming.router import EventRouter
 
 
 # --------------------------------------------------
@@ -142,19 +142,19 @@ class TestEventRouter:
 class TestEventPayloadVersioning:
 
     def test_to_dict_includes_event_version(self):
-        from market_data.streaming.payloads import PAYLOAD_SCHEMA_VERSION
+        from market_data.infrastructure.streaming.payloads import PAYLOAD_SCHEMA_VERSION
         d = _make_event().to_dict()
         assert "event_version" in d
         assert d["event_version"] == PAYLOAD_SCHEMA_VERSION
 
     def test_from_dict_round_trip_preserves_version(self):
-        from market_data.streaming.payloads import PAYLOAD_SCHEMA_VERSION
+        from market_data.infrastructure.streaming.payloads import PAYLOAD_SCHEMA_VERSION
         e  = _make_event()
         e2 = EventPayload.from_dict(e.to_dict())
         assert e2.event_version == PAYLOAD_SCHEMA_VERSION
 
     def test_from_dict_rejects_incompatible_version(self):
-        from market_data.streaming.payloads import (
+        from market_data.infrastructure.streaming.payloads import (
             PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
         )
         d = _make_event().to_dict()

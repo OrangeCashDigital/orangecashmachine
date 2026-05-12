@@ -59,7 +59,7 @@ from typing import TYPE_CHECKING, Dict, Optional
 from loguru import logger
 
 if TYPE_CHECKING:
-    from market_data.adapters.exchange.limiter import AdaptiveLimiter
+    from market_data.adapters.outbound.exchange.limiter import AdaptiveLimiter
 
 __all__ = [
     "AdaptiveThrottle",

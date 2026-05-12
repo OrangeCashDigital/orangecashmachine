@@ -8,7 +8,7 @@ Tests de SeenFilter, PersistentSeenFilter y CompositeSeenFilter.
 Sin Redis real — PersistentSeenFilter usa un store mock en memoria.
 """
 
-from market_data.streaming.dedup import (
+from market_data.infrastructure.streaming.dedup import (
     SeenFilter,
     PersistentSeenFilter,
     CompositeSeenFilter,
@@ -242,7 +242,7 @@ class TestCompositeSeenFilter:
 class TestStreamSourceWithPersistentDedup:
 
     def _make_fields(self, event_id: str) -> dict:
-        from market_data.streaming.payloads import PAYLOAD_SCHEMA_VERSION
+        from market_data.infrastructure.streaming.payloads import PAYLOAD_SCHEMA_VERSION
         import json
         return {
             "event_version":  str(PAYLOAD_SCHEMA_VERSION),
@@ -263,9 +263,9 @@ class TestStreamSourceWithPersistentDedup:
         Worker 1 procesa evento → Worker 2 (mismo store) lo detecta
         como duplicado aunque su L1 esté vacío.
         """
-        from market_data.streaming.router  import EventRouter
-        from market_data.streaming.source  import StreamSource
-        from market_data.streaming.payloads import EventPayload
+        from market_data.infrastructure.streaming.router  import EventRouter
+        from market_data.infrastructure.streaming.source  import StreamSource
+        from market_data.infrastructure.streaming.payloads import EventPayload
 
         handle_count = {"n": 0}
 

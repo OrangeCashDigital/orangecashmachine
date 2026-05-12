@@ -33,7 +33,7 @@ from market_data.ports.input.pipeline_trigger import PipelineTriggerPort
 
 from loguru import logger
 
-from market_data.adapters.exchange import CCXTAdapter
+from market_data.adapters.outbound.exchange import CCXTAdapter
 from market_data.storage.silver.derivatives_storage import DerivativesStorage
 from market_data.adapters.inbound.rest.derivatives_fetcher import (
     FundingRateFetcher,

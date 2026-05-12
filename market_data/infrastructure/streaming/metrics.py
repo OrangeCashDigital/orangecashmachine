@@ -28,7 +28,7 @@ Labels
 
 Uso
 ---
-  from market_data.streaming.metrics import StreamMetrics
+  from market_data.infrastructure.streaming.metrics import StreamMetrics
   m = StreamMetrics(stream_name="ohlcv")
   m.event_published(exchange="bybit")
   m.event_processed(exchange="bybit", latency_ms=12.3)

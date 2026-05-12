@@ -19,7 +19,7 @@ Exports públicos
 
 Uso completo
 ------------
-    from market_data.streaming import (
+    from market_data.infrastructure.streaming import (
         EventRouter, DispatchHandler,
         StreamPublisher, StreamSource,
     )
@@ -34,12 +34,12 @@ Uso completo
 Principios: SRP · DIP · OCP
 """
 
-from market_data.streaming.payloads  import EventPayload, OHLCVBar
-from market_data.streaming.context   import StreamingContext
-from market_data.streaming.consumer  import EventHandler, DispatchHandler
-from market_data.streaming.router    import EventRouter
-from market_data.streaming.publisher import StreamPublisher
-from market_data.streaming.source    import StreamSource
+from market_data.infrastructure.streaming.payloads  import EventPayload, OHLCVBar
+from market_data.infrastructure.streaming.context   import StreamingContext
+from market_data.infrastructure.streaming.consumer  import EventHandler, DispatchHandler
+from market_data.infrastructure.streaming.router    import EventRouter
+from market_data.infrastructure.streaming.publisher import StreamPublisher
+from market_data.infrastructure.streaming.source    import StreamSource
 
 __all__ = [
     # Activos

@@ -11,7 +11,7 @@ import random
 
 from loguru import logger
 
-from market_data.adapters.exchange.throttle import get_or_create_throttle
+from market_data.adapters.outbound.exchange.throttle import get_or_create_throttle
 from market_data.processing.strategies.base import (
     PairResult,
     PipelineContext,

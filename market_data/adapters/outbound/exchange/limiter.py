@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Optional
 from loguru import logger
 
 if TYPE_CHECKING:
-    from market_data.adapters.exchange.throttle import AdaptiveThrottle
+    from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
 
 __all__ = [
     "AdaptiveLimiter",

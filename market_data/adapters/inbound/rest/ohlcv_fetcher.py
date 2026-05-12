@@ -27,7 +27,7 @@ from ocm_platform.observability import bind_pipeline
 
 from market_data.ports.storage import OHLCVStorage
 from market_data.processing.transformer import OHLCVTransformer
-from market_data.adapters.exchange import (
+from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
     RetryExhaustedError,

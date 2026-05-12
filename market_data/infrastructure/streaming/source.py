@@ -23,10 +23,10 @@ from typing import Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 from loguru import logger
 
-from market_data.streaming.dedup    import SeenFilter, CompositeSeenFilter
-from market_data.streaming.metrics  import StreamMetrics, timer
-from market_data.streaming.payloads import EventPayload, SchemaVersionError
-from market_data.streaming.router   import EventRouter
+from market_data.infrastructure.streaming.dedup    import SeenFilter, CompositeSeenFilter
+from market_data.infrastructure.streaming.metrics  import StreamMetrics, timer
+from market_data.infrastructure.streaming.payloads import EventPayload, SchemaVersionError
+from market_data.infrastructure.streaming.router   import EventRouter
 
 _MAX_RETRIES_BEFORE_DLQ: int = 3
 _DEFAULT_POLL_INTERVAL_S: float = 0.1  # sleep entre polls vacíos — evita CPU spin

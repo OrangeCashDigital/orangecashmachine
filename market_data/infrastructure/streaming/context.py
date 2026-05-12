@@ -129,7 +129,7 @@ class StreamingContext:
         v2+ usa "job_name" (nombre correcto en Dagster).
         from_dict acepta ambas claves para no romper payloads en tránsito.
         """
-        from market_data.streaming.payloads import (
+        from market_data.infrastructure.streaming.payloads import (
             CONTEXT_SCHEMA_VERSION,
             SchemaVersionError,
         )

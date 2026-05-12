@@ -41,7 +41,7 @@ from typing import Any, Dict, Optional
 import pandas as pd
 from loguru import logger
 
-from market_data.adapters.exchange import (
+from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
 )

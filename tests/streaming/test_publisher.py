@@ -17,10 +17,10 @@ import json
 from typing import Optional
 
 
-from market_data.streaming.payloads import (
+from market_data.infrastructure.streaming.payloads import (
     EventPayload, OHLCVBar,
 )
-from market_data.streaming.publisher import StreamPublisher
+from market_data.infrastructure.streaming.publisher import StreamPublisher
 
 
 # --------------------------------------------------

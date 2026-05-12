@@ -96,7 +96,7 @@ class LiveExecutor:
 
         ACTIVAR cuando ccxt_adapter async esté disponible:
         ---------------------------------------------------
-        from market_data.adapters.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         import asyncio
 
         try:

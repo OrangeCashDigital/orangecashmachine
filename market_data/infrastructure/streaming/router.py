@@ -32,8 +32,8 @@ from typing import List
 
 from loguru import logger
 
-from market_data.streaming.payloads import EventPayload
-from market_data.streaming.consumer import EventHandler
+from market_data.infrastructure.streaming.payloads import EventPayload
+from market_data.infrastructure.streaming.consumer import EventHandler
 
 
 class EventRouter:
@@ -49,8 +49,8 @@ class EventRouter:
 
     Uso
     ---
-        from market_data.streaming.router import EventRouter
-        from market_data.streaming.consumer import DispatchHandler
+        from market_data.infrastructure.streaming.router import EventRouter
+        from market_data.infrastructure.streaming.consumer import DispatchHandler
 
         router = EventRouter(handlers=[DispatchHandler()])
         ok = router.route(event_payload)

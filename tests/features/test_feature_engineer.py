@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_data.gold.transformer import FEATURE_COLUMNS, GoldTransformer, VERSION
+from market_data.storage.gold.transformer import FEATURE_COLUMNS, GoldTransformer, VERSION
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_data.gold.transformer import VERSION as TRANSFORMER_VERSION
+from market_data.storage.gold.transformer import VERSION as TRANSFORMER_VERSION
 from market_data.storage.gold.gold_storage import GoldStorage, _prepare_gold_df
 from data_platform.loaders.gold_loader import (
     GoldLoader,

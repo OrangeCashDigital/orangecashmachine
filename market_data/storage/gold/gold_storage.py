@@ -40,7 +40,7 @@ import pyarrow as pa
 from loguru import logger
 from pyiceberg.expressions import And, EqualTo
 
-from market_data.gold.transformer import GoldTransformer, VERSION as _TRANSFORMER_VERSION
+from market_data.storage.gold.transformer import GoldTransformer, VERSION as _TRANSFORMER_VERSION
 from market_data.storage.iceberg.catalog import ensure_gold_table, get_catalog
 from market_data.storage.iceberg.iceberg_storage import IcebergStorage
 

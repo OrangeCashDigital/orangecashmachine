@@ -10,9 +10,9 @@ Sin dependencias externas — no necesita Redis, Dagster ni AppConfig.
 from __future__ import annotations
 
 import pytest
-from market_data.streaming.context import StreamingContext
-from market_data.streaming.consumer import DispatchHandler
-from market_data.streaming.payloads import (
+from market_data.infrastructure.streaming.context import StreamingContext
+from market_data.infrastructure.streaming.consumer import DispatchHandler
+from market_data.infrastructure.streaming.payloads import (
     EventPayload, OHLCVBar,
     SchemaVersionError,
     CONTEXT_SCHEMA_VERSION,

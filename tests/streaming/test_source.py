@@ -9,11 +9,11 @@ Tests de StreamSource con mocks — sin Redis real.
 
 from typing import List, Tuple, Dict, Optional
 
-from market_data.streaming.payloads import (
+from market_data.infrastructure.streaming.payloads import (
     EventPayload, PAYLOAD_SCHEMA_VERSION,
 )
-from market_data.streaming.router  import EventRouter
-from market_data.streaming.source  import StreamSource, _MAX_RETRIES_BEFORE_DLQ
+from market_data.infrastructure.streaming.router  import EventRouter
+from market_data.infrastructure.streaming.source  import StreamSource, _MAX_RETRIES_BEFORE_DLQ
 
 
 # --------------------------------------------------

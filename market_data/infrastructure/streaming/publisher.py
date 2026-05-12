@@ -26,8 +26,8 @@ from typing import Dict, Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
-from market_data.streaming.metrics  import StreamMetrics
-from market_data.streaming.payloads import EventPayload
+from market_data.infrastructure.streaming.metrics  import StreamMetrics
+from market_data.infrastructure.streaming.payloads import EventPayload
 
 
 
