@@ -29,7 +29,7 @@ def _record(name: str, extra: dict | None = None) -> dict:
 @pytest.mark.parametrize("module", [
     # Un representante real por cada prefijo de _PIPELINE_MODULES
     "market_data.ingestion.rest.ohlcv_fetcher",
-    "market_data.processing.pipelines.ohlcv_pipeline",
+    "market_data.application.pipelines.ohlcv_pipeline",
     "market_data.infrastructure.storage.silver.trades_storage",
     "market_data.quality.validators.ohlcv_validator",
     "market_data.adapters.outbound.exchange.ccxt_adapter",
@@ -76,7 +76,7 @@ def test_pipeline_filter_does_not_require_extra_context():
 
 # ── strict_pipeline_filter ────────────────────────────────────────────────────
 
-_PIPELINE_MODULE = "market_data.processing.pipelines.ohlcv_pipeline"
+_PIPELINE_MODULE = "market_data.application.pipelines.ohlcv_pipeline"
 _NON_PIPELINE    = "ocm_platform.config.loader"
 
 

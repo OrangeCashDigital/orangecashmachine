@@ -1,5 +1,5 @@
 """
-market_data.processing.pipelines — public API.
+market_data.application.pipelines — public API.
 
 Pipelines disponibles
 ---------------------
