@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from dagster_assets.bronze_ohlcv import make_bronze_ohlcv_asset
+from infrastructure.dagster.assets.bronze_ohlcv import make_bronze_ohlcv_asset
 
 
 # ---------------------------------------------------------------------------

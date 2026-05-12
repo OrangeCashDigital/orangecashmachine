@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 
-from dagster_assets.asset_checks import make_bronze_checks
+from infrastructure.dagster.assets.asset_checks import make_bronze_checks
 
 
 # ---------------------------------------------------------------------------

@@ -46,11 +46,11 @@ from dagster import (
     define_asset_job,
 )
 
-from dagster_assets.bronze_ohlcv import BRONZE_OHLCV_ASSETS
-from dagster_assets.repair_ohlcv import REPAIR_OHLCV_ASSETS
-from dagster_assets.resample_ohlcv import RESAMPLE_OHLCV_ASSETS
-from dagster_assets.asset_checks import ALL_ASSET_CHECKS
-from dagster_assets.resources import OCMResource
+from infrastructure.dagster.assets.bronze_ohlcv import BRONZE_OHLCV_ASSETS
+from infrastructure.dagster.assets.repair_ohlcv import REPAIR_OHLCV_ASSETS
+from infrastructure.dagster.assets.resample_ohlcv import RESAMPLE_OHLCV_ASSETS
+from infrastructure.dagster.assets.asset_checks import ALL_ASSET_CHECKS
+from infrastructure.dagster.resources import OCMResource
 
 # ==============================================================================
 # Jobs — agrupan assets para ejecución coordinada

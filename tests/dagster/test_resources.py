@@ -10,7 +10,7 @@ Principios:
 from unittest.mock import MagicMock, patch
 
 
-from dagster_assets.resources import OCMResource
+from infrastructure.dagster.resources import OCMResource
 
 
 # ---------------------------------------------------------------------------
