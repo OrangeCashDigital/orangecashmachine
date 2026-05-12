@@ -330,7 +330,7 @@ class ResampleUseCase:
         ResamplePipeline.run() es async — se ejecuta via asyncio.run()
         porque Dagster y Prefect no exponen un event loop al caller.
         """
-        from market_data.processing.pipelines.resample_pipeline import ResamplePipeline
+        from market_data.application.pipelines.resample_pipeline import ResamplePipeline
 
         pipeline = ResamplePipeline(
             symbols     = symbols,

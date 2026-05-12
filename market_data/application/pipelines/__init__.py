@@ -8,13 +8,13 @@ TradesPipeline       — tick data append-only              (esqueleto)
 DerivativesPipeline  — funding_rate, open_interest, liq.  (esqueleto)
 """
 
-from market_data.processing.pipelines.ohlcv_pipeline import OHLCVPipeline
-from market_data.processing.pipelines.trades_pipeline import (
+from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
+from market_data.application.pipelines.trades_pipeline import (
     TradesPipeline,
     TradesResult,
     TradesSummary,
 )
-from market_data.processing.pipelines.derivatives_pipeline import (
+from market_data.application.pipelines.derivatives_pipeline import (
     DerivativesPipeline,
     DerivativesResult,
     DerivativesSummary,

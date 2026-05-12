@@ -43,17 +43,17 @@ from market_data.processing.utils.gap_utils import scan_gaps
 from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
 from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
-from market_data.processing.pipelines._worker_pool import run_worker_pool
-from market_data.processing.strategies.base import (
+from market_data.application.pipelines._worker_pool import run_worker_pool
+from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
     PipelineMode,
     PipelineStrategy,
     PipelineSummary,
 )
-from market_data.processing.strategies.backfill import BackfillStrategy
-from market_data.processing.strategies.incremental import IncrementalStrategy
-from market_data.processing.strategies.repair import RepairStrategy
+from market_data.domain.policies.backfill import BackfillStrategy
+from market_data.domain.policies.incremental import IncrementalStrategy
+from market_data.domain.policies.repair import RepairStrategy
 from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,

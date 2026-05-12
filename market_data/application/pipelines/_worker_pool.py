@@ -12,7 +12,7 @@ drenado de queue. NO conoce el dominio de los items ni el tipo de resultado.
 
 Uso
 ---
-    from market_data.processing.pipelines._worker_pool import run_worker_pool
+    from market_data.application.pipelines._worker_pool import run_worker_pool
 
     results, aborted = await run_worker_pool(
         items           = [(idx, symbol, tf), ...],

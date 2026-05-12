@@ -46,11 +46,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pandas as pd
 import pytest
 
-from market_data.processing.strategies.repair import RepairStrategy
-from market_data.processing.strategies.base import (
+from market_data.domain.policies.repair import RepairStrategy
+from market_data.domain.policies.base import (
     PipelineContext,
 )
-from market_data.processing.exceptions import (
+from market_data.domain.exceptions.processing_exceptions import (
     ChunkFetchError,
 )
 from market_data.processing.utils.gap_utils import GapRange
@@ -349,7 +349,7 @@ class TestExecutePairHealing:
     @pytest.mark.asyncio
     async def test_gap_too_large_skipped(self):
         """Gap > _MAX_HEALABLE_GAP_CANDLES → skip con métrica, no fetch."""
-        from market_data.processing.strategies.repair import _MAX_HEALABLE_GAP_CANDLES
+        from market_data.domain.policies.repair import _MAX_HEALABLE_GAP_CANDLES
 
         # DataFrame con gap enorme
         gap_end_ms = (_MAX_HEALABLE_GAP_CANDLES + 100) * _TF_MS

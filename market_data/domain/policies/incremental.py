@@ -12,7 +12,7 @@ import random
 from loguru import logger
 
 from market_data.adapters.outbound.exchange.throttle import get_or_create_throttle
-from market_data.processing.strategies.base import (
+from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
     PipelineMode,

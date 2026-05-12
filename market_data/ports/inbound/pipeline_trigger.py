@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     # Evitar import circular — solo para type hints
-    from market_data.processing.strategies.base import PipelineSummary
+    from market_data.domain.policies.base import PipelineSummary
 
 PipelineModeStr = Literal["incremental", "backfill", "repair"]
 

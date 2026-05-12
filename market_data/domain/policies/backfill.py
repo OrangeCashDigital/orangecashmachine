@@ -20,7 +20,7 @@ from ocm_platform.observability import bind_pipeline
 from market_data.adapters.inbound.rest.ohlcv_fetcher import DEFAULT_CHUNK_LIMIT
 from market_data.processing.utils.timeframe import timeframe_to_ms
 from market_data.adapters.outbound.exchange.exchange_quirks import get_origin_fallback_ms, get_quirks
-from market_data.processing.strategies.base import (
+from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
     PipelineMode,
