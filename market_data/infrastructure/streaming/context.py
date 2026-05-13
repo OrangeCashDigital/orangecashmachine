@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-market_data/streaming/context.py
-==================================
+market_data/infrastructure/streaming/context.py
+=================================================
 
 StreamingContext — contexto ligero para el path event-driven.
 
@@ -28,13 +28,22 @@ Contrato
   ctx2 = StreamingContext.from_dict(d)
   assert ctx == ctx2
 
-Principios: SRP · inmutable · serializable · sin credenciales
+Principios: SRP · inmutable · serializable · sin credenciales · SSOT
 """
 
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, TYPE_CHECKING
+
+# SSOT: CONTEXT_SCHEMA_VERSION vive en payloads.py (mismo paquete).
+# Import module-level — no deferred por llamada — para que el default
+# del campo context_version sea siempre la única fuente de verdad.
+# payloads.py NO importa de este módulo → sin riesgo de ciclo.
+from market_data.infrastructure.streaming.payloads import (
+    CONTEXT_SCHEMA_VERSION,
+    SchemaVersionError,
+)
 
 if TYPE_CHECKING:
     from ocm_platform.runtime.context import RuntimeContext
@@ -50,9 +59,11 @@ class StreamingContext:
     env             : Entorno activo (development | staging | production).
     run_id          : Identificador único del run OCM (trazabilidad).
     pushgateway     : host:port del Prometheus Pushgateway.
-    job_name        : Nombre del job Dagster a disparar (ocm_bronze_only_job u otro).
+    job_name        : Nombre del job Dagster a disparar.
     created_at      : Momento de construcción (UTC ISO 8601).
-    context_version : Versión del schema de este contexto.
+    context_version : Versión del schema. SSOT → CONTEXT_SCHEMA_VERSION
+                      en payloads.py. Si se bumps el schema, este campo
+                      se actualiza automáticamente sin tocar este archivo.
     """
 
     env:             str
@@ -60,7 +71,8 @@ class StreamingContext:
     pushgateway:     str
     job_name:        str
     created_at:      str
-    context_version: int = 2  # SSoT: CONTEXT_SCHEMA_VERSION de payloads.py
+    # SSOT — no magic number: default viene de payloads.py.
+    context_version: int = CONTEXT_SCHEMA_VERSION
 
     # --------------------------------------------------
     # Constructors
@@ -103,9 +115,9 @@ class StreamingContext:
         from ocm_platform.config.loader.env_resolver import resolve_env
 
         env         = resolve_env()
-        _pgw_raw    = os.getenv(env_vars.PUSHGATEWAY_URL, "localhost:9091")
-        # Normalizar: acepta "host:port", solo puerto, o URL completa "http://host:port"
-        pushgateway = _pgw_raw if ":" in _pgw_raw else f"localhost:{_pgw_raw}"
+        pgw_raw     = os.getenv(env_vars.PUSHGATEWAY_URL, "localhost:9091")
+        # Normalizar: acepta "host:port", solo puerto, o "http://host:port"
+        pushgateway = pgw_raw if ":" in pgw_raw else f"localhost:{pgw_raw}"
         run_id      = uuid.uuid4().hex[:12]
 
         return cls(
@@ -120,8 +132,8 @@ class StreamingContext:
     def from_dict(cls, data: Dict[str, Any]) -> "StreamingContext":
         """Deserializa desde dict (ej: payload de Redis Stream).
 
-        Valida context_version — falla explícitamente si el schema
-        es incompatible en lugar de producir datos corruptos.
+        Valida context_version — falla explícitamente (Fail-Fast) si el
+        schema es incompatible en lugar de producir datos corruptos.
 
         Backward compat
         ---------------
@@ -129,10 +141,8 @@ class StreamingContext:
         v2+ usa "job_name" (nombre correcto en Dagster).
         from_dict acepta ambas claves para no romper payloads en tránsito.
         """
-        from market_data.infrastructure.streaming.payloads import (
-            CONTEXT_SCHEMA_VERSION,
-            SchemaVersionError,
-        )
+        # CONTEXT_SCHEMA_VERSION y SchemaVersionError ya en scope —
+        # module-level import; sin costo por llamada.
         version = int(data.get("context_version", 1))
         if version > CONTEXT_SCHEMA_VERSION:
             raise SchemaVersionError(
@@ -166,3 +176,6 @@ class StreamingContext:
             "job_name":        self.job_name,
             "created_at":      self.created_at,
         }
+
+
+__all__ = ["StreamingContext"]

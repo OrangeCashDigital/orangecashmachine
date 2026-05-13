@@ -118,3 +118,5 @@ class StreamPublisher:
             "bars":           json.dumps([b.to_dict() for b in event.bars]),
             "meta":           json.dumps(event.meta),
         }
+
+__all__ = ["RedisPublisherProtocol", "StreamPublisher"]

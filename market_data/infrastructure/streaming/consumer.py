@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 """
-market_data/streaming/consumer.py
-===================================
+market_data/infrastructure/streaming/consumer.py
+==================================================
 
 DispatchHandler — handler que despacha un EventPayload al orquestador activo.
 
@@ -33,20 +33,26 @@ Fases de implementación
       # via dagster-graphql o REST API:
       # POST /graphql → launchRun mutation con asset selection
 
-El caller (EventRouter) no cambia entre fases — SRP garantizado.
+El caller (EventRouter) no cambia entre fases — SRP + OCP garantizados.
 
-Principios: SRP · DI · SafeOps (nunca lanza al caller) · OCP
+Principios: SRP · DI · SafeOps (nunca lanza al caller) · OCP · DIP
 """
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Optional, Protocol, TYPE_CHECKING, runtime_checkable
 
 from loguru import logger
 
 from market_data.infrastructure.streaming.payloads import EventPayload
 
+# TYPE_CHECKING guard — StreamingContext solo se necesita como anotación
+# estática y para isinstance en __init__. Evita import circular en runtime
+# ya que context.py importa de payloads.py (mismo paquete).
+if TYPE_CHECKING:
+    from market_data.infrastructure.streaming.context import StreamingContext
+
 
 # ---------------------------------------------------------------------------
-# Contrato público — EventHandler protocol
+# Contrato público — EventHandler protocol (DIP)
 # ---------------------------------------------------------------------------
 
 @runtime_checkable
@@ -87,23 +93,31 @@ class DispatchHandler:
     El caller (EventRouter) nunca recibe una excepción de este handler.
     """
 
-    _DEFAULT_RUN_NAME: str = "ocm_bronze_only_job"
+    # Público — accesible en tests y configuración externa sin name-mangling.
+    DEFAULT_RUN_NAME: str = "ocm_bronze_only_job"
 
     def __init__(
         self,
-        run_name: str = _DEFAULT_RUN_NAME,
-        context: Optional["StreamingContext"] = None,  # type: ignore[name-defined]  # noqa: F821
+        run_name: str = DEFAULT_RUN_NAME,
+        context: Optional["StreamingContext"] = None,
     ) -> None:
         if context is not None:
-            from market_data.infrastructure.streaming.context import StreamingContext
-            if not isinstance(context, StreamingContext):
+            # Import real en runtime solo cuando hay un context que validar.
+            # Lazy import: evita ciclo en import-time; isinstance requiere
+            # la clase concreta, no la anotación de TYPE_CHECKING.
+            from market_data.infrastructure.streaming.context import (
+                StreamingContext as _SC,
+            )
+            if not isinstance(context, _SC):
                 raise TypeError(
-                    f"context debe ser StreamingContext, recibió {type(context)}"
+                    f"context debe ser StreamingContext, "
+                    f"recibió {type(context).__name__!r}"
                 )
-        self._run_name = (
+
+        self._run_name: str                        = (
             context.job_name if context is not None else run_name
         )
-        self._context = context
+        self._context:  Optional["StreamingContext"] = context
         self._log = logger.bind(
             handler  = "DispatchHandler",
             run_name = self._run_name,
@@ -130,6 +144,10 @@ class DispatchHandler:
             ).error("DispatchHandler.handle failed")
             return False
 
+    # --------------------------------------------------
+    # Internal
+    # --------------------------------------------------
+
     def _dispatch(self, event: EventPayload) -> bool:
         """
         Lógica de dispatch — stub de Fase 1/2.
@@ -155,7 +173,7 @@ class DispatchHandler:
             )
             resp.raise_for_status()
 
-        El caller no cambia — solo esta función interna.
+        El caller no cambia — solo esta función interna (OCP).
         """
         run_id = self._context.run_id if self._context is not None else "no-context"
         self._log.bind(
@@ -170,3 +188,4 @@ class DispatchHandler:
         return True
 
 
+__all__ = ["EventHandler", "DispatchHandler"]
