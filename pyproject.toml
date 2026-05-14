@@ -249,14 +249,17 @@ packages = [
     "core",
     "data_platform",
     "infra",
-    "ocm_platform",
     "shared",
     "domains/market_data",
     "domains/portfolio",
     "domains/trading",
+    "platform/infrastructure",
+    "platform/ocm_platform",
 ]
 
 [tool.hatch.build.targets.wheel.sources]
 "domains/market_data" = "market_data"
 "domains/portfolio" = "portfolio"
 "domains/trading" = "trading"
+"platform/ocm_platform" = "ocm_platform"
+"platform/infrastructure" = "infrastructure"
