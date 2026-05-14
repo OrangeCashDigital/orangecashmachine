@@ -14,7 +14,7 @@ import json
 import pytest
 
 from market_data.infrastructure.kafka.payloads import (
-    EventPayload, OHLCVBar, PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
+    EventPayload, KafkaOHLCVBar as OHLCVBar, PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
 )
 from market_data.infrastructure.kafka.serializer import (
     serialize, deserialize, make_routing_key,

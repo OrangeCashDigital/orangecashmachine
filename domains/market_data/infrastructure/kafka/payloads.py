@@ -49,11 +49,11 @@ DATASOURCE_REPLAY:   DataSource = "replay"
 
 
 # ---------------------------------------------------------------------------
-# OHLCVBar — vela OHLCV inmutable
+# KafkaOHLCVBar — vela OHLCV inmutable
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class OHLCVBar:
+class KafkaOHLCVBar:
     """
     Vela OHLCV en formato wire.
 
@@ -78,7 +78,7 @@ class OHLCVBar:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "OHLCVBar":
+    def from_dict(cls, data: Dict[str, Any]) -> "KafkaOHLCVBar":
         return cls(
             ts     = int(data["ts"]),
             open   = float(data["open"]),
@@ -120,7 +120,7 @@ class EventPayload:
     symbol:         str
     timeframe:      str
     batch_start_ts: int
-    bars:           List[OHLCVBar]
+    bars:           List[KafkaOHLCVBar]
     event_version:  int                      = PAYLOAD_SCHEMA_VERSION
     source:         DataSource               = DATASOURCE_LIVE
     run_id:         str                      = ""
@@ -185,7 +185,7 @@ class EventPayload:
         bars_raw = data["bars"]
         if isinstance(bars_raw, str):
             bars_raw = json.loads(bars_raw)
-        bars = [OHLCVBar.from_dict(b) for b in bars_raw]
+        bars = [KafkaOHLCVBar.from_dict(b) for b in bars_raw]
 
         meta_raw = data.get("meta")
         if isinstance(meta_raw, str):
@@ -210,7 +210,7 @@ class EventPayload:
 
 
 __all__ = [
-    "OHLCVBar",
+    "KafkaOHLCVBar",
     "EventPayload",
     "SchemaVersionError",
     "PAYLOAD_SCHEMA_VERSION",

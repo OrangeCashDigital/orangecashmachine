@@ -33,7 +33,7 @@ from market_data.infrastructure.observability.metrics import ROWS_INGESTED, PIPE
 # Redis — no hay forma de evitarlo sin duplicar lógica (DRY > pureza DIP).
 # SSOT: la función vive en cursor_store porque define el schema de claves.
 from ocm_platform.infra.state.encoding import encode_redis_key as _encode
-from market_data.infrastructure.kafka.payloads import EventPayload, OHLCVBar, DATASOURCE_BACKFILL
+from market_data.infrastructure.kafka.payloads import EventPayload, KafkaOHLCVBar as OHLCVBar, DATASOURCE_BACKFILL
 from market_data.infrastructure.kafka.serializer import serialize, make_routing_key
 from market_data.ports.outbound.kafka_producer import TOPIC_OHLCV_RAW, HEADER_SOURCE, HEADER_VERSION, HEADER_RUN_ID
 from market_data.infrastructure.kafka.payloads import PAYLOAD_SCHEMA_VERSION
