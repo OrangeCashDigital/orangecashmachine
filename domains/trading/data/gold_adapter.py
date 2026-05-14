@@ -47,7 +47,7 @@ class GoldLoaderAdapter:
 
     def __init__(self, exchange: str = "bybit") -> None:
         # Import lazy — evita import circular y permite mockear en tests
-        from data_platform.loaders.gold_loader import GoldLoader
+        from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
         self._loader   = GoldLoader(exchange=exchange)
         self._exchange = exchange
         self._log      = logger.bind(component="GoldLoaderAdapter", exchange=exchange)

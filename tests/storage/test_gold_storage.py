@@ -28,14 +28,12 @@ import pytest
 
 from market_data.infrastructure.storage.gold.transformer import VERSION as TRANSFORMER_VERSION
 from market_data.infrastructure.storage.gold.gold_storage import GoldStorage, _prepare_gold_df
-from data_platform.loaders.gold_loader import (
-    GoldLoader,
-    GoldLoaderError,
-    GoldVersionNotFound,
-)
-from data_platform.ohlcv_utils import (
+from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
+from market_data.domain.exceptions import (
     DataNotFoundError,
+    DataReadError as GoldLoaderError,
     VersionNotFoundError,
+    VersionNotFoundError as GoldVersionNotFound,
 )
 
 

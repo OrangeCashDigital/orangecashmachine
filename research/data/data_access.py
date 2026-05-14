@@ -34,8 +34,8 @@ import pandas as pd
 from loguru import logger
 
 from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
-from data_platform.loaders.gold_loader import GoldLoader
-from data_platform.ohlcv_utils import (
+from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
+from market_data.domain.exceptions import (
     DataNotFoundError,
     DataReadError,
     MarketDataLoaderError,

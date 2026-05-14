@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from data_platform.ohlcv_utils import (
+from market_data.domain.exceptions import (
     DataNotFoundError,
     DataReadError,
 )
