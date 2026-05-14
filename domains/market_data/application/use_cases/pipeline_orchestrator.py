@@ -305,11 +305,13 @@ class PipelineOrchestrator:
 
         adapter = CCXTAdapter(**adapter_kwargs)
 
+        # OHLCVPipeline.__init__ espera exchange_client= (CCXTAdapter),
+        # no adapter=. El exchange_id se deriva internamente via
+        # getattr(exchange_client, "_exchange_id", "unknown").
         pipeline_kwargs: dict = {
-            "exchange":    request.exchange,
-            "market_type": request.market_type,
-            "adapter":     adapter,
-            "dry_run":     request.dry_run,
+            "exchange_client": adapter,
+            "market_type":     request.market_type,
+            "dry_run":         request.dry_run,
         }
         if request.symbols is not None:
             pipeline_kwargs["symbols"] = request.symbols

@@ -22,7 +22,12 @@ from market_data.infrastructure.observability.metrics import (
     PAIR_DURATION,
     QUALITY_DECISIONS,
     ROWS_INGESTED,
+    PIPELINE_ERRORS,
 )
+# DRY: helper Kappa es SSOT en backfill.py — reutilizado aquí, no duplicado.
+# Principio: un solo lugar define cómo serializar y publicar a ohlcv.raw.
+from market_data.domain.policies.backfill import _publish_chunk_to_kafka
+from market_data.infrastructure.kafka.payloads import DATASOURCE_LIVE
 
 # Parámetros del retry OCC — extraídos como constantes de módulo
 # para facilitar ajuste y legibilidad (DRY, KISS).
@@ -63,10 +68,7 @@ class IncrementalStrategy(StrategyMixin):
             )
             return
 
-        run_id = await self._append_bronze_with_retry(
-            df=df, symbol=symbol, timeframe=timeframe, ctx=ctx,
-        )
-
+        # ── Quality gate ──────────────────────────────────────────────────────
         qres = ctx.quality.run(
             df=df, symbol=symbol, timeframe=timeframe, exchange=ctx.exchange_id,
         )
@@ -77,28 +79,61 @@ class IncrementalStrategy(StrategyMixin):
         ).inc()
 
         if not qres.accepted:
-            # Bronze ya contiene los datos crudos (append anterior).
-            # Silver NO recibirá este lote — trazabilidad explícita con run_id
-            # para correlacionar Bronze rechazado con el log de quality.
             logger.warning(
                 "Par rechazado por calidad [{}/{}] | exchange={} symbol={} "
-                "timeframe={} score={:.1f} bronze_run_id={} "
-                "(datos en Bronze, NO escritos en Silver)",
-                idx, total, ctx.exchange_id, symbol, timeframe,
-                qres.score, run_id,
+                "timeframe={} score={:.1f} "
+                "(datos descartados — no publicados a Kafka ni a Iceberg)",
+                idx, total, ctx.exchange_id, symbol, timeframe, qres.score,
             )
             result.skipped = True
             return
 
-        # Lock de serialización de commits Silver (tabla distinta → lock distinto).
-        # bronze_commit_lock ya fue liberado — no hay riesgo de deadlock.
-        async with ctx.silver_commit_lock:
-            ctx.storage.save_ohlcv(
-                df=qres.df, symbol=symbol, timeframe=timeframe, run_id=run_id,
+        # ── Kappa router: publish → ohlcv.raw | degraded → Bronze+Silver directo
+        if ctx.kafka_producer is not None:
+            # ── Kappa path: live → ohlcv.raw → KafkaBronzeWriter → Bronze → Silver
+            # BronzeWriter consume ohlcv.raw y escribe a Bronze con dedup por event_id.
+            # Silver se materializa desde Bronze via Dagster job (medallion).
+            # source=DATASOURCE_LIVE distingue live de backfill en los consumers.
+            ok = await _publish_chunk_to_kafka(
+                ctx       = ctx,
+                symbol    = symbol,
+                timeframe = timeframe,
+                df        = qres.df,
             )
+            if not ok:
+                # SafeOps: send_async=False → broker caído o topic inexistente.
+                # No actualizar cursor — se reintentará en el próximo run.
+                logger.warning(
+                    "Incremental kafka publish failed — cursor NO actualizado [{}/{}] "
+                    "| symbol={} timeframe={}",
+                    idx, total, symbol, timeframe,
+                )
+                PIPELINE_ERRORS.labels(
+                    exchange=ctx.exchange_id, error_type="transient",
+                ).inc()
+                result.skipped = True
+                return
+        else:
+            # ── Degraded path: sin Kafka → Bronze + Silver directo (modo Lambda)
+            # Activo cuando KAFKA_BOOTSTRAP_SERVERS no está configurado o el
+            # producer no pudo iniciar en OHLCVPipeline._build_kafka_producer_safe().
+            # El pipeline no se detiene — SafeOps.
+            logger.warning(
+                "kafka_producer=None — modo degradado: Bronze+Silver directo [{}/{}] "
+                "| symbol={} timeframe={}",
+                idx, total, symbol, timeframe,
+            )
+            run_id = await self._append_bronze_with_retry(
+                df=df, symbol=symbol, timeframe=timeframe, ctx=ctx,
+            )
+            async with ctx.silver_commit_lock:
+                ctx.storage.save_ohlcv(
+                    df=qres.df, symbol=symbol, timeframe=timeframe, run_id=run_id,
+                )
 
-        # _normalize_dataframe garantiza timestamp es datetime64[ns, UTC]
-        # .timestamp() es siempre válido aquí — sin necesidad de hasattr.
+        # ── Cursor update — siempre tras escritura exitosa (Kappa o degradado) ──
+        # _normalize_dataframe garantiza timestamp es datetime64[ns, UTC].
+        # .timestamp() es válido — sin necesidad de hasattr.
         last_ts_ms = int(qres.df["timestamp"].max().timestamp() * 1000)
         await ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)
 
@@ -129,6 +164,9 @@ class IncrementalStrategy(StrategyMixin):
     ) -> str:
         """
         Append a Bronze con retry OCC y backoff exponencial con jitter.
+
+        Usado SOLO en modo degradado (ctx.kafka_producer is None).
+        En modo Kappa, Bronze se escribe via KafkaBronzeWriter desde ohlcv.raw.
 
         Serialización + retry OCC para Bronze:
           - El lock garantiza que solo un worker commitea a la vez — elimina la
