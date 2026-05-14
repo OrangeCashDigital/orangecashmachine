@@ -71,7 +71,7 @@ from market_data.quality.validators.data_quality import (
 
 # infra / utils
 from market_data.infrastructure.observability.metrics import PIPELINE_ERRORS, QUALITY_GAPS_TOTAL
-from market_data.processing.utils.gap_utils import scan_gaps
+from market_data.domain.value_objects.gap_utils import scan_gaps
 
 
 # ===========================================================================

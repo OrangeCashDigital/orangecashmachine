@@ -32,7 +32,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.quality.schemas.ohlcv_schema import validate_ohlcv
-from market_data.processing.utils.grid_alignment import align_to_grid
+from market_data.domain.value_objects.grid_alignment import align_to_grid
 from market_data.domain.value_objects.candle_validator import (
     CandleValidator,
     ValidationSummary,

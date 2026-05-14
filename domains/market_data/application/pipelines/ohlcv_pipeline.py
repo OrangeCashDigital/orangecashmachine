@@ -57,7 +57,7 @@ def _build_kafka_producer_safe():
 
 from market_data.quality.pipeline import QualityPipeline
 from market_data.quality.invariants.invariants import check_dataset_invariants
-from market_data.processing.utils.gap_utils import scan_gaps
+from market_data.domain.value_objects.gap_utils import scan_gaps
 from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
 from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage

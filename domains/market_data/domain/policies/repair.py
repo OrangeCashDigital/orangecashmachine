@@ -31,7 +31,7 @@ from market_data.infrastructure.observability.metrics import (
     REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED, REPAIR_GAPS_SKIPPED,
 )
 
-from market_data.processing.utils.gap_utils import GapRange, scan_gaps  # noqa: F401 — re-export
+from market_data.domain.value_objects.gap_utils import GapRange, scan_gaps  # noqa: F401 — re-export
 
 _log = bind_pipeline("repair")
 
