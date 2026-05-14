@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from market_data.domain.value_objects.timeframe import Timeframe
+from shared.types.timeframe import Timeframe
 
 
 @dataclass(frozen=True)
