@@ -511,7 +511,147 @@ services:
       - ocm_internal
       - ocm_public
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # ZOOKEEPER — coordinador de metadatos para Kafka
+  # Requerido por Kafka clásico (Apache Kafka).
+  # En producción considerar KRaft mode (Kafka 3.3+) para eliminar Zookeeper.
+  # ────────────────────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: ocm_zookeeper
+    init: true
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME:   "2000"
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: "WARN"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 15s
+    logging: *default-logging
+    networks:
+      - ocm_internal
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # KAFKA BROKER — source of truth para todos los domain events
+  #
+  # Tópicos principales:
+  #   ohlcv.raw       — velas crudas desde CCXT collectors (Bronze inbound)
+  #   ohlcv.validated — velas post quality-gate              (Silver inbound)
+  #   ohlcv.features  — features Gold computados             (Gold inbound)
+  #   dlq.ohlcv       — Dead Letter Queue — mensajes no procesables
+  #
+  # Retención: 7 días (configurable via KAFKA_LOG_RETENTION_HOURS).
+  # Replicación: factor 1 (single-broker dev/prod). Escalar a 3 en multi-node.
+  #
+  # Acceso:
+  #   • Desde contenedores Docker  → kafka:9092  (PLAINTEXT interno)
+  #   • Desde host (pipeline local) → localhost:9093 (PLAINTEXT externo)
+  # ────────────────────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: ocm_kafka
+    init: true
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "${KAFKA_HOST_PORT:-9093}:9093"
+    environment:
+      KAFKA_BROKER_ID:                        "1"
+      KAFKA_ZOOKEEPER_CONNECT:                "zookeeper:2181"
+
+      # Listeners:
+      #   INTERNAL — entre contenedores (Docker network)
+      #   EXTERNAL — desde el host (pipeline local, CLI tools)
+      KAFKA_LISTENERS:                        "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS:             "INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_HOST_PORT:-9093}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:   "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME:       "INTERNAL"
+
+      # Tópicos automáticos — producción: desactivar y crear explícitamente
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE:        "true"
+      KAFKA_DEFAULT_REPLICATION_FACTOR:       "1"
+      KAFKA_MIN_INSYNC_REPLICAS:              "1"
+      KAFKA_NUM_PARTITIONS:                   "3"
+
+      # Retención y rendimiento
+      KAFKA_LOG_RETENTION_HOURS:              "${KAFKA_LOG_RETENTION_HOURS:-168}"
+      KAFKA_LOG_SEGMENT_BYTES:                "1073741824"
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS:  "300000"
+      KAFKA_MESSAGE_MAX_BYTES:                "10485760"
+
+      # Rendimiento producer
+      KAFKA_COMPRESSION_TYPE:                 "lz4"
+
+      # Offsets
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR:    "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+
+      # Logs menos verbosos
+      KAFKA_LOG4J_ROOT_LOGLEVEL:              "WARN"
+      KAFKA_LOG4J_LOGGERS:                    "kafka=WARN,kafka.controller=WARN,kafka.log.LogCleaner=WARN,state.change.logger=WARN,kafka.producer.async.DefaultEventHandler=WARN"
+
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout:  10s
+      retries:  5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus:   "1.0"
+          memory: 1024M
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # KAFKA UI — interfaz web para inspección de tópicos y mensajes
+  # Solo perfil [monitoring] — no corre en producción por defecto.
+  # Acceso: http://localhost:8080
+  # ────────────────────────────────────────────────────────────────────────────
+  kafka-ui:
+    profiles: [monitoring]
+    image: provectuslabs/kafka-ui:latest
+    container_name: ocm_kafka_ui
+    init: true
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${KAFKA_UI_PORT:-8080}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME:            "ocm-local"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
+      KAFKA_CLUSTERS_0_ZOOKEEPER:       "zookeeper:2181"
+      DYNAMIC_CONFIG_ENABLED:           "true"
+    logging: *default-logging
+    networks:
+      - ocm_internal
+      - ocm_public
+
+
 volumes:
+  zookeeper_data:
+    name: ocm_zookeeper_data
+  zookeeper_logs:
+    name: ocm_zookeeper_logs
+  kafka_data:
+    name: ocm_kafka_data
   dagster_home:
     name: ocm_dagster_home
   redis_data:
