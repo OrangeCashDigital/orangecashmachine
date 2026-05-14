@@ -110,7 +110,6 @@ root_packages = [
     "portfolio",
     "app",
     "shared",
-    "domain",
 ]
 
 [[tool.importlinter.contracts]]
@@ -208,11 +207,24 @@ source_modules = [
     "market_data",
     "trading",
     "data_platform",
-    "domain",
     "app",
     "portfolio",
 ]
 forbidden_modules = [
+    "api",
+]
+
+[[tool.importlinter.contracts]]
+name = "BC-10: infrastructure depends only on platform abstractions"
+type = "forbidden"
+source_modules = [
+    "infrastructure",
+]
+forbidden_modules = [
+    "trading",
+    "portfolio",
+    "data_platform",
+    "app",
     "api",
 ]
 
@@ -245,10 +257,7 @@ exclude = [
 packages = [
     "api",
     "app",
-    "backtesting",
-    "core",
     "data_platform",
-    "infra",
     "shared",
     "domains/market_data",
     "domains/portfolio",
