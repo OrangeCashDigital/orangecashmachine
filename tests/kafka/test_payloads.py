@@ -14,7 +14,7 @@ import json
 import pytest
 
 from market_data.infrastructure.kafka.payloads import (
-    EventPayload, OHLCVBar,
+    EventPayload, KafkaOHLCVBar as OHLCVBar,
     PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
 )
 
@@ -101,6 +101,7 @@ class TestEventPayload:
         required = {
             "event_id", "exchange", "symbol", "timeframe",
             "batch_start_ts", "bars", "event_version", "meta",
+            "source", "run_id",
         }
         assert required == set(d.keys())
 
