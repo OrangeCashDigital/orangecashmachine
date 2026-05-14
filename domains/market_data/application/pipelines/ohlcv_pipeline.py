@@ -37,6 +37,24 @@ from ocm_platform.observability import bind_pipeline
 
 _log = bind_pipeline("pipeline")
 
+
+def _build_kafka_producer_safe():
+    """
+    Construye KafkaProducerAdapter desde env vars. SafeOps: retorna None si falla.
+
+    None → pipeline opera en modo degradado (escribe directo a Iceberg).
+    Kappa: cuando el producer está disponible, todo fluye por ohlcv.raw.
+    """
+    try:
+        from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+        return KafkaProducerAdapter.from_env()
+    except Exception as exc:
+        _log.warning(
+            "KafkaProducerAdapter no disponible — modo degradado (sin Kafka)",
+            error=str(exc),
+        )
+        return None
+
 from market_data.quality.pipeline import QualityPipeline
 from market_data.quality.invariants.invariants import check_dataset_invariants
 from market_data.processing.utils.gap_utils import scan_gaps
@@ -276,17 +294,29 @@ class OHLCVPipeline(PipelineTriggerPort):
             auto_lookback_days = auto_lookback_days,
         )
 
+        _kafka_producer = _build_kafka_producer_safe()
+
         self._ctx = PipelineContext(
-            fetcher      = fetcher,
-            storage      = silver,
-            bronze       = bronze,
-            cursor       = cursor,
-            quality      = quality,
-            exchange_id  = self._exchange_id,
-            market_type  = self.market_type,
-            start_date   = start_date,
-            gap_registry = build_gap_registry(),
+            fetcher         = fetcher,
+            storage         = silver,
+            bronze          = bronze,
+            cursor          = cursor,
+            quality         = quality,
+            exchange_id     = self._exchange_id,
+            market_type     = self.market_type,
+            start_date      = start_date,
+            gap_registry    = build_gap_registry(),
+            kafka_producer  = _kafka_producer,
         )
+
+        if _kafka_producer is not None:
+            self._log.info(
+                "Kappa mode activo — backfill/incremental → ohlcv.raw → KafkaBronzeWriter → Iceberg"
+            )
+        else:
+            self._log.warning(
+                "Kappa mode DEGRADADO — kafka_producer=None, escribiendo directo a Iceberg"
+            )
 
         self._strategies: dict[PipelineMode, PipelineStrategy] = {
             PipelineMode.INCREMENTAL: IncrementalStrategy(),

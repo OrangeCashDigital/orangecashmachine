@@ -33,6 +33,7 @@ from ocm_platform.observability import bind_pipeline
 from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.ports.outbound.state import CursorStorePort as CursorStore
 from market_data.ports.outbound.gap_registry import GapRegistryPort
+from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
 _log = bind_pipeline("base")
 
@@ -83,6 +84,13 @@ class PipelineContext:
     # None = modo degradado (SafeOps): repair opera sin persistencia de estado.
     # Implementación concreta: infra.state.gap_registry.GapRegistry via DI.
     gap_registry: "GapRegistryPort | None" = field(default=None)
+
+    # Puerto Kafka — inyectado por OHLCVPipeline cuando Kafka está habilitado.
+    # None = modo degradado (SafeOps): el pipeline escribe directo a Iceberg.
+    # Con Kafka: backfill/incremental → ohlcv.raw → KafkaBronzeWriter → Iceberg.
+    # Principio Kappa: todo evento pasa por Kafka; Iceberg es materialización.
+    kafka_producer: "KafkaProducerPort | None" = field(default=None)
+
     bronze_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     silver_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 

@@ -33,6 +33,10 @@ from market_data.infrastructure.observability.metrics import ROWS_INGESTED, PIPE
 # Redis — no hay forma de evitarlo sin duplicar lógica (DRY > pureza DIP).
 # SSOT: la función vive en cursor_store porque define el schema de claves.
 from ocm_platform.infra.state.encoding import encode_redis_key as _encode
+from market_data.infrastructure.kafka.payloads import EventPayload, OHLCVBar, DATASOURCE_BACKFILL
+from market_data.infrastructure.kafka.serializer import serialize, make_routing_key
+from market_data.ports.outbound.kafka_producer import TOPIC_OHLCV_RAW, HEADER_SOURCE, HEADER_VERSION, HEADER_RUN_ID
+from market_data.infrastructure.kafka.payloads import PAYLOAD_SCHEMA_VERSION
 
 _log = bind_pipeline("backfill")
 
@@ -40,6 +44,72 @@ _BACKFILL_TTL_SECONDS: int = 30 * 86_400
 _ORIGIN_KEY_PREFIX:    str = "origin"
 _BACKFILL_KEY_PREFIX:  str = "backfill"
 _MAX_BACKFILL_CHUNKS:  int = 100_000
+
+
+# ---------------------------------------------------------------------------
+# Kafka publish helper — Kappa: backfill entra a ohlcv.raw igual que live
+# ---------------------------------------------------------------------------
+
+import uuid as _uuid
+
+
+async def _publish_chunk_to_kafka(
+    ctx:       "PipelineContext",
+    symbol:    str,
+    timeframe: str,
+    df:        "pd.DataFrame",
+) -> bool:
+    """
+    Publica un chunk de backfill a ohlcv.raw.
+
+    Wire format: EventPayload con source=DATASOURCE_BACKFILL.
+    Routing key: "{exchange}:{symbol}:{timeframe}" — orden por par garantizado.
+    Headers Kappa: x-ocm-source, x-ocm-version, x-ocm-run-id.
+
+    SafeOps: retorna False si el producer falla — el caller decide el fallback.
+    Fail-Fast: lanza si df está vacío (bug del caller, no error de red).
+    """
+    if df is None or df.empty:
+        raise ValueError("_publish_chunk_to_kafka: df vacío — bug del caller")
+
+    bars = [
+        OHLCVBar(
+            ts     = int(row["timestamp"].timestamp() * 1000),
+            open   = float(row["open"]),
+            high   = float(row["high"]),
+            low    = float(row["low"]),
+            close  = float(row["close"]),
+            volume = float(row["volume"]),
+        )
+        for _, row in df.iterrows()
+    ]
+
+    event = EventPayload(
+        event_id       = str(_uuid.uuid4()),
+        exchange       = ctx.exchange_id,
+        symbol         = symbol,
+        timeframe      = timeframe,
+        batch_start_ts = int(df["timestamp"].min().timestamp() * 1000),
+        bars           = bars,
+        source         = DATASOURCE_BACKFILL,
+        run_id         = getattr(ctx, "run_id", ""),
+    )
+
+    payload_bytes = serialize(event)
+    routing_key   = make_routing_key(ctx.exchange_id, symbol, timeframe)
+    headers       = {
+        HEADER_SOURCE:  DATASOURCE_BACKFILL,
+        HEADER_VERSION: str(PAYLOAD_SCHEMA_VERSION),
+        HEADER_RUN_ID:  getattr(ctx, "run_id", ""),
+    }
+
+    ok = await ctx.kafka_producer.send_async(
+        topic   = TOPIC_OHLCV_RAW,
+        value   = payload_bytes,
+        key     = routing_key,
+        headers = headers,
+    )
+    return ok
 
 
 class BackfillStrategy(StrategyMixin):
@@ -385,10 +455,40 @@ class BackfillStrategy(StrategyMixin):
 
             if qres.accepted:
                 try:
-                    ctx.storage.save_ohlcv(
-                        df=qres.df, symbol=symbol, timeframe=timeframe,
-                        skip_versioning=True,
-                    )
+                    if ctx.kafka_producer is not None:
+                        # ── Kappa path: backfill → ohlcv.raw → KafkaBronzeWriter → Iceberg
+                        ok = await _publish_chunk_to_kafka(
+                            ctx       = ctx,
+                            symbol    = symbol,
+                            timeframe = timeframe,
+                            df        = qres.df,
+                        )
+                        if not ok:
+                            # SafeOps: send_async retornó False (broker caído, etc.)
+                            # No avanzar cursor — se reintentará en próximo run.
+                            log.warning(
+                                "Backfill chunk kafka publish failed — cursor NO avanzado",
+                                chunk=chunks + 1,
+                                oldest=pd.Timestamp(oldest_in_chunk, unit="ms", tz="UTC").isoformat(),
+                            )
+                            PIPELINE_ERRORS.labels(
+                                exchange=ctx.exchange_id, error_type="transient",
+                            ).inc()
+                            # No raise — continuar con siguientes chunks (fail-soft)
+                            current_end = oldest_in_chunk
+                            continue
+                    else:
+                        # ── Degraded path: sin Kafka, escribe directo a Iceberg
+                        # Activo cuando KAFKA_BOOTSTRAP_SERVERS no está configurado
+                        # o el producer no pudo iniciar. Pipeline no se detiene.
+                        log.warning(
+                            "kafka_producer=None — escribiendo directo a Iceberg (modo degradado)",
+                            chunk=chunks + 1,
+                        )
+                        ctx.storage.save_ohlcv(
+                            df=qres.df, symbol=symbol, timeframe=timeframe,
+                            skip_versioning=True,
+                        )
                     total_rows += len(qres.df)
                     self._update_backfill_cursor(symbol, timeframe, oldest_in_chunk, ctx)
                 except Exception as exc:
