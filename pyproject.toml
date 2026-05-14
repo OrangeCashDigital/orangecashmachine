@@ -169,9 +169,7 @@ source_modules = [
     "trading",
 ]
 forbidden_modules = ["market_data.adapters.exchange.ccxt_adapter"]
-ignore_imports = [
-    "market_data.adapters.exchange -> market_data.adapters.exchange.ccxt_adapter",
-]
+# ignore_imports: eliminado — ccxt_adapter ya no se importa directamente (BC-01 limpio)
 
 [[tool.importlinter.contracts]]
 name    = "BC-02: market_data no importa trading ni data_platform"
