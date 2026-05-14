@@ -1,25 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-domain/
-=======
+domain/ — STUB DE COMPATIBILIDAD (DEPRECATED)
+==============================================
 
-Core de dominio puro — sin dependencias de infraestructura ni frameworks.
+Este módulo fue renombrado a shared/ (refactor DDD, commit 5a2db4c).
 
-Regla de oro: ningún módulo dentro de domain/ puede importar desde
-trading/, market_data/, ocm_platform/, data_platform/ ni librerías
-de terceros salvo stdlib y pydantic (para value objects).
+ACCIÓN REQUERIDA: actualizar todos los imports:
+    from domain.boundaries    → from shared.contracts.boundaries
+    from domain.value_objects → from shared.types
+    from domain.entities      → from shared.types
+    from domain.events        → from shared.types
 
-Submódulos
-----------
-  value_objects/  — tipos inmutables sin identidad
-  entities/       — tipos con identidad y ciclo de vida
-  events/         — domain events publicados entre bounded contexts
+Este stub será ELIMINADO en el próximo release.
+BC-09 en pyproject.toml detecta violaciones automáticamente:
+    uv run lint-imports
 """
+import warnings as _warnings
 
-# =============================================================================
-# Boundary contracts — cross-BC protocols (DIP · OCP · SSOT)
-# =============================================================================
-from domain.boundaries import (
+_warnings.warn(
+    "El paquete 'domain' está deprecado. "
+    "Usar 'shared.contracts' y 'shared.types' en su lugar. "
+    "Será eliminado en el próximo release.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from shared.contracts.boundaries import (  # noqa: E402, F401
     FeatureSource,
     SignalProtocol,
     FillHandler,
