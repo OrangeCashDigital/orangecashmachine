@@ -20,6 +20,7 @@ from market_data.domain.exceptions import (  # noqa: F401
     DataNotFoundError,
     DataReadError,
     VersionNotFoundError,
+    MarketDataLoaderError,
 )
 
 
@@ -67,4 +68,5 @@ __all__ = [
     "VersionNotFoundError",
     "safe_symbol",
     "normalize_ohlcv_df",
+    "MarketDataLoaderError",
 ]

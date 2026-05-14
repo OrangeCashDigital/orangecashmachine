@@ -247,6 +247,15 @@ class VersionNotFoundError(StorageError):
     - snapshot_id entero no existe en el catálogo
     """
 
+class MarketDataLoaderError(StorageError):
+    """
+    Error genérico de carga de datos de mercado.
+
+    Alias semántico para consumidores externos (research, backtesting)
+    que no necesitan distinguir entre DataNotFoundError y DataReadError.
+    Permite captura amplia con un solo except sin silenciar errores no relacionados.
+    """
+
 # ===========================================================================
 # __all__ — API pública explícita
 # ===========================================================================
@@ -284,4 +293,5 @@ __all__ = [
     "DataNotFoundError",
     "DataReadError",
     "VersionNotFoundError",
+    "MarketDataLoaderError",
 ]
