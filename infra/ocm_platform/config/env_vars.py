@@ -45,7 +45,9 @@ OCM_DATA_LAKE_PATH: str = "OCM_DATA_LAKE_PATH"   # DEPRECATED — legacy
 OCM_GOLD_PATH: str = "OCM_GOLD_PATH"
 OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
 OCM_EXCHANGE: str = "OCM_EXCHANGE"
-OCM_MARKET_TYPE: str = "OCM_MARKET_TYPE"
+OCM_MARKET_TYPE: str    = "OCM_MARKET_TYPE"
+OCM_OHLCV_START_DATE: str = "OCM_OHLCV_START_DATE"
+"""Fecha ISO de inicio del backfill histórico. Default: 2024-01-01"""
 
 # =============================================================================
 # Market-data server
@@ -117,7 +119,7 @@ _ENV_VAR_NAMES: frozenset[str] = frozenset({
     OCM_DATA_LAKE_PATH,
     OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH,
     MARKET_DATA_HOST, MARKET_DATA_PORT, INGESTION_INTERVAL_S,
-    OCM_EXCHANGE, OCM_MARKET_TYPE,
+    OCM_EXCHANGE, OCM_MARKET_TYPE, OCM_OHLCV_START_DATE,
     # Kafka
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_CLIENT_ID_PRODUCER,

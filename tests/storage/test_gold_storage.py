@@ -31,7 +31,7 @@ from market_data.infrastructure.storage.gold.gold_storage import GoldStorage, _p
 from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
 from market_data.domain.exceptions import (
     DataNotFoundError,
-    DataReadError as GoldLoaderError,
+    DataNotFoundError as GoldLoaderError,
     VersionNotFoundError,
     VersionNotFoundError as GoldVersionNotFound,
 )
