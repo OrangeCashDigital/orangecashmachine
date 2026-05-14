@@ -40,3 +40,18 @@ infra/cache/
 *.bak
 .prefectignore
 *.obsolete
+
+# ==============================================================================
+# Iceberg runtime — artefactos generados, nunca versionables
+# ==============================================================================
+# iceberg_catalog/ : SQLite catalog (catalog.db + lock files)
+# iceberg_warehouse/: archivos Parquet de datos reales
+# Estos viven dentro de data_platform/ (sibling del data_lake).
+# SSOT: paths.py los coloca en data_lake_root().parent / "iceberg_*"
+data_platform/iceberg_catalog/
+data_platform/iceberg_warehouse/
+
+# Archivos temporales de SQLite (journal, WAL)
+*.db-journal
+*.db-wal
+*.db-shm
