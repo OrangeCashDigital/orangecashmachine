@@ -12,15 +12,14 @@ publicar en Kafka y cómo se reconstruyen al consumir.
 
 Wire format
 -----------
-JSON UTF-8. Mismo schema que EventPayload.to_dict() — compatible
-con el wire format Redis Streams existente (mismos campos, mismo
-PAYLOAD_SCHEMA_VERSION). Migración sin ruptura de contrato.
+JSON UTF-8. Schema definido por EventPayload.to_dict() — SSOT en
+kafka/payloads.py. Versionado explícito via PAYLOAD_SCHEMA_VERSION.
 
 Routing key
 -----------
 "{exchange}:{symbol}:{timeframe}" como bytes UTF-8.
-Kafka usa la clave para asignar partición consistentemente —
-mismo par/timeframe → misma partición → orden garantizado.
+Kafka asigna partición por hash(key) — mismo par/timeframe siempre
+va a la misma partición → orden garantizado por símbolo.
 
 Principios: SSOT · SRP · Fail-Fast · KISS
 """
@@ -36,8 +35,8 @@ def serialize(event: EventPayload) -> bytes:
     """
     Serializa un EventPayload a bytes JSON UTF-8.
 
-    Usa EventPayload.to_dict() como SSOT del schema —
-    mismo formato que Redis Streams, compatible con from_dict().
+    Usa EventPayload.to_dict() como SSOT del schema.
+    Compatible con deserialize() via from_dict().
 
     Raises
     ------

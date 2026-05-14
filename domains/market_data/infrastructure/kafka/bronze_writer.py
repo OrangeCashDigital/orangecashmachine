@@ -16,7 +16,7 @@ Flujo
       ↓  poll()
   deserialize() → EventPayload
       ↓
-  dedup via event_id (SeenFilter L1 + Redis L2)
+  dedup via event_id (SeenFilter L1 en memoria)
       ↓
   BronzeStorage.write()
       ↓
@@ -25,9 +25,9 @@ Flujo
 Idempotencia
 ------------
 Dos rutas de dedup:
-  1. SeenFilter (L1, en memoria) — dedup dentro de la misma sesión
-  2. BronzeStorage — Iceberg append-only deduplica por event_id
-     al hacer merge en la capa Silver (Dagster job)
+  1. SeenFilter L1 (en memoria) — dedup dentro de la misma sesión del proceso
+  2. Iceberg merge-on-read      — Silver Dagster job deduplica por event_id
+                                  al materializar desde Bronze
 
 SafeOps
 -------

@@ -108,9 +108,9 @@ class EventPayload:
 
     Compatibilidad
     --------------
-    from_dict() acepta tanto valores string (legacy Redis Streams)
-    como tipos nativos Python ya deserializados. La normalización
-    ocurre aquí, no en los callers (SRP · Tell Don't Ask).
+    from_dict() acepta tanto valores string (bytes deserializados
+    de Kafka) como tipos nativos Python. La normalización ocurre
+    aquí, no en los callers (SRP · Tell Don't Ask).
 
     Fail-Fast
     ---------
