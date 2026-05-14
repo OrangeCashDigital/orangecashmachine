@@ -3,23 +3,21 @@
 market_data/domain/events/ingestion.py
 ========================================
 
-Domain events de la capa de ingestión — Value Objects inmutables.
+Domain events de ingestión — Value Objects inmutables.
 
-Responsabilidad
----------------
-Representar, como datos puros, los momentos en que datos de mercado
-llegan desde los adapters (REST fetcher, WebSocket adapter, replay).
+Catálogo completo
+-----------------
+CandleReceived      — tick individual desde WebSocket (cryptofeed)
+OHLCVBatchReceived  — lote desde REST fetcher o replay
+OHLCVBatchIngested  — Bronze confirmó escritura → dispara ohlcv.validated
+QualityCheckPassed  — quality gate OK → dispara ohlcv.features
+QualityCheckFailed  — quality gate KO → va a DLQ
+SignalGenerated     — estrategia generó señal → dispara signals.raw
 
-Estos eventos son el contrato entre ingestión y procesamiento.
-Ningún adapter ni consumer importa el otro — solo estos tipos compartidos.
-
-Principios
-----------
-DDD    — domain events como ciudadanos de primera clase del modelo
-SSOT   — única definición; adapters publican, consumers consumen
-OCP    — nuevos tipos de evento sin modificar los existentes
-KISS   — solo los campos que el dominio necesita; sin lógica
-Immutability — frozen=True; el estado queda sellado en creación
+source field (Kappa)
+--------------------
+Todos los eventos llevan source para que los consumers puedan filtrar
+sin conocer el contexto del emisor. SSOT: payloads.DATASOURCE_*.
 """
 from __future__ import annotations
 
@@ -41,7 +39,6 @@ class DomainEvent:
 
     event_id    : UUID v4 — idempotencia y deduplicación downstream
     occurred_at : ISO-8601 UTC del momento de creación del evento
-                  (≠ timestamp del dato; el evento se crea al llegar al bus)
     """
     event_id:    str = field(default_factory=lambda: str(uuid.uuid4()))
     occurred_at: str = field(
@@ -50,27 +47,16 @@ class DomainEvent:
 
 
 # ===========================================================================
-# Ingestion Events
+# Ingestión — entrada al stream
 # ===========================================================================
 
 @dataclass(frozen=True)
 class CandleReceived(DomainEvent):
     """
-    Una vela OHLCV llegó desde un adapter de exchange.
+    Tick OHLCV desde cryptofeed WebSocket.
 
-    Publicado por  : WebSocket adapter (real-time tick-by-tick)
-    Consumido por  : QualityPipelineConsumer, FeatureConsumer (futuro)
-
-    Fields
-    ------
-    exchange      : identificador del exchange ("binance", "okx", …)
-    symbol        : par de trading ("BTC/USDT")
-    timeframe     : resolución canónica ("1m", "1h", …)
-    timestamp_ms  : timestamp de la vela en epoch ms UTC
-    open/high/low/close : precios OHLC
-    volume        : volumen de la vela
-    source        : "websocket" | "rest" | "replay"
-    run_id        : correlación con LineageTracker (vacío si no aplica)
+    source: siempre "live" — los ticks WS nunca son backfill.
+    Publicado a: ohlcv.raw con header x-ocm-source: live
     """
     exchange:     str   = ""
     symbol:       str   = ""
@@ -81,43 +67,107 @@ class CandleReceived(DomainEvent):
     low:          float = 0.0
     close:        float = 0.0
     volume:       float = 0.0
-    source:       str   = "websocket"   # "websocket" | "rest" | "replay"
+    source:       str   = "live"
     run_id:       str   = ""
 
 
 @dataclass(frozen=True)
 class OHLCVBatchReceived(DomainEvent):
     """
-    Un lote de velas OHLCV llegó desde un adapter de exchange.
+    Lote de velas desde REST fetcher (backfill) o replay.
 
-    Preferido sobre múltiples CandleReceived cuando el batch completo
-    es la unidad semántica correcta: REST fetch, backfill chunk, replay.
-
-    Publicado por  : REST fetcher, batch replay adapter
-    Consumido por  : QualityPipelineConsumer, BatchConsumer
-
-    Fields
-    ------
-    batch : OHLCVBatch — payload completo: velas + metadatos de contexto
-            (exchange, symbol, timeframe, source, run_id, chunk_index,
-             total_chunks están todos en el VO — sin duplicación)
-
-    Properties delegadas
-    --------------------
-    row_count     → batch.count
-    is_last_chunk → batch.is_last_chunk
+    source: "backfill" (REST histórico) | "replay" (seek_to_beginning)
+    Publicado a: ohlcv.raw con header x-ocm-source: backfill|replay
     """
-    batch: OHLCVBatch = field(default_factory=OHLCVBatch)
+    batch:  OHLCVBatch = field(default_factory=OHLCVBatch)
+    source: str        = "backfill"
+    run_id: str        = ""
 
     @property
     def row_count(self) -> int:
-        """Número de velas en el batch."""
         return self.batch.count
 
     @property
     def is_last_chunk(self) -> bool:
-        """True si este es el último chunk de un backfill."""
         return self.batch.is_last_chunk
+
+
+# ===========================================================================
+# Procesamiento — downstream del stream
+# ===========================================================================
+
+@dataclass(frozen=True)
+class OHLCVBatchIngested(DomainEvent):
+    """
+    KafkaBronzeWriter confirmó escritura a Bronze Iceberg.
+
+    Disparado por: KafkaBronzeWriter al completar write()
+    Publicado a:   ohlcv.validated (mismo source del evento original)
+    Consumido por: FeatureConsumer
+
+    rows_written : número de filas escritas en Bronze
+    source       : propagado desde el EventPayload original (SSOT)
+    """
+    exchange:     str = ""
+    symbol:       str = ""
+    timeframe:    str = ""
+    rows_written: int = 0
+    source:       str = "live"
+    run_id:       str = ""
+
+
+@dataclass(frozen=True)
+class QualityCheckPassed(DomainEvent):
+    """
+    Quality gate validó el batch — datos aptos para features.
+
+    Disparado por: QualityGateConsumer
+    Publicado a:   ohlcv.features
+    """
+    exchange:  str = ""
+    symbol:    str = ""
+    timeframe: str = ""
+    rows:      int = 0
+    source:    str = "live"
+    run_id:    str = ""
+
+
+@dataclass(frozen=True)
+class QualityCheckFailed(DomainEvent):
+    """
+    Quality gate rechazó el batch — va a DLQ.
+
+    Disparado por: QualityGateConsumer
+    Publicado a:   dlq.ohlcv
+    """
+    exchange:   str = ""
+    symbol:     str = ""
+    timeframe:  str = ""
+    reason:     str = ""
+    source:     str = "live"
+    run_id:     str = ""
+
+
+@dataclass(frozen=True)
+class SignalGenerated(DomainEvent):
+    """
+    Estrategia generó una señal de trading.
+
+    Solo existe para eventos con source="live".
+    StrategyConsumer nunca genera este evento para source="backfill".
+
+    Disparado por: StrategyConsumer
+    Publicado a:   signals.raw
+    Consumido por: RiskGateConsumer
+    """
+    exchange:   str   = ""
+    symbol:     str   = ""
+    timeframe:  str   = ""
+    signal:     str   = ""      # "buy" | "sell" | "hold"
+    price:      float = 0.0
+    confidence: float = 1.0
+    strategy:   str   = ""      # nombre de la estrategia
+    run_id:     str   = ""
 
 
 # ===========================================================================
@@ -128,4 +178,8 @@ __all__ = [
     "DomainEvent",
     "CandleReceived",
     "OHLCVBatchReceived",
+    "OHLCVBatchIngested",
+    "QualityCheckPassed",
+    "QualityCheckFailed",
+    "SignalGenerated",
 ]

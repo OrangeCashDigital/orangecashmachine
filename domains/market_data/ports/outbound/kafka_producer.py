@@ -3,34 +3,31 @@
 market_data/ports/outbound/kafka_producer.py
 =============================================
 
-Puerto OUTBOUND: contrato que usan los inbound adapters para publicar
-mensajes a Kafka.
+Puerto OUTBOUND: contrato de publicación a Kafka.
 
-Responsabilidad
----------------
-Definir la abstracción que cualquier producer Kafka debe cumplir.
-Los adapters de ingestión dependen de este protocolo — nunca de
-aiokafka directamente (DIP).
+Topics canónicos — SSOT
+-----------------------
+Cada topic tiene un consumer group designado y una retención recomendada.
+Modificar un topic aquí es la única forma válida de renombrarlo en el sistema.
 
-Tópicos canónicos OCM
----------------------
-  TOPIC_OHLCV_RAW       = "ohlcv.raw"       — velas crudas CCXT → Bronze
-  TOPIC_OHLCV_VALIDATED = "ohlcv.validated"  — post quality-gate → Silver
-  TOPIC_OHLCV_FEATURES  = "ohlcv.features"   — features Gold computados
-  TOPIC_DLQ             = "dlq.ohlcv"        — Dead Letter Queue
+  ohlcv.raw         → KafkaBronzeWriter (ocm-bronze-writer)  — retención 7d
+  ohlcv.validated   → FeatureConsumer   (ocm-features)       — retención 7d
+  ohlcv.features    → StrategyConsumer  (ocm-strategy)       — retención 7d
+  signals.raw       → RiskGateConsumer  (ocm-risk-gate)      — retención 24h
+  signals.approved  → ExecutionConsumer (ocm-execution)      — retención 24h
+  orders.filled     → PortfolioConsumer (ocm-portfolio)      — retención 30d
+  dlq.ohlcv         → (manual review)                        — retención 30d
 
-Wire format
------------
-Los mensajes viajan como bytes JSON. La clave (key) es el routing key
-canónico: "{exchange}:{symbol}:{timeframe}" — garantiza orden dentro
-de una partición para el mismo par/timeframe (SSOT de particionado).
+Consumer groups — SSOT
+-----------------------
+Constantes GROUP_* usadas en KafkaConsumerAdapter factories.
+Un solo lugar donde renombrar un grupo afecta a todos los consumers.
 
-Principios
-----------
-DIP  — adapters dependen de este Protocol, no de aiokafka
-ISP  — solo send_async; flush vive en KafkaProducerPort.flush()
-OCP  — KafkaProducerAdapter implementa este contrato sin modificarlo
-SafeOps — send_async es fail-soft: no propaga errores al caller
+Routing key — SSOT
+-------------------
+"{exchange}:{symbol}:{timeframe}" — orden garantizado por par/timeframe.
+
+Principios: DIP · SSOT · ISP · OCP · SafeOps
 """
 from __future__ import annotations
 
@@ -38,13 +35,36 @@ from typing import Optional, Protocol, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
-# Constantes de tópicos — SSOT
+# Topics — SSOT
 # ---------------------------------------------------------------------------
 
-TOPIC_OHLCV_RAW:       str = "ohlcv.raw"
-TOPIC_OHLCV_VALIDATED: str = "ohlcv.validated"
-TOPIC_OHLCV_FEATURES:  str = "ohlcv.features"
-TOPIC_DLQ:             str = "dlq.ohlcv"
+TOPIC_OHLCV_RAW:        str = "ohlcv.raw"
+TOPIC_OHLCV_VALIDATED:  str = "ohlcv.validated"
+TOPIC_OHLCV_FEATURES:   str = "ohlcv.features"
+TOPIC_SIGNALS_RAW:      str = "signals.raw"
+TOPIC_SIGNALS_APPROVED: str = "signals.approved"
+TOPIC_ORDERS_FILLED:    str = "orders.filled"
+TOPIC_POSITIONS:        str = "positions.updated"
+TOPIC_DLQ:              str = "dlq.ohlcv"
+
+# ---------------------------------------------------------------------------
+# Consumer groups — SSOT
+# ---------------------------------------------------------------------------
+
+GROUP_BRONZE_WRITER: str = "ocm-bronze-writer"
+GROUP_FEATURES:      str = "ocm-features"
+GROUP_STRATEGY:      str = "ocm-strategy"
+GROUP_RISK_GATE:     str = "ocm-risk-gate"
+GROUP_EXECUTION:     str = "ocm-execution"
+GROUP_PORTFOLIO:     str = "ocm-portfolio"
+
+# ---------------------------------------------------------------------------
+# Kafka header keys — SSOT
+# ---------------------------------------------------------------------------
+
+HEADER_SOURCE:  str = "x-ocm-source"    # "live" | "backfill" | "replay"
+HEADER_VERSION: str = "x-ocm-version"   # str(PAYLOAD_SCHEMA_VERSION)
+HEADER_RUN_ID:  str = "x-ocm-run-id"    # correlación con LineageTracker
 
 
 # ---------------------------------------------------------------------------
@@ -56,21 +76,10 @@ class KafkaProducerPort(Protocol):
     """
     Contrato async de publicación a Kafka.
 
-    Implementado por: KafkaProducerAdapter (infrastructure/kafka/producer.py)
-    Usado por      : adapters/inbound/rest/ohlcv_fetcher.py
-                     adapters/inbound/websocket/trades_stream.py
+    Implementado por: KafkaProducerAdapter
+    Usado por: BackfillProducer, CryptofeedAdapter, QualityGateConsumer
 
-    Routing key
-    -----------
-    key = "{exchange}:{symbol}:{timeframe}"
-    Kafka usa la clave para asignar partición — mismo par/timeframe
-    siempre va a la misma partición → orden garantizado (SSOT).
-
-    SafeOps
-    -------
-    send_async() DEBE ser fail-soft:
-      - errores de red → loguear + retornar False
-      - el adapter inbound no debe saber si Kafka está caído
+    SafeOps: send_async() DEBE retornar False en lugar de lanzar.
     """
 
     async def send_async(
@@ -79,47 +88,34 @@ class KafkaProducerPort(Protocol):
         value:   bytes,
         key:     Optional[bytes] = None,
         headers: Optional[dict]  = None,
-    ) -> bool:
-        """
-        Publica un mensaje a un tópico Kafka.
+    ) -> bool: ...
 
-        Parámetros
-        ----------
-        topic   : nombre canónico del tópico (usar constantes TOPIC_*)
-        value   : payload serializado como bytes (JSON UTF-8)
-        key     : routing key como bytes — determina partición
-        headers : metadatos opcionales (tracing, schema version)
+    async def flush(self) -> None: ...
 
-        Retorna
-        -------
-        True  — mensaje encolado con éxito
-        False — fallo (SafeOps: no lanza)
-        """
-        ...
-
-    async def flush(self) -> None:
-        """
-        Fuerza el envío de todos los mensajes pendientes en el buffer.
-
-        Llamar en shutdown para garantizar entrega antes de cerrar.
-        SafeOps: no lanza si Kafka no está disponible.
-        """
-        ...
-
-    async def close(self) -> None:
-        """
-        Cierra la conexión al broker limpiamente.
-
-        Llamar en shutdown del servicio (lifespan FastAPI o Dagster).
-        Idempotente: seguro llamar más de una vez.
-        """
-        ...
+    async def close(self) -> None: ...
 
 
 __all__ = [
-    "KafkaProducerPort",
+    # Topics
     "TOPIC_OHLCV_RAW",
     "TOPIC_OHLCV_VALIDATED",
     "TOPIC_OHLCV_FEATURES",
+    "TOPIC_SIGNALS_RAW",
+    "TOPIC_SIGNALS_APPROVED",
+    "TOPIC_ORDERS_FILLED",
+    "TOPIC_POSITIONS",
     "TOPIC_DLQ",
+    # Consumer groups
+    "GROUP_BRONZE_WRITER",
+    "GROUP_FEATURES",
+    "GROUP_STRATEGY",
+    "GROUP_RISK_GATE",
+    "GROUP_EXECUTION",
+    "GROUP_PORTFOLIO",
+    # Headers
+    "HEADER_SOURCE",
+    "HEADER_VERSION",
+    "HEADER_RUN_ID",
+    # Protocol
+    "KafkaProducerPort",
 ]

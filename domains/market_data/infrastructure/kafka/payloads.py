@@ -5,41 +5,28 @@ market_data/infrastructure/kafka/payloads.py
 
 Wire format contract para el pipeline Kafka OHLCV.
 
-Responsabilidad
----------------
-Definir los tipos de datos que viajan por Kafka entre el productor
-(pipeline de ingestión) y los stream processors (KafkaBronzeWriter,
-KafkaSilverWriter, etc.).
+Kappa source field
+------------------
+EventPayload.source discrimina el origen del evento en todo el pipeline:
+  "live"     — cryptofeed WebSocket → StrategyConsumer LO PROCESA
+  "backfill" — REST histórico       → StrategyConsumer LO IGNORA
+  "replay"   — seek_to_beginning()  → StrategyConsumer LO IGNORA
 
-Wire format
------------
-Kafka entrega el value como bytes JSON. `from_dict()` normaliza
-el dict deserializado — los callers no conocen el encoding interno
-(SRP · Tell Don't Ask).
+Este campo viaja en el payload JSON Y como Kafka header "x-ocm-source"
+para que los consumers puedan filtrar sin deserializar el body completo.
 
-Tipos
------
-OHLCVBar     — vela OHLCV inmutable: (ts, open, high, low, close, volume)
-EventPayload — lote de velas con metadatos de contexto (exchange, symbol, tf)
+Schema version
+--------------
+PAYLOAD_SCHEMA_VERSION no se bumpeó al añadir source — tiene default
+"live" que mantiene compatibilidad con mensajes anteriores (additive change).
 
-Versión de schema
------------------
-PAYLOAD_SCHEMA_VERSION — versión actual del wire format de EventPayload.
-SSOT: cualquier bumping de versión ocurre aquí y solo aquí.
-
-Principios
-----------
-SRP         — solo define tipos wire; no valida reglas de negocio
-Immutability — frozen=True en ambos dataclasses
-DIP         — SchemaVersionError importada desde domain (no definida aquí)
-SSOT        — versión de schema declarada como constante de módulo
-KISS        — sin dependencias externas más allá de stdlib
+Principios: DIP · SRP · SSOT · Immutability · Kappa · KISS
 """
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Literal, Optional
 
 from market_data.domain.exceptions import SchemaVersionError  # noqa: F401
 
@@ -49,6 +36,16 @@ from market_data.domain.exceptions import SchemaVersionError  # noqa: F401
 # ---------------------------------------------------------------------------
 
 PAYLOAD_SCHEMA_VERSION: int = 1
+
+# ---------------------------------------------------------------------------
+# DataSource — SSOT del discriminador de origen (Kappa)
+# ---------------------------------------------------------------------------
+
+DataSource = Literal["live", "backfill", "replay"]
+
+DATASOURCE_LIVE:     DataSource = "live"
+DATASOURCE_BACKFILL: DataSource = "backfill"
+DATASOURCE_REPLAY:   DataSource = "replay"
 
 
 # ---------------------------------------------------------------------------
@@ -101,22 +98,22 @@ class EventPayload:
     """
     Lote de velas OHLCV con metadatos de contexto.
 
-    Serialización
-    -------------
-    to_dict()   → dict Python (para JSON Kafka o tests)
-    from_dict() → instancia (desde bytes deserializados o dict Python)
+    source (Kappa discriminator)
+    ----------------------------
+    Viaja en el payload JSON y como Kafka header "x-ocm-source".
+    Los consumers usan este campo para decidir si procesan el evento:
+
+      KafkaBronzeWriter    → procesa TODOS los sources (almacena siempre)
+      QualityGateConsumer  → procesa TODOS los sources
+      FeatureConsumer      → procesa TODOS los sources
+      StrategyConsumer     → procesa SOLO source="live"
+      RiskGateConsumer     → procesa SOLO source="live"
+      ExecutionConsumer    → procesa SOLO source="live"
 
     Compatibilidad
     --------------
-    from_dict() acepta tanto valores string (bytes deserializados
-    de Kafka) como tipos nativos Python. La normalización ocurre
-    aquí, no en los callers (SRP · Tell Don't Ask).
-
-    Fail-Fast
-    ---------
-    from_dict() lanza SchemaVersionError si la versión es incompatible.
-    No intenta migrar versiones desconocidas — eso es responsabilidad
-    del consumer con un migrator explícito.
+    source tiene default "live" — mensajes sin source son tratados como live.
+    No requirió bump de PAYLOAD_SCHEMA_VERSION (additive change con default).
     """
     event_id:       str
     exchange:       str
@@ -125,7 +122,42 @@ class EventPayload:
     batch_start_ts: int
     bars:           List[OHLCVBar]
     event_version:  int                      = PAYLOAD_SCHEMA_VERSION
+    source:         DataSource               = DATASOURCE_LIVE
+    run_id:         str                      = ""
     meta:           Optional[Dict[str, Any]] = None
+
+    # ------------------------------------------------------------------
+    # Kappa helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def is_live(self) -> bool:
+        """True si el evento viene de WebSocket en tiempo real."""
+        return self.source == DATASOURCE_LIVE
+
+    @property
+    def is_backfill(self) -> bool:
+        """True si el evento viene de REST histórico."""
+        return self.source == DATASOURCE_BACKFILL
+
+    @property
+    def is_replay(self) -> bool:
+        """True si el evento es un replay de Kafka (seek_to_beginning)."""
+        return self.source == DATASOURCE_REPLAY
+
+    @property
+    def should_generate_signal(self) -> bool:
+        """
+        True si los consumers de señal deben procesar este evento.
+
+        SSOT de la regla de filtrado Kappa — un solo punto de decisión.
+        StrategyConsumer y RiskGateConsumer deben usar esta propiedad.
+        """
+        return self.source == DATASOURCE_LIVE
+
+    # ------------------------------------------------------------------
+    # Serialización
+    # ------------------------------------------------------------------
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -135,6 +167,8 @@ class EventPayload:
             "symbol":         self.symbol,
             "timeframe":      self.timeframe,
             "batch_start_ts": self.batch_start_ts,
+            "source":         self.source,
+            "run_id":         self.run_id,
             "bars":           [b.to_dict() for b in self.bars],
             "meta":           self.meta,
         }
@@ -145,8 +179,7 @@ class EventPayload:
         if version != PAYLOAD_SCHEMA_VERSION:
             raise SchemaVersionError(
                 f"EventPayload schema v{version} incompatible "
-                f"con v{PAYLOAD_SCHEMA_VERSION} esperada. "
-                "Actualizar consumer o migrar el evento."
+                f"con v{PAYLOAD_SCHEMA_VERSION} esperada."
             )
 
         bars_raw = data["bars"]
@@ -158,6 +191,10 @@ class EventPayload:
         if isinstance(meta_raw, str):
             meta_raw = json.loads(meta_raw)
 
+        source = data.get("source", DATASOURCE_LIVE)
+        if source not in (DATASOURCE_LIVE, DATASOURCE_BACKFILL, DATASOURCE_REPLAY):
+            source = DATASOURCE_LIVE  # fail-soft: source desconocido → live
+
         return cls(
             event_id       = str(data["event_id"]),
             exchange       = str(data["exchange"]),
@@ -166,6 +203,8 @@ class EventPayload:
             batch_start_ts = int(data["batch_start_ts"]),
             bars           = bars,
             event_version  = version,
+            source         = source,
+            run_id         = str(data.get("run_id", "")),
             meta           = meta_raw,
         )
 
@@ -175,4 +214,8 @@ __all__ = [
     "EventPayload",
     "SchemaVersionError",
     "PAYLOAD_SCHEMA_VERSION",
+    "DataSource",
+    "DATASOURCE_LIVE",
+    "DATASOURCE_BACKFILL",
+    "DATASOURCE_REPLAY",
 ]

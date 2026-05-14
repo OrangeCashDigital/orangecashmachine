@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+# -*- coding: utf-8 -*-
 """
 core/config/env_vars.py
 =======================
@@ -7,97 +6,86 @@ core/config/env_vars.py
 Single Source of Truth para los nombres de variables de entorno del proceso.
 
 Este es el ÚNICO archivo en todo el proyecto que define estos strings.
-Nadie más escribe ``"OCM_DEBUG"`` o ``"OCM_ENV"`` directamente — todos
-importan desde aquí. Si una variable se renombra, se cambia aquí y solo aquí.
+Nadie más escribe "KAFKA_BOOTSTRAP_SERVERS" directamente — todos importan aquí.
+Si una variable se renombra, se cambia aquí y solo aquí.
 
-Categorías
-----------
-- **Proceso**      — controlan cómo arranca el proceso (bootstrap).
-- **Credenciales** — credenciales de exchanges (``credentials.py``).
-- **Storage**      — rutas del data lake (``paths.py``).
-
-Nota sobre overrides de aplicación
------------------------------------
-Las variables OCM_PIPELINE__*, OCM_OBSERVABILITY__*, OCM_SECTION__KEY, etc.
-son aplicadas por apply_env_overrides() en core/config/layers/env_override.py
-(L2 del ConfigPipeline), usando el separador doble guión bajo (__).
-``env_vars.py`` es el SSOT de los nombres de variables de entorno OCM_*
-propias del proceso — las claves OCM_SECTION__KEY de L2 no se listan aquí
-porque cualquier clave del schema es un override válido por diseño.
+Guard de sincronía (import-time)
+---------------------------------
+El assert al final del módulo verifica que _ENV_VAR_NAMES contiene
+exactamente las mismas constantes UPPER_CASE declaradas en el módulo.
+Añadir una variable sin actualizar _ENV_VAR_NAMES falla en import.
+Principio: Fail-Fast en el punto más temprano posible.
 """
+from __future__ import annotations
 
 # =============================================================================
 # Proceso — leídas por RunConfig.from_env()
 # =============================================================================
 
 OCM_DEBUG: str = "OCM_DEBUG"
-"""``"true"`` | ``"false"`` | ``"1"`` | ``"0"`` — activa diagnósticos verbosos."""
-
 OCM_ENV: str = "OCM_ENV"
-"""``"development"`` | ``"test"`` | ``"staging"`` | ``"production"``."""
-
 OCM_CONFIG_PATH: str = "OCM_CONFIG_PATH"
-"""Path absoluto o relativo al directorio de config YAML."""
-
 OCM_CONFIG_DIR: str = "OCM_CONFIG_DIR"
-"""Alias legacy de ``OCM_CONFIG_PATH``. Preferir ``OCM_CONFIG_PATH``."""
-
 OCM_VALIDATE_ONLY: str = "OCM_VALIDATE_ONLY"
-"""``"1"`` | ``"true"`` — valida config y sale sin ejecutar pipeline."""
-
 PUSHGATEWAY_URL: str = "PUSHGATEWAY_URL"
-"""URL completa del Prometheus Pushgateway."""
 
 # =============================================================================
 # Credenciales — leídas por credentials.py
 # =============================================================================
 
 OCM_API_KEY: str = "OCM_API_KEY"
-"""Fallback genérico si no existe ``{EXCHANGE}_API_KEY``."""
-
 OCM_API_SECRET: str = "OCM_API_SECRET"
-"""Fallback genérico si no existe ``{EXCHANGE}_API_SECRET``."""
 
 # =============================================================================
 # Storage — leídas por core/config/paths.py
 # =============================================================================
 
 OCM_STORAGE__DATA_LAKE__PATH: str = "OCM_STORAGE__DATA_LAKE__PATH"
-"""Override absoluto del root del data lake.
-
-Convencion: separador __ alineado con apply_env_overrides() (L2).
-  OCM_STORAGE__DATA_LAKE__PATH=/var/lib/ocm/data_lake
-
-Reemplaza OCM_DATA_LAKE_PATH (legacy). Ver migracion en paths.py.
-"""
-
-OCM_DATA_LAKE_PATH: str = "OCM_DATA_LAKE_PATH"
-"""DEPRECATED — usar OCM_STORAGE__DATA_LAKE__PATH.
-
-Mantenida durante transicion controlada. paths.py emite DeprecationWarning
-si esta variable esta presente en el entorno. Eliminar en siguiente release.
-"""
-
+OCM_DATA_LAKE_PATH: str = "OCM_DATA_LAKE_PATH"   # DEPRECATED — legacy
 OCM_GOLD_PATH: str = "OCM_GOLD_PATH"
-"""Override absoluto del root del gold layer."""
-
-OCM_EXCHANGE: str = "OCM_EXCHANGE"
-"""Exchange default para scripts de research y loaders standalone."""
-
-OCM_MARKET_TYPE: str = "OCM_MARKET_TYPE"
-"""``"spot"`` | ``"swap"`` — tipo de mercado para research y loaders standalone."""
-
 OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
-# ── Market-data server ────────────────────────────────────────────────────────
+OCM_EXCHANGE: str = "OCM_EXCHANGE"
+OCM_MARKET_TYPE: str = "OCM_MARKET_TYPE"
+
+# =============================================================================
+# Market-data server
+# =============================================================================
+
 MARKET_DATA_HOST: str = "MARKET_DATA_HOST"
-"""Interfaz de escucha del servidor HTTP de market data. Default: 0.0.0.0"""
-
 MARKET_DATA_PORT: str = "MARKET_DATA_PORT"
-"""Puerto TCP del servidor HTTP de market data. Default: 8001"""
-
 INGESTION_INTERVAL_S: str = "INGESTION_INTERVAL_S"
-"""Segundos entre ciclos de ingestión del loop principal. Default: 300"""
-"""Override absoluto del root del gold features layer (alias de OCM_GOLD_PATH por campo)."""
+
+# =============================================================================
+# Kafka — leídas por KafkaProducerAdapter.from_env() y KafkaConsumerAdapter
+# SSOT: nadie escribe estos strings directamente fuera de este módulo.
+# =============================================================================
+
+KAFKA_BOOTSTRAP_SERVERS: str = "KAFKA_BOOTSTRAP_SERVERS"
+"""Host:puerto del broker. Múltiples separados por coma. Default: kafka:9092"""
+
+KAFKA_CLIENT_ID_PRODUCER: str = "KAFKA_CLIENT_ID_PRODUCER"
+"""Client ID del producer — visible en kafka-ui. Default: ocm-producer"""
+
+KAFKA_COMPRESSION_TYPE: str = "KAFKA_COMPRESSION_TYPE"
+"""lz4 | gzip | snappy | None. Default: lz4"""
+
+KAFKA_ACKS: str = "KAFKA_ACKS"
+"""all | 1 | 0. Default: all (máxima durabilidad)"""
+
+KAFKA_LINGER_MS: str = "KAFKA_LINGER_MS"
+"""Tiempo de espera para batch en ms. 0 = sin espera. Default: 5"""
+
+KAFKA_MAX_BATCH_SIZE: str = "KAFKA_MAX_BATCH_SIZE"
+"""Tamaño máximo del batch en bytes. Default: 16384 (16KB)"""
+
+KAFKA_CONSUMER_SESSION_TIMEOUT_MS: str = "KAFKA_CONSUMER_SESSION_TIMEOUT_MS"
+"""Timeout de sesión del consumer en ms. Default: 30000"""
+
+KAFKA_CONSUMER_HEARTBEAT_MS: str = "KAFKA_CONSUMER_HEARTBEAT_MS"
+"""Intervalo de heartbeat del consumer en ms. Default: 10000"""
+
+KAFKA_AUTO_OFFSET_RESET: str = "KAFKA_AUTO_OFFSET_RESET"
+"""earliest (replay desde inicio) | latest (solo nuevos). Default: earliest"""
 
 # =============================================================================
 # Valores permitidos y helpers
@@ -107,9 +95,6 @@ ALLOWED_ENVS: frozenset[str] = frozenset(
     {"development", "test", "staging", "production"}
 )
 
-# TRUTHY_VALUES eliminada — SSOT en core.config.layers.coercion.BOOL_TRUE
-# Importar desde allí: from ocm_platform.config.layers.coercion import BOOL_TRUE
-
 _DEBUG_DEFAULTS: dict[str, bool] = {
     "development": True,
     "test":        True,
@@ -117,9 +102,8 @@ _DEBUG_DEFAULTS: dict[str, bool] = {
     "production":  False,
 }
 
-
 # =============================================================================
-# Registro canónico — consumido por test_invariants.py (SSoT sin heurística)
+# Registro canónico — SSOT sin heurística
 # =============================================================================
 
 _ENV_VAR_NAMES: frozenset[str] = frozenset({
@@ -130,22 +114,23 @@ _ENV_VAR_NAMES: frozenset[str] = frozenset({
     OCM_API_KEY, OCM_API_SECRET,
     # Storage / runtime
     OCM_STORAGE__DATA_LAKE__PATH,
-    OCM_DATA_LAKE_PATH,          # DEPRECATED — legacy, transicion controlada
+    OCM_DATA_LAKE_PATH,
     OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH,
     MARKET_DATA_HOST, MARKET_DATA_PORT, INGESTION_INTERVAL_S,
     OCM_EXCHANGE, OCM_MARKET_TYPE,
+    # Kafka
+    KAFKA_BOOTSTRAP_SERVERS,
+    KAFKA_CLIENT_ID_PRODUCER,
+    KAFKA_COMPRESSION_TYPE,
+    KAFKA_ACKS,
+    KAFKA_LINGER_MS,
+    KAFKA_MAX_BATCH_SIZE,
+    KAFKA_CONSUMER_SESSION_TIMEOUT_MS,
+    KAFKA_CONSUMER_HEARTBEAT_MS,
+    KAFKA_AUTO_OFFSET_RESET,
 })
-"""Registro explícito de todos los nombres de env var propios de OCM.
 
-Es el ÚNICO lugar donde se decide qué cuenta como "env var declarada".
-Los tests consumen este frozenset directamente — sin inferencia por heurística.
-Principio: Explicit over Implicit (PEP 20), SSOT.
-"""
-
-# Guard de sincronía: falla en import si _ENV_VAR_NAMES diverge de las
-# constantes UPPER_CASE del módulo. Hace imposible olvidar actualizar
-# _ENV_VAR_NAMES al añadir una nueva variable.
-# Principio: Fail-Fast en el punto más temprano posible.
+# Guard de sincronía — falla en import si _ENV_VAR_NAMES diverge
 _module_constants: frozenset[str] = frozenset(
     v for k, v in globals().items()
     if k == k.upper() and not k.startswith("_")
@@ -167,14 +152,4 @@ del _module_constants, _missing_from_registry, _missing_from_module
 
 
 def default_debug_for(env: str) -> bool:
-    """Retorna el valor por defecto de debug según el entorno.
-
-    Solo se usa cuando ``OCM_DEBUG`` no está definida explícitamente.
-
-    Args:
-        env: Nombre del entorno activo.
-
-    Returns:
-        True si el entorno es development o test, False en caso contrario.
-    """
     return _DEBUG_DEFAULTS.get(env, False)

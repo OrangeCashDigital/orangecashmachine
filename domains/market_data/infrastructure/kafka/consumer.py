@@ -5,26 +5,13 @@ market_data/infrastructure/kafka/consumer.py
 
 KafkaConsumerAdapter — implementación concreta de KafkaConsumerPort.
 
-Responsabilidad
----------------
-Consumir mensajes de Kafka usando aiokafka.AIOKafkaConsumer.
-Implementa KafkaConsumerPort — los stream processors solo conocen
-el port, nunca esta clase concreta (DIP).
+Factories por consumer group
+-----------------------------
+Cada método de clase `for_*` construye el consumer correcto para su rol.
+Los nombres de grupo vienen de kafka_producer.py (SSOT).
+Los nombres de env var vienen de env_vars.py (SSOT).
 
-Semántica at-least-once
------------------------
-poll() obtiene mensajes → processor los procesa → commit() confirma.
-Si el proceso muere entre poll y commit, los mensajes se reprocesarán.
-El processor garantiza idempotencia via event_id dedup.
-
-Consumer groups
----------------
-Cada grupo de consumers comparte la carga de particiones.
-Un grupo por rol funcional:
-  "ocm-bronze-writer"   — escribe a Iceberg Bronze
-  "ocm-quality-gate"    — valida y publica a ohlcv.validated
-
-Principios: DIP · SRP · SafeOps · Resiliencia · KISS
+Principios: DIP · SRP · SafeOps · SSOT · Kappa
 """
 from __future__ import annotations
 
@@ -33,63 +20,169 @@ from typing import List, Optional
 
 from loguru import logger
 
-from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort, KafkaMessage  # noqa: F401
+from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort, KafkaMessage  # noqa
+from market_data.ports.outbound.kafka_producer import (
+    TOPIC_OHLCV_RAW,
+    TOPIC_OHLCV_VALIDATED,
+    TOPIC_OHLCV_FEATURES,
+    TOPIC_SIGNALS_RAW,
+    TOPIC_SIGNALS_APPROVED,
+    GROUP_BRONZE_WRITER,
+    GROUP_FEATURES,
+    GROUP_STRATEGY,
+    GROUP_RISK_GATE,
+    GROUP_EXECUTION,
+    GROUP_PORTFOLIO,
+)
+from ocm_platform.config.env_vars import (
+    KAFKA_BOOTSTRAP_SERVERS,
+    KAFKA_AUTO_OFFSET_RESET,
+    KAFKA_CONSUMER_SESSION_TIMEOUT_MS,
+    KAFKA_CONSUMER_HEARTBEAT_MS,
+)
+
+
+def _broker() -> str:
+    """Bootstrap servers desde SSOT. No strings literales aquí."""
+    return os.environ.get(KAFKA_BOOTSTRAP_SERVERS, "kafka:9092")
+
+def _offset_reset() -> str:
+    return os.environ.get(KAFKA_AUTO_OFFSET_RESET, "earliest")
+
+def _session_timeout() -> int:
+    return int(os.environ.get(KAFKA_CONSUMER_SESSION_TIMEOUT_MS, "30000"))
+
+def _heartbeat() -> int:
+    return int(os.environ.get(KAFKA_CONSUMER_HEARTBEAT_MS, "10000"))
 
 
 class KafkaConsumerAdapter:
     """
     Adaptador concreto de KafkaConsumerPort usando aiokafka.
 
-    Parámetros
-    ----------
-    topics            : lista de tópicos a suscribirse
-    group_id          : consumer group — determina offset tracking
-    bootstrap_servers : host:port del broker
-    auto_offset_reset : "earliest" (replay desde inicio) | "latest" (solo nuevos)
-    enable_auto_commit: False — commit manual para at-least-once
-    max_poll_records  : máximo de mensajes por poll
+    Semántica at-least-once
+    -----------------------
+    poll() → procesar → commit(). Sin auto-commit.
+    El processor garantiza idempotencia via event_id + SeenFilter.
+
+    Kappa replay
+    ------------
+    seek_to_beginning() reposiciona al inicio de todas las particiones.
+    Llamar después de start() y antes del primer poll().
     """
 
     def __init__(
         self,
-        topics:             List[str],
-        group_id:           str,
-        bootstrap_servers:  str  = "kafka:9092",
-        auto_offset_reset:  str  = "earliest",
-        enable_auto_commit: bool = False,
-        max_poll_records:   int  = 500,
-        session_timeout_ms: int  = 30_000,
-        heartbeat_interval_ms: int = 10_000,
+        topics:                List[str],
+        group_id:              str,
+        bootstrap_servers:     str  = "kafka:9092",
+        auto_offset_reset:     str  = "earliest",
+        enable_auto_commit:    bool = False,
+        max_poll_records:      int  = 500,
+        session_timeout_ms:    int  = 30_000,
+        heartbeat_interval_ms: int  = 10_000,
     ) -> None:
-        self._topics              = topics
-        self._group_id            = group_id
-        self._bootstrap_servers   = bootstrap_servers
-        self._auto_offset_reset   = auto_offset_reset
-        self._enable_auto_commit  = enable_auto_commit
-        self._max_poll_records    = max_poll_records
-        self._session_timeout_ms  = session_timeout_ms
+        self._topics               = topics
+        self._group_id             = group_id
+        self._bootstrap_servers    = bootstrap_servers
+        self._auto_offset_reset    = auto_offset_reset
+        self._enable_auto_commit   = enable_auto_commit
+        self._max_poll_records     = max_poll_records
+        self._session_timeout_ms   = session_timeout_ms
         self._heartbeat_interval_ms = heartbeat_interval_ms
-        self._consumer            = None
-        self._started             = False
-        self._log                 = logger.bind(
-            component  = "KafkaConsumerAdapter",
-            group_id   = group_id,
-            topics     = topics,
+        self._consumer             = None
+        self._started              = False
+        self._log                  = logger.bind(
+            component = "KafkaConsumerAdapter",
+            group_id  = group_id,
+            topics    = topics,
         )
 
     # ------------------------------------------------------------------
-    # Factory
+    # Factories — un método por consumer group (SSOT de configuración)
     # ------------------------------------------------------------------
 
     @classmethod
     def for_bronze_writer(cls) -> "KafkaConsumerAdapter":
-        """Consumer para el BronzeWriter — consume ohlcv.raw."""
-        from market_data.ports.outbound.kafka_producer import TOPIC_OHLCV_RAW
+        """
+        ohlcv.raw → KafkaBronzeWriter.
+        Procesa TODOS los sources (live, backfill, replay).
+        """
         return cls(
             topics            = [TOPIC_OHLCV_RAW],
-            group_id          = "ocm-bronze-writer",
-            bootstrap_servers = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
+            group_id          = GROUP_BRONZE_WRITER,
+            bootstrap_servers = _broker(),
+            auto_offset_reset = _offset_reset(),
+            session_timeout_ms    = _session_timeout(),
+            heartbeat_interval_ms = _heartbeat(),
+        )
+
+    @classmethod
+    def for_feature_consumer(cls) -> "KafkaConsumerAdapter":
+        """
+        ohlcv.validated → FeatureConsumer → Gold Iceberg.
+        Procesa TODOS los sources.
+        """
+        return cls(
+            topics            = [TOPIC_OHLCV_VALIDATED],
+            group_id          = GROUP_FEATURES,
+            bootstrap_servers = _broker(),
+            auto_offset_reset = _offset_reset(),
+            session_timeout_ms    = _session_timeout(),
+            heartbeat_interval_ms = _heartbeat(),
+        )
+
+    @classmethod
+    def for_strategy_consumer(cls) -> "KafkaConsumerAdapter":
+        """
+        ohlcv.features → StrategyConsumer.
+        SOLO procesa source="live" — filtro en StrategyConsumer,
+        no aquí (el header x-ocm-source evita deserializar el body).
+        """
+        return cls(
+            topics            = [TOPIC_OHLCV_FEATURES],
+            group_id          = GROUP_STRATEGY,
+            bootstrap_servers = _broker(),
+            auto_offset_reset = "latest",   # estrategia: solo datos nuevos en vivo
+            session_timeout_ms    = _session_timeout(),
+            heartbeat_interval_ms = _heartbeat(),
+        )
+
+    @classmethod
+    def for_risk_gate(cls) -> "KafkaConsumerAdapter":
+        """signals.raw → RiskGateConsumer → signals.approved | rejected."""
+        return cls(
+            topics            = [TOPIC_SIGNALS_RAW],
+            group_id          = GROUP_RISK_GATE,
+            bootstrap_servers = _broker(),
+            auto_offset_reset = "latest",
+            session_timeout_ms    = _session_timeout(),
+            heartbeat_interval_ms = _heartbeat(),
+        )
+
+    @classmethod
+    def for_execution(cls) -> "KafkaConsumerAdapter":
+        """signals.approved → ExecutionConsumer → OMS → exchange."""
+        return cls(
+            topics            = [TOPIC_SIGNALS_APPROVED],
+            group_id          = GROUP_EXECUTION,
+            bootstrap_servers = _broker(),
+            auto_offset_reset = "latest",
+            session_timeout_ms    = _session_timeout(),
+            heartbeat_interval_ms = _heartbeat(),
+        )
+
+    @classmethod
+    def for_portfolio(cls) -> "KafkaConsumerAdapter":
+        """orders.filled → PortfolioConsumer → TradeTracker."""
+        from market_data.ports.outbound.kafka_producer import TOPIC_ORDERS_FILLED
+        return cls(
+            topics            = [TOPIC_ORDERS_FILLED],
+            group_id          = GROUP_PORTFOLIO,
+            bootstrap_servers = _broker(),
             auto_offset_reset = "earliest",
+            session_timeout_ms    = _session_timeout(),
+            heartbeat_interval_ms = _heartbeat(),
         )
 
     # ------------------------------------------------------------------
@@ -97,7 +190,7 @@ class KafkaConsumerAdapter:
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Conecta al broker y arranca el consumer. Idempotente."""
+        """Conecta al broker. Idempotente."""
         if self._started:
             return
         from aiokafka import AIOKafkaConsumer
@@ -116,7 +209,7 @@ class KafkaConsumerAdapter:
         self._log.info("kafka_consumer_started")
 
     async def close(self) -> None:
-        """Cierra la conexión limpiamente. Idempotente. SafeOps."""
+        """Cierra limpiamente. Idempotente. SafeOps."""
         if not self._started or self._consumer is None:
             return
         try:
@@ -127,7 +220,7 @@ class KafkaConsumerAdapter:
             self._log.warning("kafka_consumer_close_error", error=str(exc))
 
     # ------------------------------------------------------------------
-    # KafkaConsumerPort — implementación del contrato
+    # KafkaConsumerPort
     # ------------------------------------------------------------------
 
     async def poll(
@@ -135,9 +228,7 @@ class KafkaConsumerAdapter:
         timeout_ms:  int = 1_000,
         max_records: int = 500,
     ) -> List[KafkaMessage]:
-        """
-        Obtiene mensajes del broker. SafeOps: retorna [] si falla.
-        """
+        """Obtiene mensajes. SafeOps: retorna [] si falla."""
         if not self._started or self._consumer is None:
             return []
         try:
@@ -146,7 +237,7 @@ class KafkaConsumerAdapter:
                 max_records = max_records,
             )
             messages = []
-            for tp, records in raw.items():
+            for _tp, records in raw.items():
                 for r in records:
                     messages.append(KafkaMessage(
                         topic     = r.topic,
@@ -163,7 +254,7 @@ class KafkaConsumerAdapter:
             return []
 
     async def commit(self) -> None:
-        """Confirma offset del último mensaje procesado. SafeOps."""
+        """Confirma offset. SafeOps."""
         if not self._started or self._consumer is None:
             return
         try:
@@ -172,12 +263,17 @@ class KafkaConsumerAdapter:
             self._log.warning("kafka_commit_error", error=str(exc))
 
     async def seek_to_beginning(self) -> None:
-        """Reposiciona al inicio para replay Kappa. SafeOps."""
+        """
+        Kappa replay — reposiciona al inicio de todas las particiones.
+
+        Llamar después de start() y antes del primer poll().
+        SafeOps: no lanza si el consumer no está listo.
+        """
         if not self._started or self._consumer is None:
             return
         try:
             await self._consumer.seek_to_beginning()
-            self._log.info("kafka_consumer_seeked_to_beginning")
+            self._log.info("kafka_consumer_seeked_to_beginning — Kappa replay activo")
         except Exception as exc:
             self._log.warning("kafka_seek_error", error=str(exc))
 
