@@ -110,6 +110,7 @@ root_packages = [
     "portfolio",
     "app",
     "shared",
+    "infrastructure",
 ]
 
 [[tool.importlinter.contracts]]
