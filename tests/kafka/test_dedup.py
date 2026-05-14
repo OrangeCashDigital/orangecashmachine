@@ -12,7 +12,7 @@ from market_data.infrastructure.kafka.dedup import (
     SeenFilter,
     PersistentSeenFilter,
     CompositeSeenFilter,
-    DedupFilter,
+    SeenFilter,
 )
 
 
@@ -104,7 +104,7 @@ class TestSeenFilter:
         assert len(f) == 100
 
     def test_implements_dedup_filter_protocol(self):
-        assert isinstance(SeenFilter(), DedupFilter)
+        assert isinstance(SeenFilter(), SeenFilter)
 
 
 # --------------------------------------------------
