@@ -72,12 +72,19 @@ class GoldLoader:
         gold_path: object = None,
     ) -> None:
         self._exchange = exchange.lower() if exchange else None
-        ensure_gold_table()
-        self._table = get_catalog().load_table("gold.features")
-        logger.info(
-            "GoldLoader ready | backend=iceberg exchange={}",
+        self._table    = None  # lazy — inicializado en _get_table()
+        logger.debug(
+            "GoldLoader created | backend=iceberg exchange={}",
             self._exchange or "any",
         )
+
+    def _get_table(self):
+        """Lazy init del catálogo Iceberg — solo en el primer acceso real."""
+        if self._table is None:
+            ensure_gold_table()
+            self._table = get_catalog().load_table("gold.features")
+            logger.info("GoldLoader ready | backend=iceberg exchange={}", self._exchange or "any")
+        return self._table
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -119,7 +126,7 @@ class GoldLoader:
         snap_id    = self._resolve_snapshot(version, as_of)
 
         try:
-            scan = self._table.scan(
+            scan = self._get_table().scan(
                 row_filter      = row_filter,
                 selected_fields = tuple(columns) if columns else _BASE_COLS,
                 **({"snapshot_id": snap_id} if snap_id is not None else {}),
@@ -164,7 +171,7 @@ class GoldLoader:
         """
         try:
             result = []
-            for entry in self._table.history():
+            for entry in self._get_table().history():
                 snap = self._table.snapshot_by_id(entry.snapshot_id)
                 if snap is None:
                     continue
@@ -198,9 +205,9 @@ class GoldLoader:
         snap_id = self._resolve_snapshot(version, as_of)
         try:
             snap = (
-                self._table.snapshot_by_id(snap_id)
+                self._get_table().snapshot_by_id(snap_id)
                 if snap_id is not None
-                else self._table.current_snapshot()
+                else self._get_table().current_snapshot()
             )
             if snap is None:
                 return None
@@ -242,7 +249,7 @@ class GoldLoader:
         if as_of is not None:
             target_ms = int(pd.Timestamp(as_of, tz="UTC").timestamp() * 1000)
             try:
-                history  = self._table.history()
+                history  = self._get_table().history()
                 eligible = [s for s in history if s.timestamp_ms <= target_ms]
                 if not eligible:
                     raise VersionNotFoundError(

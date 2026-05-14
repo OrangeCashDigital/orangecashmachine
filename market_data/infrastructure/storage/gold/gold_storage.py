@@ -83,8 +83,9 @@ class GoldStorage:
     ) -> None:
         self._dry_run            = dry_run
         self._engineer_version   = _TRANSFORMER_VERSION
-        ensure_gold_table()
-        self._table = get_catalog().load_table("gold.features")
+        if not dry_run:
+            ensure_gold_table()
+            self._table = get_catalog().load_table("gold.features")
         logger.info(
             "GoldStorage ready | backend=iceberg dry_run={} transformer_version={}",
             self._dry_run,

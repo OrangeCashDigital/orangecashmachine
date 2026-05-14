@@ -11,10 +11,39 @@ las mismas garantías de auditoría o fallar de forma idéntica y explícita.
 from __future__ import annotations
 
 import pytest
+import yaml
 from omegaconf import OmegaConf
 from unittest.mock import patch
 
 from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _exchange_block() -> dict:
+    """
+    Bloque bybit mínimo que pasa L1-L5 del ConfigPipeline.
+
+    api_password requerido por el validador de credenciales cuando
+    enabled=True — campo obligatorio no vacío para bybit.
+    SSOT: si el schema cambia, este helper es el único punto a actualizar.
+    """
+    return {
+        "enabled":      True,
+        "api_key":      "test-key",
+        "api_secret":   "test-secret",
+        "api_password": "test-password",  # requerido por bybit credential validator
+    }
+
+
+def _pipeline_block() -> dict:
+    return {
+        "historical": {"start_date": "auto", "timeframes": ["1m"]},
+        "resample":   {"targets": ["5m"], "source_tf": "1m"},
+        "realtime":   {},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -25,14 +54,10 @@ from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
 def minimal_cfg():
     """DictConfig mínimo que pasa L1-L5 del pipeline."""
     return OmegaConf.create({
-        "exchanges": {"bybit": {"enabled": True, "api_key": "test", "api_secret": "test"}},
-        "pipeline": {
-            "historical": {"start_date": "auto", "timeframes": ["1m"]},
-            "resample":   {"targets": ["5m"], "source_tf": "1m"},
-            "realtime":   {},
-        },
+        "exchanges":   {"bybit": _exchange_block()},
+        "pipeline":    _pipeline_block(),
         "environment": {"name": "test"},
-        "safety": {"dry_run": True},
+        "safety":      {"dry_run": True},
     })
 
 
@@ -82,31 +107,35 @@ def test_write_snapshot_with_run_id_calls_writer(minimal_cfg):
 # Contrato standalone: run_id propagado → mismo comportamiento que hydra path
 # ---------------------------------------------------------------------------
 
-def test_standalone_propagates_run_id_to_snapshot(tmp_path, minimal_cfg):
+def test_standalone_propagates_run_id_to_snapshot(tmp_path, monkeypatch):
     """load_appconfig_standalone con run_id debe propagar al snapshot writer.
 
     Verifica que el standalone path tiene el mismo contrato de auditoría
     que el hydra path — sin configuration drift entre flows.
+
+    Nota: config_dir construido en tmp_path — sin dependencia de filesystem
+    real, compatible con cualquier entorno CI.
     """
-    import yaml
+    import os
     from ocm_platform.config.hydra_loader import load_appconfig_standalone
 
-    # Construir config_dir mínimo en tmp_path
+    # Aislar env vars que L2 aplicaría sobre credenciales del YAML de test
+    for key in list(os.environ.keys()):
+        if key.startswith(("OCM_EXCHANGE__", "OCM_STORAGE__")):
+            monkeypatch.delenv(key, raising=False)
+
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "base.yaml").write_text(yaml.dump({
-        "exchanges": {"bybit": {"enabled": True, "api_key": "test", "api_secret": "test"}},
-        "pipeline": {
-            "historical": {"start_date": "auto", "timeframes": ["1m"]},
-            "resample":   {"targets": ["5m"], "source_tf": "1m"},
-            "realtime":   {},
-        },
+        "exchanges":   {"bybit": _exchange_block()},
+        "pipeline":    _pipeline_block(),
         "environment": {"name": "test"},
-        "safety": {"dry_run": True},
+        "safety":      {"dry_run": True},
     }))
     (config_dir / "env").mkdir()
 
-    with patch("ocm_platform.config.hydra_loader.write_config_snapshot") as mock_write:
+    with patch("ocm_platform.config.loader.env_resolver.load_dotenv_for_env"), \
+         patch("ocm_platform.config.hydra_loader.write_config_snapshot") as mock_write:
         load_appconfig_standalone(
             env="test",
             config_dir=config_dir,

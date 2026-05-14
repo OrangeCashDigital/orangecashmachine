@@ -87,8 +87,9 @@ class BronzeStorage:
         self._exchange    = (exchange    or "unknown").lower()
         self._market_type = (market_type or "spot").lower()
         self._dry_run     = dry_run
-        ensure_bronze_table()
-        self._table = get_catalog().load_table("bronze.ohlcv")
+        if not dry_run:
+            ensure_bronze_table()
+            self._table = get_catalog().load_table("bronze.ohlcv")
         logger.debug(
             "BronzeStorage ready | exchange={} market_type={} dry_run={}",
             self._exchange, self._market_type, self._dry_run,

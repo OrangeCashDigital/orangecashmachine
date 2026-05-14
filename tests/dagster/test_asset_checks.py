@@ -1,9 +1,12 @@
 """
 Tests unitarios para infrastructure.dagster.assets.asset_checks.make_bronze_checks.
 
+Patch target correcto: "infrastructure.dagster.assets.asset_checks.IcebergStorageFactory"
+— el módulo usa IcebergStorageFactory().get_storage(), no IcebergStorage directamente.
+
 Principios:
   OCP      : make_bronze_checks extensible sin modificar código existente
-  DIP      : IcebergStorage, scan_gaps y RuntimeContext mockeados desde fuera
+  DIP      : IcebergStorageFactory, scan_gaps y RuntimeContext mockeados desde fuera
   Fail-fast: check retorna passed=False ante datos inválidos (no lanza)
   Clean Code: helpers _make_ocm / _make_df mantienen los tests DRY
 """
@@ -24,7 +27,6 @@ def _make_ocm() -> MagicMock:
     """OCMResource cuyo RuntimeContext no pasa por __post_init__ real."""
     runtime_ctx            = MagicMock()
     runtime_ctx.app_config = MagicMock()
-
     ocm = MagicMock()
     ocm.build_runtime_context.return_value = runtime_ctx
     return ocm
@@ -43,6 +45,13 @@ def _make_df(rows: int = 60) -> pd.DataFrame:
     })
 
 
+def _mock_factory(storage: MagicMock) -> MagicMock:
+    """IcebergStorageFactory mock que retorna storage en get_storage()."""
+    factory = MagicMock()
+    factory.return_value.get_storage.return_value = storage
+    return factory
+
+
 # ---------------------------------------------------------------------------
 # Row count check
 # ---------------------------------------------------------------------------
@@ -55,8 +64,13 @@ class TestRowCountCheck:
         ocm       = _make_ocm()
         context   = MagicMock()
 
-        with patch("infrastructure.dagster.assets.asset_checks.IcebergStorage") as mock_storage:
-            mock_storage.return_value.count.return_value = 100
+        mock_storage = MagicMock()
+        mock_storage.count.return_value = 100
+
+        with patch(
+            "infrastructure.dagster.assets.asset_checks.IcebergStorageFactory",
+            **{"return_value.get_storage.return_value": mock_storage},
+        ):
             result = row_check.op.compute_fn.decorated_fn(context=context, ocm=ocm)
 
         assert result.passed is True
@@ -67,8 +81,13 @@ class TestRowCountCheck:
         ocm       = _make_ocm()
         context   = MagicMock()
 
-        with patch("infrastructure.dagster.assets.asset_checks.IcebergStorage") as mock_storage:
-            mock_storage.return_value.count.return_value = 0
+        mock_storage = MagicMock()
+        mock_storage.count.return_value = 0
+
+        with patch(
+            "infrastructure.dagster.assets.asset_checks.IcebergStorageFactory",
+            **{"return_value.get_storage.return_value": mock_storage},
+        ):
             result = row_check.op.compute_fn.decorated_fn(context=context, ocm=ocm)
 
         assert result.passed is False
@@ -87,8 +106,13 @@ class TestFreshnessCheck:
         ocm             = _make_ocm()
         context         = MagicMock()
 
-        with patch("infrastructure.dagster.assets.asset_checks.IcebergStorage") as mock_storage:
-            mock_storage.return_value.get_last_timestamp.return_value = None
+        mock_storage = MagicMock()
+        mock_storage.get_last_timestamp.return_value = None
+
+        with patch(
+            "infrastructure.dagster.assets.asset_checks.IcebergStorageFactory",
+            **{"return_value.get_storage.return_value": mock_storage},
+        ):
             result = freshness_check.op.compute_fn.decorated_fn(context=context, ocm=ocm)
 
         assert result.passed is True
@@ -105,12 +129,18 @@ class TestGapCheck:
         gap_check = next(c for c in checks if "gap_severity" in list(c.check_specs)[0].name)
         ocm       = _make_ocm()
         context   = MagicMock()
+        df        = _make_df(rows=60)
 
-        df = _make_df(rows=60)
+        mock_storage = MagicMock()
+        mock_storage.load_ohlcv.return_value = df
 
-        with patch("infrastructure.dagster.assets.asset_checks.IcebergStorage") as mock_storage, \
-             patch("infrastructure.dagster.assets.asset_checks.scan_gaps", return_value=[]):
-            mock_storage.return_value.load_ohlcv.return_value = df
+        with patch(
+            "infrastructure.dagster.assets.asset_checks.IcebergStorageFactory",
+            **{"return_value.get_storage.return_value": mock_storage},
+        ), patch(
+            "infrastructure.dagster.assets.asset_checks.scan_gaps",
+            return_value=[],
+        ):
             result = gap_check.op.compute_fn.decorated_fn(context=context, ocm=ocm)
 
         assert result.passed is True
@@ -122,13 +152,18 @@ class TestGapCheck:
         context   = MagicMock()
 
         from market_data.processing.utils.gap_utils import GapRange
+        high_gap     = GapRange(start_ms=1_000_000, end_ms=2_000_000, expected=100)
+        df           = _make_df(rows=10)
+        mock_storage = MagicMock()
+        mock_storage.load_ohlcv.return_value = df
 
-        high_gap = GapRange(start_ms=1_000_000, end_ms=2_000_000, expected=100)
-        df       = _make_df(rows=10)
-
-        with patch("infrastructure.dagster.assets.asset_checks.IcebergStorage") as mock_storage, \
-             patch("infrastructure.dagster.assets.asset_checks.scan_gaps", return_value=[high_gap]):
-            mock_storage.return_value.load_ohlcv.return_value = df
+        with patch(
+            "infrastructure.dagster.assets.asset_checks.IcebergStorageFactory",
+            **{"return_value.get_storage.return_value": mock_storage},
+        ), patch(
+            "infrastructure.dagster.assets.asset_checks.scan_gaps",
+            return_value=[high_gap],
+        ):
             result = gap_check.op.compute_fn.decorated_fn(context=context, ocm=ocm)
 
         assert result.passed is False
@@ -141,8 +176,13 @@ class TestGapCheck:
         ocm       = _make_ocm()
         context   = MagicMock()
 
-        with patch("infrastructure.dagster.assets.asset_checks.IcebergStorage") as mock_storage:
-            mock_storage.return_value.load_ohlcv.return_value = None
+        mock_storage = MagicMock()
+        mock_storage.load_ohlcv.return_value = None
+
+        with patch(
+            "infrastructure.dagster.assets.asset_checks.IcebergStorageFactory",
+            **{"return_value.get_storage.return_value": mock_storage},
+        ):
             result = gap_check.op.compute_fn.decorated_fn(context=context, ocm=ocm)
 
         assert result.passed is True
