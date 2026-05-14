@@ -151,7 +151,7 @@ class TestGapCheck:
         ocm       = _make_ocm()
         context   = MagicMock()
 
-        from market_data.processing.utils.gap_utils import GapRange
+        from market_data.domain.value_objects.gap_utils import GapRange
         high_gap     = GapRange(start_ms=1_000_000, end_ms=2_000_000, expected=100)
         df           = _make_df(rows=10)
         mock_storage = MagicMock()

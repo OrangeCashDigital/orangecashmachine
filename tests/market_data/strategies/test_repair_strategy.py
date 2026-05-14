@@ -53,7 +53,7 @@ from market_data.domain.policies.base import (
 from market_data.domain.exceptions.processing_exceptions import (
     ChunkFetchError,
 )
-from market_data.processing.utils.gap_utils import GapRange
+from market_data.domain.value_objects.gap_utils import GapRange
 
 
 # ══════════════════════════════════════════════════════════════════════════════
