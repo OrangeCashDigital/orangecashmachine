@@ -107,7 +107,6 @@ root_packages = [
     "market_data",
     "ocm_platform",
     "trading",
-    "data_platform",
     "portfolio",
     "app",
     "shared",
@@ -125,7 +124,6 @@ forbidden_modules = [
     "trading",
     "portfolio",
     "ocm_platform",
-    "data_platform",
     "infrastructure",
     "app",
     "api",
@@ -146,14 +144,13 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-02: market_data no importa trading ni data_platform"
+name = "BC-02: market_data no importa trading"
 type = "forbidden"
 source_modules = [
     "market_data",
 ]
 forbidden_modules = [
     "trading",
-    "data_platform",
 ]
 
 [[tool.importlinter.contracts]]
@@ -186,7 +183,6 @@ source_modules = [
 forbidden_modules = [
     "market_data",
     "trading",
-    "data_platform",
     "infra",
 ]
 
@@ -208,7 +204,6 @@ source_modules = [
     "ocm_platform",
     "market_data",
     "trading",
-    "data_platform",
     "app",
     "portfolio",
 ]
@@ -225,7 +220,6 @@ source_modules = [
 forbidden_modules = [
     "trading",
     "portfolio",
-    "data_platform",
     "app",
     "api",
 ]
@@ -259,7 +253,6 @@ exclude = [
 packages = [
     "api",
     "app",
-    "data_platform",
     "shared",
     "domains/market_data",
     "domains/portfolio",
