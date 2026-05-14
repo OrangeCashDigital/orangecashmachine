@@ -50,7 +50,15 @@ from ocm_platform.runtime.context import RuntimeContext
 from ocm_platform.config import env_vars
 
 from ocm_platform.runtime import guard_context
-from ocm_platform.control_plane.orchestration.entrypoint import build_context
+# TODO(Patch P): implementar build_context() standalone sin Hydra.
+# ocm_platform.control_plane.orchestration fue eliminado (era stub vacío).
+# Pendiente: ocm_platform.config.loader con API no-Hydra + OHLCVPipeline.from_config().
+def build_context() -> "RuntimeContext":  # type: ignore[name-defined]
+    raise NotImplementedError(
+        "build_context() no implementado. "
+        "Patch P pendiente: bootstrap standalone sin Hydra. "
+        "Ver: platform/ocm_platform/config/loader/ y OHLCVPipeline.__init__."
+    )
 
 _log = bind_pipeline("market_data.main")
 
@@ -102,7 +110,12 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
     - Excepciones del flow se capturan — el loop nunca muere por 1 run fallido.
     - guard.record_error() activa kill switch si hay errores consecutivos.
     """
-    from ocm_platform.control_plane.orchestration.flows.batch_flow import market_data_flow
+    # TODO(Patch P): reemplazar con OHLCVPipeline construido desde AppConfig.
+    # market_data_flow era un ghost — nunca se implementó.
+    raise NotImplementedError(
+        "market_data_flow no implementado. "
+        "Patch P pendiente: OHLCVPipeline.from_config(app_config) o equivalente."
+    )
 
     log = _log.bind(component="ingestion_loop")
     log.info("ingestion_loop_started", interval_s=_INGESTION_INTERVAL_S)
@@ -113,7 +126,7 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
 
         try:
             guard.check()
-            await market_data_flow(runtime_context=ctx)
+            # market_data_flow eliminado — ver NotImplementedError arriba
             guard.record_success()
             _state.last_result = "success"
             log.info(
