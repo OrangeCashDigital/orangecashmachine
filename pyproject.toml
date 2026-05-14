@@ -111,6 +111,8 @@ root_packages = [
     "app",
     "shared",
     "infrastructure",
+    "research",
+    "api",
 ]
 
 [[tool.importlinter.contracts]]
@@ -198,7 +200,7 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-08: api is a pure consumer"
+name = "BC-08: domain layers must not depend on api (no upward dependency)"
 type = "forbidden"
 source_modules = [
     "ocm_platform",
@@ -222,6 +224,34 @@ forbidden_modules = [
     "portfolio",
     "app",
     "api",
+]
+
+[[tool.importlinter.contracts]]
+name = "BC-11: domain layers must not import research (no upward dependency)"
+type = "forbidden"
+source_modules = [
+    "market_data",
+    "trading",
+    "portfolio",
+    "ocm_platform",
+    "infrastructure",
+]
+forbidden_modules = [
+    "research",
+]
+
+[[tool.importlinter.contracts]]
+name = "BC-12: research is a read-only analytics consumer"
+type = "forbidden"
+source_modules = [
+    "research",
+]
+forbidden_modules = [
+    "trading",
+    "portfolio",
+    "app",
+    "api",
+    "infrastructure",
 ]
 
 [tool.pytest.ini_options]
@@ -254,6 +284,7 @@ packages = [
     "api",
     "app",
     "shared",
+    "research",
     "domains/market_data",
     "domains/portfolio",
     "domains/trading",
