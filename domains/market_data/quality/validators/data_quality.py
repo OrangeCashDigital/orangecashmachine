@@ -59,7 +59,7 @@ from loguru import logger
 from market_data.domain.exceptions import DataQualityError  # noqa: F401
 
 # utils internos
-from market_data.processing.utils.timeframe import timeframe_to_ms
+from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
 
 # ===========================================================================

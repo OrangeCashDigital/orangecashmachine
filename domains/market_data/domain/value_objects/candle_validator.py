@@ -55,7 +55,7 @@ from typing import List, Optional, Tuple
 
 # Tipos de dominio — importar desde domain, nunca definir aquí (DIP · SSOT)
 from market_data.domain.value_objects import QualityLabel, RawCandle
-from market_data.processing.utils.timeframe import timeframe_to_ms
+from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
 
 # ===========================================================================
