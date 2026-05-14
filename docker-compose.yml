@@ -83,7 +83,7 @@ services:
       '
     volumes:
       - type: bind
-        source: ./infra/monitoring
+        source: ./deploy/monitoring
         target: /config
         read_only: true
     networks:
@@ -206,13 +206,13 @@ services:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
     volumes:
       - type: bind
-        source: ./infra/monitoring/prometheus.yml
+        source: ./deploy/monitoring/prometheus.yml
         target: /etc/prometheus/prometheus.yml
         read_only: true
         bind:
           create_host_path: false
       - type: bind
-        source: ./infra/monitoring/alerts.yml
+        source: ./deploy/monitoring/alerts.yml
         target: /etc/prometheus/alerts.yml
         read_only: true
         bind:
@@ -251,7 +251,7 @@ services:
       - "${ALERTMANAGER_HOST_PORT:-9093}:9093"
     volumes:
       - type: bind
-        source: ./infra/monitoring/alertmanager.yml
+        source: ./deploy/monitoring/alertmanager.yml
         target: /etc/alertmanager/alertmanager.yml
         read_only: true
         bind:
@@ -288,8 +288,8 @@ services:
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/ocm_pipeline.json
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       prometheus:
         condition: service_healthy
@@ -319,7 +319,7 @@ services:
       - "${LOKI_HOST_PORT:-3100}:3100"
     volumes:
       - type: bind
-        source: ./infra/monitoring/loki/loki.yml
+        source: ./deploy/monitoring/loki/loki.yml
         target: /etc/loki/loki.yml
         read_only: true
         bind:
@@ -353,7 +353,7 @@ services:
       OCM_ENV: ${OCM_ENV:-production}
     volumes:
       - type: bind
-        source: ./infra/monitoring/promtail/promtail.yml
+        source: ./deploy/monitoring/promtail/promtail.yml
         target: /etc/promtail/promtail.yml
         read_only: true
         bind:
