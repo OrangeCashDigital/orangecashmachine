@@ -32,7 +32,7 @@ Observabilidad
 --------------
 - Logs estructurados con loguru en cada operación crítica
 - Métricas: kafka_messages_sent_total{topic, exchange}
-  (via StreamMetrics — reutiliza infraestructura existente)
+  (via KafkaMetrics — kafka/metrics.py)
 
 Principios: DIP · SRP · SafeOps · Resiliencia · KISS · OCP
 """

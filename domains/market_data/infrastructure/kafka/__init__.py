@@ -7,29 +7,38 @@ Implementaciones concretas Kafka para OCM.
 
 Módulos
 -------
-payloads   — EventPayload + OHLCVBar (wire format SSOT)
-metrics    — KafkaMetrics + timer (observabilidad Prometheus)
-dedup      — SeenFilter + CompositeSeenFilter (idempotencia)
-serializer — serialize / deserialize / make_routing_key
-producer   — KafkaProducerAdapter (implementa KafkaProducerPort)
-consumer   — KafkaConsumerAdapter (implementa KafkaConsumerPort)
-bronze_writer — KafkaBronzeWriter (stream processor Kappa)
+payloads      — EventPayload + OHLCVBar (wire format SSOT)
+metrics       — KafkaMetrics + timer (observabilidad Prometheus)
+dedup         — SeenFilter + CompositeSeenFilter (idempotencia L1+L2)
+serializer    — serialize / deserialize / make_routing_key
+producer      — KafkaProducerAdapter  (implementa KafkaProducerPort)
+consumer      — KafkaConsumerAdapter  (implementa KafkaConsumerPort)
+bronze_writer — KafkaBronzeWriter     (stream processor Kappa)
 
 Arquitectura
 ------------
-Exchanges / Nodes / APIs
-        ↓
-  Kafka (source of truth)
-        ↓
-  Stream processors (KafkaBronzeWriter → Iceberg Bronze)
-        ↓
-  Silver / Gold (Dagster jobs)
-        ↓
-  Research / ML / Execution
+  Exchanges / Nodes / APIs
+          ↓
+    Kafka (único event backbone — source of truth)
+          ↓
+    KafkaBronzeWriter (ohlcv.raw → Iceberg Bronze)
+          ↓
+    Silver / Gold — Dagster jobs (materialización batch)
+          ↓
+    Research / ML / Execution
 
-Kafka es el único event backbone.
-Redis queda como cache de estado (cursores, circuit breakers) — no como
-event log ni streaming transport.
+Roles explícitos
+----------------
+  Kafka  → event log durable · replay · DLQ · source of truth
+  Redis  → state cache · cursores · circuit breakers (NO event transport)
+  Dagster→ orchestration · asset materialization · schedules
+
+Tópicos canónicos (SSOT en ports/outbound/kafka_producer.py)
+------------------------------------------------------------
+  ohlcv.raw       — velas crudas CCXT → Bronze
+  ohlcv.validated — post quality-gate → Silver
+  ohlcv.features  — features Gold computados
+  dlq.ohlcv       — Dead Letter Queue
 
 Principios: DIP · SRP · SafeOps · Kappa · at-least-once · SSOT
 """
