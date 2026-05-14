@@ -53,7 +53,6 @@ __all__ = ["safe_symbol", "normalize_ohlcv_df"]
 
 # ==========================================================
 # Timeframe constants — ELIMINADO (SSOT violation)
-# Usar: from domain.value_objects.timeframe import timeframe_to_ms
 # ==========================================================
 
 

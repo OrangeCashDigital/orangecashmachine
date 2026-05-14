@@ -1,23 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-shared/types/timeframe.py
-==========================
+shared/types/timeframe.py — TOMBSTONE
+======================================
 
-⚠️  TOMBSTONE — re-exporta desde el SSOT canónico.
+⚠️  DEPRECATED — scheduled for removal after 2026-08-01
 
-La fuente de verdad es:
-  market_data.domain.value_objects.timeframe
+SSOT canónico:
+    market_data.domain.value_objects.timeframe
 
-Este módulo existe para no romper imports legacy.
-Migrar todos los callers a la ruta canónica y eliminar este archivo.
+Este módulo re-exporta sin lógica propia. No añadir lógica aquí.
 
-Migración:
-  ✗ from shared.types.timeframe import Timeframe
-  ✔ from market_data.domain.value_objects.timeframe import Timeframe
+Migración de callers:
+    ✗  from shared.types.timeframe import Timeframe
+    ✗  from shared.types import Timeframe
+    ✔  from market_data.domain.value_objects.timeframe import Timeframe
 
-Principios: SSOT · OCP
+Estado de callers conocidos al 2026-05-14:
+    - shared/types/ohlcv.py          → MIGRADO (Cirugía A)
+    - shared/types/__init__.py       → re-exporta Timeframe (tolerable como API pública)
+
+Eliminar este archivo cuando __init__.py importe desde domain/ directamente.
+
+Principles: SSOT · OCP · YAGNI
 """
 from __future__ import annotations
+import warnings
+
+warnings.warn(
+    "shared.types.timeframe está deprecated. "
+    "Usa: from market_data.domain.value_objects.timeframe import Timeframe",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from market_data.domain.value_objects.timeframe import (  # noqa: F401
     Timeframe,
