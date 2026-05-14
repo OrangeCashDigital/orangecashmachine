@@ -22,7 +22,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 
-from domain.boundaries import FeatureSource
+from shared.contracts.boundaries import FeatureSource
 from trading.execution.paper_bot import PaperBot, PaperOrder
 from trading.risk.models import PositionConfig, RiskConfig, SignalFilterConfig
 from trading.strategies.base import Signal

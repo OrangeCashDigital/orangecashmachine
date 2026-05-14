@@ -31,7 +31,7 @@ from typing import Optional
 
 from loguru import logger
 
-from domain.boundaries import SignalProtocol  # DIP — risk depende de abstraccion
+from shared.contracts.boundaries import SignalProtocol  # DIP — risk depende de abstraccion
 from trading.risk.models import RiskConfig
 
 

@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from domain.value_objects.signal import Signal  # DIP — order depende de domain, no de strategies
+from shared.types.signal import Signal  # DIP — order depende de domain, no de strategies
 
 
 # ---------------------------------------------------------------------------

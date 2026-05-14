@@ -19,7 +19,7 @@ import pandas as pd
 
 # Signal vive en domain/ — re-exportado aquí para backwards compatibility.
 # Importar directamente desde domain.value_objects en código nuevo.
-from domain.value_objects.signal import Signal, SignalType  # noqa: F401
+from shared.types.signal import Signal, SignalType  # noqa: F401
 
 
 class BaseStrategy(ABC):

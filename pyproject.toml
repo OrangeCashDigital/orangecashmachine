@@ -98,6 +98,26 @@ dev = [
     "httpx>=0.28.1",
 ]
 
+
+[[tool.importlinter.contracts]]
+name    = "BC-09: shared is dependency-free (stdlib + third-party only)"
+type    = "forbidden"
+source_modules = ["shared"]
+forbidden_modules = [
+    "market_data",
+    "trading",
+    "portfolio",
+    "ocm_platform",
+    "data_platform",
+    "infrastructure",
+    "app",
+    "api",
+    "domain",
+]
+# Garantía: shared/ es el nivel más bajo del DAG de dependencias.
+# Cualquier violación aquí crea un ciclo o una dependencia oculta.
+# Fail-Fast: esto se verifica en CI con: uv run lint-imports
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -120,6 +140,7 @@ exclude = ["tests/", ".venv/"]
 
 [tool.hatch.build.targets.wheel]
 packages = [
+    "shared",
     "api",
     "ocm_platform",
     "core",
@@ -136,7 +157,7 @@ packages = [
 # =============================================================================
 [tool.importlinter]
 include_external_packages = true
-root_packages = ["market_data", "ocm_platform", "trading", "data_platform", "portfolio", "app"]
+root_packages = ["market_data", "ocm_platform", "trading", "data_platform", "portfolio", "app", "shared", "domain"]
 
 [[tool.importlinter.contracts]]
 name    = "BC-01: no direct ccxt_adapter imports"
