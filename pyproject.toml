@@ -163,11 +163,12 @@ root_packages = ["market_data", "ocm_platform", "trading", "data_platform", "por
 name    = "BC-01: no direct ccxt_adapter imports"
 type    = "forbidden"
 source_modules = [
-    "market_data.ingestion",
-    "market_data.processing",
+    "market_data.application",
     "market_data.quality",
+    "market_data.infrastructure",
     "trading",
 ]
+# market_data.ingestion no existe — renombrado a market_data.application
 forbidden_modules = ["market_data.adapters.exchange.ccxt_adapter"]
 # ignore_imports: eliminado — ccxt_adapter ya no se importa directamente (BC-01 limpio)
 
