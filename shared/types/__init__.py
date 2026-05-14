@@ -11,7 +11,7 @@ Solo stdlib y third-party permitidos.
 
 Contrato: BC-09 en pyproject.toml lo hace cumplir automáticamente.
 """
-from market_data.domain.value_objects.timeframe import Timeframe
+from shared.types.timeframe import Timeframe
 from shared.types.signal import Signal, SignalType
 from shared.types.ohlcv import OHLCVBar
 from shared.types.order_events import OrderFilled, OrderRejected, OrderCancelled
