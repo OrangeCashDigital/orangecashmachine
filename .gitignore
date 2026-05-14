@@ -57,3 +57,5 @@ data_platform/iceberg_warehouse/
 *.db-shm
 data/lineage/*.db
 data/quality/*.db
+.coverage
+.import_linter_cache/
