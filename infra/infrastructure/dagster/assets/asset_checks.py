@@ -105,7 +105,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> List:
         return AssetCheckResult(
             passed      = passed,
             description = f"{count} filas presentes",
-            severity    = AssetCheckSeverity.ERROR if not passed else None,
+            **({"severity": AssetCheckSeverity.ERROR} if not passed else {}),
             metadata    = {"row_count": count},
         )
 
@@ -159,7 +159,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> List:
                 "Schema OK" if passed
                 else f"Columnas faltantes: {sorted(missing_cols)}"
             ),
-            severity    = AssetCheckSeverity.ERROR if not passed else None,
+            **({"severity": AssetCheckSeverity.ERROR} if not passed else {}),
             metadata    = {
                 "required": str(sorted(_REQUIRED_COLS)),
                 "present":  str(sorted(actual_cols & _REQUIRED_COLS)),
@@ -215,7 +215,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> List:
                 if passed
                 else f"Dato desactualizado: {age_hours:.1f}h sin actualizar"
             ),
-            severity    = AssetCheckSeverity.WARN if not passed else None,
+            **({"severity": AssetCheckSeverity.WARN} if not passed else {}),
             metadata    = {"age_hours": round(age_hours, 2)},
         )
 
@@ -263,7 +263,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> List:
                 if passed
                 else f"{len(high_gaps)} gap(s) HIGH detectados en {symbol}/{tf}"
             ),
-            severity    = AssetCheckSeverity.WARN if not passed else None,
+            **({"severity": AssetCheckSeverity.WARN} if not passed else {}),
             metadata    = {
                 "total_gaps": len(gaps),
                 "high_gaps":  len(high_gaps),
