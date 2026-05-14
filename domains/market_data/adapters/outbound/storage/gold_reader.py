@@ -34,7 +34,7 @@ import pandas as pd
 from loguru import logger
 from pyiceberg.expressions import And, EqualTo
 
-from data_platform.ohlcv_utils import (
+from market_data.domain.exceptions import (
     DataNotFoundError,
     DataReadError,
     VersionNotFoundError,

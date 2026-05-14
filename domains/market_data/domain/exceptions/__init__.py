@@ -216,6 +216,38 @@ class ExchangeCircuitOpenError(ExchangeAdapterError):
 
 
 # ===========================================================================
+# Gold Reader / Data Access
+# ===========================================================================
+
+class DataNotFoundError(StorageError):
+    """
+    No se encontraron datos para el query solicitado.
+
+    Fail-fast: load_features lanza esto cuando el scan Iceberg
+    retorna un DataFrame vacío. El llamador debe manejar explícitamente.
+    """
+
+
+class DataReadError(StorageError):
+    """
+    Error de lectura desde el storage (Iceberg u otro backend).
+
+    Distingue fallos de I/O/deserialización de ausencia de datos
+    (DataNotFoundError). El mensaje incluye contexto de exchange/symbol.
+    """
+
+
+class VersionNotFoundError(StorageError):
+    """
+    El snapshot/versión solicitado no existe en el historial Iceberg.
+
+    Lanzado por GoldReader._resolve_snapshot cuando:
+    - as_of apunta antes del primer snapshot disponible
+    - version usa formato legacy 'v000003' incompatible con Iceberg
+    - snapshot_id entero no existe en el catálogo
+    """
+
+# ===========================================================================
 # __all__ — API pública explícita
 # ===========================================================================
 
@@ -248,4 +280,8 @@ __all__ = [
     "UnsupportedExchangeError",
     "ExchangeConnectionError",
     "ExchangeCircuitOpenError",
+    # Gold / Data Access
+    "DataNotFoundError",
+    "DataReadError",
+    "VersionNotFoundError",
 ]
