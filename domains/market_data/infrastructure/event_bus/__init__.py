@@ -3,25 +3,30 @@
 market_data/infrastructure/event_bus/
 =======================================
 
-Event bus infrastructure — implementaciones concretas del EventBusPort.
+Event bus in-process para DomainEvents.
 
-Exports
--------
-InMemoryEventBus : implementación in-process, thread-safe (desarrollo + tests)
-event_bus        : singleton global para uso en single-process production
+Responsabilidad
+---------------
+Pub/sub sincrónico entre adapters inbound y application consumers
+dentro del mismo proceso. Transporta DomainEvents (OHLCVBatchReceived,
+LineageEvent, etc.) — no wire payloads.
 
-Swap a producción distribuida
------------------------------
-Sustituir event_bus por RedisStreamsEventBus o KafkaEventBus
-sin cambiar ningún caller — solo el wiring en bootstrap/.
+Nota de arquitectura
+--------------------
+Este bus es distinto del pipeline Kafka:
+  - EventBus (este módulo) → DomainEvents in-process (mismo proceso)
+  - Kafka                  → EventPayload cross-process (source of truth)
 
-Principios: OCP · DIP · SSOT (singleton declarado aquí, no en callers)
+Implementaciones
+----------------
+InMemoryEventBus — in-process, thread-safe. Único backend necesario
+                   para uso single-process (desarrollo, tests, producción).
+
+Principios: SRP · DIP · OCP · thread-safe · fail-soft
 """
 from market_data.infrastructure.event_bus.in_memory import InMemoryEventBus  # noqa: F401
 
-#: Singleton global — único event bus del proceso.
-#: Los adapters y consumers lo inyectan via bootstrap/; nunca lo importan directo.
-#: En producción distribuida: reemplazar por RedisStreamsEventBus en bootstrap/.
+#: Singleton de proceso — compartido por adapters y consumers del mismo proceso.
 event_bus: InMemoryEventBus = InMemoryEventBus()
 
 __all__ = [

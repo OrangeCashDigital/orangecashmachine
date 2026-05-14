@@ -1,21 +1,24 @@
-# ports/outbound/__init__.py
-# Driven (secondary) ports — interfaces que el dominio usa para llamar
-# a servicios externos. Las implementaciones concretas viven en
-# adapters/outbound/ e infrastructure/.
-#
-# Importar siempre desde el submódulo específico:
-#   from market_data.ports.outbound.storage import OHLCVStorage
-# Este __init__.py NO re-exporta para evitar imports circulares.
+# -*- coding: utf-8 -*-
+"""
+market_data/ports/outbound/
+============================
 
-# Kafka ports — añadidos en Bloque 3 (migración Kappa)
-from market_data.ports.outbound.kafka_producer import (  # noqa: F401
-    KafkaProducerPort,
-    TOPIC_OHLCV_RAW,
-    TOPIC_OHLCV_VALIDATED,
-    TOPIC_OHLCV_FEATURES,
-    TOPIC_DLQ,
-)
-from market_data.ports.outbound.kafka_consumer import (  # noqa: F401
-    KafkaConsumerPort,
-    KafkaMessage,
-)
+Driven (secondary) ports — interfaces que el dominio y la aplicación
+usan para llamar a servicios externos.
+
+Importar siempre desde el submódulo específico:
+  from market_data.ports.outbound.kafka_producer import KafkaProducerPort
+  from market_data.ports.outbound.storage import OHLCVStorage
+
+Este __init__.py NO re-exporta para evitar imports circulares.
+
+Puertos disponibles
+-------------------
+kafka_producer  — KafkaProducerPort + constantes TOPIC_*
+kafka_consumer  — KafkaConsumerPort + KafkaMessage
+storage         — OHLCVStorage (Bronze / Silver / Gold)
+exchange        — ExchangePort (CCXT adapter contract)
+observability   — MetricsPort · LineagePort · GitHashPort
+quality         — AnomalyRegistryPort
+event_bus       — EventBusPort (DomainEvent bus in-process)
+"""

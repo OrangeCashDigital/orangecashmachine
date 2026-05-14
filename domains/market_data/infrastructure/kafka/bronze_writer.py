@@ -45,7 +45,7 @@ from typing import Optional
 from loguru import logger
 
 from market_data.infrastructure.kafka.serializer import deserialize
-from market_data.infrastructure.streaming.dedup  import SeenFilter
+from market_data.infrastructure.kafka.dedup      import SeenFilter
 from market_data.ports.outbound.kafka_consumer   import KafkaConsumerPort
 from market_data.ports.outbound.kafka_producer   import KafkaProducerPort, TOPIC_DLQ
 
