@@ -281,20 +281,24 @@ exclude = [
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "api",
-    "app",
+    "packages/market_data",
+    "packages/trading",
+    "packages/portfolio",
+    "ocm",
+    "infrastructure/dagster",
+    "infrastructure/redis",
+    "apps/api",
+    "apps/app",
+    "apps/research",
     "shared",
-    "research",
-    "domains/market_data",
-    "domains/portfolio",
-    "domains/trading",
-    "infra/infrastructure",
-    "infra/ocm_platform",
 ]
 
 [tool.hatch.build.targets.wheel.sources]
-"domains/market_data" = "market_data"
-"domains/portfolio" = "portfolio"
-"domains/trading" = "trading"
-"infra/ocm_platform" = "ocm_platform"
-"infra/infrastructure" = "infrastructure"
+"packages/market_data"  = "market_data"
+"packages/trading"      = "trading"
+"packages/portfolio"    = "portfolio"
+"infrastructure/dagster" = "infrastructure/dagster"
+"infrastructure/redis"  = "infrastructure/redis"
+"apps/api"              = "api"
+"apps/app"              = "app"
+"apps/research"         = "research"
