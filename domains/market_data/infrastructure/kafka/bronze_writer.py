@@ -44,6 +44,8 @@ from typing import Optional
 
 from loguru import logger
 
+import pandas as pd
+
 from market_data.infrastructure.kafka.serializer import deserialize
 from market_data.infrastructure.kafka.dedup      import SeenFilter
 from market_data.ports.outbound.kafka_consumer   import KafkaConsumerPort
@@ -189,27 +191,55 @@ class KafkaBronzeWriter:
             return False
         self._dedup.mark_seen(event.event_id)
 
-        # ── Escribir a Bronze ─────────────────────────────────────────
+        # ── Construir DataFrame desde EventPayload.bars ──────────────────
+        # SRP: KafkaBronzeWriter adapta EventPayload → BronzeStorage.
+        # BronzeStorage recibe df — no conoce OHLCVBar (DIP · bounded context).
+        if not event.bars:
+            self._log.bind(event_id=event.event_id).warning(
+                "bronze_writer_empty_bars — mensaje descartado"
+            )
+            return False
+
+        df = pd.DataFrame(
+            [
+                {
+                    "timestamp": pd.Timestamp(b.ts, unit="ms", tz="UTC"),
+                    "open":      b.open,
+                    "high":      b.high,
+                    "low":       b.low,
+                    "close":     b.close,
+                    "volume":    b.volume,
+                }
+                for b in event.bars
+            ]
+        )
+
+        # ── Escribir a Bronze via append() ────────────────────────────────
         try:
             await asyncio.to_thread(
-                self._bronze.write,
-                exchange  = event.exchange,
+                self._bronze.append,
+                df        = df,
                 symbol    = event.symbol,
                 timeframe = event.timeframe,
-                bars      = [b.to_dict() for b in event.bars],
+                run_id    = event.event_id,  # event_id como run_id → trazabilidad
             )
             self._log.bind(
                 event_id  = event.event_id,
                 exchange  = event.exchange,
                 symbol    = event.symbol,
+                timeframe = event.timeframe,
                 bars      = len(event.bars),
+                source    = getattr(event, "source", "unknown"),
             ).info("bronze_written")
             return True
         except Exception as exc:
             self._log.error(
                 "bronze_write_error",
-                event_id = event.event_id,
-                error    = str(exc),
+                event_id  = event.event_id,
+                exchange  = event.exchange,
+                symbol    = event.symbol,
+                timeframe = event.timeframe,
+                error     = str(exc),
             )
             return False
 

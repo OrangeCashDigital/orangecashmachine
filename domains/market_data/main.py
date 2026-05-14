@@ -50,14 +50,25 @@ from ocm_platform.runtime.context import RuntimeContext
 from ocm_platform.config import env_vars
 
 from ocm_platform.runtime import guard_context
-# TODO(Patch P): implementar build_context() standalone sin Hydra.
-# ocm_platform.control_plane.orchestration fue eliminado (era stub vacío).
-# Pendiente: ocm_platform.config.loader con API no-Hydra + OHLCVPipeline.from_config().
-def build_context() -> "RuntimeContext":  # type: ignore[name-defined]
-    raise NotImplementedError(
-        "build_context() no implementado. "
-        "Patch P pendiente: bootstrap standalone sin Hydra. "
-        "Ver: platform/ocm_platform/config/loader/ y OHLCVPipeline.__init__."
+def build_context() -> RuntimeContext:
+    """
+    Construye RuntimeContext standalone — sin Hydra, sin CLI.
+
+    Usa load_appconfig_standalone() (mismo path que OCMResource en Dagster).
+    SSOT: RunConfig.from_env() resuelve OCM_ENV, OCM_DEBUG, run_id.
+
+    Fail-Fast: lanza ConfigurationError si AppConfig es inválido.
+    """
+    from datetime import datetime, timezone
+    from ocm_platform.config.hydra_loader import load_appconfig_standalone
+    from ocm_platform.runtime.run_config import RunConfig
+
+    run_cfg = RunConfig.from_env()
+    app_cfg = load_appconfig_standalone(env=run_cfg.env)
+    return RuntimeContext(
+        app_config = app_cfg,
+        run_config = run_cfg,
+        started_at = datetime.now(timezone.utc),
     )
 
 _log = bind_pipeline("market_data.main")
@@ -110,15 +121,17 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
     - Excepciones del flow se capturan — el loop nunca muere por 1 run fallido.
     - guard.record_error() activa kill switch si hay errores consecutivos.
     """
-    # TODO(Patch P): reemplazar con OHLCVPipeline construido desde AppConfig.
-    # market_data_flow era un ghost — nunca se implementó.
-    raise NotImplementedError(
-        "market_data_flow no implementado. "
-        "Patch P pendiente: OHLCVPipeline.from_config(app_config) o equivalente."
-    )
-
     log = _log.bind(component="ingestion_loop")
     log.info("ingestion_loop_started", interval_s=_INGESTION_INTERVAL_S)
+
+    # Imports lazy — application layer depende de infra, no al revés (DIP)
+    from market_data.application.use_cases.pipeline_orchestrator import (
+        PipelineOrchestrator,
+        PipelineRequest,
+    )
+
+    orchestrator = PipelineOrchestrator()
+    app_cfg      = ctx.app_config
 
     while not guard.should_stop():
         run_start = time.monotonic()
@@ -126,7 +139,36 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
 
         try:
             guard.check()
-            # market_data_flow eliminado — ver NotImplementedError arriba
+
+            # Ejecutar pipeline por cada exchange configurado
+            for exc_name in app_cfg.exchange_names:
+                exc_cfg = app_cfg.get_exchange(exc_name)
+                if exc_cfg is None:
+                    continue
+
+                for market_type, symbols in [
+                    ("spot",    getattr(exc_cfg.markets, "spot_symbols",    [])),
+                    ("futures", getattr(exc_cfg.markets, "futures_symbols", [])),
+                ]:
+                    if not symbols:
+                        continue
+
+                    request = PipelineRequest(
+                        exchange           = exc_name,
+                        market_type        = market_type,
+                        pipeline           = "ohlcv",
+                        mode               = "incremental",
+                        credentials        = exc_cfg.ccxt_credentials(),
+                        resilience         = exc_cfg.resilience,
+                        symbols            = symbols,
+                        timeframes         = app_cfg.pipeline.historical.timeframes,
+                        start_date         = app_cfg.pipeline.historical.start_date,
+                        auto_lookback_days = app_cfg.pipeline.historical.auto_lookback_days,
+                        run_id             = ctx.run_id,
+                        dry_run            = app_cfg.safety.dry_run,
+                    )
+                    await orchestrator.run(request)
+
             guard.record_success()
             _state.last_result = "success"
             log.info(
@@ -159,6 +201,72 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
             raise
 
     log.info("ingestion_loop_stopped", reason=guard.stop_reason)
+
+
+async def _bronze_writer_loop() -> None:
+    """
+    Loop permanente del KafkaBronzeWriter — Kappa stream processor.
+
+    Responsabilidad: consumir ohlcv.raw → escribir a Bronze Iceberg.
+    Corre en paralelo al _ingestion_loop — son dos tareas independientes.
+
+    Ciclo de vida:
+      start() → run() [loop poll/process/commit] → stop() en CancelledError
+
+    SafeOps:
+      - start() falla → log error + return (no muere el proceso)
+      - Errores en run() → KafkaBronzeWriter los captura internamente
+      - CancelledError → stop() + return (shutdown limpio)
+
+    Degraded mode:
+      Si Kafka no está disponible (broker down), start() falla y el loop
+      retorna inmediatamente. El _ingestion_loop sigue corriendo en modo
+      degradado (escribe directo a Iceberg via ctx.kafka_producer=None path).
+    """
+    log = _log.bind(component="bronze_writer_loop")
+    log.info("bronze_writer_loop_starting")
+
+    # Imports lazy — infra no se importa en module level (DIP · startup cost)
+    try:
+        from market_data.infrastructure.kafka.consumer import KafkaConsumerAdapter
+        from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+        from market_data.infrastructure.kafka.bronze_writer import KafkaBronzeWriter
+        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
+    except ImportError as exc:
+        log.error("bronze_writer_loop_import_error", error=str(exc))
+        return
+
+    # Construir dependencias — BronzeStorage sin exchange fijo:
+    # el exchange se extrae del EventPayload en cada mensaje (SSOT del wire format).
+    bronze   = BronzeStorage()  # exchange=None → se setea por mensaje
+    consumer = KafkaConsumerAdapter.for_bronze_writer()
+
+    # DLQ producer — opcional, SafeOps: None = mensajes malos solo se loguean
+    try:
+        dlq_producer = KafkaProducerAdapter.from_env()
+    except Exception as exc:
+        log.warning("bronze_writer_dlq_producer_failed", error=str(exc))
+        dlq_producer = None
+
+    writer = KafkaBronzeWriter(
+        consumer       = consumer,
+        bronze_storage = bronze,
+        dlq_producer   = dlq_producer,
+    )
+
+    try:
+        await writer.start()
+        log.info("bronze_writer_loop_started — consuming ohlcv.raw → Bronze")
+        await writer.run()
+    except asyncio.CancelledError:
+        log.info("bronze_writer_loop_cancelled — stopping")
+        await writer.stop()
+    except Exception as exc:
+        log.error("bronze_writer_loop_error", error=str(exc))
+        try:
+            await writer.stop()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +327,14 @@ async def _lifespan(app: FastAPI):
         name="market_data_ingestion",
     )
 
+    # Kappa: KafkaBronzeWriter corre en paralelo — consume ohlcv.raw → Bronze.
+    # Independiente del ingestion_loop — son bounded contexts distintos.
+    # SafeOps: si Kafka no está disponible, el loop retorna sin matar el proceso.
+    bronze_writer_task = asyncio.create_task(
+        _bronze_writer_loop(),
+        name="kafka_bronze_writer",
+    )
+
     _log.info(
         "service_started",
         service=_SERVICE_NAME,
@@ -238,12 +354,13 @@ async def _lifespan(app: FastAPI):
         guard.trigger("service_shutdown")
         guard_context.set_guard(None)
 
-        if not ingestion_task.done():
-            ingestion_task.cancel()
-            try:
-                await asyncio.wait_for(asyncio.shield(ingestion_task), timeout=10.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
+        for task in (ingestion_task, bronze_writer_task):
+            if not task.done():
+                task.cancel()
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
 
         _log.info(
             "service_stopped",
