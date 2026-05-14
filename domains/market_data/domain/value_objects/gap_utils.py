@@ -37,7 +37,7 @@ import pandas as pd
 
 # GapRange importado desde domain — DIP correcto (utils depende del dominio)
 from market_data.domain.value_objects import GapRange  # noqa: F401
-from market_data.processing.utils.timeframe import timeframe_to_ms
+from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
 # Tolerancia: gap debe ser ≥ 2× el timeframe para ser detectado.
 # Evita falsos positivos por microsegundos de desfase en timestamps.
