@@ -117,7 +117,7 @@ def make_repair_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
 
         metadata = {
             "rows_healed":  summary.total_rows,
-            "pairs_ok":     summary.ok,
+            "pairs_ok":     summary.succeeded,
             "pairs_failed": summary.failed,
             "duration_ms":  summary.duration_ms,
             "status":       summary.status,

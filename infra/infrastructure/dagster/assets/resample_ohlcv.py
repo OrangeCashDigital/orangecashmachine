@@ -25,13 +25,9 @@ from dagster import AssetIn, Output, asset
 
 from infrastructure.dagster.resources import OCMResource
 from market_data.application import ResampleUseCase, ResampleRequest
-from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
-
-# Instancia del use case — singleton a nivel de módulo (DIP · SafeOps)
-# La factory se inyecta aquí: composition root del adapter.
-_resample_use_case = ResampleUseCase(
-    storage_factory = IcebergStorageFactory(),
-)
+# _resample_use_case se construye lazy en el asset (DIP · Composition Root).
+# IcebergStorageFactory no se carga en import-time — solo al primer run.
+_resample_use_case = None
 
 
 def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
@@ -83,6 +79,12 @@ def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
             run_id      = runtime_ctx.run_id,
         )
 
+        global _resample_use_case
+        if _resample_use_case is None:
+            from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+            _resample_use_case = ResampleUseCase(
+                storage_factory = IcebergStorageFactory(),
+            )
         result = _resample_use_case.execute(request)
 
         if result.status == "skipped":

@@ -1,88 +1,117 @@
-# infrastructure/dagster/assets/asset_checks.py
+# -*- coding: utf-8 -*-
 """
-Asset checks para el bronze layer de OHLCV.
+infrastructure/dagster/assets/asset_checks.py
+=============================================
 
-Cada exchange/market_type tiene 4 checks:
-  1. row_count    — verifica que existan datos (filas > 0)
-  2. schema       — verifica columnas OHLCV requeridas
-  3. freshness    — verifica que el dato no sea demasiado antiguo
-  4. gap_severity — detecta gaps HIGH en la serie temporal
+Checks de calidad sobre assets OHLCV materializados.
 
-Semántica de severidad (Dagster 1.7+ API):
-  severity va en AssetCheckResult, NO en @asset_check.
-  Un check FAIL no bloquea downstream (severity=WARN) salvo que sea
-  crítico (severity=ERROR → Dagster bloquea la cadena).
+Checks por asset (exchange, market_type)
+-----------------------------------------
+  row_count   — blocking=True  — 0 filas = fallo crítico
+  schema      — blocking=True  — columnas OHLCV requeridas presentes
+  freshness   — blocking=False — dato < 24h (WARN, no bloquea)
+  gap_severity— blocking=False — gaps HIGH detectados (WARN)
 
-Principios:
-  OCP  : make_bronze_checks extensible por exchange/market sin modificar código
-  DIP  : storage vía IcebergStorageFactory (port), scan_gaps importado (mockables en tests)
-  SSOT : ALL_ASSET_CHECKS es la única lista registrada en Definitions
+DIP
+---
+Los checks reciben OHLCVStorage via OCMResource (composition root).
+Ningún check instancia IcebergStorageFactory directamente.
+El storage_factory se registra en OCMResource y se inyecta aquí.
+
+Principios: DIP · OCP · SRP · SafeOps · Fail-Fast donde importa
 """
-
 from __future__ import annotations
+
+import time
+from typing import List
 
 from dagster import (
     AssetCheckResult,
     AssetCheckSeverity,
+    AssetKey,
     asset_check,
 )
 
 from infrastructure.dagster.resources import OCMResource
+from market_data.quality.pipeline import scan_gaps
 
-from market_data.processing.utils.gap_utils import scan_gaps
-from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+_REQUIRED_COLS = frozenset({
+    "timestamp", "open", "high", "low", "close", "volume",
+})
 
-_REQUIRED_COLS = frozenset({"timestamp", "open", "high", "low", "close", "volume"})
 
-
-def make_bronze_checks(exchange_name: str, market_type: str) -> list:
+def make_bronze_checks(exchange_name: str, market_type: str) -> List:
     """
-    Factory — genera los 4 asset checks estándar para un exchange/market_type.
+    Factory OCP: genera los 4 checks para (exchange_name, market_type).
 
-    OCP: añadir un nuevo exchange = llamar esta función, sin modificar nada más.
+    Añadir exchange = llamar esta factory — sin tocar código existente.
     """
+    asset_key = AssetKey(f"bronze_ohlcv_{exchange_name}_{market_type}")
 
-    asset_key = f"bronze_ohlcv_{exchange_name}_{market_type}"
+    # ------------------------------------------------------------------
+    # Helper: obtiene storage via OCMResource (DIP — sin adaptador directo)
+    # ------------------------------------------------------------------
+    def _storage(ocm: OCMResource):
+        """
+        Retorna OHLCVStorage para este exchange/market_type.
+
+        DIP: OCMResource es el composition root — los checks no conocen
+        IcebergStorageFactory ni IcebergStorage directamente.
+        """
+        return ocm.get_storage(
+            exchange    = exchange_name,
+            market_type = market_type,
+        )
 
     # ------------------------------------------------------------------
     # 1. ROW COUNT
-    #    blocking=True — tabla vacía es error crítico, bloquea downstream.
+    #    blocking=True — 0 filas implica pipeline roto aguas arriba.
     # ------------------------------------------------------------------
     @asset_check(
         asset       = asset_key,
         name        = f"row_count_{exchange_name}_{market_type}",
-        description = "Verifica que la tabla bronze tenga al menos 1 fila.",
+        description = "Verifica que el asset tenga al menos una fila.",
         blocking    = True,
     )
-    def _row_count_check(
-        context,
-        ocm: OCMResource,
-    ) -> AssetCheckResult:
+    def _row_count_check(context, ocm: OCMResource) -> AssetCheckResult:
+        runtime_ctx = ocm.build_runtime_context()
+        app_cfg     = runtime_ctx.app_config
+        exc_cfg     = app_cfg.get_exchange(exchange_name)
 
-        ocm.build_runtime_context()
-        storage = IcebergStorageFactory().get_storage(
-            exchange    = exchange_name,
-            market_type = market_type,
-        )
-        count   = storage.count()
-
-        if count == 0:
+        if exc_cfg is None:
             return AssetCheckResult(
                 passed      = False,
-                description = f"Tabla bronze vacía para {exchange_name}/{market_type}",
+                description = "Exchange no encontrado en AppConfig",
                 severity    = AssetCheckSeverity.ERROR,
-                metadata    = {"row_count": 0},
             )
 
+        symbols = (
+            exc_cfg.markets.spot_symbols
+            if market_type == "spot"
+            else exc_cfg.markets.futures_symbols
+        )
+        if not symbols:
+            return AssetCheckResult(
+                passed      = True,
+                description = "Sin símbolos configurados — skip",
+            )
+
+        storage = _storage(ocm)
+        tf      = app_cfg.pipeline.historical.timeframes[0]
+        df      = storage.load_ohlcv(symbol=symbols[0], timeframe=tf)
+        count   = 0 if (df is None or df.empty) else len(df)
+        passed  = count > 0
+
         return AssetCheckResult(
-            passed      = True,
+            passed      = passed,
             description = f"{count} filas presentes",
+            severity    = AssetCheckSeverity.ERROR if not passed else None,
             metadata    = {"row_count": count},
         )
 
     # ------------------------------------------------------------------
     # 2. SCHEMA
-    #    blocking=True — columnas faltantes rompen todo el pipeline downstream.
+    #    blocking=True — columnas faltantes rompen pipeline downstream.
     # ------------------------------------------------------------------
     @asset_check(
         asset       = asset_key,
@@ -90,11 +119,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
         description = "Verifica que las columnas OHLCV requeridas existan.",
         blocking    = True,
     )
-    def _schema_check(
-        context,
-        ocm: OCMResource,
-    ) -> AssetCheckResult:
-
+    def _schema_check(context, ocm: OCMResource) -> AssetCheckResult:
         runtime_ctx = ocm.build_runtime_context()
         app_cfg     = runtime_ctx.app_config
         exc_cfg     = app_cfg.get_exchange(exchange_name)
@@ -112,12 +137,9 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
             else exc_cfg.markets.futures_symbols
         )
         if not symbols:
-            return AssetCheckResult(
-                passed      = True,
-                description = "Sin símbolos — skip",
-            )
+            return AssetCheckResult(passed=True, description="Sin símbolos — skip")
 
-        storage = IcebergStorageFactory().get_storage(exchange=exchange_name, market_type=market_type)
+        storage = _storage(ocm)
         tf      = app_cfg.pipeline.historical.timeframes[0]
         df      = storage.load_ohlcv(symbol=symbols[0], timeframe=tf)
 
@@ -137,7 +159,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
                 "Schema OK" if passed
                 else f"Columnas faltantes: {sorted(missing_cols)}"
             ),
-            severity    = AssetCheckSeverity.ERROR,
+            severity    = AssetCheckSeverity.ERROR if not passed else None,
             metadata    = {
                 "required": str(sorted(_REQUIRED_COLS)),
                 "present":  str(sorted(actual_cols & _REQUIRED_COLS)),
@@ -154,26 +176,36 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
         name        = f"freshness_{exchange_name}_{market_type}",
         description = "Verifica que el último dato no tenga más de 24h de antigüedad.",
     )
-    def _freshness_check(
-        context,
-        ocm: OCMResource,
-    ) -> AssetCheckResult:
-        import time
+    def _freshness_check(context, ocm: OCMResource) -> AssetCheckResult:
+        runtime_ctx = ocm.build_runtime_context()
+        app_cfg     = runtime_ctx.app_config
+        exc_cfg     = app_cfg.get_exchange(exchange_name)
 
-        ocm.build_runtime_context()
-        storage    = IcebergStorageFactory().get_storage(
-            exchange    = exchange_name,
-            market_type = market_type,
+        if exc_cfg is None:
+            return AssetCheckResult(passed=True, description="Exchange no encontrado — skip")
+
+        symbols = (
+            exc_cfg.markets.spot_symbols
+            if market_type == "spot"
+            else exc_cfg.markets.futures_symbols
         )
-        last_ts_ms = storage.get_last_timestamp()
+        if not symbols:
+            return AssetCheckResult(passed=True, description="Sin símbolos — skip")
 
-        if last_ts_ms is None:
-            return AssetCheckResult(
-                passed      = True,
-                description = "Sin datos todavía — skip",
-            )
+        # get_last_timestamp requiere (symbol, timeframe) — firma correcta del port
+        storage = _storage(ocm)
+        tf      = app_cfg.pipeline.historical.timeframes[0]
+        last_ts = storage.get_last_timestamp(
+            symbol    = symbols[0],
+            timeframe = tf,
+        )
 
-        age_hours = (time.time() * 1000 - last_ts_ms) / (1000 * 3600)
+        if last_ts is None:
+            return AssetCheckResult(passed=True, description="Sin datos todavía — skip")
+
+        import pandas as pd
+        now_utc   = pd.Timestamp.utcnow()
+        age_hours = (now_utc - last_ts).total_seconds() / 3600
         passed    = age_hours < 24.0
 
         return AssetCheckResult(
@@ -183,34 +215,26 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
                 if passed
                 else f"Dato desactualizado: {age_hours:.1f}h sin actualizar"
             ),
-            severity    = AssetCheckSeverity.WARN,
+            severity    = AssetCheckSeverity.WARN if not passed else None,
             metadata    = {"age_hours": round(age_hours, 2)},
         )
 
     # ------------------------------------------------------------------
     # 4. GAP SEVERITY
-    #    blocking=False — gaps HIGH son WARN, requieren atención pero no
-    #    bloquean la cadena (el repair job los corregirá).
+    #    blocking=False — gaps HIGH son WARN, no bloquean la cadena.
     # ------------------------------------------------------------------
     @asset_check(
         asset       = asset_key,
         name        = f"gap_severity_{exchange_name}_{market_type}",
         description = "Detecta gaps de severidad HIGH en la serie OHLCV.",
     )
-    def _gap_check(
-        context,
-        ocm: OCMResource,
-    ) -> AssetCheckResult:
-
+    def _gap_check(context, ocm: OCMResource) -> AssetCheckResult:
         runtime_ctx = ocm.build_runtime_context()
         app_cfg     = runtime_ctx.app_config
         exc_cfg     = app_cfg.get_exchange(exchange_name)
 
         if exc_cfg is None:
-            return AssetCheckResult(
-                passed      = True,
-                description = "Exchange no encontrado — skip",
-            )
+            return AssetCheckResult(passed=True, description="Exchange no encontrado — skip")
 
         symbols = (
             exc_cfg.markets.spot_symbols
@@ -218,24 +242,15 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
             else exc_cfg.markets.futures_symbols
         )
         if not symbols:
-            return AssetCheckResult(
-                passed      = True,
-                description = "Sin símbolos — skip",
-            )
+            return AssetCheckResult(passed=True, description="Sin símbolos — skip")
 
-        storage   = IcebergStorageFactory().get_storage(
-            exchange    = exchange_name,
-            market_type = market_type,
-        )
+        storage   = _storage(ocm)
         tf        = app_cfg.pipeline.historical.timeframes[0]
         symbol    = symbols[0]
         df        = storage.load_ohlcv(symbol=symbol, timeframe=tf)
 
         if df is None or df.empty:
-            return AssetCheckResult(
-                passed      = True,
-                description = "Sin datos — skip",
-            )
+            return AssetCheckResult(passed=True, description="Sin datos — skip")
 
         gaps      = scan_gaps(df, tf)
         high_gaps = [g for g in gaps if g.severity == "high"]
@@ -248,7 +263,7 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
                 if passed
                 else f"{len(high_gaps)} gap(s) HIGH detectados en {symbol}/{tf}"
             ),
-            severity    = AssetCheckSeverity.WARN,
+            severity    = AssetCheckSeverity.WARN if not passed else None,
             metadata    = {
                 "total_gaps": len(gaps),
                 "high_gaps":  len(high_gaps),
@@ -260,15 +275,10 @@ def make_bronze_checks(exchange_name: str, market_type: str) -> list:
     return [_row_count_check, _schema_check, _freshness_check, _gap_check]
 
 
-# ==============================================================================
-# Checks concretos — generados por factory (OCP)
-# ==============================================================================
-
 BRONZE_CHECKS_KUCOIN_SPOT        = make_bronze_checks("kucoin",        "spot")
 BRONZE_CHECKS_BYBIT_SPOT         = make_bronze_checks("bybit",         "spot")
 BRONZE_CHECKS_KUCOINFUTURES_SWAP = make_bronze_checks("kucoinfutures", "futures")
 
-# Lista exportada para Definitions (SSOT)
 ALL_ASSET_CHECKS = [
     *BRONZE_CHECKS_KUCOIN_SPOT,
     *BRONZE_CHECKS_BYBIT_SPOT,
