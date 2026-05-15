@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Tests para core/config/lineage.py."""
+"""Tests para ocm/runtime/lineage.py."""
 
 from unittest.mock import MagicMock, patch
 

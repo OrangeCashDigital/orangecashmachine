@@ -48,7 +48,7 @@ from typing import Any
 
 # loguru importado de forma lazy para evitar circular:
 #   coercion → loguru → stdlib logging → core/logging/ → loguru
-# core/logging/ sombrea el stdlib logging — el import lazy rompe el ciclo.
+# ocm/observability/ sombrea el stdlib logging — el import lazy rompe el ciclo.
 def _get_logger():  # noqa: ANN201
     from loguru import logger as _logger  # lazy — solo al primer log
     return _logger

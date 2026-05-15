@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Tests para core/config/run_registry.py.
+Tests para ocm/runtime/run_registry.py.
 
 Cubre:
   - record_run happy path: SQLite + JSONL escritos correctamente

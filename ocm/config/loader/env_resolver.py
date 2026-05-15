@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""core/config/loader/env_resolver.py — Resolución de variables de entorno y entorno activo."""
+"""ocm/config/loader/env_resolver.py — Resolución de variables de entorno y entorno activo."""
 
 import os
 import re

@@ -67,7 +67,7 @@ _HYDRA_INTERNAL: frozenset[str] = frozenset(
     {"_target_", "_recursive_", "_convert_", "hydra"}
 )
 # _NULLABLE_KEYS eliminado — reemplazado por _NULLABLE_PATHS en
-# core/config/layers/coercion.py (path-based, robusto ante campos nuevos).
+# ocm/config/layers/coercion.py (path-based, robusto ante campos nuevos).
 # Ver: OCP — Open/Closed Principle aplicado a campos nullable.
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Tests para core/config/paths.py."""
+"""Tests para ocm/config/paths.py."""
 
 from unittest.mock import patch
 

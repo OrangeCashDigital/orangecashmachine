@@ -1,7 +1,7 @@
 """
-tests/core/config/loader/test_loader.py
+tests/ocm/config/loader/test_loader.py
 ========================================
-Suite de tests para core/config/loader/*.
+Suite de tests para ocm/config/loader/*.
 
 Estado: stub — tests pendientes de implementar contra el modulo real.
 Los tests de env_overrides ya estan en test_env_overrides.py.

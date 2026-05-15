@@ -1,4 +1,4 @@
-"""tests/core/config/loader/test_env_overrides.py
+"""tests/ocm/config/loader/test_env_overrides.py
 
 Tests migrados a layers/env_override.py (nueva API).
 

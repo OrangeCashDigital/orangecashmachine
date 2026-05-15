@@ -1,5 +1,5 @@
 """
-tests/core/config/test_snapshot_contract.py
+tests/ocm/config/test_snapshot_contract.py
 ============================================
 
 Contrato de integración: load_appconfig_from_hydra y load_appconfig_standalone
