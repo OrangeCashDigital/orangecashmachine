@@ -284,9 +284,8 @@ class GoldStorage:
                     result.append(entry.snapshot_id)
             return result
         except Exception as _snap_exc:
-            logger.debug(
+            logger.opt(exception=True).debug(
                 "list_snapshots_for failed — retornando vacío",
-                error=str(_snap_exc),
             )
             return []
 

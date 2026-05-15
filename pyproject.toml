@@ -59,6 +59,12 @@ dependencies = [
     "pybreaker==1.4.1",
     "redis>=7.4.0,<8.0",
     "aiokafka>=0.11.0,<1.0",
+    # pyiceberg: <1.0 — API pública no estabilizada en 1.x todavía.
+    # >=0.9.1: requiere TimestampType microsecond epoch (int) en scan filters.
+    # Actualizar solo tras smoke test completo en staging (iceberg_storage tests).
+    # pyiceberg: <1.0 — API pública no estabilizada en 1.x todavía.
+    # >=0.9.1: requiere TimestampType microsecond epoch (int) en scan filters.
+    # Actualizar solo tras smoke test completo en staging (iceberg_storage tests).
     "pyiceberg[pyarrow,sql-sqlite]>=0.9.1,<1.0",
     "duckdb>=1.5.1,<2.0",
     "fastapi>=0.111.0,<1.0",

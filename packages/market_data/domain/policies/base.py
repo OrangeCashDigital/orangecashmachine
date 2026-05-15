@@ -25,7 +25,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, List, Protocol, runtime_checkable
 
 from ocm.observability import bind_pipeline
 
@@ -70,11 +70,11 @@ class PipelineContext:
 
     Ref: Iceberg OCC — "branch main has changed" cuando dos writers compiten.
     """
-    fetcher:     object          # HistoricalFetcherAsync — importación local evita circular
+    fetcher:     Any  # HistoricalFetcherAsync — inyectado desde application/ (TYPE_CHECKING)
     storage:     OHLCVStorage
-    bronze:      object          # BronzeStorage — importación local evita circular
+    bronze:      Any  # BronzeStorage — inyectado desde application/ (TYPE_CHECKING)
     cursor:      CursorStore
-    quality:     object          # QualityPipeline — importación local evita circular
+    quality:     Any                          # QualityPipeline — sin Port; inyectado desde application/
     exchange_id: str
     market_type: str
     start_date:  str
@@ -180,8 +180,8 @@ class _TransientProxy:
         "UnsupportedExchangeError", "AuthenticationError",
     })
 
-    def __init__(self, error_type: str, error_msg: str) -> None:
-        self._error_msg = error_msg
+    def __init__(self, error_type: str, error_msg: str | None) -> None:
+        self._error_msg = error_msg or ""
         if error_type in self._KNOWN_TRANSIENT:
             self.is_transient = True
         elif error_type in self._KNOWN_PERMANENT:
@@ -233,7 +233,7 @@ class PairResult:
         """
         if not self.error_type and not self.error:
             return False
-        return classify_error(_TransientProxy(self.error_type, self.error))
+        return classify_error(_TransientProxy(self.error_type, self.error or ""))
 
     def __str__(self) -> str:
         if self.error:

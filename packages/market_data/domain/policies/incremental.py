@@ -135,7 +135,7 @@ class IncrementalStrategy(StrategyMixin):
         # _normalize_dataframe garantiza timestamp es datetime64[ns, UTC].
         # .timestamp() es válido — sin necesidad de hasattr.
         last_ts_ms = int(qres.df["timestamp"].max().timestamp() * 1000)
-        await ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)
+        ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)
 
         result.rows = len(qres.df)
 

@@ -49,10 +49,17 @@ Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Soft · Fail-Fast
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
+
+# PipelineSummary es el tipo de retorno semántico de pipeline.run().
+# Definido como alias hasta que el Protocol esté formalizado en ports/.
+# Usar `object` es válido para Liskov pero pierde información semántica.
+PipelineSummary = Any  # TODO: formalizar como Protocol en ports/inbound/
 
 from loguru import logger
 
+from market_data.exceptions import PipelineBuildError, PipelineExecutionError
+from market_data.exceptions import PipelineBuildError, PipelineExecutionError
 from market_data.ports.inbound.pipeline_trigger import (
     PipelineTriggerPort,
     PipelineModeStr,
@@ -111,7 +118,7 @@ class PipelineRequest:
 
     # Parámetros de construcción del adapter — provistos por el caller
     credentials:         Optional[dict]        = None
-    resilience:          Optional[Any]         = None
+    resilience:          Optional[dict[str, Any]] = None
 
     # Parámetros de selección de datos — provistos por el caller
     symbols:             Optional[list[str]]   = None
@@ -122,7 +129,7 @@ class PipelineRequest:
     # Parámetros de control
     run_id:              Optional[str]         = None
     dry_run:             bool                  = False
-    extra:               dict                  = field(default_factory=dict)
+    extra:               dict[str, Any]        = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Fail-Fast: valida invariantes del DTO en construcción."""
@@ -217,26 +224,23 @@ class PipelineOrchestrator:
         """
         logger.info("PipelineOrchestrator.run | {}", request)
 
+        # _build_pipeline() ahora lanza PipelineBuildError en lugar de retornar None.
+        # Fail-Fast: el caller conoce el fallo inmediatamente con contexto completo.
         pipeline = self._build_pipeline(request)
-        if pipeline is None:
-            logger.error(
-                "PipelineOrchestrator: construcción fallida | {}", request,
-            )
-            return None
 
         try:
             summary = await pipeline.run(mode=request.mode)
-            logger.info(
-                "PipelineOrchestrator.run OK | {} summary={}",
-                request, summary,
-            )
+            logger.info("PipelineOrchestrator.run OK | {} summary={}", request, summary)
             return summary
+        except PipelineExecutionError:
+            raise  # Ya es el tipo correcto — re-lanzar sin wrappear
         except Exception as exc:
-            logger.error(
-                "PipelineOrchestrator.run FAILED | {} err={} type={}",
-                request, exc, type(exc).__name__,
+            logger.opt(exception=True).error(
+                "PipelineOrchestrator.run FAILED | {}", request,
             )
-            return None
+            raise PipelineExecutionError(
+                f"Fallo durante ejecución del pipeline: {request}"
+            ) from exc
 
     def _build_pipeline(
         self,
@@ -265,12 +269,15 @@ class PipelineOrchestrator:
                     request.pipeline,
                 )
                 return None
+        except PipelineBuildError:
+            raise  # Re-lanzar sin wrappear
         except Exception as exc:
-            logger.error(
-                "PipelineOrchestrator._build_pipeline error | {} err={} type={}",
-                request, exc, type(exc).__name__,
+            logger.opt(exception=True).error(
+                "PipelineOrchestrator._build_pipeline FAILED | {}", request,
             )
-            return None
+            raise PipelineBuildError(
+                f"Error construyendo pipeline para: {request}"
+            ) from exc
 
     # ------------------------------------------------------------------
     # Builders privados — SRP: uno por tipo de pipeline
@@ -294,7 +301,7 @@ class PipelineOrchestrator:
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
-        adapter_kwargs: dict = {
+        adapter_kwargs: dict[str, Any] = {
             "exchange_id": request.exchange,
             "market_type": request.market_type,
         }
@@ -308,7 +315,7 @@ class PipelineOrchestrator:
         # OHLCVPipeline.__init__ espera exchange_client= (CCXTAdapter),
         # no adapter=. El exchange_id se deriva internamente via
         # getattr(exchange_client, "_exchange_id", "unknown").
-        pipeline_kwargs: dict = {
+        pipeline_kwargs: dict[str, Any] = {
             "exchange_client": adapter,
             "market_type":     request.market_type,
             "dry_run":         request.dry_run,
@@ -332,7 +339,7 @@ class PipelineOrchestrator:
         from market_data.application.pipelines.trades_pipeline import TradesPipeline
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
-        adapter_kwargs: dict = {
+        adapter_kwargs: dict[str, Any] = {
             "exchange_id": request.exchange,
             "market_type": request.market_type,
         }
@@ -358,7 +365,7 @@ class PipelineOrchestrator:
         from market_data.application.pipelines.derivatives_pipeline import DerivativesPipeline
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
-        adapter_kwargs: dict = {
+        adapter_kwargs: dict[str, Any] = {
             "exchange_id": request.exchange,
             "market_type": request.market_type,
         }

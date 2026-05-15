@@ -347,21 +347,17 @@ class ResampleUseCase:
             len(symbols), targets, source_tf,
         )
 
-        # asyncio.run() crea un event loop nuevo si no existe uno activo.
-        # Correcto para callers sincónicos (Dagster assets, Prefect tasks).
-        # Si el caller ya tiene un loop activo, usar await en su lugar.
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            # Caller tiene event loop activo (ej: entorno Jupyter / tests async)
-            # Crear una tarea y esperar en un loop anidado via nest_asyncio si disponible.
-            # En producción (Dagster sync assets) este branch no se ejecuta.
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(asyncio.run, pipeline.run(now_ms=request.now_ms))
-                return future.result()
-        else:
-            return asyncio.run(pipeline.run(now_ms=request.now_ms))
+        # asyncio.run() es el único path — producción y tests ejecutan lo mismo.
+        #
+        # Decisión arquitectónica (Fase 1 / 2026-05):
+        #   La rama ThreadPoolExecutor fue eliminada porque:
+        #   1. En producción (Dagster sync assets, Prefect tasks) nunca se ejecutaba.
+        #   2. En tests async causaba deadlocks potenciales: asyncio.run() dentro de
+        #      un ThreadPoolExecutor con el loop del test activo crea un segundo loop
+        #      no coordinado — comportamiento indefinido.
+        #   3. Tests que necesiten un loop activo deben usar pytest-asyncio con
+        #      asyncio.get_event_loop() y await directamente, no via esta capa.
+        #
+        # Si en el futuro se necesita compatibilidad con callers async, exponer
+        # un método async separado (run_async) y dejar este como sync. SRP.
+        return asyncio.run(pipeline.run(now_ms=request.now_ms))

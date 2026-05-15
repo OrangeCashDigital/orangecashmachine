@@ -103,6 +103,9 @@ async def _publish_chunk_to_kafka(
         HEADER_RUN_ID:  getattr(ctx, "run_id", ""),
     }
 
+    # Fail-Fast: esta función solo se llama cuando kafka_producer está disponible.
+    # El assert es la guardia de mypy — el caller (L458) ya verifica None.
+    assert ctx.kafka_producer is not None, "_emit_to_kafka: kafka_producer es None"
     ok = await ctx.kafka_producer.send_async(
         topic   = TOPIC_OHLCV_RAW,
         value   = payload_bytes,

@@ -64,3 +64,44 @@ class CursorStorePort(Protocol):
     def exists(self, key: str) -> bool:
         """True si el cursor existe en el store."""
         ...
+
+    # ── API extendida — alias sobre get/set para callers legacy ──────────────
+    # Mantiene OCP: no rompe implementaciones que ya satisfacen el Port mínimo.
+    # Las implementaciones concretas PUEDEN sobreescribir para añadir TTL real.
+
+    def get_raw(self, key: str) -> Optional[str]:
+        """
+        Alias de get() para callers que usan la API extendida.
+
+        Semántica idéntica a get(): retorna el valor o None.
+        El prefijo _raw indica que el valor no está deserializado.
+        """
+        return self.get(key)
+
+    def set_raw(self, key: str, value: str, ttl_s: int = 0) -> None:
+        """
+        Alias de set() para callers que pasan TTL.
+
+        ttl_s es ignorado en el Port base — las implementaciones concretas
+        que soportan TTL (Redis) deben sobreescribir este método.
+        Fail-soft: callers no deben depender del TTL para correctitud.
+        """
+        self.set(key, value)
+
+    def update(
+        self,
+        exchange:  str,
+        symbol:    str,
+        timeframe: str,
+        ts_ms:     int,
+    ) -> None:
+        """
+        Persiste el último timestamp procesado usando la clave canónica.
+
+        Shorthand semántico para:
+            self.set(encode_cursor_key(exchange, symbol, timeframe), str(ts_ms))
+
+        Usado por IncrementalStrategy para actualizar el cursor después de
+        cada batch exitoso.
+        """
+        self.set(encode_cursor_key(exchange, symbol, timeframe), str(ts_ms))
