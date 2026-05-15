@@ -22,7 +22,7 @@ concurrency:
 
   # Límites por concurrency_key — SSOT de throttling por perfil
   # Estos keys deben coincidir exactamente con los tags de los assets.
-  # Ver dagster_assets/bronze_ohlcv.py, resample_ohlcv.py, repair_ohlcv.py
+  # Ver infrastructure/dagster/assets/ (bronze_ohlcv.py, resample_ohlcv.py, repair_ohlcv.py)
   pools:
     bronze_ingestion:
       run_limit: 2    # máx 2 runs paralelos de ingesta bronze
