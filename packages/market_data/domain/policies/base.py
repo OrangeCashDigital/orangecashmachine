@@ -154,7 +154,7 @@ def classify_error(exc: BaseException) -> bool:
         return False  # SafeOps: fallo en clasificación → asumir permanente
 
 
-class _TransientProxy:
+class _TransientProxy(Exception):
     """
     Proxy mínimo para classify_error() cuando solo tenemos strings
     (error_type, error_msg) en lugar del objeto excepción original.
@@ -181,6 +181,7 @@ class _TransientProxy:
     })
 
     def __init__(self, error_type: str, error_msg: str | None) -> None:
+        super().__init__(error_msg or "")
         self._error_msg = error_msg or ""
         if error_type in self._KNOWN_TRANSIENT:
             self.is_transient = True
