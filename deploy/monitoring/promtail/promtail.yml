@@ -1,4 +1,4 @@
-# infra/monitoring/promtail/promtail.yml
+# deploy/monitoring/promtail/promtail.yml
 # =========================================
 # Rutas DENTRO del container — el volume mount es:
 #   host: ./logs  →  container: /logs  (read-only)

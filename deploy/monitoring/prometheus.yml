@@ -1,4 +1,4 @@
-# infra/monitoring/prometheus.yml
+# deploy/monitoring/prometheus.yml
 # ================================
 # Configuración de scrape de Prometheus para OrangeCashMachine.
 #
