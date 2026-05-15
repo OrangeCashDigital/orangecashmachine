@@ -61,7 +61,6 @@ dependencies = [
     "aiokafka>=0.11.0,<1.0",
     "pyiceberg[pyarrow,sql-sqlite]>=0.9.1,<1.0",
     "duckdb>=1.5.1,<2.0",
-    "pyspark>=4.1.1,<5.0",
     "fastapi>=0.111.0,<1.0",
     "uvicorn[standard]>=0.14.0,<0.29.0",
     "python-jose[cryptography]>=3.3.0,<4.0",

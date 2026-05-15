@@ -38,12 +38,40 @@ Principios: SRP · OCP · DIP · SafeOps · SSOT
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+from collections.abc import Coroutine
+from typing import Any
 
 from dagster import Output, asset
 
 from infrastructure.dagster.resources import OCMResource
 from market_data.application import PipelineOrchestrator, PipelineRequest
 
+
+
+
+# ==============================================================================
+# Helper: ejecución async segura desde threads Dagster
+# ==============================================================================
+
+def _run_async(coro: Coroutine[Any, Any, Any]) -> Any:
+    """
+    Ejecuta una coroutine de forma segura desde un thread Dagster.
+
+    Dagster ejecuta assets en threads sin event loop activo →
+    asyncio.run() es el camino normal.  El fallback via ThreadPoolExecutor
+    cubre contextos async-aware (Dagster Cloud, tests con pytest-asyncio).
+
+    Fail-Fast: propaga excepciones sin silenciarlas.
+    """
+    try:
+        asyncio.get_running_loop()
+        # Ya hay un loop activo — delegar a un thread limpio
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    except RuntimeError:
+        # No hay loop activo — camino estándar para Dagster threaded
+        return asyncio.run(coro)
 
 # ==============================================================================
 # Factory: genera un asset por (exchange_name, market_type)
@@ -137,7 +165,7 @@ def make_bronze_ohlcv_asset(exchange_name: str, market_type: str):
         )
 
         orchestrator = PipelineOrchestrator()
-        summary      = asyncio.run(orchestrator.run(request))
+        summary      = _run_async(orchestrator.run(request))
 
         if summary is None:
             raise RuntimeError(

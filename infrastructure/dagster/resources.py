@@ -14,6 +14,14 @@ construyen AppConfig, IcebergStorageFactory ni IcebergStorage directamente.
   build_runtime_context() → RuntimeContext (config + run_id)
   get_storage(exchange, market_type) → OHLCVStorage (via StorageFactoryPort)
 
+Caché por instancia
+-------------------
+OCMResource se instancia UNA VEZ por run de Dagster.
+runtime_context y _storage_factory se cachean con PrivateAttr (Pydantic v2):
+  - run_id consistente a través de todos los accesos al asset en ese run.
+  - PrivateAttr es el contrato Pydantic v2 correcto para estado mutable
+    en subclases de BaseModel (ConfigurableResource hereda de él).
+
 SafeOps
 -------
 Si la config falla → lanza en build_runtime_context() (Fail-Fast en startup).
@@ -24,8 +32,10 @@ Principios: DIP · SRP · Fail-Fast · SafeOps · SSOT · Composition Root
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from dagster import ConfigurableResource
+from pydantic import PrivateAttr
 
 from ocm.config.hydra_loader import load_appconfig_standalone
 from ocm.runtime.run_config  import RunConfig
@@ -40,7 +50,13 @@ class OCMResource(ConfigurableResource):
 
     Parámetros configurables vía dagster.yaml o launchpad:
       env: Entorno OCM (development | production | test).
-           Si vacío, RunConfig.from_env() resuelve OCM_ENV.
+           Si vacío, RunConfig.from_env() resuelve OCM_ENV en tiempo de ejecución.
+
+    Caché
+    -----
+    _runtime_context y _storage_factory se inicializan lazy y se cachean
+    por instancia.  En Dagster, OCMResource se instancia una vez por run →
+    run_id idéntico en todos los accesos dentro del mismo run.
 
     Uso en asset
     ------------
@@ -50,7 +66,12 @@ class OCMResource(ConfigurableResource):
             storage     = ocm.get_storage("bybit", "spot")
     """
 
-    env: str = ""  # vacío = delegar a OCM_ENV / settings.yaml
+    env: str = ""  # vacío = delegar a OCM_ENV en ejecución (SSOT)
+
+    # PrivateAttr: estado mutable en un BaseModel Pydantic v2.
+    # No forman parte del esquema serializable del recurso.
+    _runtime_context: Optional[RuntimeContext] = PrivateAttr(default=None)
+    _storage_factory: Optional[StorageFactoryPort] = PrivateAttr(default=None)
 
     # ── RuntimeContext ────────────────────────────────────────────────────────
 
@@ -58,8 +79,8 @@ class OCMResource(ConfigurableResource):
         """
         Construye RuntimeContext desde variables de entorno.
 
+        Lee OCM_ENV en tiempo de EJECUCIÓN (no import-time) → SSOT correcto.
         Fail-Fast: lanza si AppConfig es inválido.
-        Dagster captura la excepción y la muestra en el asset catalog.
         """
         explicit_env = self.env or None
         run_cfg      = RunConfig.from_env(explicit_env=explicit_env)
@@ -74,11 +95,14 @@ class OCMResource(ConfigurableResource):
     @property
     def runtime_context(self) -> RuntimeContext:
         """
-        RuntimeContext construido bajo demanda.
+        RuntimeContext cacheado por instancia.
 
-        No cacheado — cada asset call recibe run_id único (SSOT: RunConfig).
+        Garantiza run_id consistente a través de todos los accesos
+        dentro del mismo run de Dagster.
         """
-        return self.build_runtime_context()
+        if self._runtime_context is None:
+            self._runtime_context = self.build_runtime_context()
+        return self._runtime_context
 
     # ── OHLCVStorage — Composition Root (DIP) ────────────────────────────────
 
@@ -92,8 +116,6 @@ class OCMResource(ConfigurableResource):
         Retorna OHLCVStorage para (exchange, market_type) via StorageFactoryPort.
 
         DIP: los assets piden storage aquí — nunca instancian IcebergStorageFactory.
-        Cache: gestionado por IcebergStorageFactory (SSOT — sin cache duplicado).
-
         Fail-Fast: lanza RuntimeError si el backend no puede inicializarse.
         """
         factory: StorageFactoryPort = self._get_storage_factory()
@@ -105,13 +127,14 @@ class OCMResource(ConfigurableResource):
 
     def _get_storage_factory(self) -> StorageFactoryPort:
         """
-        Retorna la factory de storage. Import lazy — no carga Iceberg en import-time.
+        Retorna la factory de storage, cacheada por instancia.
 
-        Singleton a nivel de instancia de OCMResource.
-        En Dagster, OCMResource se instancia una vez por run → safe.
+        Import lazy: no carga Iceberg en import-time.
+        PrivateAttr garantiza que la asignación es válida en Pydantic v2.
         """
-        if not hasattr(self, "_storage_factory"):
-            from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
-            # object.__setattr__ porque ConfigurableResource puede ser frozen-like
-            object.__setattr__(self, "_storage_factory", IcebergStorageFactory())
+        if self._storage_factory is None:
+            from market_data.adapters.outbound.storage.iceberg_factory import (
+                IcebergStorageFactory,
+            )
+            self._storage_factory = IcebergStorageFactory()
         return self._storage_factory
