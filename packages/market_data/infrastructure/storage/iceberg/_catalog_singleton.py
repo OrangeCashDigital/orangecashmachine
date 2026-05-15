@@ -10,7 +10,7 @@ Privado al paquete — importar via catalog.py, nunca directamente.
 
 Paths
 -----
-SSOT: ocm_platform.config.paths.data_lake_root()
+SSOT: ocm.config.paths.data_lake_root()
 
     iceberg_catalog/   → data_lake_root().parent / "iceberg_catalog"
     iceberg_warehouse/ → data_lake_root().parent / "iceberg_warehouse"
@@ -36,7 +36,7 @@ from typing import Optional
 from pyiceberg.catalog.sql import SqlCatalog
 
 # SSOT de paths — nunca calcular paths aquí directamente.
-from ocm_platform.config.paths import data_lake_root
+from ocm.config.paths import data_lake_root
 
 _CATALOG: Optional[SqlCatalog] = None
 _LOCK:    threading.Lock        = threading.Lock()

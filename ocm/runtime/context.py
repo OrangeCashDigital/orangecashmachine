@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ocm_platform/runtime/context.py
+ocm/runtime/context.py
 =================================
 
 :class:`RuntimeContext` — contexto inmutable de ejecución.
@@ -18,7 +18,7 @@ SSOT:
     debug       → run_config.debug         (property delegada)
 
 Serialización:
-    La lógica de serialización de :class:`~ocm_platform.runtime.run_config.RunConfig`
+    La lógica de serialización de :class:`~ocm.runtime.run_config.RunConfig`
     vive en ``RunConfig.to_dict()`` / ``RunConfig.from_dict()`` (SRP).
     RuntimeContext solo se responsabiliza de su propio envelope.
 """
@@ -27,8 +27,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from ocm_platform.config.schema import AppConfig
-from ocm_platform.runtime.run_config import RunConfig
+from ocm.config.schema import AppConfig
+from ocm.runtime.run_config import RunConfig
 
 
 @dataclass(frozen=True)

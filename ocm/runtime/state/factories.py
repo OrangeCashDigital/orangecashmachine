@@ -33,7 +33,7 @@ el store port ya construido en su constructor:
 
 Uso
 ---
-    from ocm_platform.infra.state.factories import (
+    from ocm.runtime.state.factories import (
         build_cursor_store,
         build_gap_registry,
         build_lateness_calibration_store,
@@ -87,12 +87,12 @@ from typing import Optional, TYPE_CHECKING
 
 from loguru import logger
 
-from ocm_platform.infra.state.cursor_store import RedisCursorStore, build_cursor_store_from_env
-from ocm_platform.infra.state.gap_store    import RedisGapStore
+from ocm.runtime.state.cursor_store import RedisCursorStore, build_cursor_store_from_env
+from ocm.runtime.state.gap_store    import RedisGapStore
 
 if TYPE_CHECKING:
-    from ocm_platform.infra.state.gap_registry import GapRegistry
-    from ocm_platform.infra.state.lateness_calibration import LatenessCalibrationStore
+    from ocm.runtime.state.gap_registry import GapRegistry
+    from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
 
 
 def build_cursor_store(env: Optional[str] = None) -> RedisCursorStore:
@@ -126,7 +126,7 @@ def build_gap_registry(
     env : str, optional
         Entorno explícito. Si None, usa resolve_env().
     """
-    from ocm_platform.infra.state.gap_registry import GapRegistry
+    from ocm.runtime.state.gap_registry import GapRegistry
 
     try:
         store = build_cursor_store_from_env(env=env)
@@ -155,7 +155,7 @@ def build_lateness_calibration_store(
     env : str, optional
         Entorno explícito. Si None, usa resolve_env().
     """
-    from ocm_platform.infra.state.lateness_calibration import LatenessCalibrationStore
+    from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
 
     try:
         store = build_cursor_store_from_env(env=env)
@@ -190,7 +190,7 @@ def build_stream_publisher(
     stream_name : nombre lógico del stream (sin prefijo).
     env         : entorno explícito. Si None, usa resolve_env().
     """
-    from ocm_platform.infra.state.redis_stream import RedisStreamPublisher
+    from ocm.runtime.state.redis_stream import RedisStreamPublisher
 
     try:
         store = build_cursor_store_from_env(env=env)
@@ -230,7 +230,7 @@ def build_stream_source(
     consumer_name : nombre de este worker dentro del consumer group.
     env           : entorno explícito. Si None, usa resolve_env().
     """
-    from ocm_platform.infra.state.redis_stream import RedisStreamConsumer
+    from ocm.runtime.state.redis_stream import RedisStreamConsumer
 
     try:
         store = build_cursor_store_from_env(env=env)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ocm_platform/config/paths.py
+ocm/config/paths.py
 ====================
 
 Single Source of Truth para los paths del Data Lakehouse.
@@ -33,7 +33,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from ocm_platform.config.env_vars import (
+from ocm.config.env_vars import (
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
     OCM_STORAGE__DATA_LAKE__PATH,
@@ -206,8 +206,8 @@ def _read_yaml_lake_path() -> Optional[str]:
     de configuración durante desarrollo.
     """
     try:
-        from ocm_platform.config.loader.yaml_loader import YamlLoader
-        from ocm_platform.config.loader.env_resolver import resolve_env
+        from ocm.config.loader.yaml_loader import YamlLoader
+        from ocm.config.loader.env_resolver import resolve_env
 
         config_dir = _find_config_dir()
         if config_dir is None:

@@ -18,7 +18,7 @@ from typing import Optional
 from loguru import logger
 
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort  # noqa: F401
-from ocm_platform.config.env_vars import (
+from ocm.config.env_vars import (
     KAFKA_ACKS,
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_CLIENT_ID_PRODUCER,
@@ -71,7 +71,7 @@ class KafkaProducerAdapter:
         """
         Construye el adapter desde variables de entorno.
 
-        Nombres leídos desde ocm_platform.config.env_vars (SSOT).
+        Nombres leídos desde ocm.config.env_vars (SSOT).
         Nunca strings literales aquí.
         """
         return cls(

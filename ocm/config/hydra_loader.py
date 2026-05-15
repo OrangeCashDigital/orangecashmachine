@@ -60,8 +60,8 @@ from typing import Any, Optional
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
-from ocm_platform.config.schema import AppConfig
-from ocm_platform.config.loader.snapshot import write_config_snapshot
+from ocm.config.schema import AppConfig
+from ocm.config.loader.snapshot import write_config_snapshot
 
 _HYDRA_INTERNAL: frozenset[str] = frozenset(
     {"_target_", "_recursive_", "_convert_", "hydra"}
@@ -206,7 +206,7 @@ def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
         ConfigPipelineError: Si cualquier capa del pipeline falla (identifica la capa).
         pydantic.ValidationError: Propagada desde L4 si la config no es válida.
     """
-    from ocm_platform.config.pipeline import ConfigPipeline
+    from ocm.config.pipeline import ConfigPipeline
     return ConfigPipeline(cfg).run()
 
 
@@ -291,7 +291,7 @@ def load_appconfig_standalone(
         FileNotFoundError: Si ``config_dir`` o ``base.yaml`` no existen.
         pydantic.ValidationError: Si la configuración resultante no es válida.
     """
-    from ocm_platform.config.loader.env_resolver import resolve_env, load_dotenv_for_env
+    from ocm.config.loader.env_resolver import resolve_env, load_dotenv_for_env
 
     _env = resolve_env(env)
     load_dotenv_for_env(_env)

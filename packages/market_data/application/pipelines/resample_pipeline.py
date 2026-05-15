@@ -54,7 +54,7 @@ from typing import List, Optional
 
 import pandas as pd
 
-from ocm_platform.observability import bind_pipeline
+from ocm.observability import bind_pipeline
 from market_data.domain.value_objects.timeframe import (
     timeframe_to_ms,
     VALID_TIMEFRAMES,

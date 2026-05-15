@@ -14,7 +14,7 @@ Cobertura:
 """
 
 import pytest
-from ocm_platform.observability.filters import pipeline_filter, strict_pipeline_filter
+from ocm.observability.filters import pipeline_filter, strict_pipeline_filter
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ def _record(name: str, extra: dict | None = None) -> dict:
     "market_data.infrastructure.storage.silver.trades_storage",
     "market_data.quality.validators.ohlcv_validator",
     "market_data.adapters.outbound.exchange.ccxt_adapter",
-    "ocm_platform.control_plane.orchestration.entrypoint",
+    "ocm.control_plane.orchestration.entrypoint",
 ])
 def test_pipeline_filter_accepts_pipeline_modules(module):
     """pipeline_filter acepta exactamente los módulos del pipeline OCM."""
@@ -44,8 +44,8 @@ def test_pipeline_filter_accepts_pipeline_modules(module):
 
 @pytest.mark.parametrize("module", [
     # Módulos legítimos fuera del pipeline
-    "ocm_platform.config.loader",
-    "ocm_platform.observability.logger",
+    "ocm.config.loader",
+    "ocm.observability.logger",
     "infra.observability.runtime",
     "main",
     # Módulos eliminados del pipeline (prefijos pre-refactor)
@@ -77,7 +77,7 @@ def test_pipeline_filter_does_not_require_extra_context():
 # ── strict_pipeline_filter ────────────────────────────────────────────────────
 
 _PIPELINE_MODULE = "market_data.application.pipelines.ohlcv_pipeline"
-_NON_PIPELINE    = "ocm_platform.config.loader"
+_NON_PIPELINE    = "ocm.config.loader"
 
 
 def test_strict_filter_accepts_full_context():

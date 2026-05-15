@@ -38,8 +38,8 @@ from __future__ import annotations
 
 import pytest
 
-from ocm_platform.infra.state.lateness_calibration import LatenessCalibrationStore
-from ocm_platform.infra.state.gap_store             import InMemoryGapStore
+from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
+from ocm.runtime.state.gap_store             import InMemoryGapStore
 
 # ── Constantes de test ───────────────────────────────────────────────────────
 _ENV       = "test"

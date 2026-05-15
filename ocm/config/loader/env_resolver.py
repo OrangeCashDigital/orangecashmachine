@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
 from ..env_vars import OCM_ENV as _OCM_ENV_VAR
-from ocm_platform.observability.bootstrap import pre_log
+from ocm.observability.bootstrap import pre_log
 
 from loguru import logger
 
@@ -103,7 +103,7 @@ def load_dotenv_for_env(env: str) -> None:
 # SETTINGS FALLBACK
 # --------------------------------------------------
 def read_default_env_from_settings(config_dir: Optional[Path] = None) -> Optional[str]:
-    from ocm_platform.config.schema import CONFIG_PATH
+    from ocm.config.schema import CONFIG_PATH
 
     settings_path = (config_dir or CONFIG_PATH.parent) / "settings.yaml"
     cache_key = str(settings_path.resolve())

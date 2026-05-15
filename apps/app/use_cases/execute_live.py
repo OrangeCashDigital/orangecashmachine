@@ -81,7 +81,7 @@ def build_live_engine(args: argparse.Namespace, tracker):
     from trading.engine import TradingEngine
     from trading.execution.order import OrderSide
     from trading.data.gold_adapter import GoldLoaderAdapter
-    from ocm_platform.runtime.guard import ExecutionGuard
+    from ocm.runtime.guard import ExecutionGuard
     from portfolio.services.portfolio_service import PortfolioService
     from portfolio.infra.redis_store import RedisPositionStore
 

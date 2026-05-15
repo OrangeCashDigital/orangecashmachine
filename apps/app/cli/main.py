@@ -39,7 +39,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 from loguru import logger
 
-from ocm_platform.config.structured import (
+from ocm.config.structured import (
     PipelineConfig,
     HistoricalConfig,
     ObservabilityConfig,
@@ -72,20 +72,20 @@ def _register_structured_configs() -> None:
 _register_structured_configs()
 
 # Imports post-registration — Hydra requiere que ConfigStore esté listo primero
-from ocm_platform.config.loader.exceptions import (
+from ocm.config.loader.exceptions import (
     ConfigurationError,
     ConfigValidationError,
 )
-from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
-from ocm_platform.config.schema import AppConfig
-from ocm_platform.runtime.run_config import RunConfig
-from ocm_platform.runtime.context import RuntimeContext
-from ocm_platform.observability import bootstrap_logging, configure_logging
-from ocm_platform.observability.metrics_runtime import init_metrics_runtime
-from ocm_platform.observability.pushers import PrometheusPusher, NoopPusher
+from ocm.config.hydra_loader import load_appconfig_from_hydra
+from ocm.config.schema import AppConfig
+from ocm.runtime.run_config import RunConfig
+from ocm.runtime.context import RuntimeContext
+from ocm.observability import bootstrap_logging, configure_logging
+from ocm.observability.metrics_runtime import init_metrics_runtime
+from ocm.observability.pushers import PrometheusPusher, NoopPusher
 from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline as _default_pipeline_runner
 from market_data.ports.outbound.observability import MetricsPusherPort
-from ocm_platform.runtime.environment_validator import (
+from ocm.runtime.environment_validator import (
     EnvironmentValidator,
     EnvironmentMismatchError,
 )

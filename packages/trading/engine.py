@@ -26,7 +26,7 @@ from typing import Callable, Optional
 from loguru import logger
 
 from shared.contracts.boundaries import FeatureSource  # SSOT — unica definicion del contrato
-from ocm_platform.runtime.guard import ExecutionGuard
+from ocm.runtime.guard import ExecutionGuard
 from trading.execution.order import Order, OrderStatus
 from trading.risk.models import RiskConfig
 from trading.strategies.base import BaseStrategy

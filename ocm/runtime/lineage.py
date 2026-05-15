@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 """
-ocm_platform/runtime/lineage.py
+ocm/runtime/lineage.py
 ================================
 
 Trazabilidad de datos — Single Source of Truth para lineage.
 
-Ubicación canónica: ocm_platform/runtime/
+Ubicación canónica: ocm/runtime/
 Razón: lineage describe qué run_id produjo qué datos — es metadata
 de ejecución, no configuración declarativa. Separación por SRP.
 
@@ -25,7 +25,7 @@ Diseño
 
 Uso
 ---
-    from ocm_platform.runtime.lineage import build_lineage
+    from ocm.runtime.lineage import build_lineage
 
     rec = build_lineage(run_id=run_id, version_id=version_id, layer="silver")
     manifest["git_hash"]   = rec.git_hash

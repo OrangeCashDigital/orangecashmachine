@@ -6,7 +6,7 @@ shared/types/
 Value objects, entities y domain events compartidos entre bounded contexts.
 
 Regla de oro: este módulo NO importa desde ningún bounded context del proyecto
-(market_data, trading, portfolio, ocm_platform, infrastructure, apps).
+(market_data, trading, portfolio, ocm, infrastructure, apps).
 Solo stdlib y third-party permitidos.
 
 Contrato: BC-09 en pyproject.toml lo hace cumplir automáticamente.

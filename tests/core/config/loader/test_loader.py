@@ -14,4 +14,4 @@ from __future__ import annotations
 class TestPlaceholder:
     def test_module_imports(self):
         """Confirma que el modulo loader es importable sin errores."""
-        import ocm_platform.config.loader  # noqa: F401
+        import ocm.config.loader  # noqa: F401

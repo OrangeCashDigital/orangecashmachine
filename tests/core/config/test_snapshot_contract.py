@@ -15,7 +15,7 @@ import yaml
 from omegaconf import OmegaConf
 from unittest.mock import patch
 
-from ocm_platform.config.hydra_loader import load_appconfig_from_hydra
+from ocm.config.hydra_loader import load_appconfig_from_hydra
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ def test_write_snapshot_false_without_run_id_ok(minimal_cfg):
 
 def test_write_snapshot_with_run_id_calls_writer(minimal_cfg):
     """write_snapshot=True + run_id válido debe llamar write_config_snapshot."""
-    with patch("ocm_platform.config.hydra_loader.write_config_snapshot") as mock_write:
+    with patch("ocm.config.hydra_loader.write_config_snapshot") as mock_write:
         load_appconfig_from_hydra(
             minimal_cfg,
             env="test",
@@ -117,7 +117,7 @@ def test_standalone_propagates_run_id_to_snapshot(tmp_path, monkeypatch):
     real, compatible con cualquier entorno CI.
     """
     import os
-    from ocm_platform.config.hydra_loader import load_appconfig_standalone
+    from ocm.config.hydra_loader import load_appconfig_standalone
 
     # Aislar env vars que L2 aplicaría sobre credenciales del YAML de test
     for key in list(os.environ.keys()):
@@ -134,8 +134,8 @@ def test_standalone_propagates_run_id_to_snapshot(tmp_path, monkeypatch):
     }))
     (config_dir / "env").mkdir()
 
-    with patch("ocm_platform.config.loader.env_resolver.load_dotenv_for_env"), \
-         patch("ocm_platform.config.hydra_loader.write_config_snapshot") as mock_write:
+    with patch("ocm.config.loader.env_resolver.load_dotenv_for_env"), \
+         patch("ocm.config.hydra_loader.write_config_snapshot") as mock_write:
         load_appconfig_standalone(
             env="test",
             config_dir=config_dir,

@@ -12,7 +12,7 @@ import time
 from typing import Optional
 
 import pandas as pd
-from ocm_platform.observability import bind_pipeline
+from ocm.observability import bind_pipeline
 from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,

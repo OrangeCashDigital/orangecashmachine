@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ocm_platform/runtime/guard.py
+ocm/runtime/guard.py
 ==============================
 
 Kill switch + runtime guard para cualquier proceso de ejecución OCM.

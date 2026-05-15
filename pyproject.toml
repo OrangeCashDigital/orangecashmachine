@@ -105,7 +105,7 @@ dev = [
 include_external_packages = true
 root_packages = [
     "market_data",
-    "ocm_platform",
+    "ocm",
     "trading",
     "portfolio",
     "app",
@@ -125,7 +125,7 @@ forbidden_modules = [
     "market_data",
     "trading",
     "portfolio",
-    "ocm_platform",
+    "ocm",
     "infrastructure",
     "app",
     "api",
@@ -180,12 +180,12 @@ forbidden_modules = [
 name = "BC-06: platform has no business logic dependencies"
 type = "forbidden"
 source_modules = [
-    "ocm_platform",
+    "ocm",
 ]
 forbidden_modules = [
     "market_data",
     "trading",
-    "infra",
+    "infrastructure",
 ]
 
 [[tool.importlinter.contracts]]
@@ -203,7 +203,7 @@ forbidden_modules = [
 name = "BC-08: domain layers must not depend on api (no upward dependency)"
 type = "forbidden"
 source_modules = [
-    "ocm_platform",
+    "ocm",
     "market_data",
     "trading",
     "app",
@@ -233,7 +233,7 @@ source_modules = [
     "market_data",
     "trading",
     "portfolio",
-    "ocm_platform",
+    "ocm",
     "infrastructure",
 ]
 forbidden_modules = [

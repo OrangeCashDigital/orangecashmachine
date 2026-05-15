@@ -29,7 +29,7 @@ def validate_and_coerce(raw_dict: dict[str, Any]) -> Any:
         ValidationError: si tipos o estructura no son correctos.
         ConfigPipelineError: wrapeado por el pipeline con stage=VALIDATED.
     """
-    from ocm_platform.config.schema import AppConfig  # SSOT — schema.py, no models
+    from ocm.config.schema import AppConfig  # SSOT — schema.py, no models
 
     app_config = AppConfig.model_validate(raw_dict)
     logger.debug("config_pipeline_l4 | pydantic=ok env={}", app_config.environment.name)

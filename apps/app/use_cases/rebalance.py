@@ -22,7 +22,7 @@ Integración
 Nota sobre RebalanceSignal → Signal
 ------------------------------------
 RebalanceSignal es un value object de portfolio/.
-El OMS espera un SignalProtocol (ocm_platform/boundaries.py).
+El OMS espera un SignalProtocol (ocm/boundaries.py).
 _RebalanceSignalAdapter hace el bridge sin acoplar los BCs.
 
 Principios: SRP · DIP · DRY · SafeOps · Composition Root

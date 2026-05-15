@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import pandas as pd
-from ocm_platform.observability import bind_pipeline
+from ocm.observability import bind_pipeline
 
 from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
@@ -163,7 +163,7 @@ class _LazyCalibrationStore:
     def _get(self, exchange: str, timeframe: str) -> "int | None":
         try:
             if not self._initialized:
-                from ocm_platform.infra.state.factories import build_lateness_calibration_store
+                from ocm.runtime.state.factories import build_lateness_calibration_store
                 self._store = build_lateness_calibration_store()
                 self._initialized = True
             if self._store is None:
@@ -225,7 +225,7 @@ class DownloadResult:
 # ==========================================================
 
 from market_data.ports.outbound.state import CursorStorePort as CursorStore
-from ocm_platform.infra.state.cursor_store import InMemoryCursorStore
+from ocm.runtime.state.cursor_store import InMemoryCursorStore
 
 
 # ==========================================================

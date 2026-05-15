@@ -1,5 +1,5 @@
 """
-ocm_platform/observability/__init__.py
+ocm/observability/__init__.py
 =======================================
 
 Exportaciones públicas del paquete observability.
@@ -10,14 +10,14 @@ SSOT · OCP · Fail-Fast en import time.
 """
 from __future__ import annotations
 
-from ocm_platform.observability.logger import (
+from ocm.observability.logger import (
     bootstrap_logging,
     configure_logging,
     bind_pipeline,
     is_logging_configured,
     setup_logging,
 )
-from ocm_platform.observability.bootstrap import (
+from ocm.observability.bootstrap import (
     pre_log,
     drain,
 )
@@ -41,17 +41,17 @@ __all__ = [
 ]
 
 # ── Metrics runtime + Prometheus ─────────────────────────────────────────────
-from ocm_platform.observability.prometheus import (
+from ocm.observability.prometheus import (
     push_metrics,
     start_metrics_server,
 )
-from ocm_platform.observability.metrics_runtime import (
+from ocm.observability.metrics_runtime import (
     MetricsRuntime,
     MetricsMode,
     init_metrics_runtime,
     get_metrics_runtime,
 )
-from ocm_platform.observability.pushers import (
+from ocm.observability.pushers import (
     PrometheusPusher,
     NoopPusher,
 )

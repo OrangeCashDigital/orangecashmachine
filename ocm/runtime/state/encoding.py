@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ocm_platform/infra/state/encoding.py
+ocm/infra/state/encoding.py
 ======================================
 
 Codificación de segmentos de claves Redis.

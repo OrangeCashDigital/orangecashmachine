@@ -34,7 +34,7 @@ from market_data.ports.outbound.kafka_producer import (
     GROUP_EXECUTION,
     GROUP_PORTFOLIO,
 )
-from ocm_platform.config.env_vars import (
+from ocm.config.env_vars import (
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_AUTO_OFFSET_RESET,
     KAFKA_CONSUMER_SESSION_TIMEOUT_MS,

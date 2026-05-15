@@ -20,7 +20,7 @@ Ambos coexisten — no son mutuamente excluyentes.
 
 Uso
 ---
-    from ocm_platform.runtime.registry import record_run, query_runs
+    from ocm.runtime.registry import record_run, query_runs
 
     run_id = record_run(
         env="development",

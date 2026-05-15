@@ -44,8 +44,8 @@ from omegaconf import DictConfig, OmegaConf
 # coerce_scalar_values — motor canónico de coerción (L3 SSOT).
 # Vive en layers/coercion.py junto a BOOL_TRUE/BOOL_FALSE y _NULLABLE_PATHS.
 # Nota: _NULLABLE_KEYS eliminado — SSOT migrado a _NULLABLE_PATHS (path-based).
-from ocm_platform.config.hydra_loader import strip_hydra_internals
-from ocm_platform.config.layers.coercion import coerce_scalar_values
+from ocm.config.hydra_loader import strip_hydra_internals
+from ocm.config.layers.coercion import coerce_scalar_values
 
 
 class ConfigStage(Enum):
@@ -186,7 +186,7 @@ class ConfigPipeline:
         Esta es la ÚNICA fuente autorizada de mutación runtime.
         """
         try:
-            from ocm_platform.config.layers.env_override import apply_env_overrides
+            from ocm.config.layers.env_override import apply_env_overrides
             mutated, mutations = apply_env_overrides(cfg)  # os.environ: correcto en prod
             logger.debug("config_pipeline_l2 | ocm_overrides={}", mutations)
             self._record(ConfigStage.ENV_MUTATED, ConfigStage.COERCED, mutations)
@@ -235,7 +235,7 @@ class ConfigPipeline:
         SIN reglas de negocio (esas van en L5).
         """
         try:
-            from ocm_platform.config.layers.validation import validate_and_coerce
+            from ocm.config.layers.validation import validate_and_coerce
             app_config = validate_and_coerce(raw_dict)
             logger.debug("config_pipeline_l4 | pydantic=ok")
             self._record(ConfigStage.VALIDATED, ConfigStage.FROZEN)
@@ -254,7 +254,7 @@ class ConfigPipeline:
         Fail-fast: cualquier violación aborta el startup.
         """
         try:
-            from ocm_platform.config.layers.rules import apply_business_rules
+            from ocm.config.layers.rules import apply_business_rules
             apply_business_rules(app_config)
             logger.debug("config_pipeline_l5 | rules=ok")
             return app_config

@@ -48,8 +48,8 @@ from __future__ import annotations
 
 import pytest
 
-from ocm_platform.infra.state.gap_registry import GapRegistry
-from ocm_platform.infra.state.gap_store    import InMemoryGapStore
+from ocm.runtime.state.gap_registry import GapRegistry
+from ocm.runtime.state.gap_store    import InMemoryGapStore
 
 # ── Constantes de test ───────────────────────────────────────────────────────
 _ENV       = "test"
@@ -322,7 +322,7 @@ class TestGet:
 class TestDIPInvariant:
 
     def test_inmemory_satisface_gapstoreport(self) -> None:
-        from ocm_platform.infra.state.gap_store import GapStorePort
+        from ocm.runtime.state.gap_store import GapStorePort
         store = InMemoryGapStore()
         assert isinstance(store, GapStorePort)
 

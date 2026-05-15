@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ocm_platform/observability/sinks.py
+ocm/observability/sinks.py
 =====================================
 
 Sinks remotos para el sistema de logging de OrangeCashMachine.

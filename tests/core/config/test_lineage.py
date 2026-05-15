@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ocm_platform.runtime.lineage import build_lineage, get_git_hash
+from ocm.runtime.lineage import build_lineage, get_git_hash
 
 
 # ---------------------------------------------------------------------------

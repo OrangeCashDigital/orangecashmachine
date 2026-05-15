@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from ocm_platform.config.schema import AppConfig  # SSOT — schema.py, no models
+    from ocm.config.schema import AppConfig  # SSOT — schema.py, no models
 
 
 class ConfigRuleViolation(RuntimeError):

@@ -5,14 +5,14 @@ from __future__ import annotations
 from unittest.mock import patch
 
 
-from ocm_platform.config.paths import (
+from ocm.config.paths import (
     _expand_env,
     _read_yaml_lake_path,
     data_lake_root,
     bronze_ohlcv_root,
     gold_features_root,
 )
-from ocm_platform.config.env_vars import OCM_DATA_LAKE_PATH, OCM_GOLD_PATH
+from ocm.config.env_vars import OCM_DATA_LAKE_PATH, OCM_GOLD_PATH
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ def test_data_lake_root_env_override(monkeypatch, tmp_path):
 
 def test_data_lake_root_fallback(monkeypatch):
     monkeypatch.delenv(OCM_DATA_LAKE_PATH, raising=False)
-    with patch("ocm_platform.config.paths._read_yaml_lake_path", return_value=None):
+    with patch("ocm.config.paths._read_yaml_lake_path", return_value=None):
         result = data_lake_root()
     assert result.parts[-2:] == ("data_platform", "data_lake")
 
@@ -89,6 +89,6 @@ def test_gold_features_root_derived(monkeypatch, tmp_path):
 
 def test_read_yaml_lake_path_returns_none_on_error(monkeypatch):
     """Si el YAML loader lanza, devuelve None sin propagar."""
-    with patch("ocm_platform.config.paths._find_config_dir", side_effect=RuntimeError("boom")):
+    with patch("ocm.config.paths._find_config_dir", side_effect=RuntimeError("boom")):
         result = _read_yaml_lake_path()
     assert result is None

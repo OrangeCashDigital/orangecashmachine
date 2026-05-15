@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ocm_platform/observability/processors.py
+ocm/observability/processors.py
 ==========================================
 
 Processor chain de structlog para OrangeCashMachine.

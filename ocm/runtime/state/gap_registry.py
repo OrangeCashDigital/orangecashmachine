@@ -48,9 +48,9 @@ from typing import List, Optional
 
 from loguru import logger
 
-from ocm_platform.infra.state.encoding import encode_redis_key as _encode
-from ocm_platform.infra.state.retry    import redis_retry      as _retry
-from ocm_platform.infra.state.gap_store    import GapStorePort
+from ocm.runtime.state.encoding import encode_redis_key as _encode
+from ocm.runtime.state.retry    import redis_retry      as _retry
+from ocm.runtime.state.gap_store    import GapStorePort
 
 _GAP_TTL_DAYS   = 90
 _GAP_TTL        = _GAP_TTL_DAYS * 86_400
@@ -369,5 +369,5 @@ def build_gap_registry_from_env(env: Optional[str] = None) -> Optional["GapRegis
         DeprecationWarning,
         stacklevel=2,
     )
-    from ocm_platform.infra.state.factories import build_gap_registry
+    from ocm.runtime.state.factories import build_gap_registry
     return build_gap_registry(env=env)

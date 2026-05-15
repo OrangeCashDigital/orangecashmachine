@@ -1,5 +1,5 @@
 """
-ocm_platform/config/structured/__init__.py
+ocm/config/structured/__init__.py
 ==========================================
 
 Exportaciones públicas del paquete structured config.
@@ -13,14 +13,14 @@ SSOT · OCP · Fail-Fast en import time.
 """
 from __future__ import annotations
 
-from ocm_platform.config.structured.pipeline import (
+from ocm.config.structured.pipeline import (
     PipelineConfig,
     HistoricalConfig,
     ResampleConfig,
     RealtimeConfig,
     RetryPolicyConfig,
 )
-from ocm_platform.config.structured.observability import ObservabilityConfig
+from ocm.config.structured.observability import ObservabilityConfig
 
 __all__ = [
     "PipelineConfig",

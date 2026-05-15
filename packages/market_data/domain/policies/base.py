@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Protocol, runtime_checkable
 
-from ocm_platform.observability import bind_pipeline
+from ocm.observability import bind_pipeline
 
 # ── Ports (contratos) — nunca importar implementaciones concretas aquí ──────
 from market_data.ports.outbound.storage import OHLCVStorage

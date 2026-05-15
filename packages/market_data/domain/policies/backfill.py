@@ -16,7 +16,7 @@ from typing import Optional
 # Ajustar por exchange en exchange_quirks si es necesario.
 
 import pandas as pd
-from ocm_platform.observability import bind_pipeline
+from ocm.observability import bind_pipeline
 from market_data.adapters.inbound.rest.ohlcv_fetcher import DEFAULT_CHUNK_LIMIT
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 from market_data.adapters.outbound.exchange.exchange_quirks import get_origin_fallback_ms, get_quirks
@@ -32,7 +32,7 @@ from market_data.infrastructure.observability.metrics import ROWS_INGESTED, PIPE
 # Se importa desde infra.state por necesidad de compatibilidad de schema
 # Redis — no hay forma de evitarlo sin duplicar lógica (DRY > pureza DIP).
 # SSOT: la función vive en cursor_store porque define el schema de claves.
-from ocm_platform.infra.state.encoding import encode_redis_key as _encode
+from ocm.runtime.state.encoding import encode_redis_key as _encode
 from market_data.infrastructure.kafka.payloads import EventPayload, KafkaOHLCVBar as OHLCVBar, DATASOURCE_BACKFILL
 from market_data.infrastructure.kafka.serializer import serialize, make_routing_key
 from market_data.ports.outbound.kafka_producer import TOPIC_OHLCV_RAW, HEADER_SOURCE, HEADER_VERSION, HEADER_RUN_ID

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ocm_platform/observability/filters.py
+ocm/observability/filters.py
 ======================================
 
 Filtros reutilizables para sinks de Loguru.
@@ -9,7 +9,7 @@ Filtros reutilizables para sinks de Loguru.
 Módulos canónicos del pipeline OCM
 -----------------------------------
 Derivados de la estructura real del proyecto (verificada con grep).
-Cualquier cambio estructural en market_data/ u ocm_platform/control_plane/
+Cualquier cambio estructural en market_data/ u ocm/control_plane/
 debe reflejarse aquí — este módulo es el SSOT de qué constituye "pipeline".
 
 Contratos
@@ -42,7 +42,7 @@ _PIPELINE_MODULES: tuple[str, ...] = (
     "market_data.ingestion.",
     "market_data.processing.",
     # Control plane — orquestación Dagster / Prefect
-    "ocm_platform.control_plane.",
+    "ocm.control_plane.",
 )
 
 

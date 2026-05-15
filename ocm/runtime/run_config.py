@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 """
-ocm_platform/runtime/run_config.py
+ocm/runtime/run_config.py
 ====================================
 
 :class:`RunConfig` — configuración de proceso inmutable.
 
 Centraliza las variables de entorno que controlan **cómo** arranca el proceso,
-separadas de :class:`~ocm_platform.config.schema.AppConfig` que controla **qué**
+separadas de :class:`~ocm.config.schema.AppConfig` que controla **qué**
 hace la app.
 
-Ubicación canónica: ocm_platform/runtime/
+Ubicación canónica: ocm/runtime/
 Razón: RunConfig describe el sistema en ejecución, no la configuración
 declarativa. Separación por SRP y Clean Architecture.
 
@@ -38,7 +38,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from ocm_platform.config.env_vars import (
+from ocm.config.env_vars import (
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
     OCM_DEBUG,
@@ -46,7 +46,7 @@ from ocm_platform.config.env_vars import (
     PUSHGATEWAY_URL,
     default_debug_for,
 )
-from ocm_platform.config.layers.coercion import BOOL_TRUE  # SSOT — única fuente para bool strings
+from ocm.config.layers.coercion import BOOL_TRUE  # SSOT — única fuente para bool strings
 
 # ---------------------------------------------------------------------------
 # Constantes de módulo — compiladas una vez (DRY + eficiencia)
@@ -121,7 +121,7 @@ class RunConfig:
             ValueError: Si ``env`` resuelto no pertenece a :data:`VALID_ENVS`.
         """
         # Local import para romper ciclo. No mover a nivel de módulo.
-        from ocm_platform.config.loader.env_resolver import resolve_env
+        from ocm.config.loader.env_resolver import resolve_env
 
         env = resolve_env(explicit_env)
 

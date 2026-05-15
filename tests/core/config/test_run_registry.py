@@ -17,8 +17,8 @@ from unittest.mock import patch
 
 import pytest
 
-import ocm_platform.runtime.registry as rr
-import ocm_platform.runtime.registry as _rr_impl  # SSOT: constantes viven en el módulo canónico
+import ocm.runtime.registry as rr
+import ocm.runtime.registry as _rr_impl  # SSOT: constantes viven en el módulo canónico
 
 
 # ---------------------------------------------------------------------------

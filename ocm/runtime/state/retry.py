@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ocm_platform/infra/state/retry.py
+ocm/infra/state/retry.py
 ===================================
 
 Resiliencia síncrona ante fallos transitorios de Redis.

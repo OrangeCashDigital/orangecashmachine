@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ocm_platform/observability/formats.py
+ocm/observability/formats.py
 ======================================
 
 Formatos de log centralizados para todos los sinks de Loguru.

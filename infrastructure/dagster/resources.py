@@ -27,9 +27,9 @@ from datetime import datetime, timezone
 
 from dagster import ConfigurableResource
 
-from ocm_platform.config.hydra_loader import load_appconfig_standalone
-from ocm_platform.runtime.run_config  import RunConfig
-from ocm_platform.runtime.context     import RuntimeContext
+from ocm.config.hydra_loader import load_appconfig_standalone
+from ocm.runtime.run_config  import RunConfig
+from ocm.runtime.context     import RuntimeContext
 from market_data.ports.outbound.storage         import OHLCVStorage
 from market_data.ports.outbound.storage_factory import StorageFactoryPort
 

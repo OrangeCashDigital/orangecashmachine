@@ -59,7 +59,7 @@ from market_data.adapters.outbound.exchange.throttle import (
 from market_data.infrastructure.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 
 if TYPE_CHECKING:
-    from ocm_platform.config.schema import ExchangeConfig, ResilienceConfig
+    from ocm.config.schema import ExchangeConfig, ResilienceConfig
 
 # Símbolos definidos en este módulo.
 # Las clases de resiliencia, throttle y limiter se re-exportan desde

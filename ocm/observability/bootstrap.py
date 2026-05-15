@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-ocm_platform/observability/bootstrap.py
+ocm/observability/bootstrap.py
 =========================================
 
 Buffer de pre-logging de Fase 0.

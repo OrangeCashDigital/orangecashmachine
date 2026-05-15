@@ -53,9 +53,9 @@ from typing import Optional
 
 from loguru import logger
 
-from ocm_platform.infra.state.gap_store    import GapStorePort
-from ocm_platform.infra.state.encoding import encode_redis_key as _encode
-from ocm_platform.infra.state.retry    import redis_retry      as _retry
+from ocm.runtime.state.gap_store    import GapStorePort
+from ocm.runtime.state.encoding import encode_redis_key as _encode
+from ocm.runtime.state.retry    import redis_retry      as _retry
 
 _CALIBRATION_TTL_DAYS = 7
 _CALIBRATION_TTL      = _CALIBRATION_TTL_DAYS * 86_400
@@ -219,5 +219,5 @@ def build_calibration_store_from_env(
         DeprecationWarning,
         stacklevel=2,
     )
-    from ocm_platform.infra.state.factories import build_lateness_calibration_store
+    from ocm.runtime.state.factories import build_lateness_calibration_store
     return build_lateness_calibration_store(env=env)

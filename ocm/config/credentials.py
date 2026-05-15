@@ -23,7 +23,7 @@ Principios: KISS · SafeOps · Sin efectos secundarios
 import os
 from typing import Any
 
-from ocm_platform.config.env_vars import OCM_API_KEY, OCM_API_SECRET
+from ocm.config.env_vars import OCM_API_KEY, OCM_API_SECRET
 
 
 def resolve_exchange_credentials(

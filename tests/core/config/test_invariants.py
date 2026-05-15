@@ -27,12 +27,12 @@ import re
 from pathlib import Path
 
 
-import ocm_platform.config.env_vars as env_vars_module
-from ocm_platform.config.env_vars import (
+import ocm.config.env_vars as env_vars_module
+from ocm.config.env_vars import (
     OCM_DATA_LAKE_PATH,
     OCM_GOLD_PATH,
 )
-from ocm_platform.config.paths import (
+from ocm.config.paths import (
     bronze_ohlcv_root,
     data_lake_root,
     gold_features_root,

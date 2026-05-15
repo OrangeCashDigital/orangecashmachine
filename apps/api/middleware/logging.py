@@ -3,7 +3,7 @@
 # ==============================================================================
 #
 # Loguea cada request con: método, path, status, duración, ip.
-# Integrado con el pipeline loguru existente en ocm_platform/observability/.
+# Integrado con el pipeline loguru existente en ocm/observability/.
 #
 # No loguea bodies — SafeOps: evitar filtrar datos sensibles en logs.
 # Authorization header nunca se loguea — sanitizado explícitamente.

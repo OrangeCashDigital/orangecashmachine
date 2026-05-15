@@ -30,7 +30,7 @@ from pydantic import (
     model_validator,
 )
 
-from ocm_platform.observability.config import LoggingConfig
+from ocm.observability.config import LoggingConfig
 
 CONFIG_PATH: Path = Path("config/settings.yaml")
 
@@ -205,7 +205,7 @@ class ExchangeConfig(StrictBaseModel):
     @classmethod
     def resolve_credentials(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Resuelve credenciales desde env vars antes de instanciar el modelo."""
-        from ocm_platform.config.credentials import resolve_exchange_credentials
+        from ocm.config.credentials import resolve_exchange_credentials
 
         name = str(values.get("name", "")).upper()
         creds: dict[str, Any] = values.pop("credentials", {}) or {}
@@ -220,7 +220,7 @@ class ExchangeConfig(StrictBaseModel):
         Lee OCM_ENV directamente desde os.environ para evitar el import circular
         schema → env_resolver → schema. Fail-soft: entorno desconocido no es prod.
         """
-        from ocm_platform.config.env_vars import OCM_ENV as _OCM_ENV  # import local: solo constante str
+        from ocm.config.env_vars import OCM_ENV as _OCM_ENV  # import local: solo constante str
 
         env      = (os.environ.get(_OCM_ENV) or "development").strip().lower()
         is_prod  = env == "production"

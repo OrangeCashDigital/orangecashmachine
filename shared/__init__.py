@@ -15,7 +15,7 @@ Estructura
 Regla de dependencia (BC-09 en pyproject.toml):
   shared/ → SOLO stdlib y third-party
   PROHIBIDO importar desde: market_data, trading, portfolio,
-                             ocm_platform, infrastructure, apps, data_platform
+                             ocm, infrastructure, apps, data_platform
 
 Esto garantiza que shared/ sea el nivel más bajo del grafo de dependencias,
 nunca creando ciclos.

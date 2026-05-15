@@ -88,7 +88,7 @@ async def _retry_async(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RE
 
     Delegado a retry.redis_retry_async — SSOT.
     """
-    from ocm_platform.infra.state.retry import redis_retry_async
+    from ocm.runtime.state.retry import redis_retry_async
     return await redis_retry_async(fn, attempts=attempts, base_ms=base_ms)
 
 
@@ -99,7 +99,7 @@ def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS)
 
     Delegado a utils.redis_retry — SSOT.
     """
-    from ocm_platform.infra.state.retry import redis_retry
+    from ocm.runtime.state.retry import redis_retry
     return redis_retry(fn, attempts=attempts, base_ms=base_ms)
 
 
@@ -354,7 +354,7 @@ def encode_cursor_key(value: str) -> str:
 
     Delegado a utils.encode_redis_key — SSOT.
     """
-    from ocm_platform.infra.state.encoding import encode_redis_key
+    from ocm.runtime.state.encoding import encode_redis_key
     return encode_redis_key(value)
 
 
@@ -431,7 +431,7 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
             "Instala python-dotenv o exporta las vars manualmente."
         )
 
-    from ocm_platform.config.loader.env_resolver import resolve_env
+    from ocm.config.loader.env_resolver import resolve_env
     return RedisCursorStore(
         host=os.getenv("REDIS_HOST", _DEFAULT_HOST),
         port=int(os.getenv("REDIS_PORT", str(_DEFAULT_PORT))),

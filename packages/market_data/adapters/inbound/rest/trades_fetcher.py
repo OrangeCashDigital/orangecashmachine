@@ -38,7 +38,7 @@ from loguru import logger
 
 from market_data.adapters.outbound.exchange import CCXTAdapter
 from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
-from ocm_platform.infra.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
+from ocm.runtime.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
 
 # ---------------------------------------------------------------------------
 # Constants

@@ -18,7 +18,7 @@ from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
 import pytest
 
-from ocm_platform.observability.processors import (
+from ocm.observability.processors import (
     _SERVICE,
     _VERSION,
     _add_timestamp,

@@ -36,7 +36,7 @@ from typing import Callable, Optional, Protocol, runtime_checkable
 from loguru import logger
 
 from shared.contracts.boundaries import SignalProtocol  # DIP — execution depende de abstraccion
-from ocm_platform.runtime.guard import ExecutionGuard
+from ocm.runtime.guard import ExecutionGuard
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.risk.manager import RiskManager
 

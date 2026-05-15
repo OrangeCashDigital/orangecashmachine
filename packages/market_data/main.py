@@ -44,12 +44,12 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from ocm_platform.observability import bind_pipeline, bootstrap_logging, configure_logging
-from ocm_platform.runtime.guard import ExecutionGuard, ExecutionStoppedError
-from ocm_platform.runtime.context import RuntimeContext
-from ocm_platform.config import env_vars
+from ocm.observability import bind_pipeline, bootstrap_logging, configure_logging
+from ocm.runtime.guard import ExecutionGuard, ExecutionStoppedError
+from ocm.runtime.context import RuntimeContext
+from ocm.config import env_vars
 
-from ocm_platform.runtime import guard_context
+from ocm.runtime import guard_context
 def build_context() -> RuntimeContext:
     """
     Construye RuntimeContext standalone — sin Hydra, sin CLI.
@@ -60,8 +60,8 @@ def build_context() -> RuntimeContext:
     Fail-Fast: lanza ConfigurationError si AppConfig es inválido.
     """
     from datetime import datetime, timezone
-    from ocm_platform.config.hydra_loader import load_appconfig_standalone
-    from ocm_platform.runtime.run_config import RunConfig
+    from ocm.config.hydra_loader import load_appconfig_standalone
+    from ocm.runtime.run_config import RunConfig
 
     run_cfg = RunConfig.from_env()
     app_cfg = load_appconfig_standalone(env=run_cfg.env)

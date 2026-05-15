@@ -44,8 +44,8 @@ from omegaconf import DictConfig, OmegaConf
 # L2 y L3 usan el mismo conjunto de strings reconocidos; sin duplicación ni riesgo
 # de divergencia silenciosa entre capas.
 # Ref: core/config/layers/coercion.py — BOOL_TRUE / BOOL_FALSE.
-from ocm_platform.config.layers.coercion import BOOL_FALSE as _BOOL_FALSE
-from ocm_platform.config.layers.coercion import BOOL_TRUE as _BOOL_TRUE
+from ocm.config.layers.coercion import BOOL_FALSE as _BOOL_FALSE
+from ocm.config.layers.coercion import BOOL_TRUE as _BOOL_TRUE
 
 _OCM_PREFIX = "OCM_"
 _SEPARATOR  = "__"
