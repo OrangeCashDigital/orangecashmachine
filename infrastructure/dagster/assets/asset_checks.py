@@ -22,7 +22,6 @@ Principios: DIP · OCP · SRP · SafeOps · Fail-Fast donde importa
 """
 from __future__ import annotations
 
-import time
 from typing import List
 
 from dagster import (

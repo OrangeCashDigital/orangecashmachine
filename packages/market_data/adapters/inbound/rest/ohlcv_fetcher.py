@@ -22,7 +22,6 @@ import math
 import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 

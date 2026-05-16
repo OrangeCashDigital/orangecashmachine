@@ -13,7 +13,6 @@ Principios verificados: SRP · optional dependency · zero overhead
 from __future__ import annotations
 
 import time
-import pytest
 
 from market_data.infrastructure.kafka.metrics import KafkaMetrics, timer
 

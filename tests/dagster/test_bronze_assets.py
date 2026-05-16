@@ -12,7 +12,7 @@ Principios:
   Fail-soft: status="partial" emite Output en lugar de lanzar
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

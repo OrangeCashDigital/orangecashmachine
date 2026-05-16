@@ -9,9 +9,7 @@ Sin Redis real — PersistentSeenFilter usa un store mock en memoria.
 """
 
 from market_data.infrastructure.kafka.dedup import (
-    SeenFilter,
     PersistentSeenFilter,
-    CompositeSeenFilter,
     SeenFilter,
 )
 

@@ -30,7 +30,6 @@ Principios: SOLID · KISS · DRY · SSOT · SafeOps
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 from datetime import datetime, timezone
 from typing import Callable
 

@@ -21,7 +21,6 @@ import pytest
 from omegaconf import OmegaConf
 
 from ocm.config.layers.env_override import apply_env_overrides
-from ocm.config.layers.coercion import BOOL_TRUE, BOOL_FALSE
 
 
 # ── Fixture base ───────────────────────────────────────────────────────────────

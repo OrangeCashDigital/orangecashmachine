@@ -260,11 +260,6 @@ class OHLCVPipeline(PipelineTriggerPort):
 
         cursor  = cursor_store or _build_cursor_store_safe()
         from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage  # local — BC-05
-        from market_data.adapters.outbound.exchange import (  # local — BC-05
-            CCXTAdapter, ExchangeAdapterError, ExchangeCircuitOpenError,
-            get_or_create_throttle, get_or_create_limiter,
-        )
-        from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle  # local — BC-05
         bronze  = BronzeStorage(exchange=self._exchange_id)
         silver  = _build_storage(
             exchange     = self._exchange_id,
