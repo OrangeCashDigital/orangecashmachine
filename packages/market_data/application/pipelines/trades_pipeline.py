@@ -117,15 +117,29 @@ class TradesPipeline(PipelineTriggerPort):
     def __init__(
         self,
         symbols:         List[str],
-        exchange_client: CCXTAdapter,
+        exchange_client: "ExchangeClientPort",
+        fetcher:         "TradesFetcherPort",   # obligatorio — inyectar desde factory (DIP)
+        storage:         "TradesStoragePort",   # obligatorio — inyectar desde factory (DIP)
         market_type:     str  = "spot",
         dry_run:         bool = False,
         max_concurrency: int  = 4,
     ) -> None:
+        # Fail-fast: todas las dependencias concretas se inyectan desde
+        # ConcretePipelineFactory — TradesPipeline no resuelve infraestructura.
         if not symbols:
             raise ValueError("TradesPipeline: symbols no puede estar vacío")
         if exchange_client is None:
-            raise ValueError("TradesPipeline: exchange_client es obligatorio")
+            raise TypeError("TradesPipeline: 'exchange_client' es obligatorio")
+        if fetcher is None:
+            raise TypeError(
+                "TradesPipeline: 'fetcher' es obligatorio. "
+                "Inyectar TradesFetcher desde el composition root."
+            )
+        if storage is None:
+            raise TypeError(
+                "TradesPipeline: 'storage' es obligatorio. "
+                "Inyectar TradesStorage desde el composition root."
+            )
         if max_concurrency < 1:
             raise ValueError("TradesPipeline: max_concurrency debe ser >= 1")
 
@@ -140,26 +154,10 @@ class TradesPipeline(PipelineTriggerPort):
             exchange=self._exchange_id, pipeline="trades",
         )
 
-        # DIP: fetcher inyectado desde factory — no se resuelve catalog aquí.
-        # La factory cabla: get_catalog() → TradesStorage → TradesFetcher.
-        if fetcher is None:
-            from market_data.infrastructure.storage.iceberg.catalog import get_catalog  # composition root fallback
-            from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
-            from market_data.adapters.outbound.trades.trades_fetcher import TradesFetcher
-            _catalog = get_catalog()
-            _storage = TradesStorage(
-                exchange    = self._exchange_id,
-                market_type = self.market_type,
-                catalog     = _catalog,
-                dry_run     = dry_run,
-            )
-            fetcher = TradesFetcher(
-                exchange_client = exchange_client,
-                storage         = _storage,
-                market_type     = self.market_type,
-                dry_run         = dry_run,
-            )
+        # DIP: fetcher y storage inyectados desde ConcretePipelineFactory.
+        # TradesPipeline no conoce implementaciones concretas (Clean Architecture).
         self._fetcher = fetcher
+        self._storage = storage
 
     async def run(self, mode: TradesPipelineMode = "incremental") -> TradesSummary:
         """

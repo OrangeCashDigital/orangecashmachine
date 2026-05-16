@@ -69,14 +69,17 @@ class RepairStrategy(StrategyMixin):
     def __init__(
         self,
         gap_tolerance: int = 0,
-        metrics: "RepairMetricsPort | None" = None,
+        metrics: "RepairMetricsPort" = None,  # type: ignore[assignment]
     ) -> None:
-        self._tolerance = gap_tolerance
+        # Fail-fast: metrics es obligatorio — inyectar desde composition root.
+        # RepairStrategy no puede importar infrastructure/ (DIP — BC-05).
         if metrics is None:
-            from market_data.infrastructure.observability.metrics_adapter import (  # composition root fallback
-                PrometheusRepairMetrics,
+            raise TypeError(
+                "RepairStrategy: 'metrics' es obligatorio. "
+                "Inyectar PrometheusRepairMetrics desde el composition root "
+                "(market_data.factories.pipeline_factory o OCMContainer)."
             )
-            metrics = PrometheusRepairMetrics()
+        self._tolerance = gap_tolerance
         self._metrics: RepairMetricsPort = metrics
 
     async def execute_pair(

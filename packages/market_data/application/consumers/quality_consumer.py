@@ -60,14 +60,20 @@ class QualityPipelineConsumer(BaseConsumer):
         bus: EventBusPort,
         *,
         registry=None,
-        tracker=None,
+        tracker,           # obligatorio — inyectar desde composition root (DIP · BC-05)
     ) -> None:
+        # Fail-fast: tracker es obligatorio.
+        # QualityPipelineConsumer no puede importar infrastructure/ (DIP — BC-05).
+        # Inyectar lineage_tracker desde OCMContainer o ConcretePipelineFactory.
+        if tracker is None:
+            raise TypeError(
+                "QualityPipelineConsumer: 'tracker' es obligatorio. "
+                "Inyectar LineageTracker desde el composition root "
+                "(OCMContainer o ConcretePipelineFactory)."
+            )
         super().__init__(bus)
         self._registry = registry or default_registry
-        from market_data.infrastructure.lineage.tracker import (  # composition root fallback — BC-05
-            lineage_tracker as _default_tracker,
-        )
-        self._tracker  = tracker  or _default_tracker
+        self._tracker  = tracker
 
     # ----------------------------------------------------------
     # BaseConsumer contract

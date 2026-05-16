@@ -405,29 +405,8 @@ class OHLCVTransformer:
             dict(df["quality_flag"].value_counts()),
         )
 
-        # ── Lineage SILVER ───────────────────────────────────────────────────
-        # rows_in=original_rows captura pérdida real por velas CORRUPT.
-        # Fail-soft: si lineage_tracker falla, el pipeline continúa (SafeOps).
-        if run_id is not None:
-            from market_data.infrastructure.lineage.tracker import (  # local — tipos únicamente
-                LineageEvent, LineageStatus, PipelineLayer,
-            )
-            self._tracker.record(LineageEvent(
-                run_id    = run_id,
-                layer     = PipelineLayer.SILVER,
-                exchange  = exchange,
-                symbol    = symbol,
-                timeframe = timeframe,
-                rows_in   = original_rows,
-                rows_out  = len(df),
-                status    = (
-                    LineageStatus.PARTIAL if len(df) < original_rows
-                    else LineageStatus.SUCCESS
-                ),
-                params    = {
-                    "timeframe":    timeframe,
-                    "rows_removed": original_rows - len(df),
-                },
-            ))
-
+        # Lineage SILVER: OHLCVTransformer es un @classmethod puro (sin estado).
+        # El lineage se registra en QualityPipelineConsumer, que recibe el tracker
+        # inyectado y opera sobre OHLCVBatchReceived events post-transformación.
+        # No hay self._tracker aquí — es @classmethod, no tiene instancia.
         return df

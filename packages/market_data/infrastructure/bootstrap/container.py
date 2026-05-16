@@ -150,11 +150,19 @@ class OCMContainer:
 
         # 2. Use cases — no dependen de infra directamente (DIP)
         from market_data.application import PipelineOrchestrator, ResampleUseCase
+        from market_data.infrastructure.observability.metrics_adapter import (
+            PrometheusResampleMetrics,
+            PrometheusRepairMetrics,
+        )
         self.orchestrator = PipelineOrchestrator()
         from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
         self.resample_uc  = ResampleUseCase(
             storage_factory = IcebergStorageFactory(),
+            metrics         = PrometheusResampleMetrics(),
         )
+        # Exponer factories de métricas para pipelines construidos externamente.
+        self.resample_metrics = PrometheusResampleMetrics
+        self.repair_metrics   = PrometheusRepairMetrics
 
         logger.info("OCMContainer: listo")
 

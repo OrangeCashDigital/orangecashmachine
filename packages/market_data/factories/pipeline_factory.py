@@ -89,16 +89,44 @@ class ConcretePipelineFactory:
             pipeline_kwargs["auto_lookback_days"] = request.auto_lookback_days
 
         from market_data.infrastructure.observability.metrics_adapter import PrometheusPipelineMetrics
-        from market_data.infrastructure.kafka.producer import KafkaProducer
         from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
+        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
+        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
+        from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 
-        pipeline_kwargs["storage"]  = IcebergStorage(
-            exchange    = request.exchange,
-            market_type = request.market_type,
-            dry_run     = request.dry_run,
+        exchange_id = request.exchange
+        market_type = request.market_type
+        dry_run     = request.dry_run
+
+        from ocm.runtime.state import build_cursor_store_from_env, InMemoryCursorStore
+        try:
+            cursor = build_cursor_store_from_env()
+        except Exception:
+            cursor = InMemoryCursorStore()
+
+        silver = IcebergStorage(
+            exchange    = exchange_id,
+            market_type = market_type,
+            dry_run     = dry_run,
+            cursor_store = cursor,
         )
-        pipeline_kwargs["producer"] = KafkaProducer()
-        pipeline_kwargs["metrics"]  = PrometheusPipelineMetrics()
+        bronze  = BronzeStorage(exchange=exchange_id)
+        fetcher = HistoricalFetcherAsync(
+            storage            = silver,
+            transformer        = OHLCVTransformer(),
+            exchange_client    = pipeline_kwargs["exchange_client"],
+            cursor_store       = cursor,
+            backfill_mode      = pipeline_kwargs.get("backfill_mode", True),
+            market_type        = market_type,
+            config_start_date  = pipeline_kwargs.get("start_date", "auto"),
+            auto_lookback_days = pipeline_kwargs.get("auto_lookback_days", 3650),
+        )
+        metrics = PrometheusPipelineMetrics()
+
+        pipeline_kwargs["fetcher"]  = fetcher
+        pipeline_kwargs["bronze"]   = bronze
+        pipeline_kwargs["storage"]  = silver
+        pipeline_kwargs["metrics"]  = metrics
         return OHLCVPipeline(**pipeline_kwargs)
 
     def _build_trades(self, request: Any) -> Any:

@@ -236,18 +236,12 @@ ignore_imports = [
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.silver.trades_storage",
     "market_data.application.pipelines.trades_pipeline -> market_data.adapters.outbound.trades.trades_fetcher",
-    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
     "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.silver.derivatives_storage",
-    "market_data.application.pipelines.derivatives_pipeline -> market_data.adapters.outbound.derivatives.funding_rate_fetcher",
-    "market_data.application.pipelines.derivatives_pipeline -> market_data.adapters.outbound.derivatives.open_interest_fetcher",
     "market_data.application.strategies.repair -> market_data.infrastructure.observability.metrics_adapter",
-    "market_data.application.use_cases.ohlcv_transformer -> market_data.infrastructure.lineage.tracker",
     # ── Circuit breaker — cross-cutting concern del adapter layer ──────────────
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange.ccxt_adapter",  # get_breaker_state — pendiente CircuitBreakerPort
     # get_breaker_state() y ExchangeCircuitOpenError pertenecen semánticamente
     # al adapter de exchange. Pendiente: exponer breaker_state via ExchangeClientPort.
-            # ── quality_consumer — pendiente de migración a Dagster sensor/op ──────────
-    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.lineage.tracker",
 ]
 
 [[tool.importlinter.contracts]]

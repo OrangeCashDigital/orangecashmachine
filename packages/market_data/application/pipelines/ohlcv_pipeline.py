@@ -85,34 +85,6 @@ from ocm.runtime.state import build_gap_registry
 
 
 # ==============================================================================
-# Storage factory
-# ==============================================================================
-
-def _build_storage(
-    exchange:     str,
-    market_type:  str,
-    dry_run:      bool                 = False,
-    cursor_store: "CursorStorePort | None" = None,
-) -> "OHLCVStorage":
-    """
-    Factory de storage OHLCV.
-
-    IcebergStorage es el único backend activo.
-    cursor_store se pasa directamente — IcebergStorage gestiona su propio acceso.
-    """
-    _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
-        "storage_factory | IcebergStorage"
-    )
-    from market_data.ports.outbound.storage import OHLCVStorage  # local — BC-05
-    return IcebergStorage(
-        exchange     = exchange,
-        market_type  = market_type,
-        dry_run      = dry_run,
-        cursor_store = cursor_store,
-    )
-
-
-# ==============================================================================
 # Constantes
 # ==============================================================================
 
@@ -233,7 +205,11 @@ class OHLCVPipeline(PipelineTriggerPort):
         symbols:            List[str],
         timeframes:         List[str],
         start_date:         str,
-        exchange_client:    CCXTAdapter,
+        exchange_client:    "ExchangeClientPort",
+        fetcher:            object,                    # HistoricalFetcherPort — inyectar desde factory
+        bronze:             object,                    # BronzeStoragePort — inyectar desde factory
+        storage:            "OHLCVStorage",            # Silver — inyectar desde factory
+        metrics:            object,                    # PipelineMetricsPort — inyectar desde factory
         max_concurrency:    int                        = DEFAULT_MAX_CONCURRENCY,
         cursor_store:       Optional[CursorStorePort]  = None,
         backfill_mode:      bool                       = True,
@@ -242,16 +218,37 @@ class OHLCVPipeline(PipelineTriggerPort):
         auto_lookback_days: int                        = 3650,
         throttle:           Optional[AdaptiveThrottle] = None,
     ) -> None:
+        # Fail-fast: dependencias de infraestructura obligatorias.
+        # OHLCVPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).
+        # Todas las implementaciones concretas vienen de ConcretePipelineFactory.
         if not symbols:
             raise ValueError("symbols no puede estar vacio")
         if not timeframes:
             raise ValueError("timeframes no puede estar vacio")
         if not start_date:
             raise ValueError("start_date es obligatorio")
-        # "auto" es el sentinel para lookback dinámico — se resuelve en el fetcher.
-        # Una fecha ISO explícita actúa como floor; el fetcher la respeta en path C.
         if exchange_client is None:
-            raise ValueError("exchange_client es obligatorio")
+            raise TypeError("OHLCVPipeline: 'exchange_client' es obligatorio")
+        if fetcher is None:
+            raise TypeError(
+                "OHLCVPipeline: 'fetcher' es obligatorio. "
+                "Inyectar HistoricalFetcherAsync desde el composition root."
+            )
+        if bronze is None:
+            raise TypeError(
+                "OHLCVPipeline: 'bronze' es obligatorio. "
+                "Inyectar BronzeStorage desde el composition root."
+            )
+        if storage is None:
+            raise TypeError(
+                "OHLCVPipeline: 'storage' es obligatorio. "
+                "Inyectar IcebergStorage desde el composition root."
+            )
+        if metrics is None:
+            raise TypeError(
+                "OHLCVPipeline: 'metrics' es obligatorio. "
+                "Inyectar PrometheusPipelineMetrics desde el composition root."
+            )
 
         self.symbols         = symbols
         self.timeframes      = timeframes
@@ -262,53 +259,23 @@ class OHLCVPipeline(PipelineTriggerPort):
         self._exchange_id    = getattr(exchange_client, "_exchange_id", "unknown")
         self._throttle       = throttle
 
-        cursor  = cursor_store or _build_cursor_store_safe()
-        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage  # composition root fallback — DIP
-        bronze: BronzeStoragePort = BronzeStorage(exchange=self._exchange_id)
-        silver  = _build_storage(
-            exchange     = self._exchange_id,
-            market_type  = self.market_type,
-            dry_run      = dry_run,
-            cursor_store = cursor,
-        )
-        quality = QualityPipeline()
-
-        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync  # composition root — OHLCVPipeline cabla su propio fetcher
-        # overlap NO se resuelve globalmente aquí.
-        # Razón: un único max() sobre todos los timeframes produciría
-        # solapamiento excesivo en timeframes largos (ej: overlap de 1m
-        # aplicado a 1d = 15 días de reingesta innecesaria).
-        # overlap_for_timeframe(tf, exchange) se invoca por par dentro de
-        # _resolve_start_timestamp del fetcher, que ya recibe el exchange_id
-        # via self._exchange (CCXTAdapter._exchange_id).
-        fetcher = HistoricalFetcherAsync(
-            storage            = silver,
-            transformer        = OHLCVTransformer(),
-            exchange_client    = exchange_client,
-            cursor_store       = cursor,
-            backfill_mode      = self.backfill_mode,
-            market_type        = market_type,
-            config_start_date  = start_date,
-            auto_lookback_days = auto_lookback_days,
-        )
-
+        # Dependencias inyectadas — sin resolución de infraestructura aquí (DIP).
+        cursor          = cursor_store or _build_cursor_store_safe()
+        quality         = QualityPipeline()
         _kafka_producer = _build_kafka_producer_safe()
 
-        from market_data.infrastructure.observability.metrics_adapter import (  # composition root fallback
-            PrometheusPipelineMetrics,
-        )
         self._ctx = PipelineContext(
-            fetcher         = fetcher,
-            storage         = silver,
-            bronze          = bronze,
-            cursor          = cursor,
-            quality         = quality,
-            exchange_id     = self._exchange_id,
-            market_type     = self.market_type,
-            start_date      = start_date,
-            gap_registry    = build_gap_registry(),  # type: ignore[arg-type]
-            kafka_producer  = _kafka_producer,
-            metrics         = PrometheusPipelineMetrics(),
+            fetcher        = fetcher,
+            storage        = storage,
+            bronze         = bronze,
+            cursor         = cursor,
+            quality        = quality,
+            exchange_id    = self._exchange_id,
+            market_type    = self.market_type,
+            start_date     = start_date,
+            gap_registry   = build_gap_registry(),  # type: ignore[arg-type]
+            kafka_producer = _kafka_producer,
+            metrics        = metrics,
         )
 
         if _kafka_producer is not None:

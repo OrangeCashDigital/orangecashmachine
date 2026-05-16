@@ -293,12 +293,14 @@ class ResamplePipeline:
         # Misma instancia para lectura (source 1m) y escritura (targets).
         self._storage = storage
 
-        # DIP: metrics inyectado — fallback a PrometheusResampleMetrics si None.
+        # Fail-fast: metrics es obligatorio — inyectar desde composition root.
+        # ResamplePipeline no puede importar infrastructure/ (DIP — BC-05).
         if metrics is None:
-            from market_data.infrastructure.observability.metrics_adapter import (  # composition root fallback
-                PrometheusResampleMetrics,
+            raise TypeError(
+                "ResamplePipeline: 'metrics' es obligatorio. "
+                "Inyectar PrometheusResampleMetrics desde el composition root "
+                "(market_data.factories.pipeline_factory o OCMContainer)."
             )
-            metrics = PrometheusResampleMetrics()
         self._metrics: ResampleMetricsPort = metrics
         self._log = bind_pipeline(
             "resample_pipeline",

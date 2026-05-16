@@ -47,6 +47,54 @@ import pandas as pd
 import pytest
 
 from market_data.application.strategies.repair import RepairStrategy
+from market_data.ports.outbound.metrics import RepairMetricsPort
+
+
+def _make_metrics() -> MagicMock:
+    """
+    Stub de RepairMetricsPort para tests.
+
+    Cada counter/gauge es un MagicMock con .labels().inc() encadenado
+    para que RepairStrategy pueda llamarlo sin Prometheus real.
+    DIP: el test nunca toca PrometheusRepairMetrics.
+    """
+    m = MagicMock(spec=RepairMetricsPort)
+    for attr in (
+        "pipeline_errors",
+        "repair_gaps_found",
+        "repair_gaps_healed",
+        "repair_gaps_skipped",
+        "rows_ingested",
+    ):
+        counter = MagicMock()
+        counter.labels.return_value = MagicMock()
+        counter.labels.return_value.inc = MagicMock()
+        setattr(m, attr, counter)
+    return m
+from market_data.ports.outbound.metrics import RepairMetricsPort
+
+
+def _make_metrics() -> MagicMock:
+    """
+    Stub de RepairMetricsPort para tests.
+
+    Cada counter/gauge es un MagicMock con .labels().inc() encadenado
+    para que RepairStrategy pueda llamarlo sin Prometheus real.
+    DIP: el test nunca toca PrometheusRepairMetrics.
+    """
+    m = MagicMock(spec=RepairMetricsPort)
+    for attr in (
+        "pipeline_errors",
+        "repair_gaps_found",
+        "repair_gaps_healed",
+        "repair_gaps_skipped",
+        "rows_ingested",
+    ):
+        counter = MagicMock()
+        counter.labels.return_value = MagicMock()
+        counter.labels.return_value.inc = MagicMock()
+        setattr(m, attr, counter)
+    return m
 from market_data.domain.policies.base import (
     PipelineContext,
 )
@@ -238,7 +286,7 @@ class TestExecutePairSkip:
     @pytest.mark.asyncio
     async def test_skip_if_silver_empty(self):
         """Si Silver no tiene datos → result.skipped=True sin tocar el exchange."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=None)
 
         result = await strategy.execute_pair(
@@ -254,7 +302,7 @@ class TestExecutePairSkip:
         """DataFrame contiguo → scan_gaps vacío → result.skipped=True."""
         # 10 velas contiguas: ningún gap
         df       = _make_df(n_rows=10, start_ms=0)
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=df)
 
         result = await strategy.execute_pair(
@@ -267,7 +315,7 @@ class TestExecutePairSkip:
     @pytest.mark.asyncio
     async def test_skip_if_silver_raises(self):
         """Si storage.load_ohlcv lanza → _read_silver retorna None → skip."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(raise_on_load=True)
 
         result = await strategy.execute_pair(
@@ -298,7 +346,7 @@ class TestExecutePairHealing:
 
         # Exchange devuelve 4 velas que llenan el gap completamente
         gap_candles = _raw_candles(start_ms=_TF_MS, n=4)
-        strategy    = RepairStrategy()
+        strategy    = RepairStrategy(metrics=_make_metrics())
         ctx         = _make_ctx(df=df, chunks=[gap_candles])
 
         with patch(
@@ -332,7 +380,7 @@ class TestExecutePairHealing:
 
         # Solo 5 velas de 19 esperadas → fill_ratio ≈ 0.26 < 0.95
         gap_candles = _raw_candles(start_ms=_TF_MS, n=5)
-        strategy    = RepairStrategy()
+        strategy    = RepairStrategy(metrics=_make_metrics())
         ctx         = _make_ctx(df=df, chunks=[gap_candles])
 
         with patch(
@@ -364,7 +412,7 @@ class TestExecutePairHealing:
             "volume": [1000.0, 1000.0],
         })
 
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=df, chunks=[])
 
         result = await strategy.execute_pair(
@@ -395,7 +443,7 @@ class TestExecutePairHealing:
         })
 
         # El gap_start_ms=0 está marcado irrecuperable
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=df, chunks=[], irrecoverable={gap_start_ms})
 
         result = await strategy.execute_pair(
@@ -425,7 +473,7 @@ class TestExecutePairHealing:
         bad_fetcher = MagicMock()
         bad_fetcher.fetch_chunk = AsyncMock(side_effect=RuntimeError("boom"))
 
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=df)
         ctx      = PipelineContext(
             fetcher      = bad_fetcher,
@@ -461,7 +509,7 @@ class TestExecutePairHealing:
         bad_fetcher = MagicMock()
         bad_fetcher.fetch_chunk = AsyncMock(side_effect=asyncio.CancelledError())
 
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx = PipelineContext(
             fetcher      = bad_fetcher,
             storage      = _StorageStub(df=df),
@@ -492,7 +540,7 @@ class TestReadSilver:
 
     def test_returns_none_if_storage_raises(self):
         """SafeOps: si storage lanza → None sin propagar."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(raise_on_load=True)
 
         result = strategy._read_silver(ctx, _SYMBOL, _TF)
@@ -500,7 +548,7 @@ class TestReadSilver:
 
     def test_returns_none_if_df_empty(self):
         """Si storage retorna DataFrame vacío → None."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=pd.DataFrame())
 
         result = strategy._read_silver(ctx, _SYMBOL, _TF)
@@ -508,7 +556,7 @@ class TestReadSilver:
 
     def test_returns_none_if_storage_returns_none(self):
         """Si storage retorna None explícito → None."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=None)
 
         result = strategy._read_silver(ctx, _SYMBOL, _TF)
@@ -517,7 +565,7 @@ class TestReadSilver:
     def test_columns_only_filters_correctly(self):
         """columns_only=['timestamp'] → solo columna timestamp en resultado."""
         df       = _make_df(n_rows=5)
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=df)
 
         result = strategy._read_silver(ctx, _SYMBOL, _TF, columns_only=["timestamp"])
@@ -528,7 +576,7 @@ class TestReadSilver:
     def test_columns_only_ignores_missing_columns(self):
         """columns_only con columna inexistente → columnas válidas solamente."""
         df       = _make_df(n_rows=3)
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=df)
 
         result = strategy._read_silver(
@@ -541,7 +589,7 @@ class TestReadSilver:
     def test_full_df_returned_without_columns_only(self):
         """Sin columns_only → retorna DataFrame completo."""
         df       = _make_df(n_rows=5)
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         ctx      = _make_ctx(df=df)
 
         result = strategy._read_silver(ctx, _SYMBOL, _TF)
@@ -574,7 +622,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_no_data_available_if_exchange_empty(self):
         """Exchange retorna lista vacía → NoDataAvailableError."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=_TF_MS, expected=4)
         ctx      = self._forward_ctx(chunks=[])
 
@@ -592,7 +640,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_no_data_available_if_df_empty_after_filter(self):
         """Exchange retorna velas fuera de la ventana del gap → NoDataAvailableError."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=100 * _TF_MS, expected=4)
 
         # Velas en timestamp=0, muy lejos del gap → filtradas → df vacío
@@ -612,7 +660,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_quality_rejected_returns_false(self):
         """QualityPipeline rechaza → (False, 0, 0.0) sin guardar en storage."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=_TF_MS, expected=4)
         candles  = _raw_candles(start_ms=_TF_MS, n=4)
         storage  = _StorageStub()
@@ -642,7 +690,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_happy_path_returns_true_rows_fill_ratio(self):
         """Camino feliz: 4 velas → (True, 4, fill_ratio)."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=_TF_MS, expected=4)
         candles  = _raw_candles(start_ms=_TF_MS, n=4)
         storage  = _StorageStub()
@@ -674,7 +722,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_no_data_available_marks_irrecoverable(self):
         """NoDataAvailableError → GapRegistry.mark_healed(irreversible=True)."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=_TF_MS, expected=4)
         registry = _GapRegistryStub()
         ctx      = PipelineContext(
@@ -706,7 +754,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_gap_registry_none_no_crash(self):
         """gap_registry=None (modo degradado) → SafeOps: no lanza."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=_TF_MS, expected=4)
         ctx      = PipelineContext(
             fetcher      = _FetcherStub(chunks=[]),
@@ -734,7 +782,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_chunk_fetch_error_returns_false(self):
         """ChunkFetchError → (False, 0, 0.0), no marca irrecuperable."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=_TF_MS, expected=4)
         registry = _GapRegistryStub()
 
@@ -772,7 +820,7 @@ class TestHealGap:
     @pytest.mark.asyncio
     async def test_cancelled_error_propagates_from_heal_gap(self):
         """CancelledError en _heal_gap debe propagarse — no tragarse."""
-        strategy = RepairStrategy()
+        strategy = RepairStrategy(metrics=_make_metrics())
         gap      = _make_gap(start_ms=_TF_MS, expected=4)
 
         bad_fetcher = MagicMock()

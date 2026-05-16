@@ -129,17 +129,25 @@ class DerivativesPipeline(PipelineTriggerPort):
         self,
         symbols:         List[str],
         datasets:        List[str],
-        exchange_client: CCXTAdapter,
+        exchange_client: "ExchangeClientPort",
+        fetchers:        "dict[str, object]",  # obligatorio — inyectar desde factory (DIP)
         market_type:     str  = "swap",
         dry_run:         bool = False,
         max_concurrency: int  = 4,
     ) -> None:
+        # Fail-fast: fetchers es obligatorio — inyectar desde ConcretePipelineFactory.
+        # DerivativesPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).
         if not symbols:
             raise ValueError("DerivativesPipeline: symbols no puede estar vacío")
         if not datasets:
             raise ValueError("DerivativesPipeline: datasets no puede estar vacío")
         if exchange_client is None:
-            raise ValueError("DerivativesPipeline: exchange_client es obligatorio")
+            raise TypeError("DerivativesPipeline: 'exchange_client' es obligatorio")
+        if fetchers is None:
+            raise TypeError(
+                "DerivativesPipeline: 'fetchers' es obligatorio. "
+                "Inyectar dict[str, FetcherPort] desde el composition root."
+            )
 
         unknown = set(datasets) - SUPPORTED_DERIVATIVE_DATASETS
         if unknown:
@@ -160,43 +168,9 @@ class DerivativesPipeline(PipelineTriggerPort):
             exchange=self._exchange_id, pipeline="derivatives",
         )
 
-        # DIP: fetchers inyectados desde factory — no se resuelve catalog aquí.
-        # La factory cabla: get_catalog() → DerivativesStorage → Fetchers.
-        if fetchers is not None:
-            self._fetchers: dict[str, object] = fetchers
-        else:
-            from market_data.infrastructure.storage.iceberg.catalog import get_catalog  # composition root fallback
-            from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
-            from market_data.adapters.outbound.derivatives.funding_rate_fetcher import FundingRateFetcher
-            from market_data.adapters.outbound.derivatives.open_interest_fetcher import OpenInterestFetcher
-            _catalog = get_catalog()
-            self._fetchers = {}
-            if "funding_rate" in datasets:
-                self._fetchers["funding_rate"] = FundingRateFetcher(
-                    exchange_client = exchange_client,
-                    storage         = DerivativesStorage(
-                        dataset     = "funding_rate",
-                        exchange    = self._exchange_id,
-                        market_type = self.market_type,
-                        catalog     = _catalog,
-                        dry_run     = dry_run,
-                    ),
-                    market_type     = self.market_type,
-                    dry_run         = dry_run,
-                )
-            if "open_interest" in datasets:
-                self._fetchers["open_interest"] = OpenInterestFetcher(
-                    exchange_client = exchange_client,
-                    storage         = DerivativesStorage(
-                        dataset     = "open_interest",
-                        exchange    = self._exchange_id,
-                        market_type = self.market_type,
-                        catalog     = _catalog,
-                        dry_run     = dry_run,
-                    ),
-                    market_type     = self.market_type,
-                    dry_run         = dry_run,
-                )
+        # DIP: fetchers inyectados desde ConcretePipelineFactory.
+        # DerivativesPipeline no conoce implementaciones concretas (Clean Architecture).
+        self._fetchers: dict[str, object] = fetchers
 
     async def run(
         self, mode: DerivativesPipelineMode = "incremental"

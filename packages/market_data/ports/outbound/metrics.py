@@ -217,3 +217,18 @@ class RepairMetricsPort(Protocol):
     @property
     def rows_ingested(self) -> object: ...
 
+
+class QualityMetricsPort(Protocol):
+    """
+    Contrato de métricas del pipeline de calidad de datos.
+
+    Implementación: métricas Prometheus globales en
+    market_data.infrastructure.observability.metrics_adapter.
+    DIP: QualityPipeline depende de este port, no de Prometheus directamente.
+
+    Nota: QualityPipeline usa métricas globales (QUALITY_GAPS_TOTAL,
+    PIPELINE_ERRORS) registradas en module-level. Este port sirve como
+    contrato documentado para esas métricas — la implementación futura
+    puede inyectarlas como instancia si se requiere testabilidad completa.
+    """
+    ...  # Métricas via globals en quality/pipeline.py — contrato nominal
