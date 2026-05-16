@@ -234,7 +234,7 @@ class DownloadResult:
 # CursorStore import (aqui para evitar circular import)
 # ==========================================================
 
-from market_data.ports.outbound.state import CursorStorePort as CursorStore
+from market_data.ports.outbound.state import AsyncCursorStorePort as CursorStore
 from ocm.runtime.state.cursor_store import InMemoryCursorStore
 
 
@@ -269,7 +269,7 @@ class HistoricalFetcherAsync:
         self._storage = storage
         self._transformer       = transformer or OHLCVTransformer()
         self._overlap           = overlap_bars
-        self._cursor: CursorStore = cursor_store or InMemoryCursorStore()  # type: ignore[assignment]
+        self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
         self._backfill_mode     = backfill_mode
         self._market_type       = market_type
         self._config_start_date  = config_start_date
@@ -519,7 +519,7 @@ class HistoricalFetcherAsync:
             return self._exchange.parse8601(candidate)
 
         # A. Cursor async — await obligatorio
-        cursor_ts = await self._cursor.get(exchange_name, symbol, timeframe)  # type: ignore[misc,call-arg]
+        cursor_ts = await self._cursor.get(exchange_name, symbol, timeframe)
         if cursor_ts is not None:
             self._log.bind(symbol=symbol, timeframe=timeframe, ts_ms=cursor_ts).debug("Cursor hit")
             return cursor_ts - (self._overlap * tf_ms)

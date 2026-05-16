@@ -142,7 +142,7 @@ class _BaseDerivativesFetcher:
             self._log.warning(
                 "CursorStore no disponible — usando storage fallback | error={}", exc
             )
-            self._cursor = None  # type: ignore[assignment]
+            self._cursor: CursorStore | None = None
 
     # ------------------------------------------------------------------
     # Public API

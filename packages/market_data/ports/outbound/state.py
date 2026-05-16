@@ -105,3 +105,54 @@ class CursorStorePort(Protocol):
         cada batch exitoso.
         """
         self.set(encode_cursor_key(exchange, symbol, timeframe), str(ts_ms))
+
+
+# ── Puerto async de cursores (fetchers) ──────────────────────────────────────
+
+@runtime_checkable
+class AsyncCursorStorePort(Protocol):
+    """Contrato async de persistencia de cursores para fetchers de ingesta.
+
+    API semántica de 3 argumentos — exchange, symbol, timeframe — que refleja
+    el dominio de mercado directamente sin requerir que el caller construya
+    la clave manualmente (encode_cursor_key queda encapsulado en la impl).
+
+    Implementaciones concretas (ocm.runtime.state.cursor_store):
+        - RedisCursorStore    — producción (Redis con TTL configurable)
+        - InMemoryCursorStore — tests y modos sin Redis
+
+    Diferencia con CursorStorePort
+    --------------------------------
+    CursorStorePort: API de clave plana (get(key: str)) para callers que
+        construyen la clave explícitamente (backfill, iceberg_storage).
+    AsyncCursorStorePort: API semántica async para fetchers de ingesta.
+
+    Principios: ISP · DIP · OCP · SSOT
+    """
+
+    async def get(
+        self,
+        exchange:  str,
+        symbol:    str,
+        timeframe: str,
+    ) -> Optional[int]:
+        """Retorna el último timestamp procesado (ms) o None si no existe."""
+        ...
+
+    async def update(
+        self,
+        exchange:     str,
+        symbol:       str,
+        timeframe:    str,
+        timestamp_ms: int,
+    ) -> bool:
+        """Persiste el último timestamp procesado. Retorna True si exitoso."""
+        ...
+
+    def get_raw(self, key: str) -> Optional[str]:
+        """Acceso de clave plana para compatibilidad con callers legacy."""
+        ...
+
+    def set_raw(self, key: str, value: str, ttl_seconds: int = 0) -> None:
+        """Escritura de clave plana para compatibilidad con callers legacy."""
+        ...
