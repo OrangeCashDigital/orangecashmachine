@@ -275,7 +275,7 @@ class RepairStrategy(StrategyMixin):
             gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
 
             collected_raw: list = []
-                _quirks = get_quirks(ctx.exchange_id)
+            _quirks = get_quirks(ctx.exchange_id)
 
             if _quirks.backward_pagination:
                 current_end_ms = gap.end_ms + tf_ms
