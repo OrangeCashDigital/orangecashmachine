@@ -337,7 +337,7 @@ class ResampleUseCase:
             timeframes  = targets,
             exchange    = request.exchange,
             market_type = request.market_type,
-            storage     = storage,
+            storage     = storage,  # type: ignore[arg-type]
             dry_run     = request.dry_run,
         )
 
