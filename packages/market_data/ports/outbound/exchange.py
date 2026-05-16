@@ -132,6 +132,7 @@ class ExchangeAdapter(ABC):
     async def fetch_trades(
         self,
         symbol: str,
+        since:  Optional[int] = None,
         limit:  int = 100,
     ) -> List[Dict[str, Any]]:
         """

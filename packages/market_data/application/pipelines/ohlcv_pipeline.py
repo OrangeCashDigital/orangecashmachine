@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from ocm.observability import bind_pipeline
 
@@ -159,12 +159,12 @@ def _build_cursor_store_safe() -> CursorStorePort:
     try:
         store = build_cursor_store_from_env()
         if store.is_healthy():
-            return store
+            return store  # type: ignore[return-value]
         _log.warning("Redis no disponible — cursor store en memoria (fallback)")
-        return InMemoryCursorStore()
+        return InMemoryCursorStore()  # type: ignore[return-value]
     except Exception as exc:
         _log.bind(error=str(exc)).warning("CursorStore init failed — fallback")
-        return InMemoryCursorStore()
+        return InMemoryCursorStore()  # type: ignore[return-value]
 
 
 def _classify_pair_error(result: PairResult) -> str:
@@ -201,6 +201,7 @@ def _classify_pair_error(result: PairResult) -> str:
 # ==============================================================================
 
 class OHLCVPipeline(PipelineTriggerPort):
+    _log: Any  # bound en __init__ via bind_pipeline() — anotado para MyPy
     """
     Pipeline unificado de ingestion OHLCV.
 
@@ -305,7 +306,7 @@ class OHLCVPipeline(PipelineTriggerPort):
             exchange_id     = self._exchange_id,
             market_type     = self.market_type,
             start_date      = start_date,
-            gap_registry    = build_gap_registry(),
+            gap_registry    = build_gap_registry(),  # type: ignore[arg-type]
             kafka_producer  = _kafka_producer,
         )
 

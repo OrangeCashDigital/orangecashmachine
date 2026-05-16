@@ -10,7 +10,6 @@ Depende de: ports.outbound.cache (abstracto), nunca de IcebergStorage.
 """
 from __future__ import annotations
 
-import time
 from typing import Optional
 
 from loguru import logger
@@ -41,7 +40,7 @@ class CursorStore:
         self._exchange   = exchange
         self._market_type = market_type
         self._ttl_s      = ttl_s
-        self._l1: dict[str, Optional[int]] = {}
+        self._l1: dict[tuple[str, str], Optional[int]] = {}
 
     # ── key helper ────────────────────────────────────────────────────────
 

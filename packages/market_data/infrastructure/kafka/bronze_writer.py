@@ -88,7 +88,7 @@ class KafkaBronzeWriter:
 
     async def start(self) -> None:
         """Arranca el consumer. Llamar antes de run()."""
-        await self._consumer.start()  # type: ignore[union-attr]
+        await self._consumer.start()  # type: ignore[attr-defined]
         self._running = True
         self._log.info("bronze_writer_started")
 
@@ -217,7 +217,7 @@ class KafkaBronzeWriter:
         # ── Escribir a Bronze via append() ────────────────────────────────
         try:
             await asyncio.to_thread(
-                self._bronze.append,
+                self._bronze.append,  # type: ignore[attr-defined]
                 df        = df,
                 symbol    = event.symbol,
                 timeframe = event.timeframe,

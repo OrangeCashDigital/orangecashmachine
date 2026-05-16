@@ -44,7 +44,7 @@ from market_data.adapters.inbound.rest.derivatives_fetcher import (
 # Types
 # ---------------------------------------------------------------------------
 
-DerivativesPipelineMode = Literal["incremental", "backfill"]
+DerivativesPipelineMode = Literal["incremental", "backfill", "repair"]
 
 SUPPORTED_DERIVATIVE_DATASETS: frozenset[str] = frozenset(
     {"funding_rate", "open_interest"}
@@ -262,7 +262,7 @@ class DerivativesPipeline(PipelineTriggerPort):
                 duration_ms = 0,
             )
         try:
-            rows = await fetcher.fetch_symbol(symbol)
+            rows = await fetcher.fetch_symbol(symbol)  # type: ignore[attr-defined]
             duration_ms = int((time.monotonic() - start) * 1000)
             self._log.info(
                 "  [{}/{}] {}/{} | rows={} duration={}ms",

@@ -37,7 +37,7 @@ from market_data.infrastructure.storage.silver.trades_storage import TradesStora
 # Types
 # ---------------------------------------------------------------------------
 
-TradesPipelineMode = Literal["incremental", "backfill"]
+TradesPipelineMode = Literal["incremental", "backfill", "repair"]
 
 # ---------------------------------------------------------------------------
 # Result / Summary

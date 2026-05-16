@@ -25,7 +25,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, List, Protocol, runtime_checkable
+from typing import Any, List, Protocol, runtime_checkable
 
 from ocm.observability import bind_pipeline
 
@@ -91,6 +91,21 @@ class PipelineContext:
     # Principio Kappa: todo evento pasa por Kafka; Iceberg es materialización.
     kafka_producer: "KafkaProducerPort | None" = field(default=None)
 
+
+    # Métricas de observabilidad — inyectadas por OHLCVPipeline.
+    # None = modo degradado (SafeOps): estrategias omiten métricas.
+    # Protocolo esperado: .record_pair(result) -> None
+    metrics:  Any = field(default=None)
+
+    # Publisher de eventos Kafka a nivel de par — inyectado por OHLCVPipeline.
+    # None = modo directo sin publicación de eventos de progreso.
+    # Protocolo esperado: .publish(event) -> Awaitable[None]
+    publisher: Any = field(default=None)
+
+    # Throttle de rate-limiting entre pares — inyectado por OHLCVPipeline.
+    # None = sin throttling (modo test o batch sin límite de rate).
+    # Protocolo esperado: .wait() -> Awaitable[None]
+    throttle:  Any = field(default=None)
     bronze_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     silver_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 

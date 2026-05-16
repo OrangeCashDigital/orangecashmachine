@@ -102,6 +102,8 @@ class KafkaProducerAdapter:
             request_timeout_ms = 30_000,
             retry_backoff_ms   = 500,
         )
+        if self._producer is None:
+            raise RuntimeError("producer_not_initialized")
         await self._producer.start()
         self._started = True
         self._log.info("kafka_producer_started")

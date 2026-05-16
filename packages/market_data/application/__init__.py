@@ -21,14 +21,28 @@ Submódulos
   use_cases/   — casos de uso concretos (PipelineOrchestrator, ResampleUseCase)
   pipelines/   — pipelines de datos (OHLCVPipeline, ResamplePipeline)
   consumers/   — consumidores de streams (QualityConsumer)
-  strategies/  — estrategias de ingestión (BackfillStrategy)
+  strategies/  — estrategias de ingestión (BackfillStrategy, IncrementalStrategy, RepairStrategy)
 
-Importar siempre desde el submódulo específico:
-    from market_data.application.use_cases.pipeline_orchestrator import PipelineOrchestrator
-    from market_data.application.use_cases.resample_ohlcv        import ResampleUseCase
-
-Este __init__.py está intencionalmente vacío de re-exports para evitar
-imports circulares y cascadas de inicialización.
+Re-exports públicos
+-------------------
+Exclusivamente para Composition Roots (infrastructure/dagster/assets/).
+El dominio y los ports NO deben importar desde aquí.
 
 Principios: SRP · DIP · OCP · KISS · Clean Architecture
 """
+# Re-exports para Composition Roots (Dagster assets)
+from market_data.application.use_cases.pipeline_orchestrator import (  # noqa: F401
+    PipelineOrchestrator,
+    PipelineRequest,
+)
+from market_data.application.use_cases.resample_ohlcv import (  # noqa: F401
+    ResampleUseCase,
+    ResampleRequest,
+)
+
+__all__ = [
+    "PipelineOrchestrator",
+    "PipelineRequest",
+    "ResampleUseCase",
+    "ResampleRequest",
+]

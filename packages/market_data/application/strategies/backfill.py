@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-import uuid as _uuid
 from typing import Optional
 
 import pandas as pd

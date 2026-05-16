@@ -63,11 +63,11 @@ class _NoOpHistogram:
 # Registro global — una sola instancia por proceso
 # ---------------------------------------------------------------------------
 
-def _make_counter(name: str, doc: str, labels: list) -> object:
+def _make_counter(name: str, doc: str, labels: list) -> "_NoOpCounter | Counter":
     return Counter(name, doc, labels) if _PROMETHEUS_AVAILABLE else _NoOpCounter()
 
 
-def _make_histogram(name: str, doc: str, labels: list, buckets: list) -> object:
+def _make_histogram(name: str, doc: str, labels: list, buckets: list) -> "_NoOpHistogram | Histogram":
     return (
         Histogram(name, doc, labels, buckets=buckets)
         if _PROMETHEUS_AVAILABLE
@@ -123,7 +123,7 @@ class KafkaMetrics:
 
     def event_published(self, exchange: str = "unknown") -> None:
         """Incrementa el contador de mensajes publicados."""
-        _events_published.labels(topic=self._topic, exchange=exchange).inc()
+        _events_published.labels(topic=self._topic, exchange=exchange).inc()  # type: ignore[attr-defined]
 
     def event_processed(
         self,
@@ -131,8 +131,8 @@ class KafkaMetrics:
         latency_ms: float = 0.0,
     ) -> None:
         """Registra un mensaje procesado con commit y su latencia."""
-        _events_processed.labels(topic=self._topic, exchange=exchange).inc()
-        _processing_latency.labels(topic=self._topic, exchange=exchange).observe(latency_ms)
+        _events_processed.labels(topic=self._topic, exchange=exchange).inc()  # type: ignore[attr-defined]
+        _processing_latency.labels(topic=self._topic, exchange=exchange).observe(latency_ms)  # type: ignore[attr-defined]
 
     def event_failed(
         self,
@@ -144,7 +144,7 @@ class KafkaMetrics:
 
         reason: deserialize_error | schema_mismatch | write_error | dlq_sent
         """
-        _events_failed.labels(
+        _events_failed.labels(  # type: ignore[attr-defined]
             topic    = self._topic,
             exchange = exchange,
             reason   = reason,

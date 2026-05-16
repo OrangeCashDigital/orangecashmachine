@@ -26,6 +26,11 @@ Eliminación programada: v3.0.0
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
+
 import warnings
 
 # Columnas que el caller podría referenciar — re-exportadas para no romper

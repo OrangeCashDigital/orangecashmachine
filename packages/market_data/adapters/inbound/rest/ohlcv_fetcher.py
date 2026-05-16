@@ -159,7 +159,7 @@ class _LazyCalibrationStore:
     """
 
     def __init__(self) -> None:
-        self._store = None
+        self._store = None  # type: ignore[assignment]
         self._initialized = False
 
     def _get(self, exchange: str, timeframe: str) -> "int | None":
@@ -261,7 +261,7 @@ class HistoricalFetcherAsync:
         self._storage = storage
         self._transformer       = transformer or OHLCVTransformer()
         self._overlap           = overlap_bars
-        self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
+        self._cursor: CursorStore = cursor_store or InMemoryCursorStore()  # type: ignore[assignment]
         self._backfill_mode     = backfill_mode
         self._market_type       = market_type
         self._config_start_date  = config_start_date
@@ -511,7 +511,7 @@ class HistoricalFetcherAsync:
             return self._exchange.parse8601(candidate)
 
         # A. Cursor async — await obligatorio
-        cursor_ts = await self._cursor.get(exchange_name, symbol, timeframe)
+        cursor_ts = await self._cursor.get(exchange_name, symbol, timeframe)  # type: ignore[misc,call-arg]
         if cursor_ts is not None:
             self._log.bind(symbol=symbol, timeframe=timeframe, ts_ms=cursor_ts).debug("Cursor hit")
             return cursor_ts - (self._overlap * tf_ms)

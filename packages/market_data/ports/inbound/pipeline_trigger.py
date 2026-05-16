@@ -21,7 +21,7 @@ DIP: Dagster depende de la abstracción, no del pipeline concreto.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Any
 
 if TYPE_CHECKING:
     # Evitar import circular — solo para type hints
@@ -42,12 +42,12 @@ class PipelineTriggerPort(ABC):
 
     Implementar este port requiere solo añadir la herencia:
         class OHLCVPipeline(PipelineTriggerPort):
-            async def run(self, mode="incremental") -> PipelineSummary:
+            async def run(self, mode="incremental") -> Any:
                 ...
     """
 
     @abstractmethod
-    async def run(self, mode: PipelineModeStr = "incremental") -> "PipelineSummary":
+    async def run(self, mode: PipelineModeStr = "incremental") -> Any:
         """
         Ejecuta el pipeline en el modo indicado.
 

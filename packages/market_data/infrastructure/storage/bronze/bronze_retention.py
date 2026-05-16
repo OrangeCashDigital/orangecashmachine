@@ -140,7 +140,7 @@ def run_retention(
     expired = 0
     try:
         (
-            table.expire_snapshots()
+            table.expire_snapshots()  # type: ignore[attr-defined]
             .expire_older_than(effective)
             .commit()
         )

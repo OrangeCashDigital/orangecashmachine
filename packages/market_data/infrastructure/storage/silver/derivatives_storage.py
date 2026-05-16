@@ -32,6 +32,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyiceberg.table import Table
+    import pyiceberg
+    import pyiceberg.catalog
+    import pyiceberg.table
 
 # ---------------------------------------------------------------------------
 # Datasets soportados — fuente única de verdad (DRY)
@@ -251,11 +254,11 @@ class DerivativesStorage:
             return self._table
 
         try:
-            self._table = self._catalog.load_table(self._table_name)
+            self._table = self._catalog.load_table(self._table_name)  # type: ignore[attr-defined]
             self._log.debug("Tabla existente | table={}", self._table_name)
         except Exception:
             self._log.info("Creando tabla | table={}", self._table_name)
-            self._table = self._catalog.create_table(
+            self._table = self._catalog.create_table(  # type: ignore[attr-defined]
                 identifier     = self._table_name,
                 schema         = _SCHEMAS[self._dataset](),
                 partition_spec = _build_partition_spec(),

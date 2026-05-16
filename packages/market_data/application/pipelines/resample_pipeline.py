@@ -61,6 +61,7 @@ from market_data.domain.value_objects.timeframe import (
     InvalidTimeframeError,
 )
 from market_data.domain.value_objects.timeframe import align_to_grid
+from market_data.ports.outbound.storage import OHLCVStorage
 
 _log = bind_pipeline("resample_pipeline")
 
@@ -223,7 +224,7 @@ def _resample_df(
     if df_1m is None or df_1m.empty:
         return pd.DataFrame()
 
-    resampled = align_to_grid(
+    resampled = align_to_grid(  # type: ignore[call-arg]
         df        = df_1m,
         timeframe = target_tf,
         exchange  = exchange,
@@ -266,7 +267,7 @@ class ResamplePipeline:
         symbols:     List[str],
         timeframes:  List[str],
         exchange:    str,
-        storage:     object,
+        storage: OHLCVStorage,
         market_type: str  = "spot",
         dry_run:     bool = False,
     ) -> None:

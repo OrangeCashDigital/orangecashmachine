@@ -24,7 +24,6 @@ Principios: SRP · DIP · SafeOps · Kappa architecture
 from __future__ import annotations
 
 import uuid as _uuid
-from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -108,7 +107,7 @@ class KafkaOHLCVPublisher:
                 timeframe      = timeframe,
                 batch_start_ts = int(df["timestamp"].min().timestamp() * 1000),
                 bars           = bars,
-                source         = source,
+                source         = source,  # type: ignore[arg-type]
                 run_id         = run_id,
             )
 

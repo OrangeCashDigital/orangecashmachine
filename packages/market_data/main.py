@@ -38,7 +38,7 @@ import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
@@ -88,11 +88,15 @@ _VERSION:          str   = "1.0.0"
 # Estado global del servicio — mutable solo desde el lifespan
 # ---------------------------------------------------------------------------
 
+
+if TYPE_CHECKING:  # pragma: no cover
+    from market_data.ports.outbound.storage_factory import StorageFactoryPort
+
 class _ServiceState:
     """Estado mutable del proceso. Un único instancia por proceso (singleton)."""
     guard:           Optional[ExecutionGuard]   = None
     ctx:             Optional[RuntimeContext]   = None
-    storage_factory: Optional[object]          = None  # StorageFactoryPort — inyectado en lifespan
+    storage_factory: Optional["StorageFactoryPort"] = None  # inyectado en lifespan
     started:         float                     = 0.0
     healthy:         bool                      = False
     last_run:        Optional[float]           = None

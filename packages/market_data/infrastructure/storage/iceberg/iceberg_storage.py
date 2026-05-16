@@ -33,7 +33,7 @@ Notas de implementación
 from __future__ import annotations
 
 import time
-from typing import Optional
+from typing import Optional, Any
 
 import pandas as pd
 import pyarrow as pa
@@ -115,6 +115,8 @@ class IcebergStorage:
         # SRP: IcebergStorage delega todo cache management aquí.
         # Inyectado desde container para testabilidad (DIP).
         self._ts_cache = TimestampCacheService(cursor_store=cursor_store)
+        self._cursor        = cursor_store  # CursorStorePort | None — acceso directo a Redis L2
+        self._last_ts_cache: dict[tuple[str, str], Any] = {}  # L1 cache in-process — invalidado en save_ohlcv()
         # SafeOps: en dry_run skip bootstrap y carga de tabla — sin I/O al catálogo.
         # En tests/CI el catálogo SQLite puede no existir. Todos los métodos de
         # escritura son no-op en dry_run. Los de lectura retornan None si _table=None.
@@ -142,12 +144,12 @@ class IcebergStorage:
         market_type = self._market_type or "unknown"
         return And(
             And(
-                EqualTo("exchange",    exchange),
-                EqualTo("symbol",      symbol),
+                EqualTo(term="exchange", literal=exchange),  # type: ignore[call-arg,arg-type]
+                EqualTo(term="symbol", literal=symbol),  # type: ignore[call-arg,arg-type]
             ),
             And(
-                EqualTo("timeframe",   timeframe),
-                EqualTo("market_type", market_type),
+                EqualTo(term="timeframe", literal=timeframe),  # type: ignore[call-arg,arg-type]
+                EqualTo(term="market_type", literal=market_type),  # type: ignore[call-arg,arg-type]
             ),
         )
 
@@ -228,7 +230,9 @@ class IcebergStorage:
             market_type = self._market_type or "unknown",
         )
 
+        assert self._table is not None, "_table debe estar inicializado antes de escribir"
         arrow_schema = self._table.schema().as_arrow()
+        assert self._table is not None, "_table debe estar inicializado antes de escribir"
         self._table.append(
             pa.Table.from_pandas(prepared, schema=arrow_schema, preserve_index=False)
         )
@@ -313,7 +317,7 @@ class IcebergStorage:
             return None
         try:
             result = (
-                self._table
+                self._table  # type: ignore[union-attr]
                 .scan(
                     row_filter      = self._base_filter(symbol, timeframe),
                     selected_fields = ("timestamp",),
@@ -331,7 +335,7 @@ class IcebergStorage:
             self._ts_cache.set(symbol, timeframe, ts)
             return ts
 
-        except Exception as exc:
+        except Exception:
             logger.opt(exception=True).warning(
                 "IcebergStorage.get_last_timestamp failed | {}/{}",
                 symbol, timeframe,
@@ -353,7 +357,7 @@ class IcebergStorage:
             return None
         try:
             result = (
-                self._table
+                self._table  # type: ignore[union-attr]
                 .scan(
                     row_filter      = self._base_filter(symbol, timeframe),
                     selected_fields = ("timestamp",),
@@ -363,7 +367,7 @@ class IcebergStorage:
             if result.num_rows == 0:
                 return None
             return _to_utc_timestamp(pc.min(result.column("timestamp")).as_py())
-        except Exception as exc:
+        except Exception:
             logger.opt(exception=True).warning(
                 "IcebergStorage.get_oldest_timestamp failed | {}/{}",
                 symbol, timeframe,
@@ -374,6 +378,7 @@ class IcebergStorage:
         # GoldStorage usa este metodo para anclar lineage antes del build.
         # SafeOps: nunca lanza — retorna None si tabla nueva o Iceberg degradado.
         try:
+            assert self._table is not None, "_table no inicializado en get_current_snapshot"
             snap = self._table.current_snapshot()
             if snap is None:
                 return None
@@ -411,19 +416,19 @@ class IcebergStorage:
                 # puede rechazar dependiendo de la versión. int epoch es seguro.
                 row_filter = And(
                     row_filter,
-                    GreaterThanOrEqual("timestamp", int(start.timestamp() * 1_000_000)),
+                    GreaterThanOrEqual("timestamp", int(start.timestamp() * 1_000_000)),  # type: ignore[call-arg,arg-type,misc]
                 )
             if end is not None:
                 row_filter = And(
                     row_filter,
-                    LessThanOrEqual("timestamp", int(end.timestamp() * 1_000_000)),
+                    LessThanOrEqual("timestamp", int(end.timestamp() * 1_000_000)),  # type: ignore[call-arg,arg-type,misc]
                 )
 
             import concurrent.futures as _cf
             with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
                 _future = _pool.submit(
                     lambda: (
-                        self._table
+                        self._table  # type: ignore[union-attr]
                         .scan(row_filter=row_filter)
                         .to_arrow()
                         .to_pandas()
@@ -448,7 +453,7 @@ class IcebergStorage:
                 .reset_index(drop=True)
             )
 
-        except Exception as exc:
+        except Exception:
             logger.opt(exception=True).warning(
                 "IcebergStorage.load_ohlcv failed | {}/{}",
                 symbol, timeframe,
@@ -476,6 +481,7 @@ class IcebergStorage:
     ) -> Optional[dict]:
         """Retorna metadata del snapshot actual como proxy de versión."""
         try:
+            assert self._table is not None, "_table no inicializado en get_current_snapshot"
             snap = self._table.current_snapshot()
             if snap is None:
                 return None

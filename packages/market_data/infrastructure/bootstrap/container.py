@@ -151,7 +151,10 @@ class OCMContainer:
         # 2. Use cases — no dependen de infra directamente (DIP)
         from market_data.application import PipelineOrchestrator, ResampleUseCase
         self.orchestrator = PipelineOrchestrator()
-        self.resample_uc  = ResampleUseCase()
+        from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+        self.resample_uc  = ResampleUseCase(
+            storage_factory = IcebergStorageFactory(),
+        )
 
         logger.info("OCMContainer: listo")
 

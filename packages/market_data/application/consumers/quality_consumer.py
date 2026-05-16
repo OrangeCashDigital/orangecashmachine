@@ -114,7 +114,6 @@ class QualityPipelineConsumer(BaseConsumer):
         checker = DataQualityChecker(
             timeframe=event.batch.timeframe,
             exchange=event.batch.exchange,
-            registry=self._registry,
         )
         report = checker.check(df, symbol=event.batch.symbol)
 

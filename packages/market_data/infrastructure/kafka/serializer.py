@@ -26,7 +26,6 @@ Principios: SSOT · SRP · Fail-Fast · KISS
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 from market_data.infrastructure.kafka.payloads import EventPayload
 

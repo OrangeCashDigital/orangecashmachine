@@ -16,7 +16,7 @@ Principios: DIP · SRP · SafeOps · SSOT · Kappa
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from typing import List
 
 from loguru import logger
 
@@ -204,6 +204,8 @@ class KafkaConsumerAdapter:
             session_timeout_ms    = self._session_timeout_ms,
             heartbeat_interval_ms = self._heartbeat_interval_ms,
         )
+        if self._consumer is None:
+            raise RuntimeError("consumer_not_initialized")
         await self._consumer.start()
         self._started = True
         self._log.info("kafka_consumer_started")

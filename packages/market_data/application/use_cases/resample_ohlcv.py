@@ -262,10 +262,10 @@ class ResampleUseCase:
             )
 
         result = ResampleUseCaseResult(
-            status      = summary.status,
+            status      = summary.status,  # type: ignore[attr-defined]
             exchange    = request.exchange,
             market_type = request.market_type,
-            rows        = summary.total_rows,
+            rows        = summary.total_rows,  # type: ignore[attr-defined]
             symbols     = symbols,
             targets     = targets,
             source_tf   = source_tf,

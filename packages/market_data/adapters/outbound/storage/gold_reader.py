@@ -147,8 +147,9 @@ class GoldReader:
         """Snapshot_ids que construyeron este dataset. SafeOps: retorna [] ante error."""
         try:
             result = []
-            for entry in self._get_table().history():
-                snap  = self._table.snapshot_by_id(entry.snapshot_id)
+            _tbl = self._get_table()
+            for entry in _tbl.history():
+                snap  = _tbl.snapshot_by_id(entry.snapshot_id)
                 if snap is None:
                     continue
                 props = getattr(snap.summary, "additional_properties", {}) or {}
@@ -172,8 +173,9 @@ class GoldReader:
         try:
             seen:   set       = set()
             result: List[Dict] = []
-            for entry in self._get_table().history():
-                snap  = self._table.snapshot_by_id(entry.snapshot_id)
+            _tbl = self._get_table()
+            for entry in _tbl.history():
+                snap  = _tbl.snapshot_by_id(entry.snapshot_id)
                 if snap is None:
                     continue
                 props = getattr(snap.summary, "additional_properties", {}) or {}
@@ -253,7 +255,8 @@ class GoldReader:
         if as_of is not None:
             target_ms = int(pd.Timestamp(as_of, tz="UTC").timestamp() * 1000)
             try:
-                history  = self._get_table().history()
+                _tbl = self._get_table()
+                history  = _tbl.history()
                 eligible = [s for s in history if s.timestamp_ms <= target_ms]
                 if not eligible:
                     raise VersionNotFoundError(
@@ -292,8 +295,8 @@ def _build_filter(
     timeframe:   str,
 ):
     return And(
-        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),
-        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),
+        And(EqualTo(term="exchange", literal=exchange), EqualTo(term="symbol", literal=symbol)),  # type: ignore[call-arg,arg-type]
+        And(EqualTo(term="market_type", literal=market_type), EqualTo(term="timeframe", literal=timeframe)),  # type: ignore[call-arg,arg-type]
     )
 
 

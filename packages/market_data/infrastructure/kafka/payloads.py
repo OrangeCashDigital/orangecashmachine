@@ -25,7 +25,7 @@ Principios: DIP · SRP · SSOT · Immutability · Kappa · KISS
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional
 
 from market_data.domain.exceptions import SchemaVersionError  # noqa: F401

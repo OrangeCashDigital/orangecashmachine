@@ -122,6 +122,8 @@ class TimestampCacheService:
         Fail-Soft: retorna None si Redis falla.
         """
         try:
+            if self._cursor is None:
+                return None
             raw = self._cursor.get_raw(
                 f"{exchange.lower()}:{symbol}:{market_type.lower()}:{timeframe}"
             )

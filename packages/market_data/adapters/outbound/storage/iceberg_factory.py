@@ -86,5 +86,5 @@ class IcebergStorageFactory:
         return self._cache[key]
 
     def __repr__(self) -> str:  # pragma: no cover
-        keys = [f"{e}/{m}" for e, m in self._cache]
+        keys = [f"{e}/{m}" for e, m, _dr in self._cache]
         return f"IcebergStorageFactory(cached={keys})"

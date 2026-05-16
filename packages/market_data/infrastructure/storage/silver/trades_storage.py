@@ -32,6 +32,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyiceberg.table import Table
+    import pyiceberg
+    import pyiceberg.catalog
+    import pyiceberg.table
 
 # ---------------------------------------------------------------------------
 # Schema Iceberg — definido una sola vez (DRY)
@@ -234,11 +237,11 @@ class TradesStorage:
             return self._table
 
         try:
-            self._table = self._catalog.load_table(_TABLE_NAME)
+            self._table = self._catalog.load_table(_TABLE_NAME)  # type: ignore[attr-defined]
             self._log.debug("Tabla existente cargada | table={}", _TABLE_NAME)
         except Exception:
             self._log.info("Creando tabla | table={}", _TABLE_NAME)
-            self._table = self._catalog.create_table(
+            self._table = self._catalog.create_table(  # type: ignore[attr-defined]
                 identifier      = _TABLE_NAME,
                 schema          = _build_schema(),
                 partition_spec  = _build_partition_spec(),

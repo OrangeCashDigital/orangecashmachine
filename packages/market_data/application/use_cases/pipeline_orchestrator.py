@@ -49,7 +49,7 @@ Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Soft · Fail-Fast
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 # PipelineSummary es el tipo de retorno semántico de pipeline.run().
 # Definido como alias hasta que el Protocol esté formalizado en ports/.
@@ -59,11 +59,13 @@ PipelineSummary = Any  # TODO: formalizar como Protocol en ports/inbound/
 from loguru import logger
 
 from market_data.exceptions import PipelineBuildError, PipelineExecutionError
-from market_data.exceptions import PipelineBuildError, PipelineExecutionError
 from market_data.ports.inbound.pipeline_trigger import (
     PipelineTriggerPort,
     PipelineModeStr,
 )
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ocm.config.schema import ResilienceConfig
 
 # Re-export para que callers no dependan del port directamente
 PipelineMode = PipelineModeStr
@@ -118,13 +120,17 @@ class PipelineRequest:
 
     # Parámetros de construcción del adapter — provistos por el caller
     credentials:         Optional[dict]        = None
-    resilience:          Optional[dict[str, Any]] = None
+    resilience:          "Optional[Union[ResilienceConfig, dict[str, Any]]]" = None
 
     # Parámetros de selección de datos — provistos por el caller
     symbols:             Optional[list[str]]   = None
     timeframes:          Optional[list[str]]   = None
     start_date:          Optional[str]         = None
     auto_lookback_days:  Optional[int]         = None
+
+    # Datasets para DerivativesPipeline — ej: ['funding_rate', 'open_interest']
+    # None = pipeline usa su lista interna de datasets soportados.
+    datasets:            Optional[list[str]]   = None
 
     # Parámetros de control
     run_id:              Optional[str]         = None
@@ -245,7 +251,7 @@ class PipelineOrchestrator:
     def _build_pipeline(
         self,
         request: PipelineRequest,
-    ) -> Optional[PipelineTriggerPort]:
+    ) -> PipelineTriggerPort:
         """
         Factory interna — construye el pipeline correcto para el request.
 
@@ -351,10 +357,10 @@ class PipelineOrchestrator:
         adapter = CCXTAdapter(**adapter_kwargs)
 
         return TradesPipeline(
-            exchange    = request.exchange,
-            market_type = request.market_type,
-            adapter     = adapter,
-            dry_run     = request.dry_run,
+            symbols         = request.symbols or [],
+            exchange_client = adapter,
+            market_type     = request.market_type,
+            dry_run         = request.dry_run,
         )
 
     def _build_derivatives_pipeline(
@@ -377,8 +383,9 @@ class PipelineOrchestrator:
         adapter = CCXTAdapter(**adapter_kwargs)
 
         return DerivativesPipeline(
-            exchange    = request.exchange,
-            market_type = request.market_type,
-            adapter     = adapter,
-            dry_run     = request.dry_run,
+            symbols         = request.symbols or [],
+            datasets        = request.datasets or [],
+            exchange_client = adapter,
+            market_type     = request.market_type,
+            dry_run         = request.dry_run,
         )
