@@ -5,7 +5,10 @@ market_data/application/strategies/incremental.py
 
 Strategy de ingestión incremental hacia adelante.
 
-Orquesta: fetcher · quality gate · kafka_producer · storage · cursor · throttle.
+Orquesta: fetcher · quality gate · publisher (port) · storage · cursor · throttle (port).
+
+Capas permitidas: domain/ · ports/ · ocm/
+Prohibidas (DIP): adapters/ · infrastructure/
 
 Principios: SRP · DIP · SafeOps · KISS
 """
@@ -16,7 +19,7 @@ import random
 
 from loguru import logger
 
-# ── Domain (tipos y contratos) ────────────────────────────────────────────────
+# ── Domain ───────────────────────────────────────────────────────────────────
 from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
@@ -24,20 +27,8 @@ from market_data.domain.policies.base import (
     StrategyMixin,
 )
 
-# ── Application (helper DRY — SSOT para publicar a ohlcv.raw) ────────────────
-from market_data.application.strategies.backfill import _publish_chunk_to_kafka
-
-# ── Adapters ──────────────────────────────────────────────────────────────────
-from market_data.adapters.outbound.exchange.throttle import get_or_create_throttle
-
-# ── Infrastructure ────────────────────────────────────────────────────────────
-from market_data.infrastructure.kafka.payloads import DATASOURCE_LIVE
-from market_data.infrastructure.observability.metrics import (
-    PAIR_DURATION,
-    PIPELINE_ERRORS,
-    QUALITY_DECISIONS,
-    ROWS_INGESTED,
-)
+# ── Ports ─────────────────────────────────────────────────────────────────────
+from market_data.ports.outbound.publisher import SOURCE_LIVE
 
 # Parámetros del retry OCC — SSOT a nivel de módulo (DRY, KISS).
 _BRONZE_MAX_RETRIES: int   = 5
@@ -82,26 +73,32 @@ class IncrementalStrategy(StrategyMixin):
             timeframe=timeframe, exchange=ctx.exchange_id,
         )
 
-        QUALITY_DECISIONS.labels(
-            exchange=ctx.exchange_id, market_type=ctx.market_type,
-            symbol=symbol, timeframe=timeframe, decision=qres.tier.value,
-        ).inc()
+        ctx.metrics.quality_decisions_inc(
+            exchange    = ctx.exchange_id,
+            market_type = ctx.market_type,
+            symbol      = symbol,
+            timeframe   = timeframe,
+            decision    = qres.tier.value,
+        )
 
         if not qres.accepted:
             logger.warning(
                 "Par rechazado por calidad [{}/{}] | exchange={} symbol={} "
-                "timeframe={} score={:.1f} "
-                "(datos descartados — no publicados a Kafka ni a Iceberg)",
+                "timeframe={} score={:.1f}",
                 idx, total, ctx.exchange_id, symbol, timeframe, qres.score,
             )
             result.skipped = True
             return
 
         # ── Kappa router ──────────────────────────────────────────────────────
-        if ctx.kafka_producer is not None:
-            ok = await _publish_chunk_to_kafka(
-                ctx=ctx, symbol=symbol,
-                timeframe=timeframe, df=qres.df,
+        if ctx.publisher is not None:
+            ok = await ctx.publisher.publish_chunk(
+                exchange_id = ctx.exchange_id,
+                symbol      = symbol,
+                timeframe   = timeframe,
+                df          = qres.df,
+                source      = SOURCE_LIVE,
+                run_id      = getattr(ctx, "run_id", ""),
             )
             if not ok:
                 logger.warning(
@@ -109,15 +106,15 @@ class IncrementalStrategy(StrategyMixin):
                     "[{}/{}] | symbol={} timeframe={}",
                     idx, total, symbol, timeframe,
                 )
-                PIPELINE_ERRORS.labels(
+                ctx.metrics.pipeline_errors_inc(
                     exchange=ctx.exchange_id, error_type="transient",
-                ).inc()
+                )
                 result.skipped = True
                 return
         else:
-            # Degraded path: sin Kafka → Bronze + Silver directo (modo Lambda)
+            # Degraded path: sin publisher → Bronze + Silver directo (modo Lambda)
             logger.warning(
-                "kafka_producer=None — modo degradado: Bronze+Silver directo "
+                "publisher=None — modo degradado: Bronze+Silver directo "
                 "[{}/{}] | symbol={} timeframe={}",
                 idx, total, symbol, timeframe,
             )
@@ -136,12 +133,13 @@ class IncrementalStrategy(StrategyMixin):
 
         result.rows = len(qres.df)
 
-        ROWS_INGESTED.labels(
-            exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-        ).inc(result.rows)
-        PAIR_DURATION.labels(
-            exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-        ).observe(result.duration_ms / 1000)
+        ctx.metrics.rows_ingested_inc(
+            exchange=ctx.exchange_id, timeframe=timeframe, delta=result.rows,
+        )
+        ctx.metrics.pair_duration_observe(
+            exchange=ctx.exchange_id, symbol=symbol,
+            timeframe=timeframe, seconds=result.duration_ms / 1000,
+        )
 
         logger.info(
             "Incremental completado [{}/{}] | exchange={} market={} "
@@ -162,17 +160,11 @@ class IncrementalStrategy(StrategyMixin):
         """
         Append a Bronze con retry OCC y backoff exponencial con jitter.
 
-        Usado SOLO en modo degradado (ctx.kafka_producer is None).
-        En modo Kappa, Bronze se escribe via KafkaBronzeWriter.
+        Usado SOLO en modo degradado (ctx.publisher is None).
+        En modo Kappa, Bronze se escribe via KafkaBronzeWriter (downstream).
+        ctx.throttle recibe la señal OCC — ajusta concurrencia sin acoplarse
+        a AdaptiveThrottle concreto (ThrottlePort via DIP).
         """
-        throttle = get_or_create_throttle(
-            exchange_id = ctx.exchange_id,
-            market_type = ctx.market_type,
-            dataset     = "ohlcv",
-            initial     = 5,
-            maximum     = 20,
-        )
-
         last_occ_wait: float = 0.0
 
         for attempt in range(1, _BRONZE_MAX_RETRIES + 1):
@@ -192,7 +184,12 @@ class IncrementalStrategy(StrategyMixin):
                     if not is_occ or attempt >= _BRONZE_MAX_RETRIES:
                         raise
 
-                    throttle.record_occ_conflict()
+                    # Señal de contención de storage al throttle (DIP via port)
+                    if ctx.throttle is not None:
+                        try:
+                            ctx.throttle.record_occ_conflict()
+                        except Exception:
+                            pass  # SafeOps: throttle es observabilidad
 
                     last_occ_wait  = _BRONZE_BASE_WAIT_S * (2 ** (attempt - 1))
                     last_occ_wait *= 1 + random.uniform(-0.25, 0.25)

@@ -3,47 +3,34 @@
 market_data/domain/policies/
 ==============================
 
-Shim de backward compatibility.
+Contratos y tipos del sistema de pipeline unificado.
 
-Las estrategias de ingestión (BackfillStrategy, IncrementalStrategy,
-RepairStrategy) viven ahora en market_data.application.strategies/.
+Re-exporta únicamente lo que existe en base.py.
+BasePipelineStrategy fue renombrado a StrategyMixin — no re-exportar alias.
 
-Este módulo re-exporta desde application para no romper imports existentes
-durante la migración. Migrar los imports directamente:
-
-    # Antes (deprecado):
-    from market_data.domain.policies import BackfillStrategy
-
-    # Ahora (correcto):
+Estrategias concretas → market_data.application.strategies.*
     from market_data.application.strategies.backfill    import BackfillStrategy
     from market_data.application.strategies.incremental import IncrementalStrategy
     from market_data.application.strategies.repair      import RepairStrategy
 
-Los tipos de dominio (PipelineContext, PairResult, etc.) permanecen en
-domain/policies/base.py y se pueden importar directamente desde allí.
+Principios: SSOT · KISS · no re-exports que creen cascadas de inicialización.
 """
 from market_data.domain.policies.base import (
+    PairResult,
     PipelineContext,
     PipelineMode,
-    PairResult,
+    PipelineStrategy,
     PipelineSummary,
     StrategyMixin,
     classify_error,
 )
-from market_data.application.strategies.backfill    import BackfillStrategy
-from market_data.application.strategies.incremental import IncrementalStrategy
-from market_data.application.strategies.repair      import RepairStrategy
 
 __all__ = [
-    # Tipos de dominio — fuente permanente: domain/policies/base.py
+    "PairResult",
     "PipelineContext",
     "PipelineMode",
-    "PairResult",
+    "PipelineStrategy",
     "PipelineSummary",
     "StrategyMixin",
     "classify_error",
-    # Estrategias — fuente permanente: application/strategies/
-    "BackfillStrategy",
-    "IncrementalStrategy",
-    "RepairStrategy",
 ]

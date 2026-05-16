@@ -69,9 +69,9 @@ from market_data.domain.policies.base import (
     PipelineStrategy,
     PipelineSummary,
 )
-from market_data.domain.policies.backfill import BackfillStrategy
-from market_data.domain.policies.incremental import IncrementalStrategy
-from market_data.domain.policies.repair import RepairStrategy
+from market_data.application.strategies.backfill    import BackfillStrategy
+from market_data.application.strategies.incremental import IncrementalStrategy
+from market_data.application.strategies.repair      import RepairStrategy
 from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
