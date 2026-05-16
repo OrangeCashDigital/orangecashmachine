@@ -629,10 +629,10 @@ class OHLCVPipeline(PipelineTriggerPort):
         error en el semáforo) y lo convierte en PairResult con error,
         garantizando que el worker pool nunca pierda un resultado.
         """
-        from market_data.infrastructure.observability.metrics import (  # local — BC-05
-            FETCH_ABORTS_TOTAL, ACTIVE_PAIRS,
-        )
-        ACTIVE_PAIRS.labels(exchange=self._exchange_id).inc()
+        # DIP·BC-05: métricas via puerto, nunca via infraestructura directa.
+        # fail-soft: si metrics es None el pipeline opera en modo degradado.
+        if self._ctx.metrics is not None:
+            self._ctx.metrics.active_pairs_inc(self._exchange_id)
         try:
             result = await strategy.execute_pair(
                 symbol    = symbol,
@@ -647,16 +647,6 @@ class OHLCVPipeline(PipelineTriggerPort):
         except asyncio.CancelledError:
             raise  # nunca alimentar throttle — pipeline cancelado externamente
 
-        except Exception as _pre_exc:  # noqa: BLE001 — re-raise after import
-            from market_data.adapters.outbound.exchange import (  # local — BC-05/BC-08 deuda
-                ExchangeCircuitOpenError,
-            )
-            from market_data.adapters.outbound.exchange.ccxt_adapter import (  # local — BC-05
-                get_breaker_state,
-            )
-            if not isinstance(_pre_exc, ExchangeCircuitOpenError):
-                raise
-            exc = _pre_exc
 
         except ExchangeCircuitOpenError as exc:
             # Si otro worker ya disparó el abort, salir sin duplicar cooldown.
@@ -665,12 +655,12 @@ class OHLCVPipeline(PipelineTriggerPort):
 
             # Primer worker en detectar circuit open: cooldown coordinado.
             # Los demás workers detectarán abort_event activo y saltarán esto.
-            _bs       = get_breaker_state(self._exchange_id)
-            _cooldown = max(1.0, _bs["cooldown_remaining_ms"] / 1000)
+            # DIP: exc transporta el estado del breaker — sin consultar el adapter.
+            _cooldown = max(1.0, exc.cooldown_remaining_ms / 1000)
             self._log.bind(
                 symbol     = symbol,
                 timeframe  = timeframe,
-                failures   = _bs["fail_counter"],
+                failures   = exc.fail_counter,
                 cooldown_s = round(_cooldown, 1),
             ).warning("Circuit open — sleeping cooldown")
             await asyncio.sleep(_cooldown)
@@ -692,23 +682,16 @@ class OHLCVPipeline(PipelineTriggerPort):
                 )
                 self._feed_throttle(result)
                 return result
-            except Exception as _inner_exc:  # noqa: BLE001
-                from market_data.adapters.outbound.exchange import (  # local — BC-05/BC-08 deuda
-                    ExchangeCircuitOpenError as _ECO,
-                )
-                from market_data.adapters.outbound.exchange.ccxt_adapter import (  # local
-                    get_breaker_state,
-                )
-                if not isinstance(_inner_exc, _ECO):
-                    raise
-                # Breaker todavía abierto — abortar exchange, no el pipeline.
-                _bs2 = get_breaker_state(self._exchange_id)
-                FETCH_ABORTS_TOTAL.labels(exchange=self._exchange_id).inc()
+            except ExchangeCircuitOpenError as _inner_exc:  # DIP·BC-05: tipo desde port
+                # Breaker todavía abierto tras cooldown — abortar exchange, no pipeline.
+                # fail-soft: métricas opcionales; abort siempre se propaga.
+                if self._ctx.metrics is not None:
+                    self._ctx.metrics.fetch_aborts_inc(self._exchange_id)
                 self._log.bind(
                     symbol                = symbol,
                     timeframe             = timeframe,
-                    failures              = _bs2["fail_counter"],
-                    cooldown_remaining_ms = _bs2["cooldown_remaining_ms"],
+                    failures              = _inner_exc.fail_counter,
+                    cooldown_remaining_ms = _inner_exc.cooldown_remaining_ms,
                 ).warning("Circuit open after retry — aborting exchange")
                 raise _ExchangeAbortError(self._exchange_id) from exc
 
@@ -734,6 +717,7 @@ class OHLCVPipeline(PipelineTriggerPort):
             # éxito, CancelledError, AbortError, o excepción inesperada.
             # Sin finally, cualquier raise deja el gauge incrementado para siempre.
             try:
-                ACTIVE_PAIRS.labels(exchange=self._exchange_id).dec()
+                if self._ctx.metrics is not None:
+                    self._ctx.metrics.active_pairs_dec(self._exchange_id)
             except Exception:
                 pass  # métricas son best-effort
