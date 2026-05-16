@@ -10,4 +10,6 @@ Si una utilidad necesita importar de trading/, market_data/, etc.,
 pertenece a ese bounded context, no aquí.
 """
 
-__all__: list[str] = []
+from shared.utils.repo import repo_root  # noqa: F401
+
+__all__ = ["repo_root"]

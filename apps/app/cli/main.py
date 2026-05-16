@@ -200,19 +200,12 @@ def run_application(
 # ---------------------------------------------------------------------------
 
 # SafeOps: path absoluto — independiente del CWD de invocación
-def _find_repo_root() -> Path:
-    """Busca la raíz del repo subiendo hasta encontrar pyproject.toml — Fail-Fast.
-
-    Más robusto que .parent×N: no se rompe si main.py cambia de nivel.
-    Principio: SSOT — la raíz del repo se define por pyproject.toml, no por conteo de padres.
-    """
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    raise RuntimeError(f"No se encontró pyproject.toml subiendo desde {here}")
-
-_CONFIG_DIR = str(_find_repo_root() / "config")
+# SSOT: repo_root() vive en shared/utils/repo.py — única definición canónica.
+# Antes: _find_repo_root() duplicada aquí buscando pyproject.toml.
+# Ahora: shared/utils/repo.py busca .git — más robusto (pyproject.toml puede
+# existir en subdirectorios de monorepos; .git es inequívoco).
+from shared.utils.repo import repo_root as _repo_root
+_CONFIG_DIR = str(_repo_root() / "config")
 
 @hydra.main(config_path=_CONFIG_DIR, config_name="config", version_base="1.3")
 def hydra_main(cfg: DictConfig) -> None:

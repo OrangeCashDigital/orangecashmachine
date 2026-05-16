@@ -40,26 +40,7 @@ from ocm.config.env_vars import (
     OCM_DATA_LAKE_PATH,          # DEPRECATED — legacy, transicion controlada
     OCM_GOLD_PATH,
 )
-def repo_root() -> Path:
-    """Devuelve la raíz del repositorio localizando el directorio .git.
-
-    Fail-Fast explícito: nunca usa parents[N] hardcodeado.
-    Robusto ante reubicación de archivos.
-
-    Returns:
-        Path absoluto a la raíz del repositorio.
-
-    Raises:
-        RuntimeError: Si no se encuentra .git en ningún ancestro.
-    """
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / ".git").exists():
-            return parent
-    raise RuntimeError(
-        f"No se encontró .git subiendo desde {here}. "
-        "¿Estás ejecutando desde fuera del repositorio?"
-    )
+from shared.utils.repo import repo_root  # SSOT: definición canónica en shared/utils/repo.py
 
 
 # ==========================================================
@@ -247,5 +228,7 @@ __all__ = [
     "bronze_ohlcv_root",
     "silver_ohlcv_root",
     "gold_features_root",
+    # repo_root re-exportado desde shared.utils.repo — backward compatibility.
+    # Importar preferentemente desde shared.utils.repo directamente.
     "repo_root",
 ]

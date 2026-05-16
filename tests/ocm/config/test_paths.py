@@ -137,8 +137,20 @@ def test_find_config_dir_env_override_invalid_dir_falls_back(tmp_path, monkeypat
 
 
 def test_repo_root_resolves_to_git_root():
-    """repo_root() siempre apunta al directorio que contiene .git."""
-    from ocm.config.paths import repo_root
+    """repo_root() siempre apunta al directorio que contiene .git.
+
+    SSOT: importado desde shared.utils.repo — fuente canónica.
+    ocm.config.paths re-exporta por backward compat pero no es la fuente.
+    """
+    from shared.utils.repo import repo_root
     root = repo_root()
     assert (root / ".git").exists(), f"repo_root() no contiene .git: {root}"
     assert (root / "pyproject.toml").exists(), f"repo_root() no contiene pyproject.toml: {root}"
+
+
+def test_repo_root_reexported_from_paths_for_compat():
+    """paths.py re-exporta repo_root desde shared para backward compat."""
+    from ocm.config.paths import repo_root as paths_repo_root
+    from shared.utils.repo import repo_root as shared_repo_root
+    # Misma función — no una copia
+    assert paths_repo_root is shared_repo_root
