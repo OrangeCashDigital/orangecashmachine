@@ -26,6 +26,13 @@ from typing import TYPE_CHECKING, List, Optional
 import pandas as pd
 from ocm.observability import bind_pipeline
 
+if TYPE_CHECKING:
+    # LatenessCalibrationStore: exclusivo para anotaciones de tipo.
+    # El import de runtime ocurre en _LazyCalibrationStore._get() —
+    # nunca en import time, preservando la inicialización diferida
+    # y evitando conexiones Redis en tests (SafeOps · DIP).
+    from ocm.runtime.state.factories import LatenessCalibrationStore
+
 from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 from market_data.adapters.outbound.exchange import (
@@ -682,13 +689,6 @@ class HistoricalFetcherAsync:
 # ==========================================================
 
 from market_data.domain.value_objects.timeframe import timeframe_to_ms  # noqa: E402
-
-if TYPE_CHECKING:
-    # Import exclusivo para anotaciones de tipo — no se ejecuta en runtime.
-    # Preserva la inicialización diferida de _LazyCalibrationStore:
-    # build_lateness_calibration_store() se importa solo en _get(),
-    # evitando conexiones Redis en import time (SafeOps).
-    from ocm.runtime.state.factories import LatenessCalibrationStore
 
 
 def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:

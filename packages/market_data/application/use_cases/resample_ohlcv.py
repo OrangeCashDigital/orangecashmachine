@@ -41,7 +41,7 @@ Diagrama
       ├─ valida request (Fail-Fast)
       ├─ extrae símbolos y targets desde AppConfig
       ├─ construye storage via StorageFactoryPort (DIP)
-      ├─ instancia ResamplePipeline(symbols, timeframes, exchange, storage)  # type: ignore[arg-type]
+      ├─ instancia ResamplePipeline(symbols, timeframes, exchange, storage)
       └─ asyncio.run(pipeline.run()) → ResampleSummary
 
 Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Fast · SafeOps
@@ -50,11 +50,16 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from loguru import logger
 
 from market_data.ports.outbound.storage_factory import StorageFactoryPort
+
+if TYPE_CHECKING:
+    # OHLCVStorage: exclusivo para anotaciones de tipo en _run_pipeline.
+    # En runtime se obtiene via StorageFactoryPort.get_storage() — DIP.
+    from market_data.ports.outbound.storage import OHLCVStorage
 
 
 # =============================================================================
@@ -217,7 +222,7 @@ class ResampleUseCase:
 
         # ── 3. Construir storage via factory (DIP) ────────────────────────────
         try:
-            storage = self._storage_factory.get_storage(  # type: ignore[assignment]
+            storage = self._storage_factory.get_storage(
                 exchange    = request.exchange,
                 market_type = request.market_type,
                 dry_run     = request.dry_run,
@@ -262,10 +267,10 @@ class ResampleUseCase:
             )
 
         result = ResampleUseCaseResult(
-            status      = summary.status,  # type: ignore[attr-defined]
+            status      = summary.status,
             exchange    = request.exchange,
             market_type = request.market_type,
-            rows        = summary.total_rows,  # type: ignore[attr-defined]
+            rows        = summary.total_rows,
             symbols     = symbols,
             targets     = targets,
             source_tf   = source_tf,
@@ -319,8 +324,8 @@ class ResampleUseCase:
         symbols:   List[str],
         targets:   List[str],
         source_tf: str,
-        storage:   object,
-    ) -> object:
+        storage:   OHLCVStorage,
+    ) -> Any:
         """
         Instancia ResamplePipeline y ejecuta su loop async.
 
@@ -337,7 +342,7 @@ class ResampleUseCase:
             timeframes  = targets,
             exchange    = request.exchange,
             market_type = request.market_type,
-            storage     = storage,  # type: ignore[arg-type]
+            storage     = storage,
             dry_run     = request.dry_run,
         )
 
