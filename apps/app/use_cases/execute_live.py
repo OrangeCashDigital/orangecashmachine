@@ -30,7 +30,11 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from trading.engine import EngineResult
+    from trading.analytics.performance import PerformanceSummary
 
 import redis as redis_lib
 from loguru import logger
@@ -48,9 +52,9 @@ class LiveRunResult:
     Usado por el CLI para determinar exit code y logging final.
     """
     success:        bool
-    error:          Optional[str]    = None
-    engine_result:  Optional[object] = None   # EngineResult
-    performance:    Optional[object] = None   # PerformanceSummary
+    error:          Optional[str]             = None
+    engine_result:  Optional["EngineResult"]    = None
+    performance:    Optional["PerformanceSummary"] = None
     open_positions: Optional[dict]   = None
     oms_summary:    Optional[dict]   = None
 
