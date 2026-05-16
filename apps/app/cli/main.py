@@ -200,7 +200,7 @@ def run_application(
 # ---------------------------------------------------------------------------
 
 # SafeOps: path absoluto — independiente del CWD de invocación
-_CONFIG_DIR = str(Path(__file__).resolve().parent.parent.parent / "config")
+_CONFIG_DIR = str(Path(__file__).resolve().parent.parent.parent.parent / "config")
 
 @hydra.main(config_path=_CONFIG_DIR, config_name="config", version_base="1.3")
 def hydra_main(cfg: DictConfig) -> None:
