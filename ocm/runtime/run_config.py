@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from ocm.config.env_vars import (
+    ALLOWED_ENVS,
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
     OCM_DEBUG,
@@ -52,7 +53,9 @@ from ocm.config.layers.coercion import BOOL_TRUE  # SSOT — única fuente para 
 # Constantes de módulo — compiladas una vez (DRY + eficiencia)
 # ---------------------------------------------------------------------------
 
-VALID_ENVS: frozenset[str] = frozenset({"development", "test", "staging", "production"})
+# VALID_ENVS eliminado — usar ALLOWED_ENVS de env_vars.py (SSOT).
+# Importado arriba junto a los demás símbolos de env_vars.
+VALID_ENVS: frozenset[str] = ALLOWED_ENVS  # alias de compatibilidad — eliminar en siguiente refactor
 
 _PROTO_RE = re.compile(r"^https?://")
 

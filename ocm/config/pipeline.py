@@ -43,7 +43,7 @@ from omegaconf import DictConfig, OmegaConf
 #
 # coerce_scalar_values — motor canónico de coerción (L3 SSOT).
 # Vive en layers/coercion.py junto a BOOL_TRUE/BOOL_FALSE y _NULLABLE_PATHS.
-# Nota: _NULLABLE_KEYS eliminado — SSOT migrado a _NULLABLE_PATHS (path-based).
+# _NULLABLE_KEYS: frozenset[str] — matching por nombre de clave (nodos dinámicos, ej: exchanges).
 from ocm.config.hydra_loader import strip_hydra_internals
 from ocm.config.layers.coercion import coerce_scalar_values
 
