@@ -307,7 +307,13 @@ def load_appconfig_standalone(
     _env = resolve_env(env)
     load_dotenv_for_env(_env)
 
-    _dir = Path(config_dir).resolve() if config_dir else Path("config").resolve()
+    if config_dir is not None:
+        _dir = Path(config_dir).resolve()
+    else:
+        # SSOT: _find_config_dir() ancla en repo_root() via .git — mismo mecanismo
+        # que paths.py usa para data_lake_root(). Evita CWD-relativo frágil.
+        from ocm.config.paths import _find_config_dir
+        _dir = _find_config_dir() or Path("config").resolve()
 
     if not _dir.exists():
         raise FileNotFoundError(f"config_dir not found: {_dir}")
