@@ -48,6 +48,17 @@ from pyiceberg.expressions import (
 
 from market_data.infrastructure.storage.iceberg.catalog import get_catalog, ensure_silver_table
 from market_data.ports.outbound.state import CursorStorePort as CursorStore
+from market_data.infrastructure.storage.iceberg.timestamp_cache import TimestampCacheService
+
+# =============================================================================
+# Timeouts — SSOT de límites de I/O (segundos)
+# =============================================================================
+# Iceberg scans sobre SQLite catalog pueden bloquearse bajo contención.
+# Timeout conservador: suficientemente alto para scans legítimos,
+# suficientemente bajo para detectar deadlocks en CI/staging.
+# Ajustar via variable de entorno en el futuro si se necesita tuning.
+_ICEBERG_SCAN_TIMEOUT_S: float = 30.0   # get_last_timestamp, get_oldest_timestamp
+_ICEBERG_LOAD_TIMEOUT_S: float = 120.0  # load_ohlcv — puede retornar mucho volumen
 
 
 # Columnas OHLCV en el orden del schema Iceberg
@@ -100,14 +111,10 @@ class IcebergStorage:
         self._exchange    = exchange
         self._market_type = market_type
         self._dry_run     = dry_run
-        # cursor_store opcional — actúa como cache L2 distribuido (cross-process)
-        # en get_last_timestamp. Sin él, solo cache L1 in-process.
-        # Inyectado desde _build_storage() en ohlcv_pipeline.
-        self._cursor: Optional[CursorStore] = cursor_store
-        # Cache L1 de metadatos por symbol/timeframe — evita scans repetidos
-        # en el mismo proceso. Invalidado en save_ohlcv.
-        # Para cache cross-process ver self._cursor (L2).
-        self._last_ts_cache: dict[tuple[str, str], object] = {}
+        # TimestampCacheService gestiona L1 (in-process) y L2 (Redis).
+        # SRP: IcebergStorage delega todo cache management aquí.
+        # Inyectado desde container para testabilidad (DIP).
+        self._ts_cache = TimestampCacheService(cursor_store=cursor_store)
         # SafeOps: en dry_run skip bootstrap y carga de tabla — sin I/O al catálogo.
         # En tests/CI el catálogo SQLite puede no existir. Todos los métodos de
         # escritura son no-op en dry_run. Los de lectura retornan None si _table=None.
@@ -196,8 +203,8 @@ class IcebergStorage:
         como append con dedup y se emite un warning.
         """
         if self._dry_run:
-            logger.info(
-                "[DRY RUN] IcebergStorage.save_ohlcv skipped | {}/{} "
+            logger.opt(exception=True).info(
+            "[DRY RUN] IcebergStorage.save_ohlcv skipped | {}/{} "
                 "exchange={} rows={}",
                 symbol, timeframe, self._exchange or "shared", len(df),
             )
@@ -226,7 +233,7 @@ class IcebergStorage:
             pa.Table.from_pandas(prepared, schema=arrow_schema, preserve_index=False)
         )
 
-        self._last_ts_cache.pop((symbol, timeframe), None)
+        self._ts_cache.invalidate(symbol, timeframe)
         logger.debug(
             "IcebergStorage saved | {}/{} exchange={} rows={} duration={}ms",
             symbol, timeframe, self._exchange or "shared",
@@ -319,15 +326,15 @@ class IcebergStorage:
                 else _to_utc_timestamp(pc.max(result.column("timestamp")).as_py())
             )
 
-            # Solo cachear en L1 resultado del scan Iceberg.
+            # Poblar L1 con resultado del scan L3 (fuente de verdad).
             # El cursor (L2) lo actualiza IncrementalStrategy tras cada write.
-            self._last_ts_cache[cache_key] = ts
+            self._ts_cache.set(symbol, timeframe, ts)
             return ts
 
         except Exception as exc:
-            logger.warning(
-                "IcebergStorage.get_last_timestamp failed | {}/{} error={}",
-                symbol, timeframe, exc,
+            logger.opt(exception=True).warning(
+                "IcebergStorage.get_last_timestamp failed | {}/{}",
+                symbol, timeframe,
             )
             return None
 
@@ -357,9 +364,9 @@ class IcebergStorage:
                 return None
             return _to_utc_timestamp(pc.min(result.column("timestamp")).as_py())
         except Exception as exc:
-            logger.warning(
-                "IcebergStorage.get_oldest_timestamp failed | {}/{} error={}",
-                symbol, timeframe, exc,
+            logger.opt(exception=True).warning(
+                "IcebergStorage.get_oldest_timestamp failed | {}/{}",
+                symbol, timeframe,
             )
             return None
     def get_current_snapshot(self) -> Optional[dict]:
@@ -377,8 +384,7 @@ class IcebergStorage:
         except Exception as _snap_exc:
             logger.debug(
                 "get_snapshot_info failed (tabla nueva o Iceberg no init)",
-                error=str(_snap_exc),
-            )
+        )
             return None
 
     def load_ohlcv(
@@ -413,12 +419,24 @@ class IcebergStorage:
                     LessThanOrEqual("timestamp", int(end.timestamp() * 1_000_000)),
                 )
 
-            df = (
-                self._table
-                .scan(row_filter=row_filter)
-                .to_arrow()
-                .to_pandas()
-            )
+            import concurrent.futures as _cf
+            with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
+                _future = _pool.submit(
+                    lambda: (
+                        self._table
+                        .scan(row_filter=row_filter)
+                        .to_arrow()
+                        .to_pandas()
+                    )
+                )
+                try:
+                    df = _future.result(timeout=_ICEBERG_LOAD_TIMEOUT_S)
+                except _cf.TimeoutError:
+                    logger.opt(exception=True).error(
+            "IcebergStorage.load_ohlcv TIMEOUT ({:.0f}s) | {}/{}",
+                        _ICEBERG_LOAD_TIMEOUT_S, symbol, timeframe,
+                    )
+                    return None
 
             if df.empty:
                 return None
@@ -431,9 +449,9 @@ class IcebergStorage:
             )
 
         except Exception as exc:
-            logger.warning(
-                "IcebergStorage.load_ohlcv failed | {}/{} error={}",
-                symbol, timeframe, exc,
+            logger.opt(exception=True).warning(
+                "IcebergStorage.load_ohlcv failed | {}/{}",
+                symbol, timeframe,
             )
             return None
 
@@ -472,8 +490,7 @@ class IcebergStorage:
         except Exception as _ver_exc:
             logger.debug(
                 "get_version_info failed (tabla nueva o Iceberg no init)",
-                error=str(_ver_exc),
-            )
+        )
             return None
 
     def find_partition_files(
