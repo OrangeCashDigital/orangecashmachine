@@ -552,3 +552,20 @@ packages = [
 "apps/api"              = "api"
 "apps/app"              = "app"
 "apps/research"         = "research"
+
+[[tool.importlinter.contracts]]
+# ocm.config.paths es la SSOT de resolución de rutas del repo.
+# Solo hydra_loader puede importarla (lazy, bootstrap), y solo para _find_config_dir.
+# Ningún otro módulo de ocm.config debe depender de paths — evita ciclos.
+name = "BC-21: ocm.config bootstrap — paths es SSOT de root resolution"
+type = "forbidden"
+source_modules = [
+    "ocm.config.pipeline",
+    "ocm.config.schema",
+    "ocm.config.layers",
+    "ocm.config.loader",
+    "ocm.config.structured",
+]
+forbidden_modules = [
+    "ocm.config.paths",
+]
