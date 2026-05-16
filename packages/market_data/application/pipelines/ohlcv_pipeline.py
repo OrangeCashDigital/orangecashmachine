@@ -263,8 +263,8 @@ class OHLCVPipeline(PipelineTriggerPort):
         self._throttle       = throttle
 
         cursor  = cursor_store or _build_cursor_store_safe()
-        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage  # local — BC-05
-        bronze  = BronzeStorage(exchange=self._exchange_id)
+        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage  # composition root fallback — DIP
+        bronze: BronzeStoragePort = BronzeStorage(exchange=self._exchange_id)
         silver  = _build_storage(
             exchange     = self._exchange_id,
             market_type  = self.market_type,
@@ -273,7 +273,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         )
         quality = QualityPipeline()
 
-        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
+        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync  # composition root — OHLCVPipeline cabla su propio fetcher
         # overlap NO se resuelve globalmente aquí.
         # Razón: un único max() sobre todos los timeframes produciría
         # solapamiento excesivo en timeframes largos (ej: overlap de 1m
@@ -294,8 +294,8 @@ class OHLCVPipeline(PipelineTriggerPort):
 
         _kafka_producer = _build_kafka_producer_safe()
 
-        from market_data.infrastructure.observability.pipeline_metrics import (  # local — BC-05
-            PipelineMetricsAdapter,
+        from market_data.infrastructure.observability.metrics_adapter import (  # composition root fallback
+            PrometheusPipelineMetrics,
         )
         self._ctx = PipelineContext(
             fetcher         = fetcher,
@@ -308,7 +308,7 @@ class OHLCVPipeline(PipelineTriggerPort):
             start_date      = start_date,
             gap_registry    = build_gap_registry(),  # type: ignore[arg-type]
             kafka_producer  = _kafka_producer,
-            metrics         = PipelineMetricsAdapter(),
+            metrics         = PrometheusPipelineMetrics(),
         )
 
         if _kafka_producer is not None:

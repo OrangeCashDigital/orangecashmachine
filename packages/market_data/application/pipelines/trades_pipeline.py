@@ -140,23 +140,26 @@ class TradesPipeline(PipelineTriggerPort):
             exchange=self._exchange_id, pipeline="trades",
         )
 
-        # Catalog inyectado o construido desde entorno (SafeOps)
-        _catalog = getattr(exchange_client, '_catalog', None)
-        if _catalog is None and not dry_run:
-            from market_data.infrastructure.storage.iceberg.catalog import get_catalog
+        # DIP: fetcher inyectado desde factory — no se resuelve catalog aquí.
+        # La factory cabla: get_catalog() → TradesStorage → TradesFetcher.
+        if fetcher is None:
+            from market_data.infrastructure.storage.iceberg.catalog import get_catalog  # composition root fallback
+            from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
+            from market_data.adapters.outbound.trades.trades_fetcher import TradesFetcher
             _catalog = get_catalog()
-        storage = TradesStorage(
-            exchange    = self._exchange_id,
-            market_type = self.market_type,
-            catalog     = _catalog,
-            dry_run     = dry_run,
-        )
-        self._fetcher = TradesFetcher(
-            exchange_client = exchange_client,
-            storage         = storage,
-            market_type     = self.market_type,
-            dry_run         = dry_run,
-        )
+            _storage = TradesStorage(
+                exchange    = self._exchange_id,
+                market_type = self.market_type,
+                catalog     = _catalog,
+                dry_run     = dry_run,
+            )
+            fetcher = TradesFetcher(
+                exchange_client = exchange_client,
+                storage         = _storage,
+                market_type     = self.market_type,
+                dry_run         = dry_run,
+            )
+        self._fetcher = fetcher
 
     async def run(self, mode: TradesPipelineMode = "incremental") -> TradesSummary:
         """

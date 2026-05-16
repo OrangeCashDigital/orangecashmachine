@@ -20,6 +20,7 @@ import pandas as pd
 from ocm.observability import bind_pipeline
 
 # ── Domain (tipos y contratos) ────────────────────────────────────────────────
+from market_data.ports.outbound.metrics import RepairMetricsPort
 from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
@@ -65,8 +66,18 @@ _LARGE_GAP_LOG_THRESHOLD:  int = 1_000
 class RepairStrategy(StrategyMixin):
     _mode = PipelineMode.REPAIR
 
-    def __init__(self, gap_tolerance: int = 0) -> None:
+    def __init__(
+        self,
+        gap_tolerance: int = 0,
+        metrics: "RepairMetricsPort | None" = None,
+    ) -> None:
         self._tolerance = gap_tolerance
+        if metrics is None:
+            from market_data.infrastructure.observability.metrics_adapter import (  # composition root fallback
+                PrometheusRepairMetrics,
+            )
+            metrics = PrometheusRepairMetrics()
+        self._metrics: RepairMetricsPort = metrics
 
     async def execute_pair(
         self,
@@ -77,10 +88,7 @@ class RepairStrategy(StrategyMixin):
         ctx:       PipelineContext,
     ) -> PairResult:
 
-        from market_data.infrastructure.observability.metrics import (  # local — BC-05/BC-08 deuda
-            PIPELINE_ERRORS, REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED,
-            REPAIR_GAPS_SKIPPED, ROWS_INGESTED,
-        )
+        _m = self._metrics  # RepairMetricsPort — inyectado en __init__
         result     = PairResult(
             symbol=symbol, timeframe=timeframe, mode=PipelineMode.REPAIR,
         )
@@ -106,7 +114,7 @@ class RepairStrategy(StrategyMixin):
             gaps              = scan_gaps(df_existing, timeframe, tolerance=self._tolerance)
             result.gaps_found = len(gaps)
             if gaps:
-                REPAIR_GAPS_FOUND.labels(
+                _m.repair_gaps_found.labels(
                     exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
                 ).inc(len(gaps))
 
@@ -133,7 +141,7 @@ class RepairStrategy(StrategyMixin):
                         "Gap demasiado grande — skip",
                         expected=gap.expected, max=_MAX_HEALABLE_GAP_CANDLES,
                     )
-                    REPAIR_GAPS_SKIPPED.labels(
+                    _m.repair_gaps_skipped.labels(
                         exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
                     ).inc()
                     return False, 0, 0.0
@@ -148,7 +156,7 @@ class RepairStrategy(StrategyMixin):
                             "Gap skip — conocido irrecuperable",
                             gap=str(gap),
                         )
-                        REPAIR_GAPS_SKIPPED.labels(
+                        _m.repair_gaps_skipped.labels(
                             exchange=ctx.exchange_id, symbol=symbol,
                             timeframe=timeframe,
                         ).inc()
@@ -189,7 +197,7 @@ class RepairStrategy(StrategyMixin):
                     total_healed_rows += rows
                     if fill_ratio >= _FULL_HEAL_THRESHOLD:
                         healed_count += 1
-                        REPAIR_GAPS_HEALED.labels(
+                        _m.repair_gaps_healed.labels(
                             exchange=ctx.exchange_id, symbol=symbol,
                             timeframe=timeframe,
                         ).inc()
@@ -215,7 +223,7 @@ class RepairStrategy(StrategyMixin):
             )
 
             if total_healed_rows > 0:
-                ROWS_INGESTED.labels(
+                _m.rows_ingested.labels(
                     exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
                 ).inc(total_healed_rows)
 
@@ -415,10 +423,7 @@ class RepairStrategy(StrategyMixin):
                     "Gap heal: fetch transitorio",
                     error=str(exc), is_transient=True,
                 )
-                from market_data.infrastructure.observability.metrics import (  # local — BC-05/BC-08 deuda
-                    PIPELINE_ERRORS,
-                )
-                PIPELINE_ERRORS.labels(
+                self._metrics.pipeline_errors.labels(
                     exchange=ctx.exchange_id, error_type="transient",
                 ).inc()
             else:
@@ -429,10 +434,7 @@ class RepairStrategy(StrategyMixin):
                     error=str(exc),
                     is_transient=_is_transient,
                 )
-                from market_data.infrastructure.observability.metrics import (  # local — BC-05/BC-08 deuda
-                    PIPELINE_ERRORS,
-                )
-                PIPELINE_ERRORS.labels(
+                self._metrics.pipeline_errors.labels(
                     exchange=ctx.exchange_id,
                     error_type="transient" if _is_transient else "fatal",
                 ).inc()

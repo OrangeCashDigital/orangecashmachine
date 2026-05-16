@@ -225,22 +225,29 @@ forbidden_modules = [
     "market_data.infrastructure",
 ]
 ignore_imports = [
-    # ── DEUDA TÉCNICA: pipelines/ usan infraestructura concreta — World A activo ──
-    # Serán refactorizados para recibir implementaciones por inyección de dependencias.
-    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.lineage.tracker",
-    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.silver.derivatives_storage",
-    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
+    # ── Composition-root fallbacks — imports lazy en __init__ cuando factory no inyecta ──
+    # Cada uno tiene un port definido; el fallback garantiza que el pipeline
+    # funciona sin factory (tests, CLI directo) sin romper el contrato DIP.
+    # Pendiente de eliminación cuando Dagster IOManagers cablen todo en runtime.
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.inbound.rest.ohlcv_fetcher",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.metrics_adapter",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.bronze.bronze_storage",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.iceberg.iceberg_storage",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.metrics",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.pipeline_metrics",
-    # repair también usa métricas Prometheus directamente — World A, mismo patrón que pipelines
-    "market_data.application.strategies.repair -> market_data.infrastructure.observability.metrics",
-    "market_data.application.pipelines.resample_pipeline -> market_data.infrastructure.observability.metrics",
-    "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.silver.trades_storage",
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
+    "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.silver.trades_storage",
+    "market_data.application.pipelines.trades_pipeline -> market_data.adapters.outbound.trades.trades_fetcher",
+    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
+    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.silver.derivatives_storage",
+    "market_data.application.pipelines.derivatives_pipeline -> market_data.adapters.outbound.derivatives.funding_rate_fetcher",
+    "market_data.application.pipelines.derivatives_pipeline -> market_data.adapters.outbound.derivatives.open_interest_fetcher",
+    "market_data.application.strategies.repair -> market_data.infrastructure.observability.metrics_adapter",
     "market_data.application.use_cases.ohlcv_transformer -> market_data.infrastructure.lineage.tracker",
+    # ── Circuit breaker — cross-cutting concern del adapter layer ──────────────
+    # get_breaker_state() y ExchangeCircuitOpenError pertenecen semánticamente
+    # al adapter de exchange. Pendiente: exponer breaker_state via ExchangeClientPort.
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange.ccxt_adapter",
+    # ── quality_consumer — pendiente de migración a Dagster sensor/op ──────────
+    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.lineage.tracker",
 ]
 
 [[tool.importlinter.contracts]]

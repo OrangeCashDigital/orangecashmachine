@@ -271,6 +271,7 @@ class ResamplePipeline:
         storage: OHLCVStorage,
         market_type: str  = "spot",
         dry_run:     bool = False,
+        metrics:     "ResampleMetricsPort | None" = None,
     ) -> None:
         if not symbols:
             raise ValueError("symbols no puede estar vac\xedo")
@@ -291,6 +292,14 @@ class ResamplePipeline:
         # DIP: storage inyectado — no se instancia aquí (Clean Architecture).
         # Misma instancia para lectura (source 1m) y escritura (targets).
         self._storage = storage
+
+        # DIP: metrics inyectado — fallback a PrometheusResampleMetrics si None.
+        if metrics is None:
+            from market_data.infrastructure.observability.metrics_adapter import (  # composition root fallback
+                PrometheusResampleMetrics,
+            )
+            metrics = PrometheusResampleMetrics()
+        self._metrics: ResampleMetricsPort = metrics
         self._log = bind_pipeline(
             "resample_pipeline",
             exchange    = self._exchange,
@@ -375,11 +384,6 @@ class ResamplePipeline:
         5. save_ohlcv(result, symbol, target_tf)
         6. Emitir métricas Prometheus
         """
-        from market_data.infrastructure.observability.metrics import (  # evita import circular en módulo
-            RESAMPLE_ROWS_TOTAL,
-            RESAMPLE_DURATION_MS,
-        )
-
         pair_start = time.monotonic()
         result = ResampleResult(
             symbol      = symbol,
@@ -450,13 +454,13 @@ class ResamplePipeline:
 
             # Métricas Prometheus (SafeOps: nunca lanza)
             try:
-                RESAMPLE_ROWS_TOTAL.labels(
+                self._metrics.resample_rows_total.labels(
                     exchange    = self._exchange,
                     symbol      = symbol,
                     timeframe   = target_tf,
                     market_type = self._market_type,
                 ).inc(result.rows)
-                RESAMPLE_DURATION_MS.labels(
+                self._metrics.resample_duration_ms.labels(
                     exchange    = self._exchange,
                     timeframe   = target_tf,
                     market_type = self._market_type,

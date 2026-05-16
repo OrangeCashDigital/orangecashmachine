@@ -89,3 +89,42 @@ class PrometheusPipelineMetrics:
     @property
     def candle_delay_ms(self) -> object:
         return self._candle_delay_ms
+
+
+class PrometheusRepairMetrics:
+    """Implementa RepairMetricsPort con contadores Prometheus reales."""
+
+    def __init__(self) -> None:
+        from market_data.infrastructure.observability.metrics import (
+            PIPELINE_ERRORS,
+            REPAIR_GAPS_FOUND,
+            REPAIR_GAPS_HEALED,
+            REPAIR_GAPS_SKIPPED,
+            ROWS_INGESTED,
+        )
+        self._pipeline_errors      = PIPELINE_ERRORS
+        self._repair_gaps_found    = REPAIR_GAPS_FOUND
+        self._repair_gaps_healed   = REPAIR_GAPS_HEALED
+        self._repair_gaps_skipped  = REPAIR_GAPS_SKIPPED
+        self._rows_ingested        = ROWS_INGESTED
+
+    @property
+    def pipeline_errors(self) -> object:
+        return self._pipeline_errors
+
+    @property
+    def repair_gaps_found(self) -> object:
+        return self._repair_gaps_found
+
+    @property
+    def repair_gaps_healed(self) -> object:
+        return self._repair_gaps_healed
+
+    @property
+    def repair_gaps_skipped(self) -> object:
+        return self._repair_gaps_skipped
+
+    @property
+    def rows_ingested(self) -> object:
+        return self._rows_ingested
+

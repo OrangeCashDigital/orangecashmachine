@@ -193,3 +193,27 @@ class NullMetrics:
 
 
 __all__ = ["MetricsPort", "NullMetrics"]
+
+
+class RepairMetricsPort(Protocol):
+    """
+    Contrato de métricas de repair de gaps.
+    Implementación: PrometheusRepairMetrics (infrastructure.observability.metrics_adapter).
+    DIP: RepairStrategy depende de este port, no de Prometheus directamente.
+    """
+
+    @property
+    def pipeline_errors(self) -> object: ...
+
+    @property
+    def repair_gaps_found(self) -> object: ...
+
+    @property
+    def repair_gaps_healed(self) -> object: ...
+
+    @property
+    def repair_gaps_skipped(self) -> object: ...
+
+    @property
+    def rows_ingested(self) -> object: ...
+
