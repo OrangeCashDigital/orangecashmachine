@@ -91,8 +91,7 @@ def build_live_engine(args: argparse.Namespace, tracker):
 
     # Fail-Fast: guard obligatorio en live — sin kill switch no hay ejecución
     guard = ExecutionGuard(
-        max_errors     = args.max_errors,
-        error_window_s = 300,   # ventana de 5 min para contar errores
+        max_errors = args.max_errors,
     )
 
     # RiskConfig explícita — no defaults permisivos en live
