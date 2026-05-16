@@ -45,7 +45,9 @@ import time
 # Constants
 # ==========================================================
 
-DEFAULT_CHUNK_LIMIT   = 500
+# DEFAULT_CHUNK_LIMIT: SSOT en domain/constants.py.
+# Re-exportado aquí para compat con callers legacy que importan desde el fetcher.
+from market_data.domain.constants import DEFAULT_CHUNK_LIMIT  # noqa: F401
 MAX_CHUNKS_PER_RUN    = 100_000
 DEFAULT_OVERLAP_BARS  = 3
 

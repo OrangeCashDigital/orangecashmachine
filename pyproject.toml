@@ -107,6 +107,11 @@ dev = [
 ]
 
 [tool.importlinter]
+# import-linter >= 2.1  (docs: https://import-linter.readthedocs.io)
+# SSOT único: este bloque en pyproject.toml. El archivo .importlinter fue eliminado.
+# Cada contrato tiene número único secuencial (BC-NN) para trazabilidad en PRs.
+# Orden: TIER 0 (shared/exceptions) → TIER 1 (market_data interno) → TIER 2 (BCs) → TIER 3+ (platform/infra/api/research)
+# REGLA CI: un contrato BROKEN = merge bloqueado. Fail-fast sin excepciones.
 include_external_packages = true
 root_packages = [
     "market_data",
@@ -120,8 +125,14 @@ root_packages = [
     "api",
 ]
 
+# ─────────────────────────────────────────────────────────────────
+# TIER 0 — fundamentos: dependency-free por definición
+# ─────────────────────────────────────────────────────────────────
+
 [[tool.importlinter.contracts]]
-name = "BC-09: shared is dependency-free (stdlib + third-party only)"
+# shared solo puede depender de stdlib y third-party.
+# Importar cualquier package interno rompe la independencia del kernel compartido.
+name = "BC-01: shared is dependency-free (stdlib + third-party only)"
 type = "forbidden"
 source_modules = [
     "shared",
@@ -134,34 +145,211 @@ forbidden_modules = [
     "infrastructure",
     "app",
     "api",
-    "domain",
+    "research",
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-01: no direct ccxt_adapter imports"
+# exceptions.py es SSOT de jerarquía de errores del bounded context.
+# No puede importar nada del propio dominio — rompe la jerarquía de inicialización.
+name = "BC-02: market_data.exceptions is stdlib-only (no internal imports)"
+type = "forbidden"
+source_modules = [
+    "market_data.exceptions",
+]
+forbidden_modules = [
+    "market_data.domain",
+    "market_data.ports",
+    "market_data.application",
+    "market_data.adapters",
+    "market_data.infrastructure",
+]
+
+# ─────────────────────────────────────────────────────────────────
+# TIER 1 — market_data: capas internas (DIP + Clean Architecture)
+# ─────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# domain es el núcleo puro: cero dependencias hacia capas externas.
+# Viola DIP si importa infrastructure, adapters, application o ports.
+# Las policies en domain/ son World-B — actualmente tienen imports ilegales
+# que son deuda técnica de la migración en curso (ver MIGRATION.md).
+name = "BC-03: market_data.domain isolated from outer layers"
+type = "forbidden"
+source_modules = [
+    "market_data.domain",
+]
+forbidden_modules = [
+    "market_data.infrastructure",
+    "market_data.adapters",
+    "market_data.application",
+    "market_data.quality",
+]
+ignore_imports = [
+    # ── DEUDA TÉCNICA: domain/policies/ — migración World-A → World-B en curso ──
+    # Estas importaciones son del pipeline activo (World A). Serán eliminadas cuando
+    # domain/policies/ se refactorice para recibir sus dependencias por inyección.
+    # Tracking: cada línea aquí debe tener un ticket/issue antes del próximo sprint.
+    "market_data.domain.policies.base -> market_data.ports.outbound.storage",
+    "market_data.domain.policies.base -> market_data.ports.outbound.state",
+    "market_data.domain.policies.base -> market_data.ports.outbound.gap_registry",
+    "market_data.domain.policies.base -> market_data.ports.outbound.kafka_producer",
+    # ── DEUDA TÉCNICA: domain/value_objects/ — lazy imports de métricas ──
+    # grid_alignment usa lazy imports para evitar circular. Mover a puerto de observabilidad.
+    "market_data.domain.value_objects.grid_alignment -> market_data.infrastructure.observability.metrics",
+]
+
+[[tool.importlinter.contracts]]
+# ports son contratos puros (Protocols/ABCs).
+# Solo pueden depender del dominio propio. Nunca de implementaciones concretas.
+# NOTA: ports/outbound/kafka_producer.py exporta constantes (TOPIC_OHLCV_RAW etc.)
+# que actualmente son usadas desde domain/policies/. Esas constantes deben migrar
+# a domain/events/ como parte de la refactorización World-A → World-B.
+# El import real domain.policies → infrastructure.kafka.payloads está cubierto en BC-03.
+name = "BC-04: market_data.ports depend only on domain"
+type = "forbidden"
+source_modules = [
+    "market_data.ports",
+]
+forbidden_modules = [
+    "market_data.infrastructure",
+    "market_data.adapters",
+    "market_data.application",
+]
+
+[[tool.importlinter.contracts]]
+# application orquesta use cases a través de ports — nunca instancia infraestructura directamente.
+# Las importaciones directas de infrastructure en application son World-A en migración.
+name = "BC-05: market_data.application isolated from infrastructure and adapters"
 type = "forbidden"
 source_modules = [
     "market_data.application",
-    "market_data.quality",
-    "market_data.infrastructure",
-    "trading",
 ]
 forbidden_modules = [
-    "market_data.adapters.exchange.ccxt_adapter",
+    "market_data.adapters",
+    "market_data.infrastructure",
+]
+ignore_imports = [
+    # ── DEUDA TÉCNICA: pipelines/ usan infraestructura concreta — World A activo ──
+    # Serán refactorizados para recibir implementaciones por inyección de dependencias.
+    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.lineage.tracker",
+    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.silver.derivatives_storage",
+    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.bronze.bronze_storage",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.iceberg.iceberg_storage",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.metrics",
+    "market_data.application.pipelines.resample_pipeline -> market_data.infrastructure.observability.metrics",
+    "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.silver.trades_storage",
+    "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
+    "market_data.application.use_cases.ohlcv_transformer -> market_data.infrastructure.lineage.tracker",
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-02: market_data no importa trading"
+# Los adaptadores concretos no pueden importar infraestructura directamente.
+# Deben recibir dependencias por inyección o usar ports de storage.
+name = "BC-06: market_data.adapters isolated from infrastructure"
+type = "forbidden"
+source_modules = [
+    "market_data.adapters",
+]
+forbidden_modules = [
+    "market_data.infrastructure",
+]
+ignore_imports = [
+    # ── DEUDA TÉCNICA: adapters/ con imports directos de infrastructure — World A ──
+    "market_data.adapters.inbound.rest.derivatives_fetcher -> market_data.infrastructure.storage.silver.derivatives_storage",
+    "market_data.adapters.inbound.rest.ohlcv_fetcher -> market_data.infrastructure.observability.metrics",
+    "market_data.adapters.inbound.rest.trades_fetcher -> market_data.infrastructure.storage.silver.trades_storage",
+    "market_data.adapters.outbound.exchange.ccxt_adapter -> market_data.infrastructure.observability.metrics",
+    "market_data.adapters.outbound.storage.gold_reader -> market_data.infrastructure.storage.iceberg.catalog",
+    "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
+]
+
+[[tool.importlinter.contracts]]
+# infrastructure NO puede importar application en nivel módulo — viola DIP.
+# EXCEPCIONES DOCUMENTADAS (Composition Root legítimo):
+#   · infrastructure/dagster/assets/*.py — orquestadores Dagster; por definición
+#     son el punto de ensamblaje del sistema. Conocen use cases por diseño.
+#   · market_data.infrastructure.bootstrap.container — OCMContainer es el único
+#     Composition Root interno. El import de PipelineOrchestrator/ResampleUseCase
+#     es lazy (dentro de método build()) — no contamina el grafo en import-time.
+# REGLA: ningún otro módulo de infrastructure puede importar application.
+name = "BC-07: market_data.infrastructure does not import application (DIP)"
+type = "forbidden"
+source_modules = [
+    "market_data.infrastructure",
+    "infrastructure",
+]
+forbidden_modules = [
+    "market_data.application",
+]
+ignore_imports = [
+    # Composition Root: dagster assets ensamblan use cases con infrastructure.
+    "infrastructure.dagster.assets.bronze_ohlcv -> market_data.application",
+    "infrastructure.dagster.assets.repair_ohlcv -> market_data.application",
+    "infrastructure.dagster.assets.resample_ohlcv -> market_data.application",
+    # Composition Root interno: OCMContainer (lazy import en método build()).
+    "market_data.infrastructure.bootstrap.container -> market_data.application",
+]
+
+[[tool.importlinter.contracts]]
+# Orden de capas: las dependencias fluyen solo hacia adentro (domain es el núcleo).
+# domain < ports < application < adapters < infrastructure
+#
+# NOTA sobre pipeline_orchestrator → CCXTAdapter:
+# Los imports de CCXTAdapter (líneas 302/340/366) son LAZY (dentro de métodos).
+# Import-linter analiza grafo estático — estos imports NO generan arista en el
+# grafo. No se necesita ignore_imports. Verificar con:
+#   grep -n "from market_data.adapters" \
+#     packages/market_data/application/use_cases/pipeline_orchestrator.py
+name = "BC-08: market_data layer order (domain < ports < application < adapters < infrastructure)"
+type = "layers"
+layers = [
+    "market_data.infrastructure",
+    "market_data.adapters",
+    "market_data.application",
+    "market_data.ports",
+    "market_data.domain",
+]
+
+[[tool.importlinter.contracts]]
+# domain no puede importar librerías de infraestructura de terceros.
+# Un import de pyiceberg/redis/ccxt en domain acopla el núcleo a implementaciones concretas.
+name = "BC-09: market_data.domain does not import infrastructure third-party libs"
+type = "forbidden"
+source_modules = [
+    "market_data.domain",
+]
+forbidden_modules = [
+    "pyiceberg",
+    "redis",
+    "ccxt",
+    "dagster",
+    "sqlalchemy",
+    "boto3",
+]
+
+# ─────────────────────────────────────────────────────────────────
+# TIER 2 — bounded contexts: independencia entre packages
+# ─────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# market_data no puede importar bounded contexts de negocio.
+# El flujo legítimo: trading/portfolio consumen datos de market_data, nunca al revés.
+name = "BC-10: market_data does not import sibling bounded contexts"
 type = "forbidden"
 source_modules = [
     "market_data",
 ]
 forbidden_modules = [
     "trading",
+    "portfolio",
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-03: signals isolated from execution"
+# Strategies son pure functions sobre datos. No conocen ejecución ni analytics.
+# Viola SRP y crea acoplamiento circular si importan execution.
+name = "BC-11: trading.strategies isolated from execution and analytics"
 type = "forbidden"
 source_modules = [
     "trading.strategies",
@@ -172,7 +360,9 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-04: risk isolated from execution"
+# Risk es un guard layer previo a ejecución.
+# Importar execution desde risk crea dependencia circular implícita.
+name = "BC-12: trading.risk isolated from execution"
 type = "forbidden"
 source_modules = [
     "trading.risk",
@@ -182,19 +372,9 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-06: platform has no business logic dependencies"
-type = "forbidden"
-source_modules = [
-    "ocm",
-]
-forbidden_modules = [
-    "market_data",
-    "trading",
-    "infrastructure",
-]
-
-[[tool.importlinter.contracts]]
-name = "BC-07: portfolio isolated from execution"
+# portfolio gestiona estado de posiciones. No orquesta ejecución ni estrategias.
+# Comunicación legítima: por eventos (PositionOpened etc.), no por importación directa.
+name = "BC-13: portfolio isolated from trading execution and strategies"
 type = "forbidden"
 source_modules = [
     "portfolio",
@@ -204,22 +384,47 @@ forbidden_modules = [
     "trading.strategies",
 ]
 
+# ─────────────────────────────────────────────────────────────────
+# TIER 3 — platform (ocm): config/runtime, sin lógica de negocio
+# ─────────────────────────────────────────────────────────────────
+
 [[tool.importlinter.contracts]]
-name = "BC-08: domain layers must not depend on api (no upward dependency)"
+# ocm es la plataforma de config, runtime y observabilidad.
+# No contiene lógica de negocio: no puede importar BCs de dominio.
+name = "BC-14: ocm platform has no business logic dependencies"
 type = "forbidden"
 source_modules = [
     "ocm",
-    "market_data",
-    "trading",
-    "app",
-    "portfolio",
 ]
 forbidden_modules = [
-    "api",
+    "market_data",
+    "trading",
+    "portfolio",
+]
+
+# ─────────────────────────────────────────────────────────────────
+# TIER 4 — infrastructure: orquestación, sin dominio de negocio
+# ─────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# infrastructure.dagster.assets puede importar market_data ports y application.
+# NO puede instanciar infraestructura de storage ni el ccxt_adapter directamente.
+# CORRECCIÓN: módulo existe en root_packages — error anterior era root_package = market_data
+# en .importlinter (solo indexaba market_data, infrastructure no estaba en el graph).
+name = "BC-15: infrastructure.dagster.assets does not bypass ports layer"
+type = "forbidden"
+source_modules = [
+    "infrastructure.dagster.assets",
+]
+forbidden_modules = [
+    "market_data.infrastructure.storage",
+    "market_data.adapters.outbound.exchange.ccxt_adapter",
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-10: infrastructure depends only on platform abstractions"
+# infrastructure (dagster, redis) no puede importar execution, portfolio, app ni api.
+# Solo puede depender de ocm (plataforma) y market_data (datos via ports).
+name = "BC-16: infrastructure depends only on platform and market_data abstractions"
 type = "forbidden"
 source_modules = [
     "infrastructure",
@@ -232,7 +437,44 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-11: domain layers must not import research (no upward dependency)"
+# timeouts.py es SSOT de todos los valores de timeout del sistema.
+# iceberg_storage debe importar desde infrastructure.timeouts, no hardcodear valores.
+# type=independence: si alguno importa al otro en dirección incorrecta, falla.
+name = "BC-17: infrastructure.timeouts is SSOT — no circular dependency with iceberg"
+type = "independence"
+modules = [
+    "infrastructure.timeouts",
+    "market_data.infrastructure.storage.iceberg.iceberg_storage",
+]
+
+# ─────────────────────────────────────────────────────────────────
+# TIER 5 — api: presentación HTTP, sin flujo hacia abajo
+# ─────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# api es la capa de presentación. Ningún dominio puede depender de ella.
+# Una dependencia hacia api desde dominio invierte el flujo de control.
+name = "BC-18: no upward dependency to api layer"
+type = "forbidden"
+source_modules = [
+    "ocm",
+    "market_data",
+    "trading",
+    "app",
+    "portfolio",
+    "infrastructure",
+]
+forbidden_modules = [
+    "api",
+]
+
+# ─────────────────────────────────────────────────────────────────
+# TIER 6 — research: consumer de solo lectura
+# ─────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# research es analytics post-hoc. Los dominios no saben que existe.
+name = "BC-19: no upward dependency to research layer"
 type = "forbidden"
 source_modules = [
     "market_data",
@@ -246,7 +488,8 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "BC-12: research is a read-only analytics consumer"
+# research consume datos ya procesados (gold layer). No modifica estado operacional.
+name = "BC-20: research is a read-only analytics consumer"
 type = "forbidden"
 source_modules = [
     "research",
