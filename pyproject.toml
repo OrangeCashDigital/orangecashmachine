@@ -236,7 +236,6 @@ ignore_imports = [
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.silver.trades_storage",
     "market_data.application.pipelines.trades_pipeline -> market_data.adapters.outbound.trades.trades_fetcher",
-    "market_data.application.pipelines.derivatives_pipeline -> market_data.infrastructure.storage.silver.derivatives_storage",
     "market_data.application.strategies.repair -> market_data.infrastructure.observability.metrics_adapter",
     # ── Circuit breaker — cross-cutting concern del adapter layer ──────────────
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange.ccxt_adapter",  # get_breaker_state — pendiente CircuitBreakerPort
