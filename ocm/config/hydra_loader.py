@@ -62,6 +62,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from ocm.config.schema import AppConfig
 from ocm.config.loader.snapshot import write_config_snapshot
+from ocm.config.loader.exceptions import ConfigValidationError
 
 _HYDRA_INTERNAL: frozenset[str] = frozenset(
     {"_target_", "_recursive_", "_convert_", "hydra"}

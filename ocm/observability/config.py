@@ -56,4 +56,4 @@ class LoggingConfig(BaseModel):
 # SSOT de esta constante: ocm.observability.config (BC-26)
 # ocm.config.env_vars re-exporta desde aquí para backwards compat.
 # ---------------------------------------------------------------------------
-ALLOWED_ENVS: frozenset[str] = frozenset({"dev", "staging", "prod"})
+ALLOWED_ENVS: frozenset[str] = frozenset({"dev", "development", "staging", "prod", "production", "test"})
