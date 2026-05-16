@@ -28,7 +28,10 @@ Principios
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from market_data.ports.outbound.storage import OHLCVStorage
 
 import pandas as pd
 from loguru import logger

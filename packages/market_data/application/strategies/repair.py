@@ -412,6 +412,9 @@ class RepairStrategy(StrategyMixin):
                     "Gap heal: fetch transitorio",
                     error=str(exc), is_transient=True,
                 )
+                from market_data.infrastructure.observability.metrics import (  # local — BC-05/BC-08 deuda
+                    PIPELINE_ERRORS,
+                )
                 PIPELINE_ERRORS.labels(
                     exchange=ctx.exchange_id, error_type="transient",
                 ).inc()
@@ -422,6 +425,9 @@ class RepairStrategy(StrategyMixin):
                     error_type=type(exc).__name__,
                     error=str(exc),
                     is_transient=_is_transient,
+                )
+                from market_data.infrastructure.observability.metrics import (  # local — BC-05/BC-08 deuda
+                    PIPELINE_ERRORS,
                 )
                 PIPELINE_ERRORS.labels(
                     exchange=ctx.exchange_id,

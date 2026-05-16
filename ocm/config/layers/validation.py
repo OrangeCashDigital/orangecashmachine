@@ -24,7 +24,7 @@ from loguru import logger
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig
 
-__all__ = ["validate_config", "validate_and_coerce"]
+__all__ = ["validate_config"]
 
 
 def validate_config(raw_dict: dict[str, Any]) -> "AppConfig":
