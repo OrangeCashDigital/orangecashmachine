@@ -230,7 +230,6 @@ ignore_imports = [
     # Cada uno tiene un port definido; el fallback garantiza que el pipeline
     # funciona sin factory (tests, CLI directo) sin romper el contrato DIP.
     # Pendiente de eliminación cuando Dagster IOManagers cablen todo en runtime.
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.inbound.rest.ohlcv_fetcher",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.metrics_adapter",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.bronze.bronze_storage",
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
