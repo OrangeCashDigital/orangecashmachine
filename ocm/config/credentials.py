@@ -18,6 +18,16 @@ Patrón de resolución (ejemplo para BINANCE)::
     4. ""                 → vacío seguro
 
 Principios: KISS · SafeOps · Sin efectos secundarios
+
+Excepción al SSOT de env_vars.py
+----------------------------------
+Las variables per-exchange (``BINANCE_API_KEY``, ``KUCOIN_PASSPHRASE``, etc.)
+son dinámicas — su nombre depende del exchange activo en runtime y no puede
+enumerarse estáticamente sin violar OCP. Esta es la única excepción documentada
+al SSOT de ``env_vars.py``, que cubre únicamente variables estáticas del proceso.
+
+Las variables genéricas de fallback (``OCM_API_KEY``, ``OCM_API_SECRET``) sí
+están en ``env_vars.py`` y se importan desde allí.
 """
 
 import os

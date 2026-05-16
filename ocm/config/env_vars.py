@@ -5,9 +5,17 @@ core/config/env_vars.py
 
 Single Source of Truth para los nombres de variables de entorno del proceso.
 
-Este es el ÚNICO archivo en todo el proyecto que define estos strings.
+Este es el ÚNICO archivo en todo el proyecto que define estos strings estáticos.
 Nadie más escribe "KAFKA_BOOTSTRAP_SERVERS" directamente — todos importan aquí.
 Si una variable se renombra, se cambia aquí y solo aquí.
+
+Alcance del SSOT
+-----------------
+Cubre ÚNICAMENTE variables estáticas conocidas en compile-time.
+Excepción explícita: variables per-exchange dinámicas (``BINANCE_API_KEY``,
+``KUCOIN_PASSPHRASE``, etc.) viven en ``core/config/credentials.py`` porque
+su nombre depende del exchange activo en runtime — no pueden enumerarse aquí
+sin violar OCP. Ver ``credentials.py`` para la documentación de esa excepción.
 
 Guard de sincronía (import-time)
 ---------------------------------

@@ -66,8 +66,9 @@ from ocm.config.loader.snapshot import write_config_snapshot
 _HYDRA_INTERNAL: frozenset[str] = frozenset(
     {"_target_", "_recursive_", "_convert_", "hydra"}
 )
-# _NULLABLE_KEYS eliminado — reemplazado por _NULLABLE_PATHS en
-# ocm/config/layers/coercion.py (path-based, robusto ante campos nuevos).
+# Coerción nullable delegada a layers/coercion.py (SSOT):
+#   _NULLABLE_PATHS: frozenset[tuple] — matching exacto por path completo.
+#   _NULLABLE_KEYS:  frozenset[str]   — matching por nombre de clave (nodos dinámicos).
 # Ver: OCP — Open/Closed Principle aplicado a campos nullable.
 
 # ---------------------------------------------------------------------------
@@ -184,7 +185,6 @@ def ensure_log_dir(log_dir_path: str) -> None:
         OSError: Si el directorio no puede crearse (permisos, disco lleno).
                  Fail-fast — mejor error en startup que error silencioso en runtime.
     """
-    from pathlib import Path
     log_dir = Path(log_dir_path)
     log_dir.mkdir(parents=True, exist_ok=True)
     logger.debug("bootstrap | log_dir_ensured={}", log_dir)
