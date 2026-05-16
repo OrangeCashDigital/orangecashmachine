@@ -50,13 +50,17 @@ def apply_business_rules(cfg: "AppConfig") -> None:
     Para acumulación de errores en el futuro:
         Cambiar a lista + raise al final (pero fail-fast es correcto aquí).
     """
-    _rule_production_never_dry_run(cfg)
-    _rule_resample_source_in_historical(cfg)
-    _rule_order_range_coherent(cfg)
-    _rule_max_backfill_production(cfg)
-    _rule_require_confirmation_in_prod(cfg)
+    _rules = [
+        _rule_production_never_dry_run,
+        _rule_resample_source_in_historical,
+        _rule_order_range_coherent,
+        _rule_max_backfill_production,
+        _rule_require_confirmation_in_prod,
+    ]
+    for rule in _rules:
+        rule(cfg)
 
-    logger.debug("config_pipeline_l5 | rules=ok rules_verified=5")
+    logger.debug("config_pipeline_l5 | rules=ok rules_verified={}", len(_rules))
 
 
 # ------------------------------------------------------------------------------

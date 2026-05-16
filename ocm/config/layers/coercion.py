@@ -82,6 +82,8 @@ BOOL_FALSE: frozenset[str] = frozenset({"false", "no",  "off"})
 # OCP: añadir paths sin modificar la lógica de coerce_scalar_values().
 # ---------------------------------------------------------------------------
 
+# Paths completos desde la raíz del config — matching exacto por path completo.
+# OCP: añadir aquí campos Optional[X] estáticos cuyo path se conoce en compile-time.
 _NULLABLE_PATHS: frozenset[tuple[str, ...]] = frozenset({
     # integrations.postgres
     ("integrations", "postgres", "user"),
@@ -91,8 +93,14 @@ _NULLABLE_PATHS: frozenset[tuple[str, ...]] = frozenset({
     ("integrations", "redis", "password"),
     # integrations.kafka
     ("integrations", "kafka", "password"),
-    # exchanges — credenciales opcionales
-    ("api_password",),   # dentro de cada ExchangeConfig (path relativo al nodo)
+})
+
+# Nombres de clave — matching por nombre a cualquier profundidad del árbol.
+# Para campos Optional[X] en nodos dinámicos (ej: lista de exchanges)
+# donde el path completo no puede enumerarse estáticamente en compile-time.
+# OCP: añadir aquí campos opcionales de nodos instanciados N veces.
+_NULLABLE_KEYS: frozenset[str] = frozenset({
+    "api_password",   # ExchangeConfig — credencial opcional por exchange
 })
 
 
@@ -143,13 +151,13 @@ def coerce_scalar_values(
             continue  # ya es tipo nativo (int/float/bool de YAML) — nada que hacer
 
         # ── string vacío en campo nullable ────────────────────────────────
-        if value == "" and (current_path in _NULLABLE_PATHS or (key,) in _NULLABLE_PATHS):
+        if value == "" and (current_path in _NULLABLE_PATHS or key in _NULLABLE_KEYS):
             d[key] = None
             _get_logger().debug("coerce_scalar | path={} '' → None", ".".join(current_path))
             continue
 
         # ── bool inequívoco ───────────────────────────────────────────────
-        coerced = _coerce_string(value, current_path)
+        coerced = coerce_string(value, current_path)
         if coerced is not value:   # identidad: cambió
             d[key] = coerced
             _get_logger().debug(
@@ -167,10 +175,10 @@ def _coerce_list(lst: list[Any], path: tuple[str, ...]) -> None:
         if isinstance(item, dict):
             coerce_scalar_values(item, path + (str(i),))
         elif isinstance(item, str):
-            lst[i] = _coerce_string(item, path + (str(i),))
+            lst[i] = coerce_string(item, path + (str(i),))
 
 
-def _coerce_string(value: str, path: tuple[str, ...]) -> Any:  # noqa: ARG001
+def coerce_string(value: str, path: tuple[str, ...] = ()) -> Any:  # noqa: ARG001
     """Convierte un string al tipo nativo inequívoco, o lo devuelve sin cambios.
 
     Solo convierte booleans semánticos (BOOL_TRUE ∪ BOOL_FALSE).

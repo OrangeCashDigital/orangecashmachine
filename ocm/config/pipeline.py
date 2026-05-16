@@ -167,11 +167,12 @@ class ConfigPipeline:
             sorted(top_level_keys),
             required_keys,
         )
-        if logger.level("DEBUG").no <= logger._core.min_level:
-            logger.debug(
-                "config_pipeline_l1_snapshot\n{}",
-                OmegaConf.to_yaml(self._raw),
-            )
+        # Guard lazy: OmegaConf.to_yaml() es costoso — solo en DEBUG activo.
+        # logger.opt(lazy=True) es la API pública correcta (loguru ≥ 0.5.0).
+        logger.opt(lazy=True).debug(
+            "config_pipeline_l1_snapshot\n{}",
+            lambda: OmegaConf.to_yaml(self._raw),
+        )
         self._record(ConfigStage.RAW, ConfigStage.ENV_MUTATED, 0)
         return self._raw
 

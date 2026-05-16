@@ -36,6 +36,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -46,6 +47,7 @@ from omegaconf import DictConfig, OmegaConf
 # Ref: core/config/layers/coercion.py — BOOL_TRUE / BOOL_FALSE.
 from ocm.config.layers.coercion import BOOL_FALSE as _BOOL_FALSE
 from ocm.config.layers.coercion import BOOL_TRUE as _BOOL_TRUE
+from ocm.config.layers.coercion import coerce_string as _coerce_string_canonical
 
 _OCM_PREFIX = "OCM_"
 _SEPARATOR  = "__"
@@ -54,7 +56,7 @@ _SEPARATOR  = "__"
 def apply_env_overrides(
     cfg: DictConfig,
     *,
-    env: "os.Mapping[str, str] | None" = None,
+    env: "Mapping[str, str] | None" = None,
 ) -> tuple[DictConfig, int]:
     """Aplica OCM_* env vars como overrides estructurados sobre el DictConfig.
 
@@ -127,14 +129,10 @@ def apply_env_overrides(
 def _coerce_value(value: str) -> bool | str:
     """Coerciona un string de env var al tipo nativo mínimo seguro.
 
-    Convierte ÚNICAMENTE booleans semánticos inequívocos.
-    Cualquier otro string se retorna intacto para que Pydantic L4 lo
-    coercione con pleno conocimiento del tipo de destino en el schema.
-
-    Lógica idéntica a coercion._coerce_string() — SSOT en coercion.py.
-    L2 no llama a _coerce_string() directamente para evitar acoplar L2
-    a una función privada de L3; las constantes públicas BOOL_TRUE/BOOL_FALSE
-    son el contrato compartido entre ambas capas.
+    Delega a coercion.coerce_string() — SSOT canónico compartido entre L2 y L3.
+    Convierte únicamente booleans semánticos inequívocos (BOOL_TRUE ∪ BOOL_FALSE).
+    Cualquier otro string se retorna intacto para que Pydantic L4 lo coercione
+    con pleno conocimiento del tipo de destino declarado en el schema.
 
     Por qué NO convertir int/float aquí:
         "6379" podría ser port: int o api_key: str según el campo de destino.
@@ -147,12 +145,7 @@ def _coerce_value(value: str) -> bool | str:
     Returns:
         True/False si es boolean semántico reconocido, str original en caso contrario.
     """
-    lower = value.lower()
-    if lower in _BOOL_TRUE:
-        return True
-    if lower in _BOOL_FALSE:
-        return False
-    return value  # str — Pydantic coerce int/float en L4
+    return _coerce_string_canonical(value)  # SSOT: coercion.py — sin duplicación de lógica
 
 
 def _count_leaves(d: dict) -> int:
