@@ -49,11 +49,3 @@ def validate_config(raw_dict: dict[str, Any]) -> "AppConfig":
     logger.debug("config_pipeline_l4 | pydantic=ok env={}", app_config.environment.name)
     return app_config
 
-
-# ---------------------------------------------------------------------------
-# Alias de compatibilidad — el nombre validate_and_coerce era semánticamente
-# incorrecto (L4 no coerciona; coerción es responsabilidad de L3). Conservado
-# para no romper callers existentes durante la transición.
-# Deprecated: usar validate_config directamente.
-# ---------------------------------------------------------------------------
-validate_and_coerce = validate_config

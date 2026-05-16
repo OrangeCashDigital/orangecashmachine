@@ -165,7 +165,7 @@ def coerce_scalar_values(
             continue
 
         # ── bool inequívoco ───────────────────────────────────────────────
-        coerced = coerce_string(value, current_path)
+        coerced = coerce_string(value)
         if coerced is not value:   # identidad: cambió
             d[key] = coerced
             _get_logger().debug(

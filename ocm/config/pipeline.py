@@ -254,8 +254,8 @@ class ConfigPipeline:
         SIN reglas de negocio (esas van en L5).
         """
         try:
-            from ocm.config.layers.validation import validate_and_coerce
-            app_config = validate_and_coerce(raw_dict)
+            from ocm.config.layers.validation import validate_config
+            app_config = validate_config(raw_dict)
             logger.debug("config_pipeline_l4 | pydantic=ok")
             self._record(ConfigStage.VALIDATED, ConfigStage.FROZEN)
             return app_config

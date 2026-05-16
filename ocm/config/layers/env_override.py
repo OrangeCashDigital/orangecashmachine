@@ -30,7 +30,7 @@
 #   Int/float se dejan como str para que Pydantic L4 los coercione con pleno
 #   conocimiento del tipo de destino declarado en el schema.
 #   Razón: "6379" podría ser port: int o api_key: str — L2 no puede saberlo.
-#   Ref: core/config/layers/coercion.py — motor canónico, misma lógica.
+#   Ref: ocm/config/layers/coercion.py — motor canónico (coerce_string), misma lógica.
 # ==============================================================================
 
 from __future__ import annotations
@@ -45,10 +45,8 @@ from omegaconf import DictConfig, OmegaConf
 # SSOT para constantes booleanas — importadas desde el motor canónico de coerción.
 # L2 y L3 usan el mismo conjunto de strings reconocidos; sin duplicación ni riesgo
 # de divergencia silenciosa entre capas.
-# Ref: core/config/layers/coercion.py — BOOL_TRUE / BOOL_FALSE.
-from ocm.config.layers.coercion import BOOL_FALSE as _BOOL_FALSE
-from ocm.config.layers.coercion import BOOL_TRUE as _BOOL_TRUE
-from ocm.config.layers.coercion import coerce_string as _coerce_string_canonical
+# Ref: ocm/config/layers/coercion.py — BOOL_TRUE / BOOL_FALSE (encapsulados en coerce_string).
+from ocm.config.layers.coercion import coerce_string as _coerce_string_canonical  # SSOT: BOOL_TRUE/BOOL_FALSE encapsulados en coerce_string
 
 # SSOT de este módulo para el prefijo y separador de env vars estructuradas.
 # Nota: OCM_PREFIX en env_vars.py es el prefijo genérico del proceso; este
