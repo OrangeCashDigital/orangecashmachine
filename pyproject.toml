@@ -572,6 +572,10 @@ forbidden_modules = [
     "ocm.runtime.state.encoding",
     "ocm.runtime.state.retry",
 ]
+# allow_indirect_imports: la fachada ocm.runtime.state.__init__ re-exporta estos
+# módulos por diseño (Clean Architecture facade). Solo se prohíbe importación
+# directa desde source_modules. Ver: https://import-linter.readthedocs.io/en/stable/contract_types.html
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name            = "BC-24: ocm.runtime — no puede importar de packages ni apps"
