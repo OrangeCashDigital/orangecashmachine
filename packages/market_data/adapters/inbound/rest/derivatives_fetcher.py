@@ -36,7 +36,10 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+if TYPE_CHECKING:
+    from ocm.runtime.state.ports import CursorStorePort as CursorStore
 
 import pandas as pd
 from loguru import logger

@@ -31,7 +31,11 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
+    from ocm.runtime.state.ports import CursorStorePort as CursorStore
 
 import pandas as pd
 from loguru import logger
