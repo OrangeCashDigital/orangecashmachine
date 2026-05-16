@@ -35,6 +35,9 @@ from market_data.domain.value_objects.timeframe import timeframe_to_ms
 from market_data.domain.value_objects.gap_utils     import GapRange, scan_gaps
 from market_data.domain.value_objects.exchange_quirks import get_quirks  # domain VO — BC-05
 
+# ── Infrastructure (métricas — import local por BC-05: application aislada de infrastructure) ──
+# Los imports concretos ocurren dentro de los métodos que los usan (ver execute_pair, _heal_gap).
+
 # ── Adapters ──────────────────────────────────────────────────────────────────
 # get_quirks: import local en execute_pair() — BC-05
 

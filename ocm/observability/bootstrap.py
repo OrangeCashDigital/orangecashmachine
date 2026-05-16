@@ -83,7 +83,7 @@ def pre_log(event: str, **kwargs: str | int | float | bool | None) -> None:
             file=sys.stderr,
             flush=True,
         )
-        kwargs = {k: str(v) if not isinstance(v, _PRIMITIVE) else v for k, v in kwargs.items()}  # type: ignore[assignment]
+        kwargs = {k: (str(v) if not isinstance(v, _PRIMITIVE) else v) for k, v in kwargs.items()}  # type: narrowed: all values are _PRIMITIVE after coercion
 
     with _lock:
         if not _active[0]:

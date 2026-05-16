@@ -22,7 +22,7 @@ OCP: InMemoryGapStore para tests sin Redis real.
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional, Protocol, runtime_checkable
+from typing import Any, List, Optional, Protocol, cast, runtime_checkable
 
 
 # ── Protocolo de pipeline ────────────────────────────────────────────────────
@@ -98,7 +98,8 @@ class RedisGapStore:
         return self._client.scan(cursor=cursor, match=match, count=count)
 
     def pipeline(self) -> PipelinePort:
-        return self._client.pipeline()  # type: ignore[return-value]  # redis.Pipeline satisface PipelinePort estructuralmente
+        # redis.Pipeline satisface PipelinePort estructuralmente (duck typing).
+        return cast(PipelinePort, self._client.pipeline())
 
 
 # ── Implementación en memoria (tests sin Redis) ──────────────────────────────
