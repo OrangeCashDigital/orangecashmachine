@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-infra/state/adapters.py
+ocm/runtime/state/adapters.py
 ========================
 Re-exporta las implementaciones concretas de CursorStorePort
 para uso exclusivo del composition root.

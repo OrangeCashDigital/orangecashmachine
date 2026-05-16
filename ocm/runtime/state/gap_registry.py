@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 """
-infra/state/gap_registry.py
+ocm/runtime/state/gap_registry.py
 ============================
 
 Registro persistente de gaps detectados en Silver.

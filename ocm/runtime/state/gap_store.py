@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ocm/infra/state/gap_store.py
+ocm/runtime/state/gap_store.py
 =======================================
 
 GapStorePort  — contrato mínimo de almacenamiento para GapRegistry.

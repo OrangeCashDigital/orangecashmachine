@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ocm/infra/state/retry.py
+ocm/runtime/state/retry.py
 ===================================
 
 Resiliencia síncrona ante fallos transitorios de Redis.
@@ -13,7 +13,7 @@ para operaciones Redis síncronas que pueden fallar de forma transitoria
 
 Por qué existe este módulo
 --------------------------
-La lógica de retry es transversal al subsistema infra/state: la necesitan
+La lógica de retry es transversal al subsistema ocm/runtime/state: la necesitan
 cursor_store, gap_registry y lateness_calibration, pero no pertenece
 semánticamente a ninguno de ellos.
 

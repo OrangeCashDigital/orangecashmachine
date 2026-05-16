@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-infra/state/factories.py
+ocm/runtime/state/factories.py
 =========================
 
-Factories centralizadas para todos los stores de infra/state/.
+Factories centralizadas para todos los stores de ocm/runtime/state/.
 
 Responsabilidad
 ---------------

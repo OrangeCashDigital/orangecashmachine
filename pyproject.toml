@@ -196,8 +196,6 @@ ignore_imports = [
     "market_data.domain.policies.base -> market_data.ports.outbound.gap_registry",
     "market_data.domain.policies.base -> market_data.ports.outbound.kafka_producer",
     # ── DEUDA TÉCNICA: domain/value_objects/ — lazy imports de métricas ──
-    # grid_alignment usa lazy imports para evitar circular. Mover a puerto de observabilidad.
-    "market_data.domain.value_objects.grid_alignment -> market_data.infrastructure.observability.metrics",
 ]
 
 [[tool.importlinter.contracts]]
@@ -438,19 +436,6 @@ forbidden_modules = [
     "api",
 ]
 
-[[tool.importlinter.contracts]]
-# timeouts.py es SSOT de todos los valores de timeout del sistema.
-# iceberg_storage debe importar desde infrastructure.timeouts, no hardcodear valores.
-# type=independence: si alguno importa al otro en dirección incorrecta, falla.
-name = "BC-17: infrastructure.timeouts is SSOT — no circular dependency with iceberg"
-type = "independence"
-modules = [
-    "infrastructure.timeouts",
-    "market_data.infrastructure.storage.iceberg.iceberg_storage",
-]
-
-# ─────────────────────────────────────────────────────────────────
-# TIER 5 — api: presentación HTTP, sin flujo hacia abajo
 # ─────────────────────────────────────────────────────────────────
 
 [[tool.importlinter.contracts]]
@@ -568,4 +553,56 @@ source_modules = [
 ]
 forbidden_modules = [
     "ocm.config.paths",
+]
+
+[[tool.importlinter.contracts]]
+name            = "BC-22: ocm.runtime.state — solo adapters/factories son API pública"
+type            = "forbidden"
+source_modules  = [
+    "market_data",
+    "trading",
+    "app",
+    "infrastructure",
+]
+forbidden_modules = [
+    "ocm.runtime.state.cursor_store",
+    "ocm.runtime.state.gap_store",
+    "ocm.runtime.state.gap_registry",
+    "ocm.runtime.state.lateness_calibration",
+    "ocm.runtime.state.encoding",
+    "ocm.runtime.state.retry",
+]
+
+[[tool.importlinter.contracts]]
+name            = "BC-24: ocm.runtime — no puede importar de packages ni apps"
+type            = "forbidden"
+source_modules  = ["ocm.runtime"]
+forbidden_modules = ["packages", "app", "infrastructure"]
+
+[[tool.importlinter.contracts]]
+name            = "BC-25: ocm.config — prohibido importar de ocm.runtime"
+type            = "forbidden"
+source_modules  = ["ocm.config"]
+forbidden_modules = ["ocm.runtime"]
+
+[[tool.importlinter.contracts]]
+name = "BC-26: ocm — layering observability < config < runtime"
+type = "layers"
+layers = ["ocm.runtime", "ocm.config", "ocm.observability"]
+ignore_imports = [
+    "ocm.config.loader.env_resolver -> ocm.observability.bootstrap",
+]
+
+[[tool.importlinter.contracts]]
+name            = "BC-27: ocm.runtime.state — no importa de ocm.runtime raíz"
+type            = "forbidden"
+source_modules  = ["ocm.runtime.state"]
+forbidden_modules = [
+    "ocm.runtime.context",
+    "ocm.runtime.run_config",
+    "ocm.runtime.guard",
+    "ocm.runtime.guard_context",
+    "ocm.runtime.lineage",
+    "ocm.runtime.registry",
+    "ocm.runtime.environment_validator",
 ]

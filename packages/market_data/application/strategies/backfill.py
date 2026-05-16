@@ -48,7 +48,7 @@ from market_data.domain.value_objects.exchange_quirks import (
 from market_data.ports.outbound.publisher import SOURCE_BACKFILL
 
 # ── OCM platform ─────────────────────────────────────────────────────────────
-from ocm.runtime.state.encoding import encode_redis_key as _encode
+from ocm.runtime.state import encode_redis_key as _encode
 
 _log = bind_pipeline("backfill")
 
