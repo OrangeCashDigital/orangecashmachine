@@ -81,13 +81,13 @@ class PipelineContext:
     # Puerto de registro de gaps irrecuperables — inyectado por OHLCVPipeline.
     # None = modo degradado (SafeOps): repair opera sin persistencia de estado.
     # Implementación concreta: infra.state.gap_registry.GapRegistry via DI.
-    gap_registry: Any  # GapRegistryPort port — None = modo degradado SafeOps (BC-08) = field(default=None)
+    gap_registry: Any = field(default=None)  # GapRegistryPort port — None = SafeOps (BC-08)
 
     # Puerto Kafka — inyectado por OHLCVPipeline cuando Kafka está habilitado.
     # None = modo degradado (SafeOps): el pipeline escribe directo a Iceberg.
     # Con Kafka: backfill/incremental → ohlcv.raw → KafkaBronzeWriter → Iceberg.
     # Principio Kappa: todo evento pasa por Kafka; Iceberg es materialización.
-    kafka_producer: Any  # KafkaProducerPort — None = modo sin Kafka (BC-08) = field(default=None)
+    kafka_producer: Any = field(default=None)  # KafkaProducerPort — None = sin Kafka (BC-08)
 
 
     # Métricas de observabilidad — inyectadas por OHLCVPipeline.
