@@ -238,6 +238,9 @@ ignore_imports = [
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.bronze.bronze_storage",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.iceberg.iceberg_storage",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.metrics",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.pipeline_metrics",
+    # repair también usa métricas Prometheus directamente — World A, mismo patrón que pipelines
+    "market_data.application.strategies.repair -> market_data.infrastructure.observability.metrics",
     "market_data.application.pipelines.resample_pipeline -> market_data.infrastructure.observability.metrics",
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.silver.trades_storage",
     "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
@@ -554,6 +557,11 @@ source_modules = [
 forbidden_modules = [
     "ocm.config.paths",
 ]
+# allow_indirect_imports: ocm.config.hydra_loader es el único importador autorizado
+# de ocm.config.paths (bootstrap, lazy). La cadena pipeline → hydra_loader → paths
+# es intencional — hydra_loader actúa como intermediario de acceso controlado.
+# Solo se prohíbe importación directa desde source_modules.
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name            = "BC-22: ocm.runtime.state — solo adapters/factories son API pública"

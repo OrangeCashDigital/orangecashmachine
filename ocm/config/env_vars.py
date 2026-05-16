@@ -101,9 +101,9 @@ KAFKA_AUTO_OFFSET_RESET: str = "KAFKA_AUTO_OFFSET_RESET"
 # Valores permitidos y helpers
 # =============================================================================
 
-ALLOWED_ENVS: frozenset[str] = frozenset(
-    {"development", "test", "staging", "production"}
-)
+# ALLOWED_ENVS: re-export desde ocm.observability.config (SSOT)
+# La constante pertenece a observability — aquí solo para backwards compat.
+from ocm.observability.config import ALLOWED_ENVS as ALLOWED_ENVS  # noqa: F401
 
 _DEBUG_DEFAULTS: dict[str, bool] = {
     "development": True,

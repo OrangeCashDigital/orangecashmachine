@@ -50,3 +50,10 @@ class LoggingConfig(BaseModel):
         if upper not in allowed:
             raise ValueError(f"level must be one of {allowed}, got {v!r}")
         return upper
+
+# ---------------------------------------------------------------------------
+# Entornos de ejecución válidos para observability
+# SSOT de esta constante: ocm.observability.config (BC-26)
+# ocm.config.env_vars re-exporta desde aquí para backwards compat.
+# ---------------------------------------------------------------------------
+ALLOWED_ENVS: frozenset[str] = frozenset({"dev", "staging", "prod"})

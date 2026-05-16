@@ -22,6 +22,9 @@ import math
 import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 
 import pandas as pd
 from ocm.observability import bind_pipeline
@@ -235,7 +238,7 @@ class DownloadResult:
 # ==========================================================
 
 from market_data.ports.outbound.state import AsyncCursorStorePort as CursorStore
-from ocm.runtime.state.cursor_store import InMemoryCursorStore
+from ocm.runtime.state import InMemoryCursorStore  # fachada pública — BC-22
 
 
 # ==========================================================
@@ -252,7 +255,7 @@ class HistoricalFetcherAsync:
         self,
         exchange_client:    CCXTAdapter,
         storage:            Optional[OHLCVStorage]      = None,
-        transformer:        Optional[OHLCVTransformer]  = None,
+        transformer: "OHLCVTransformer | None" = None,
         overlap_bars:       int                         = DEFAULT_OVERLAP_BARS,
         cursor_store:       Optional[CursorStore]       = None,
         backfill_mode:        bool                      = False,
@@ -267,7 +270,14 @@ class HistoricalFetcherAsync:
                 "inyectar desde ohlcv_pipeline via storage_factory()"
             )
         self._storage = storage
-        self._transformer       = transformer or OHLCVTransformer()
+        # transformer requerido — inyectado desde Composition Root (pipeline_factory)
+        # BC-06: fetcher no instancia application use cases
+        if transformer is None:
+            raise ValueError(
+                "OHLCVFetcher requiere transformer inyectado. "
+                "Usa pipeline_factory.py como Composition Root."
+            )
+        self._transformer       = transformer
         self._overlap           = overlap_bars
         self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
         self._backfill_mode     = backfill_mode

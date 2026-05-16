@@ -7,8 +7,7 @@ Contrato central del sistema de pipeline unificado.
 
 Responsabilidad
 ---------------
-Definir los tipos de datos compartidos por todas las estrategias:
-PipelineContext, PipelineMode, PairResult, PipelineSummary,
+Definir los tipos de datos compartidos por todas las estrategias: "PipelineContext", PipelineMode, PairResult, PipelineSummary,
 StrategyMixin y el Protocol PipelineStrategy.
 
 Principios aplicados
@@ -29,11 +28,10 @@ from typing import Any, List, Protocol, runtime_checkable
 
 from ocm.observability import bind_pipeline
 
-# ── Ports (contratos) — nunca importar implementaciones concretas aquí ──────
-from market_data.ports.outbound.storage import OHLCVStorage
-from market_data.ports.outbound.state import CursorStorePort as CursorStore
-from market_data.ports.outbound.gap_registry import GapRegistryPort
-from market_data.ports.outbound.kafka_producer import KafkaProducerPort
+# ── Ports (contratos) ────────────────────────────────────────────────────────
+# domain/ no puede importar ports/ en runtime — BC-08 layer order lo prohíbe.
+# Los campos de PipelineContext que representan ports usan Any como tipo runtime.
+# Deuda técnica documentada: mover PipelineContext a application/ con DI completo.
 
 _log = bind_pipeline("base")
 
@@ -71,9 +69,9 @@ class PipelineContext:
     Ref: Iceberg OCC — "branch main has changed" cuando dos writers compiten.
     """
     fetcher:     Any  # HistoricalFetcherAsync — inyectado desde application/ (TYPE_CHECKING)
-    storage:     OHLCVStorage
+    storage:     Any  # OHLCVStorage port — inyectado desde pipeline (BC-08)
     bronze:      Any  # BronzeStorage — inyectado desde application/ (TYPE_CHECKING)
-    cursor:      CursorStore
+    cursor:      Any   # CursorStorePort — inyectado desde pipeline (BC-08)
     quality:     Any                          # QualityPipeline — sin Port; inyectado desde application/
     exchange_id: str
     market_type: str
@@ -83,13 +81,13 @@ class PipelineContext:
     # Puerto de registro de gaps irrecuperables — inyectado por OHLCVPipeline.
     # None = modo degradado (SafeOps): repair opera sin persistencia de estado.
     # Implementación concreta: infra.state.gap_registry.GapRegistry via DI.
-    gap_registry: "GapRegistryPort | None" = field(default=None)
+    gap_registry: Any  # GapRegistryPort port — None = modo degradado SafeOps (BC-08) = field(default=None)
 
     # Puerto Kafka — inyectado por OHLCVPipeline cuando Kafka está habilitado.
     # None = modo degradado (SafeOps): el pipeline escribe directo a Iceberg.
     # Con Kafka: backfill/incremental → ohlcv.raw → KafkaBronzeWriter → Iceberg.
     # Principio Kappa: todo evento pasa por Kafka; Iceberg es materialización.
-    kafka_producer: "KafkaProducerPort | None" = field(default=None)
+    kafka_producer: Any  # KafkaProducerPort — None = modo sin Kafka (BC-08) = field(default=None)
 
 
     # Métricas de observabilidad — inyectadas por OHLCVPipeline.
@@ -440,8 +438,6 @@ class StrategyMixin:
         total:     int,
         ctx:       "PipelineContext",
     ) -> "PairResult":
-        from market_data.infrastructure.observability.metrics import PIPELINE_ERRORS  # evita circular
-
         result     = PairResult(
             symbol=symbol, timeframe=timeframe,
             mode=self._mode, exchange_id=ctx.exchange_id,
@@ -464,9 +460,8 @@ class StrategyMixin:
             result.error      = f"Pair timeout after {pair_timeout}s"
             result.error_type = "TimeoutError"
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-            PIPELINE_ERRORS.labels(
-                exchange=ctx.exchange_id, error_type="transient",
-            ).inc()
+            if ctx.metrics is not None:  # fail-soft — modo degradado sin métricas
+                ctx.metrics.record_error(ctx.exchange_id, "transient")
             _log.bind(
                 mode=self._mode.value, exchange=ctx.exchange_id,
                 symbol=symbol, timeframe=timeframe,
@@ -481,10 +476,11 @@ class StrategyMixin:
             result.error_type = type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             is_transient = classify_error(exc)
-            PIPELINE_ERRORS.labels(
-                exchange=ctx.exchange_id,
-                error_type="transient" if is_transient else "fatal",
-            ).inc()
+            if ctx.metrics is not None:  # fail-soft — modo degradado sin métricas
+                ctx.metrics.record_error(
+                    ctx.exchange_id,
+                    "transient" if is_transient else "fatal",
+                )
             _log.bind(
                 mode=self._mode.value, exchange=ctx.exchange_id,
                 symbol=symbol, timeframe=timeframe,
@@ -533,6 +529,6 @@ class PipelineStrategy(Protocol):
         timeframe: str,
         idx:       int,
         total:     int,
-        ctx:       PipelineContext,
+        ctx: "PipelineContext",
     ) -> PairResult:
         ...

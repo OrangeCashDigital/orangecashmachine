@@ -65,7 +65,7 @@ from ocm.observability.config import LoggingConfig
 from ocm.observability.formats import CONSOLE, FILE
 from ocm.observability.processors import build_processor_chain, process_event
 from ocm.observability.sinks import LokiSink, PrometheusLogSink
-from ocm.config.env_vars import ALLOWED_ENVS as VALID_ENVS  # SSOT: ocm.config.env_vars (BC-26)
+from ocm.observability.config import ALLOWED_ENVS as VALID_ENVS  # SSOT: ocm.observability.config (BC-26)
 
 
 # ---------------------------------------------------------------------------
