@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from typing import Final
 
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -49,8 +50,15 @@ from ocm.config.layers.coercion import BOOL_FALSE as _BOOL_FALSE
 from ocm.config.layers.coercion import BOOL_TRUE as _BOOL_TRUE
 from ocm.config.layers.coercion import coerce_string as _coerce_string_canonical
 
-_OCM_PREFIX = "OCM_"
-_SEPARATOR  = "__"
+# SSOT de este módulo para el prefijo y separador de env vars estructuradas.
+# Nota: OCM_PREFIX en env_vars.py es el prefijo genérico del proceso; este
+# _OCM_PREFIX es específico del protocolo OCM_SECTION__KEY de L2.
+# Si se renombra el prefijo, cambiar aquí y en env_vars.py.
+_OCM_PREFIX: Final[str] = "OCM_"
+_SEPARATOR:  Final[str] = "__"
+
+
+__all__ = ["apply_env_overrides"]
 
 
 def apply_env_overrides(

@@ -24,13 +24,22 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from ocm.config.loader.exceptions import ConfigValidationError
+
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig  # SSOT — schema.py, no models
 
 
-class ConfigRuleViolation(RuntimeError):
-    """
-    Violación de regla de negocio en config.
+__all__ = ["ConfigRuleViolation", "apply_business_rules"]
+
+
+class ConfigRuleViolation(ConfigValidationError):
+    """Violación de regla de negocio cross-field en config.
+
+    Hereda de :exc:`ConfigValidationError` — las violaciones de reglas
+    de negocio son exactamente errores de validación semántica.
+    Catcheable como ``ConfigurationError`` desde main.py.
+
     Siempre fail-fast — el sistema NO debe arrancar con config inválida.
     """
     def __init__(self, rule: str, message: str, fix: str) -> None:
@@ -93,8 +102,13 @@ def _rule_resample_source_in_historical(cfg: "AppConfig") -> None:
     Si ResamplePipeline intenta resamplear desde 1m pero historical
     no descarga 1m, el pipeline produce datos vacíos silenciosamente.
     """
+    # Guard: campos pueden ser None si config está incompleta — Pydantic L4
+    # debería haberlo detectado, pero reglas son la última línea de defensa.
     source_tf = cfg.pipeline.resample.source_tf
     historical_tfs = cfg.pipeline.historical.timeframes
+
+    if source_tf is None or historical_tfs is None:
+        return  # incomplitud ya detectada en L4 — no duplicar error
 
     if source_tf not in historical_tfs:
         raise ConfigRuleViolation(

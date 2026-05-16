@@ -44,7 +44,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 # loguru importado de forma lazy para evitar circular:
 #   coercion → loguru → stdlib logging → core/logging/ → loguru
@@ -66,8 +66,8 @@ def _get_logger():  # noqa: ANN201
 # L3 solo coerciona lo que es inequívoco semánticamente sin conocer el tipo destino.
 # "true"/"false"/"yes"/"no"/"on"/"off" son inequívocamente booleanos en cualquier
 # contexto. "1"/"0" no lo son — delegar coerción al schema (L4, Pydantic, SSOT).
-BOOL_TRUE:  frozenset[str] = frozenset({"true",  "yes", "on"})
-BOOL_FALSE: frozenset[str] = frozenset({"false", "no",  "off"})
+BOOL_TRUE:  Final[frozenset[str]] = frozenset({"true",  "yes", "on"})
+BOOL_FALSE: Final[frozenset[str]] = frozenset({"false", "no",  "off"})
 
 # ---------------------------------------------------------------------------
 # Nullable paths — path-based (robusto ante campos nuevos).
@@ -84,7 +84,7 @@ BOOL_FALSE: frozenset[str] = frozenset({"false", "no",  "off"})
 
 # Paths completos desde la raíz del config — matching exacto por path completo.
 # OCP: añadir aquí campos Optional[X] estáticos cuyo path se conoce en compile-time.
-_NULLABLE_PATHS: frozenset[tuple[str, ...]] = frozenset({
+_NULLABLE_PATHS: Final[frozenset[tuple[str, ...]]] = frozenset({
     # integrations.postgres
     ("integrations", "postgres", "user"),
     ("integrations", "postgres", "password"),
@@ -99,9 +99,17 @@ _NULLABLE_PATHS: frozenset[tuple[str, ...]] = frozenset({
 # Para campos Optional[X] en nodos dinámicos (ej: lista de exchanges)
 # donde el path completo no puede enumerarse estáticamente en compile-time.
 # OCP: añadir aquí campos opcionales de nodos instanciados N veces.
-_NULLABLE_KEYS: frozenset[str] = frozenset({
+_NULLABLE_KEYS: Final[frozenset[str]] = frozenset({
     "api_password",   # ExchangeConfig — credencial opcional por exchange
 })
+
+
+__all__ = [
+    "BOOL_TRUE",
+    "BOOL_FALSE",
+    "coerce_scalar_values",
+    "coerce_string",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -175,10 +183,10 @@ def _coerce_list(lst: list[Any], path: tuple[str, ...]) -> None:
         if isinstance(item, dict):
             coerce_scalar_values(item, path + (str(i),))
         elif isinstance(item, str):
-            lst[i] = coerce_string(item, path + (str(i),))
+            lst[i] = coerce_string(item)
 
 
-def coerce_string(value: str, path: tuple[str, ...] = ()) -> Any:  # noqa: ARG001
+def coerce_string(value: str) -> Any:
     """Convierte un string al tipo nativo inequívoco, o lo devuelve sin cambios.
 
     Solo convierte booleans semánticos (BOOL_TRUE ∪ BOOL_FALSE).
