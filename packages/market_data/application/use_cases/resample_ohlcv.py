@@ -41,7 +41,7 @@ Diagrama
       ├─ valida request (Fail-Fast)
       ├─ extrae símbolos y targets desde AppConfig
       ├─ construye storage via StorageFactoryPort (DIP)
-      ├─ instancia ResamplePipeline(symbols, timeframes, exchange, storage)
+      ├─ instancia ResamplePipeline(symbols, timeframes, exchange, storage)  # type: ignore[arg-type]
       └─ asyncio.run(pipeline.run()) → ResampleSummary
 
 Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Fast · SafeOps
@@ -217,7 +217,7 @@ class ResampleUseCase:
 
         # ── 3. Construir storage via factory (DIP) ────────────────────────────
         try:
-            storage = self._storage_factory.get_storage(
+            storage = self._storage_factory.get_storage(  # type: ignore[assignment]
                 exchange    = request.exchange,
                 market_type = request.market_type,
                 dry_run     = request.dry_run,
