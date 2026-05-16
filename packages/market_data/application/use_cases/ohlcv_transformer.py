@@ -37,9 +37,7 @@ from market_data.domain.value_objects.candle_validator import (
     CandleValidator,
     ValidationSummary,
 )
-from market_data.infrastructure.lineage.tracker import (
-    LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
-)
+# lineage: import local en transform() — BC-06
 
 
 class OHLCVTransformer:
@@ -411,6 +409,9 @@ class OHLCVTransformer:
         # rows_in=original_rows captura pérdida real por velas CORRUPT.
         # Fail-soft: si lineage_tracker falla, el pipeline continúa (SafeOps).
         if run_id is not None:
+            from market_data.infrastructure.lineage.tracker import (  # local — BC-06
+                LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
+            )
             lineage_tracker.record(LineageEvent(
                 run_id    = run_id,
                 layer     = PipelineLayer.SILVER,

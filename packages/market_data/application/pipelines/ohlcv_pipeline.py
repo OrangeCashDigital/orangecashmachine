@@ -58,9 +58,7 @@ def _build_kafka_producer_safe():
 from market_data.quality.pipeline import QualityPipeline
 from market_data.quality.invariants.invariants import check_dataset_invariants
 from market_data.domain.value_objects.gap_utils import scan_gaps
-from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
 from market_data.ports.outbound.storage import OHLCVStorage
-from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.application.pipelines._worker_pool import run_worker_pool
 from market_data.domain.policies.base import (
     PairResult,
@@ -73,13 +71,6 @@ from market_data.application.strategies.backfill    import BackfillStrategy
 from market_data.application.strategies.incremental import IncrementalStrategy
 from market_data.application.strategies.repair      import RepairStrategy
 from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
-from market_data.adapters.outbound.exchange import (
-    CCXTAdapter,
-    ExchangeCircuitOpenError,
-    get_breaker_state,
-)
-from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
-from market_data.infrastructure.observability.metrics import FETCH_ABORTS_TOTAL, ACTIVE_PAIRS
 from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from ocm.runtime.state import (
@@ -108,6 +99,7 @@ def _build_storage(
     _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
         "storage_factory | IcebergStorage"
     )
+    from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage  # local — BC-05
     return IcebergStorage(
         exchange     = exchange,
         market_type  = market_type,
@@ -267,6 +259,12 @@ class OHLCVPipeline(PipelineTriggerPort):
         self._throttle       = throttle
 
         cursor  = cursor_store or _build_cursor_store_safe()
+        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage  # local — BC-05
+        from market_data.adapters.outbound.exchange import (  # local — BC-05
+            CCXTAdapter, ExchangeAdapterError, ExchangeCircuitOpenError,
+            get_or_create_throttle, get_or_create_limiter,
+        )
+        from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle  # local — BC-05
         bronze  = BronzeStorage(exchange=self._exchange_id)
         silver  = _build_storage(
             exchange     = self._exchange_id,
@@ -297,6 +295,9 @@ class OHLCVPipeline(PipelineTriggerPort):
 
         _kafka_producer = _build_kafka_producer_safe()
 
+        from market_data.infrastructure.observability.pipeline_metrics import (  # local — BC-05
+            PipelineMetricsAdapter,
+        )
         self._ctx = PipelineContext(
             fetcher         = fetcher,
             storage         = silver,
@@ -308,6 +309,7 @@ class OHLCVPipeline(PipelineTriggerPort):
             start_date      = start_date,
             gap_registry    = build_gap_registry(),  # type: ignore[arg-type]
             kafka_producer  = _kafka_producer,
+            metrics         = PipelineMetricsAdapter(),
         )
 
         if _kafka_producer is not None:
@@ -628,6 +630,9 @@ class OHLCVPipeline(PipelineTriggerPort):
         error en el semáforo) y lo convierte en PairResult con error,
         garantizando que el worker pool nunca pierda un resultado.
         """
+        from market_data.infrastructure.observability.metrics import (  # local — BC-05
+            FETCH_ABORTS_TOTAL, ACTIVE_PAIRS,
+        )
         ACTIVE_PAIRS.labels(exchange=self._exchange_id).inc()
         try:
             result = await strategy.execute_pair(

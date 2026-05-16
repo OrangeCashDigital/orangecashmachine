@@ -2,18 +2,15 @@
 """
 market_data/domain/policies/repair.py
 ======================================
-Shim de compatibilidad — re-exporta desde la ubicación canónica.
+MÓDULO ELIMINADO — este shim ha sido removido.
 
-Ubicación canónica: market_data.application.strategies.repair
-Este módulo existe para tests e imports legacy (domain.policies.repair).
+Importa desde la ubicación canónica:
+    from market_data.application.strategies.repair import RepairStrategy
 
-Principios: DRY · SSOT · backward-compatibility
+Principio: DIP — domain no puede importar application.
+BC-03: market_data.domain isolated from outer layers.
 """
-from __future__ import annotations
-
-from market_data.application.strategies.repair import (  # noqa: F401
-    RepairStrategy,
-    _MAX_HEALABLE_GAP_CANDLES,
+raise ImportError(
+    "market_data.domain.policies.repair fue eliminado. "
+    "Usa: from market_data.application.strategies.repair import RepairStrategy"
 )
-
-__all__ = ["RepairStrategy", "_MAX_HEALABLE_GAP_CANDLES"]

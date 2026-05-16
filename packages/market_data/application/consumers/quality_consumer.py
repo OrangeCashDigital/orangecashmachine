@@ -27,7 +27,7 @@ from market_data.domain.events import (
     PipelineLayer,
 )
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
-from market_data.infrastructure.lineage.tracker import lineage_tracker as _default_tracker
+# lineage_tracker: import local en __init__ — BC-08
 from market_data.application.consumers.base import BaseConsumer
 from market_data.ports.outbound.event_bus import EventBusPort
 from market_data.quality.anomaly_registry import default_registry
@@ -64,6 +64,9 @@ class QualityPipelineConsumer(BaseConsumer):
     ) -> None:
         super().__init__(bus)
         self._registry = registry or default_registry
+        from market_data.infrastructure.lineage.tracker import (  # local — BC-08
+            lineage_tracker as _default_tracker,
+        )
         self._tracker  = tracker  or _default_tracker
 
     # ----------------------------------------------------------

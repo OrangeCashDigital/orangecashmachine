@@ -37,8 +37,8 @@ import pandas as pd
 from loguru import logger
 
 from market_data.adapters.outbound.exchange import CCXTAdapter
-from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
-from ocm.runtime.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
+# TradesStorage y build_cursor_store se importan localmente en __init__
+# para romper la dependencia adapter → infrastructure en nivel módulo (BC-06).
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -113,6 +113,10 @@ class TradesFetcher:
             raise ValueError("TradesFetcher: exchange_client es obligatorio")
         if storage is None:
             raise ValueError("TradesFetcher: storage es obligatorio")
+
+        # Imports locales — rompen dependencia adapter → infrastructure en nivel módulo (BC-06)
+        from market_data.infrastructure.storage.silver.trades_storage import TradesStorage  # noqa: F401
+        from ocm.runtime.state.factories import build_cursor_store as _build_cursor_store
 
         self._client      = exchange_client
         self._storage     = storage
