@@ -33,7 +33,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ocm.config.schema import AppConfig
 
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -44,8 +47,17 @@ from omegaconf import DictConfig, OmegaConf
 # coerce_scalar_values — motor canónico de coerción (L3 SSOT).
 # Vive en layers/coercion.py junto a BOOL_TRUE/BOOL_FALSE y _NULLABLE_PATHS.
 # _NULLABLE_KEYS: frozenset[str] — matching por nombre de clave (nodos dinámicos, ej: exchanges).
+from ocm.config.loader.exceptions import ConfigurationError
 from ocm.config.hydra_loader import strip_hydra_internals
 from ocm.config.layers.coercion import coerce_scalar_values
+
+
+__all__ = [
+    "ConfigPipelineError",  # excepción pública del bounded context
+    "ConfigPipeline",       # punto de entrada del pipeline
+    "ConfigStage",          # diagnóstico — etapas del pipeline
+    "ConfigTransition",     # diagnóstico — historial de transiciones
+]
 
 
 class ConfigStage(Enum):
@@ -65,8 +77,12 @@ class ConfigTransition:
     mutations: int = 0   # cantidad de overrides/cambios aplicados en esta transición
 
 
-class ConfigPipelineError(RuntimeError):
+class ConfigPipelineError(ConfigurationError):
     """Error de pipeline — indica en qué capa ocurrió el fallo.
+
+    Hereda de :exc:`ConfigurationError` para integrarse en la jerarquía
+    del bounded context: cualquier ``except ConfigurationError`` en
+    ``main.py`` captura errores de pipeline sin import adicional.
 
     El chain de causa se delega al mecanismo nativo de Python
     (``raise ... from exc`` — PEP 3134). No duplicar con
@@ -101,7 +117,7 @@ class ConfigPipeline:
     # Public API
     # ------------------------------------------------------------------
 
-    def run(self) -> Any:  # → AppConfig
+    def run(self) -> AppConfig:
         """
         Ejecuta el pipeline completo.
         Retorna AppConfig frozen o lanza ConfigPipelineError con el stage que falló.
@@ -192,6 +208,8 @@ class ConfigPipeline:
             logger.debug("config_pipeline_l2 | ocm_overrides={}", mutations)
             self._record(ConfigStage.ENV_MUTATED, ConfigStage.COERCED, mutations)
             return mutated, mutations
+        except ConfigPipelineError:
+            raise  # no re-envolver errores de pipeline ya tipados
         except Exception as exc:
             raise ConfigPipelineError(ConfigStage.ENV_MUTATED, str(exc)) from exc
 
@@ -229,7 +247,7 @@ class ConfigPipeline:
     # L4: Pydantic validation (validation only — no business rules)
     # ------------------------------------------------------------------
 
-    def _l4_validate(self, raw_dict: dict) -> Any:
+    def _l4_validate(self, raw_dict: dict) -> AppConfig:
         """
         L4: Validación Pydantic.
         Responsabilidad ÚNICA: tipos y estructura.
@@ -241,6 +259,8 @@ class ConfigPipeline:
             logger.debug("config_pipeline_l4 | pydantic=ok")
             self._record(ConfigStage.VALIDATED, ConfigStage.FROZEN)
             return app_config
+        except ConfigPipelineError:
+            raise  # no re-envolver errores de pipeline ya tipados
         except Exception as exc:
             raise ConfigPipelineError(ConfigStage.VALIDATED, str(exc)) from exc
 
@@ -248,7 +268,7 @@ class ConfigPipeline:
     # L5: Business rules (cross-field invariants)
     # ------------------------------------------------------------------
 
-    def _l5_business_rules(self, app_config: Any) -> Any:
+    def _l5_business_rules(self, app_config: AppConfig) -> AppConfig:
         """
         L5: Reglas de negocio.
         Invariantes cross-field que Pydantic no puede expresar.
@@ -259,6 +279,8 @@ class ConfigPipeline:
             apply_business_rules(app_config)
             logger.debug("config_pipeline_l5 | rules=ok")
             return app_config
+        except ConfigPipelineError:
+            raise  # no re-envolver errores de pipeline ya tipados
         except Exception as exc:
             raise ConfigPipelineError(ConfigStage.FROZEN, str(exc)) from exc
 

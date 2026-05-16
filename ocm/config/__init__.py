@@ -45,6 +45,7 @@ from .loader import (
     ConfigParseError,
     ConfigValidationError,
 )
+from .pipeline import ConfigPipelineError
 
 # -- Bootstrap de entorno y dotenv ----------------------------------------
 from .loader import (
@@ -69,6 +70,7 @@ __all__ = [
     "ConfigFileNotFoundError",
     "ConfigParseError",
     "ConfigValidationError",
+    "ConfigPipelineError",
     # loader / bootstrap
     "bootstrap_dotenv",
     "load_dotenv_for_env",

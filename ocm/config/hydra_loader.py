@@ -204,10 +204,17 @@ def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
 
     Raises:
         ConfigPipelineError: Si cualquier capa del pipeline falla (identifica la capa).
-        pydantic.ValidationError: Propagada desde L4 si la config no es válida.
+        ConfigValidationError: Si la validación Pydantic (L4) falla — envuelve
+            ``pydantic.ValidationError`` para mantener el bounded context del paquete.
     """
+    from pydantic import ValidationError as _PydanticValidationError
     from ocm.config.pipeline import ConfigPipeline
-    return ConfigPipeline(cfg).run()
+    try:
+        return ConfigPipeline(cfg).run()
+    except _PydanticValidationError as exc:
+        raise ConfigValidationError(
+            f"AppConfig validation failed: {exc}"
+        ) from exc
 
 
 def load_appconfig_from_hydra(
@@ -244,6 +251,9 @@ def load_appconfig_from_hydra(
 
     if write_snapshot and run_id is not None:
         try:
+            # Hash del DictConfig original pre-pipeline (trazabilidad del input
+            # a Hydra). Distinto de compute_hash() en yaml_loader que hashea el
+            # dict post-pipeline. Ambos son SSOT de su propio artefacto.
             raw_json = json.dumps(
                 OmegaConf.to_container(cfg, resolve=True),
                 default=str,
@@ -288,8 +298,9 @@ def load_appconfig_standalone(
         AppConfig validado e inmutable.
 
     Raises:
-        FileNotFoundError: Si ``config_dir`` o ``base.yaml`` no existen.
-        pydantic.ValidationError: Si la configuración resultante no es válida.
+        ConfigFileNotFoundError: Si ``config_dir`` o ``base.yaml`` no existen.
+        ConfigValidationError: Si la configuración resultante no es válida.
+            Envuelve ``pydantic.ValidationError`` — bounded context preservado.
     """
     from ocm.config.loader.env_resolver import resolve_env, load_dotenv_for_env
 
