@@ -127,6 +127,11 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("Use case fallido | {}", run_result.error)
         return run_result.exit_code
 
+    # Narrowing: success=True garantiza engine_result poblado por el use case.
+    # Si es None aquí, es un bug de contrato en execute_paper — fail-fast.
+    assert run_result.engine_result is not None, (
+        "engine_result is None with success=True — contrato roto en PaperRunResult"
+    )
     result = run_result.engine_result
 
     # ── Resultado del ciclo ────────────────────────────────────────────────

@@ -121,6 +121,11 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("Live use case fallido | {}", run_result.error)
         return run_result.exit_code
 
+    # Narrowing: success=True garantiza engine_result poblado por el use case.
+    # Si es None aquí, es un bug de contrato en execute_live — fail-fast.
+    assert run_result.engine_result is not None, (
+        "engine_result is None with success=True — contrato roto en LiveRunResult"
+    )
     result = run_result.engine_result
 
     logger.info(
