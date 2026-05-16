@@ -31,7 +31,11 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, List, Literal, Optional
+
+if TYPE_CHECKING:
+    from market_data.adapters.outbound.exchange import CCXTAdapter
+    from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
 
 from ocm.observability import bind_pipeline
 
@@ -643,6 +647,17 @@ class OHLCVPipeline(PipelineTriggerPort):
         except asyncio.CancelledError:
             raise  # nunca alimentar throttle — pipeline cancelado externamente
 
+        except Exception as _pre_exc:  # noqa: BLE001 — re-raise after import
+            from market_data.adapters.outbound.exchange import (  # local — BC-05/BC-08 deuda
+                ExchangeCircuitOpenError,
+            )
+            from market_data.adapters.outbound.exchange.ccxt_adapter import (  # local — BC-05
+                get_breaker_state,
+            )
+            if not isinstance(_pre_exc, ExchangeCircuitOpenError):
+                raise
+            exc = _pre_exc
+
         except ExchangeCircuitOpenError as exc:
             # Si otro worker ya disparó el abort, salir sin duplicar cooldown.
             if abort_event.is_set():
@@ -677,7 +692,15 @@ class OHLCVPipeline(PipelineTriggerPort):
                 )
                 self._feed_throttle(result)
                 return result
-            except ExchangeCircuitOpenError:
+            except Exception as _inner_exc:  # noqa: BLE001
+                from market_data.adapters.outbound.exchange import (  # local — BC-05/BC-08 deuda
+                    ExchangeCircuitOpenError as _ECO,
+                )
+                from market_data.adapters.outbound.exchange.ccxt_adapter import (  # local
+                    get_breaker_state,
+                )
+                if not isinstance(_inner_exc, _ECO):
+                    raise
                 # Breaker todavía abierto — abortar exchange, no el pipeline.
                 _bs2 = get_breaker_state(self._exchange_id)
                 FETCH_ABORTS_TOTAL.labels(exchange=self._exchange_id).inc()
