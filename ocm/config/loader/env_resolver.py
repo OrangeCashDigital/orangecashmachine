@@ -12,12 +12,13 @@ from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
 from ..env_vars import OCM_ENV as _OCM_ENV_VAR
+from ..env_vars import ALLOWED_ENVS as _ALLOWED_ENVS  # SSOT — no duplicar; importado como frozenset inmutable
 from ocm.observability.bootstrap import pre_log
 
 from loguru import logger
 
 _ENV_PATTERN = re.compile(r"\$\{([^}:]+)(:-([^}]*))?\}")
-_ALLOWED_ENVS = {"development", "test", "staging", "production"}
+# _ALLOWED_ENVS: ver import desde env_vars arriba (SSOT, frozenset inmutable)
 
 _resolved_env_cache: dict[str, str] = {}
 
@@ -157,9 +158,18 @@ def resolve_env(explicit_env: Optional[str] = None, config_dir: Optional[Path] =
         return explicit_env
 
     if ocm := os.getenv(_OCM_ENV_VAR):
-        source = "dotenv" if ocm in _DOTENV_INJECTED else "env_var"
-        pre_log("config.env_resolved", source=source, value=ocm)
-        return ocm
+        if ocm not in _ALLOWED_ENVS:
+            logger.warning(
+                "env_invalid | source=OCM_ENV value={} allowed={} action=fallback_settings_or_default",
+                ocm,
+                sorted(_ALLOWED_ENVS),
+            )
+            # Fail-soft: typo en .env no debe impedir arranque; RunConfig valida después.
+            # Consistente con el comportamiento de read_default_env_from_settings.
+        else:
+            source = "dotenv" if ocm in _DOTENV_INJECTED else "env_var"
+            pre_log("config.env_resolved", source=source, value=ocm)
+            return ocm
 
     if yaml_env := read_default_env_from_settings(config_dir):
         pre_log("config.env_resolved", source="settings_yaml", value=yaml_env)

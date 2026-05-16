@@ -19,10 +19,10 @@ Flujo::
 
     DictConfig
         → to_container()           # resuelve interpolaciones, convierte a dict nativo
-        → _strip_hydra_internals   # elimina _target_, _recursive_, hydra.*
-        → _normalize_empty_strings # "" → None en campos nullable
+        → strip_hydra_internals    # elimina _target_, _recursive_, hydra.*
+        → coerce_scalar_values()   # "" → None (nullable) + str → bool (L3 SSOT)
         → apply_env_overrides      # OCM_* tienen prioridad sobre YAML
-        → AppConfig(**raw)         # validación Pydantic completa
+        → AppConfig(**raw)         # validación Pydantic completa (L4 + L5)
 
 ADVERTENCIA — load_appconfig_standalone:
     OmegaConf.load() ignora la directiva ``# @package`` de Hydra.
