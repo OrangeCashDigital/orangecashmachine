@@ -409,10 +409,10 @@ class OHLCVTransformer:
         # rows_in=original_rows captura pérdida real por velas CORRUPT.
         # Fail-soft: si lineage_tracker falla, el pipeline continúa (SafeOps).
         if run_id is not None:
-            from market_data.infrastructure.lineage.tracker import (  # local — BC-06
-                LineageEvent, LineageStatus, PipelineLayer, lineage_tracker,
+            from market_data.infrastructure.lineage.tracker import (  # local — tipos únicamente
+                LineageEvent, LineageStatus, PipelineLayer,
             )
-            lineage_tracker.record(LineageEvent(
+            self._tracker.record(LineageEvent(
                 run_id    = run_id,
                 layer     = PipelineLayer.SILVER,
                 exchange  = exchange,

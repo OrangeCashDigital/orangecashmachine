@@ -29,9 +29,12 @@ from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 
 from loguru import logger
 
-from market_data.adapters.outbound.exchange import CCXTAdapter
-from market_data.adapters.inbound.rest.trades_fetcher import TradesFetcher
-from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
+# Dependencias concretas eliminadas del application layer (DIP — BC-05/BC-08).
+# CCXTAdapter, TradesFetcher, TradesStorage se inyectan por constructor
+# desde market_data.factories.pipeline_factory (composition root).
+from market_data.ports.outbound.exchange_client import ExchangeClientPort
+from market_data.ports.outbound.fetcher import TradesFetcherPort
+from market_data.ports.outbound.storage import TradesStoragePort
 
 # ---------------------------------------------------------------------------
 # Types

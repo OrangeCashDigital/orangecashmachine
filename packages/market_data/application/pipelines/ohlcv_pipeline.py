@@ -34,7 +34,7 @@ import time
 from typing import TYPE_CHECKING, Any, List, Literal, Optional
 
 if TYPE_CHECKING:
-    from market_data.adapters.outbound.exchange import CCXTAdapter
+    from market_data.ports.outbound.exchange_client import ExchangeClientPort
     from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
 
 from ocm.observability import bind_pipeline
@@ -50,7 +50,7 @@ def _build_kafka_producer_safe():
     Kappa: cuando el producer está disponible, todo fluye por ohlcv.raw.
     """
     try:
-        from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+        from market_data.ports.outbound.kafka_producer import KafkaProducerPortAdapter
         return KafkaProducerAdapter.from_env()
     except Exception as exc:
         _log.warning(
@@ -103,7 +103,7 @@ def _build_storage(
     _log.bind(backend="iceberg", exchange=exchange, market_type=market_type).debug(
         "storage_factory | IcebergStorage"
     )
-    from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage  # local — BC-05
+    from market_data.ports.outbound.storage import OHLCVStorage  # local — BC-05
     return IcebergStorage(
         exchange     = exchange,
         market_type  = market_type,

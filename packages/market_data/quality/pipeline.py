@@ -50,12 +50,11 @@ from loguru import logger
 
 # dominio
 from market_data.domain.entities import DataTier
-from market_data.infrastructure.lineage.tracker import (
-    LineageEvent,
-    LineageStatus,
-    PipelineLayer,
-    lineage_tracker,
-)
+# LineageEvent, LineageStatus, PipelineLayer: importados lazy en _record_lineage()
+# lineage_tracker: inyectado vía constructor (DIP — BC-05/BC-08).
+# Ver LineageTrackerPort en market_data.ports.outbound.lineage.
+from market_data.ports.outbound.lineage import LineageTrackerPort
+from market_data.ports.outbound.metrics import QualityMetricsPort
 from market_data.ports.outbound.quality import AnomalyRegistryPort
 from market_data.quality.anomaly_registry import default_registry
 from market_data.quality.policies.data_quality_policy import (
@@ -70,7 +69,7 @@ from market_data.quality.validators.data_quality import (
 )
 
 # infra / utils
-from market_data.infrastructure.observability.metrics import PIPELINE_ERRORS, QUALITY_GAPS_TOTAL
+# PIPELINE_ERRORS, QUALITY_GAPS_TOTAL: import lazy dentro de los métodos que los usan (BC-05).
 from market_data.domain.value_objects.gap_utils import scan_gaps
 
 

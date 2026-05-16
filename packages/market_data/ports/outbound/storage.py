@@ -159,3 +159,40 @@ class OHLCVStorage(Protocol):
         pd.DataFrame ordenado por timestamp con dedup aplicado, o None.
         """
         ...
+
+
+# ---------------------------------------------------------------------------
+# Trades storage port
+# ---------------------------------------------------------------------------
+
+class TradesStoragePort(Protocol):
+    """Contrato de persistencia de trades. Implementación: TradesStorage (infrastructure)."""
+
+    def save_trades(self, symbol: str, trades: object) -> None: ...
+    def get_last_timestamp(self, symbol: str) -> int | None: ...
+
+
+# ---------------------------------------------------------------------------
+# Derivatives storage port
+# ---------------------------------------------------------------------------
+
+class DerivativesStoragePort(Protocol):
+    """Contrato de persistencia de derivados. Implementación: DerivativesStorage."""
+
+    def save(self, metric_type: str, symbol: str, data: object) -> None: ...
+    def get_last_timestamp(self, metric_type: str, symbol: str) -> int | None: ...
+
+
+# ---------------------------------------------------------------------------
+# Bronze storage port
+# ---------------------------------------------------------------------------
+
+class BronzeStoragePort(Protocol):
+    """
+    Contrato de persistencia de candles crudas (capa Bronze).
+    Implementación: BronzeStorage (infrastructure.storage.bronze).
+    """
+
+    def save_raw(self, symbol: str, timeframe: str, candles: object) -> None: ...
+    def get_last_timestamp(self, symbol: str, timeframe: str) -> int | None: ...
+

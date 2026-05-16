@@ -33,12 +33,14 @@ from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 
 from loguru import logger
 
-from market_data.adapters.outbound.exchange import CCXTAdapter
-from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
-from market_data.adapters.inbound.rest.derivatives_fetcher import (
-    FundingRateFetcher,
-    OpenInterestFetcher,
+# Dependencias concretas eliminadas del application layer (DIP — BC-05/BC-08).
+# Se inyectan desde market_data.factories.pipeline_factory (composition root).
+from market_data.ports.outbound.exchange_client import ExchangeClientPort
+from market_data.ports.outbound.fetcher import (
+    FundingRateFetcherPort,
+    OpenInterestFetcherPort,
 )
+from market_data.ports.outbound.storage import DerivativesStoragePort
 
 # ---------------------------------------------------------------------------
 # Types

@@ -246,22 +246,15 @@ ignore_imports = [
 [[tool.importlinter.contracts]]
 # Los adaptadores concretos no pueden importar infraestructura directamente.
 # Deben recibir dependencias por inyección o usar ports de storage.
-name = "BC-06: market_data.adapters isolated from infrastructure"
+[[tool.importlinter.contracts]]
+[[tool.importlinter.contracts]]
+name = "BC-06: market_data.adapters no importa application (sin dependencia inversa)"
 type = "forbidden"
 source_modules = [
     "market_data.adapters",
 ]
 forbidden_modules = [
-    "market_data.infrastructure",
-]
-ignore_imports = [
-    # ── DEUDA TÉCNICA: adapters/ con imports directos de infrastructure — World A ──
-    "market_data.adapters.inbound.rest.derivatives_fetcher -> market_data.infrastructure.storage.silver.derivatives_storage",
-    "market_data.adapters.inbound.rest.ohlcv_fetcher -> market_data.infrastructure.observability.metrics",
-    "market_data.adapters.inbound.rest.trades_fetcher -> market_data.infrastructure.storage.silver.trades_storage",
-    "market_data.adapters.outbound.exchange.ccxt_adapter -> market_data.infrastructure.observability.metrics",
-    "market_data.adapters.outbound.storage.gold_reader -> market_data.infrastructure.storage.iceberg.catalog",
-    "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
+    "market_data.application",
 ]
 
 [[tool.importlinter.contracts]]
@@ -614,3 +607,18 @@ forbidden_modules = [
     "ocm.runtime.registry",
     "ocm.runtime.environment_validator",
 ]
+
+[[tool.importlinter.contracts]]
+name = "BC-28: market_data.factories es composition root — nadie lo importa"
+type = "forbidden"
+source_modules = [
+    "market_data.domain",
+    "market_data.ports",
+    "market_data.application",
+    "market_data.adapters",
+    "market_data.infrastructure",
+]
+forbidden_modules = [
+    "market_data.factories",
+]
+

@@ -293,19 +293,18 @@ class PipelineOrchestrator:
         self,
         request: PipelineRequest,
     ) -> PipelineTriggerPort:
-        """
-        Construye OHLCVPipeline completo con sus dependencias.
+        """Delegado a la fábrica concreta (DIP — composition root)."""
+        return self._factory.build(request)
 
-        credentials y resilience se pasan a CCXTAdapter si el caller
-        los proveyó (producción). Si son None, CCXTAdapter usa defaults
-        (desarrollo / tests sin infra real).
-
-        symbols, timeframes, start_date y auto_lookback_days se pasan
-        a OHLCVPipeline si el caller los proveyó. Si son None,
-        OHLCVPipeline usa su configuración interna.
+    def _build_ohlcv_pipeline_RETIRED(
+        self,
+        request: PipelineRequest,
+    ) -> PipelineTriggerPort:
+        """RETIRED — lógica movida a market_data.factories.pipeline_factory.
+        Conservado como referencia histórica; se elimina en el próximo
+        ciclo de limpieza de deuda técnica.
         """
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
         adapter_kwargs: dict[str, Any] = {
             "exchange_id": request.exchange,
@@ -343,7 +342,6 @@ class PipelineOrchestrator:
     ) -> PipelineTriggerPort:
         """Construye TradesPipeline. Import lazy (DIP)."""
         from market_data.application.pipelines.trades_pipeline import TradesPipeline
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
         adapter_kwargs: dict[str, Any] = {
             "exchange_id": request.exchange,
@@ -369,7 +367,6 @@ class PipelineOrchestrator:
     ) -> PipelineTriggerPort:
         """Construye DerivativesPipeline. Import lazy (DIP)."""
         from market_data.application.pipelines.derivatives_pipeline import DerivativesPipeline
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 
         adapter_kwargs: dict[str, Any] = {
             "exchange_id": request.exchange,

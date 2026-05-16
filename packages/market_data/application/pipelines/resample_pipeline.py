@@ -62,6 +62,7 @@ from market_data.domain.value_objects.timeframe import (
 )
 from market_data.domain.value_objects.timeframe import align_to_grid
 from market_data.ports.outbound.storage import OHLCVStorage
+from market_data.ports.outbound.metrics import ResampleMetricsPort
 
 _log = bind_pipeline("resample_pipeline")
 
