@@ -191,10 +191,6 @@ ignore_imports = [
     # Estas importaciones son del pipeline activo (World A). Serán eliminadas cuando
     # domain/policies/ se refactorice para recibir sus dependencias por inyección.
     # Tracking: cada línea aquí debe tener un ticket/issue antes del próximo sprint.
-    "market_data.domain.policies.base -> market_data.ports.outbound.storage",
-    "market_data.domain.policies.base -> market_data.ports.outbound.state",
-    "market_data.domain.policies.base -> market_data.ports.outbound.gap_registry",
-    "market_data.domain.policies.base -> market_data.ports.outbound.kafka_producer",
     # ── DEUDA TÉCNICA: domain/value_objects/ — lazy imports de métricas ──
 ]
 

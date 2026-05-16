@@ -32,7 +32,8 @@ from market_data.domain.exceptions.processing_exceptions import (
     NoDataAvailableError,
 )
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
-from market_data.domain.value_objects.gap_utils import GapRange, scan_gaps
+from market_data.domain.value_objects.gap_utils     import GapRange, scan_gaps
+from market_data.domain.value_objects.exchange_quirks import get_quirks  # domain VO — BC-05
 
 # ── Adapters ──────────────────────────────────────────────────────────────────
 # get_quirks: import local en execute_pair() — BC-05
@@ -73,7 +74,6 @@ class RepairStrategy(StrategyMixin):
         ctx:       PipelineContext,
     ) -> PairResult:
 
-        from market_data.domain.value_objects.exchange_quirks import get_quirks  # domain — BC-05
         from market_data.infrastructure.observability.metrics import (  # local — BC-05/BC-08 deuda
             PIPELINE_ERRORS, REPAIR_GAPS_FOUND, REPAIR_GAPS_HEALED,
             REPAIR_GAPS_SKIPPED, ROWS_INGESTED,
@@ -275,8 +275,7 @@ class RepairStrategy(StrategyMixin):
             gap_end   = pd.Timestamp(gap.end_ms,   unit="ms", tz="UTC")
 
             collected_raw: list = []
-            from market_data.domain.value_objects.exchange_quirks import get_quirks  # domain — BC-05
-            _quirks = get_quirks(ctx.exchange_id)
+                _quirks = get_quirks(ctx.exchange_id)
 
             if _quirks.backward_pagination:
                 current_end_ms = gap.end_ms + tf_ms
