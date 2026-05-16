@@ -64,7 +64,7 @@ class QualityPipelineConsumer(BaseConsumer):
     ) -> None:
         super().__init__(bus)
         self._registry = registry or default_registry
-        from market_data.infrastructure.lineage.tracker import (  # local — BC-08
+        from market_data.infrastructure.lineage.tracker import (  # composition root fallback — BC-05
             lineage_tracker as _default_tracker,
         )
         self._tracker  = tracker  or _default_tracker

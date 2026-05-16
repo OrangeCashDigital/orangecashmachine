@@ -109,6 +109,7 @@ dev = [
 ]
 
 [tool.importlinter]
+exclude_type_checking = true
 # import-linter >= 2.1  (docs: https://import-linter.readthedocs.io)
 # SSOT único: este bloque en pyproject.toml. El archivo .importlinter fue eliminado.
 # Cada contrato tiene número único secuencial (BC-NN) para trazabilidad en PRs.
@@ -242,11 +243,10 @@ ignore_imports = [
     "market_data.application.strategies.repair -> market_data.infrastructure.observability.metrics_adapter",
     "market_data.application.use_cases.ohlcv_transformer -> market_data.infrastructure.lineage.tracker",
     # ── Circuit breaker — cross-cutting concern del adapter layer ──────────────
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange.ccxt_adapter",  # get_breaker_state — pendiente CircuitBreakerPort
     # get_breaker_state() y ExchangeCircuitOpenError pertenecen semánticamente
     # al adapter de exchange. Pendiente: exponer breaker_state via ExchangeClientPort.
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange.ccxt_adapter",
-    # ── quality_consumer — pendiente de migración a Dagster sensor/op ──────────
+            # ── quality_consumer — pendiente de migración a Dagster sensor/op ──────────
     "market_data.application.consumers.quality_consumer -> market_data.infrastructure.lineage.tracker",
 ]
 

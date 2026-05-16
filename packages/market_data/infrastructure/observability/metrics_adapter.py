@@ -60,19 +60,27 @@ class PrometheusResampleMetrics:
 
 
 class PrometheusPipelineMetrics:
-    """Implementa PipelineMetricsPort."""
+    """Implementa PipelineMetricsPort — todos los métodos del contrato."""
 
     def __init__(self) -> None:
         from market_data.infrastructure.observability.metrics import (
+            ACTIVE_PAIRS,
             CANDLE_DELAY_MS,
+            FETCH_ABORTS_TOTAL,
             FETCH_CHUNK_DURATION,
             FETCH_CHUNK_ERRORS_TOTAL,
             FETCH_CHUNKS_TOTAL,
+            PIPELINE_ERRORS,
         )
-        self._fetch_chunk_duration    = FETCH_CHUNK_DURATION
-        self._fetch_chunks_total      = FETCH_CHUNKS_TOTAL
+        self._active_pairs             = ACTIVE_PAIRS
+        self._candle_delay_ms          = CANDLE_DELAY_MS
+        self._fetch_aborts_total       = FETCH_ABORTS_TOTAL
+        self._fetch_chunk_duration     = FETCH_CHUNK_DURATION
+        self._fetch_chunks_total       = FETCH_CHUNKS_TOTAL
         self._fetch_chunk_errors_total = FETCH_CHUNK_ERRORS_TOTAL
-        self._candle_delay_ms         = CANDLE_DELAY_MS
+        self._pipeline_errors          = PIPELINE_ERRORS
+
+    # ── PipelineMetricsPort: propiedades raw (usadas por ohlcv_fetcher) ─────
 
     @property
     def fetch_chunk_duration(self) -> object:
@@ -89,6 +97,39 @@ class PrometheusPipelineMetrics:
     @property
     def candle_delay_ms(self) -> object:
         return self._candle_delay_ms
+
+    # ── PipelineMetricsPort: métodos con semántica de dominio ───────────────
+
+    def active_pairs_inc(self, exchange: str) -> None:
+        self._active_pairs.labels(exchange=exchange).inc()
+
+    def active_pairs_dec(self, exchange: str) -> None:
+        self._active_pairs.labels(exchange=exchange).dec()
+
+    def fetch_aborts_inc(self, exchange: str) -> None:
+        self._fetch_aborts_total.labels(exchange=exchange).inc()
+
+    def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:
+        self._pipeline_errors.labels(
+            exchange=exchange, error_type=error_type,
+        ).inc()
+
+    def record_error(self, exchange: str, error_type: str) -> None:
+        """Alias de pipeline_errors_inc — contrato usado por base.py (ctx.metrics)."""
+        self.pipeline_errors_inc(exchange, error_type)
+
+    def circuit_open_set(self, exchange: str, value: float) -> None:
+        pass  # gauge opcional — no todos los deployments lo exponen
+
+    def pair_duration_observe(
+        self, exchange: str, symbol: str, timeframe: str, seconds: float,
+    ) -> None:
+        pass  # histogram opcional — pendiente de añadir a metrics.py
+
+    def quality_decisions_inc(
+        self, exchange: str, market_type: str, **kwargs: object
+    ) -> None:
+        pass  # opcional — implementar cuando se añada el counter a metrics.py
 
 
 class PrometheusRepairMetrics:
