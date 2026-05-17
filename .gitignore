@@ -60,3 +60,4 @@ data/quality/*.db
 .coverage
 .import_linter_cache/
 .opencode/
+AUDITORIA_IMPORT_LINTER.txt
