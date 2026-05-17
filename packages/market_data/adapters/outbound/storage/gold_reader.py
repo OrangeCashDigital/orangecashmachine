@@ -39,10 +39,7 @@ from market_data.domain.exceptions import (
     DataReadError,
     VersionNotFoundError,
 )
-from market_data.infrastructure.storage.iceberg.catalog import (
-    ensure_gold_table,
-    get_catalog,
-)
+
 
 _BASE_COLS = (
     "timestamp", "open", "high", "low", "close", "volume",
@@ -82,6 +79,10 @@ class GoldReader:
     def _get_table(self):
         """Inicializa el catalog Iceberg en el primer acceso. Thread-safe vía GIL."""
         if self._table is None:
+            from market_data.infrastructure.storage.iceberg.catalog import (  # type: ignore[import-untyped]
+                ensure_gold_table,
+                get_catalog,
+            )
             ensure_gold_table()
             self._table = get_catalog().load_table("gold.features")
             logger.info(

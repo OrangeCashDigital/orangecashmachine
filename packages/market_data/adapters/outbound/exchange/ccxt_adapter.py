@@ -56,7 +56,6 @@ from market_data.adapters.outbound.exchange.resilience import (
 from market_data.adapters.outbound.exchange.throttle import (
     get_or_create_throttle,
 )
-from market_data.infrastructure.observability.metrics import EXCHANGE_CIRCUIT_OPEN
 
 if TYPE_CHECKING:
     from ocm.config.schema import ExchangeConfig, ResilienceConfig
@@ -407,7 +406,10 @@ class CCXTAdapter(ExchangeAdapter):
         best-effort; el raise lo hace el caller).
         """
         try:
-            EXCHANGE_CIRCUIT_OPEN.labels(
+            from market_data.infrastructure.observability.metrics import (
+                EXCHANGE_CIRCUIT_OPEN as _EXCHANGE_CIRCUIT_OPEN,
+            )
+            _EXCHANGE_CIRCUIT_OPEN.labels(
                 exchange=self._exchange_id, operation=operation
             ).inc()
             self._throttle.record_error(error_type="rate_limit")

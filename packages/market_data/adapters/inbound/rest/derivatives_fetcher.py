@@ -48,8 +48,16 @@ from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
 )
-from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
-from ocm.runtime.state.factories  import build_cursor_store as _build_cursor_store  # Fail-Soft fallback
+
+
+def _derivatives_storage(exchange: str) -> object:
+    from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
+    return DerivativesStorage(exchange=exchange)
+
+
+def _build_cursor_store():
+    from ocm.runtime.state.factories import build_cursor_store as _bcs
+    return _bcs()
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -119,7 +127,7 @@ class _BaseDerivativesFetcher:
     def __init__(
         self,
         exchange_client: CCXTAdapter,
-        storage:         DerivativesStorage,
+        storage:         object,
         market_type:     str  = "swap",
         dry_run:         bool = False,
     ) -> None:
