@@ -760,6 +760,97 @@ forbidden_modules = [
     "market_data.infrastructure.storage",
 ]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 2 (detalle shared) — contratos de neutralidad del bus Kafka
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# shared.kafka.schemas son wire contracts del bus — el ACL explícito entre BCs.
+# No son objetos de dominio de ningún BC concreto.
+#
+# Regla de oro: shared.kafka.schemas solo puede importar desde:
+#   · shared.kafka.schemas._base  (BasePayload — mecanismo)
+#   · stdlib (dataclasses, typing, json, uuid, datetime)
+#
+# NO puede importar desde shared.types (value objects de dominio),
+# ni desde ningún BC (market_data, trading, portfolio, app).
+# Si un schema necesita un tipo de dominio, ese tipo debe definirse
+# localmente en el schema o en shared.kafka.schemas._base.
+#
+# Violación típica: from shared.types.signal import SignalType en signals.py
+# Fix: definir SignalDirection directamente en el schema (ya es el caso actual).
+name = "BC-33: shared.kafka.schemas isolated from domain types and bounded contexts"
+type = "forbidden"
+source_modules = ["shared.kafka.schemas"]
+forbidden_modules = [
+    "shared.types",
+    "market_data",
+    "trading",
+    "portfolio",
+    "app",
+    "infrastructure",
+    "ocm",
+]
+
+[[tool.importlinter.contracts]]
+# shared/ es tooling neutro — no puede importar lógica de negocio de ningún BC.
+# shared.types contiene value objects compartidos (Signal, Timeframe, Order*).
+# Estos value objects son contratos de datos, no implementaciones de dominio.
+# Si shared.types necesita importar de un BC, el value object pertenece al BC.
+#
+# shared.kafka.schemas queda cubierto por BC-33 (más específico).
+# Este contrato cubre el resto de shared: types, utils, contracts, exceptions.
+#
+# EXCEPCIÓN PREVISTA (no existe aún): si shared/types/ crece y necesita
+# tipos de market_data, esos tipos deben migrar a domain/value_objects/ de
+# market_data y eliminarse de shared/. Añadir ignore_import con issue de tracking.
+name = "BC-34: shared is neutral tooling — does not import bounded context implementations"
+type = "forbidden"
+source_modules = ["shared"]
+forbidden_modules = [
+    "market_data.application",
+    "market_data.infrastructure",
+    "market_data.adapters",
+    "trading.execution",
+    "trading.strategies",
+    "trading.risk",
+    "trading.analytics",
+    "portfolio.services",
+    "portfolio.infra",
+    "infrastructure",
+    "ocm.runtime",
+]
+
+[[tool.importlinter.contracts]]
+# Los BCs no definen sus propios wire payloads Kafka — los importan de shared.kafka.
+# Esto previene duplicación del wire format (dos definiciones de EventPayload
+# divergen silenciosamente y producen deserialización incorrecta en producción).
+#
+# Regla: si trading/ necesita publicar o consumir un evento Kafka, el payload
+# debe vivir en shared.kafka.schemas.* — nunca en trading/infrastructure/kafka/.
+#
+# Condición de eliminación: cuando cada BC tenga su propio deploy independiente
+# con schema registry dedicado. Hasta entonces, shared.kafka.schemas es el SSOT.
+#
+# NOTA: market_data.infrastructure.kafka.* son IMPLEMENTACIONES del productor,
+# no definiciones de wire format. No confundir con los schemas de shared.kafka.
+# Los shims de compatibilidad (payloads.py, serializer.py) quedan excluidos
+# porque son re-exports de shared — no duplican, re-exponen.
+name = "BC-35: bounded contexts do not define their own Kafka wire payloads (no duplication)"
+type = "forbidden"
+source_modules = [
+    "trading",
+    "portfolio",
+    "app",
+]
+forbidden_modules = [
+    # Los BCs no pueden tener su propia clase que extienda BasePayload
+    # fuera de shared.kafka.schemas. Si aparece, debe moverse a shared.
+    # import-linter detecta: from shared.kafka.schemas._base import BasePayload
+    # en módulos de trading/ o portfolio/ → violación.
+    "shared.kafka.schemas._base",
+]
+
 # ---------------------------------------------------------------------------
 # mypy overrides — librerías sin py.typed
 # ---------------------------------------------------------------------------
