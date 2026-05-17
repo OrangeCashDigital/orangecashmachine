@@ -67,11 +67,6 @@ from market_data.domain.value_objects.ohlcv_chunk import (  # noqa: F401
 )
 
 # ---------------------------------------------------------------------------
-# OHLCVBatch — DEPRECATED: alias puro de OHLCVChunk
-# ---------------------------------------------------------------------------
-from market_data.domain.value_objects.ohlcv_batch import OHLCVBatch  # noqa: F401
-
-# ---------------------------------------------------------------------------
 # RawCandle — tipo alias para wire format CCXT crudo (ACL boundary)
 # ---------------------------------------------------------------------------
 RawCandle = Tuple[int, float, float, float, float, float]
@@ -102,7 +97,6 @@ __all__ = [
     "Symbol",
     "OHLCVChunk",
     "OHLCVSource",
-    "OHLCVBatch",       # DEPRECATED — alias de OHLCVChunk
     # Wire format alias (ACL boundary)
     "RawCandle",
     # Quality
