@@ -22,9 +22,15 @@ CheckerFactory
 Callable que recibe los parámetros de runtime (timeframe, exchange,
 rows_removed) y retorna una instancia lista para ejecutar.
 
-    factory: CheckerFactory = lambda tf, ex, rr: GreatExpectationsChecker(tf, ex, rr)
+    factory: CheckerFactory = lambda tf, ex, rr: GEChecker(tf, ex, rr)
     checker = factory("1h", "bybit", 0)
     report  = checker.check(df, symbol="BTC/USDT")
+
+SSOT de implementaciones
+------------------------
+- Nativo (legacy):  market_data.quality.validators.data_quality.DataQualityChecker
+- GE (producción):  market_data.infrastructure.quality.ge_checker.GEChecker
+- Null (tests):     NullChecker (este módulo)
 """
 from __future__ import annotations
 
@@ -33,8 +39,9 @@ from typing import TYPE_CHECKING, Callable, Protocol, runtime_checkable
 import pandas as pd
 
 if TYPE_CHECKING:
-    # Evitar import circular en runtime — solo para type checkers
-    from market_data.quality.report import DataQualityReport
+    # Solo para type checkers — evita import circular en runtime.
+    # SSOT real: market_data.quality.validators.data_quality.DataQualityReport
+    from market_data.quality.validators.data_quality import DataQualityReport
 
 
 @runtime_checkable
@@ -44,8 +51,8 @@ class DataQualityCheckerPort(Protocol):
 
     Implementaciones
     ----------------
-    market_data.quality.checker.DataQualityChecker         (nativo, legacy)
-    market_data.infrastructure.quality.ge_checker.GEChecker (Great Expectations)
+    market_data.quality.validators.data_quality.DataQualityChecker  (nativo)
+    market_data.infrastructure.quality.ge_checker.GEChecker          (GE)
 
     SafeOps
     -------
@@ -95,7 +102,10 @@ Uso en tests:
     factory = lambda tf, ex, rr: MockChecker(expected_report)
 
 Uso en producción (GE):
-    factory = ge_checker_factory   # definida en infrastructure/quality/ge_checker.py
+    factory = ge_checker_factory  # infrastructure/quality/ge_checker.py
+
+Uso en producción (nativo):
+    factory = native_checker_factory  # este módulo
 """
 
 
@@ -104,7 +114,9 @@ class NullChecker:
     Implementación vacía de DataQualityCheckerPort.
 
     Siempre retorna DataQualityReport limpio (sin issues).
-    Útil en tests que no necesitan validar calidad.
+    Útil en dry_run o tests que no necesitan validar calidad.
+
+    SafeOps: nunca lanza excepciones.
     """
 
     def check(
@@ -113,8 +125,20 @@ class NullChecker:
         *,
         symbol: str,
     ) -> "DataQualityReport":
-        from market_data.quality.report import DataQualityReport  # late import
-        return DataQualityReport(symbol=symbol, rows=len(df), issues=[])
+        # Late import — BC-31: port no importa quality/ en module-level
+        from market_data.quality.validators.data_quality import (
+            DataQualityReport,
+        )
+        from datetime import datetime, timezone
+        return DataQualityReport(
+            symbol     = symbol,
+            timeframe  = "unknown",
+            exchange   = "unknown",
+            rows       = len(df),
+            checked_at = datetime.now(timezone.utc).isoformat(),
+            git_hash   = "null-checker",
+            issues     = [],
+        )
 
 
 def native_checker_factory(
@@ -123,15 +147,19 @@ def native_checker_factory(
     rows_removed: int,
 ) -> DataQualityCheckerPort:
     """
-    Factory que produce el DataQualityChecker nativo (legacy).
+    Factory que produce el DataQualityChecker nativo.
 
-    Úsala como fallback o en entornos donde GE no está disponible.
+    Fallback para entornos donde GE no está disponible, o como
+    checker de referencia en tests de integración.
+
+    Late import (BC-31): ports/ no importa quality/ en module-level.
     """
-    from market_data.quality.checker import DataQualityChecker  # late import — BC-31 safe
+    # SSOT: DataQualityChecker vive en quality.validators.data_quality
+    from market_data.quality.validators.data_quality import DataQualityChecker
     return DataQualityChecker(
-        timeframe=timeframe,
-        exchange=exchange,
-        rows_removed=rows_removed,
+        timeframe    = timeframe,
+        exchange     = exchange,
+        rows_removed = rows_removed,
     )
 
 

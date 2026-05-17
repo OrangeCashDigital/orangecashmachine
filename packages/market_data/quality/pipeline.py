@@ -68,10 +68,9 @@ from market_data.quality.policies.data_quality_policy import (
     QualityDecision,
     default_policy,
 )
-from market_data.quality.validators.data_quality import (
-    DataQualityChecker,
-    DataQualityReport,
-)
+# DataQualityReport: type usado en QualityPipelineResult y _resolve_tier
+# DataQualityChecker: NO importar aquí — pipeline usa self._checker_factory (DIP)
+from market_data.quality.validators.data_quality import DataQualityReport
 
 
 # ===========================================================================
