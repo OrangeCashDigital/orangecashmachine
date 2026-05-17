@@ -28,10 +28,9 @@ class ConcretePipelineFactory:
     """
     Implementación concreta de PipelineFactoryPort.
 
-    Todos los imports concretos ocurren lazy dentro de `build()`
+    Todos los imports concretos ocurren lazy dentro de cada builder
     para evitar coste de inicialización en import time y mantener
-    el feedback de errores near-fail-fast en construcción, no en
-    import.
+    el feedback de errores near-fail-fast en construcción, no en import.
     """
 
     def build(self, request: Any) -> Any:  # PipelineRequest → PipelineTriggerPort
@@ -64,10 +63,14 @@ class ConcretePipelineFactory:
 
     def _build_ohlcv(self, request: Any) -> Any:
         """Cabla OHLCVPipeline con CCXTAdapter y sus dependencias concretas."""
+        # Imports lazy — evitan circularidades y coste en import-time.
+        # ge_checker_factory y PrometheusPipelineMetrics pertenecen a infra:
+        # van aquí (lazy) para mantener la arquitectura de capas.
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
         from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
+        from market_data.infrastructure.quality.ge_checker import ge_checker_factory
         from market_data.infrastructure.observability.metrics_adapter import PrometheusPipelineMetrics
         from ocm.runtime.state import build_cursor_store_from_env, InMemoryCursorStore
 
@@ -118,6 +121,7 @@ class ConcretePipelineFactory:
                 f"PipelineRequest.start_date es obligatorio para pipeline='ohlcv'. "
                 f"Request recibido: {request}"
             )
+
         pipeline_kwargs: dict[str, Any] = {
             "exchange_client":    exchange_client,
             "fetcher":            fetcher,
@@ -128,6 +132,7 @@ class ConcretePipelineFactory:
             "timeframes":         request.timeframes,
             "start_date":         request.start_date,
             "auto_lookback_days": request.auto_lookback_days or 3650,
+            "checker_factory":    ge_checker_factory,
         }
 
         return OHLCVPipeline(**pipeline_kwargs)

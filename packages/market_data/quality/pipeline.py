@@ -43,6 +43,10 @@ from __future__ import annotations
 # stdlib
 from dataclasses import dataclass
 from typing import Optional
+from market_data.ports.outbound.data_quality_checker import (
+    CheckerFactory,
+    native_checker_factory,
+)
 
 # terceros
 import pandas as pd
@@ -50,10 +54,13 @@ from loguru import logger
 
 # dominio
 from market_data.domain.entities import DataTier
-# LineageEvent, LineageStatus, PipelineLayer: importados lazy en _record_lineage()
-# lineage_tracker: inyectado vía constructor (DIP — BC-05/BC-08).
-# Ver LineageTrackerPort en market_data.ports.outbound.lineage.
+from market_data.domain.events._lineage import LineageEvent, LineageStatus, PipelineLayer
+from market_data.domain.value_objects.gap_utils import scan_gaps
+# ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta
+from market_data.ports.outbound.lineage import LineageTrackerPort
+from market_data.ports.outbound.metrics import NullQualityMetrics, QualityMetricsPort
 from market_data.ports.outbound.quality import AnomalyRegistryPort
+# quality internals
 from market_data.quality.anomaly_registry import default_registry
 from market_data.quality.policies.data_quality_policy import (
     DataQualityPolicy,
@@ -65,10 +72,6 @@ from market_data.quality.validators.data_quality import (
     DataQualityChecker,
     DataQualityReport,
 )
-
-# infra / utils
-# PIPELINE_ERRORS, QUALITY_GAPS_TOTAL: import lazy dentro de los métodos que los usan (BC-05).
-from market_data.domain.value_objects.gap_utils import scan_gaps
 
 
 # ===========================================================================
@@ -129,11 +132,18 @@ class QualityPipeline:
 
     def __init__(
         self,
-        policy:   Optional[DataQualityPolicy] = None,
-        registry: Optional[AnomalyRegistryPort] = None,
+        policy:          Optional[DataQualityPolicy]    = None,
+        registry:        Optional[AnomalyRegistryPort]  = None,
+        metrics:         Optional[QualityMetricsPort]   = None,
+        lineage_tracker: Optional[LineageTrackerPort]   = None,
+        checker_factory: Optional[CheckerFactory]       = None,
     ) -> None:
-        self._policy   = policy   or default_policy
-        self._registry = registry or default_registry
+        self._policy          = policy          or default_policy
+        self._registry        = registry        or default_registry
+        self._metrics         = metrics         or NullQualityMetrics()
+        self._lineage_tracker = lineage_tracker or _null_lineage_tracker()
+        # DIP: checker inyectado — default = native (backward compat)
+        self._checker_factory = checker_factory or native_checker_factory
 
     def run(
         self,
@@ -157,12 +167,9 @@ class QualityPipeline:
         rows_removed : velas CORRUPT eliminadas upstream (para gap scan)
         """
         # 1. Validación de calidad
-        checker = DataQualityChecker(
-            timeframe    = timeframe,
-            exchange     = exchange,
-            rows_removed = rows_removed,
-        )
-        report = checker.check(df, symbol=symbol)
+        # DIP: checker inyectado por factory
+        checker = self._checker_factory(timeframe, exchange, rows_removed)
+        report  = checker.check(df, symbol=symbol)
         result = self._policy.evaluate(report)
 
         # 2. Gap scan post-ingesta
@@ -207,15 +214,12 @@ class QualityPipeline:
             "Gap scan | total={} high={} medium={} low={}{} | {}/{} exchange={}",
             len(gaps), high, medium, low, suffix, symbol, timeframe, exchange,
         )
-        from market_data.infrastructure.observability.metrics import (  # noqa: PLC0415
-            QUALITY_GAPS_TOTAL,
-        )
         for sev, cnt in (("high", high), ("medium", medium), ("low", low)):
             if cnt:
-                QUALITY_GAPS_TOTAL.labels(
+                self._metrics.quality_gaps_inc(
                     exchange=exchange, symbol=symbol,
-                    timeframe=timeframe, severity=sev,
-                ).inc(cnt)
+                    timeframe=timeframe, severity=sev, count=cnt,
+                )
 
     def _resolve_tier(
         self,
@@ -227,12 +231,9 @@ class QualityPipeline:
     ) -> DataTier:
         """Traduce QualityDecision → DataTier con logging apropiado."""
         if result.decision == QualityDecision.REJECT:
-            from market_data.infrastructure.observability.metrics import (  # noqa: PLC0415
-                PIPELINE_ERRORS,
+            self._metrics.pipeline_errors_inc(
+                exchange=exchange, error_type="quality_reject",
             )
-            PIPELINE_ERRORS.labels(
-                exchange=exchange, error_type="quality_reject"
-            ).inc()
             logger.warning(
                 "QualityPipeline REJECT | {}/{} exchange={} score={:.1f} reasons={}",
                 symbol, timeframe, exchange, result.score, result.reasons,
@@ -282,16 +283,8 @@ class QualityPipeline:
         if run_id is None:
             return
 
-        from market_data.domain.events._lineage import (  # noqa: PLC0415
-            LineageEvent,
-            LineageStatus,
-            PipelineLayer,
-        )
-        from market_data.infrastructure.lineage.tracker import (  # noqa: PLC0415
-            lineage_tracker,
-        )
         if tier == DataTier.REJECTED:
-            lineage_tracker.record(LineageEvent(
+            self._lineage_tracker.record(LineageEvent(
                 run_id        = run_id,
                 layer         = PipelineLayer.SILVER,
                 exchange      = exchange,
@@ -305,7 +298,7 @@ class QualityPipeline:
             ))
             return
 
-        lineage_tracker.record(LineageEvent(
+        self._lineage_tracker.record(LineageEvent(
             run_id        = run_id,
             layer         = PipelineLayer.SILVER,
             exchange      = exchange,
@@ -322,6 +315,31 @@ class QualityPipeline:
             params        = {"tier": tier.value, "reasons": result.reasons},
         ))
 
+
+
+
+# ===========================================================================
+# Null object para LineageTrackerPort — SafeOps cuando no se inyecta tracker
+# ===========================================================================
+
+class _NullLineageTracker:
+    """
+    Implementación vacía de LineageTrackerPort.
+
+    Uso: cuando run_id=None o lineage_tracker no está configurado.
+    No-op en todos los métodos — nunca propaga excepciones (SafeOps).
+    """
+    def record(self, event: object) -> None:
+        pass
+
+    def new_run_id(self) -> str:
+        import uuid
+        return str(uuid.uuid4())
+
+
+def _null_lineage_tracker() -> _NullLineageTracker:
+    """Factoría del null object — evita singleton mutable compartido."""
+    return _NullLineageTracker()
 
 # ===========================================================================
 # Singleton de módulo — injectable para tests

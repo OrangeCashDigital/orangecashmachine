@@ -41,6 +41,7 @@ from loguru import logger
 from pyiceberg.expressions import And, EqualTo
 
 from market_data.infrastructure.storage.gold.transformer import GoldTransformer, VERSION as _TRANSFORMER_VERSION
+from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.infrastructure.storage.iceberg.catalog import ensure_gold_table, get_catalog
 from market_data.ports.outbound.storage import OHLCVStorage, SnapshottableStoragePort
 
@@ -146,7 +147,6 @@ class GoldStorage:
             silver = self._silver_storage
         else:
             # Lazy fallback — solo para callers que no inyectan (legacy).
-            from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
             silver = IcebergStorage(exchange=exchange, market_type=market_type)
 
         # Capturar snapshot ANTES del load — ancla el lineage al punto exacto
