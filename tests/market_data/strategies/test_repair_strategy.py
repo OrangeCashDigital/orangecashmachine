@@ -477,7 +477,6 @@ class TestExecutePairHealing:
         ctx      = PipelineContext(
             fetcher      = bad_fetcher,
             storage      = _StorageStub(df=df),
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(),
             exchange_id  = _EXCHANGE,
