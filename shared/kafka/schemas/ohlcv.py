@@ -212,7 +212,11 @@ class EventPayload(BasePayload):
 
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
-            source = DATASOURCE_LIVE  # fail-soft: source desconocido → live
+            raise OHLCVSchemaVersionError(
+                f"EventPayload.source desconocido: {source!r}. "
+                f"Válidos: {sorted(_VALID_SOURCES)}. "
+                "Enviar mensaje al DLQ — no asumir source=live en trading."
+            )
 
         return cls(
             event_id       = str(data["event_id"]),

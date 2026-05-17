@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-domain/value_objects/signal.py
+shared/types/signal.py
 ===============================
 
 Signal — value object de dominio.

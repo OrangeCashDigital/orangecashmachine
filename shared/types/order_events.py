@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-domain/events/order_events.py
+shared/types/order_events.py
 ===============================
 
 Eventos de dominio relacionados con el ciclo de vida de órdenes.

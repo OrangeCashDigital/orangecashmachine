@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-domain/entities/ohlcv.py
-=========================
+shared/types/ohlcv.py
+======================
 
 OHLCVBar — entidad de dominio para una vela OHLCV.
 
@@ -164,7 +164,7 @@ class OHLCVBar:
         return (self.exchange, self.symbol, self.timeframe.value, self.timestamp)
 
     # ------------------------------------------------------------------
-    # Propiedades derivadas
+    # Propiedades derivadas — sin parámetros (son propiedades, no métodos)
     # ------------------------------------------------------------------
 
     @property
@@ -192,12 +192,19 @@ class OHLCVBar:
         """True si close < open (vela bajista)."""
         return self.close < self.open
 
-    @property
     def is_doji(self, threshold: float = 0.001) -> bool:
         """
-        True si el cuerpo es < 0.1% del precio — indecisión de mercado.
+        True si el cuerpo es < threshold × close — indecisión de mercado.
 
-        threshold: fracción de close debajo de la cual se considera doji.
+        Método regular (no property) — acepta threshold configurable.
+
+        Args:
+            threshold: fracción del precio de cierre bajo la cual se considera
+                       doji. Default 0.001 = 0.1%.
+
+        Uso:
+            bar.is_doji()        # threshold default 0.001
+            bar.is_doji(0.002)   # threshold personalizado
         """
         return self.body < self.close * threshold
 

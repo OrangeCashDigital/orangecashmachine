@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-domain/boundaries.py
+shared/contracts/boundaries.py
 ====================
 
 Contratos explícitos entre Bounded Contexts.
