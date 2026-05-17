@@ -25,7 +25,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from market_data.domain.value_objects.ohlcv_batch import OHLCVBatch
+from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 
 
 # ===========================================================================
@@ -79,7 +79,7 @@ class OHLCVBatchReceived(DomainEvent):
     source: "backfill" (REST histórico) | "replay" (seek_to_beginning)
     Publicado a: ohlcv.raw con header x-ocm-source: backfill|replay
     """
-    batch:  OHLCVBatch = field(default_factory=OHLCVBatch)
+    batch:  OHLCVChunk = field(default_factory=OHLCVChunk)
     source: str        = "backfill"
     run_id: str        = ""
 

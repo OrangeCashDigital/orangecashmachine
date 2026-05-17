@@ -54,7 +54,7 @@ from loguru import logger
 
 # dominio
 from market_data.domain.entities import DataTier
-from market_data.domain.events._lineage import LineageEvent, LineageStatus, PipelineLayer
+from market_data.domain.events import LineageEvent, LineageStatus, PipelineLayer
 from market_data.domain.value_objects.gap_utils import scan_gaps
 # ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta
 from market_data.ports.outbound.lineage import LineageTrackerPort
