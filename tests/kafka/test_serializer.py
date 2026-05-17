@@ -13,16 +13,11 @@ from __future__ import annotations
 import json
 import pytest
 
-from shared.kafka.schemas.ohlcv import (
-    EventPayload,
-    KafkaOHLCVBar as OHLCVBar,
-    OHLCV_SCHEMA_VERSION as PAYLOAD_SCHEMA_VERSION,
-    OHLCVSchemaVersionError as SchemaVersionError,
+from market_data.infrastructure.kafka.payloads import (
+    EventPayload, KafkaOHLCVBar as OHLCVBar, PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
 )
-from shared.kafka.serializer import (
-    serialize,
-    deserialize,
-    make_routing_key,
+from market_data.infrastructure.kafka.serializer import (
+    serialize, deserialize, make_routing_key,
 )
 
 
