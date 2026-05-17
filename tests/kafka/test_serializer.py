@@ -13,11 +13,16 @@ from __future__ import annotations
 import json
 import pytest
 
-from market_data.infrastructure.kafka.payloads import (
-    EventPayload, KafkaOHLCVBar as OHLCVBar, PAYLOAD_SCHEMA_VERSION, SchemaVersionError,
+from shared.kafka.schemas.ohlcv import (
+    EventPayload,
+    KafkaOHLCVBar as OHLCVBar,
+    OHLCV_SCHEMA_VERSION as PAYLOAD_SCHEMA_VERSION,
+    OHLCVSchemaVersionError as SchemaVersionError,
 )
-from market_data.infrastructure.kafka.serializer import (
-    serialize, deserialize, make_routing_key,
+from shared.kafka.serializer import (
+    serialize,
+    deserialize,
+    make_routing_key,
 )
 
 
@@ -108,7 +113,7 @@ class TestDeserialize:
 
     def test_returns_event_payload(self):
         raw = serialize(_make_event())
-        assert isinstance(deserialize(raw), EventPayload)
+        assert isinstance(deserialize(raw, EventPayload), EventPayload)
 
     def test_round_trip_preserves_all_fields(self):
         original  = _make_event("evt-rt")
@@ -138,7 +143,7 @@ class TestDeserialize:
 
     def test_invalid_json_raises(self):
         with pytest.raises((ValueError, json.JSONDecodeError)):
-            deserialize(b"not-json")
+            deserialize(b"not-json", EventPayload)
 
     def test_incompatible_schema_version_raises(self):
         raw    = serialize(_make_event())
@@ -146,7 +151,7 @@ class TestDeserialize:
         parsed["event_version"] = PAYLOAD_SCHEMA_VERSION + 99
         bad    = json.dumps(parsed).encode("utf-8")
         with pytest.raises(SchemaVersionError):
-            deserialize(bad)
+            deserialize(bad, EventPayload)
 
     def test_multiple_bars_round_trip(self):
         bars = [
