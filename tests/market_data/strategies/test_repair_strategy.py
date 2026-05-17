@@ -243,7 +243,6 @@ def _make_ctx(
     return PipelineContext(
         fetcher      = _FetcherStub(chunks=chunks),
         storage      = _StorageStub(df=df, raise_on_load=raise_on_load),
-        bronze       = MagicMock(),
         cursor       = MagicMock(),
         quality      = _QualityStub(accept=quality_accept),
         exchange_id  = _EXCHANGE,

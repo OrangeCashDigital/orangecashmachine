@@ -284,15 +284,6 @@ class OHLCVPipeline(PipelineTriggerPort):
             gap_registry = build_gap_registry(),  # type: ignore[arg-type]
         )
 
-        if _kafka_producer is not None:
-            self._log.info(
-                "Kappa mode activo — backfill/incremental → ohlcv.raw → KafkaBronzeWriter → Iceberg"
-            )
-        else:
-            self._log.warning(
-                "Kappa mode DEGRADADO — kafka_producer=None, escribiendo directo a Iceberg"
-            )
-
         self._strategies: dict[PipelineMode, PipelineStrategy] = {
             PipelineMode.INCREMENTAL: IncrementalStrategy(),
             PipelineMode.BACKFILL:    BackfillStrategy(),
@@ -497,73 +488,10 @@ class OHLCVPipeline(PipelineTriggerPort):
             "Completeness check iniciando"
         )
 
-        total_gaps   = 0
-        total_high   = 0
-        series_clean = 0
-
-        for result in written:
-            try:
-                df = self._ctx.storage.load_ohlcv(
-                    symbol=result.symbol, timeframe=result.timeframe,
-                )
-                if df is None or df.empty:
-                    continue
-
-                gaps = scan_gaps(df, result.timeframe)
-                if not gaps:
-                    series_clean += 1
-                    continue
-
-                high   = sum(1 for g in gaps if g.severity == "high")
-                medium = sum(1 for g in gaps if g.severity == "medium")
-                low    = len(gaps) - high - medium
-                total_gaps += len(gaps)
-                total_high += high
-
-                _lvl = self._log.warning if high > 0 else self._log.info
-                _lvl(
-                    "Completeness gap detected | {}/{} exchange={} "
-                    "gaps={} high={} medium={} low={}",
-                    result.symbol, result.timeframe, self._exchange_id,
-                    len(gaps), high, medium, low,
-                )
-
-                # Verificar invariantes formales del dataset completo.
-                # Solo se ejecuta si load_ohlcv tuvo éxito — datos disponibles.
-                try:
-                    _manifest = {
-                        "symbol":     result.symbol,
-                        "timeframe":  result.timeframe,
-                        "exchange":   self._exchange_id,
-                        "version":    1,
-                        "partitions": [{"min_ts": str(df["timestamp"].min()),
-                                        "max_ts": str(df["timestamp"].max()),
-                                        "rows":   len(df)}],
-                    }
-                    _inv = check_dataset_invariants(_manifest, check_lag=True)
-                    if not _inv.ok:
-                        for violation in _inv.violations:
-                            self._log.bind(
-                                symbol    = result.symbol,
-                                timeframe = result.timeframe,
-                            ).warning("Invariant violation | {}", violation)
-                    for warning in _inv.warnings:
-                        self._log.bind(
-                            symbol    = result.symbol,
-                            timeframe = result.timeframe,
-                        ).info("Invariant warning | {}", warning)
-                except Exception as _inv_exc:
-                    self._log.bind(error=str(_inv_exc)).debug(
-                        "Invariant check skipped (non-critical)"
-                    )
-
-            except Exception as exc:
-                self._log.bind(
-                    symbol    = result.symbol,
-                    timeframe = result.timeframe,
-                    error     = str(exc),
-                ).warning("Completeness check failed for series (non-critical)")
-
+        # Post-run completeness scan eliminado — Kappa: el producer no lee
+        # el lago. Gap detection y invariant checks son maintenance logic —
+        # pertenecen a RepairStrategy o a un Dagster asset de observabilidad
+        # separado que lee Iceberg directamente sin pasar por el pipeline.
         self._log.bind(
             mode           = "completeness",
             series_checked = len(written),
