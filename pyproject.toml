@@ -844,12 +844,18 @@ source_modules = [
     "app",
 ]
 forbidden_modules = [
-    # Los BCs no pueden tener su propia clase que extienda BasePayload
-    # fuera de shared.kafka.schemas. Si aparece, debe moverse a shared.
-    # import-linter detecta: from shared.kafka.schemas._base import BasePayload
+    # Los BCs no pueden importar _base directamente para extender BasePayload
+    # fuera de shared.kafka.schemas. Si aparece, el payload debe moverse a shared.
+    # Importación directa: from shared.kafka.schemas._base import BasePayload
     # en módulos de trading/ o portfolio/ → violación.
+    #
+    # allow_indirect_imports = true: la cadena transitiva legítima es:
+    #   app → market_data → infrastructure.kafka → shared.kafka.schemas → _base
+    # Esa cadena es uso del bus (correcto), no extensión de BasePayload (incorrecto).
+    # Solo se prohíbe el import DIRECTO de _base desde los BCs.
     "shared.kafka.schemas._base",
 ]
+allow_indirect_imports = true
 
 # ---------------------------------------------------------------------------
 # mypy overrides — librerías sin py.typed
