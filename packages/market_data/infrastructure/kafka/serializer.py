@@ -3,79 +3,56 @@
 market_data/infrastructure/kafka/serializer.py
 ===============================================
 
-Serialización EventPayload ↔ bytes para el wire format Kafka.
+SHIM DE COMPATIBILIDAD — FASE DE TRANSICIÓN.
 
-Responsabilidad
----------------
-SSOT de cómo los EventPayload se convierten a bytes JSON para
-publicar en Kafka y cómo se reconstruyen al consumir.
+SSOT canónico: shared.kafka.serializer
+Este módulo re-exporta desde shared para no romper importers existentes.
 
-Wire format
------------
-JSON UTF-8. Schema definido por EventPayload.to_dict() — SSOT en
-kafka/payloads.py. Versionado explícito via PAYLOAD_SCHEMA_VERSION.
+Deprecado: eliminar en Fase 2 cuando todos los importers apunten a shared.
+Condición: grep -r "infrastructure.kafka.serializer" devuelve cero resultados.
 
-Routing key
------------
-"{exchange}:{symbol}:{timeframe}" como bytes UTF-8.
-Kafka asigna partición por hash(key) — mismo par/timeframe siempre
-va a la misma partición → orden garantizado por símbolo.
+Diferencia de firma en deserialize()
+--------------------------------------
+  Local (legacy): deserialize(data: bytes) → EventPayload
+  shared:         deserialize(data: bytes, payload_cls: Type[P]) → P
 
-Principios: SSOT · SRP · Fail-Fast · KISS
+El shim expone la firma legacy para compatibilidad, pero llama a shared
+internamente con EventPayload como clase concreta.
+Callers que necesiten deserializar otros tipos deben migrar a shared directamente.
 """
 from __future__ import annotations
 
-import json
+import warnings
 
-from market_data.infrastructure.kafka.payloads import EventPayload
-
-
-def serialize(event: EventPayload) -> bytes:
-    """
-    Serializa un EventPayload a bytes JSON UTF-8.
-
-    Usa EventPayload.to_dict() como SSOT del schema.
-    Compatible con deserialize() via from_dict().
-
-    Raises
-    ------
-    ValueError : si event es None (Fail-Fast)
-    """
-    if event is None:
-        raise ValueError("serialize: event no puede ser None")
-    return json.dumps(event.to_dict(), ensure_ascii=False).encode("utf-8")
+from shared.kafka.serializer import (
+    serialize,
+    make_ohlcv_key,
+    make_symbol_key,
+    make_routing_key,
+    deserialize as _shared_deserialize,
+)
+from shared.kafka.schemas.ohlcv import EventPayload
 
 
 def deserialize(data: bytes) -> EventPayload:
     """
-    Deserializa bytes JSON UTF-8 a EventPayload.
+    Firma legacy — deserializa a EventPayload (shared).
 
-    Fail-Fast: lanza SchemaVersionError si la versión es incompatible.
-
-    Raises
-    ------
-    SchemaVersionError : versión de schema incompatible
-    ValueError         : bytes no son JSON válido
+    Deprecado: migrar a shared.kafka.serializer.deserialize(data, PayloadClass).
     """
-    payload = json.loads(data.decode("utf-8"))
-    return EventPayload.from_dict(payload)
+    warnings.warn(
+        "infrastructure.kafka.serializer.deserialize() está deprecado. "
+        "Usar shared.kafka.serializer.deserialize(data, EventPayload).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _shared_deserialize(data, EventPayload)
 
 
-def make_routing_key(
-    exchange:  str,
-    symbol:    str,
-    timeframe: str,
-) -> bytes:
-    """
-    Construye la routing key canónica como bytes UTF-8.
-
-    Formato: "{exchange}:{symbol}:{timeframe}"
-    Ejemplo: b"bybit:BTC/USDT:1h"
-
-    Kafka asigna partición según hash(key) — mismo routing key
-    siempre va a la misma partición → orden por par/timeframe.
-    """
-    return f"{exchange}:{symbol}:{timeframe}".encode("utf-8")
-
-
-__all__ = ["serialize", "deserialize", "make_routing_key"]
+__all__ = [
+    "serialize",
+    "deserialize",
+    "make_ohlcv_key",
+    "make_symbol_key",
+    "make_routing_key",
+]

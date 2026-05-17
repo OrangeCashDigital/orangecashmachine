@@ -43,7 +43,7 @@ class KafkaProducerAdapter:
         self,
         bootstrap_servers: str    = "kafka:9092",
         client_id:         str    = "ocm-producer",
-        compression_type:  str    = "lz4",
+        compression_type:  str    = "gzip",
         acks:              object  = "all",
         max_batch_size:    int    = 16_384,
         linger_ms:         int    = 5,
@@ -77,7 +77,7 @@ class KafkaProducerAdapter:
         return cls(
             bootstrap_servers = os.environ.get(KAFKA_BOOTSTRAP_SERVERS, "kafka:9092"),
             client_id         = os.environ.get(KAFKA_CLIENT_ID_PRODUCER, "ocm-producer"),
-            compression_type  = os.environ.get(KAFKA_COMPRESSION_TYPE,   "lz4"),
+            compression_type  = os.environ.get(KAFKA_COMPRESSION_TYPE,   "gzip"),
             acks              = os.environ.get(KAFKA_ACKS,                "all"),
             linger_ms         = int(os.environ.get(KAFKA_LINGER_MS,      "5")),
             max_batch_size    = int(os.environ.get(KAFKA_MAX_BATCH_SIZE,  "16384")),
@@ -167,6 +167,31 @@ class KafkaProducerAdapter:
             await self._producer.flush()
         except Exception as exc:
             self._log.warning("kafka_flush_error", error=str(exc))
+
+
+    async def produce(
+        self,
+        topic:   str,
+        value:   bytes,
+        key      = None,
+        headers  = None,
+    ) -> None:
+        """
+        Método canónico de KafkaProducerPort.
+
+        Delega a send_async() — adaptación de nombre para cumplir el contrato.
+        SafeOps: captura excepciones internamente; no lanza si el mensaje se pierde.
+        """
+        await self.send_async(topic=topic, value=value, key=key, headers=headers)
+
+    async def stop(self) -> None:
+        """
+        Método canónico de KafkaProducerPort.
+
+        Alias de close() — flush implícito + cierre de conexión.
+        Idempotente. SafeOps.
+        """
+        await self.close()
 
 
 __all__ = ["KafkaProducerAdapter"]

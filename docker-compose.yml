@@ -529,7 +529,7 @@ services:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_logs:/var/lib/zookeeper/log
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "zookeeper-shell localhost:2181 ls / > /dev/null 2>&1"]
       interval: 10s
       timeout:  5s
       retries:  5

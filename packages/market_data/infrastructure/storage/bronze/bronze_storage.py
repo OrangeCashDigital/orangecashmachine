@@ -105,6 +105,7 @@ class BronzeStorage:
         symbol:    str,
         timeframe: str,
         run_id:    Optional[str] = None,
+        exchange:  Optional[str] = None,
     ) -> str:
         """
         Inserta un batch OHLCV en bronze.ohlcv (Iceberg).
@@ -142,11 +143,15 @@ class BronzeStorage:
             )
             return run_id
 
+        # exchange override: el caller (KafkaBronzeWriter) pasa el exchange
+        # extraído del EventPayload — más preciso que el valor del constructor
+        # cuando BronzeStorage se instancia sin exchange explícito (main.py).
+        effective_exchange = (exchange or self._exchange).lower()
         prepared = _normalize_df(
             df,
             symbol      = symbol,
             timeframe   = timeframe,
-            exchange    = self._exchange,
+            exchange    = effective_exchange,
             market_type = self._market_type,
         )
 
