@@ -53,16 +53,6 @@ class SignalSchemaVersionError(ValueError):
     """Schema version incompatible en SignalPayload.from_dict()."""
 
 
-# DEUDA TÉCNICA: Signal.signal (dominio) vs SignalPayload.direction (wire)
-# -------------------------------------------------------------------------
-# shared/types/signal.py usa el campo "signal" (SignalType).
-# Este wire payload usa "direction" (SignalDirection).
-# Son el mismo concepto con nombres distintos — el publisher debe hacer
-# el mapeo manual: payload.direction = domain_signal.signal
-# Fix: renombrar Signal.signal → Signal.direction en shared/types/signal.py
-# y actualizar todos los consumidores en trading/strategies/.
-# Bloqueante para: sprint de unificación de naming dominio/wire.
-# Rastrear en: GitHub Issue #__ antes del próximo sprint.
 
 
 # ---------------------------------------------------------------------------

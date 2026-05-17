@@ -136,10 +136,7 @@ class OMS:
             return None
 
         # Crear orden
-        # signal.signal → campo de dominio; OrderSide acepta "buy"|"sell".
-        # Cuando sprint naming complete Signal.signal → Signal.direction,
-        # cambiar aquí a: OrderSide(signal.direction)
-        raw_side = getattr(signal, "direction", None) or getattr(signal, "signal", None)
+        raw_side = signal.direction
         if raw_side not in ("buy", "sell"):
             self._log.error(
                 "submit: side inválido | symbol={} side={}",

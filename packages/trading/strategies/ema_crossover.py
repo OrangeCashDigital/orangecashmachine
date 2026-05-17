@@ -85,7 +85,7 @@ class EMACrossoverStrategy(BaseStrategy):
         return [Signal(
             symbol     = self.symbol,
             timeframe  = self.timeframe,
-            signal     = signal_type,
+            direction  = signal_type,
             price      = float(last["close"]),
             timestamp  = ts,
             confidence = 1.0,

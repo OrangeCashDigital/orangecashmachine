@@ -12,7 +12,7 @@ pero ningún campo debe modificarse tras construcción).
 Reglas de dominio
 -----------------
 - confidence ∈ [0.0, 1.0]        — invariante validada en __post_init__
-- is_actionable ≡ signal ∈ {buy, sell}  — derivada, nunca almacenar
+- is_actionable ≡ direction ∈ {buy, sell}  — derivada, nunca almacenar
 - hold signals son válidas (carry information: "no actúes")
 
 Ubicación: domain/ (sin imports externos a stdlib)
@@ -41,7 +41,7 @@ class Signal:
     ------
     symbol      : par normalizado  (e.g. "BTC/USDT")
     timeframe   : marco temporal   (e.g. "1h", "4h")
-    signal      : dirección        ("buy" | "sell" | "hold")
+    direction   : dirección        ("buy" | "sell" | "hold")
     price       : precio de cierre al momento de la señal
     timestamp   : timestamp UTC de la vela que generó la señal
     confidence  : confianza de la señal ∈ [0.0, 1.0]
@@ -54,7 +54,7 @@ class Signal:
     """
     symbol:     str
     timeframe:  str
-    signal:     SignalType
+    direction:  SignalType
     price:      float
     timestamp:  datetime
     confidence: float = 1.0
@@ -76,21 +76,36 @@ class Signal:
             raise ValueError("Signal.timeframe no puede estar vacío")
 
     @property
+    def signal(self) -> "SignalType":
+        """
+        DEPRECATED — usar Signal.direction.
+        Alias de compatibilidad durante la migración Signal.signal → Signal.direction.
+        Eliminable cuando todos los consumidores usen .direction.
+        """
+        import warnings
+        warnings.warn(
+            "Signal.signal está deprecado — usar Signal.direction",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.direction
+
+    @property
     def is_actionable(self) -> bool:
         """True si la señal debe generar una orden (buy o sell)."""
-        return self.signal in ("buy", "sell")
+        return self.direction in ("buy", "sell")
 
     @property
     def is_buy(self) -> bool:
-        return self.signal == "buy"
+        return self.direction == "buy"
 
     @property
     def is_sell(self) -> bool:
-        return self.signal == "sell"
+        return self.direction == "sell"
 
     def __str__(self) -> str:
         return (
-            f"Signal({self.signal.upper()} {self.symbol} @ {self.price:.4f}"
+            f"Signal({self.direction.upper()} {self.symbol} @ {self.price:.4f}"
             f" tf={self.timeframe} conf={self.confidence:.2f})"
         )
 

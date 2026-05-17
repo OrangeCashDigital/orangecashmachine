@@ -243,7 +243,7 @@ class PaperBot:
                 return None
             return PaperOrder(
                 symbol    = signal.symbol,
-                side      = signal.signal,
+                side      = signal.direction,
                 price     = signal.price,
                 size_pct  = decision.size_pct,
                 timestamp = getattr(signal, "timestamp", None)
