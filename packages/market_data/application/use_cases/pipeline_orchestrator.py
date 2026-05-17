@@ -8,7 +8,7 @@ PipelineOrchestrator — caso de uso de ejecución de pipelines.
 Responsabilidad
 ---------------
 Seleccionar el pipeline correcto (OHLCV / Trades / Derivatives)
-según el request, construirlo con sus dependencias, y ejecutarlo.
+según el request, construirlo via factory, y ejecutarlo.
 
 SSOT de la lógica de selección e instanciación de pipelines.
 
@@ -21,14 +21,14 @@ Sin esta capa, infrastructure/dagster/assets/ y main.py deben conocer:
 
 Con PipelineOrchestrator:
   - El caller solo conoce PipelineRequest (DTO)
-  - La selección y construcción está centralizada (SSOT)
+  - La selección y construcción está centralizada en ConcretePipelineFactory (SSOT)
   - Añadir DerivativesPipeline no cambia ningún caller (OCP)
 
 Relación con PipelineTriggerPort
 ---------------------------------
 PipelineTriggerPort (ports/inbound/) define el contrato abstracto
 que los pipelines implementan. PipelineOrchestrator construye e
-invoca cualquier PipelineTriggerPort concreto.
+invoca cualquier PipelineTriggerPort concreto via factory.
 
 Diagrama de flujo
 -----------------
@@ -37,24 +37,23 @@ Diagrama de flujo
       ▼
   PipelineOrchestrator.run(request)
       │
-      ├─ _build_pipeline(request) → PipelineTriggerPort
-      │       ├─ ohlcv       → OHLCVPipeline(symbols, timeframes, ...)
-      │       ├─ trades      → TradesPipeline(...)
-      │       └─ derivatives → DerivativesPipeline(...)
+      ├─ _build_pipeline(request) → factory.build(request) → PipelineTriggerPort
+      │       (ConcretePipelineFactory: ohlcv | trades | derivatives)
       │
       └─ pipeline.run(mode=request.mode) → PipelineSummary
 
-Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Soft · Fail-Fast
+Contrato de errores
+-------------------
+_build_pipeline → lanza PipelineBuildError     (Fail-Fast: construcción fallida)
+run()           → lanza PipelineExecutionError (Fail-Fast: ejecución fallida)
+El caller decide si recuperar o propagar — este módulo no silencia fallos.
+
+Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Fast
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
-
-# PipelineSummary es el tipo de retorno semántico de pipeline.run().
-# Definido como alias hasta que el Protocol esté formalizado en ports/.
-# Usar `object` es válido para Liskov pero pierde información semántica.
-PipelineSummary = Any  # TODO: formalizar como Protocol en ports/inbound/
 
 from loguru import logger
 
@@ -63,9 +62,14 @@ from market_data.ports.inbound.pipeline_trigger import (
     PipelineTriggerPort,
     PipelineModeStr,
 )
+from market_data.ports.inbound.pipeline_factory import PipelineFactoryPort
 
 if TYPE_CHECKING:  # pragma: no cover
     from ocm.config.schema import ResilienceConfig
+
+# Type alias — definido después de imports para no romper orden E402.
+# TODO: formalizar como Protocol en ports/inbound/
+PipelineSummary = Any
 
 # Re-export para que callers no dependan del port directamente
 PipelineMode = PipelineModeStr
@@ -111,31 +115,30 @@ class PipelineRequest:
     extra    : dict abierto para extensión sin romper el contrato (OCP).
     """
 
-    exchange:            str
-    market_type:         str
-    pipeline:            PipelineType
+    exchange:    str
+    market_type: str
+    pipeline:    PipelineType
 
     # Modo de ejecución
-    mode:                PipelineModeStr       = "incremental"
+    mode: PipelineModeStr = "incremental"
 
-    # Parámetros de construcción del adapter — provistos por el caller
-    credentials:         Optional[dict]        = None
-    resilience:          "Optional[Union[ResilienceConfig, dict[str, Any]]]" = None
+    # Parámetros de construcción del adapter
+    credentials: Optional[dict]                                         = None
+    resilience:  "Optional[Union[ResilienceConfig, dict[str, Any]]]"   = None
 
-    # Parámetros de selección de datos — provistos por el caller
-    symbols:             Optional[list[str]]   = None
-    timeframes:          Optional[list[str]]   = None
-    start_date:          Optional[str]         = None
-    auto_lookback_days:  Optional[int]         = None
+    # Parámetros de selección de datos
+    symbols:             Optional[list[str]] = None
+    timeframes:          Optional[list[str]] = None
+    start_date:          Optional[str]       = None
+    auto_lookback_days:  Optional[int]       = None
 
     # Datasets para DerivativesPipeline — ej: ['funding_rate', 'open_interest']
-    # None = pipeline usa su lista interna de datasets soportados.
-    datasets:            Optional[list[str]]   = None
+    datasets: Optional[list[str]] = None
 
     # Parámetros de control
-    run_id:              Optional[str]         = None
-    dry_run:             bool                  = False
-    extra:               dict[str, Any]        = field(default_factory=dict)
+    run_id:  Optional[str]    = None
+    dry_run: bool             = False
+    extra:   dict[str, Any]   = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Fail-Fast: valida invariantes del DTO en construcción."""
@@ -146,12 +149,12 @@ class PipelineRequest:
         if self.pipeline not in ("ohlcv", "trades", "derivatives"):
             raise ValueError(
                 f"PipelineRequest.pipeline inválido: {self.pipeline!r}. "
-                f"Valores: 'ohlcv', 'trades', 'derivatives'"
+                f"Valores válidos: 'ohlcv', 'trades', 'derivatives'"
             )
         if self.mode not in ("incremental", "backfill", "repair"):
             raise ValueError(
                 f"PipelineRequest.mode inválido: {self.mode!r}. "
-                f"Valores: 'incremental', 'backfill', 'repair'"
+                f"Valores válidos: 'incremental', 'backfill', 'repair'"
             )
 
     def __str__(self) -> str:
@@ -170,8 +173,14 @@ class PipelineOrchestrator:
     Orquestador de casos de uso de ingesta de market data.
 
     Selecciona, construye y ejecuta el pipeline correcto según el request.
-    Composition root de la capa de aplicación: único lugar donde se
-    instancian pipelines concretos (SSOT).
+    La construcción concreta está completamente delegada a la factory (DIP·OCP).
+    Este módulo no instancia adaptadores ni infraestructura directamente.
+
+    Contrato de errores
+    -------------------
+    _build_pipeline: lanza PipelineBuildError si la construcción falla.
+    run():           lanza PipelineExecutionError si la ejecución falla.
+    Ambos son Fail-Fast — el caller decide cómo recuperarse.
 
     Uso básico (desarrollo / tests)
     --------------------------------
@@ -183,77 +192,58 @@ class PipelineOrchestrator:
         mode        = "incremental",
     ))
 
-    Uso con credenciales (producción via Dagster)
-    ----------------------------------------------
-    request = PipelineRequest(
-        exchange           = exc_name,
-        market_type        = market_type,
-        pipeline           = "ohlcv",
-        mode               = "incremental",
-        credentials        = exc_cfg.ccxt_credentials(),
-        resilience         = exc_cfg.resilience,
-        symbols            = exc_cfg.markets.spot_symbols,
-        timeframes         = app_cfg.pipeline.historical.timeframes,
-        start_date         = app_cfg.pipeline.historical.start_date,
-        auto_lookback_days = app_cfg.pipeline.historical.auto_lookback_days,
-        dry_run            = app_cfg.safety.dry_run,
-    )
-    summary = await orchestrator.run(request)
-
     Extensión (OCP)
     ---------------
     Añadir nuevo pipeline:
       1. Crear la clase (implementa PipelineTriggerPort)
-      2. Añadir case en _build_pipeline()
+      2. Añadir case en ConcretePipelineFactory.build()
       3. Añadir literal a PipelineType
-      Ningún caller existente cambia.
-
-    Fail-Soft
-    ---------
-    run() nunca lanza excepción al caller.
-    _build_pipeline() falla → retorna None con log de error.
-    pipeline.run() falla → retorna None con log de error.
+      Ningún código aquí cambia.
     """
 
-    def __init__(self, factory: Any = None) -> None:
+    def __init__(self, factory: PipelineFactoryPort | None = None) -> None:
         """
         Parámetros
         ----------
         factory : PipelineFactoryPort — composition root de pipelines.
-                  Default: ConcretePipelineFactory() — implementaciones concretas.
+                  None = caller debe inyectar en run().
                   Override en tests para inyectar mocks (DIP · OCP).
-
-        Fail-Fast: si factory no es None y no tiene método build(),
-        el error aparece en construcción, no en ejecución.
         """
-        if factory is None:
-            from market_data.factories.pipeline_factory import ConcretePipelineFactory
-            factory = ConcretePipelineFactory()
-        if not callable(getattr(factory, "build", None)):
-            raise TypeError(
-                f"PipelineOrchestrator: factory debe implementar build(request). "
-                f"Recibido: {type(factory)}"
-            )
         self._factory = factory
 
     async def run(
         self,
         request: PipelineRequest,
-    ) -> Optional[object]:
+        factory: PipelineFactoryPort | None = None,
+    ) -> object:
         """
         Ejecuta el pipeline descrito por el request.
 
+        Parámetros
+        ----------
+        request : PipelineRequest — DTO con parámetros del pipeline.
+        factory : PipelineFactoryPort — override por llamada. Si es None,
+                  usa la factory del constructor.
+
         Returns
         -------
-        PipelineSummary del pipeline ejecutado, o None si algo falló.
+        PipelineSummary del pipeline ejecutado.
 
-        SafeOps: nunca lanza excepción al caller.
+        Raises
+        ------
+        PipelineBuildError     : si la construcción del pipeline falla.
+        PipelineExecutionError : si la ejecución del pipeline falla.
         """
         logger.info("PipelineOrchestrator.run | {}", request)
 
-        # _build_pipeline() ahora lanza PipelineBuildError en lugar de retornar None.
-        # Fail-Fast: el caller conoce el fallo inmediatamente con contexto completo.
-        pipeline = self._build_pipeline(request)
+        f = factory or self._factory
+        if f is None:
+            raise PipelineBuildError(
+                "PipelineOrchestrator: se requiere factory — "
+                "inyectar via constructor o parámetro run()"
+            )
+
+        pipeline = self._build_pipeline(request, factory=f)
 
         try:
             summary = await pipeline.run(mode=request.mode)
@@ -272,32 +262,22 @@ class PipelineOrchestrator:
     def _build_pipeline(
         self,
         request: PipelineRequest,
+        factory: PipelineFactoryPort,
     ) -> PipelineTriggerPort:
         """
-        Factory interna — construye el pipeline correcto para el request.
+        Delega la construcción completa a la factory (DIP · SSOT).
 
-        Imports lazy dentro del método (DIP): application/ no depende
-        de adapters/ en nivel de módulo — la dependencia se resuelve
-        solo en construcción, nunca en import time.
+        ConcretePipelineFactory es el único módulo con licencia para
+        importar infraestructura concreta — este módulo no lo hace.
 
-        Returns None si la construcción falla (Fail-Soft hacia el caller).
+        Raises
+        ------
+        PipelineBuildError : si la factory no puede construir el pipeline.
         """
         try:
-            if request.pipeline == "ohlcv":
-                return self._build_ohlcv_pipeline(request)
-            elif request.pipeline == "trades":
-                return self._build_trades_pipeline(request)
-            elif request.pipeline == "derivatives":
-                return self._build_derivatives_pipeline(request)
-            else:
-                # Defensivo — PipelineRequest.__post_init__ ya validó.
-                logger.error(
-                    "PipelineOrchestrator._build_pipeline: tipo desconocido {}",
-                    request.pipeline,
-                )
-                return None
+            return factory.build(request)
         except PipelineBuildError:
-            raise  # Re-lanzar sin wrappear
+            raise  # Re-lanzar sin wrappear — ya tiene contexto
         except Exception as exc:
             logger.opt(exception=True).error(
                 "PipelineOrchestrator._build_pipeline FAILED | {}", request,
@@ -305,105 +285,3 @@ class PipelineOrchestrator:
             raise PipelineBuildError(
                 f"Error construyendo pipeline para: {request}"
             ) from exc
-
-    # ------------------------------------------------------------------
-    # Builders privados — SRP: uno por tipo de pipeline
-    # ------------------------------------------------------------------
-
-    def _build_ohlcv_pipeline(
-        self,
-        request: PipelineRequest,
-    ) -> PipelineTriggerPort:
-        """Delegado a la fábrica concreta (DIP — composition root)."""
-        return self._factory.build(request)
-
-    def _build_ohlcv_pipeline_RETIRED(
-        self,
-        request: PipelineRequest,
-    ) -> PipelineTriggerPort:
-        """RETIRED — lógica movida a market_data.factories.pipeline_factory.
-        Conservado como referencia histórica; se elimina en el próximo
-        ciclo de limpieza de deuda técnica.
-        """
-        from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
-
-        adapter_kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
-        }
-        if request.credentials is not None:
-            adapter_kwargs["credentials"] = request.credentials
-        if request.resilience is not None:
-            adapter_kwargs["resilience"] = request.resilience
-
-        adapter = CCXTAdapter(**adapter_kwargs)
-
-        # OHLCVPipeline.__init__ espera exchange_client= (CCXTAdapter),
-        # no adapter=. El exchange_id se deriva internamente via
-        # getattr(exchange_client, "_exchange_id", "unknown").
-        pipeline_kwargs: dict[str, Any] = {
-            "exchange_client": adapter,
-            "market_type":     request.market_type,
-            "dry_run":         request.dry_run,
-        }
-        if request.symbols is not None:
-            pipeline_kwargs["symbols"] = request.symbols
-        if request.timeframes is not None:
-            pipeline_kwargs["timeframes"] = request.timeframes
-        if request.start_date is not None:
-            pipeline_kwargs["start_date"] = request.start_date
-        if request.auto_lookback_days is not None:
-            pipeline_kwargs["auto_lookback_days"] = request.auto_lookback_days
-
-        return OHLCVPipeline(**pipeline_kwargs)
-
-    def _build_trades_pipeline(
-        self,
-        request: PipelineRequest,
-    ) -> PipelineTriggerPort:
-        """Construye TradesPipeline. Import lazy (DIP)."""
-        from market_data.application.pipelines.trades_pipeline import TradesPipeline
-
-        adapter_kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
-        }
-        if request.credentials is not None:
-            adapter_kwargs["credentials"] = request.credentials
-        if request.resilience is not None:
-            adapter_kwargs["resilience"] = request.resilience
-
-        adapter = CCXTAdapter(**adapter_kwargs)
-
-        return TradesPipeline(
-            symbols         = request.symbols or [],
-            exchange_client = adapter,
-            market_type     = request.market_type,
-            dry_run         = request.dry_run,
-        )
-
-    def _build_derivatives_pipeline(
-        self,
-        request: PipelineRequest,
-    ) -> PipelineTriggerPort:
-        """Construye DerivativesPipeline. Import lazy (DIP)."""
-        from market_data.application.pipelines.derivatives_pipeline import DerivativesPipeline
-
-        adapter_kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
-        }
-        if request.credentials is not None:
-            adapter_kwargs["credentials"] = request.credentials
-        if request.resilience is not None:
-            adapter_kwargs["resilience"] = request.resilience
-
-        adapter = CCXTAdapter(**adapter_kwargs)
-
-        return DerivativesPipeline(
-            symbols         = request.symbols or [],
-            datasets        = request.datasets or [],
-            exchange_client = adapter,
-            market_type     = request.market_type,
-            dry_run         = request.dry_run,
-        )

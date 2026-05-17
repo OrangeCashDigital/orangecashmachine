@@ -26,6 +26,10 @@ Principio: Fail-Fast en el punto más temprano posible.
 """
 from __future__ import annotations
 
+# ALLOWED_ENVS: re-export desde ocm.observability.config (SSOT)
+# La constante pertenece a observability — aquí solo para backwards compat.
+from ocm.observability.config import ALLOWED_ENVS as ALLOWED_ENVS  # noqa: F401
+
 # =============================================================================
 # Proceso — leídas por RunConfig.from_env()
 # =============================================================================
@@ -106,10 +110,6 @@ Override en producción: KAFKA_ENABLED=true en .env o env del sistema."""
 # =============================================================================
 # Valores permitidos y helpers
 # =============================================================================
-
-# ALLOWED_ENVS: re-export desde ocm.observability.config (SSOT)
-# La constante pertenece a observability — aquí solo para backwards compat.
-from ocm.observability.config import ALLOWED_ENVS as ALLOWED_ENVS  # noqa: F401
 
 _DEBUG_DEFAULTS: dict[str, bool] = {
     "development": True,

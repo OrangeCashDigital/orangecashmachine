@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 ocm/observability/filters.py
 ======================================
@@ -20,6 +18,8 @@ Contratos
 - ``strict_pipeline_filter`` — variante para sinks que requieren
                                exchange + dataset obligatorios.
 """
+
+from __future__ import annotations
 
 from typing import Any
 

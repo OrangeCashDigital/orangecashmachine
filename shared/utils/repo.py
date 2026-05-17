@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 shared/utils/repo.py
 ====================
@@ -18,6 +16,8 @@ Por qué en shared/utils/:
 
 Principios: SRP · SSOT · DRY · Fail-Fast
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 

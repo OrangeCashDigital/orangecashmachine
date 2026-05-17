@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 core/config/structured/observability.py
 ========================================
@@ -16,6 +14,8 @@ El test tests/config/test_structured_parity.py verifica esto en CI.
 Campos opcionales de Loki (loki_url, loki_labels): default None / {}
 para mantener compatibilidad con entornos sin Loki (dev, CI).
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, Optional

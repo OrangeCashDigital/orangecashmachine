@@ -35,8 +35,10 @@ if TYPE_CHECKING:
     # y evitando conexiones Redis en tests (SafeOps · DIP).
     from ocm.runtime.state.factories import LatenessCalibrationStore
 
+from market_data.ports.outbound.state import AsyncCursorStorePort as CursorStore
 from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.ports.outbound.transformer import OHLCVTransformerPort
+from ocm.runtime.state import InMemoryCursorStore  # fachada pública — BC-22
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
@@ -242,14 +244,6 @@ class DownloadResult:
     @property
     def has_data(self) -> bool:
         return not self.df.empty
-
-
-# ==========================================================
-# CursorStore import (aqui para evitar circular import)
-# ==========================================================
-
-from market_data.ports.outbound.state import AsyncCursorStorePort as CursorStore
-from ocm.runtime.state import InMemoryCursorStore  # fachada pública — BC-22
 
 
 # ==========================================================
