@@ -42,7 +42,7 @@ from pyiceberg.expressions import And, EqualTo
 
 from market_data.infrastructure.storage.gold.transformer import GoldTransformer, VERSION as _TRANSFORMER_VERSION
 from market_data.infrastructure.storage.iceberg.catalog import ensure_gold_table, get_catalog
-from market_data.ports.outbound.storage import OHLCVStorage
+from market_data.ports.outbound.storage import OHLCVStorage, SnapshottableStoragePort
 
 # Columnas en orden canónico para gold.features
 _GOLD_COLS = [
@@ -77,7 +77,7 @@ class GoldStorage:
     def __init__(
         self,
         dry_run:        bool            = False,
-        silver_storage: OHLCVStorage    = None,  # type: ignore[assignment]
+        silver_storage: Optional[SnapshottableStoragePort] = None,
         # gold_path: aceptado por compatibilidad con código legacy.
         # Ya no tiene efecto — Gold usa Iceberg.
         gold_path:      object          = None,
@@ -97,7 +97,7 @@ class GoldStorage:
         self._engineer_version = _TRANSFORMER_VERSION
         # DIP: silver_storage inyectado — testeable sin Iceberg real.
         # None = lazy init en build() para compatibilidad con callers existentes.
-        self._silver_storage: OHLCVStorage | None = silver_storage
+        self._silver_storage: SnapshottableStoragePort | None = silver_storage
         if not dry_run:
             ensure_gold_table()
             self._table = get_catalog().load_table("gold.features")
@@ -141,6 +141,7 @@ class GoldStorage:
         """
         # DIP: usar silver_storage inyectado o crear lazy (compatibilidad).
         # Preferir inyección explícita desde el composition root.
+        silver: SnapshottableStoragePort
         if self._silver_storage is not None:
             silver = self._silver_storage
         else:
@@ -150,7 +151,7 @@ class GoldStorage:
 
         # Capturar snapshot ANTES del load — ancla el lineage al punto exacto
         # en el tiempo que Gold usó como fuente.
-        _snap    = silver.get_current_snapshot() or {}  # type: ignore[attr-defined]
+        _snap    = silver.get_current_snapshot() or {}
         _snap_id = _snap.get("snapshot_id", 0)
         _snap_ms = _snap.get("timestamp_ms", 0)
 

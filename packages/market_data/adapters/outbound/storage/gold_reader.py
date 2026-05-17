@@ -1,22 +1,24 @@
-# -*- coding: utf-8 -*-
 """
 market_data/adapters/outbound/storage/gold_reader.py
 =====================================================
 
-GoldReader — adaptador concreto de FeatureReaderPort.
+GoldReader — adaptador concreto de FeatureReaderPort sobre Iceberg.
 
 Responsabilidad única
 ---------------------
-Leer features desde Iceberg gold.features usando pyiceberg directamente.
-Implementa FeatureReaderPort — el único adaptador activo para Gold.
+Leer features desde la tabla Iceberg gold.features con soporte de
+versionado por snapshot (time travel).
 
-Migrado desde data_platform/loaders/gold_loader.py.
-data_platform NO debe acceder al catalog Iceberg directamente (DIP).
+Clean Architecture
+------------------
+Este adapter está en la capa de infraestructura, entre el dominio y
+Apache Iceberg. El catalog se importa lazy para evitar circular imports
+y diferir I/O al primer acceso real (SafeOps en tests/CI).
 
 Versionado
 ----------
   version="latest"   → snapshot actual (default)
-  version=<int>      → snapshot_id exacto (reproducible)
+  version=<int>      → snapshot_id exacto (reproducibilidad)
   as_of=<ISO 8601>   → snapshot vigente en ese instante (time travel)
 
 SafeOps
@@ -41,6 +43,10 @@ from market_data.domain.exceptions import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Constantes
+# ---------------------------------------------------------------------------
+
 _BASE_COLS = (
     "timestamp", "open", "high", "low", "close", "volume",
     "exchange", "market_type", "symbol", "timeframe",
@@ -48,12 +54,21 @@ _BASE_COLS = (
 )
 
 
+# ---------------------------------------------------------------------------
+# GoldReader
+# ---------------------------------------------------------------------------
+
 class GoldReader:
     """
     Adaptador de lectura Gold sobre Apache Iceberg.
 
     Implementa FeatureReaderPort estructuralmente (Protocol — duck typing).
     No hereda explícitamente para evitar acoplamiento a la interfaz abstracta.
+
+    Lazy init
+    ---------
+    El catalog Iceberg se inicializa en el primer acceso real (_get_table()).
+    En tests/CI sin catálogo disponible, la instancia se crea sin error.
 
     Uso
     ---
@@ -63,12 +78,9 @@ class GoldReader:
                                   as_of="2026-03-17T22:40:00Z")
     """
 
-    def __init__(
-        self,
-        exchange:  Optional[str] = None,
-    ) -> None:
+    def __init__(self, exchange: Optional[str] = None) -> None:
         self._exchange = exchange.lower() if exchange else None
-        self._table    = None  # lazy — solo en el primer acceso real
+        self._table    = None  # lazy — inicializado en primer acceso real
         logger.debug(
             "GoldReader created | backend=iceberg exchange={}",
             self._exchange or "any",
@@ -77,9 +89,15 @@ class GoldReader:
     # ── Lazy init ─────────────────────────────────────────────────────────────
 
     def _get_table(self):
-        """Inicializa el catalog Iceberg en el primer acceso. Thread-safe vía GIL."""
+        """
+        Inicializa el catalog Iceberg en el primer acceso. Thread-safe vía GIL.
+
+        Lazy import del catalog: evita circular imports en módulo-nivel y
+        diferir I/O al catálogo hasta que sea estrictamente necesario.
+        ignore_missing_imports = true en pyproject.toml cubre pyiceberg.
+        """
         if self._table is None:
-            from market_data.infrastructure.storage.iceberg.catalog import (  # type: ignore[import-untyped]
+            from market_data.infrastructure.storage.iceberg.catalog import (
                 ensure_gold_table,
                 get_catalog,
             )
@@ -103,7 +121,12 @@ class GoldReader:
         columns:     Optional[List[str]] = None,
         exchange:    Optional[str]       = None,
     ) -> pd.DataFrame:
-        """Carga features Gold para un símbolo/timeframe desde Iceberg."""
+        """
+        Carga features Gold para un símbolo/timeframe desde Iceberg.
+
+        Fail-Fast: lanza DataNotFoundError si no hay datos.
+        Fail-Fast: lanza DataReadError si Iceberg falla.
+        """
         exch       = (exchange or self._exchange or "").lower()
         row_filter = _build_filter(exch, symbol, market_type, timeframe)
         snap_id    = self._resolve_snapshot(version, as_of)
@@ -172,7 +195,7 @@ class GoldReader:
     ) -> List[Dict]:
         """Datasets Gold disponibles para exchange/market_type. SafeOps: retorna [] ante error."""
         try:
-            seen:   set       = set()
+            seen:   set        = set()
             result: List[Dict] = []
             _tbl = self._get_table()
             for entry in _tbl.history():
@@ -256,7 +279,7 @@ class GoldReader:
         if as_of is not None:
             target_ms = int(pd.Timestamp(as_of, tz="UTC").timestamp() * 1000)
             try:
-                _tbl = self._get_table()
+                _tbl     = self._get_table()
                 history  = _tbl.history()
                 eligible = [s for s in history if s.timestamp_ms <= target_ms]
                 if not eligible:
@@ -275,7 +298,7 @@ class GoldReader:
         if isinstance(version, str) and version.startswith("v"):
             raise VersionNotFoundError(
                 f"Formato legacy '{version}' incompatible con Iceberg. "
-                f"Usa snapshot_id entero o version='latest'."
+                "Usa snapshot_id entero o version='latest'."
             )
 
         try:
@@ -283,11 +306,13 @@ class GoldReader:
         except (ValueError, TypeError):
             raise VersionNotFoundError(
                 f"Versión inválida '{version}' — "
-                f"usa 'latest', snapshot_id entero, o as_of=ISO timestamp"
+                "usa 'latest', snapshot_id entero, o as_of=ISO timestamp"
             )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _build_filter(
     exchange:    str,
@@ -295,9 +320,15 @@ def _build_filter(
     market_type: str,
     timeframe:   str,
 ):
+    """
+    Construye el filtro Iceberg para el cuarteto (exchange, symbol, market_type, timeframe).
+
+    pyiceberg EqualTo acepta (term, literal) como argumentos posicionales.
+    No usar keyword arguments — la API de pyiceberg no los soporta.
+    """
     return And(
-        And(EqualTo(term="exchange", literal=exchange), EqualTo(term="symbol", literal=symbol)),  # type: ignore[call-arg,arg-type]
-        And(EqualTo(term="market_type", literal=market_type), EqualTo(term="timeframe", literal=timeframe)),  # type: ignore[call-arg,arg-type]
+        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),
+        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),
     )
 
 

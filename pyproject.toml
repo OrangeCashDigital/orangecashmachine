@@ -711,3 +711,15 @@ forbidden_modules = [
     "market_data.infrastructure.kafka.serializer",
     "market_data.infrastructure.kafka.topics",
 ]
+
+# ---------------------------------------------------------------------------
+# mypy overrides — librerías sin py.typed
+# ---------------------------------------------------------------------------
+# pyiceberg no incluye py.typed ni stubs oficiales.
+# ignore_missing_imports = true (global) ya suprime ImportMissingStubs,
+# pero ignore_errors = true aquí previene errores de tipo transitivos
+# que pyiceberg puede filtrar hacia nuestro código cuando mypy sigue
+# los imports a través de sus módulos internos.
+[[tool.mypy.overrides]]
+module        = ["pyiceberg.*"]
+ignore_errors = true

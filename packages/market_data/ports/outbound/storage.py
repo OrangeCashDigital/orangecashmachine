@@ -251,3 +251,40 @@ class StorageFactoryPort(Protocol):
         """
         ...
 
+
+
+# ---------------------------------------------------------------------------
+# Snapshottable storage port (ISP — no contaminar OHLCVStorage base)
+# ---------------------------------------------------------------------------
+
+class SnapshottableStoragePort(OHLCVStorage, Protocol):
+    """
+    OHLCVStorage con capacidad de snapshot Iceberg para lineage tracking.
+
+    Principio ISP
+    -------------
+    get_current_snapshot() es específica de Iceberg y NO pertenece al
+    contrato base OHLCVStorage — no todos los backends de storage soportan
+    snapshots. Este Protocol extiende el base solo para callers que
+    necesitan lineage (GoldStorage.build()).
+
+    Implementado por : IcebergStorage (structurally — sin herencia explícita)
+    Usado por        : GoldStorage.build() para anclar el lineage de Silver
+
+    Principios: ISP · DIP · SRP · SSOT
+    """
+
+    def get_current_snapshot(self) -> Optional[dict]:
+        """
+        Retorna metadatos del snapshot actual del backend.
+
+        Returns
+        -------
+        dict con campos:
+            snapshot_id  (int) — ID del snapshot Iceberg
+            timestamp_ms (int) — timestamp epoch ms del snapshot
+        None si el backend no tiene datos aún (primer ingesta).
+
+        SafeOps: retorna None en lugar de lanzar si no hay snapshots.
+        """
+        ...
