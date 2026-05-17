@@ -194,13 +194,7 @@ ignore = []
 "apps/app/cli/*.py"                                                  = ["E402"]
 "infrastructure/redis/redis_stream.py"                               = ["E402"]
 "packages/market_data/adapters/inbound/data_providers/*.py"          = ["E402"]
-"packages/market_data/adapters/inbound/rest/ohlcv_fetcher.py"        = ["E402"]
-"packages/market_data/application/use_cases/pipeline_orchestrator.py" = ["E402"]
 "packages/market_data/ports/outbound/observability.py"                = ["E402"]
-"ocm/config/env_vars.py"                                              = ["E402"]
-"ocm/config/structured/observability.py"                              = ["E402"]
-"ocm/observability/filters.py"                                        = ["E402"]
-"shared/utils/repo.py"                                                = ["E402"]
 # ── Tests — imports condicionales y fixtures con setup previo ───────────────
 "tests/**/*.py"                                                      = ["E402"]
 
