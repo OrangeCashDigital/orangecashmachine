@@ -14,8 +14,17 @@ Contrato: BC-09 en pyproject.toml lo hace cumplir automáticamente.
 from shared.types.timeframe import Timeframe
 from shared.types.signal import Signal, SignalType
 from shared.types.ohlcv import OHLCVBar
-from shared.types.order_events import OrderFilled, OrderRejected, OrderCancelled
-from shared.types.position_events import PositionOpened, PositionClosed
+from shared.types.order_events import (
+    OrderSide,
+    OrderFilled,
+    OrderRejected,
+    OrderCancelled,
+)
+from shared.types.position_events import (
+    PositionSide,
+    PositionOpened,
+    PositionClosed,
+)
 from shared.types.rebalance_events import RebalanceTriggered, RebalanceCompleted
 
 __all__ = [
@@ -23,9 +32,11 @@ __all__ = [
     "Signal",
     "SignalType",
     "OHLCVBar",
+    "OrderSide",
     "OrderFilled",
     "OrderRejected",
     "OrderCancelled",
+    "PositionSide",
     "PositionOpened",
     "PositionClosed",
     "RebalanceTriggered",

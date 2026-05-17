@@ -219,7 +219,7 @@ class OHLCVBar:
 
     def __str__(self) -> str:
         return (
-            f"OHLCVBar({self.exchange}:{self.symbol}/{self.timeframe}"
+            f"OHLCVBar({self.exchange}:{self.symbol}/{self.timeframe.value}"
             f" {self.timestamp.strftime('%Y-%m-%dT%H:%M')}Z"
             f" O={self.open:.4f} H={self.high:.4f}"
             f" L={self.low:.4f} C={self.close:.4f}"

@@ -136,9 +136,19 @@ class OMS:
             return None
 
         # Crear orden
+        # signal.signal → campo de dominio; OrderSide acepta "buy"|"sell".
+        # Cuando sprint naming complete Signal.signal → Signal.direction,
+        # cambiar aquí a: OrderSide(signal.direction)
+        raw_side = getattr(signal, "direction", None) or getattr(signal, "signal", None)
+        if raw_side not in ("buy", "sell"):
+            self._log.error(
+                "submit: side inválido | symbol={} side={}",
+                signal.symbol, raw_side,
+            )
+            return None
         order = Order(
             symbol   = signal.symbol,
-            side     = OrderSide(signal.signal),
+            side     = OrderSide(raw_side),
             size_pct = decision.size_pct,
             signal   = signal,
         )
@@ -216,6 +226,20 @@ class OMS:
 
     def get_order(self, order_id: str) -> Optional[Order]:
         return self._orders.get(order_id)
+
+    def validate_signal(self, signal) -> object:
+        """
+        Expone la validación de riesgo como API pública del OMS.
+
+        Permite que TradingEngine y PaperBot validen señales sin acceder
+        a self._risk directamente (Law of Demeter). El OMS es el punto
+        de entrada correcto para cualquier interacción con el RiskManager.
+
+        Returns
+        -------
+        RiskDecision con campos: rejected (bool), reason (str), size_pct (float).
+        """
+        return self._risk.validate(signal)
 
     def summary(self) -> dict:
         with self._lock:

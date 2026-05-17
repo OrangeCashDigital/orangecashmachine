@@ -179,14 +179,20 @@ class OrderRejectedPayload(BasePayload):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OrderRejectedPayload":
+        version = int(data.get("event_version", 1))
+        if version != ORDER_REJECTED_SCHEMA_VERSION:
+            raise OrderSchemaVersionError(
+                f"OrderRejectedPayload schema v{version} incompatible "
+                f"con v{ORDER_REJECTED_SCHEMA_VERSION} esperada."
+            )
         return cls(
             event_id        = str(data["event_id"]),
-            event_version   = int(data.get("event_version", 1)),
+            event_version   = version,
             occurred_at     = str(data.get("occurred_at", "")),
             order_id        = str(data["order_id"]),
             exchange        = str(data["exchange"]),
             symbol          = str(data["symbol"]),
-            side            = data.get("side", "buy"),
+            side            = data["side"],
             reason          = str(data.get("reason", "")),
             signal_event_id = str(data.get("signal_event_id", "")),
             run_id          = str(data.get("run_id", "")),

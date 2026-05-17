@@ -17,7 +17,15 @@ Principios: DIP · OCP · SSOT
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
+
+# SSOT de dirección de señal en la capa de contratos.
+# Naming canónico pendiente de unificación (sprint naming):
+#   dominio  → Signal.signal:    SignalType   ("buy"|"sell"|"hold")
+#   protocolo→ SignalProtocol.direction (este archivo)
+#   wire     → SignalPayload.direction  (shared/kafka/schemas/signals.py)
+# Cuando se complete el sprint: Signal.signal → Signal.direction en shared/types/signal.py
+SignalDirection = Literal["buy", "sell", "hold"]
 
 
 # =============================================================================
@@ -64,7 +72,8 @@ class SignalProtocol(Protocol):
 
     symbol:     str
     timeframe:  str
-    signal:     str       # "buy" | "sell" | "hold"
+    # DEUDA NAMING (sprint): renombrar a 'direction' cuando Signal.signal → Signal.direction
+    signal:     SignalDirection
     price:      float
     confidence: float
     timestamp:  datetime

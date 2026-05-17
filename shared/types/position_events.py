@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
+
+PositionSide = Literal["long", "short"]
 
 
 @dataclass(frozen=True)
@@ -26,7 +28,7 @@ class PositionOpened:
     order_id:    str
     symbol:      str
     exchange:    str
-    side:        str        # "long" | "short"
+    side:        PositionSide
     entry_price: float
     size_pct:    float
     opened_at:   datetime
@@ -69,6 +71,7 @@ class PositionClosed:
     order_id:    str
     symbol:      str
     exchange:    str
+    side:        PositionSide
     entry_price: float
     exit_price:  float
     size_pct:    float
@@ -82,6 +85,7 @@ class PositionClosed:
         order_id:    str,
         symbol:      str,
         exchange:    str,
+        side:        PositionSide,
         entry_price: float,
         exit_price:  float,
         size_pct:    float,
@@ -89,11 +93,17 @@ class PositionClosed:
         closed_at:   Optional[datetime] = None,
     ) -> "PositionClosed":
         ts      = closed_at or datetime.now(timezone.utc)
-        pnl_pct = (exit_price - entry_price) / entry_price if entry_price > 0 else 0.0
+        if entry_price <= 0:
+            raise ValueError(
+                f"PositionClosed.from_positions: entry_price debe ser > 0, "
+                f"recibido: {entry_price!r} — posible corrupción de datos."
+            )
+        pnl_pct = (exit_price - entry_price) / entry_price
         return cls(
             order_id    = order_id,
             symbol      = symbol,
             exchange    = exchange,
+            side        = side,
             entry_price = entry_price,
             exit_price  = exit_price,
             size_pct    = size_pct,

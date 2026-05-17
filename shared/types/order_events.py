@@ -12,6 +12,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Literal
+
+OrderSide = Literal["buy", "sell"]
 
 
 @dataclass(frozen=True)
@@ -35,7 +38,7 @@ class OrderFilled:
     order_id:   str
     symbol:     str
     exchange:   str
-    side:       str        # "buy" | "sell"
+    side:       OrderSide
     fill_price: float
     size_pct:   float
     filled_at:  datetime
@@ -80,7 +83,7 @@ class OrderRejected:
     order_id:    str
     symbol:      str
     exchange:    str
-    side:        str
+    side:        OrderSide
     reason:      str
     rejected_at: datetime
 
