@@ -183,7 +183,7 @@ def query_runs(
         params.append(limit)
 
         cur = conn.execute(
-            f"SELECT * FROM runs {where} ORDER BY timestamp DESC LIMIT ?",
+            f"SELECT * FROM runs {where} ORDER BY timestamp DESC LIMIT ?",  # nosec B608 — where construido solo con literales internos; valores via params parametrizados
             params,
         )
         rows = cur.fetchall()

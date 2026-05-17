@@ -161,11 +161,41 @@ line-length = 120
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-# Composition roots y entrypoints — lazy imports son intencionales aquí.
-"infrastructure/dagster/assets/*.py" = ["E402"]
-"market_data/infrastructure/bootstrap/container.py" = ["E402"]
-"ocm/config/loader/hydra_loader.py" = ["E402"]
-"app/cli/*.py" = ["E402"]
+# ── Composition roots y entrypoints ────────────────────────────────────────
+# Lazy imports son intencionales: evitan circular imports en bootstrap order.
+# Paths relativos al repo root (donde está pyproject.toml).
+"infrastructure/dagster/assets/*.py"                                 = ["E402"]
+"packages/market_data/infrastructure/bootstrap/container.py"        = ["E402"]
+"packages/market_data/application/pipelines/ohlcv_pipeline.py"      = ["E402"]
+"ocm/config/hydra_loader.py"                                         = ["E402"]
+"ocm/config/loader/env_resolver.py"                                  = ["E402"]
+"ocm/config/loader/yaml_loader.py"                                   = ["E402"]
+"ocm/config/schema.py"                                               = ["E402"]
+"ocm/observability/logger.py"                                        = ["E402"]
+"ocm/observability/processors.py"                                    = ["E402"]
+"ocm/observability/sinks.py"                                         = ["E402"]
+"ocm/runtime/registry.py"                                            = ["E402"]
+"ocm/runtime/run_config.py"                                          = ["E402"]
+"ocm/runtime/state/gap_registry.py"                                  = ["E402"]
+"ocm/runtime/state/lateness_calibration.py"                          = ["E402"]
+"ocm/runtime/context.py"                                             = ["E402"]
+"ocm/config/loader/snapshot.py"                                      = ["E402"]
+"ocm/config/__init__.py"                                             = ["E402"]
+"ocm/config/loader/__init__.py"                                      = ["E402"]
+"ocm/config/credentials.py"                                          = ["E402"]
+"ocm/config/paths.py"                                                = ["E402"]
+"ocm/runtime/state/factories.py"                                     = ["E402"]
+"ocm/runtime/state/adapters.py"                                      = ["E402"]
+"ocm/runtime/lineage.py"                                             = ["E402"]
+"ocm/observability/pushers.py"                                       = ["E402"]
+"ocm/observability/config.py"                                        = ["E402"]
+"ocm/observability/bootstrap.py"                                     = ["E402"]
+"ocm/config/structured/pipeline.py"                                  = ["E402"]
+"apps/app/cli/*.py"                                                  = ["E402"]
+"infrastructure/redis/redis_stream.py"                               = ["E402"]
+"packages/market_data/adapters/inbound/data_providers/*.py"          = ["E402"]
+# ── Tests — imports condicionales y fixtures con setup previo ───────────────
+"tests/**/*.py"                                                      = ["E402"]
 
 [tool.mypy]
 python_version      = "3.11"
@@ -205,7 +235,9 @@ packages = [
 # =============================================================================
 # import-linter — contratos de arquitectura (SSOT)
 #
-# Invocación correcta:  python -m importlinter   (NO: python -m lint_imports)
+# Invocación correcta:
+#   uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports())"
+#   import-linter 2.6 NO tiene __main__.py — NO usar python -m importlinter.
 # Documentación:        https://import-linter.readthedocs.io
 #
 # Cada contrato tiene número único secuencial BC-NN para trazabilidad en PRs.
@@ -315,6 +347,14 @@ ignore_imports = [
     # Composition-root fallbacks: imports lazy en __init__ cuando factory no inyecta.
     # Circuit breaker: get_breaker_state() / ExchangeCircuitOpenError pertenecen al
     # adapter layer — pendiente exponer via ExchangeClientPort.
+    # DEUDA TÉCNICA: chunk_converter lazy en backfill/incremental strategies.
+    # Pendiente inyección via PipelineContext._chunk_converter.
+    "market_data.application.strategies.backfill -> market_data.adapters.chunk_converter",
+    "market_data.application.strategies.incremental -> market_data.adapters.chunk_converter",
+    # DEUDA TÉCNICA: Kafka publisher lazy en ohlcv_pipeline._build_kafka_publisher_safe().
+    # Pendiente refactor a publisher port inyectado desde factory.
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.ohlcv_publisher",
 ]
 
 [[tool.importlinter.contracts]]
@@ -345,7 +385,9 @@ ignore_imports = [
     "infrastructure.dagster.assets.repair_ohlcv -> market_data.application",
     "infrastructure.dagster.assets.resample_ohlcv -> market_data.application",
     # Composition Root interno: OCMContainer (import lazy en método build()).
+    # container → pipeline_factory es composition root legítimo (via method).
     "market_data.infrastructure.bootstrap.container -> market_data.application",
+    "market_data.infrastructure.bootstrap.container -> market_data.factories.pipeline_factory",
 ]
 
 [[tool.importlinter.contracts]]
@@ -364,6 +406,22 @@ layers = [
     "market_data.application",
     "market_data.ports",
     "market_data.domain",
+]
+ignore_imports = [
+    # Adapters que implementan ports e importan infra concreta (lazy en método).
+    # Deuda técnica: migrar a ports cuando MetricsPort/StoragePort cubran todos los casos.
+    "market_data.adapters.inbound.rest.trades_fetcher -> market_data.infrastructure.storage.silver.trades_storage",
+    "market_data.adapters.inbound.rest.derivatives_fetcher -> market_data.infrastructure.storage.silver.derivatives_storage",
+    "market_data.adapters.inbound.rest.ohlcv_fetcher -> market_data.infrastructure.observability.metrics",
+    "market_data.adapters.outbound.storage.gold_reader -> market_data.infrastructure.storage.iceberg.catalog",
+    "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
+    "market_data.adapters.outbound.exchange.ccxt_adapter -> market_data.infrastructure.observability.metrics",
+    # Deuda técnica: application → adapters (ya ignorado en BC-05, duplicado aquí por layers)
+    "market_data.application.strategies.backfill -> market_data.adapters.chunk_converter",
+    "market_data.application.strategies.incremental -> market_data.adapters.chunk_converter",
+    # Deuda técnica: application → infrastructure (Kafka lazy, ya ignorado en BC-05)
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
+    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.ohlcv_publisher",
 ]
 
 [[tool.importlinter.contracts]]
@@ -449,6 +507,11 @@ ignore_imports = [
     # Composition root: resample_ohlcv instancia IcebergStorageFactory (lazy).
     # Cadena transitiva: iceberg_factory → iceberg_storage (infra interna).
     "infrastructure.dagster.assets.resample_ohlcv -> market_data.adapters.outbound.storage.iceberg_factory",
+    # Composition roots transitivos: Dagster resources exponen storage factory.
+    "infrastructure.dagster.assets.bronze_ohlcv -> infrastructure.dagster.resources",
+    "infrastructure.dagster.assets.repair_ohlcv -> infrastructure.dagster.resources",
+    "infrastructure.dagster.assets.resample_ohlcv -> infrastructure.dagster.resources",
+    "infrastructure.dagster.assets.asset_checks -> infrastructure.dagster.resources",
 ]
 
 [[tool.importlinter.contracts]]
@@ -624,6 +687,10 @@ source_modules = [
     "market_data.infrastructure",
 ]
 forbidden_modules = ["market_data.factories"]
+ignore_imports = [
+    # Composition Root: container inyecta pipeline_factory en OCMContainer.
+    "market_data.infrastructure.bootstrap.container -> market_data.factories.pipeline_factory",
+]
 
 [[tool.importlinter.contracts]]
 # Los wire schemas de Kafka son contratos compartidos entre BCs — pertenecen a

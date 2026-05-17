@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any, List, Literal, Optional
 
 if TYPE_CHECKING:
     from market_data.ports.outbound.exchange_client import ExchangeClientPort
-    from market_data.adapters.outbound.exchange.throttle import AdaptiveThrottle
+    from market_data.ports.outbound.throttle import ThrottlePort
 
 from ocm.observability import bind_pipeline
 
@@ -92,7 +92,6 @@ from market_data.domain.policies.base import (
 from market_data.application.strategies.backfill    import BackfillStrategy
 from market_data.application.strategies.incremental import IncrementalStrategy
 from market_data.application.strategies.repair      import RepairStrategy
-from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
@@ -234,7 +233,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         market_type:        str                        = "spot",
         dry_run:            bool                       = False,
         auto_lookback_days: int                        = 3650,
-        throttle:           Optional[AdaptiveThrottle] = None,
+        throttle:           "Optional[ThrottlePort]" = None,
     ) -> None:
         # Fail-fast: dependencias de infraestructura obligatorias.
         # OHLCVPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).

@@ -101,7 +101,7 @@ class TestEventPayload:
         required = {
             "event_id", "exchange", "symbol", "timeframe",
             "batch_start_ts", "bars", "event_version", "meta",
-            "source", "run_id",
+            "source", "run_id", "occurred_at",
         }
         assert required == set(d.keys())
 

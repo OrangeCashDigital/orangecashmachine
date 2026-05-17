@@ -77,7 +77,7 @@ _log = bind_pipeline("market_data.main")
 # Configuración del servicio — leída de env vars con defaults sensatos
 # ---------------------------------------------------------------------------
 
-_HOST:             str   = os.getenv(env_vars.MARKET_DATA_HOST,   "0.0.0.0")
+_HOST:             str   = os.getenv(env_vars.MARKET_DATA_HOST,   "0.0.0.0")  # nosec B104 — bind a todas las interfaces intencional en contenedor Docker
 _PORT:             int   = int(os.getenv(env_vars.MARKET_DATA_PORT, "8001"))
 _INGESTION_INTERVAL_S: float = float(os.getenv(env_vars.INGESTION_INTERVAL_S, "300"))  # 5 min entre runs
 _SERVICE_NAME:     str   = "market-data-service"
@@ -295,9 +295,9 @@ async def _lifespan(app: FastAPI):
     2. Cancelar background task
     3. Esperar cleanup
     """
-    global _state
-
     # ── Startup ──────────────────────────────────────────────────────────────
+    # _state: objeto mutable de proceso — no necesita `global` porque no
+    # reasignamos la variable, solo mutamos sus atributos.
     _log.info("service_starting", service=_SERVICE_NAME, version=_VERSION)
 
     ctx = build_context()
@@ -362,7 +362,12 @@ async def _lifespan(app: FastAPI):
             if not task.done():
                 task.cancel()
                 try:
-                    await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
+                    # FIX C-05: shield+wait_for creaba tasks zombie.
+                    # shield() previene la cancelación pero wait_for igual
+                    # lanza TimeoutError y la task shielded sigue corriendo.
+                    # Correcto: cancel() + wait_for sin shield — la task recibe
+                    # CancelledError y puede hacer cleanup en su try/finally.
+                    await asyncio.wait_for(task, timeout=10.0)
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass
 

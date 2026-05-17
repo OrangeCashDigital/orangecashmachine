@@ -23,7 +23,7 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 if TYPE_CHECKING:
-    from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
+    from market_data.ports.outbound.transformer import OHLCVTransformerPort
 
 import pandas as pd
 from ocm.observability import bind_pipeline
@@ -36,17 +36,11 @@ if TYPE_CHECKING:
     from ocm.runtime.state.factories import LatenessCalibrationStore
 
 from market_data.ports.outbound.storage import OHLCVStorage
-from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
+from market_data.ports.outbound.transformer import OHLCVTransformerPort
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
     RetryExhaustedError,
-)
-from market_data.infrastructure.observability.metrics import (
-    FETCH_CHUNK_DURATION,
-    FETCH_CHUNKS_TOTAL,
-    CANDLE_DELAY_MS,
-    FETCH_CHUNK_ERRORS_TOTAL,
 )
 import time
 
@@ -58,6 +52,24 @@ import time
 # DEFAULT_CHUNK_LIMIT: SSOT en domain/constants.py.
 # Re-exportado aquí para compat con callers legacy que importan desde el fetcher.
 from market_data.domain.constants import DEFAULT_CHUNK_LIMIT  # noqa: F401
+
+
+def _fetcher_metrics():
+    from market_data.infrastructure.observability.metrics import (
+        FETCH_CHUNK_DURATION,
+        FETCH_CHUNKS_TOTAL,
+        CANDLE_DELAY_MS,
+        FETCH_CHUNK_ERRORS_TOTAL,
+    )
+    return {
+        "FETCH_CHUNK_DURATION": FETCH_CHUNK_DURATION,
+        "FETCH_CHUNKS_TOTAL": FETCH_CHUNKS_TOTAL,
+        "CANDLE_DELAY_MS": CANDLE_DELAY_MS,
+        "FETCH_CHUNK_ERRORS_TOTAL": FETCH_CHUNK_ERRORS_TOTAL,
+    }
+
+
+_m = _fetcher_metrics()  # type: ignore[unused-variable]
 MAX_CHUNKS_PER_RUN    = 100_000
 DEFAULT_OVERLAP_BARS  = 3
 
@@ -254,7 +266,7 @@ class HistoricalFetcherAsync:
         self,
         exchange_client:    CCXTAdapter,
         storage:            Optional[OHLCVStorage]      = None,
-        transformer: "OHLCVTransformer | None" = None,
+        transformer: "OHLCVTransformerPort | None" = None,
         overlap_bars:       int                         = DEFAULT_OVERLAP_BARS,
         cursor_store:       Optional[CursorStore]       = None,
         backfill_mode:        bool                      = False,
@@ -391,40 +403,14 @@ class HistoricalFetcherAsync:
             except ExchangeCircuitOpenError:
                 _status = "circuit_open"
                 self._log.bind(symbol=symbol, timeframe=timeframe, chunk=chunk_idx).warning("Circuit open — aborting chunked download")
-                FETCH_CHUNKS_TOTAL.labels(
-                    exchange=exchange_name, timeframe=timeframe,
-                    status=_status, mode=_mode,
-                ).inc()
-                if not collected:
-                    # Sin datos — propagar para que el pipeline aborte el exchange.
-                    raise
-                # Datos parciales — devolver lo que hay.
-                break
-            except Exception as _chunk_exc:
-                _status = "error"
-                FETCH_CHUNK_ERRORS_TOTAL.labels(
-                    exchange=exchange_name,
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    error_type=type(_chunk_exc).__name__,
-                ).inc()
-                raise
-            finally:
-                FETCH_CHUNK_DURATION.labels(
-                    exchange=exchange_name, symbol=symbol, timeframe=timeframe,
-                ).observe(time.perf_counter() - _t0)
-                # Contar solo success aquí — circuit_open, empty y
-                # stale/regression se cuentan en sus bloques explícitos.
-                # Evita doble conteo de empty (bug previo).
-                if _status == "success":
-                    FETCH_CHUNKS_TOTAL.labels(
+                _fetcher_metrics()["FETCH_CHUNKS_TOTAL"].labels(
                         exchange=exchange_name, timeframe=timeframe,
                         status=_status, mode=_mode,
                     ).inc()
 
             if not raw:
                 _status = "empty"
-                FETCH_CHUNKS_TOTAL.labels(
+                _fetcher_metrics()["FETCH_CHUNKS_TOTAL"].labels(
                     exchange=exchange_name, timeframe=timeframe,
                     status=_status, mode=_mode,
                 ).inc()
@@ -453,14 +439,14 @@ class HistoricalFetcherAsync:
             _candle_close   = last_ts + tf_ms  # cierre esperado
             _delay_ms       = _now_ms - _candle_close
             if _delay_ms > 0:
-                CANDLE_DELAY_MS.labels(
+                _fetcher_metrics()["CANDLE_DELAY_MS"].labels(
                     exchange=exchange_name, timeframe=timeframe, mode=_mode,
                 ).observe(_delay_ms)
 
             if last_ts <= since_ts:
                 _stale_severity = "regression" if last_ts < since_ts else "stale"
                 self._log.bind(symbol=symbol, timeframe=timeframe, severity=_stale_severity, last_ts=last_ts, since_ts=since_ts).warning("Stale window — aborting")
-                FETCH_CHUNKS_TOTAL.labels(
+                _fetcher_metrics()["FETCH_CHUNKS_TOTAL"].labels(
                     exchange=exchange_name, timeframe=timeframe,
                     status=_stale_severity, mode=_mode,
                 ).inc()

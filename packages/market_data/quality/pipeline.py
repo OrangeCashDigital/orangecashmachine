@@ -53,8 +53,6 @@ from market_data.domain.entities import DataTier
 # LineageEvent, LineageStatus, PipelineLayer: importados lazy en _record_lineage()
 # lineage_tracker: inyectado vía constructor (DIP — BC-05/BC-08).
 # Ver LineageTrackerPort en market_data.ports.outbound.lineage.
-from market_data.ports.outbound.lineage import LineageTrackerPort
-from market_data.ports.outbound.metrics import QualityMetricsPort
 from market_data.ports.outbound.quality import AnomalyRegistryPort
 from market_data.quality.anomaly_registry import default_registry
 from market_data.quality.policies.data_quality_policy import (
@@ -209,6 +207,9 @@ class QualityPipeline:
             "Gap scan | total={} high={} medium={} low={}{} | {}/{} exchange={}",
             len(gaps), high, medium, low, suffix, symbol, timeframe, exchange,
         )
+        from market_data.infrastructure.observability.metrics import (  # noqa: PLC0415
+            QUALITY_GAPS_TOTAL,
+        )
         for sev, cnt in (("high", high), ("medium", medium), ("low", low)):
             if cnt:
                 QUALITY_GAPS_TOTAL.labels(
@@ -226,6 +227,9 @@ class QualityPipeline:
     ) -> DataTier:
         """Traduce QualityDecision → DataTier con logging apropiado."""
         if result.decision == QualityDecision.REJECT:
+            from market_data.infrastructure.observability.metrics import (  # noqa: PLC0415
+                PIPELINE_ERRORS,
+            )
             PIPELINE_ERRORS.labels(
                 exchange=exchange, error_type="quality_reject"
             ).inc()
@@ -278,6 +282,14 @@ class QualityPipeline:
         if run_id is None:
             return
 
+        from market_data.domain.events._lineage import (  # noqa: PLC0415
+            LineageEvent,
+            LineageStatus,
+            PipelineLayer,
+        )
+        from market_data.infrastructure.lineage.tracker import (  # noqa: PLC0415
+            lineage_tracker,
+        )
         if tier == DataTier.REJECTED:
             lineage_tracker.record(LineageEvent(
                 run_id        = run_id,

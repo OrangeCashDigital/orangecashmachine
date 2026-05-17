@@ -190,6 +190,9 @@ class RepairStrategy(StrategyMixin):
                         "Gap heal: excepción inesperada en gather",
                         error_type=type(_res).__name__, error=str(_res),
                     )
+                    from market_data.infrastructure.observability.metrics import (  # noqa: PLC0415
+                        PIPELINE_ERRORS,
+                    )
                     PIPELINE_ERRORS.labels(
                         exchange=ctx.exchange_id, error_type="fatal",
                     ).inc()
@@ -237,6 +240,9 @@ class RepairStrategy(StrategyMixin):
             result.error       = str(exc) or type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             error_type         = "transient" if result.is_transient_error else "fatal"
+            from market_data.infrastructure.observability.metrics import (  # noqa: PLC0415
+                PIPELINE_ERRORS,
+            )
             PIPELINE_ERRORS.labels(
                 exchange=ctx.exchange_id, error_type=error_type,
             ).inc()
