@@ -215,6 +215,27 @@ class PipelineOrchestrator:
     pipeline.run() falla → retorna None con log de error.
     """
 
+    def __init__(self, factory: Any = None) -> None:
+        """
+        Parámetros
+        ----------
+        factory : PipelineFactoryPort — composition root de pipelines.
+                  Default: ConcretePipelineFactory() — implementaciones concretas.
+                  Override en tests para inyectar mocks (DIP · OCP).
+
+        Fail-Fast: si factory no es None y no tiene método build(),
+        el error aparece en construcción, no en ejecución.
+        """
+        if factory is None:
+            from market_data.factories.pipeline_factory import ConcretePipelineFactory
+            factory = ConcretePipelineFactory()
+        if not callable(getattr(factory, "build", None)):
+            raise TypeError(
+                f"PipelineOrchestrator: factory debe implementar build(request). "
+                f"Recibido: {type(factory)}"
+            )
+        self._factory = factory
+
     async def run(
         self,
         request: PipelineRequest,

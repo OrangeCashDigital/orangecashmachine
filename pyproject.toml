@@ -230,22 +230,13 @@ ignore_imports = [
     # Cada uno tiene un port definido; el fallback garantiza que el pipeline
     # funciona sin factory (tests, CLI directo) sin romper el contrato DIP.
     # Pendiente de eliminación cuando Dagster IOManagers cablen todo en runtime.
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.observability.metrics_adapter",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.storage.bronze.bronze_storage",
-    "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.iceberg.catalog",
-    "market_data.application.pipelines.trades_pipeline -> market_data.infrastructure.storage.silver.trades_storage",
-    "market_data.application.pipelines.trades_pipeline -> market_data.adapters.outbound.trades.trades_fetcher",
-    "market_data.application.strategies.repair -> market_data.infrastructure.observability.metrics_adapter",
     # ── Circuit breaker — cross-cutting concern del adapter layer ──────────────
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.adapters.outbound.exchange.ccxt_adapter",  # get_breaker_state — pendiente CircuitBreakerPort
     # get_breaker_state() y ExchangeCircuitOpenError pertenecen semánticamente
     # al adapter de exchange. Pendiente: exponer breaker_state via ExchangeClientPort.
 ]
 
-[[tool.importlinter.contracts]]
 # Los adaptadores concretos no pueden importar infraestructura directamente.
 # Deben recibir dependencias por inyección o usar ports de storage.
-[[tool.importlinter.contracts]]
 [[tool.importlinter.contracts]]
 name = "BC-06: market_data.adapters no importa application (sin dependencia inversa)"
 type = "forbidden"
@@ -410,6 +401,13 @@ source_modules = [
 forbidden_modules = [
     "market_data.infrastructure.storage",
     "market_data.adapters.outbound.exchange.ccxt_adapter",
+]
+ignore_imports = [
+    # Dagster asset actúa como composition root para el pipeline de resample.
+    # IcebergStorageFactory se instancia lazy (l.84) — import-linter detecta
+    # la cadena transitiva: iceberg_factory → iceberg_storage (infra interna).
+    # Esto es correcto por diseño: el asset es el único punto de construcción.
+    "infrastructure.dagster.assets.resample_ohlcv -> market_data.adapters.outbound.storage.iceberg_factory",
 ]
 
 [[tool.importlinter.contracts]]

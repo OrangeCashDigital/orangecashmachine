@@ -88,6 +88,12 @@ class KafkaOHLCVPublisher:
             )
 
         try:
+            # Lazy start — idempotente: KafkaProducerAdapter guarda _started flag.
+            # No puede iniciarse en _build_kafka_publisher_safe() porque start() es async.
+            # SafeOps: si start() falla aquí, la excepción es capturada por el bloque
+            # exterior y publish_chunk() retorna False → fallback a Iceberg directo.
+            await self._producer.start()
+
             bars = [
                 KafkaOHLCVBar(
                     ts     = int(row["timestamp"].timestamp() * 1000),

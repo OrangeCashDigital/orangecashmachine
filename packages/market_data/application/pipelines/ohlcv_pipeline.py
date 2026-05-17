@@ -42,19 +42,24 @@ from ocm.observability import bind_pipeline
 _log = bind_pipeline("pipeline")
 
 
-def _build_kafka_producer_safe():
+def _build_kafka_publisher_safe():
     """
-    Construye KafkaProducerAdapter desde env vars. SafeOps: retorna None si falla.
+    Construye KafkaOHLCVPublisher desde env vars. SafeOps: retorna None si falla.
 
     None → pipeline opera en modo degradado (escribe directo a Iceberg).
-    Kappa: cuando el producer está disponible, todo fluye por ohlcv.raw.
+    Kappa: cuando el publisher está disponible, todo fluye por ohlcv.raw.
+
+    El producer NO se inicia aquí — start() es async y esta función es sync.
+    KafkaOHLCVPublisher.publish_chunk() hace lazy-start en el primer uso.
     """
     try:
-        from market_data.ports.outbound.kafka_producer import KafkaProducerPortAdapter
-        return KafkaProducerAdapter.from_env()
+        from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+        from market_data.infrastructure.kafka.ohlcv_publisher import KafkaOHLCVPublisher
+        producer = KafkaProducerAdapter.from_env()
+        return KafkaOHLCVPublisher(producer=producer)
     except Exception as exc:
         _log.warning(
-            "KafkaProducerAdapter no disponible — modo degradado (sin Kafka)",
+            "KafkaOHLCVPublisher no disponible — modo degradado (sin Kafka)",
             error=str(exc),
         )
         return None
@@ -260,9 +265,9 @@ class OHLCVPipeline(PipelineTriggerPort):
         self._throttle       = throttle
 
         # Dependencias inyectadas — sin resolución de infraestructura aquí (DIP).
-        cursor          = cursor_store or _build_cursor_store_safe()
-        quality         = QualityPipeline()
-        _kafka_producer = _build_kafka_producer_safe()
+        cursor     = cursor_store or _build_cursor_store_safe()
+        quality    = QualityPipeline()
+        _publisher = _build_kafka_publisher_safe()
 
         self._ctx = PipelineContext(
             fetcher        = fetcher,
@@ -274,7 +279,8 @@ class OHLCVPipeline(PipelineTriggerPort):
             market_type    = self.market_type,
             start_date     = start_date,
             gap_registry   = build_gap_registry(),  # type: ignore[arg-type]
-            kafka_producer = _kafka_producer,
+            kafka_producer = getattr(_publisher, "_producer", None),
+            publisher      = _publisher,
             metrics        = metrics,
         )
 
