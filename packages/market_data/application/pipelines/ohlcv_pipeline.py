@@ -30,6 +30,7 @@ una callable en lugar de un int.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from typing import TYPE_CHECKING, Any, List, Literal, Optional
 
@@ -44,14 +45,29 @@ _log = bind_pipeline("pipeline")
 
 def _build_kafka_publisher_safe():
     """
-    Construye KafkaOHLCVPublisher desde env vars. SafeOps: retorna None si falla.
+    Construye KafkaOHLCVPublisher respetando el feature flag KAFKA_ENABLED.
 
-    None → pipeline opera en modo degradado (escribe directo a Iceberg).
-    Kappa: cuando el publisher está disponible, todo fluye por ohlcv.raw.
+    Jerarquía de decisión (Fail-Fast → Fail-Soft):
+      1. KAFKA_ENABLED != true  → retorna None inmediatamente (flag apagado).
+         No se intenta conexión — safe para entornos sin broker.
+      2. KAFKA_ENABLED == true  → construye KafkaOHLCVPublisher.
+         Si el broker no está disponible → captura excepción → retorna None.
+
+    SSOT del flag: ocm.config.env_vars.KAFKA_ENABLED — nunca string literal.
+    El flag refleja integrations.kafka.enabled del YAML via Hydra.
 
     El producer NO se inicia aquí — start() es async y esta función es sync.
-    KafkaOHLCVPublisher.publish_chunk() hace lazy-start en el primer uso.
+    KafkaOHLCVPublisher.publish_chunk() hace lazy-start en el primer uso
+    (idempotente: KafkaProducerAdapter._started protege el doble arranque).
     """
+    from ocm.config.env_vars import KAFKA_ENABLED as _KAFKA_ENABLED_VAR
+    kafka_flag = os.environ.get(_KAFKA_ENABLED_VAR, "false").strip().lower()
+    if kafka_flag not in ("1", "true", "yes"):
+        _log.debug(
+            "Kafka deshabilitado ({}={}) — modo degradado (Iceberg directo)",
+            _KAFKA_ENABLED_VAR, kafka_flag,
+        )
+        return None
     try:
         from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
         from market_data.infrastructure.kafka.ohlcv_publisher import KafkaOHLCVPublisher

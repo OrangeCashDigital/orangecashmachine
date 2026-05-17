@@ -97,6 +97,12 @@ KAFKA_CONSUMER_HEARTBEAT_MS: str = "KAFKA_CONSUMER_HEARTBEAT_MS"
 KAFKA_AUTO_OFFSET_RESET: str = "KAFKA_AUTO_OFFSET_RESET"
 """earliest (replay desde inicio) | latest (solo nuevos). Default: earliest"""
 
+KAFKA_ENABLED: str = "KAFKA_ENABLED"
+"""Feature flag — activa el path Kappa (publisher → ohlcv.raw). Default: false.
+Equivale a integrations.kafka.enabled en la config Hydra/YAML.
+SSOT: env_vars.py es la única fuente de verdad para el nombre de la variable.
+Override en producción: KAFKA_ENABLED=true en .env o env del sistema."""
+
 # =============================================================================
 # Valores permitidos y helpers
 # =============================================================================
@@ -129,6 +135,7 @@ _ENV_VAR_NAMES: frozenset[str] = frozenset({
     MARKET_DATA_HOST, MARKET_DATA_PORT, INGESTION_INTERVAL_S,
     OCM_EXCHANGE, OCM_MARKET_TYPE, OCM_OHLCV_START_DATE,
     # Kafka
+    KAFKA_ENABLED,
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_CLIENT_ID_PRODUCER,
     KAFKA_COMPRESSION_TYPE,
