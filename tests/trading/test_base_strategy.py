@@ -21,7 +21,7 @@ def _make_signal(signal: SignalType = "buy", confidence: float = 1.0) -> Signal:
     return Signal(
         symbol     = "BTC/USDT",
         timeframe  = "1h",
-        signal     = signal,
+        direction  = signal,
         price      = 50_000.0,
         timestamp  = datetime(2024, 1, 1, tzinfo=timezone.utc),
         confidence = confidence,

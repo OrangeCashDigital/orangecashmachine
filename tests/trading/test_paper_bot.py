@@ -63,7 +63,7 @@ def _make_signal(signal_type: str = "buy", confidence: float = 1.0) -> Signal:
     return Signal(
         symbol     = "BTC/USDT",
         timeframe  = "1h",
-        signal     = signal_type,
+        direction  = signal_type,
         price      = 50_000.0,
         timestamp  = datetime(2024, 1, 1, tzinfo=timezone.utc),
         confidence = confidence,
@@ -167,7 +167,7 @@ def test_run_once_rejects_signal_below_min_confidence():
         return [Signal(
             symbol     = "BTC/USDT",
             timeframe  = "1h",
-            signal     = "buy",
+            direction  = "buy",
             price      = float(df.iloc[-1]["close"]),
             timestamp  = datetime(2024, 1, 1, tzinfo=timezone.utc),
             confidence = 0.5,
