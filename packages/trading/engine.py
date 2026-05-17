@@ -176,6 +176,20 @@ class TradingEngine:
     def oms_summary(self) -> dict:
         return self._oms.summary()
 
+    def validate_signal(self, signal) -> object:
+        """
+        Expone la validación de riesgo sin violar Law of Demeter.
+
+        PaperBot._evaluate_signal() tenía acceso a self._engine._oms._risk
+        (3 niveles privados — LoD violation). Este método es la API pública
+        correcta: TradingEngine como facade oculta la estructura interna.
+
+        Returns
+        -------
+        RiskDecision con campos: rejected (bool), reason (str), size_pct (float).
+        """
+        return self._oms.validate_signal(signal)
+
     # ------------------------------------------------------------------
     # Factory
     # ------------------------------------------------------------------

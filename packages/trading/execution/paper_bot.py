@@ -233,8 +233,9 @@ class PaperBot:
         SafeOps: nunca lanza — errores se convierten en None.
         """
         try:
-            risk_manager = self._engine._oms._risk   # TODO: exponer via engine
-            decision     = risk_manager.validate(signal)
+            # Fix K5 (LoD): acceso via API pública de TradingEngine.
+            # Ya no accedemos a self._engine._oms._risk (3 niveles privados).
+            decision = self._engine.validate_signal(signal)
             if decision.rejected:
                 self._log.debug(
                     "_evaluate_signal rechazada | reason={}", decision.reason

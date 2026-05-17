@@ -36,11 +36,6 @@ from loguru import logger
 # Dependencias concretas eliminadas del application layer (DIP — BC-05/BC-08).
 # Se inyectan desde market_data.factories.pipeline_factory (composition root).
 from market_data.ports.outbound.exchange_client import ExchangeClientPort
-from market_data.ports.outbound.fetcher import (
-    FundingRateFetcherPort,
-    OpenInterestFetcherPort,
-)
-from market_data.ports.outbound.storage import DerivativesStoragePort
 
 # ---------------------------------------------------------------------------
 # Types

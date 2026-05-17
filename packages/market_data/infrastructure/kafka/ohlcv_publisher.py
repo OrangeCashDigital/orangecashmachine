@@ -1,28 +1,28 @@
-# -*- coding: utf-8 -*-
 """
 market_data/infrastructure/kafka/ohlcv_publisher.py
 ====================================================
 
 Implementación de OHLCVPublisherPort sobre Kafka.
 
-Responsabilidad única: traducir un DataFrame OHLCV al wire format
-(EventPayload + serializer) y publicarlo al topic ohlcv.raw.
+Responsabilidad única: traducir un OHLCVChunk del dominio al wire format
+(EventPayload + KafkaOHLCVBar[]) y publicarlo al topic ohlcv.raw.
 
-Fix B-NEW-01: corregido self._producer.send_async() → self._producer.produce().
-  send_async() no existe en KafkaProducerPort — causaba AttributeError en runtime.
+Clean Architecture
+------------------
+Este módulo depende de:
+  - domain (OHLCVChunk, Candle)          ← el dominio NO depende de esto
+  - shared/kafka (contratos wire)        ← SSOT de serialización
+  - ports/kafka_producer (abstracción)   ← DIP
 
-Fix B-NEW-05: topics/headers importados desde topics.py (SSOT), no desde el port.
+Este módulo NO depende de pandas.
 
-Principios: SRP · DIP · SafeOps · Kappa architecture
+Principios: SRP · DIP · SafeOps · Kappa · SSOT · Clean Architecture
 """
+
 from __future__ import annotations
 
 import uuid as _uuid
 
-import pandas as pd
-
-# Migrado a shared.kafka — SSOT de contratos wire (Fix C-NUEVO-3).
-# market_data.infrastructure.kafka.payloads es el legacy — deprecado.
 from shared.kafka.schemas.ohlcv import (
     EventPayload,
     KafkaOHLCVBar,
@@ -35,15 +35,13 @@ from shared.kafka.topics import (
     HEADER_VERSION,
     HEADER_RUN_ID,
 )
+from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
 
 class KafkaOHLCVPublisher:
     """
     Publica chunks OHLCV a Kafka en formato EventPayload.
-
-    Implementa OHLCVPublisherPort (duck typing — sin herencia explícita).
-    Satisface el Protocol estructuralmente.
 
     Kappa architecture
     ------------------
@@ -64,67 +62,62 @@ class KafkaOHLCVPublisher:
 
     async def publish_chunk(
         self,
-        exchange_id: str,
-        symbol:      str,
-        timeframe:   str,
-        df:          pd.DataFrame,
-        source:      str,
-        run_id:      str = "",
+        chunk: OHLCVChunk,
     ) -> bool:
         """
-        Serializa el DataFrame a EventPayload y lo publica a ohlcv.raw.
+        Serializa el OHLCVChunk a EventPayload y lo publica a ohlcv.raw.
 
-        Fail-Fast interno: lanza ValueError si df está vacío (bug del caller).
+        Fail-Fast interno: lanza ValueError si chunk está vacío (bug del caller).
         SafeOps externo: cualquier fallo de Kafka retorna False.
         """
-        if df is None or df.empty:
+        if chunk.is_empty:
             raise ValueError(
-                f"KafkaOHLCVPublisher.publish_chunk: df vacío "
-                f"(exchange={exchange_id} symbol={symbol} timeframe={timeframe})"
+                f"KafkaOHLCVPublisher.publish_chunk: chunk vacío "
+                f"(exchange={chunk.exchange} symbol={chunk.symbol} "
+                f"timeframe={chunk.timeframe})"
             )
 
         try:
-            # Lazy start — idempotente: KafkaProducerAdapter guarda _started flag.
+            # Lazy start — idempotente
             await self._producer.start()
 
+            # Mapping directo Candle → KafkaOHLCVBar (sin pandas)
             bars = [
                 KafkaOHLCVBar(
-                    ts     = int(row["timestamp"].timestamp() * 1000),
-                    open   = float(row["open"]),
-                    high   = float(row["high"]),
-                    low    = float(row["low"]),
-                    close  = float(row["close"]),
-                    volume = float(row["volume"]),
+                    ts=c.timestamp_ms,
+                    open=c.open,
+                    high=c.high,
+                    low=c.low,
+                    close=c.close,
+                    volume=c.volume,
                 )
-                for _, row in df.iterrows()
+                for c in chunk.candles
             ]
 
             event = EventPayload(
-                event_id       = str(_uuid.uuid4()),
-                exchange       = exchange_id,
-                symbol         = symbol,
-                timeframe      = timeframe,
-                batch_start_ts = int(df["timestamp"].min().timestamp() * 1000),
-                bars           = bars,
-                source         = source,  # type: ignore[arg-type]
-                run_id         = run_id,
+                event_id=str(_uuid.uuid4()),
+                exchange=chunk.exchange,
+                symbol=chunk.symbol,
+                timeframe=chunk.timeframe,
+                batch_start_ts=chunk.start_ms or 0,
+                bars=bars,
+                source=chunk.source,  # type: ignore[arg-type]
+                run_id=chunk.run_id,
             )
 
             payload_bytes = serialize(event)
-            routing_key   = make_routing_key(exchange_id, symbol, timeframe)
-            headers       = {
-                HEADER_SOURCE:  source,
+            routing_key = make_routing_key(chunk.exchange, chunk.symbol, chunk.timeframe)
+            headers = {
+                HEADER_SOURCE: chunk.source,
                 HEADER_VERSION: str(PAYLOAD_SCHEMA_VERSION),
-                HEADER_RUN_ID:  run_id,
+                HEADER_RUN_ID: chunk.run_id,
             }
 
-            # FIX B-NEW-01: produce() — método canónico del port.
-            # send_async() no existe en KafkaProducerPort.
             await self._producer.produce(
-                topic   = TOPIC_OHLCV_RAW,
-                value   = payload_bytes,
-                key     = routing_key,
-                headers = headers,
+                topic=TOPIC_OHLCV_RAW,
+                value=payload_bytes,
+                key=routing_key,
+                headers=headers,
             )
             return True
 

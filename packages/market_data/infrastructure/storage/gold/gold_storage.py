@@ -42,7 +42,7 @@ from pyiceberg.expressions import And, EqualTo
 
 from market_data.infrastructure.storage.gold.transformer import GoldTransformer, VERSION as _TRANSFORMER_VERSION
 from market_data.infrastructure.storage.iceberg.catalog import ensure_gold_table, get_catalog
-from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
+from market_data.ports.outbound.storage import OHLCVStorage
 
 # Columnas en orden canónico para gold.features
 _GOLD_COLS = [
@@ -76,20 +76,37 @@ class GoldStorage:
 
     def __init__(
         self,
-        dry_run:   bool   = False,
-        # gold_path: aceptado por compatibilidad con código legacy que inyectaba
-        # un path de filesystem. Ya no tiene efecto — Gold usa Iceberg.
-        gold_path: object = None,
+        dry_run:        bool            = False,
+        silver_storage: OHLCVStorage    = None,  # type: ignore[assignment]
+        # gold_path: aceptado por compatibilidad con código legacy.
+        # Ya no tiene efecto — Gold usa Iceberg.
+        gold_path:      object          = None,
     ) -> None:
-        self._dry_run            = dry_run
-        self._engineer_version   = _TRANSFORMER_VERSION
+        """
+        Parameters
+        ----------
+        dry_run        : si True, no persiste en Iceberg (SafeOps).
+        silver_storage : implementación de OHLCVStorage para leer Silver.
+                         Si None, se instancia IcebergStorage lazy en build()
+                         (compatibilidad hacia atrás — preferir inyección explícita).
+
+        DIP: GoldStorage depende de OHLCVStorage (abstracción), nunca de
+        IcebergStorage directamente. Inyectar desde el composition root.
+        """
+        self._dry_run          = dry_run
+        self._engineer_version = _TRANSFORMER_VERSION
+        # DIP: silver_storage inyectado — testeable sin Iceberg real.
+        # None = lazy init en build() para compatibilidad con callers existentes.
+        self._silver_storage: OHLCVStorage | None = silver_storage
         if not dry_run:
             ensure_gold_table()
             self._table = get_catalog().load_table("gold.features")
         logger.info(
-            "GoldStorage ready | backend=iceberg dry_run={} transformer_version={}",
+            "GoldStorage ready | backend=iceberg dry_run={} transformer_version={} "
+            "silver_injected={}",
             self._dry_run,
             self._engineer_version,
+            silver_storage is not None,
         )
 
     # =========================================================================
@@ -122,11 +139,18 @@ class GoldStorage:
         -------
         pd.DataFrame con features, o None si Silver está vacío o falla.
         """
-        silver   = IcebergStorage(exchange=exchange, market_type=market_type)
+        # DIP: usar silver_storage inyectado o crear lazy (compatibilidad).
+        # Preferir inyección explícita desde el composition root.
+        if self._silver_storage is not None:
+            silver = self._silver_storage
+        else:
+            # Lazy fallback — solo para callers que no inyectan (legacy).
+            from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
+            silver = IcebergStorage(exchange=exchange, market_type=market_type)
 
         # Capturar snapshot ANTES del load — ancla el lineage al punto exacto
         # en el tiempo que Gold usó como fuente.
-        _snap    = silver.get_current_snapshot() or {}
+        _snap    = silver.get_current_snapshot() or {}  # type: ignore[attr-defined]
         _snap_id = _snap.get("snapshot_id", 0)
         _snap_ms = _snap.get("timestamp_ms", 0)
 

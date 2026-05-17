@@ -213,3 +213,41 @@ class BronzeStoragePort(Protocol):
         """Timestamp en ms del último registro. None si no hay datos."""
         ...
 
+
+# ---------------------------------------------------------------------------
+# Storage factory port
+# ---------------------------------------------------------------------------
+
+class StorageFactoryPort(Protocol):
+    """
+    Contrato de fábrica de instancias OHLCVStorage por (exchange, market_type).
+
+    Responsabilidad
+    ---------------
+    Abstraer la creación y cache de backends de storage.
+    Los pipelines no instancian IcebergStorage directamente — reciben
+    una fábrica inyectada desde el composition root (DIP).
+
+    Implementación canónica
+    -----------------------
+    market_data.adapters.outbound.storage.iceberg_factory.IcebergStorageFactory
+
+    Principios: DIP · OCP · SRP · SSOT
+    """
+
+    def get_storage(
+        self,
+        exchange:    str,
+        market_type: str  = "spot",
+        dry_run:     bool = False,
+    ) -> OHLCVStorage:
+        """
+        Retorna una instancia de OHLCVStorage para el par (exchange, market_type).
+
+        Implementaciones deben cachear instancias — IcebergStorage es stateful
+        respecto al catalog y no debe reinstanciarse en cada llamada.
+
+        Fail-Fast: lanza RuntimeError si el backend no puede inicializarse.
+        """
+        ...
+

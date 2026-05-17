@@ -9,8 +9,8 @@ Estructura
 ----------
 domain/
   exceptions/    — jerarquía canónica de excepciones del BC
-  value_objects/ — tipos inmutables sin identidad (Timeframe, Candle, OHLCVBatch,
-                   Symbol, RawCandle, QualityLabel, GapRange)
+    value_objects/ — tipos inmutables sin identidad (Timeframe, Candle, OHLCVChunk,
+                    Symbol, RawCandle, QualityLabel, GapRange — OHLCVBatch deprecado)
   entities/      — tipos con identidad de dominio (DataTier)
   events/        — domain events (DomainEvent, CandleReceived, OHLCVBatchReceived,
                    LineageEvent, PipelineLayer, LineageStatus)
@@ -28,7 +28,8 @@ Uso recomendado
 Importar siempre desde el submódulo específico:
 
     from market_data.domain.exceptions import NoDataAvailableError
-    from market_data.domain.value_objects import Timeframe, Candle, OHLCVBatch
+    from market_data.domain.value_objects import Timeframe, Candle, OHLCVChunk
+    # OHLCVBatch disponible como alias deprecado
     from market_data.domain.entities import DataTier
     from market_data.domain.events import OHLCVBatchReceived, LineageEvent
 

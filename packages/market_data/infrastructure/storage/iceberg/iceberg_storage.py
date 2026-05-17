@@ -33,7 +33,7 @@ Notas de implementación
 from __future__ import annotations
 
 import time
-from typing import Optional, Any
+from typing import Optional
 
 import pandas as pd
 import pyarrow as pa
@@ -114,9 +114,10 @@ class IcebergStorage:
         # TimestampCacheService gestiona L1 (in-process) y L2 (Redis).
         # SRP: IcebergStorage delega todo cache management aquí.
         # Inyectado desde container para testabilidad (DIP).
+        # TimestampCacheService es SSOT del cache L1/L2.
+        # No mantener un _last_ts_cache local — delegar todo a _ts_cache (SRP).
         self._ts_cache = TimestampCacheService(cursor_store=cursor_store)
-        self._cursor        = cursor_store  # CursorStorePort | None — acceso directo a Redis L2
-        self._last_ts_cache: dict[tuple[str, str], Any] = {}  # L1 cache in-process — invalidado en save_ohlcv()
+        self._cursor   = cursor_store  # CursorStorePort | None — acceso directo a Redis L2
         # SafeOps: en dry_run skip bootstrap y carga de tabla — sin I/O al catálogo.
         # En tests/CI el catálogo SQLite puede no existir. Todos los métodos de
         # escritura son no-op en dry_run. Los de lectura retornan None si _table=None.
@@ -193,20 +194,22 @@ class IcebergStorage:
         df:              pd.DataFrame,
         symbol:          str,
         timeframe:       str,
-        mode:            str           = "append",
         run_id:          Optional[str] = None,
-        skip_versioning: bool          = False,   # no-op — Iceberg versiona solo
+        skip_versioning: bool          = False,  # no-op — Iceberg versiona por snapshot
     ) -> None:
         """
-        Guarda OHLCV en la tabla Iceberg silver.ohlcv.
+        Persiste OHLCV en silver.ohlcv via append atómico (Iceberg snapshot).
 
-        Append atómico con snapshot consistency garantizada por Iceberg.
-        mode='overwrite' no está soportado en pyiceberg 0.8 — se trata
-        como append con dedup y se emite un warning.
+        Append-only — Iceberg no soporta overwrite en pyiceberg 0.8.
+        Dedup por (timestamp, exchange, symbol, timeframe) en _normalize_df.
+        Snapshot consistency garantizada por Iceberg en cada append.
+
+        Fail-Fast: lanza si _table no está inicializado (bug de configuración).
+        SafeOps  : retorna silenciosamente si df está vacío (no es un error).
         """
         if self._dry_run:
-            logger.opt(exception=True).info(
-            "[DRY RUN] IcebergStorage.save_ohlcv skipped | {}/{} "
+            logger.info(
+                "[DRY RUN] IcebergStorage.save_ohlcv skipped | {}/{} "
                 "exchange={} rows={}",
                 symbol, timeframe, self._exchange or "shared", len(df),
             )
@@ -215,10 +218,10 @@ class IcebergStorage:
         if df is None or df.empty:
             return
 
-        if mode == "overwrite":
-            logger.warning(
-                "IcebergStorage: mode=overwrite no soportado en pyiceberg 0.8 "
-                "— usando append con dedup | {}/{}", symbol, timeframe,
+        if self._table is None:
+            raise RuntimeError(
+                "IcebergStorage.save_ohlcv: _table no inicializado. "
+                "Llamar con dry_run=False o verificar bootstrap del catálogo."
             )
 
         _t0      = time.monotonic()
@@ -230,14 +233,17 @@ class IcebergStorage:
             market_type = self._market_type or "unknown",
         )
 
-        assert self._table is not None, "_table debe estar inicializado antes de escribir"
-        arrow_schema = self._table.schema().as_arrow()
-        assert self._table is not None, "_table debe estar inicializado antes de escribir"
         self._table.append(
-            pa.Table.from_pandas(prepared, schema=arrow_schema, preserve_index=False)
+            pa.Table.from_pandas(
+                prepared,
+                schema         = self._table.schema().as_arrow(),
+                preserve_index = False,
+            )
         )
 
+        # Invalidar cache L1/L2 tras escritura exitosa (SSOT: _ts_cache)
         self._ts_cache.invalidate(symbol, timeframe)
+
         logger.debug(
             "IcebergStorage saved | {}/{} exchange={} rows={} duration={}ms",
             symbol, timeframe, self._exchange or "shared",
@@ -258,61 +264,19 @@ class IcebergStorage:
         automáticamente después de cada save_ohlcv exitoso. Safe para uso
         concurrente dentro del mismo proceso (GIL protege el dict).
         """
-        cache_key = (symbol, timeframe)
-
-        # L1 — cache in-process (mismo worker). Invalidado en save_ohlcv.
-        if cache_key in self._last_ts_cache:
-            return self._last_ts_cache[cache_key]
-
-        # L2 — cursor Redis (cross-process, si inyectado).
-        # get_raw() es síncrono. Clave: cursor usa prefijo 'cursor:env:exchange:symbol:tf'
-        # pero get_raw acepta clave raw — usamos la clave interna del CursorStore.
-        # No se propaga al L1: el cursor puede estar adelantado respecto a Iceberg
-        # (escritura pendiente en otro worker). L1 solo se llena desde L3.
-        if self._cursor is not None:
-            exchange_key = (self._exchange or "unknown").lower()
-            market_key   = (self._market_type or "unknown").lower()
-            # Formato de clave interno de RedisCursorStore (base64-encoded segments).
-            # No podemos reconstruir la clave codificada aquí sin acoplar implementación.
-            # Usamos get_raw con la clave legible como best-effort; si falla → L3.
-            # NOTA: el cursor puede estar adelantado respecto a Iceberg si otro worker
-            # escribió y actualizó Redis pero el snapshot Iceberg aún no es visible.
-            # Por eso NO propagamos L2 al caché L1 — L1 solo se llena desde L3.
-            try:
-                raw = self._cursor.get_raw(
-                    f"{exchange_key}:{symbol}:{market_key}:{timeframe}"
-                )
-                if raw is not None:
-                    ts_l2 = pd.Timestamp(int(raw), unit="ms", tz="UTC")
-                    logger.debug(
-                        "get_last_timestamp L2 hit | {}/{} ts={}",
-                        symbol, timeframe, ts_l2,
-                    )
-                    # Sanity cross-layer: si L3 está disponible en caché L1,
-                    # loggear mismatch para detectar cursor adelantado/regresión.
-                    ts_l1 = self._last_ts_cache.get((symbol, timeframe))
-                    if ts_l1 is not None and isinstance(ts_l1, pd.Timestamp):
-                        delta_ms = int((ts_l2 - ts_l1).total_seconds() * 1000)
-                        if delta_ms < 0:
-                            logger.warning(
-                                "get_last_timestamp L2 < L1 (cursor regresión) | "
-                                "{}/{} l2={} l1={} delta_ms={}",
-                                symbol, timeframe, ts_l2, ts_l1, delta_ms,
-                            )
-                        elif delta_ms > 0:
-                            logger.debug(
-                                "get_last_timestamp L2 ahead of L1 | "
-                                "{}/{} delta_ms={}",
-                                symbol, timeframe, delta_ms,
-                            )
-                    return ts_l2
-            except Exception as _l2_exc:
-                logger.debug(
-                    "get_last_timestamp L2 miss | {}/{} err={}",
-                    symbol, timeframe, _l2_exc,
-                )
+        # L1/L2 — delegar a TimestampCacheService (SSOT del cache).
+        # _last_ts_cache eliminado — IcebergStorage no gestiona cache directamente (SRP).
+        ts_cached = self._ts_cache.get(
+            symbol      = symbol,
+            timeframe   = timeframe,
+            exchange    = self._exchange    or "unknown",
+            market_type = self._market_type or "unknown",
+        )
+        if ts_cached is not None:
+            return ts_cached
 
         # L3 — scan Iceberg (fuente de verdad persistente).
+        # Solo se ejecuta si L1 y L2 son miss.
         if self._table is None:
             return None
         try:
@@ -330,8 +294,8 @@ class IcebergStorage:
                 else _to_utc_timestamp(pc.max(result.column("timestamp")).as_py())
             )
 
-            # Poblar L1 con resultado del scan L3 (fuente de verdad).
-            # El cursor (L2) lo actualiza IncrementalStrategy tras cada write.
+            # Poblar L1 con el resultado del scan L3 (fuente de verdad).
+            # L2 (Redis) lo actualiza IncrementalStrategy tras cada write exitoso.
             self._ts_cache.set(symbol, timeframe, ts)
             return ts
 
