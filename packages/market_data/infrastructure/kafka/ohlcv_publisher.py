@@ -8,16 +8,10 @@ Implementación de OHLCVPublisherPort sobre Kafka.
 Responsabilidad única: traducir un DataFrame OHLCV al wire format
 (EventPayload + serializer) y publicarlo al topic ohlcv.raw.
 
-Por qué está en infrastructure/
---------------------------------
-Conoce tres detalles concretos de infraestructura:
-  1. EventPayload / KafkaOHLCVBar   — schema del mensaje Kafka
-  2. serialize / make_routing_key   — serialización a bytes
-  3. TOPIC_OHLCV_RAW, HEADER_*      — constantes del protocolo (ports)
+Fix B-NEW-01: corregido self._producer.send_async() → self._producer.produce().
+  send_async() no existe en KafkaProducerPort — causaba AttributeError en runtime.
 
-Application/domain solo ven OHLCVPublisherPort — ignorancia total del
-formato de wire. Cumple DIP: la abstracción está en ports/, la
-implementación aquí.
+Fix B-NEW-05: topics/headers importados desde topics.py (SSOT), no desde el port.
 
 Principios: SRP · DIP · SafeOps · Kappa architecture
 """
@@ -27,19 +21,21 @@ import uuid as _uuid
 
 import pandas as pd
 
-from market_data.infrastructure.kafka.payloads import (
+# Migrado a shared.kafka — SSOT de contratos wire (Fix C-NUEVO-3).
+# market_data.infrastructure.kafka.payloads es el legacy — deprecado.
+from shared.kafka.schemas.ohlcv import (
     EventPayload,
     KafkaOHLCVBar,
-    PAYLOAD_SCHEMA_VERSION,
+    OHLCV_SCHEMA_VERSION as PAYLOAD_SCHEMA_VERSION,
 )
-from market_data.infrastructure.kafka.serializer import serialize, make_routing_key
-from market_data.ports.outbound.kafka_producer import (
-    KafkaProducerPort,
+from shared.kafka.serializer import serialize, make_ohlcv_key as make_routing_key
+from shared.kafka.topics import (
     TOPIC_OHLCV_RAW,
     HEADER_SOURCE,
     HEADER_VERSION,
     HEADER_RUN_ID,
 )
+from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
 
 class KafkaOHLCVPublisher:
@@ -89,9 +85,6 @@ class KafkaOHLCVPublisher:
 
         try:
             # Lazy start — idempotente: KafkaProducerAdapter guarda _started flag.
-            # No puede iniciarse en _build_kafka_publisher_safe() porque start() es async.
-            # SafeOps: si start() falla aquí, la excepción es capturada por el bloque
-            # exterior y publish_chunk() retorna False → fallback a Iceberg directo.
             await self._producer.start()
 
             bars = [
@@ -125,12 +118,15 @@ class KafkaOHLCVPublisher:
                 HEADER_RUN_ID:  run_id,
             }
 
-            return await self._producer.send_async(
+            # FIX B-NEW-01: produce() — método canónico del port.
+            # send_async() no existe en KafkaProducerPort.
+            await self._producer.produce(
                 topic   = TOPIC_OHLCV_RAW,
                 value   = payload_bytes,
                 key     = routing_key,
                 headers = headers,
             )
+            return True
 
         except Exception:
             return False  # SafeOps — caller activa fallback a Iceberg directo

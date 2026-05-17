@@ -36,34 +36,40 @@ class ConcretePipelineFactory:
 
     def build(self, request: Any) -> Any:  # PipelineRequest → PipelineTriggerPort
         """
-        Enruta la construcción según request.pipeline_type.
+        Enruta la construcción según request.pipeline.
 
         Raises
         ------
         ValueError
-            Si request.pipeline_type no está registrado.
+            Si request.pipeline no está registrado.
         """
         dispatch = {
-            "ohlcv":        self._build_ohlcv,
-            "trades":       self._build_trades,
-            "derivatives":  self._build_derivatives,
+            "ohlcv":       self._build_ohlcv,
+            "trades":      self._build_trades,
+            "derivatives": self._build_derivatives,
         }
-        builder = dispatch.get(request.pipeline_type)
+        # FIX C-01: el campo del DTO es `pipeline`, no `pipeline_type`.
+        # PipelineRequest.__post_init__ valida los valores aceptados — SSOT.
+        builder = dispatch.get(request.pipeline)
         if builder is None:
             raise ValueError(
-                f"PipelineType desconocido: {request.pipeline_type!r}. "
+                f"PipelineType desconocido: {request.pipeline!r}. "
                 f"Registrados: {list(dispatch)}"
             )
         return builder(request)
 
     # ------------------------------------------------------------------
-    # Builders concretos
+    # Builders concretos — SRP: uno por tipo de pipeline
     # ------------------------------------------------------------------
 
     def _build_ohlcv(self, request: Any) -> Any:
-        """Cabla OHLCVPipeline con CCXTAdapter y sus dependencias."""
+        """Cabla OHLCVPipeline con CCXTAdapter y sus dependencias concretas."""
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
+        from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
+        from market_data.infrastructure.observability.metrics_adapter import PrometheusPipelineMetrics
+        from ocm.runtime.state import build_cursor_store_from_env, InMemoryCursorStore
 
         adapter_kwargs: dict[str, Any] = {
             "exchange_id": request.exchange,
@@ -74,49 +80,56 @@ class ConcretePipelineFactory:
         if request.resilience is not None:
             adapter_kwargs["resilience"] = request.resilience
 
-        pipeline_kwargs: dict[str, Any] = {
-            "exchange_client": CCXTAdapter(**adapter_kwargs),
-            "market_type":     request.market_type,
-            "dry_run":         request.dry_run,
-        }
-        if request.symbols is not None:
-            pipeline_kwargs["symbols"] = request.symbols
-        if request.timeframes is not None:
-            pipeline_kwargs["timeframes"] = request.timeframes
-        if request.start_date is not None:
-            pipeline_kwargs["start_date"] = request.start_date
-        if request.auto_lookback_days is not None:
-            pipeline_kwargs["auto_lookback_days"] = request.auto_lookback_days
+        exchange_client = CCXTAdapter(**adapter_kwargs)
 
-        from market_data.infrastructure.observability.metrics_adapter import PrometheusPipelineMetrics
-        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
-        from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
-
-        exchange_id = request.exchange
-        market_type = request.market_type
-
-        from ocm.runtime.state import build_cursor_store_from_env, InMemoryCursorStore
         try:
             cursor = build_cursor_store_from_env()
         except Exception:
             cursor = InMemoryCursorStore()
 
-        # Kappa: el fetcher no necesita storage — el cursor Redis es SSOT
-        # del offset del productor. Iceberg solo lo toca el consumer downstream.
+        # Kappa: el fetcher no toca Iceberg — cursor Redis es SSOT del offset
+        # del productor. Iceberg solo lo escribe el consumer downstream (BronzeWriter).
         fetcher = HistoricalFetcherAsync(
             storage            = None,
             transformer        = OHLCVTransformer(),
-            exchange_client    = pipeline_kwargs["exchange_client"],
+            exchange_client    = exchange_client,
             cursor_store       = cursor,
-            backfill_mode      = pipeline_kwargs.get("backfill_mode", True),
-            market_type        = market_type,
-            config_start_date  = pipeline_kwargs.get("start_date", "auto"),
-            auto_lookback_days = pipeline_kwargs.get("auto_lookback_days", 3650),
+            backfill_mode      = True,
+            market_type        = request.market_type,
+            config_start_date  = request.start_date or "auto",
+            auto_lookback_days = request.auto_lookback_days or 3650,
         )
-        metrics = PrometheusPipelineMetrics()
 
-        pipeline_kwargs["fetcher"] = fetcher
-        pipeline_kwargs["metrics"] = metrics
+        # Fail-Fast: OHLCVPipeline.__init__ valida que symbols/timeframes/start_date
+        # no estén vacíos. Si el request no los provee, la factory debe proveer
+        # un fallback explícito — no silencioso — para que el error sea claro (C-03).
+        if not request.symbols:
+            raise ValueError(
+                f"PipelineRequest.symbols es obligatorio para pipeline='ohlcv'. "
+                f"Request recibido: {request}"
+            )
+        if not request.timeframes:
+            raise ValueError(
+                f"PipelineRequest.timeframes es obligatorio para pipeline='ohlcv'. "
+                f"Request recibido: {request}"
+            )
+        if not request.start_date:
+            raise ValueError(
+                f"PipelineRequest.start_date es obligatorio para pipeline='ohlcv'. "
+                f"Request recibido: {request}"
+            )
+        pipeline_kwargs: dict[str, Any] = {
+            "exchange_client":    exchange_client,
+            "fetcher":            fetcher,
+            "metrics":            PrometheusPipelineMetrics(),
+            "market_type":        request.market_type,
+            "dry_run":            request.dry_run,
+            "symbols":            request.symbols,
+            "timeframes":         request.timeframes,
+            "start_date":         request.start_date,
+            "auto_lookback_days": request.auto_lookback_days or 3650,
+        }
+
         return OHLCVPipeline(**pipeline_kwargs)
 
     def _build_trades(self, request: Any) -> Any:
@@ -168,11 +181,11 @@ class ConcretePipelineFactory:
         exchange_client = CCXTAdapter(**adapter_kwargs)
 
         return DerivativesPipeline(
-            symbols              = request.symbols or [],
-            exchange_client      = exchange_client,
-            funding_rate_fetcher = FundingRateFetcher(exchange_client=exchange_client),
-            open_interest_fetcher= OpenInterestFetcher(exchange_client=exchange_client),
-            storage              = DerivativesStorage(exchange=request.exchange),
-            market_type          = request.market_type,
-            dry_run              = request.dry_run,
+            symbols               = request.symbols or [],
+            exchange_client       = exchange_client,
+            funding_rate_fetcher  = FundingRateFetcher(exchange_client=exchange_client),
+            open_interest_fetcher = OpenInterestFetcher(exchange_client=exchange_client),
+            storage               = DerivativesStorage(exchange=request.exchange),
+            market_type           = request.market_type,
+            dry_run               = request.dry_run,
         )

@@ -8,8 +8,16 @@ KafkaConsumerAdapter — implementación concreta de KafkaConsumerPort.
 Factories por consumer group
 -----------------------------
 Cada método de clase `for_*` construye el consumer correcto para su rol.
-Los nombres de grupo vienen de kafka_producer.py (SSOT).
+Los nombres de grupo y topic vienen de shared.kafka.topics (SSOT global).
 Los nombres de env var vienen de env_vars.py (SSOT).
+
+Fix C-NUEVO: corregido import de topics desde kafka_producer.py (port) →
+  shared.kafka.topics (SSOT). kafka_producer.py solo define KafkaProducerPort,
+  nunca topics ni consumer groups. El error causaba ImportError en runtime
+  para todos los factory methods excepto for_portfolio.
+
+Fix C-NUEVO-2: for_portfolio tenía import interpolado mid-método con
+  indentación rota. Eliminado — topics vienen del import de módulo.
 
 Principios: DIP · SRP · SafeOps · SSOT · Kappa
 """
@@ -21,13 +29,20 @@ from typing import List
 from loguru import logger
 
 from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort, KafkaMessage  # noqa
-from market_data.ports.outbound.kafka_producer import (
+
+# SSOT de topics y consumer groups — shared.kafka.topics, nunca strings literales.
+# Fix C-NUEVO: los topics NO viven en kafka_producer.py (port); ese módulo solo
+# define KafkaProducerPort. Importar desde shared cumple BC-01 y elimina el
+# acoplamiento entre el port del producer y el adapter del consumer.
+from shared.kafka.topics import (
     TOPIC_OHLCV_RAW,
     TOPIC_OHLCV_VALIDATED,
     TOPIC_OHLCV_FEATURES,
     TOPIC_SIGNALS_RAW,
     TOPIC_SIGNALS_APPROVED,
+    TOPIC_ORDERS_FILLED,
     GROUP_BRONZE_WRITER,
+    GROUP_QUALITY_GATE,
     GROUP_FEATURES,
     GROUP_STRATEGY,
     GROUP_RISK_GATE,
@@ -109,10 +124,10 @@ class KafkaConsumerAdapter:
         Procesa TODOS los sources (live, backfill, replay).
         """
         return cls(
-            topics            = [TOPIC_OHLCV_RAW],
-            group_id          = GROUP_BRONZE_WRITER,
-            bootstrap_servers = _broker(),
-            auto_offset_reset = _offset_reset(),
+            topics                = [TOPIC_OHLCV_RAW],
+            group_id              = GROUP_BRONZE_WRITER,
+            bootstrap_servers     = _broker(),
+            auto_offset_reset     = _offset_reset(),
             session_timeout_ms    = _session_timeout(),
             heartbeat_interval_ms = _heartbeat(),
         )
@@ -124,10 +139,10 @@ class KafkaConsumerAdapter:
         Procesa TODOS los sources.
         """
         return cls(
-            topics            = [TOPIC_OHLCV_VALIDATED],
-            group_id          = GROUP_FEATURES,
-            bootstrap_servers = _broker(),
-            auto_offset_reset = _offset_reset(),
+            topics                = [TOPIC_OHLCV_VALIDATED],
+            group_id              = GROUP_FEATURES,
+            bootstrap_servers     = _broker(),
+            auto_offset_reset     = _offset_reset(),
             session_timeout_ms    = _session_timeout(),
             heartbeat_interval_ms = _heartbeat(),
         )
@@ -140,10 +155,10 @@ class KafkaConsumerAdapter:
         no aquí (el header x-ocm-source evita deserializar el body).
         """
         return cls(
-            topics            = [TOPIC_OHLCV_FEATURES],
-            group_id          = GROUP_STRATEGY,
-            bootstrap_servers = _broker(),
-            auto_offset_reset = "latest",   # estrategia: solo datos nuevos en vivo
+            topics                = [TOPIC_OHLCV_FEATURES],
+            group_id              = GROUP_STRATEGY,
+            bootstrap_servers     = _broker(),
+            auto_offset_reset     = "latest",   # solo datos nuevos en vivo
             session_timeout_ms    = _session_timeout(),
             heartbeat_interval_ms = _heartbeat(),
         )
@@ -152,10 +167,10 @@ class KafkaConsumerAdapter:
     def for_risk_gate(cls) -> "KafkaConsumerAdapter":
         """signals.raw → RiskGateConsumer → signals.approved | rejected."""
         return cls(
-            topics            = [TOPIC_SIGNALS_RAW],
-            group_id          = GROUP_RISK_GATE,
-            bootstrap_servers = _broker(),
-            auto_offset_reset = "latest",
+            topics                = [TOPIC_SIGNALS_RAW],
+            group_id              = GROUP_RISK_GATE,
+            bootstrap_servers     = _broker(),
+            auto_offset_reset     = "latest",
             session_timeout_ms    = _session_timeout(),
             heartbeat_interval_ms = _heartbeat(),
         )
@@ -164,10 +179,10 @@ class KafkaConsumerAdapter:
     def for_execution(cls) -> "KafkaConsumerAdapter":
         """signals.approved → ExecutionConsumer → OMS → exchange."""
         return cls(
-            topics            = [TOPIC_SIGNALS_APPROVED],
-            group_id          = GROUP_EXECUTION,
-            bootstrap_servers = _broker(),
-            auto_offset_reset = "latest",
+            topics                = [TOPIC_SIGNALS_APPROVED],
+            group_id              = GROUP_EXECUTION,
+            bootstrap_servers     = _broker(),
+            auto_offset_reset     = "latest",
             session_timeout_ms    = _session_timeout(),
             heartbeat_interval_ms = _heartbeat(),
         )
@@ -175,12 +190,11 @@ class KafkaConsumerAdapter:
     @classmethod
     def for_portfolio(cls) -> "KafkaConsumerAdapter":
         """orders.filled → PortfolioConsumer → TradeTracker."""
-        from market_data.ports.outbound.kafka_producer import TOPIC_ORDERS_FILLED
         return cls(
-            topics            = [TOPIC_ORDERS_FILLED],
-            group_id          = GROUP_PORTFOLIO,
-            bootstrap_servers = _broker(),
-            auto_offset_reset = "earliest",
+            topics                = [TOPIC_ORDERS_FILLED],
+            group_id              = GROUP_PORTFOLIO,
+            bootstrap_servers     = _broker(),
+            auto_offset_reset     = "earliest",
             session_timeout_ms    = _session_timeout(),
             heartbeat_interval_ms = _heartbeat(),
         )

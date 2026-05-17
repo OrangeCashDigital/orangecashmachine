@@ -18,22 +18,40 @@ Flujo
       ↓
   dedup via event_id (SeenFilter L1 en memoria)
       ↓
-  BronzeStorage.write()
+  BronzeStorage.append()
       ↓
   commit() offset — at-least-once garantizado
 
 Idempotencia
 ------------
 Dos rutas de dedup:
-  1. SeenFilter L1 (en memoria) — dedup dentro de la misma sesión del proceso
-  2. Iceberg merge-on-read      — Silver Dagster job deduplica por event_id
-                                  al materializar desde Bronze
+  1. SeenFilter L1 (en memoria) — dedup dentro de la sesión del proceso
+  2. Iceberg merge-on-read — Silver Dagster deduplica por event_id
 
-SafeOps
--------
-- Mensajes no deserializables → DLQ (ohlcv.dlq) + commit + continuar
-- Errores de escritura Bronze → log + NO commit (se reprocesa)
-- El loop nunca se detiene por un mensaje individual
+Semántica at-least-once — Fix B-NEW-04
+---------------------------------------
+Un batch de mensajes puede tener mezcla de éxitos y fallos.
+La política correcta para at-least-once:
+
+  CASO A — error de Bronze write:
+    El mensaje NO se commitea → se reintenta en el próximo poll.
+    Sin commit → el proceso puede ver el mismo mensaje dos veces,
+    pero SeenFilter L1 + Iceberg dedup lo manejan correctamente.
+
+  CASO B — mensaje no deserializable o vacío:
+    Va al DLQ → se cuenta como "handled" → sí se commitea.
+    Razón: no tiene sentido reintentar un mensaje corrupto — el DLQ
+    es el lugar correcto para replay manual.
+
+Implementación: commit si write_errors == 0.
+Si cualquier Bronze write falla, NO hacer commit del batch completo.
+Los mensajes exitosos dentro del batch son idempotentes (SeenFilter + dedup).
+
+Fixes aplicados
+---------------
+B-NEW-02: self._dlq.send_async() → self._dlq.produce() (método canónico del port)
+B-NEW-04: at-least-once corregido — no commitear si hubo write_errors > 0
+B-NEW-05: topics importados desde topics.py (SSOT), no desde el port
 
 Principios: SRP · DIP · SafeOps · Kappa · at-least-once · SSOT
 """
@@ -48,8 +66,12 @@ import pandas as pd
 
 from market_data.infrastructure.kafka.serializer import deserialize
 from market_data.infrastructure.kafka.dedup      import SeenFilter
+# Fix M-NUEVO: TOPIC_DLQ desde shared.kafka.topics (SSOT global).
+# legacy topics.py definía TOPIC_DLQ='ohlcv.dlq' pero shared define
+# TOPIC_DLQ='ocm.dlq' — dos DLQs distintos. shared es canónico.
+from shared.kafka.topics import TOPIC_DLQ
 from market_data.ports.outbound.kafka_consumer   import KafkaConsumerPort
-from market_data.ports.outbound.kafka_producer   import KafkaProducerPort, TOPIC_DLQ
+from market_data.ports.outbound.kafka_producer   import KafkaProducerPort
 
 
 class KafkaBronzeWriter:
@@ -59,7 +81,7 @@ class KafkaBronzeWriter:
     Parámetros
     ----------
     consumer       : KafkaConsumerPort — fuente de mensajes
-    bronze_storage : protocolo de escritura Bronze (DIP — no IcebergStorage directo)
+    bronze_storage : BronzeStoragePort — escritura Bronze (DIP)
     dlq_producer   : KafkaProducerPort opcional — para mensajes no procesables
     poll_timeout_ms: tiempo de espera por poll en ms
     max_poll_records: máximo de mensajes por ciclo
@@ -104,12 +126,12 @@ class KafkaBronzeWriter:
 
     async def run(self) -> None:
         """
-        Loop principal. Corre hasta que stop() sea llamado.
+        Loop principal. Corre hasta que stop() sea llamado o CancelledError.
 
         Cada iteración:
           1. poll() → mensajes
           2. procesar cada mensaje (deserializar + dedup + escribir)
-          3. commit() si todos procesados exitosamente
+          3. commit() SOLO si write_errors == 0 (at-least-once correcto)
         """
         self._log.info("bronze_writer_loop_started")
         while self._running:
@@ -123,11 +145,7 @@ class KafkaBronzeWriter:
                 await asyncio.sleep(1.0)
 
     async def run_once(self) -> tuple[int, int]:
-        """
-        Una iteración del loop. Útil para tests.
-
-        Retorna (procesados, fallidos).
-        """
+        """Una iteración del loop. Útil para tests. Retorna (procesados, fallidos)."""
         return await self._run_once()
 
     # ------------------------------------------------------------------
@@ -142,36 +160,57 @@ class KafkaBronzeWriter:
         if not messages:
             return 0, 0
 
-        processed = 0
-        failed    = 0
-        wrote_any = False
+        processed    = 0   # escrituras exitosas a Bronze
+        handled      = 0   # mensajes manejados (DLQ o dedup skip) — no write error
+        write_errors = 0   # fallos de escritura a Bronze — bloquean el commit
 
         for msg in messages:
-            ok = await self._process_message(msg)
-            if ok:
+            outcome = await self._process_message(msg)
+            if outcome == "written":
                 processed += 1
-                wrote_any  = True
-            else:
-                failed += 1
+            elif outcome == "handled":
+                # DLQ, dedup skip, o bars vacío — no es un error de escritura.
+                # El mensaje fue procesado de forma definitiva; el DLQ preserva
+                # los que no pudieron deserializarse para replay manual.
+                handled += 1
+            else:  # outcome == "write_error"
+                write_errors += 1
 
-        # Commit solo si hubo escrituras exitosas — at-least-once
-        if wrote_any:
+        # FIX B-NEW-04 — at-least-once correcto:
+        # Commitear SOLO si no hubo errores de escritura a Bronze.
+        # Si hubo write_errors → NO commitear → los mensajes del batch
+        # se reprocesan en el próximo poll. Los mensajes exitosos dentro
+        # del batch son idempotentes (SeenFilter L1 + Iceberg dedup).
+        if write_errors == 0 and (processed + handled) > 0:
             await self._consumer.commit()  # type: ignore[union-attr]
+        elif write_errors > 0:
+            self._log.bind(
+                write_errors = write_errors,
+                processed    = processed,
+                handled      = handled,
+            ).warning(
+                "bronze_writer_commit_skipped — write errors en batch, "
+                "se reintentará en el próximo poll"
+            )
 
         self._log.bind(
-            processed = processed,
-            failed    = failed,
-            total     = len(messages),
+            processed    = processed,
+            handled      = handled,
+            write_errors = write_errors,
+            total        = len(messages),
         ).debug("bronze_writer_cycle")
 
-        return processed, failed
+        return processed, write_errors
 
-    async def _process_message(self, msg) -> bool:
+    async def _process_message(self, msg) -> str:
         """
         Procesa un mensaje individual.
 
-        Retorna True si fue escrito a Bronze, False si falló o fue duplicado.
-        Mensajes no deserializables van a DLQ — SafeOps.
+        Returns
+        -------
+        "written"     : escrito exitosamente a Bronze → cuenta para commit.
+        "handled"     : DLQ / dedup skip / bars vacío → cuenta para commit.
+        "write_error" : fallo de escritura Bronze → NO commitear el batch.
         """
         # ── Deserializar ──────────────────────────────────────────────
         try:
@@ -183,45 +222,43 @@ class KafkaBronzeWriter:
                 error  = str(exc),
             )
             await self._send_to_dlq(msg, reason=f"deserialize_error:{exc}")
-            return False
+            return "handled"  # DLQ recibe el mensaje — no reintentar
 
         # ── Dedup L1 (en memoria) ─────────────────────────────────────
         if self._dedup.is_duplicate(event.event_id):
             self._log.bind(event_id=event.event_id).debug("bronze_writer_dedup_skip")
-            return False
+            return "handled"
         self._dedup.mark_seen(event.event_id)
 
-        # ── Construir DataFrame desde EventPayload.bars ──────────────────
-        # SRP: KafkaBronzeWriter adapta EventPayload → BronzeStorage.
-        # BronzeStorage recibe df — no conoce OHLCVBar (DIP · bounded context).
+        # ── Validar que hay barras ────────────────────────────────────
         if not event.bars:
             self._log.bind(event_id=event.event_id).warning(
-                "bronze_writer_empty_bars — mensaje descartado"
+                "bronze_writer_empty_bars — descartado"
             )
-            return False
+            await self._send_to_dlq(msg, reason="empty_bars")
+            return "handled"  # DLQ registra el evento vacío
 
-        df = pd.DataFrame(
-            [
-                {
-                    "timestamp": pd.Timestamp(b.ts, unit="ms", tz="UTC"),
-                    "open":      b.open,
-                    "high":      b.high,
-                    "low":       b.low,
-                    "close":     b.close,
-                    "volume":    b.volume,
-                }
-                for b in event.bars
-            ]
-        )
+        # ── Construir DataFrame ───────────────────────────────────────
+        df = pd.DataFrame([
+            {
+                "timestamp": pd.Timestamp(b.ts, unit="ms", tz="UTC"),
+                "open":      b.open,
+                "high":      b.high,
+                "low":       b.low,
+                "close":     b.close,
+                "volume":    b.volume,
+            }
+            for b in event.bars
+        ])
 
-        # ── Escribir a Bronze via append() ────────────────────────────────
+        # ── Escribir a Bronze via append() ────────────────────────────
         try:
             await asyncio.to_thread(
                 self._bronze.append,  # type: ignore[attr-defined]
                 df        = df,
                 symbol    = event.symbol,
                 timeframe = event.timeframe,
-                run_id    = event.event_id,  # event_id como run_id → trazabilidad
+                run_id    = event.event_id,
             )
             self._log.bind(
                 event_id  = event.event_id,
@@ -231,7 +268,7 @@ class KafkaBronzeWriter:
                 bars      = len(event.bars),
                 source    = getattr(event, "source", "unknown"),
             ).info("bronze_written")
-            return True
+            return "written"
         except Exception as exc:
             self._log.error(
                 "bronze_write_error",
@@ -241,14 +278,16 @@ class KafkaBronzeWriter:
                 timeframe = event.timeframe,
                 error     = str(exc),
             )
-            return False
+            return "write_error"  # NO commitear — reintentar en próximo poll
 
     async def _send_to_dlq(self, msg, reason: str) -> None:
         """Envía mensaje no procesable al DLQ. SafeOps."""
         if self._dlq is None:
             return
         try:
-            await self._dlq.send_async(  # type: ignore[union-attr]
+            # FIX B-NEW-02: produce() — método canónico del port.
+            # send_async() no existe en KafkaProducerPort.
+            await self._dlq.produce(
                 topic   = TOPIC_DLQ,
                 value   = msg.value,
                 headers = {"reason": reason, "original_topic": msg.topic},

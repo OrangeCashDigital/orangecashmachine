@@ -81,8 +81,6 @@ def _build_kafka_publisher_safe():
         return None
 
 from market_data.quality.pipeline import QualityPipeline
-from market_data.quality.invariants.invariants import check_dataset_invariants
-from market_data.domain.value_objects.gap_utils import scan_gaps
 from market_data.application.pipelines._worker_pool import run_worker_pool
 from market_data.domain.policies.base import (
     PairResult,
@@ -97,6 +95,7 @@ from market_data.application.strategies.repair      import RepairStrategy
 from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
+from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
 from ocm.runtime.state import (
     build_cursor_store_from_env,
     InMemoryCursorStore,
@@ -189,7 +188,6 @@ def _classify_pair_error(result: PairResult) -> str:
 # ==============================================================================
 
 class OHLCVPipeline(PipelineTriggerPort):
-    _log: Any  # bound en __init__ via bind_pipeline() — anotado para MyPy
     """
     Pipeline unificado de ingestion OHLCV.
 
@@ -219,6 +217,8 @@ class OHLCVPipeline(PipelineTriggerPort):
     summary = await pipeline.run(mode="backfill")
     summary = await pipeline.run(mode="repair")
     """
+
+    _log: Any  # bound en __init__ via bind_pipeline() — anotado para MyPy
 
     def __init__(
         self,
@@ -463,43 +463,22 @@ class OHLCVPipeline(PipelineTriggerPort):
 
     async def _run_completeness_check(self, summary: "PipelineSummary") -> None:
         """
-        Valida cobertura temporal de las series escritas en este pipeline.
+        Hook post-pipeline para verificación de completitud.
 
-        Corre después de que el pipeline termina — nunca bloquea escrituras.
-        Solo verifica series con rows > 0 (saltea skipped/errores).
+        Kappa architecture: el producer (OHLCVPipeline) no lee el lago.
+        Gap detection e invariant checks son responsabilidad del consumer
+        downstream (RepairStrategy) o de un Dagster asset de observabilidad
+        que lee Iceberg directamente.
 
-        Estrategia
-        ----------
-        1. Leer datos desde storage (load_ohlcv con start=None → todo el dataset)
-        2. Ejecutar scan_gaps sobre el DataFrame completo
-        3. Loguear gaps por severidad — warning si high, info si medium/low
-        4. Verificar invariantes formales del dataset (non-blocking)
-        5. SafeOps: cualquier excepción capturada y logueada, nunca relanzada
-
-        Nota: load_ohlcv está en el contrato OHLCVStorage — disponible en
-        IcebergStorage sin necesidad de getattr.
+        SafeOps: nunca bloquea ni lanza — solo registra el evento.
         """
-
         written = [r for r in summary.results if r.success and r.rows > 0]
         if not written:
             return
-
-        self._log.bind(mode="completeness", series=len(written)).debug(
-            "Completeness check iniciando"
-        )
-
-        # Post-run completeness scan eliminado — Kappa: el producer no lee
-        # el lago. Gap detection y invariant checks son maintenance logic —
-        # pertenecen a RepairStrategy o a un Dagster asset de observabilidad
-        # separado que lee Iceberg directamente sin pasar por el pipeline.
         self._log.bind(
             mode           = "completeness",
             series_checked = len(written),
-            series_clean   = series_clean,
-            total_gaps     = total_gaps,
-            total_high     = total_high,
-            status         = "OK" if total_high == 0 else "GAPS_DETECTED",
-        ).info("Completeness check finalizado")
+        ).debug("Completeness check omitido — responsabilidad del consumer Kappa")
 
     # ======================================================
     # Single pair execution (barrera de seguridad)
