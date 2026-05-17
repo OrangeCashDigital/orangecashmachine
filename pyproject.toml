@@ -42,64 +42,52 @@ classifiers = [
 dependencies = [
     "dagster>=1.7.0,<2.0",
     "dagster-webserver>=1.7.0,<2.0",
-
     # pydantic: pinneado en 2.8.2 — 2.9 introdujo breaking changes en
     # model_rebuild() con forward refs en schemas anidados (Hydra + Pydantic).
     # Desbloquear solo tras validar ocm/config/schema.py en staging completo.
     "pydantic==2.8.2",
     "pydantic-settings>=2.13.1,<3.0",
-
     "pandera>=0.20.0",
     "numpy>=2.0,<3.0",
     "pandas>=2.3,<3.0",
     "pyarrow>=17.0,<20.0",
-
     # ccxt: pinneado en 4.3.58 — versiones posteriores cambian la firma de
     # fetch_ohlcv() y el campo default_type en exchange params (CCXTAdapter).
     # Actualizar solo tras smoke test completo contra Bybit + KuCoin en staging.
     "ccxt==4.3.58",
-
     # loguru: pinneado en 0.7.2 — API de sink Loki acoplada a esta versión.
     # Structlog también depende del record format de loguru. Actualizar con ambos.
     "loguru==0.7.2",
     "structlog>=24.1.0,<25.0",
-
     "httpx>=0.27.0,<1.0",
     "prometheus-client>=0.20.0,<1.0",
-
     # pyyaml: pinneado en 6.0.2 — Hydra 1.3.x requiere exactamente esta API
     # de yaml.safe_load con soporte de anchors. 6.1 cambió el comportamiento
     # de merge keys (<<) que se usan en config/. Desbloquear con Hydra 2.x.
     "pyyaml==6.0.2",
-
     "python-dotenv>=1.0,<3.0",
     "hydra-core>=1.3.2,<2.0",
-
     # aioresilience: pinneado en 0.2.1 — API de CircuitBreaker no estabilizada.
     # Versiones posteriores cambian el constructor y los hooks de estado.
     # Acoplado a import-linter CI (aioresilience rompe resolución en Python 3.12
     # con deps transitivas de anyio — ver MIGRATION.md §circuit-breaker).
     "aioresilience==0.2.1",
-
     "aiometer>=0.10.0",
-
     # pybreaker: pinneado en 1.4.1 — usado como fallback sync de circuit breaker.
     # 2.x cambia la interfaz de listeners. Sincronizar con aioresilience.
     "pybreaker==1.4.1",
-
     "redis>=7.4.0,<8.0",
     "aiokafka>=0.11.0,<1.0",
-
     # pyiceberg: <1.0 — API pública no estabilizada en 1.x todavía.
     # >=0.9.1: requiere TimestampType microsecond epoch (int) en scan filters.
     # Actualizar solo tras smoke test completo en staging (iceberg_storage tests).
     "pyiceberg[pyarrow,sql-sqlite]>=0.9.1,<1.0",
-
     "duckdb>=1.5.1,<2.0",
     "fastapi>=0.111.0,<1.0",
     "uvicorn[standard]>=0.14.0,<0.29.0",
     "python-jose[cryptography]>=3.3.0,<4.0",
     "polars[rtcompat]>=1.40.1",
+    "great-expectations>=1.17.2",
 ]
 
 [project.license]
@@ -401,12 +389,13 @@ ignore_imports = [
 #   packages/market_data/application/use_cases/pipeline_orchestrator.py
 name = "BC-08: market_data layer order (domain < ports < application < adapters < infrastructure)"
 type = "layers"
+containers = ["market_data"]
 layers = [
-    "market_data.infrastructure",
-    "market_data.adapters",
-    "market_data.application",
-    "market_data.ports",
-    "market_data.domain",
+    "infrastructure",
+    "adapters",
+    "application",
+    "ports",
+    "domain",
 ]
 ignore_imports = [
     # Adapters que implementan ports e importan infra concreta (lazy en método).
@@ -625,7 +614,9 @@ allow_indirect_imports = true
 name = "BC-24: ocm.runtime does not import domain packages or apps"
 type = "forbidden"
 source_modules = ["ocm.runtime"]
-forbidden_modules = ["packages", "app", "infrastructure"]
+# "packages" no es módulo Python — hatch remapea packages/* a sus nombres finales.
+# Protegemos contra los nombres reales que el resolver ve en el grafo.
+forbidden_modules = ["market_data", "trading", "portfolio", "app", "infrastructure"]
 
 [[tool.importlinter.contracts]]
 # ocm.config se inicializa antes que ocm.runtime — no puede depender de él.
@@ -650,8 +641,17 @@ forbidden_modules = ["ocm.runtime"]
 # Si se añaden más ignore_imports aquí, requieren revisión arquitectónica explícita.
 name = "BC-26: ocm — layering observability < config < runtime"
 type = "layers"
-layers = ["ocm.runtime", "ocm.config", "ocm.observability"]
+containers = ["ocm"]
+layers = [
+    "runtime",
+    "config",
+    "observability",
+]
 ignore_imports = [
+    # EXCEPCIÓN DOCUMENTADA: env_resolver emite warning estructurado via
+    # observability.bootstrap cuando una env var requerida falta en el parsing.
+    # El logging debe preceder al parsing para que los errores sean observables.
+    # Cualquier adición aquí requiere revisión arquitectónica explícita.
     "ocm.config.loader.env_resolver -> ocm.observability.bootstrap",
 ]
 
@@ -710,6 +710,54 @@ forbidden_modules = [
     "market_data.infrastructure.kafka.payloads",
     "market_data.infrastructure.kafka.serializer",
     "market_data.infrastructure.kafka.topics",
+]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 1 (detalle medallion) — flujo unidireccional de storage
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# Flujo medallion: bronze → silver → gold (unidireccional, append-only).
+# bronze escribe datos crudos — no conoce transformaciones silver ni gold.
+# silver normaliza — no conoce la capa analítica gold.
+# Cada capa es independientemente testeable y deployable.
+# Fail-fast: un import invertido rompe la inmutabilidad de la cadena de custodia.
+name = "BC-30: medallion storage — unidirectional bronze → silver → gold"
+type = "layers"
+containers = ["market_data.infrastructure.storage"]
+layers = [
+    "gold",
+    "silver",
+    "bronze",
+    "iceberg",
+]
+
+[[tool.importlinter.contracts]]
+# market_data.quality valida datos procesados — puede leer domain y ports.
+# No puede importar infrastructure directamente: la validación se aplica
+# sobre abstracciones, no sobre implementaciones de storage concretas.
+# Esto garantiza que quality sea testeable sin iceberg/redis/kafka reales.
+name = "BC-31: market_data.quality does not import infrastructure directly"
+type = "forbidden"
+source_modules = ["market_data.quality"]
+forbidden_modules = [
+    "market_data.infrastructure.storage",
+    "market_data.infrastructure.kafka",
+    "market_data.adapters.outbound.exchange",
+]
+
+[[tool.importlinter.contracts]]
+# shared.kafka son los wire schemas SSOT de eventos Kafka entre BCs.
+# No puede importar market_data.infrastructure.kafka (implementación concreta)
+# porque eso invertiría la dependencia: el contrato dependería de la implementación.
+# SSOT: shared.kafka define el contrato; market_data.infrastructure.kafka lo implementa.
+name = "BC-32: shared.kafka does not import market_data infrastructure (SSOT direction)"
+type = "forbidden"
+source_modules = ["shared.kafka"]
+forbidden_modules = [
+    "market_data.infrastructure.kafka",
+    "market_data.infrastructure.storage",
 ]
 
 # ---------------------------------------------------------------------------
