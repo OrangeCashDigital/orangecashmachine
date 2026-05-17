@@ -511,7 +511,6 @@ class TestExecutePairHealing:
         ctx = PipelineContext(
             fetcher      = bad_fetcher,
             storage      = _StorageStub(df=df),
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(),
             exchange_id  = _EXCHANGE,
@@ -608,7 +607,6 @@ class TestHealGap:
         return PipelineContext(
             fetcher      = _FetcherStub(chunks=chunks or []),
             storage      = _StorageStub(),
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(accept=quality_accept),
             exchange_id  = _EXCHANGE,
@@ -665,7 +663,6 @@ class TestHealGap:
         ctx      = PipelineContext(
             fetcher      = _FetcherStub(chunks=[candles]),
             storage      = storage,
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(accept=False),
             exchange_id  = _EXCHANGE,
@@ -695,7 +692,6 @@ class TestHealGap:
         ctx      = PipelineContext(
             fetcher      = _FetcherStub(chunks=[candles]),
             storage      = storage,
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(accept=True),
             exchange_id  = _EXCHANGE,
@@ -726,7 +722,6 @@ class TestHealGap:
         ctx      = PipelineContext(
             fetcher      = _FetcherStub(chunks=[]),  # vacío → NoDataAvailableError
             storage      = _StorageStub(),
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(),
             exchange_id  = _EXCHANGE,
@@ -757,7 +752,6 @@ class TestHealGap:
         ctx      = PipelineContext(
             fetcher      = _FetcherStub(chunks=[]),
             storage      = _StorageStub(),
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(),
             exchange_id  = _EXCHANGE,
@@ -791,7 +785,6 @@ class TestHealGap:
         ctx = PipelineContext(
             fetcher      = bad_fetcher,
             storage      = _StorageStub(),
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(),
             exchange_id  = _EXCHANGE,
@@ -826,7 +819,6 @@ class TestHealGap:
         ctx = PipelineContext(
             fetcher      = bad_fetcher,
             storage      = _StorageStub(),
-            bronze       = MagicMock(),
             cursor       = MagicMock(),
             quality      = _QualityStub(),
             exchange_id  = _EXCHANGE,
