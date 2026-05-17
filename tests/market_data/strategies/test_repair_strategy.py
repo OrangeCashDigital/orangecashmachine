@@ -97,7 +97,7 @@ def _make_metrics() -> MagicMock:
 from market_data.domain.policies.base import (
     PipelineContext,
 )
-from market_data.domain.exceptions.processing_exceptions import (
+from market_data.domain.exceptions import (
     ChunkFetchError,
 )
 from market_data.domain.value_objects.gap_utils import GapRange
