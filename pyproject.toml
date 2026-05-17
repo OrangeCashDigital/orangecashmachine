@@ -606,6 +606,23 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "BC-29: kafka wire schemas se importan desde shared.kafka, no desde market_data.infrastructure"
+type = "forbidden"
+source_modules = [
+    "trading",
+    "portfolio",
+    "app",
+    "infrastructure",
+]
+forbidden_modules = [
+    "market_data.infrastructure.kafka.payloads",
+    "market_data.infrastructure.kafka.serializer",
+    "market_data.infrastructure.kafka.topics",
+]
+# allow_indirect_imports: market_data puede seguir importando sus propios módulos
+# durante la Fase 2 de migración. El contrato aplica solo a BCs externos.
+# Una vez completada la migración, añadir market_data a source_modules.
+[[tool.importlinter.contracts]]
 name = "BC-28: market_data.factories es composition root — nadie lo importa"
 type = "forbidden"
 source_modules = [
