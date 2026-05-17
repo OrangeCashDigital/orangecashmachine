@@ -28,7 +28,7 @@ from market_data.domain.policies.base import (
     StrategyMixin,
     classify_error,
 )
-from market_data.domain.exceptions.processing_exceptions import (
+from market_data.domain.exceptions import (
     ChunkFetchError,
     NoDataAvailableError,
 )

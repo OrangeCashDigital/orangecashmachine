@@ -220,7 +220,7 @@ OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
 # ==========================================================
 # Exceptions
-from market_data.domain.exceptions.processing_exceptions import (  # noqa: E402
+from market_data.domain.exceptions import (  # noqa: E402
     MissingStartDateError, ChunkFetchError,
     InvalidMarketTypeError,
 )
