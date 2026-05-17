@@ -222,13 +222,47 @@ class QualityMetricsPort(Protocol):
     """
     Contrato de métricas del pipeline de calidad de datos.
 
-    Implementación: métricas Prometheus globales en
-    market_data.infrastructure.observability.metrics_adapter.
-    DIP: QualityPipeline depende de este port, no de Prometheus directamente.
+    Implementación de referencia
+    ----------------------------
+    market_data.infrastructure.observability.metrics_adapter.PrometheusQualityMetrics
 
-    Nota: QualityPipeline usa métricas globales (QUALITY_GAPS_TOTAL,
-    PIPELINE_ERRORS) registradas en module-level. Este port sirve como
-    contrato documentado para esas métricas — la implementación futura
-    puede inyectarlas como instancia si se requiere testabilidad completa.
+    DIP: QualityPipeline inyecta este port — nunca importa Prometheus directamente.
+    ISP: interfaz mínima — solo los 2 métodos que QualityPipeline necesita.
+    SafeOps: implementaciones nunca propagan excepciones al caller.
     """
-    ...  # Métricas via globals en quality/pipeline.py — contrato nominal
+
+    def quality_gaps_inc(
+        self,
+        exchange:  str,
+        symbol:    str,
+        timeframe: str,
+        severity:  str,
+        count:     int = 1,
+    ) -> None:
+        """Incrementa contador de gaps detectados por severidad."""
+        ...
+
+    def pipeline_errors_inc(
+        self,
+        exchange:   str,
+        error_type: str,
+    ) -> None:
+        """Incrementa contador de errores de pipeline. error_type: quality_reject|fatal"""
+        ...
+
+
+class NullQualityMetrics:
+    """
+    Implementación vacía de QualityMetricsPort.
+
+    Uso: tests, entornos sin Prometheus, pipelines degradados.
+    Todos los métodos son no-op — SafeOps garantizado por diseño.
+    """
+
+    def quality_gaps_inc(
+        self, exchange: str, symbol: str, timeframe: str, severity: str, count: int = 1
+    ) -> None:
+        pass
+
+    def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:
+        pass

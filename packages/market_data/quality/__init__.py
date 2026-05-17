@@ -76,3 +76,6 @@ __all__ = [
     "AnomalyRegistry",
     "default_registry",
 ]
+
+# Re-export factory para que el Composition Root pueda importar desde quality.pipeline
+from market_data.quality.pipeline import QualityPipeline, QualityPipelineResult, default_quality_pipeline  # noqa: F401
