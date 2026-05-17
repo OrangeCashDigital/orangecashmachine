@@ -263,11 +263,8 @@ class HistoricalFetcherAsync:
         auto_lookback_days:   int                       = 1825,
     ) -> None:
         self._exchange          = exchange_client
-        if storage is None:
-            raise TypeError(
-                "OHLCVFetcher requiere 'storage' explícito — "
-                "inyectar desde ohlcv_pipeline via storage_factory()"
-            )
+        # storage=None es válido en modo Kappa — el fetcher ya no consulta
+        # Iceberg para resolver timestamps. Solo RepairStrategy lo necesita.
         self._storage = storage
         # transformer requerido — inyectado desde Composition Root (pipeline_factory)
         # BC-06: fetcher no instancia application use cases
@@ -533,30 +530,10 @@ class HistoricalFetcherAsync:
             self._log.bind(symbol=symbol, timeframe=timeframe, ts_ms=cursor_ts).debug("Cursor hit")
             return cursor_ts - (self._overlap * tf_ms)
 
-        # B. Fallback Iceberg (get_last_timestamp — L1/L2/L3)
-        last_ts = self._storage.get_last_timestamp(symbol, timeframe)
-        if last_ts is not None:
-            if not isinstance(last_ts, pd.Timestamp):
-                # Guardia defensiva: _to_utc_timestamp debe devolver siempre
-                # pd.Timestamp. Si llega otro tipo, el caché L1 está corrupto.
-                self._log.bind(
-                    symbol=symbol, timeframe=timeframe,
-                    last_ts_type=type(last_ts).__name__, last_ts_repr=repr(last_ts),
-                ).error("get_last_timestamp devolvió tipo inesperado — abortando par")
-                raise MissingStartDateError(
-                    f"get_last_timestamp devolvió {type(last_ts).__name__} "
-                    f"en lugar de pd.Timestamp para {symbol}/{timeframe}"
-                )
-            since_ms  = int(last_ts.timestamp() * 1000) - (self._overlap * tf_ms)
-            delta_ms  = int(last_ts.timestamp() * 1000) - since_ms
-            self._log.bind(
-                symbol=symbol, timeframe=timeframe,
-                last_ts=last_ts.isoformat(), since_ms=since_ms,
-                delta_ms=delta_ms, overlap_candles=self._overlap,
-            ).debug("Cursor miss — fallback Iceberg")
-            return since_ms
-
-        # C. Primer inicio desde arg o config (ignora el sentinel "auto")
+        # B. Primer inicio desde arg o config (ignora el sentinel "auto")
+        # Kappa: cursor Redis es SSOT. Sin cursor → cold start desde config.
+        # El fallback a Iceberg (get_last_timestamp) fue eliminado — en Kappa
+        # el productor no consulta el lago para resolver su posición de inicio.
         for candidate in [start_date, self._config_start_date]:
             if candidate and candidate != "auto":
                 self._log.bind(symbol=symbol, timeframe=timeframe, desde=candidate).info("Primer inicio — fecha configurada")

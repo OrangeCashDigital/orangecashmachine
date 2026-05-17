@@ -15,7 +15,6 @@ Principios: SRP · DIP · SafeOps · KISS
 from __future__ import annotations
 
 import asyncio
-import random
 
 from loguru import logger
 
@@ -29,11 +28,6 @@ from market_data.domain.policies.base import (
 
 # ── Ports ─────────────────────────────────────────────────────────────────────
 from market_data.ports.outbound.publisher import SOURCE_LIVE
-
-# Parámetros del retry OCC — SSOT a nivel de módulo (DRY, KISS).
-_BRONZE_MAX_RETRIES: int   = 5
-_BRONZE_BASE_WAIT_S: float = 0.1   # backoff base: 100ms × 2^(intento-1) ± 25% jitter
-
 
 class IncrementalStrategy(StrategyMixin):
     _mode = PipelineMode.INCREMENTAL
@@ -112,20 +106,19 @@ class IncrementalStrategy(StrategyMixin):
                 result.skipped = True
                 return
         else:
-            # Degraded path: sin publisher → Bronze + Silver directo (modo Lambda)
-            logger.warning(
-                "publisher=None — modo degradado: Bronze+Silver directo "
+            # Kappa: publisher es obligatorio. Sin publisher → error fatal.
+            # No hay path Lambda — el productor nunca escribe al lago directamente.
+            logger.error(
+                "publisher=None — Kappa requiere publisher. "
+                "Verificar KAFKA_ENABLED y broker. Abortando par. "
                 "[{}/{}] | symbol={} timeframe={}",
                 idx, total, symbol, timeframe,
             )
-            run_id = await self._append_bronze_with_retry(
-                df=df, symbol=symbol, timeframe=timeframe, ctx=ctx,
+            ctx.metrics.pipeline_errors_inc(
+                exchange=ctx.exchange_id, error_type="fatal",
             )
-            async with ctx.silver_commit_lock:
-                ctx.storage.save_ohlcv(
-                    df=qres.df, symbol=symbol,
-                    timeframe=timeframe, run_id=run_id,
-                )
+            result.skipped = True
+            return
 
         # ── Cursor update ─────────────────────────────────────────────────────
         last_ts_ms = int(qres.df["timestamp"].max().timestamp() * 1000)
@@ -149,60 +142,5 @@ class IncrementalStrategy(StrategyMixin):
         )
 
     # ── helpers privados ──────────────────────────────────────────────────────
-
-    async def _append_bronze_with_retry(
-        self,
-        df,
-        symbol:    str,
-        timeframe: str,
-        ctx:       PipelineContext,
-    ) -> str:
-        """
-        Append a Bronze con retry OCC y backoff exponencial con jitter.
-
-        Usado SOLO en modo degradado (ctx.publisher is None).
-        En modo Kappa, Bronze se escribe via KafkaBronzeWriter (downstream).
-        ctx.throttle recibe la señal OCC — ajusta concurrencia sin acoplarse
-        a AdaptiveThrottle concreto (ThrottlePort via DIP).
-        """
-        last_occ_wait: float = 0.0
-
-        for attempt in range(1, _BRONZE_MAX_RETRIES + 1):
-            async with ctx.bronze_commit_lock:
-                try:
-                    return ctx.bronze.append(
-                        df=df, symbol=symbol, timeframe=timeframe,
-                    )
-                except Exception as exc:
-                    msg    = str(exc).lower()
-                    is_occ = (
-                        "branch main has changed"               in msg
-                        or "requirement failed"                 in msg
-                        or "has been updated by another process" in msg
-                    )
-
-                    if not is_occ or attempt >= _BRONZE_MAX_RETRIES:
-                        raise
-
-                    # Señal de contención de storage al throttle (DIP via port)
-                    if ctx.throttle is not None:
-                        try:
-                            ctx.throttle.record_occ_conflict()
-                        except Exception:
-                            pass  # SafeOps: throttle es observabilidad
-
-                    last_occ_wait  = _BRONZE_BASE_WAIT_S * (2 ** (attempt - 1))
-                    last_occ_wait *= 1 + random.uniform(-0.25, 0.25)
-
-                    logger.warning(
-                        "Bronze OCC conflict — retry {}/{} | {}/{} wait={:.0f}ms",
-                        attempt, _BRONZE_MAX_RETRIES,
-                        symbol, timeframe,
-                        last_occ_wait * 1000,
-                    )
-
-            await asyncio.sleep(last_occ_wait)
-
-        raise RuntimeError(
-            f"Bronze OCC: reintentos agotados para {symbol}/{timeframe}",
-        )
+    # _append_bronze_with_retry eliminado — Kappa: Bronze lo escribe el consumer,
+    # no el productor. IncrementalStrategy solo publica a Kafka.

@@ -89,14 +89,11 @@ class ConcretePipelineFactory:
             pipeline_kwargs["auto_lookback_days"] = request.auto_lookback_days
 
         from market_data.infrastructure.observability.metrics_adapter import PrometheusPipelineMetrics
-        from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
-        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
         from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
         from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
 
         exchange_id = request.exchange
         market_type = request.market_type
-        dry_run     = request.dry_run
 
         from ocm.runtime.state import build_cursor_store_from_env, InMemoryCursorStore
         try:
@@ -104,15 +101,10 @@ class ConcretePipelineFactory:
         except Exception:
             cursor = InMemoryCursorStore()
 
-        silver = IcebergStorage(
-            exchange    = exchange_id,
-            market_type = market_type,
-            dry_run     = dry_run,
-            cursor_store = cursor,
-        )
-        bronze  = BronzeStorage(exchange=exchange_id)
+        # Kappa: el fetcher no necesita storage — el cursor Redis es SSOT
+        # del offset del productor. Iceberg solo lo toca el consumer downstream.
         fetcher = HistoricalFetcherAsync(
-            storage            = silver,
+            storage            = None,
             transformer        = OHLCVTransformer(),
             exchange_client    = pipeline_kwargs["exchange_client"],
             cursor_store       = cursor,
@@ -123,10 +115,8 @@ class ConcretePipelineFactory:
         )
         metrics = PrometheusPipelineMetrics()
 
-        pipeline_kwargs["fetcher"]  = fetcher
-        pipeline_kwargs["bronze"]   = bronze
-        pipeline_kwargs["storage"]  = silver
-        pipeline_kwargs["metrics"]  = metrics
+        pipeline_kwargs["fetcher"] = fetcher
+        pipeline_kwargs["metrics"] = metrics
         return OHLCVPipeline(**pipeline_kwargs)
 
     def _build_trades(self, request: Any) -> Any:

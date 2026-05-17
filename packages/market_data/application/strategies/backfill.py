@@ -209,14 +209,10 @@ class BackfillStrategy(StrategyMixin):
                 exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
             ).debug("Backfill cursor read failed (non-critical)", error=str(exc))
 
-        # B. Oldest timestamp en Silver
-        oldest = await asyncio.to_thread(
-            self._get_oldest_silver_ts, ctx, symbol, timeframe,
-        )
-        if oldest is not None:
-            return max(int(oldest.timestamp() * 1000), start_date_ms)
-
-        # C. Cold start: paginar desde now hacia origin
+        # B. Cold start: paginar desde now hacia origin
+        # Kappa: cursor Redis es SSOT. Sin cursor → cold start desde now.
+        # El fallback a Silver (get_oldest_timestamp) fue eliminado —
+        # el productor REST no consulta el lago para resolver su posición.
         now_ms           = int(pd.Timestamp.utcnow().timestamp() * 1000)
         effective_origin = max(start_date_ms, origin_ms)
         _log.bind(
@@ -257,20 +253,6 @@ class BackfillStrategy(StrategyMixin):
                 )
             return origin_ms
         return int(pd.Timestamp(start_date, tz="UTC").value // 1_000_000)
-
-    def _get_oldest_silver_ts(
-        self,
-        ctx:       PipelineContext,
-        symbol:    str,
-        timeframe: str,
-    ) -> Optional[pd.Timestamp]:
-        try:
-            return ctx.storage.get_oldest_timestamp(symbol, timeframe)
-        except Exception as exc:
-            _log.bind(symbol=symbol, timeframe=timeframe).warning(
-                "Oldest silver ts failed", error=str(exc),
-            )
-            return None
 
     async def _paginate_backward(
         self,
@@ -402,13 +384,19 @@ class BackfillStrategy(StrategyMixin):
                             current_end = oldest_in_chunk
                             continue
                     else:
-                        log.warning(
-                            "publisher=None — modo degradado: escribiendo directo a Iceberg",
+                        # Kappa: publisher es obligatorio. Sin publisher → error fatal.
+                        # No hay fallback a Iceberg — el productor no escribe al lago.
+                        log.error(
+                            "publisher=None — Kappa requiere publisher. "
+                            "Verificar KAFKA_ENABLED y broker. Abortando chunk.",
                             chunk=chunks + 1,
                         )
-                        ctx.storage.save_ohlcv(
-                            df=qres.df, symbol=symbol, timeframe=timeframe,
-                            skip_versioning=True,
+                        ctx.metrics.pipeline_errors_inc(
+                            exchange=ctx.exchange_id, error_type="fatal",
+                        )
+                        raise RuntimeError(
+                            "BackfillStrategy: ctx.publisher es None. "
+                            "En modo Kappa el publisher es obligatorio."
                         )
                     total_rows += len(qres.df)
                     self._update_backfill_cursor(symbol, timeframe, oldest_in_chunk, ctx)
@@ -445,17 +433,8 @@ class BackfillStrategy(StrategyMixin):
                 log.info("Backfill alcanzó el origen")
                 break
 
-        if total_rows > 0:
-            try:
-                ctx.storage.commit_version(
-                    symbol=symbol, timeframe=timeframe,
-                    run_id=getattr(ctx, "run_id", None),
-                )
-            except Exception as exc:
-                _log.bind(
-                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-                ).warning("Backfill commit_version failed (non-critical)", error=str(exc))
-
+        # Kappa: commit_version eliminado — Iceberg lo gestiona el consumer,
+        # no el productor. El cursor Redis ya fue actualizado chunk a chunk.
         return total_rows, chunks
 
     # ----------------------------------------------------------

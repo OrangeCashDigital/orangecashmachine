@@ -53,59 +53,45 @@ class PipelineMode(str, Enum):
 @dataclass
 class PipelineContext:
     """
-    Contexto inmutable de ejecución de un pipeline.
+    Contexto de ejecución de un pipeline — Kappa architecture.
 
-    Todos los campos son puertos o value objects — ninguna implementación
-    concreta de infra (IcebergStorage, BronzeStorage, etc.) debe aparecer
-    aquí como tipo. Las implementaciones se inyectan desde OHLCVPipeline.
+    Bounded contexts
+    ----------------
+    Productores (BackfillStrategy, IncrementalStrategy):
+      fetcher → publisher → Kafka → [consumer] → Iceberg
 
-    Locks de commit Iceberg
-    -----------------------
-    Serializan appends concurrentes a la misma tabla Iceberg.
-    El fetch sigue siendo 100% paralelo; solo el commit (~200ms) se serializa.
-    Un lock por tabla (bronze / silver) — tablas distintas pueden escribirse
-    solapadas entre sí, solo se serializa dentro de cada tabla.
+    Mantenimiento (RepairStrategy):
+      storage → Iceberg directo (no es market truth, es maintenance)
 
-    Ref: Iceberg OCC — "branch main has changed" cuando dos writers compiten.
+    Campos obligatorios
+    -------------------
+    Todos los campos sin default son obligatorios — fail-fast en construcción.
+    RepairStrategy requiere storage; backfill/incremental no lo usan.
+
+    Principios: DIP · SRP · Kappa · Fail-Fast
     """
-    fetcher:     Any  # HistoricalFetcherAsync — inyectado desde application/ (TYPE_CHECKING)
-    storage:     Any  # OHLCVStorage port — inyectado desde pipeline (BC-08)
-    bronze:      Any  # BronzeStorage — inyectado desde application/ (TYPE_CHECKING)
-    cursor:      Any   # CursorStorePort — inyectado desde pipeline (BC-08)
-    quality:     Any                          # QualityPipeline — sin Port; inyectado desde application/
+    # ── Productores ───────────────────────────────────────────────────────────
+    fetcher:     Any  # HistoricalFetcherPort — REST poller (backfill + incremental)
+    cursor:      Any  # CursorStorePort       — Redis, SSOT del offset del productor
+    quality:     Any  # QualityPipeline       — gate de calidad antes de publicar
     exchange_id: str
     market_type: str
     start_date:  str
 
-    # Locks de serialización de commits Iceberg (un lock por tabla)
-    # Puerto de registro de gaps irrecuperables — inyectado por OHLCVPipeline.
-    # None = modo degradado (SafeOps): repair opera sin persistencia de estado.
-    # Implementación concreta: infra.state.gap_registry.GapRegistry via DI.
-    gap_registry: Any = field(default=None)  # GapRegistryPort port — None = SafeOps (BC-08)
+    # ── Publisher Kappa ───────────────────────────────────────────────────────
+    # Obligatorio en producción — backfill/incremental fallan si es None.
+    # Permite None solo en tests que mockean el publisher explícitamente.
+    publisher: Any = field(default=None)  # OHLCVPublisherPort → Kafka ohlcv.raw
 
-    # Puerto Kafka — inyectado por OHLCVPipeline cuando Kafka está habilitado.
-    # None = modo degradado (SafeOps): el pipeline escribe directo a Iceberg.
-    # Con Kafka: backfill/incremental → ohlcv.raw → KafkaBronzeWriter → Iceberg.
-    # Principio Kappa: todo evento pasa por Kafka; Iceberg es materialización.
-    kafka_producer: Any = field(default=None)  # KafkaProducerPort — None = sin Kafka (BC-08)
+    # ── Mantenimiento (RepairStrategy) ────────────────────────────────────────
+    # storage=None es válido para backfill/incremental — solo Repair lo usa.
+    # Inyectado por RepairPipelineFactory, no por ConcretePipelineFactory.
+    storage: Any = field(default=None)  # OHLCVStoragePort → Iceberg Silver (repair only)
 
-
-    # Métricas de observabilidad — inyectadas por OHLCVPipeline.
-    # None = modo degradado (SafeOps): estrategias omiten métricas.
-    # Protocolo esperado: .record_pair(result) -> None
-    metrics:  Any = field(default=None)
-
-    # Publisher de eventos Kafka a nivel de par — inyectado por OHLCVPipeline.
-    # None = modo directo sin publicación de eventos de progreso.
-    # Protocolo esperado: .publish(event) -> Awaitable[None]
-    publisher: Any = field(default=None)
-
-    # Throttle de rate-limiting entre pares — inyectado por OHLCVPipeline.
-    # None = sin throttling (modo test o batch sin límite de rate).
-    # Protocolo esperado: .wait() -> Awaitable[None]
-    throttle:  Any = field(default=None)
-    bronze_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    silver_commit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # ── Observabilidad ────────────────────────────────────────────────────────
+    metrics:      Any = field(default=None)  # PipelineMetricsPort — SafeOps: None = sin métricas
+    gap_registry: Any = field(default=None)  # GapRegistryPort     — SafeOps: None = sin estado
+    throttle:     Any = field(default=None)  # ThrottlePort        — None = sin rate limiting
 
 
 # ==========================================================================

@@ -83,7 +83,6 @@ def _build_kafka_publisher_safe():
 from market_data.quality.pipeline import QualityPipeline
 from market_data.quality.invariants.invariants import check_dataset_invariants
 from market_data.domain.value_objects.gap_utils import scan_gaps
-from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.application.pipelines._worker_pool import run_worker_pool
 from market_data.domain.policies.base import (
     PairResult,
@@ -227,10 +226,8 @@ class OHLCVPipeline(PipelineTriggerPort):
         timeframes:         List[str],
         start_date:         str,
         exchange_client:    "ExchangeClientPort",
-        fetcher:            object,                    # HistoricalFetcherPort — inyectar desde factory
-        bronze:             object,                    # BronzeStoragePort — inyectar desde factory
-        storage:            "OHLCVStorage",            # Silver — inyectar desde factory
-        metrics:            object,                    # PipelineMetricsPort — inyectar desde factory
+        fetcher:            object,   # HistoricalFetcherPort — inyectar desde factory
+        metrics:            object,   # PipelineMetricsPort  — inyectar desde factory
         max_concurrency:    int                        = DEFAULT_MAX_CONCURRENCY,
         cursor_store:       Optional[CursorStorePort]  = None,
         backfill_mode:      bool                       = True,
@@ -255,16 +252,6 @@ class OHLCVPipeline(PipelineTriggerPort):
                 "OHLCVPipeline: 'fetcher' es obligatorio. "
                 "Inyectar HistoricalFetcherAsync desde el composition root."
             )
-        if bronze is None:
-            raise TypeError(
-                "OHLCVPipeline: 'bronze' es obligatorio. "
-                "Inyectar BronzeStorage desde el composition root."
-            )
-        if storage is None:
-            raise TypeError(
-                "OHLCVPipeline: 'storage' es obligatorio. "
-                "Inyectar IcebergStorage desde el composition root."
-            )
         if metrics is None:
             raise TypeError(
                 "OHLCVPipeline: 'metrics' es obligatorio. "
@@ -286,18 +273,15 @@ class OHLCVPipeline(PipelineTriggerPort):
         _publisher = _build_kafka_publisher_safe()
 
         self._ctx = PipelineContext(
-            fetcher        = fetcher,
-            storage        = storage,
-            bronze         = bronze,
-            cursor         = cursor,
-            quality        = quality,
-            exchange_id    = self._exchange_id,
-            market_type    = self.market_type,
-            start_date     = start_date,
-            gap_registry   = build_gap_registry(),  # type: ignore[arg-type]
-            kafka_producer = getattr(_publisher, "_producer", None),
-            publisher      = _publisher,
-            metrics        = metrics,
+            fetcher      = fetcher,
+            cursor       = cursor,
+            quality      = quality,
+            exchange_id  = self._exchange_id,
+            market_type  = self.market_type,
+            start_date   = start_date,
+            publisher    = _publisher,
+            metrics      = metrics,
+            gap_registry = build_gap_registry(),  # type: ignore[arg-type]
         )
 
         if _kafka_producer is not None:
