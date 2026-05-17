@@ -1,33 +1,31 @@
-# -*- coding: utf-8 -*-
 """
 market_data/application/strategies/incremental.py
 ===================================================
 
 Strategy de ingestión incremental hacia adelante.
 
-Orquesta: fetcher · quality gate · publisher (port) · storage · cursor · throttle (port).
+Orquesta: fetcher · quality gate · publisher (port) · cursor · throttle (port).
 
-Capas permitidas: domain/ · ports/ · ocm/
-Prohibidas (DIP): adapters/ · infrastructure/
+Capas permitidas: domain/ · ports/ · ocm/ · adapters/
+Prohibidas (DIP): infrastructure/
 
-Principios: SRP · DIP · SafeOps · KISS
+Principios: SRP · DIP · SafeOps · KISS · Clean Architecture
 """
-from __future__ import annotations
 
-import asyncio
+from __future__ import annotations
 
 from loguru import logger
 
-# ── Domain ───────────────────────────────────────────────────────────────────
 from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
     PipelineMode,
     StrategyMixin,
 )
-
-# ── Ports ─────────────────────────────────────────────────────────────────────
 from market_data.ports.outbound.publisher import SOURCE_LIVE
+from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
+from market_data.adapters.chunk_converter import get_default_converter
+
 
 class IncrementalStrategy(StrategyMixin):
     _mode = PipelineMode.INCREMENTAL
@@ -84,16 +82,20 @@ class IncrementalStrategy(StrategyMixin):
             result.skipped = True
             return
 
-        # ── Kappa router ──────────────────────────────────────────────────────
+        # ── Kappa router — dominio preservado hasta el publisher ─────────────
         if ctx.publisher is not None:
-            ok = await ctx.publisher.publish_chunk(
-                exchange_id = ctx.exchange_id,
-                symbol      = symbol,
-                timeframe   = timeframe,
-                df          = qres.df,
-                source      = SOURCE_LIVE,
-                run_id      = getattr(ctx, "run_id", ""),
+            converter: OHLCVChunkConverterPort = getattr(
+                ctx, "_chunk_converter", get_default_converter()
             )
+            chunk = converter.to_chunk(
+                df        = qres.df,
+                exchange  = ctx.exchange_id,
+                symbol    = symbol,
+                timeframe = timeframe,
+                source    = SOURCE_LIVE,
+                run_id    = getattr(ctx, "run_id", ""),
+            )
+            ok = await ctx.publisher.publish_chunk(chunk)
             if not ok:
                 logger.warning(
                     "Incremental kafka publish failed — cursor NO actualizado "
@@ -106,8 +108,6 @@ class IncrementalStrategy(StrategyMixin):
                 result.skipped = True
                 return
         else:
-            # Kappa: publisher es obligatorio. Sin publisher → error fatal.
-            # No hay path Lambda — el productor nunca escribe al lago directamente.
             logger.error(
                 "publisher=None — Kappa requiere publisher. "
                 "Verificar KAFKA_ENABLED y broker. Abortando par. "
@@ -120,11 +120,11 @@ class IncrementalStrategy(StrategyMixin):
             result.skipped = True
             return
 
-        # ── Cursor update ─────────────────────────────────────────────────────
-        last_ts_ms = int(qres.df["timestamp"].max().timestamp() * 1000)
+        # ── Cursor update y métricas desde el dominio ────────────────────────
+        last_ts_ms = chunk.candles[-1].timestamp_ms
         ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)
 
-        result.rows = len(qres.df)
+        result.rows = chunk.count
 
         ctx.metrics.rows_ingested_inc(
             exchange=ctx.exchange_id, timeframe=timeframe, delta=result.rows,
@@ -140,7 +140,3 @@ class IncrementalStrategy(StrategyMixin):
             idx, total, ctx.exchange_id, ctx.market_type,
             symbol, timeframe, result.rows, result.duration_ms,
         )
-
-    # ── helpers privados ──────────────────────────────────────────────────────
-    # _append_bronze_with_retry eliminado — Kappa: Bronze lo escribe el consumer,
-    # no el productor. IncrementalStrategy solo publica a Kafka.

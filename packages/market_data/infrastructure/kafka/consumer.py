@@ -42,7 +42,6 @@ from shared.kafka.topics import (
     TOPIC_SIGNALS_APPROVED,
     TOPIC_ORDERS_FILLED,
     GROUP_BRONZE_WRITER,
-    GROUP_QUALITY_GATE,
     GROUP_FEATURES,
     GROUP_STRATEGY,
     GROUP_RISK_GATE,
@@ -151,14 +150,20 @@ class KafkaConsumerAdapter:
     def for_strategy_consumer(cls) -> "KafkaConsumerAdapter":
         """
         ohlcv.features → StrategyConsumer.
-        SOLO procesa source="live" — filtro en StrategyConsumer,
-        no aquí (el header x-ocm-source evita deserializar el body).
+
+        SOLO procesa source="live" — el filtro vive en StrategyConsumer,
+        no aquí. El header x-ocm-source permite filtrar sin deserializar
+        el payload completo.
+
+        auto_offset_reset via _offset_reset() (SSOT desde env var).
+        Valor por defecto "earliest" en desarrollo; "latest" en producción
+        se configura via KAFKA_AUTO_OFFSET_RESET=latest.
         """
         return cls(
             topics                = [TOPIC_OHLCV_FEATURES],
             group_id              = GROUP_STRATEGY,
             bootstrap_servers     = _broker(),
-            auto_offset_reset     = "latest",   # solo datos nuevos en vivo
+            auto_offset_reset     = _offset_reset(),
             session_timeout_ms    = _session_timeout(),
             heartbeat_interval_ms = _heartbeat(),
         )

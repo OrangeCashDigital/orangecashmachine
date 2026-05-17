@@ -23,9 +23,10 @@ Gold   → Iceberg (features calculadas)
 
 Notas de diseño
 ---------------
-commit_version es no-op en Iceberg — versiona en cada write automáticamente.
-Existe en el contrato por compatibilidad semántica con el ciclo de vida
-backfill → commit → verify.
+commit_version eliminado del contrato — Iceberg versiona automáticamente.
+Un método no-op en el Protocol engaña a los callers (contrato deshonesto).
+Implementaciones que reciban llamadas legacy deben aceptarlas silenciosamente
+pero no es obligación del contrato declararlo.
 
 find_partition_files NO forma parte del contrato — es un artefacto del
 backend filesystem anterior. Iceberg no expone archivos físicos de partición.
@@ -56,7 +57,10 @@ class OHLCVStorage(Protocol):
     get_last_timestamp  — None si no hay datos (primer backfill del par).
     get_oldest_timestamp— timestamp más antiguo; usado para backfill boundary.
     load_ohlcv          — scan con pushdown de filtros temporales opcionales.
-    commit_version      — no-op en Iceberg; existe por compatibilidad semántica.
+
+    Nota: commit_version eliminado del contrato — Iceberg versiona
+    automáticamente en cada snapshot. Un método no-op en el Protocol
+    es ruido que engaña a los callers sobre el comportamiento real.
 
     SafeOps
     -------
@@ -71,19 +75,22 @@ class OHLCVStorage(Protocol):
         df:              pd.DataFrame,
         symbol:          str,
         timeframe:       str,
-        mode:            str           = "append",
         run_id:          Optional[str] = None,
         skip_versioning: bool          = False,
     ) -> None:
         """
-        Persiste un DataFrame OHLCV.
+        Persiste un DataFrame OHLCV en modo append (Iceberg es append-only).
+
+        Fix K4: eliminado parámetro `mode` — era un contrato falso.
+        Iceberg no soporta overwrite; un caller que pasara mode="overwrite"
+        esperaría un comportamiento que nunca ocurriría. El contrato debe
+        ser honesto: esta operación siempre es append.
 
         Parameters
         ----------
         df        : DataFrame con columnas [timestamp, open, high, low, close, volume].
         symbol    : Par de trading normalizado, e.g. "BTC/USDT".
         timeframe : Intervalo canónico, e.g. "1m", "1h".
-        mode      : "append" (default) — Iceberg no soporta overwrite.
         run_id    : Correlación con Bronze para trazabilidad. Generado si None.
         """
         ...
@@ -116,21 +123,6 @@ class OHLCVStorage(Protocol):
         Returns
         -------
         pd.Timestamp (tz=UTC) si hay datos, None en caso contrario.
-        """
-        ...
-
-    def commit_version(
-        self,
-        symbol:    str,
-        timeframe: str,
-        run_id:    Optional[str] = None,
-    ) -> None:
-        """
-        No-op en Iceberg — versiona automáticamente en cada snapshot.
-
-        Existe en el contrato por compatibilidad semántica con el ciclo
-        backfill → commit → verify. Las implementaciones deben aceptarlo
-        sin error aunque no hagan nada.
         """
         ...
 
@@ -191,8 +183,33 @@ class BronzeStoragePort(Protocol):
     """
     Contrato de persistencia de candles crudas (capa Bronze).
     Implementación: BronzeStorage (infrastructure.storage.bronze).
+
+    Fix K3: renombrado save_raw → append para alinear con la implementación.
+    KafkaBronzeWriter llamaba self._bronze.append() pero el puerto definía
+    save_raw() — el contrato estructural no se cumplía (isinstance() pasaba
+    pero el método no existía en el Protocol).
     """
 
-    def save_raw(self, symbol: str, timeframe: str, candles: object) -> None: ...
-    def get_last_timestamp(self, symbol: str, timeframe: str) -> int | None: ...
+    def append(
+        self,
+        df:        pd.DataFrame,
+        symbol:    str,
+        timeframe: str,
+        run_id:    Optional[str] = None,
+    ) -> None:
+        """
+        Persiste un batch de candles crudas en Bronze (append-only).
+
+        Parameters
+        ----------
+        df        : DataFrame con columnas OHLCV.
+        symbol    : Par de trading normalizado.
+        timeframe : Intervalo canónico.
+        run_id    : Correlación con el EventPayload para trazabilidad.
+        """
+        ...
+
+    def get_last_timestamp(self, symbol: str, timeframe: str) -> int | None:
+        """Timestamp en ms del último registro. None si no hay datos."""
+        ...
 

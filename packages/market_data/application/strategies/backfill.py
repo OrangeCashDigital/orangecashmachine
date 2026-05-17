@@ -12,18 +12,17 @@ Capas permitidas para importar
 -------------------------------
   domain/          → value objects, tipos, contratos
   ports/outbound/  → puertos abstractos (MetricsPort, OHLCVPublisherPort)
+  adapters/        → mappers ACL (pandas_to_domain)
   ocm/             → plataforma OCM (bind_pipeline, encoding)
 
 Lo que NO importa (DIP)
 -----------------------
-  adapters/        → inyectados por PipelineOrchestrator
   infrastructure/  → inyectados por composition root
 
 Principios: SRP · DIP · SafeOps · KISS
 """
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Optional
 
@@ -47,7 +46,9 @@ from market_data.domain.value_objects.exchange_quirks import (
 # ── Ports ─────────────────────────────────────────────────────────────────────
 from market_data.ports.outbound.publisher import SOURCE_BACKFILL
 
-# ── OCM platform ─────────────────────────────────────────────────────────────
+# ── Ports ─────────────────────────────────────────────────────────────────────
+from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
+from market_data.adapters.chunk_converter import get_default_converter
 from ocm.runtime.state import encode_redis_key as _encode
 
 _log = bind_pipeline("backfill")
@@ -365,14 +366,18 @@ class BackfillStrategy(StrategyMixin):
             if qres.accepted:
                 try:
                     if ctx.publisher is not None:
-                        ok = await ctx.publisher.publish_chunk(
-                            exchange_id = ctx.exchange_id,
-                            symbol      = symbol,
-                            timeframe   = timeframe,
-                            df          = qres.df,
-                            source      = SOURCE_BACKFILL,
-                            run_id      = getattr(ctx, "run_id", ""),
+                        converter: OHLCVChunkConverterPort = getattr(
+                            ctx, "_chunk_converter", get_default_converter()
                         )
+                        chunk = converter.to_chunk(
+                            df        = qres.df,
+                            exchange  = ctx.exchange_id,
+                            symbol    = symbol,
+                            timeframe = timeframe,
+                            source    = SOURCE_BACKFILL,
+                            run_id    = getattr(ctx, "run_id", ""),
+                        )
+                        ok = await ctx.publisher.publish_chunk(chunk)
                         if not ok:
                             log.warning(
                                 "Backfill chunk kafka publish failed — cursor NO avanzado",
@@ -398,8 +403,11 @@ class BackfillStrategy(StrategyMixin):
                             "BackfillStrategy: ctx.publisher es None. "
                             "En modo Kappa el publisher es obligatorio."
                         )
-                    total_rows += len(qres.df)
-                    self._update_backfill_cursor(symbol, timeframe, oldest_in_chunk, ctx)
+                    total_rows += chunk.count
+                    self._update_backfill_cursor(
+                        symbol, timeframe,
+                        chunk.candles[-1].timestamp_ms, ctx,
+                    )
 
                 except Exception as exc:
                     ctx.metrics.pipeline_errors_inc(
