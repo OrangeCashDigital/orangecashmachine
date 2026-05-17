@@ -33,7 +33,6 @@ from market_data.ports.outbound.data_quality_checker import (
     native_checker_factory,
 )
 from market_data.ports.outbound.event_bus import EventBusPort
-from market_data.quality.anomaly_registry import default_registry
 
 
 # Columnas del DataFrame OHLCV — SSOT con OHLCVChunk.candles
@@ -76,7 +75,12 @@ class QualityPipelineConsumer(BaseConsumer):
                 "(OCMContainer o ConcretePipelineFactory)."
             )
         super().__init__(bus)
-        self._registry        = registry or default_registry
+        if registry is None:
+            # Late import — DIP: application no acopla quality/ en module-level.
+            # BC-05: import local evita dependencia estática en application layer.
+            from market_data.quality.anomaly_registry import default_registry
+            registry = default_registry
+        self._registry = registry
         self._tracker         = tracker
         # DIP: checker inyectado — default = native (backward compat)
         self._checker_factory: CheckerFactory = checker_factory or native_checker_factory
