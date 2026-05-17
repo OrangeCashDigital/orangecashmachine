@@ -49,7 +49,7 @@ Principios: SSOT · DDD · Fail-Fast · KISS · exactly-once awareness
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal
 
 from shared.kafka.schemas._base import BasePayload
 

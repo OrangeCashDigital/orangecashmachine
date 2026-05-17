@@ -71,7 +71,6 @@ def _make_metrics() -> MagicMock:
         counter.labels.return_value.inc = MagicMock()
         setattr(m, attr, counter)
     return m
-from market_data.ports.outbound.metrics import RepairMetricsPort
 
 
 def _make_metrics() -> MagicMock:
