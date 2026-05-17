@@ -53,7 +53,7 @@ def _make_filled_order(
     signal = Signal(
         symbol    = symbol,
         timeframe = "1h",
-        signal    = side.value,
+        direction = side.value,
         price     = price,
         timestamp = _NOW,
         confidence = 1.0,
