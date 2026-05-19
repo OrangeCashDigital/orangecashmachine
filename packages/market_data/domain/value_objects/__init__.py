@@ -103,4 +103,19 @@ __all__ = [
     "QualityLabel",
     # Gap
     "GapRange",
+    # Order Book — Nivel 0
+    "OrderBookSide",
+    "PriceLevel",
+    "OrderBookSnapshot",
+    "OrderBookDelta",
 ]
+
+# ---------------------------------------------------------------------------
+# Order Book — Nivel 0 (microestructura nativa del exchange)
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.order_book import (  # noqa: F401
+    OrderBookSide,
+    PriceLevel,
+    OrderBookSnapshot,
+    OrderBookDelta,
+)

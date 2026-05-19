@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-market_data/quality/invariants/invariants.py
-=============================================
-RE-EXPORT BRIDGE — SSOT movido a domain/quality/invariants.py
-No agregar lógica aquí.
+market_data/domain/quality/
+============================
+Invariantes y contratos formales del dominio OHLCV.
 """
 from market_data.domain.quality.invariants import (  # noqa: F401
     InvariantResult,

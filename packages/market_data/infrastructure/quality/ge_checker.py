@@ -244,7 +244,7 @@ class GEChecker:
           _GEIssue.severity == "critical" → QualityIssue de alta severidad
           _GEIssue.severity == "warning"  → QualityIssue de media severidad
         """
-        from market_data.quality.report import DataQualityReport, QualityIssue
+        from market_data.application.quality.report import DataQualityReport, QualityIssue
 
         domain_issues = [
             QualityIssue(
@@ -272,7 +272,7 @@ class GEChecker:
         error:  Exception,
     ) -> "DataQualityReport":
         """Reporte mínimo de fallback cuando GE falla internamente."""
-        from market_data.quality.report import DataQualityReport, QualityIssue
+        from market_data.application.quality.report import DataQualityReport, QualityIssue
 
         return DataQualityReport(
             symbol = symbol,

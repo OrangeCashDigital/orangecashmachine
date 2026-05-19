@@ -260,6 +260,52 @@ class MarketDataLoaderError(StorageError):
 # __all__ — API pública explícita
 # ===========================================================================
 
+
+
+# ===========================================================================
+# Pipeline — subclases adicionales (migradas desde exceptions.py raíz)
+# ===========================================================================
+
+class PipelineBuildError(PipelineError):
+    """
+    Fallo al construir (cablear) un pipeline en el composition root.
+
+    Fail-Fast: si las dependencias no se pueden instanciar, el proceso
+    debe abortar antes de intentar ejecutar.
+    """
+
+
+class PipelineExecutionError(PipelineError):
+    """
+    Fallo durante la ejecución de un pipeline ya construido.
+
+    Distingue errores de construcción (PipelineBuildError) de errores
+    de runtime (este). Permite catch selectivo en el orquestador.
+    """
+
+
+class PipelineTimeoutError(PipelineExecutionError):
+    """
+    Timeout durante la ejecución de un pipeline.
+
+    Subclase de PipelineExecutionError — el timeout es un fallo de
+    ejecución con causa específica (tiempo agotado).
+    """
+
+
+# ===========================================================================
+# Configuración
+# ===========================================================================
+
+class ConfigurationError(MarketDataError):
+    """
+    Error de configuración del sistema.
+
+    Lanzado cuando la config Hydra/Pydantic no puede resolverse,
+    o cuando un parámetro requerido está ausente o es inválido.
+    Fail-Fast: sin config válida el proceso no debe arrancar.
+    """
+
 __all__ = [
     # Raíz
     "MarketDataError",
@@ -284,6 +330,13 @@ __all__ = [
     "PipelineError",
     "MissingStartDateError",
     "CursorError",
+
+    # Pipeline (adicionales)
+    "PipelineBuildError",
+    "PipelineExecutionError",
+    "PipelineTimeoutError",
+    # Configuración
+    "ConfigurationError",
     # Exchange adapter
     "ExchangeAdapterError",
     "UnsupportedExchangeError",

@@ -1,10 +1,14 @@
+# -*- coding: utf-8 -*-
 """
-market_data.factories — composition root del bounded context market_data.
+market_data/factories/
+=======================
+RE-EXPORT BRIDGE — SSOT movido a infrastructure/bootstrap/pipeline_factory.py
 
-Este paquete tiene licencia explícita (BC-28) para importar desde
-todas las capas internas: domain, ports, application, adapters,
-infrastructure. Es el único lugar donde se instancian dependencias
-concretas y se cabla el grafo de objetos.
-
-Ninguna otra capa importa desde market_data.factories.
+Consumidores legacy:
+  infrastructure/bootstrap/container.py (lazy import en línea 157)
 """
+from market_data.infrastructure.bootstrap.pipeline_factory import (  # noqa: F401
+    ConcretePipelineFactory,
+)
+
+__all__ = ["ConcretePipelineFactory"]

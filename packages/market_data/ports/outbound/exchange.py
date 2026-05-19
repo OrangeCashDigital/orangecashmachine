@@ -145,6 +145,44 @@ class ExchangeAdapter(ABC):
     # Context manager — implementado en base, no sobreescribir
     # ------------------------------------------------------------------
 
+    @abstractmethod
+    async def fetch_order_book(
+        self,
+        symbol:      str,
+        depth:       int           = 20,
+        market_type: Optional[str] = None,
+    ) -> dict:
+        """
+        Retorna snapshot L2 del order book para el símbolo dado.
+
+        Usado por OrderBookSnapshotAdapter para obtener el estado inicial
+        del libro antes de conectar el stream WebSocket (bootstrap snapshot).
+
+        Parameters
+        ----------
+        symbol      : Par de trading, e.g. "BTC/USDT".
+        depth       : Número de niveles L2 a solicitar (0 = máximo del exchange).
+        market_type : Tipo de mercado override ("spot", "swap"). None = default.
+
+        Returns
+        -------
+        dict
+            Formato CCXT crudo:
+            {
+                "bids": [[price, qty], ...],   # ordenados DESC por precio
+                "asks": [[price, qty], ...],   # ordenados ASC  por precio
+                "timestamp": int | None,       # Unix ms UTC (None si exchange no lo reporta)
+                "datetime":  str | None,
+                "nonce":     int | None,
+            }
+
+        Nota para implementadores
+        -------------------------
+        Si el exchange no reporta timestamp, el adapter debe usar
+        ``int(time.time() * 1000)`` como fallback (SafeOps).
+        NUNCA retornar None — retornar dict con bids/asks vacíos si falla.
+        """
+
     async def __aenter__(self) -> "ExchangeAdapter":
         await self.connect()
         return self

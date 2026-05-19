@@ -2,78 +2,51 @@
 """
 market_data/quality/
 =====================
+RE-EXPORT BRIDGE — los módulos fueron dispersados a sus capas canónicas.
 
-Bounded context de calidad de datos OHLCV.
+SSOT de cada símbolo:
+  QualityPipeline, QualityPipelineResult, DataTier
+    → application/quality/pipeline.py
+  DataQualityChecker, DataQualityReport, QualityIssue
+    → application/quality/data_quality.py
+  DataQualityPolicy, PolicyResult, QualityDecision, default_policy
+    → domain/policies/data_quality_policy.py
+  AnomalyRegistry, default_registry
+    → infrastructure/quality/anomaly_registry.py
 
-Exports públicos
-----------------
-  QualityPipeline        — orquesta checks + política de decisión
-  QualityPipelineResult  — resultado tipado (df, report, policy, tier)
-  DataTier               — CLEAN | FLAGGED | REJECTED
-  DataQualityChecker     — checks individuales sobre DataFrame
-  DataQualityReport      — resultado de checks
-  DataQualityPolicy      — política de scoring y decisión
-  PolicyResult           — resultado de política
-  QualityDecision        — ACCEPT | ACCEPT_WITH_FLAGS | REJECT
-  AnomalyRegistry        — registro persistente de anomalías (SQLite)
-  default_registry       — singleton de módulo (injectable en tests)
-  default_quality_pipeline — singleton de módulo (injectable en tests)
-
-Regla de dependencias (Clean Architecture)
-------------------------------------------
-quality/ puede importar desde:
-  - domain/               (value objects puros)
-  - market_data/ports/    (contratos abstractos)
-  - market_data/lineage/  (trazabilidad)
-  - market_data/observability/ (métricas)
-
-quality/ NO debe importar desde:
-  - market_data/adapters/  (infraestructura)
-  - market_data/storage/   (infraestructura)
-  - market_data/ingestion/ (infraestructura)
-
-Principios: SRP · DIP · OCP · SSOT
+Este __init__.py es solo un re-export bridge de compatibilidad.
+No agregar lógica aquí. Deprecar en el próximo sprint de limpieza.
 """
 
-from market_data.quality.pipeline import (
+# Pipeline (application)
+from market_data.application.quality.pipeline import (  # noqa: F401
     QualityPipeline,
     QualityPipelineResult,
     DataTier,
     default_quality_pipeline,
 )
-from market_data.quality.policies.data_quality_policy import (
+# Policy (domain)
+from market_data.domain.policies.data_quality_policy import (  # noqa: F401
     DataQualityPolicy,
     PolicyResult,
     QualityDecision,
     default_policy,
 )
-from market_data.quality.validators.data_quality import (
+# Validators / Report (application)
+from market_data.application.quality.data_quality import (  # noqa: F401
     DataQualityChecker,
     DataQualityReport,
     QualityIssue,
 )
-from market_data.quality.anomaly_registry import (
+# Registry (infrastructure)
+from market_data.infrastructure.quality.anomaly_registry import (  # noqa: F401
     AnomalyRegistry,
     default_registry,
 )
 
 __all__ = [
-    # Pipeline
-    "QualityPipeline",
-    "QualityPipelineResult",
-    "DataTier",
-    "default_quality_pipeline",
-    # Policy
-    "DataQualityPolicy",
-    "PolicyResult",
-    "QualityDecision",
-    "default_policy",
-    # Validators
-    "DataQualityChecker",
-    "DataQualityReport",
-    "QualityIssue",
-    # Registry
-    "AnomalyRegistry",
-    "default_registry",
+    "QualityPipeline", "QualityPipelineResult", "DataTier", "default_quality_pipeline",
+    "DataQualityPolicy", "PolicyResult", "QualityDecision", "default_policy",
+    "DataQualityChecker", "DataQualityReport", "QualityIssue",
+    "AnomalyRegistry", "default_registry",
 ]
-
