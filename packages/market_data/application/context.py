@@ -18,10 +18,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from market_data.ports.outbound.storage       import OHLCVStorage
-from market_data.ports.outbound.state         import CursorStorePort
-from market_data.ports.outbound.gap_registry  import GapRegistryPort
+from market_data.ports.outbound.storage        import OHLCVStorage
+from market_data.ports.outbound.state          import CursorStorePort
+from market_data.ports.outbound.gap_registry   import GapRegistryPort
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
+from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
 
 
 @dataclass
@@ -47,6 +48,7 @@ class PipelineContext:
         timeframes      — lista de timeframes activos
         start_date      — fecha de inicio para backfill
         auto_lookback_days — días de lookback automático
+        _chunk_converter   — port de conversión DataFrame→OHLCVChunk
     """
     exchange_id:        str
     market_type:        str
@@ -62,3 +64,4 @@ class PipelineContext:
     timeframes:         list                      = field(default_factory=list)
     start_date:         Optional[Any]             = None
     auto_lookback_days: int                       = 30
+    _chunk_converter:   Optional[OHLCVChunkConverterPort] = None

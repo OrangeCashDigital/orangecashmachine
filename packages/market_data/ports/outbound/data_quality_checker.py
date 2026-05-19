@@ -105,7 +105,7 @@ Uso en producción (GE):
     factory = ge_checker_factory  # infrastructure/quality/ge_checker.py
 
 Uso en producción (nativo):
-    factory = native_checker_factory  # este módulo
+    factory = native_checker_factory  # application/quality/data_quality.py
 """
 
 
@@ -141,24 +141,9 @@ class NullChecker:
         )
 
 
-def native_checker_factory(
-    timeframe:    str,
-    exchange:     str,
-    rows_removed: int,
-) -> DataQualityCheckerPort:
-    """
-    Re-export de compatibilidad — SSOT movido a application/quality/data_quality.py.
-
-    DIP (D-02): ports/ no instancia implementaciones de application/.
-    Esta función delega a la SSOT para no romper callers existentes.
-    """
-    from market_data.application.quality.data_quality import native_checker_factory as _f
-    return _f(timeframe, exchange, rows_removed)
-
 
 __all__ = [
     "DataQualityCheckerPort",
     "CheckerFactory",
     "NullChecker",
-    "native_checker_factory",
 ]

@@ -20,7 +20,6 @@ Candle                — vela OHLCV inmutable con invariantes de dominio
 Symbol                — par de trading (base/quote), formato canónico
 OHLCVChunk            — fragmento inmutable del stream OHLCV (canónico)
 OHLCVSource           — constantes de origen: REST/LIVE/BACKFILL/REPLAY
-OHLCVBatch            — DEPRECATED: alias de OHLCVChunk
 RawCandle             — tipo alias wire format CCXT (6-tupla tipada)
 QualityLabel          — clasificación de calidad CLEAN/SUSPECT/CORRUPT
 GapRange              — rango temporal de un gap en un dataset OHLCV

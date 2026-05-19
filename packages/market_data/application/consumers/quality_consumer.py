@@ -28,10 +28,8 @@ from market_data.domain.events import (
 )
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
 from market_data.application.consumers.base import BaseConsumer
-from market_data.ports.outbound.data_quality_checker import (
-    CheckerFactory,
-    native_checker_factory,
-)
+from market_data.ports.outbound.data_quality_checker import CheckerFactory
+from market_data.application.quality.data_quality import native_checker_factory
 from market_data.ports.outbound.event_bus import EventBusPort
 
 

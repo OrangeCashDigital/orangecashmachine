@@ -48,7 +48,6 @@ from market_data.ports.outbound.publisher import SOURCE_BACKFILL
 
 # ── Ports ─────────────────────────────────────────────────────────────────────
 from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
-from market_data.adapters.outbound.chunk_converter import get_default_converter
 from ocm.runtime.state import encode_redis_key as _encode
 
 _log = bind_pipeline("backfill")
@@ -366,9 +365,7 @@ class BackfillStrategy(StrategyMixin):
             if qres.accepted:
                 try:
                     if ctx.publisher is not None:
-                        converter: OHLCVChunkConverterPort = getattr(
-                            ctx, "_chunk_converter", get_default_converter()
-                        )
+                        converter: OHLCVChunkConverterPort = ctx._chunk_converter  # type: ignore[assignment]
                         chunk = converter.to_chunk(
                             df        = qres.df,
                             exchange  = ctx.exchange_id,

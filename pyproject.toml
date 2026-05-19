@@ -317,13 +317,6 @@ forbidden_modules = [
     "market_data.application",
 ]
 
-ignore_imports = [
-    # Re-export thin wrapper: native_checker_factory delega a application/.
-    # Edge permanece porque el wrapper sigue cruzando la frontera (D-02).
-    # Deberia definirse como Protocol en ports -- application implementa el contrato.
-    # Pendiente refactor World-C: mover CheckerProtocol a ports/outbound/.
-    "market_data.ports.outbound.data_quality_checker -> market_data.application.quality.data_quality",
-]
 
 [[tool.importlinter.contracts]]
 # application orquesta use cases a través de ports — nunca instancia infra directamente.
@@ -343,8 +336,6 @@ ignore_imports = [
     # adapter layer — pendiente exponer via ExchangeClientPort.
     # DEUDA TÉCNICA: chunk_converter lazy en backfill/incremental strategies.
     # Pendiente inyección via PipelineContext._chunk_converter.
-    "market_data.application.strategies.backfill -> market_data.adapters.outbound.chunk_converter",
-    "market_data.application.strategies.incremental -> market_data.adapters.outbound.chunk_converter",
     # DEUDA TÉCNICA: Kafka publisher lazy en ohlcv_pipeline._build_kafka_publisher_safe().
     # Pendiente refactor a publisher port inyectado desde factory.
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
@@ -427,8 +418,6 @@ ignore_imports = [
     "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
     "market_data.adapters.outbound.exchange.ccxt_adapter -> market_data.infrastructure.observability.metrics",
     # Deuda técnica: application → adapters (ya ignorado en BC-05, duplicado aquí por layers)
-    "market_data.application.strategies.backfill -> market_data.adapters.outbound.chunk_converter",
-    "market_data.application.strategies.incremental -> market_data.adapters.outbound.chunk_converter",
     # Deuda técnica: application → infrastructure (Kafka lazy, ya ignorado en BC-05)
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.ohlcv_publisher",
@@ -436,9 +425,6 @@ ignore_imports = [
     # BC-08 layers verifica independientemente de BC-05 forbidden.
     "market_data.application.quality.pipeline -> market_data.infrastructure.quality.anomaly_registry",
     "market_data.application.consumers.quality_consumer -> market_data.infrastructure.quality.anomaly_registry",
-    # Deuda técnica: DataQualityChecker importado en ports bajo lazy/TYPE_CHECKING.
-    # BC-04 ya ignora este edge — BC-08 layers requiere su propia excepción.
-    "market_data.ports.outbound.data_quality_checker -> market_data.application.quality.data_quality",
 ]
 
 [[tool.importlinter.contracts]]
@@ -489,7 +475,7 @@ forbidden_modules = ["trading", "portfolio"]
 [[tool.importlinter.contracts]]
 # strategies son pure functions sobre datos de mercado.
 # No conocen ejecución ni analytics — violaría SRP y crearía acoplamiento circular.
-name = "BC-11: trading.strategies isolated from execution and analytics"
+name = "BC-36: trading.strategies isolated from execution and analytics"
 type = "forbidden"
 source_modules = ["trading.strategies"]
 forbidden_modules = ["trading.execution", "trading.analytics"]

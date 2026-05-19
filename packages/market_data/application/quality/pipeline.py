@@ -43,10 +43,8 @@ from __future__ import annotations
 # stdlib
 from dataclasses import dataclass
 from typing import Optional
-from market_data.ports.outbound.data_quality_checker import (
-    CheckerFactory,
-    native_checker_factory,
-)
+from market_data.ports.outbound.data_quality_checker import CheckerFactory
+from market_data.application.quality.data_quality import native_checker_factory
 
 # terceros
 import pandas as pd

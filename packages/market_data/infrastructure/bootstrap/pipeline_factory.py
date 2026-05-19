@@ -90,6 +90,8 @@ class ConcretePipelineFactory:
         from market_data.application.quality.pipeline import QualityPipeline
         from market_data.infrastructure.quality.anomaly_registry import default_registry
         quality = QualityPipeline(registry=default_registry)
+        from market_data.adapters.outbound.chunk_converter import PassthroughChunkConverter
+        chunk_converter = PassthroughChunkConverter()
 
         try:
             cursor = build_cursor_store_from_env()
@@ -139,6 +141,7 @@ class ConcretePipelineFactory:
             "timeframes":         request.timeframes,
             "start_date":         request.start_date,
             "auto_lookback_days": request.auto_lookback_days or 3650,
+            "_chunk_converter":   chunk_converter,
         }
 
         return OHLCVPipeline(**pipeline_kwargs)
