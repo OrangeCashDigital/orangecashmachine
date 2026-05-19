@@ -32,7 +32,7 @@ from dagster import (
 )
 
 from infrastructure.dagster.resources import OCMResource
-from market_data.quality.pipeline import scan_gaps
+from market_data.domain.value_objects.gap_utils import scan_gaps
 
 _REQUIRED_COLS = frozenset({
     "timestamp", "open", "high", "low", "close", "volume",

@@ -85,6 +85,12 @@ class ConcretePipelineFactory:
 
         exchange_client = CCXTAdapter(**adapter_kwargs)
 
+        # Composition root: construye QualityPipeline con registry inyectado (D-05).
+        # BC-28: única licencia para importar infrastructure/ desde aquí.
+        from market_data.application.quality.pipeline import QualityPipeline
+        from market_data.infrastructure.quality.anomaly_registry import default_registry
+        quality = QualityPipeline(registry=default_registry)
+
         try:
             cursor = build_cursor_store_from_env()
         except Exception:
@@ -126,13 +132,13 @@ class ConcretePipelineFactory:
             "exchange_client":    exchange_client,
             "fetcher":            fetcher,
             "metrics":            PrometheusPipelineMetrics(),
+            "quality":            quality,
             "market_type":        request.market_type,
             "dry_run":            request.dry_run,
             "symbols":            request.symbols,
             "timeframes":         request.timeframes,
             "start_date":         request.start_date,
             "auto_lookback_days": request.auto_lookback_days or 3650,
-            "checker_factory":    ge_checker_factory,
         }
 
         return OHLCVPipeline(**pipeline_kwargs)

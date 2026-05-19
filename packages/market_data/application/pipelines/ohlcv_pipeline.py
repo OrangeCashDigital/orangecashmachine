@@ -226,6 +226,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         exchange_client:    "ExchangeClientPort",
         fetcher:            object,   # HistoricalFetcherPort — inyectar desde factory
         metrics:            object,   # PipelineMetricsPort  — inyectar desde factory
+        quality:            object                     = None,   # QualityPipeline — DIP: inyectar desde factory
         max_concurrency:    int                        = DEFAULT_MAX_CONCURRENCY,
         cursor_store:       Optional[CursorStorePort]  = None,
         backfill_mode:      bool                       = True,
@@ -267,10 +268,11 @@ class OHLCVPipeline(PipelineTriggerPort):
 
         # Dependencias inyectadas — sin resolución de infraestructura aquí (DIP).
         cursor     = cursor_store or _build_cursor_store_safe()
-        # Late import — DIP: application no acopla quality/ en module-level.
-        # BC-05: QualityPipeline es infrastructure interna de quality layer.
-        from market_data.application.quality.pipeline import QualityPipeline  # noqa: PLC0415
-        quality    = QualityPipeline()
+        # DIP: quality inyectada desde ConcretePipelineFactory (composition root).
+        # Fallback solo para tests unitarios que instancian OHLCVPipeline directamente.
+        if quality is None:
+            from market_data.application.quality.pipeline import QualityPipeline  # noqa: PLC0415
+            quality = QualityPipeline()
         _publisher = _build_kafka_publisher_safe()
 
         self._ctx = PipelineContext(

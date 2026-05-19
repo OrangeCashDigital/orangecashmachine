@@ -117,7 +117,7 @@ class TestDeserialize:
 
     def test_round_trip_preserves_all_fields(self):
         original  = _make_event("evt-rt")
-        recovered = deserialize(serialize(original))
+        recovered = deserialize(serialize(original), EventPayload)
 
         assert recovered.event_id       == original.event_id
         assert recovered.exchange       == original.exchange
@@ -129,7 +129,7 @@ class TestDeserialize:
 
     def test_round_trip_preserves_bars(self):
         original  = _make_event()
-        recovered = deserialize(serialize(original))
+        recovered = deserialize(serialize(original), EventPayload)
 
         assert len(recovered.bars) == len(original.bars)
         bar_o = original.bars[0]
@@ -165,7 +165,7 @@ class TestDeserialize:
             event_id="evt-multi", exchange="kucoin", symbol="ETH/USDT",
             timeframe="1h", batch_start_ts=1_700_000_000_000, bars=bars,
         )
-        recovered = deserialize(serialize(event))
+        recovered = deserialize(serialize(event), EventPayload)
         assert len(recovered.bars) == 5
         assert recovered.bars[4].ts == bars[4].ts
 
