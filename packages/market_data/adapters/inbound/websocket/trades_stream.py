@@ -1,22 +1,24 @@
 """
-market_data.ingestion.websocket.trades_stream
-==============================================
-Stream de trades individuales vía WebSocket — NOT IMPLEMENTED.
+market_data.adapters.inbound.websocket.trades_stream
+=====================================================
+DEPRECATED — sustituido por ws_trades_source.py
 
-Responsabilidades futuras
--------------------------
-- Subscripción a canal de trades del exchange
-- Parsing de mensajes a TradeRecord (domain model)
-- Publicación via asyncio.Queue para consumers downstream
+Razón
+-----
+TradesStream levantaba NotImplementedError en el constructor.
+WSTradesSource implementa el mismo contrato (TradesSourceProtocol)
+con fail-soft: stub que emite StopAsyncIteration en lugar de levantar.
+
+Migración
+---------
+    # antes
+    from market_data.adapters.inbound.websocket.trades_stream import TradesStream
+    # después
+    from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
 """
-from __future__ import annotations
+from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
 
+# Alias de compatibilidad — remover en siguiente iteración
+TradesStream = WSTradesSource
 
-class TradesStream:
-    """Stream de trades individuales en tiempo real. NOT IMPLEMENTED."""
-
-    def __init__(self) -> None:
-        raise NotImplementedError(
-            "TradesStream no está implementado. "
-            "Usar TradesFetcher (REST) para datos de trades históricos."
-        )
+__all__ = ["WSTradesSource", "TradesStream"]
