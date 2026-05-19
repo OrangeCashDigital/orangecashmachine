@@ -394,6 +394,8 @@ ignore_imports = [
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.trades_pipeline",
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.derivatives_pipeline",
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.use_cases.ohlcv_transformer",
+    # Composition Root: pipeline_factory construye QualityPipeline (DIP-safe — inyección explícita).
+    "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.quality.pipeline",
 
 ]
 
