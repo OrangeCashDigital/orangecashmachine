@@ -78,7 +78,7 @@ class QualityPipelineConsumer(BaseConsumer):
         if registry is None:
             # Late import — DIP: application no acopla quality/ en module-level.
             # BC-05: import local evita dependencia estática en application layer.
-            from market_data.quality.anomaly_registry import default_registry
+            from market_data.infrastructure.quality.anomaly_registry import default_registry
             registry = default_registry
         self._registry = registry
         self._tracker         = tracker

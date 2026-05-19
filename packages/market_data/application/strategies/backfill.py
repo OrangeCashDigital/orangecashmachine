@@ -48,7 +48,7 @@ from market_data.ports.outbound.publisher import SOURCE_BACKFILL
 
 # ── Ports ─────────────────────────────────────────────────────────────────────
 from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
-from market_data.adapters.chunk_converter import get_default_converter
+from market_data.adapters.outbound.chunk_converter import get_default_converter
 from ocm.runtime.state import encode_redis_key as _encode
 
 _log = bind_pipeline("backfill")

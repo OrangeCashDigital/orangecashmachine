@@ -24,7 +24,7 @@ from market_data.domain.policies.base import (
 )
 from market_data.ports.outbound.publisher import SOURCE_LIVE
 from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
-from market_data.adapters.chunk_converter import get_default_converter
+from market_data.adapters.outbound.chunk_converter import get_default_converter
 
 
 class IncrementalStrategy(StrategyMixin):

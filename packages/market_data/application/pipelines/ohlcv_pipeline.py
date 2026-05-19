@@ -269,7 +269,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         cursor     = cursor_store or _build_cursor_store_safe()
         # Late import — DIP: application no acopla quality/ en module-level.
         # BC-05: QualityPipeline es infrastructure interna de quality layer.
-        from market_data.quality.pipeline import QualityPipeline  # noqa: PLC0415
+        from market_data.application.quality.pipeline import QualityPipeline  # noqa: PLC0415
         quality    = QualityPipeline()
         _publisher = _build_kafka_publisher_safe()
 

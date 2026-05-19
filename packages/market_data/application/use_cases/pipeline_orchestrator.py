@@ -57,7 +57,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 from loguru import logger
 
-from market_data.exceptions import PipelineBuildError, PipelineExecutionError
+from market_data.domain.exceptions import PipelineBuildError, PipelineExecutionError
 from market_data.ports.inbound.pipeline_trigger import (
     PipelineTriggerPort,
     PipelineModeStr,

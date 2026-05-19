@@ -17,7 +17,7 @@ subjetiva. Con ellas, es verificable: o las cumple o no.
 
 Uso
 ---
-    from market_data.quality.schemas.invariants import check_dataset_invariants
+    from market_data.domain.quality.invariants import check_dataset_invariants
 
     result = check_dataset_invariants(manifest)
     if not result.ok:

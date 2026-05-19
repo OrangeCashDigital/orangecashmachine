@@ -154,7 +154,7 @@ class OCMContainer:
             PrometheusResampleMetrics,
             PrometheusRepairMetrics,
         )
-        from market_data.factories.pipeline_factory import ConcretePipelineFactory
+        from market_data.infrastructure.bootstrap.pipeline_factory import ConcretePipelineFactory
         self.orchestrator = PipelineOrchestrator(factory=ConcretePipelineFactory())
         from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
         self.resample_uc  = ResampleUseCase(
@@ -176,7 +176,7 @@ class OCMContainer:
 
         Fail-Fast: lanza ConfigurationError si la configuración es inválida.
         """
-        from market_data.exceptions import ConfigurationError
+        from market_data.domain.exceptions import ConfigurationError
         if app_cfg is None:
             raise ConfigurationError("OCMContainer.from_app_config: app_cfg es None")
         logger.info("OCMContainer: construyendo desde AppConfig")
