@@ -2,21 +2,14 @@
 """
 market_data/application/quality/
 ==================================
-Lógica de calidad de datos en capa de aplicación:
-  data_quality.py  — DataQualityChecker + DataQualityReport + QualityIssue
-  report.py        — alias de DataQualityReport para consumidores legacy
-  pipeline.py      — QualityPipeline (orquestador) [se añade en fase 2f]
-"""
-from market_data.application.quality.data_quality import (  # noqa: F401
-    DataQualityChecker,
-    DataQualityReport,
-    QualityIssue,
-    DataQualityError,
-)
+Lógica de calidad en capa de aplicación.
 
-__all__ = [
-    "DataQualityChecker",
-    "DataQualityReport",
-    "QualityIssue",
-    "DataQualityError",
-]
+Importar directamente desde los módulos SSOT:
+  from market_data.application.quality.data_quality import DataQualityChecker, DataQualityReport
+  from market_data.application.quality.pipeline import QualityPipeline
+  from market_data.application.quality.report import DataQualityReport  # alias ge_checker
+
+No re-exportar desde aquí: pipeline importa de domain.policies e infrastructure,
+lo que puede crear ciclos si este __init__ hace eager imports.
+"""
+# Namespace puro — sin imports eager para evitar ciclos de inicialización.

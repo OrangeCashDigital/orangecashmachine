@@ -2,42 +2,13 @@
 """
 market_data/domain/policies/
 ==============================
+Policies de dominio — reglas de negocio stateless.
 
-Contratos y tipos del sistema de pipeline unificado.
+Importar directamente desde los módulos SSOT:
+  from market_data.domain.policies.data_quality_policy import DataQualityPolicy
+  from market_data.domain.policies.repair import RepairPolicy
 
-Re-exporta únicamente lo que existe en base.py.
-BasePipelineStrategy fue renombrado a StrategyMixin — no re-exportar alias.
-
-Estrategias concretas → market_data.application.strategies.*
-    from market_data.application.strategies.backfill    import BackfillStrategy
-    from market_data.application.strategies.incremental import IncrementalStrategy
-    from market_data.application.strategies.repair      import RepairStrategy
-
-Principios: SSOT · KISS · no re-exports que creen cascadas de inicialización.
+No re-exportar desde aquí: data_quality_policy importa DataQualityReport
+de application/, lo que crea un ciclo si este __init__ hace eager imports.
 """
-from market_data.domain.policies.base import (
-    PairResult,
-    PipelineContext,
-    PipelineMode,
-    PipelineStrategy,
-    PipelineSummary,
-    StrategyMixin,
-    classify_error,
-)
-
-__all__ = [
-    "PairResult",
-    "PipelineContext",
-    "PipelineMode",
-    "PipelineStrategy",
-    "PipelineSummary",
-    "StrategyMixin",
-    "classify_error",
-]
-
-from market_data.domain.policies.data_quality_policy import (  # noqa: F401
-    QualityDecision,
-    PolicyResult,
-    DataQualityPolicy,
-    default_policy,
-)
+# Namespace puro — sin imports eager para evitar ciclos de inicialización.
