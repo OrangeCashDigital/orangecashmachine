@@ -101,6 +101,30 @@ TOPIC_POSITIONS_CLOSED: str = "positions.closed"
 TOPIC_DLQ: str = "ocm.dlq"
 """Dead Letter Queue global — mensajes no procesables de cualquier topic."""
 
+
+# ── Trades / microestructura ─────────────────────────────────────────────────
+
+TOPIC_TRADES_RAW:    str = "trades.raw"
+"""Ticks individuales. Fuente: RESTTradesPoller / WebSocketTradesStream."""
+
+TOPIC_TRADES_AGG:    str = "trades.agg"
+"""TradeSeries agregadas por ventana. Fuente: TradesAggregatorProcessor."""
+
+TOPIC_OHLCV_STREAM:  str = "ohlcv.stream"
+"""Candles streaming (NO REST). Fuente: TradeToOHLCVAggregator."""
+
+TOPIC_BOOK_SNAPSHOT: str = "book.snapshot"
+"""Snapshot L2 del order book."""
+
+TOPIC_BOOK_DELTA:    str = "book.delta"
+"""Delta incremental L2."""
+
+TOPIC_MICROPRICE_RT: str = "microprice.rt"
+"""Microprice en tiempo real. Fuente: MicropriceEngine."""
+
+TOPIC_FEATURES_RT:   str = "features.rt"
+"""Features real-time (VWAP, OFI, spread, momentum)."""
+
 # =============================================================================
 # Consumer Groups — SSOT de group_id por rol
 # =============================================================================
@@ -112,6 +136,11 @@ GROUP_STRATEGY:      str = "ocm-strategy-consumer"
 GROUP_RISK_GATE:     str = "ocm-risk-gate"
 GROUP_EXECUTION:     str = "ocm-execution"
 GROUP_PORTFOLIO:     str = "ocm-portfolio"
+GROUP_TRADES_AGGREGATOR: str = "ocm-trades-aggregator"
+GROUP_OHLCV_STREAM:      str = "ocm-ohlcv-stream"
+GROUP_BOOK_BUILDER:      str = "ocm-book-builder"
+GROUP_MICROPRICE:        str = "ocm-microprice"
+GROUP_FEATURES_RT:       str = "ocm-features-rt"
 
 # =============================================================================
 # Headers — metadatos del mensaje (x-ocm-*)
@@ -170,6 +199,9 @@ _ALL_TOPICS = [
     TOPIC_ORDERS_FILLED, TOPIC_ORDERS_REJECTED,
     TOPIC_POSITIONS_OPENED, TOPIC_POSITIONS_CLOSED,
     TOPIC_DLQ,
+    TOPIC_TRADES_RAW, TOPIC_TRADES_AGG, TOPIC_OHLCV_STREAM,
+    TOPIC_BOOK_SNAPSHOT, TOPIC_BOOK_DELTA,
+    TOPIC_MICROPRICE_RT, TOPIC_FEATURES_RT,
 ]
 assert len(_ALL_TOPICS) == len(set(_ALL_TOPICS)), (
     "shared/kafka/topics.py: topics con string duplicado — colisión de nombres"
@@ -178,6 +210,8 @@ assert len(_ALL_TOPICS) == len(set(_ALL_TOPICS)), (
 _ALL_GROUPS = [
     GROUP_BRONZE_WRITER, GROUP_QUALITY_GATE, GROUP_FEATURES,
     GROUP_STRATEGY, GROUP_RISK_GATE, GROUP_EXECUTION, GROUP_PORTFOLIO,
+    GROUP_TRADES_AGGREGATOR, GROUP_OHLCV_STREAM, GROUP_BOOK_BUILDER,
+    GROUP_MICROPRICE, GROUP_FEATURES_RT,
 ]
 assert len(_ALL_GROUPS) == len(set(_ALL_GROUPS)), (
     "shared/kafka/topics.py: consumer groups con string duplicado"
@@ -200,6 +234,13 @@ __all__ = [
     # Consumer groups
     "GROUP_BRONZE_WRITER", "GROUP_QUALITY_GATE", "GROUP_FEATURES",
     "GROUP_STRATEGY", "GROUP_RISK_GATE", "GROUP_EXECUTION", "GROUP_PORTFOLIO",
+    # Topics trades / microestructura
+    "TOPIC_TRADES_RAW", "TOPIC_TRADES_AGG", "TOPIC_OHLCV_STREAM",
+    "TOPIC_BOOK_SNAPSHOT", "TOPIC_BOOK_DELTA",
+    "TOPIC_MICROPRICE_RT", "TOPIC_FEATURES_RT",
+    # Consumer groups (streaming)
+    "GROUP_TRADES_AGGREGATOR", "GROUP_OHLCV_STREAM", "GROUP_BOOK_BUILDER",
+    "GROUP_MICROPRICE", "GROUP_FEATURES_RT",
     # Headers
     "HEADER_SOURCE", "HEADER_VERSION", "HEADER_RUN_ID", "HEADER_DOMAIN",
 ]

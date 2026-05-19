@@ -41,7 +41,7 @@ import pandas as pd
 if TYPE_CHECKING:
     # Solo para type checkers — evita import circular en runtime.
     # SSOT real: market_data.quality.validators.data_quality.DataQualityReport
-    from market_data.application.quality.data_quality import DataQualityReport
+    from market_data.domain.quality.types import DataQualityReport
 
 
 @runtime_checkable
@@ -126,7 +126,7 @@ class NullChecker:
         symbol: str,
     ) -> "DataQualityReport":
         # Late import — BC-31: port no importa quality/ en module-level
-        from market_data.application.quality.data_quality import (
+        from market_data.domain.quality.types import (
             DataQualityReport,
         )
         from datetime import datetime, timezone

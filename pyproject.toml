@@ -270,11 +270,13 @@ forbidden_modules = [
 # market_data.exceptions es la SSOT de la jerarquía de errores del BC.
 # No puede importar nada del propio dominio — rompería la jerarquía de
 # inicialización de módulos en Python (ImportError circular en startup).
-name = "BC-02: market_data.exceptions is stdlib-only (no internal imports)"
+name = "BC-02: market_data.domain.exceptions is stdlib-only (no internal imports)"
 type = "forbidden"
-source_modules = ["market_data.exceptions"]
+source_modules = ["market_data.domain.exceptions"]
 forbidden_modules = [
-    "market_data.domain",
+    # "market_data.domain" eliminado: domain.exceptions ES descendiente de domain
+    # (shared descendants — import-linter no puede verificar padre vs hijo).
+    # La regla de aislamiento ya la cubre BC-03.
     "market_data.ports",
     "market_data.application",
     "market_data.adapters",
@@ -298,13 +300,8 @@ forbidden_modules = [
     "market_data.infrastructure",
     "market_data.adapters",
     "market_data.application",
-    "market_data.quality",
 ]
-ignore_imports = [
-    # DEUDA TÉCNICA — domain/policies/ (World-A): añadir imports concretos aquí
-    # cuando se identifiquen. Vacío hasta que el audit de policies/ esté completo.
-    # DEUDA TÉCNICA — domain/value_objects/ (lazy imports de métricas): ídem.
-]
+ignore_imports = []  # Verificado clean -- audit domain/ completo 2026-05-18
 
 [[tool.importlinter.contracts]]
 # ports son Protocols/ABCs puros — contratos sin implementación.
@@ -318,6 +315,13 @@ forbidden_modules = [
     "market_data.infrastructure",
     "market_data.adapters",
     "market_data.application",
+]
+
+ignore_imports = [
+    # DEUDA TECNICA: DataQualityChecker (implementacion concreta) importado en ports.
+    # Deberia definirse como Protocol en ports -- application implementa el contrato.
+    # Pendiente refactor World-C: mover CheckerProtocol a ports/outbound/.
+    "market_data.ports.outbound.data_quality_checker -> market_data.application.quality.data_quality",
 ]
 
 [[tool.importlinter.contracts]]
@@ -338,12 +342,18 @@ ignore_imports = [
     # adapter layer — pendiente exponer via ExchangeClientPort.
     # DEUDA TÉCNICA: chunk_converter lazy en backfill/incremental strategies.
     # Pendiente inyección via PipelineContext._chunk_converter.
-    "market_data.application.strategies.backfill -> market_data.adapters.chunk_converter",
-    "market_data.application.strategies.incremental -> market_data.adapters.chunk_converter",
+    "market_data.application.strategies.backfill -> market_data.adapters.outbound.chunk_converter",
+    "market_data.application.strategies.incremental -> market_data.adapters.outbound.chunk_converter",
     # DEUDA TÉCNICA: Kafka publisher lazy en ohlcv_pipeline._build_kafka_publisher_safe().
     # Pendiente refactor a publisher port inyectado desde factory.
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.ohlcv_publisher",
+    # DEUDA TECNICA: anomaly_registry lazy en quality.pipeline (default fallback).
+    # Pendiente inyeccion obligatoria desde ConcretePipelineFactory.
+    "market_data.application.quality.pipeline -> market_data.infrastructure.quality.anomaly_registry",
+    # DEUDA TECNICA: anomaly_registry lazy en quality_consumer (fallback DI).
+    # Pendiente inyeccion obligatoria desde OCMContainer / ConcretePipelineFactory.
+    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.quality.anomaly_registry",
 ]
 
 [[tool.importlinter.contracts]]
@@ -376,7 +386,16 @@ ignore_imports = [
     # Composition Root interno: OCMContainer (import lazy en método build()).
     # container → pipeline_factory es composition root legítimo (via method).
     "market_data.infrastructure.bootstrap.container -> market_data.application",
-    "market_data.infrastructure.bootstrap.container -> market_data.factories.pipeline_factory",
+    # Composition Root: ConcretePipelineFactory instancia pipelines concretos.
+    # pipeline_factory es el único punto de ensamble de application en infrastructure.
+    # DEUDA TÉCNICA: mover a factories/ o composition root externo en World-B.
+    "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.ohlcv_pipeline",
+    "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.trades_pipeline",
+    "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.derivatives_pipeline",
+    "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.use_cases.ohlcv_transformer",
+    # DEUDA TÉCNICA: ge_checker construye DataQualityReport (lazy local import).
+    # Report debería vivir en domain.quality — pendiente consolidación en World-B.
+    "market_data.infrastructure.quality.ge_checker -> market_data.application.quality.report",
 ]
 
 [[tool.importlinter.contracts]]
@@ -407,11 +426,18 @@ ignore_imports = [
     "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
     "market_data.adapters.outbound.exchange.ccxt_adapter -> market_data.infrastructure.observability.metrics",
     # Deuda técnica: application → adapters (ya ignorado en BC-05, duplicado aquí por layers)
-    "market_data.application.strategies.backfill -> market_data.adapters.chunk_converter",
-    "market_data.application.strategies.incremental -> market_data.adapters.chunk_converter",
+    "market_data.application.strategies.backfill -> market_data.adapters.outbound.chunk_converter",
+    "market_data.application.strategies.incremental -> market_data.adapters.outbound.chunk_converter",
     # Deuda técnica: application → infrastructure (Kafka lazy, ya ignorado en BC-05)
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
     "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.ohlcv_publisher",
+    # Deuda técnica: anomaly_registry lazy en quality.pipeline (ya ignorado en BC-05).
+    # BC-08 layers verifica independientemente de BC-05 forbidden.
+    "market_data.application.quality.pipeline -> market_data.infrastructure.quality.anomaly_registry",
+    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.quality.anomaly_registry",
+    # Deuda técnica: DataQualityChecker importado en ports bajo lazy/TYPE_CHECKING.
+    # BC-04 ya ignora este edge — BC-08 layers requiere su propia excepción.
+    "market_data.ports.outbound.data_quality_checker -> market_data.application.quality.data_quality",
 ]
 
 [[tool.importlinter.contracts]]
@@ -422,11 +448,33 @@ type = "forbidden"
 source_modules = ["market_data.domain"]
 forbidden_modules = [
     "pyiceberg", "redis", "ccxt", "dagster", "sqlalchemy", "boto3",
+    "cryptofeed", "websockets",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 2 — bounded contexts: independencia entre packages
 # ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# Nivel 0 (trades, order book) no depende de tipos derivados OHLCV.
+# El flujo correcto de derivación es: Trades → OHLCV, nunca al revés.
+# Una Candle no puede existir sin Trades — el orden es asimétrico.
+# Esta regla hace ejecutable el principio arquitectónico en CI.
+name = "BC-11: level-0 raw market data does not import derived OHLCV types"
+type = "forbidden"
+source_modules = [
+    "market_data.domain.value_objects.raw_trade",
+    "market_data.domain.value_objects.trade_series",
+    "market_data.domain.value_objects.order_book",
+    "market_data.domain.events.trade_events",
+    "market_data.domain.events.orderbook_events",
+    "market_data.domain.events.replay_events",
+]
+forbidden_modules = [
+    "market_data.domain.value_objects.candle",
+    "market_data.domain.value_objects.ohlcv_chunk",
+    "market_data.domain.events.ingestion",
+]
 
 [[tool.importlinter.contracts]]
 # market_data no puede importar bounded contexts de negocio.
@@ -673,27 +721,6 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-# market_data.factories es el único Composition Root interno del BC market_data.
-# Los módulos internos (domain, ports, application, adapters, infrastructure)
-# no pueden importarlo — rompería la jerarquía de inicialización y haría
-# imposible el testing de capas individuales sin wiring completo del CR.
-# Ver: domain/events/ línea 188 — referencia a BC-29 en comentario de migración Kafka.
-name = "BC-28: market_data.factories is the composition root — internal layers must not import it"
-type = "forbidden"
-source_modules = [
-    "market_data.domain",
-    "market_data.ports",
-    "market_data.application",
-    "market_data.adapters",
-    "market_data.infrastructure",
-]
-forbidden_modules = ["market_data.factories"]
-ignore_imports = [
-    # Composition Root: container inyecta pipeline_factory en OCMContainer.
-    "market_data.infrastructure.bootstrap.container -> market_data.factories.pipeline_factory",
-]
-
-[[tool.importlinter.contracts]]
 # Los wire schemas de Kafka son contratos compartidos entre BCs — pertenecen a
 # shared.kafka (SSOT), no a market_data.infrastructure.kafka.
 # BCs externos que importen market_data.infrastructure.kafka.* quedan acoplados
@@ -732,21 +759,6 @@ layers = [
     "bronze",
     "iceberg",
 ]
-
-[[tool.importlinter.contracts]]
-# market_data.quality valida datos procesados — puede leer domain y ports.
-# No puede importar infrastructure directamente: la validación se aplica
-# sobre abstracciones, no sobre implementaciones de storage concretas.
-# Esto garantiza que quality sea testeable sin iceberg/redis/kafka reales.
-name = "BC-31: market_data.quality does not import infrastructure directly"
-type = "forbidden"
-source_modules = ["market_data.quality"]
-forbidden_modules = [
-    "market_data.infrastructure.storage",
-    "market_data.infrastructure.kafka",
-    "market_data.adapters.outbound.exchange",
-]
-
 [[tool.importlinter.contracts]]
 # shared.kafka son los wire schemas SSOT de eventos Kafka entre BCs.
 # No puede importar market_data.infrastructure.kafka (implementación concreta)
