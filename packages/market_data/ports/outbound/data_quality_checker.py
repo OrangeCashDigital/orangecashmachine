@@ -147,20 +147,13 @@ def native_checker_factory(
     rows_removed: int,
 ) -> DataQualityCheckerPort:
     """
-    Factory que produce el DataQualityChecker nativo.
+    Re-export de compatibilidad — SSOT movido a application/quality/data_quality.py.
 
-    Fallback para entornos donde GE no está disponible, o como
-    checker de referencia en tests de integración.
-
-    Late import (BC-31): ports/ no importa quality/ en module-level.
+    DIP (D-02): ports/ no instancia implementaciones de application/.
+    Esta función delega a la SSOT para no romper callers existentes.
     """
-    # SSOT: DataQualityChecker vive en quality.validators.data_quality
-    from market_data.application.quality.data_quality import DataQualityChecker
-    return DataQualityChecker(
-        timeframe    = timeframe,
-        exchange     = exchange,
-        rows_removed = rows_removed,
-    )
+    from market_data.application.quality.data_quality import native_checker_factory as _f
+    return _f(timeframe, exchange, rows_removed)
 
 
 __all__ = [

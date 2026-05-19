@@ -233,6 +233,35 @@ class DataQualityChecker:
             ))
 
 
+
+# ---------------------------------------------------------------------------
+# Factory — producción de DataQualityChecker como DataQualityCheckerPort
+# Movido desde ports/outbound/data_quality_checker.py (D-02: DIP).
+# ports/ no puede instanciar clases concretas de application/.
+# ---------------------------------------------------------------------------
+
+def native_checker_factory(
+    timeframe:    str,
+    exchange:     str,
+    rows_removed: int,
+) -> "DataQualityCheckerPort":
+    """
+    Factory que produce el DataQualityChecker nativo como DataQualityCheckerPort.
+
+    Fallback para entornos donde GE no está disponible, o como checker de
+    referencia en tests de integración.
+
+    SSOT: la implementación concreta (DataQualityChecker) y su factory
+    viven juntos en application/quality/ — no en ports/.
+    """
+    from market_data.ports.outbound.data_quality_checker import DataQualityCheckerPort  # noqa: F401
+    return DataQualityChecker(
+        timeframe    = timeframe,
+        exchange     = exchange,
+        rows_removed = rows_removed,
+    )
+
+
 __all__ = [
     "DataQualityChecker",
     # Re-exports desde domain para backward-compat de consumidores directos

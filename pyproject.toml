@@ -318,7 +318,8 @@ forbidden_modules = [
 ]
 
 ignore_imports = [
-    # DEUDA TECNICA: DataQualityChecker (implementacion concreta) importado en ports.
+    # Re-export thin wrapper: native_checker_factory delega a application/.
+    # Edge permanece porque el wrapper sigue cruzando la frontera (D-02).
     # Deberia definirse como Protocol en ports -- application implementa el contrato.
     # Pendiente refactor World-C: mover CheckerProtocol a ports/outbound/.
     "market_data.ports.outbound.data_quality_checker -> market_data.application.quality.data_quality",
@@ -393,9 +394,7 @@ ignore_imports = [
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.trades_pipeline",
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.derivatives_pipeline",
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.use_cases.ohlcv_transformer",
-    # DEUDA TÉCNICA: ge_checker construye DataQualityReport (lazy local import).
-    # Report debería vivir en domain.quality — pendiente consolidación en World-B.
-    "market_data.infrastructure.quality.ge_checker -> market_data.application.quality.report",
+
 ]
 
 [[tool.importlinter.contracts]]
