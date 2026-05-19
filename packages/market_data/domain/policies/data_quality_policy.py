@@ -51,7 +51,7 @@ from typing import Dict, List
 
 from loguru import logger
 
-from market_data.quality.validators.data_quality import DataQualityReport
+from market_data.application.quality.data_quality import DataQualityReport
 
 
 # ===========================================================================
