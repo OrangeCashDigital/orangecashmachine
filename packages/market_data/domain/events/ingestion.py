@@ -21,29 +21,10 @@ sin conocer el contexto del emisor. SSOT: payloads.DATASOURCE_*.
 """
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 
+from market_data.domain.events._base import DomainEvent
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
-
-
-# ===========================================================================
-# Base
-# ===========================================================================
-
-@dataclass(frozen=True)
-class DomainEvent:
-    """
-    Raíz común de todos los domain events.
-
-    event_id    : UUID v4 — idempotencia y deduplicación downstream
-    occurred_at : ISO-8601 UTC del momento de creación del evento
-    """
-    event_id:    str = field(default_factory=lambda: str(uuid.uuid4()))
-    occurred_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
 
 
 # ===========================================================================
