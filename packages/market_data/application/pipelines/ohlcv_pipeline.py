@@ -273,7 +273,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         if quality is None:
             from market_data.application.quality.pipeline import QualityPipeline  # noqa: PLC0415
             quality = QualityPipeline()
-        _publisher = _build_kafka_publisher_safe()
+        _publisher = None  # Inyectado desde pipeline_factory (Composition Root)
 
         self._ctx = PipelineContext(
             fetcher      = fetcher,

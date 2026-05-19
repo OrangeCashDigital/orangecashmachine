@@ -266,22 +266,11 @@ forbidden_modules = [
     "infrastructure", "app", "api", "research",
 ]
 
-[[tool.importlinter.contracts]]
-# market_data.exceptions es la SSOT de la jerarquía de errores del BC.
-# No puede importar nada del propio dominio — rompería la jerarquía de
-# inicialización de módulos en Python (ImportError circular en startup).
-name = "BC-02: market_data.domain.exceptions is stdlib-only (no internal imports)"
-type = "forbidden"
-source_modules = ["market_data.domain.exceptions"]
-forbidden_modules = [
-    # "market_data.domain" eliminado: domain.exceptions ES descendiente de domain
-    # (shared descendants — import-linter no puede verificar padre vs hijo).
-    # La regla de aislamiento ya la cubre BC-03.
-    "market_data.ports",
-    "market_data.application",
-    "market_data.adapters",
-    "market_data.infrastructure",
-]
+# BC-02: ELIMINADO — audit 2026-05-18.
+# market_data.domain.exceptions es descendiente de market_data.domain.
+# BC-03 ya prohíbe que todo market_data.domain importe ports/application/
+# adapters/infrastructure — BC-02 verificaba un subconjunto redundante.
+# El propio contrato documentaba: "La regla de aislamiento ya la cubre BC-03".
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 1 — market_data: capas internas (DIP + Clean Architecture)
@@ -330,22 +319,31 @@ forbidden_modules = [
     "market_data.adapters",
     "market_data.infrastructure",
 ]
-ignore_imports = [
-    # Composition-root fallbacks: imports lazy en __init__ cuando factory no inyecta.
-    # Circuit breaker: get_breaker_state() / ExchangeCircuitOpenError pertenecen al
-    # adapter layer — pendiente exponer via ExchangeClientPort.
-    # DEUDA TÉCNICA: chunk_converter lazy en backfill/incremental strategies.
-    # Pendiente inyección via PipelineContext._chunk_converter.
-    # DEUDA TÉCNICA: Kafka publisher lazy en ohlcv_pipeline._build_kafka_publisher_safe().
-    # Pendiente refactor a publisher port inyectado desde factory.
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.ohlcv_publisher",
-    # DEUDA TECNICA: anomaly_registry lazy en quality.pipeline (default fallback).
-    # Pendiente inyeccion obligatoria desde ConcretePipelineFactory.
-    "market_data.application.quality.pipeline -> market_data.infrastructure.quality.anomaly_registry",
-    # DEUDA TECNICA: anomaly_registry lazy en quality_consumer (fallback DI).
-    # Pendiente inyeccion obligatoria desde OCMContainer / ConcretePipelineFactory.
-    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.quality.anomaly_registry",
+
+[[tool.importlinter.contracts]]
+# ports/inbound (primary/driving) no debe importar ports/outbound (secondary/driven).
+# Los dos lados del hexágono son ortogonales — un import cruzado acoplaría
+# ambos lados, eliminando la independencia de testeo de cada uno.
+name = "BC-37a: ports/inbound does not import ports/outbound"
+type = "forbidden"
+source_modules = ["market_data.ports.inbound"]
+forbidden_modules = ["market_data.ports.outbound"]
+
+[[tool.importlinter.contracts]]
+# ports/outbound (secondary/driven) no debe importar ports/inbound (primary/driving).
+name = "BC-37b: ports/outbound does not import ports/inbound"
+type = "forbidden"
+source_modules = ["market_data.ports.outbound"]
+forbidden_modules = ["market_data.ports.inbound"]
+
+
+[[tool.importlinter.contracts]]
+name = "BC-05: market_data.application isolated from infrastructure and adapters"
+type = "forbidden"
+source_modules = ["market_data.application"]
+forbidden_modules = [
+    "market_data.adapters",
+    "market_data.infrastructure",
 ]
 
 [[tool.importlinter.contracts]]
@@ -417,14 +415,6 @@ ignore_imports = [
     "market_data.adapters.outbound.storage.gold_reader -> market_data.infrastructure.storage.iceberg.catalog",
     "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
     "market_data.adapters.outbound.exchange.ccxt_adapter -> market_data.infrastructure.observability.metrics",
-    # Deuda técnica: application → adapters (ya ignorado en BC-05, duplicado aquí por layers)
-    # Deuda técnica: application → infrastructure (Kafka lazy, ya ignorado en BC-05)
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.producer",
-    "market_data.application.pipelines.ohlcv_pipeline -> market_data.infrastructure.kafka.ohlcv_publisher",
-    # Deuda técnica: anomaly_registry lazy en quality.pipeline (ya ignorado en BC-05).
-    # BC-08 layers verifica independientemente de BC-05 forbidden.
-    "market_data.application.quality.pipeline -> market_data.infrastructure.quality.anomaly_registry",
-    "market_data.application.consumers.quality_consumer -> market_data.infrastructure.quality.anomaly_registry",
 ]
 
 [[tool.importlinter.contracts]]
@@ -542,7 +532,7 @@ ignore_imports = [
 [[tool.importlinter.contracts]]
 # infrastructure (dagster, redis) solo puede depender de ocm (plataforma)
 # y de market_data (datos vía ports). No conoce lógica de negocio ni la API.
-name = "BC-16: infrastructure depends only on platform and market_data abstractions"
+name = "BC-16: infrastructure does not couple to business bounded contexts"
 type = "forbidden"
 source_modules = ["infrastructure"]
 forbidden_modules = ["trading", "portfolio", "app", "api"]

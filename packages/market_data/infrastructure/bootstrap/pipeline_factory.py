@@ -130,7 +130,11 @@ class ConcretePipelineFactory:
                 f"Request recibido: {request}"
             )
 
+        # Kafka publisher — construido aquí (Composition Root), no en application/
+        kafka_publisher = self._build_kafka_publisher()
+
         pipeline_kwargs: dict[str, Any] = {
+
             "exchange_client":    exchange_client,
             "fetcher":            fetcher,
             "metrics":            PrometheusPipelineMetrics(),

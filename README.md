@@ -20,7 +20,11 @@ antes de llegar a review.
 
 |Módulo                |Responsabilidad                                                                       |
 |----------------------|--------------------------------------------------------------------------------------|
-|`shared`              |Shared Kernel — tipos canónicos sin dependencias internas (BC-01)                     |
+|`shared`              |Shared Kernel — tipos canónicos, schemas Kafka (ACL neutral), eventos de dominio y excepciones base sin dependencias internas (BC-01, BC-33/34/35)|
+|`shared/kafka`       |Neutral bus ACL — wire schemas (OHLCV, signals, orders, positions, trades), serializer, topics (BC-29, BC-32, BC-33, BC-35)|
+|`shared/types`       |Eventos de dominio across BCs — OHLCVBar, Signal, OrderEvent, PositionEvent, RebalanceEvent|
+|`shared/exceptions`  |Excepciones base compartidas entre bounded contexts                                   |
+|`shared/contracts`   |Protocolos explícitos entre BCs (FeatureSource, SignalProtocol, FillHandler, TradeHistory, RiskGate)|
 |`ocm`                 |Plataforma transversal: config, runtime, observabilidad. Sin lógica de negocio (BC-14)|
 |`packages/market_data`|Bounded context de datos de mercado — autocontenido (BC-10)                           |
 |`packages/trading`    |Motor de trading paper + live ⚠️ en desarrollo activo                                  |
@@ -52,30 +56,43 @@ packages/market_data/infrastructure ← storage Iceberg/Parquet, Kafka, lineage
 infrastructure/dagster/assets       ← Composition Root (único punto de ensamblaje)
 ```
 
-### Contratos de frontera verificados por import-linter
+### Contratos de frontera verificados por import-linter (BC-01..BC-37)
 
 |ID   |Regla                                                                                      |
 |-----|-------------------------------------------------------------------------------------------|
 |BC-01|`shared` solo depende de stdlib y third-party                                              |
-|BC-02|`market_data.exceptions` es stdlib-only                                                    |
 |BC-03|`market_data.domain` aislado de capas externas (DIP)                                       |
 |BC-04|`market_data.ports` solo depende del dominio propio                                        |
 |BC-05|`market_data.application` aislado de infrastructure y adapters                             |
 |BC-06|`market_data.adapters` aislado de infrastructure                                           |
-|BC-07|`infrastructure` no importa `application` en nivel módulo                                  |
+|BC-07|`market_data.infrastructure` no importa `application` (DIP)                                |
 |BC-08|Dependencias fluyen hacia adentro: domain ← ports ← application ← adapters ← infrastructure|
 |BC-09|`market_data.domain` no importa librerías de infraestructura (pyiceberg, redis, ccxt)      |
 |BC-10|`market_data` no importa bounded contexts hermanos                                         |
-|BC-11|`trading.strategies` aislado de execution y analytics                                      |
+|BC-11|Nivel-0 raw market data no importa tipos OHLCV derivados                                   |
 |BC-12|`trading.risk` aislado de execution                                                        |
 |BC-13|`portfolio` aislado de trading execution y strategies                                      |
 |BC-14|`ocm` sin dependencias de lógica de negocio                                                |
 |BC-15|`infrastructure.dagster.assets` no bypasea la capa de ports                                |
 |BC-16|`infrastructure` solo depende de plataforma y abstracciones de market_data                 |
-|BC-17|`infrastructure.timeouts` es SSOT de timeouts — sin dependencia circular con iceberg       |
 |BC-18|Ningún dominio importa la capa `api`                                                       |
 |BC-19|Ningún dominio importa `research`                                                          |
 |BC-20|`research` es consumidor read-only del gold layer                                          |
+|BC-21|`ocm.config.bootstrap` — `paths` es SSOT de root resolution                               |
+|BC-22|`ocm.runtime.state` — solo adapters/factories son API pública                              |
+|BC-24|`ocm.runtime` no importa domain packages ni apps                                           |
+|BC-25|`ocm.config` no importa `ocm.runtime` (bootstrap order)                                    |
+|BC-26|`ocm` — layering: observabilidad < config < runtime                                        |
+|BC-27|`ocm.runtime.state` no importa desde `ocm.runtime` root (init order)                       |
+|BC-29|Kafka wire schemas deben importarse desde `shared.kafka` (no desde `market_data.infrastructure`)|
+|BC-30|Medallion storage — unidireccional bronze → silver → gold                                  |
+|BC-32|`shared.kafka` no importa `market_data` infrastructure (SSOT direction)                    |
+|BC-33|`shared.kafka.schemas` aislado de domain types y bounded contexts                          |
+|BC-34|`shared` es neutral tooling — no importa implementaciones de bounded contexts               |
+|BC-35|Bounded contexts no definen sus propios Kafka wire payloads (sin duplicación)               |
+|BC-36|`trading.strategies` aislado de execution y analytics                                      |
+|BC-37a|`ports/inbound` no importa `ports/outbound`                                                |
+|BC-37b|`ports/outbound` no importa `ports/inbound`                                                |
 
 ### Composition Root
 
@@ -99,9 +116,10 @@ Comportamientos específicos por exchange centralizados en
 
 |Quirk                |Exchanges afectados|
 |---------------------|-------------------|
-|`backward_pagination`|KuCoinFutures      |
-|`requires_end_at`    |KuCoinFutures      |
+|`backward_pagination`|KuCoin, KuCoinFutures|
+|`requires_end_at`    |KuCoin, KuCoinFutures|
 |`reject_zero_since`  |KuCoin             |
+|`origin_fallback_date`|KuCoin (2018-01-01), KuCoinFutures (2020-01-01)|
 
 -----
 
@@ -111,9 +129,20 @@ Comportamientos específicos por exchange centralizados en
 orangecashmachine/
 │
 ├── shared/                         # Shared Kernel — sin dependencias internas (BC-01)
-│   ├── contracts/boundaries.py     # Definición de bounded contexts
-│   ├── exceptions/
-│   └── types/                      # OHLCVBar, Timeframe, Signal, eventos de dominio
+│   ├── contracts/boundaries.py     # Protocolos explícitos entre BCs (FeatureSource,
+│   │                               # SignalProtocol, FillHandler, TradeHistory, RiskGate)
+│   ├── kafka/                      # Neutral bus ACL (BC-29, BC-32, BC-33, BC-35)
+│   │   ├── schemas/                # Wire schemas: ohlcv, signals, orders, positions, trades
+│   │   ├── serializer.py
+│   │   └── topics.py
+│   ├── types/                      # Eventos de dominio across BCs
+│   │   ├── ohlcv.py                # OHLCVBar, Timeframe
+│   │   ├── signal.py               # SignalPayload
+│   │   ├── order_events.py         # OrderEvent, OrderFilled, OrderRejected
+│   │   ├── position_events.py      # PositionEvent
+│   │   └── rebalance_events.py     # RebalanceEvent
+│   ├── exceptions/                 # Excepciones base compartidas
+│   └── utils/                      # Utilidades transversales (repo root, paths)
 │
 ├── ocm/                            # Plataforma transversal (BC-14)
 │   ├── config/
@@ -140,49 +169,56 @@ orangecashmachine/
 │   ├── market_data/                # Bounded context de datos de mercado (BC-10)
 │   │   ├── domain/
 │   │   │   ├── entities/
-│   │   │   ├── events/             # ingestion.py, _lineage.py
-│   │   │   ├── exceptions/
-│   │   │   ├── policies/           # base.py, repair.py
+│   │   │   ├── events/             # ingestion, _lineage, trade_events,
+│   │   │   │                       # orderbook_events, replay_events
+│   │   │   ├── exceptions/         # Jerarquía de errores del BC
+│   │   │   ├── quality/            # Invariants y tipos de calidad (dominio puro, BC-09)
+│   │   │   ├── policies/           # base.py, repair.py, data_quality_policy.py
 │   │   │   └── value_objects/      # candle, timeframe, gap_utils, grid_alignment,
-│   │   │                           # exchange_quirks, ohlcv_batch, symbol
+│   │   │                           # exchange_quirks, symbol, order_book, raw_trade,
+│   │   │                           # trade_series, ohlcv_chunk, quality_label
 │   │   ├── ports/
-│   │   │   ├── inbound/            # event_consumer, pipeline_trigger
+│   │   │   ├── inbound/            # event_consumer, pipeline_trigger, trades_source
 │   │   │   └── outbound/           # exchange, storage, storage_factory, state,
 │   │   │                           # gap_registry, lineage, metrics, observability,
 │   │   │                           # kafka_producer, kafka_consumer, event_bus,
-│   │   │                           # publisher, quality, throttle, feature_reader
+│   │   │                           # publisher, data_quality_checker, throttle,
+│   │   │                           # feature_reader
 │   │   ├── application/
 │   │   │   ├── use_cases/          # pipeline_orchestrator, ohlcv_transformer,
 │   │   │   │                       # resample_ohlcv, candle_normalizer
 │   │   │   ├── pipelines/          # ohlcv_pipeline, resample_pipeline,
 │   │   │   │                       # trades_pipeline, derivatives_pipeline, _worker_pool
 │   │   │   ├── strategies/         # backfill, incremental, repair
+│   │   │   ├── quality/            # DataQualityPipeline, report
 │   │   │   └── consumers/          # base, quality_consumer
 │   │   ├── adapters/
 │   │   │   ├── inbound/
 │   │   │   │   ├── rest/           # OHLCVFetcher, TradesFetcher, DerivativesFetcher
-│   │   │   │   ├── websocket/      # WebSocket manager, streams
+│   │   │   │   ├── websocket/      # WebSocket manager, orderbook_stream,
+│   │   │   │   │                   # trades_stream, ws_trades_source
 │   │   │   │   └── data_providers/ # CoinGlass, CoinMarketCap
 │   │   │   └── outbound/
 │   │   │       ├── exchange/       # CCXTAdapter, resiliencia, throttle adaptativo,
 │   │   │       │                   # circuit breaker
-│   │   │       └── storage/
+│   │   │       └── storage/        # gold_reader, chunk_converter
 │   │   ├── infrastructure/
-│   │   │   ├── bootstrap/          # OCMContainer — DI interno
+│   │   │   ├── bootstrap/          # OCMContainer — DI interno, pipeline_factory
 │   │   │   ├── storage/
 │   │   │   │   ├── bronze/         # BronzeStorage — Parquet raw con retención
-│   │   │   │   ├── silver/         # SilverStorage — Parquet limpio + manifiestos
+│   │   │   │   ├── silver/         # SilverStorage — Parquet limpio + manifiestos,
+│   │   │   │   │                   # trades_storage
 │   │   │   │   ├── gold/           # GoldStorage — features procesados (Iceberg)
 │   │   │   │   └── iceberg/        # SqlCatalog, schemas, particiones, CursorStore
 │   │   │   ├── kafka/              # BronzeWriter, consumer, producer, dedup,
-│   │   │   │                       # ohlcv_publisher, serializer, metrics, payloads
+│   │   │   │                       # ohlcv_publisher, serializer, metrics, topics
+│   │   │   ├── quality/            # anomaly_registry, cross_exchange_validator,
+│   │   │   │                       # ge_checker, ge_suite (Great Expectations)
 │   │   │   ├── lineage/tracker.py
 │   │   │   ├── observability/      # métricas Prometheus del bounded context
 │   │   │   ├── event_bus/          # in_memory.py
-│   │   │   └── timeouts.py         # SSOT de todos los timeouts del sistema (BC-17)
-│   │   ├── quality/                # Pandera: schemas, validators, policies,
-│   │   │                           # invariants, anomaly_registry, pipeline
-│   │   └── exceptions.py           # SSOT de jerarquía de errores del bounded context
+│   │   │   └── timeouts.py         # SSOT de todos los timeouts del sistema
+│   │   └── ports/inbound/          # trades_source (protocolo de fuente de trades)
 │   │
 │   ├── trading/                    # Motor de trading ⚠️ en desarrollo activo
 │   │   ├── strategies/             # BaseStrategy, EMA Crossover, registry
@@ -204,7 +240,7 @@ orangecashmachine/
 │   │   │   ├── bronze_ohlcv.py     # backfill + incremental
 │   │   │   ├── repair_ohlcv.py     # repair de gaps
 │   │   │   ├── resample_ohlcv.py   # 1m → 5m, 15m, 1h, 4h, 1d
-│   │   │   ├── asset_checks.py
+│   │   │   ├── asset_checks.py     # verificaciones de calidad post-escritura
 │   │   │   └── partitions.py
 │   │   ├── defs.py
 │   │   └── resources.py
@@ -230,6 +266,7 @@ orangecashmachine/
 ├── config/                         # YAML Hydra
 │   ├── config.yaml                 # Raíz: defaults list
 │   ├── base.yaml                   # Defaults globales (dry_run=true)
+│   ├── settings.yaml               # default_env (último recurso en cascada)
 │   ├── env/                        # development, production, test
 │   ├── exchanges/                  # bybit, kucoin, kucoinfutures
 │   ├── pipeline/                   # historical, realtime, resample
@@ -243,14 +280,14 @@ orangecashmachine/
 │   └── monitoring/                 # prometheus.yml, alerts.yml, alertmanager.yml,
 │                                   # loki/loki.yml, promtail/promtail.yml
 │
-├── tests/                          # 439 tests — mirrors estructura de paquetes
+├── tests/                          # 553 tests — mirrors estructura de paquetes
 │
 ├── dagster_defs.py                 # Contrato de framework (entry point fijo)
 ├── dagster.yaml
 ├── docker-compose.yml
 ├── docker-compose.override.yml
 ├── Dockerfile
-└── pyproject.toml                  # Contratos BC-01..BC-20, ruff, mypy, pytest
+└── pyproject.toml                  # Contratos BC-01..BC-37, ruff, mypy, pytest
 ```
 
 -----
@@ -260,10 +297,12 @@ orangecashmachine/
 ```
 dagster_defs.py                           (contrato de framework — posición fija)
   └── infrastructure/dagster/defs.py
-        └── infrastructure/dagster/assets/   (Composition Root)
-              ├── bronze_ohlcv    → PipelineOrchestrator → BackfillStrategy | IncrementalStrategy
-              ├── repair_ohlcv    → PipelineOrchestrator → RepairStrategy
-              └── resample_ohlcv  → ResamplePipeline (1m → 5m, 15m, 1h, 4h, 1d)
+        ├── infrastructure/dagster/assets/   (Composition Root)
+        │     ├── bronze_ohlcv    → PipelineOrchestrator → BackfillStrategy | IncrementalStrategy
+        │     ├── repair_ohlcv    → PipelineOrchestrator → RepairStrategy
+        │     ├── resample_ohlcv  → ResamplePipeline (1m → 5m, 15m, 1h, 4h, 1d)
+        │     └── asset_checks    → verificaciones post-escritura (calidad, completitud)
+        └── trades (vía asset_checks o pipeline dedicado)
 
 PipelineOrchestrator
   └── construye PipelineRequest (credentials, resilience, symbols,
@@ -437,27 +476,41 @@ almacenan en Silver junto a cada partición. El linaje persiste en `data/lineage
 ## Tests y tooling
 
 ```bash
-uv run pytest tests/          # 439 tests
+uv run pytest tests/          # 553 tests
 uv run ruff check .           # linting
 uv run mypy .                 # 0 errores genuinos
-uv run lint-imports           # contratos BC-01..BC-20
+uv run python -m importlinter # contratos BC-01..BC-37
 uv run bandit .               # seguridad
 ```
 
 `type: ignore` en el código requiere comentario explicativo — la presencia sin
-justificación es deuda técnica explícita visible en el diff.
+justificación es deuda técnica explícita visible en el diff. Nunca silenciar
+`type: ignore` en commits sin PR.
 
 -----
 
 ## CI/CD
 
-`.github/workflows/ocm-ci.yml` ejecuta en cada PR:
+`.github/workflows/ocm-ci.yml` ejecuta en cada PR (en orden, con fail-fast):
 
-1. `uv run pytest tests/`
-1. `uv run ruff check .`
-1. `uv run mypy .`
-1. `uv run lint-imports`
-1. `uv run bandit .`
+|Job                   |Comando                                    |Propósito                          |
+|----------------------|-------------------------------------------|-----------------------------------|
+|Architecture contracts|`uv run python -m importlinter`            |BC-01..BC-37 — gate, bloquea todo  |
+|Tests                 |`uv run pytest tests/ -x -q`               |553 tests — fail-fast en primer error|
+|Config validation     |`OCM_VALIDATE_ONLY=1 uv run python main.py`|Hydra bootstrap + validación schema|
+
+Los jobs de tests y config dependen de architecture: si los contratos están rotos,
+no se ejecuta nada más. CI usa `uv sync --group dev` para architecture,
+`uv sync` (sin dev) para los demás.
+
+Tooling local de pre-commit:
+
+```bash
+uv run ruff check .           # linting
+uv run mypy .                 # 0 errores genuinos
+uv run python -m importlinter # contratos BC-01..BC-37
+uv run bandit .               # seguridad
+```
 
 `.github/workflows/ocm-cd.yml` — 🚧 placeholder, pendiente de implementación
 (`workflow_dispatch` manual, no automatizado).
@@ -471,6 +524,6 @@ justificación es deuda técnica explícita visible en el diff.
 1. Verificar antes del PR:
 
    ```bash
-   uv run ruff check . && uv run lint-imports && uv run pytest tests/ -q
+   uv run ruff check . && uv run python -m importlinter && uv run pytest tests/ -q
    ```
 1. `mypy` debe reportar 0 errores genuinos

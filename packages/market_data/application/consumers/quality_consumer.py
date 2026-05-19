@@ -73,12 +73,9 @@ class QualityPipelineConsumer(BaseConsumer):
                 "(OCMContainer o ConcretePipelineFactory)."
             )
         super().__init__(bus)
-        if registry is None:
-            # Late import — DIP: application no acopla quality/ en module-level.
-            # BC-05: import local evita dependencia estática en application layer.
-            from market_data.infrastructure.quality.anomaly_registry import default_registry
-            registry = default_registry
-        self._registry = registry
+        # AnomalyRegistryPort inyectado desde pipeline_factory (Composition Root).
+        # NullAnomalyRegistry si no se provee — fail-soft sin acoplamiento a infra.
+        self._registry = registry if registry is not None else _null_registry()
         self._tracker         = tracker
         # DIP: checker inyectado — default = native (backward compat)
         self._checker_factory: CheckerFactory = checker_factory or native_checker_factory

@@ -135,14 +135,9 @@ class QualityPipeline:
         checker_factory: Optional[CheckerFactory]       = None,
     ) -> None:
         self._policy          = policy          or default_policy
-        if registry is None:
-            # Late import — DIP: application no acopla infra en module-level.
-            # BC-05: lazy — pendiente inyeccion desde ConcretePipelineFactory.
-            from market_data.infrastructure.quality.anomaly_registry import (
-                default_registry as _default_registry,
-            )
-            registry = _default_registry
-        self._registry        = registry
+        # AnomalyRegistryPort inyectado desde pipeline_factory (Composition Root).
+        # NullAnomalyRegistry si no se provee — fail-soft sin acoplamiento a infra.
+        self._registry        = registry if registry is not None else _null_registry()
         self._metrics         = metrics         or NullQualityMetrics()
         self._lineage_tracker = lineage_tracker or _null_lineage_tracker()
         # DIP: checker inyectado — default = native (backward compat)
