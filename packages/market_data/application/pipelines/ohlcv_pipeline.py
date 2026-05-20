@@ -38,6 +38,10 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.exchange_client import ExchangeClientPort
     from market_data.ports.outbound.throttle import ThrottlePort
 
+from market_data.ports.outbound.publisher_port import (
+    OHLCVPublisherPort,
+    NullPublisher,
+)
 from ocm.observability import bind_pipeline
 
 _log = bind_pipeline("pipeline")
@@ -236,7 +240,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         if quality is None:
             from market_data.application.quality.pipeline import QualityPipeline  # noqa: PLC0415
             quality = QualityPipeline()
-        _publisher = None  # Inyectado desde pipeline_factory (Composition Root)
+        _publisher: OHLCVPublisherPort = NullPublisher()  # Inyectado por CompositionRoot
 
         self._ctx = PipelineContext(
             fetcher      = fetcher,

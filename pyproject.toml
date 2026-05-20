@@ -254,6 +254,22 @@ root_packages = [
 # TIER 0 — fundamentos: dependency-free por definición
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+[[tool.importlinter.contracts]]
+# PipelineFactory es un detalle de infraestructura — solo el Composition Root
+# puede instanciarla. application/, domain/, ports/ y adapters/ dependen de
+# abstracciones (OHLCVPublisherPort, etc.), no de la factory concreta.
+# Ref: Seemann, «DI in .NET» §Composition Root.
+name = "BC-38: PipelineFactory solo instanciable desde infrastructure/bootstrap/composition_root"
+type = "forbidden"
+source_modules = [
+    "market_data.application",
+    "market_data.domain",
+    "market_data.ports",
+    "market_data.adapters",
+]
+forbidden_modules = ["market_data.infrastructure.bootstrap.pipeline_factory"]
+
 [[tool.importlinter.contracts]]
 # shared es el kernel compartido entre todos los bounded contexts.
 # Solo puede depender de stdlib y third-party.
