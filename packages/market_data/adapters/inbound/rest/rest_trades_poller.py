@@ -3,57 +3,42 @@
 market_data/adapters/inbound/rest/rest_trades_poller.py
 =======================================================
 
-RESTTradesPoller — implementación REST de TradesSourceProtocol.
+.. deprecated::
+    RESTTradesPoller está DEPRECADO desde el ciclo de implementación
+    de GapAwareStream (Paso 4). Usar en su lugar:
 
-Responsabilidad
----------------
-Producir un stream continuo de RawTrade usando REST polling via
-ExchangeAdapter.fetch_trades(). Implementa TradesSourceProtocol,
-lo que lo hace intercambiable con WebSocketTradesStream (futuro).
+      ┌─────────────────────────────────────────────────────────────┐
+      │  Live (continuo)  →  GapAwareStream(WSTradesSource, ...)   │
+      │  Backfill         →  TradesBackfillFetcher                  │
+      │  Gap recovery     →  GapRecoveryFetcher                     │
+      └─────────────────────────────────────────────────────────────┘
 
-Kappa Architecture
-------------------
-REST polling produce eventos RawTrade incrementales e inmutables —
-semánticamente idénticos a los de WebSocket. El OHLCV builder y
-el OrderBook builder no distinguen el transporte.
+    RESTTradesPoller permanece en el codebase SOLO como alias de
+    compatibilidad durante la transición. Será eliminado en el siguiente
+    ciclo de limpieza una vez que GapAwareStream esté en producción.
 
-Diseño del polling
-------------------
-  1. fetch_trades(symbol, since=cursor_ms, limit=PAGE_LIMIT)
-  2. Para cada trade raw → convertir a RawTrade (ACL)
-  3. Yield cada RawTrade → consumer los recibe via AsyncIterator
-  4. Actualizar cursor al max(timestamp_ms) del batch
-  5. Si batch vacío → esperar poll_interval_s antes de reintentar
-  6. Backoff exponencial en errores de red
+    Razón de deprecación
+    --------------------
+    RESTTradesPoller mezclaba dos responsabilidades semánticas distintas:
+      1. Live fallback continuo  → ahora: GapAwareStream
+      2. source=REST_RECOVERY    → BUG: debería ser REST_POLLING para live
 
-Cursor
-------
-Persiste en memoria (last_trade_ms). Para persistencia entre reinicios,
-el caller inyecta since_ms en el constructor. El cursor avanza +1ms
-después de cada batch para evitar re-fetch del último trade.
+    El sistema Kappa requiere que cada fuente declare su source de forma
+    semánticamente correcta. REST_RECOVERY está reservado para
+    GapRecoveryFetcher (gaps acotados). Un poller continuo no es recovery.
 
-Deduplicación
---------------
-Los exchanges pueden devolver el mismo trade en polls consecutivos
-si el timestamp cae en el borde del cursor. SeenFilter L1 (en memoria)
-descarta duplicados por trade_id dentro de la sesión.
-
-ACL — conversión raw → RawTrade
---------------------------------
-fetch_trades() devuelve List[Dict] de CCXT. La conversión a RawTrade
-ocurre aquí, en la frontera del adapter — el dominio no conoce CCXT.
-
-SafeOps
--------
-- Errores de red → backoff + retry, nunca propagan al consumer
-- stop() → SafeOps, idempotente
-- StopAsyncIteration cuando stop() es llamado
+Historial
+---------
+    Creado  : Ciclo OHLCV bootstrap — live fallback sobre REST
+    Deprecado: Ciclo Paso 4 — GapAwareStream + GapRecoveryFetcher
+    Eliminar : Siguiente ciclo de limpieza (post-producción de GapAwareStream)
 
 Principios: DIP · ACL · Kappa · SafeOps · Fail-Soft · SSOT
 """
 from __future__ import annotations
 
 import asyncio
+import warnings
 from collections import OrderedDict
 from decimal import Decimal, InvalidOperation
 from typing import AsyncIterator, Optional
@@ -71,13 +56,13 @@ from market_data.ports.outbound.exchange import ExchangeAdapter
 
 _DEFAULT_POLL_INTERVAL_S: float = 1.0    # polling cada 1s en condiciones normales
 _DEFAULT_PAGE_LIMIT:      int   = 500    # trades por request REST
-_DEFAULT_DEDUP_SIZE:      int   = 5_000  # LRU de trade_ids vistos
-_MAX_BACKOFF_S:           float = 60.0   # backoff máximo en errores
+_DEFAULT_DEDUP_SIZE:      int   = 5_000  # LRU de trade_ids vistos (ventana de sesión)
+_MAX_BACKOFF_S:           float = 60.0   # backoff máximo en errores de red
 _BACKOFF_BASE:            float = 2.0    # base exponencial del backoff
 
 
 # ---------------------------------------------------------------------------
-# ACL — conversión CCXT raw → RawTrade
+# ACL — conversión CCXT raw → RawTrade  (pura, sin efectos secundarios)
 # ---------------------------------------------------------------------------
 
 def _parse_raw_trade(
@@ -89,7 +74,16 @@ def _parse_raw_trade(
     """
     ACL: convierte un trade CCXT crudo a RawTrade del dominio.
 
-    Fail-Soft: retorna None si el trade es inválido — el poller lo omite.
+    source=REST_POLLING declara que este trade proviene de REST polling
+    continuo (live fallback), no de WebSocket ni de recovery.
+
+    Semántica SSOT de source:
+      REST_POLLING  → polling continuo (este poller, live fallback)
+      REST_BACKFILL → histórico acotado (TradesBackfillFetcher)
+      REST_RECOVERY → gap recovery acotado (GapRecoveryFetcher)
+      WS            → stream live (WSTradesSource / GapAwareStream)
+
+    Fail-soft: retorna None si el trade es inválido — el poller lo omite.
     No lanza — un trade malformado no debe abortar el stream.
 
     CCXT trade format:
@@ -102,7 +96,7 @@ def _parse_raw_trade(
         }
     """
     try:
-        trade_id     = str(raw.get("id") or "")
+        trade_id     = str(raw.get("id") or "").strip()
         timestamp_ms = int(raw.get("timestamp") or 0)
         price_raw    = raw.get("price")
         amount_raw   = raw.get("amount")
@@ -126,21 +120,26 @@ def _parse_raw_trade(
             price        = price,
             amount       = amount,
             side         = TradeSide.from_raw(side_raw),
-            # TECH-DEBT: REST_RECOVERY temporal hasta migración a
-            # GapRecoveryFetcher, que recibirá source como parámetro.
-            source       = TradeSource.REST_RECOVERY,
+            source       = TradeSource.REST_POLLING,  # SSOT: live polling ≠ recovery
         )
     except (InvalidOperation, TypeError, ValueError):
         return None
 
 
 # ---------------------------------------------------------------------------
-# RESTTradesPoller — AsyncIterator[RawTrade]
+# RESTTradesPoller — AsyncIterator[RawTrade]  [DEPRECATED]
 # ---------------------------------------------------------------------------
 
 class RESTTradesPoller:
     """
-    Stream de trades via REST polling. Implementa TradesSourceProtocol.
+    .. deprecated::
+        Usar GapAwareStream(WSTradesSource, recovery_factory, ...) en su lugar.
+        Ver módulo docstring para la ruta de migración completa.
+
+    Stream continuo de trades via REST polling. Implementa TradesSourceProtocol.
+
+    Permanece funcional durante la transición. El constructor emite
+    DeprecationWarning para que los callers sean conscientes.
 
     Parámetros
     ----------
@@ -148,10 +147,16 @@ class RESTTradesPoller:
     exchange_id       : identificador del exchange ("bybit", "kucoin"…).
     symbol            : par de trading ("BTC/USDT").
     market_type       : "spot" | "linear" | "inverse".
-    since_ms          : cursor inicial. None = desde el más reciente.
+    since_ms          : cursor inicial. None = desde el más reciente disponible.
     poll_interval_s   : segundos entre polls cuando no hay datos nuevos.
-    page_limit        : máximo de trades por request.
-    run_id            : correlación con el run actual.
+    page_limit        : máximo de trades por request REST.
+    run_id            : correlación con el run actual (observabilidad).
+
+    Ciclo de vida
+    -------------
+    1. __aiter__() → inicia iteración, resetea stop_event.
+    2. __anext__() → retorna RawTrade; bloquea con backoff si no hay datos.
+    3. stop()      → SafeOps, idempotente.
     """
 
     def __init__(
@@ -159,39 +164,65 @@ class RESTTradesPoller:
         exchange_adapter: ExchangeAdapter,
         exchange_id:      str,
         symbol:           str,
-        market_type:      str   = "spot",
+        market_type:      str          = "spot",
         since_ms:         Optional[int] = None,
-        poll_interval_s:  float = _DEFAULT_POLL_INTERVAL_S,
-        page_limit:       int   = _DEFAULT_PAGE_LIMIT,
-        run_id:           str   = "",
+        poll_interval_s:  float        = _DEFAULT_POLL_INTERVAL_S,
+        page_limit:       int          = _DEFAULT_PAGE_LIMIT,
+        run_id:           str          = "",
     ) -> None:
+        # -- Deprecation warning observable en logs y en warnings ----------------
+        warnings.warn(
+            "RESTTradesPoller está DEPRECADO. "
+            "Migrar a GapAwareStream(WSTradesSource, recovery_factory=...) "
+            "para live streaming con auto-recovery. "
+            "Ver: market_data/adapters/inbound/websocket/gap_aware_stream.py",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        # -- Fail-fast: invariantes de construcción ------------------------------
         if exchange_adapter is None:
             raise ValueError("RESTTradesPoller: exchange_adapter es obligatorio")
         if not exchange_id:
             raise ValueError("RESTTradesPoller: exchange_id no puede ser vacío")
         if not symbol:
             raise ValueError("RESTTradesPoller: symbol no puede ser vacío")
+        if poll_interval_s <= 0:
+            raise ValueError(
+                f"RESTTradesPoller: poll_interval_s debe ser > 0, got {poll_interval_s}"
+            )
+        if page_limit <= 0:
+            raise ValueError(
+                f"RESTTradesPoller: page_limit debe ser > 0, got {page_limit}"
+            )
 
-        self._adapter        = exchange_adapter
-        self._exchange_id    = exchange_id
-        self._symbol         = symbol
-        self._market_type    = market_type.lower()
-        self._cursor_ms      = since_ms
-        self._poll_interval  = poll_interval_s
-        self._page_limit     = page_limit
-        self._run_id         = run_id
+        self._adapter       = exchange_adapter
+        self._exchange_id   = exchange_id
+        self._symbol        = symbol
+        self._market_type   = market_type.lower()
+        self._cursor_ms     = since_ms
+        self._poll_interval = poll_interval_s
+        self._page_limit    = page_limit
+        self._run_id        = run_id
 
-        self._running        = False
-        self._stop_event     = asyncio.Event()
-        # OrderedDict: LRU manual via popitem(last=False).
-        # dict normal no garantiza popitem FIFO en CPython < 3.8.
+        self._running    = False
+        self._stop_event = asyncio.Event()
+
+        # OrderedDict: LRU manual via popitem(last=False) — O(1) por operación.
+        # Mantiene ventana de _DEFAULT_DEDUP_SIZE trade_ids vistos en sesión.
+        # Propósito: descartar duplicados de borde de cursor entre polls.
         self._dedup: OrderedDict[str, None] = OrderedDict()
 
         self._log = logger.bind(
-            component   = "RESTTradesPoller",
+            component   = "RESTTradesPoller[DEPRECATED]",
             exchange    = exchange_id,
             symbol      = symbol,
             market_type = market_type,
+        )
+        self._log.warning(
+            "RESTTradesPoller instanciado [DEPRECATED] | "
+            "exchange={} symbol={} — migrar a GapAwareStream",
+            exchange_id, symbol,
         )
 
     # ------------------------------------------------------------------
@@ -204,29 +235,35 @@ class RESTTradesPoller:
 
     @property
     def source_id(self) -> str:
+        # prefix "rest:" identifica live REST polling en observabilidad
         return f"rest:{self._exchange_id}:{self._symbol}"
 
     def __aiter__(self) -> AsyncIterator[RawTrade]:
         self._running = True
         self._stop_event.clear()
+        self._log.debug(
+            "polling start | since_ms={} interval={}s",
+            self._cursor_ms, self._poll_interval,
+        )
         return self
 
-    # TECH-DEBT: __anext__ mezcla fetch, parsing/dedup y yield (SRP).
-    # Pendiente: extraer _fetch_batch() y _process_batch() como helpers.
     async def __anext__(self) -> RawTrade:
         """
-        Retorna el siguiente RawTrade del stream REST.
+        Retorna el siguiente RawTrade del stream REST polling.
 
         Loop interno:
-          1. Si stop() fue llamado → StopAsyncIteration
-          2. fetch_trades(since=cursor_ms)
-          3. Para cada trade válido no duplicado → yield
-          4. Si batch vacío → esperar poll_interval_s
-          5. En error → backoff exponencial, retry
+          1. stop() llamado              → StopAsyncIteration
+          2. fetch_trades(since=cursor)  → batch de trades crudos
+          3. Error de red               → backoff exponencial, retry
+          4. Batch vacío                → esperar poll_interval_s, retry
+          5. ACL + dedup LRU            → filtrar inválidos y duplicados
+          6. Yield uno a uno (FIFO)     → el consumer controla el ritmo
+          7. Avanzar cursor: max_ts + 1 → evita re-fetch del último trade
         """
         backoff = _DEFAULT_POLL_INTERVAL_S
 
         while not self._stop_event.is_set():
+            # -- fetch con backoff exponencial en error ----------------------
             try:
                 raw_trades = await self._adapter.fetch_trades(
                     symbol = self._symbol,
@@ -242,17 +279,16 @@ class RESTTradesPoller:
                 backoff = min(backoff * _BACKOFF_BASE, _MAX_BACKOFF_S)
                 continue
 
-            backoff = _DEFAULT_POLL_INTERVAL_S  # reset backoff en éxito
+            backoff = _DEFAULT_POLL_INTERVAL_S  # reset en fetch exitoso
 
             if not raw_trades:
-                # Sin datos nuevos — esperar antes de reintentar
                 await asyncio.sleep(self._poll_interval)
                 continue
 
-            # ACL: convertir batch completo, filtrar inválidos y duplicados
+            # -- ACL: convertir batch, dedup, avanzar cursor -----------------
             new_trades: list[RawTrade] = []
-            # None or 0 → arranca en 0; cualquier trade.timestamp_ms > 0
-            # garantiza que max_ts avanza en el primer batch.
+            # cursor_ms None implica "desde el más reciente" — max_ts arranca en 0
+            # y avanza con el primer trade válido recibido.
             max_ts = self._cursor_ms or 0
 
             for raw in raw_trades:
@@ -263,10 +299,12 @@ class RESTTradesPoller:
                     continue
                 if trade.trade_id in self._dedup:
                     continue
-                # LRU dedup en memoria
+
+                # LRU dedup: insertar y evictar oldest si supera la ventana
                 self._dedup[trade.trade_id] = None
                 if len(self._dedup) > _DEFAULT_DEDUP_SIZE:
-                    self._dedup.popitem(last=False)
+                    self._dedup.popitem(last=False)  # O(1) — FIFO eviction
+
                 new_trades.append(trade)
                 max_ts = max(max_ts, trade.timestamp_ms)
 
@@ -274,14 +312,17 @@ class RESTTradesPoller:
                 await asyncio.sleep(self._poll_interval)
                 continue
 
-            # Avanzar cursor — +1ms evita re-fetch del último trade
+            # Avanzar cursor — +1ms garantiza que el siguiente poll no
+            # re-fetche el trade con timestamp max_ts (borde inclusivo CCXT).
             self._cursor_ms = max_ts + 1
 
             self._log.debug(
-                "fetched | trades={} cursor_ms={}", len(new_trades), self._cursor_ms
+                "polled | trades={} cursor_ms={}",
+                len(new_trades), self._cursor_ms,
             )
 
-            # Yield uno a uno — el consumer controla el ritmo
+            # -- Yield uno a uno en orden cronológico ------------------------
+            # sorted() garantiza orden independientemente del orden de CCXT.
             for trade in sorted(new_trades, key=lambda t: t.timestamp_ms):
                 if self._stop_event.is_set():
                     self._running = False
@@ -292,7 +333,7 @@ class RESTTradesPoller:
         raise StopAsyncIteration
 
     async def stop(self) -> None:
-        """SafeOps: señaliza el fin del stream. Nunca lanza."""
+        """SafeOps: señaliza fin del stream. Nunca lanza. Idempotente."""
         try:
             self._stop_event.set()
             self._running = False
@@ -302,7 +343,7 @@ class RESTTradesPoller:
 
     def __repr__(self) -> str:
         return (
-            f"RESTTradesPoller("
+            f"RESTTradesPoller[DEPRECATED]("
             f"exchange={self._exchange_id!r}, "
             f"symbol={self._symbol!r}, "
             f"market_type={self._market_type!r}, "

@@ -17,17 +17,23 @@ stream semántico de RawTrade. El pipeline downstream (OHLCV builder,
 OrderBook builder, feature pipeline) depende de este protocolo —
 nunca de una implementación concreta.
 
-    RESTTradesPoller      ─┐
-    WebSocketTradesStream  ├── TradesSourceProtocol → AsyncIterator[RawTrade]
-    ReplayTradesSource    ─┘
+    GapAwareStream(WSTradesSource)  ─┐
+    TradesBackfillFetcher           ├── TradesSourceProtocol → AsyncIterator[RawTrade]
+    GapRecoveryFetcher              |
+    ReplayTradesSource (futuro)    ─┘
 
 El stream es la semántica. El transporte es un detalle de implementación.
 
-Implementaciones de referencia
--------------------------------
-  adapters/inbound/rest/rest_trades_poller.py    — REST (hoy)
-  adapters/inbound/websocket/trades_stream.py    — WebSocket (futuro)
-  adapters/inbound/replay/replay_trades_source.py — Replay (futuro)
+Implementaciones activas
+------------------------
+  adapters/inbound/websocket/gap_aware_stream.py      — WS + auto-recovery (preferido)
+  adapters/inbound/rest/trades_backfill_fetcher.py    — backfill histórico acotado
+  adapters/inbound/rest/gap_recovery_fetcher.py       — gap recovery acotado
+  adapters/inbound/replay/replay_trades_source.py     — replay (futuro)
+
+Deprecated
+----------
+  adapters/inbound/rest/rest_trades_poller.py         — DEPRECATED, usar GapAwareStream
 
 Principios
 ----------
@@ -69,10 +75,11 @@ class TradesSourceProtocol(Protocol):
     Responsabilidad del implementador
     ----------------------------------
     Cada RawTrade producido DEBE declarar ``source`` explícitamente (SSOT):
-      WsTradesStream        → source=TradeSource.WS
-      TradesBackfillFetcher → source=TradeSource.REST_BACKFILL
-      GapRecoveryFetcher    → source=TradeSource.REST_RECOVERY
-      ReplayTradesSource    → source=TradeSource.REPLAY
+      GapAwareStream / WSTradesSource → source=TradeSource.WS
+      TradesBackfillFetcher           → source=TradeSource.REST_BACKFILL
+      GapRecoveryFetcher              → source=TradeSource.REST_RECOVERY
+      RESTTradesPoller [DEPRECATED]   → source=TradeSource.REST_POLLING
+      ReplayTradesSource (futuro)     → source=TradeSource.REPLAY
 
     Esto garantiza que los consumers downstream puedan deduplicar y
     priorizar eventos de forma determinista sin depender del transporte.
