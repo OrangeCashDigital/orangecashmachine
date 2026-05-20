@@ -28,6 +28,8 @@ from typing import AsyncIterator
 
 from loguru import logger
 
+from market_data.domain.value_objects.raw_trade import TradeSource
+
 
 class WSTradesSource:
     """
@@ -69,6 +71,9 @@ class WSTradesSource:
 
     @property
     def source_id(self) -> str:
+        # source_id prefix "ws:" corresponde a TradeSource.WS.
+        # La implementación real (cryptofeed/ccxt-pro) DEBE declarar
+        # source=TradeSource.WS en cada RawTrade producido (SSOT).
         return f"ws:{self._exchange_id}:{self._symbol}"
 
     @property
@@ -93,8 +98,8 @@ class WSTradesSource:
             self._stop_event.set()
             self._running = False
             self._log.debug("WSTradesSource stopped | source_id={}", self.source_id)
-        except Exception:
-            pass  # SafeOps
+        except Exception as _stop_exc:  # SafeOps — nunca propaga
+            self._log.warning("stop() raised unexpectedly | error={}", _stop_exc)
 
     def __repr__(self) -> str:
         return (
