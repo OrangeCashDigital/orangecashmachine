@@ -26,14 +26,10 @@ El stream es la semántica. El transporte es un detalle de implementación.
 
 Implementaciones activas
 ------------------------
-  adapters/inbound/websocket/gap_aware_stream.py      — WS + auto-recovery (preferido)
+  adapters/inbound/websocket/gap_aware_stream.py      — WS + auto-recovery (fuente canónica)
   adapters/inbound/rest/trades_backfill_fetcher.py    — backfill histórico acotado
   adapters/inbound/rest/gap_recovery_fetcher.py       — gap recovery acotado
   adapters/inbound/replay/replay_trades_source.py     — replay (futuro)
-
-Deprecated
-----------
-  adapters/inbound/rest/rest_trades_poller.py         — DEPRECATED, usar GapAwareStream
 
 Principios
 ----------
@@ -78,7 +74,6 @@ class TradesSourceProtocol(Protocol):
       GapAwareStream / WSTradesSource → source=TradeSource.WS
       TradesBackfillFetcher           → source=TradeSource.REST_BACKFILL
       GapRecoveryFetcher              → source=TradeSource.REST_RECOVERY
-      RESTTradesPoller [DEPRECATED]   → source=TradeSource.REST_POLLING
       ReplayTradesSource (futuro)     → source=TradeSource.REPLAY
 
     Esto garantiza que los consumers downstream puedan deduplicar y
