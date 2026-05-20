@@ -169,6 +169,7 @@ def overlap_for_timeframe(timeframe: str, exchange: str | None = None) -> int:
     return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
 
 
+from market_data.domain.value_objects.timeframe import timeframe_to_ms
 class _LazyCalibrationStore:
     """
     Singleton lazy del store de calibración de lateness.
@@ -198,8 +199,7 @@ class _LazyCalibrationStore:
         except Exception as _cal_exc:
             # SafeOps: calibration store no disponible → caller usa DEFAULT_OVERLAP_BARS.
             # debug, no warning — es esperado en entornos sin datos de calibración.
-            import logging as _logging
-            _logging.getLogger(__name__).debug(
+            self._log.debug(
                 "Lateness calibration unavailable exchange=%s tf=%s err=%s",
                 exchange, timeframe, _cal_exc,
             )
@@ -220,7 +220,7 @@ OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
 # ==========================================================
 # Exceptions
-from market_data.domain.exceptions import (  # noqa: E402
+from market_data.domain.exceptions import (
     MissingStartDateError, ChunkFetchError,
     InvalidMarketTypeError,
 )
@@ -368,13 +368,11 @@ class HistoricalFetcherAsync:
         except Exception as _ovl_exc:
             # SafeOps: overlap_for_timeframe falla → fallback a DEFAULT_OVERLAP_BARS.
             # debug — el fallback es seguro y el pipeline no se interrumpe.
-            import logging as _logging
-            _logging.getLogger(__name__).debug(
+            self._log.debug(
                 "overlap_for_timeframe failed exchange=%s tf=%s err=%s — using default",
                 _exchange_name, timeframe, _ovl_exc,
             )
             _pair_overlap = self._overlap
-        _effective_overlap = _pair_overlap
 
         collected:    List[pd.DataFrame] = []
         for chunk_idx in range(MAX_CHUNKS_PER_RUN):
@@ -446,7 +444,7 @@ class HistoricalFetcherAsync:
                 ).inc()
                 break
 
-            since_ts     = last_ts - (_effective_overlap * tf_ms)
+            since_ts     = last_ts - (_pair_overlap * tf_ms)
 
             if len(raw) < limit:
                 break
@@ -654,7 +652,7 @@ class HistoricalFetcherAsync:
 # Helpers
 # ==========================================================
 
-from market_data.domain.value_objects.timeframe import timeframe_to_ms  # noqa: E402
+
 
 
 def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:
