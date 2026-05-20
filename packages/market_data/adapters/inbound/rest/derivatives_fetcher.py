@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/ingestion/rest/derivatives_fetcher.py
+market_data/adapters/inbound/rest/derivatives_fetcher.py
 ==================================================
 
 Fetchers de derivados (funding_rate, open_interest) via REST CCXT.
@@ -35,7 +35,6 @@ Principios: SOLID · KISS · DRY · SafeOps
 """
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
@@ -50,14 +49,9 @@ from market_data.adapters.outbound.exchange import (
 )
 
 
-def _derivatives_storage(exchange: str) -> object:
-    from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
-    return DerivativesStorage(exchange=exchange)
-
-
-def _build_cursor_store():
-    from ocm.runtime.state.factories import build_cursor_store as _bcs
-    return _bcs()
+from market_data.adapters.inbound.rest._cursor_factory import (
+    build_cursor_store as _build_cursor_store,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -153,7 +147,7 @@ class _BaseDerivativesFetcher:
             self._log.warning(
                 "CursorStore no disponible — usando storage fallback | error={}", exc
             )
-            self._cursor: CursorStore | None = None
+            self._cursor = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -210,37 +204,22 @@ class _BaseDerivativesFetcher:
     async def _fetch_raw_with_retry(
         self, symbol: str
     ) -> Optional[Dict[str, Any]]:
-        """Llama a ``_fetch_raw`` con retry + backoff. None si no soportado."""
-        last_exc: Exception | None = None
+        """Llama a _fetch_raw delegando retry a retry_async (DRY).
 
-        for attempt in range(MAX_RETRIES):
-            try:
-                return await self._fetch_raw(symbol)
-            except ExchangeCircuitOpenError:
-                raise
-            except Exception as exc:
-                err_str = str(exc).lower()
-                if "notsupported" in err_str or "not supported" in err_str:
-                    self._log.debug(
-                        "{} not supported | symbol={}", self._dataset, symbol
-                    )
-                    return None
-                last_exc = exc
-                if attempt < MAX_RETRIES - 1:
-                    backoff = min(BACKOFF_BASE ** attempt, MAX_BACKOFF_SECONDS)
-                    self._log.warning(
-                        "fetch_{} error (intento {}/{}) | "
-                        "symbol={} error={} retry_in={:.1f}s",
-                        self._dataset, attempt + 1, MAX_RETRIES,
-                        symbol, exc, backoff,
-                    )
-                    await asyncio.sleep(backoff)
+        Retorna None si el endpoint no está soportado (Fail-Soft).
+        Relanza ExchangeCircuitOpenError sin reintentar (Fail-Fast).
+        """
+        from market_data.adapters.inbound.rest._retry import retry_async
 
-        self._log.warning(
-            "fetch_{} agotó reintentos | symbol={} last_error={}",
-            self._dataset, symbol, last_exc,
+        return await retry_async(
+            lambda: self._fetch_raw(symbol),
+            attempts=MAX_RETRIES,
+            backoff_base=BACKOFF_BASE,
+            backoff_cap=MAX_BACKOFF_SECONDS,
+            context=f"{type(self).__name__}.{self._dataset} symbol={symbol}",
+            circuit_open_exc=ExchangeCircuitOpenError,
+            not_supported_passthrough=True,
         )
-        return None
 
     async def _resolve_cursor(self, symbol: str) -> Optional[int]:
         """Nivel 1: Redis. Nivel 2: storage. Nivel 3: None."""
@@ -292,6 +271,8 @@ class FundingRateFetcher(_BaseDerivativesFetcher):
     _dataset = "funding_rate"
 
     async def _fetch_raw(self, symbol: str) -> Optional[Dict[str, Any]]:
+        # TECH-DEBT: accede a _get_client() interno del adapter (Ley de Demeter).
+        # Pendiente: exponer fetch_funding_rate en la API pública de CCXTAdapter.
         client = await self._client._get_client()
         return await client.fetch_funding_rate(symbol)
 
@@ -305,6 +286,8 @@ class OpenInterestFetcher(_BaseDerivativesFetcher):
     _dataset = "open_interest"
 
     async def _fetch_raw(self, symbol: str) -> Optional[Dict[str, Any]]:
+        # TECH-DEBT: accede a _get_client() interno del adapter (Ley de Demeter).
+        # Pendiente: exponer fetch_open_interest en la API pública de CCXTAdapter.
         client = await self._client._get_client()
         return await client.fetch_open_interest(symbol)
 
