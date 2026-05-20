@@ -60,7 +60,7 @@ from typing import AsyncIterator, Optional
 
 from loguru import logger
 
-from market_data.domain.value_objects.raw_trade import RawTrade, TradeSide
+from market_data.domain.value_objects.raw_trade import RawTrade, TradeSide, TradeSource
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
 from market_data.ports.outbound.exchange import ExchangeAdapter
 
@@ -126,6 +126,9 @@ def _parse_raw_trade(
             price        = price,
             amount       = amount,
             side         = TradeSide.from_raw(side_raw),
+            # TECH-DEBT: REST_RECOVERY temporal hasta migración a
+            # GapRecoveryFetcher, que recibirá source como parámetro.
+            source       = TradeSource.REST_RECOVERY,
         )
     except (InvalidOperation, TypeError, ValueError):
         return None

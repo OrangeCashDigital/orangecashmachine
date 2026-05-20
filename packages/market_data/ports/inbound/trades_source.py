@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from typing import AsyncIterator, Protocol, runtime_checkable
 
-from market_data.domain.value_objects.raw_trade import RawTrade
+from market_data.domain.value_objects.raw_trade import RawTrade, TradeSource
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +65,17 @@ class TradesSourceProtocol(Protocol):
     1. __aiter__() → inicia la iteración (idempotente)
     2. __anext__() → retorna el siguiente RawTrade o lanza StopAsyncIteration
     3. stop()      → señaliza al source que deje de producir (SafeOps)
+
+    Responsabilidad del implementador
+    ----------------------------------
+    Cada RawTrade producido DEBE declarar ``source`` explícitamente (SSOT):
+      WsTradesStream        → source=TradeSource.WS
+      TradesBackfillFetcher → source=TradeSource.REST_BACKFILL
+      GapRecoveryFetcher    → source=TradeSource.REST_RECOVERY
+      ReplayTradesSource    → source=TradeSource.REPLAY
+
+    Esto garantiza que los consumers downstream puedan deduplicar y
+    priorizar eventos de forma determinista sin depender del transporte.
 
     SafeOps
     -------
@@ -160,4 +171,5 @@ class OrderBookSourceProtocol(Protocol):
 __all__ = [
     "TradesSourceProtocol",
     "OrderBookSourceProtocol",
+    "TradeSource",
 ]

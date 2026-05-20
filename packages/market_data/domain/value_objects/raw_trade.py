@@ -12,9 +12,11 @@ Principios
 ----------
 DDD        — Value Object puro: identidad por valor, no por referencia.
 Fail-Fast  — invariantes validados en construcción, no en uso.
-SSOT       — TradeSide vive aquí; es el único lugar de verdad para el enum.
-SRP        — este módulo solo define RawTrade y TradeSide.
+SSOT       — TradeSide y TradeSource viven aquí; únicos lugares de verdad.
+SRP        — este módulo solo define RawTrade, TradeSide y TradeSource.
 Clean Arch — sin dependencias de infraestructura ni frameworks.
+Kappa      — source declara el transporte productor; consumers filtran
+             y deducan por origen de forma determinista.
 
 Nota sobre Decimal
 ------------------
@@ -73,6 +75,39 @@ class TradeSide(str, Enum):
 
 
 # ---------------------------------------------------------------------------
+# TradeSource
+# ---------------------------------------------------------------------------
+
+class TradeSource(str, Enum):
+    """
+    Origen del transporte que produjo el RawTrade.
+
+    WS             → WebSocket live stream — fuente canónica en Kappa.
+                     Stream de verdad para el estado en tiempo real.
+    REST_BACKFILL  → bootstrap histórico via REST paginado.
+                     Usado en arranque inicial o ingesta de datos históricos.
+    REST_RECOVERY  → relleno de gap via REST (WS caído o gap detectado).
+                     Recupera el hueco entre el último trade WS y el presente.
+    REPLAY         → replay de eventos almacenados para testing o
+                     reprocessing — nunca debe entrar al stream de producción.
+
+    Kappa Architecture
+    ------------------
+    Todos los productores publican RawTrade con source declarado.
+    Los consumers pueden filtrar, deduplicar y priorizar por origen de
+    forma determinista: WS tiene prioridad sobre REST_RECOVERY para el
+    mismo trade_id.
+
+    Hereda ``str`` para serialización JSON directa sin encoder personalizado.
+    """
+
+    WS            = "ws"
+    REST_BACKFILL = "rest_backfill"
+    REST_RECOVERY = "rest_recovery"
+    REPLAY        = "replay"
+
+
+# ---------------------------------------------------------------------------
 # RawTrade
 # ---------------------------------------------------------------------------
 
@@ -96,6 +131,9 @@ class RawTrade:
     price        : precio de ejecución en activo cotizado.
     amount       : cantidad de activo base ejecutada.
     side         : dirección agresora del taker.
+    source       : transporte que produjo este trade (Kappa provenance).
+                   Permite deduplicación determinista en consumers:
+                   WS tiene prioridad sobre REST_RECOVERY para el mismo trade_id.
 
     Propiedades derivadas
     ---------------------
@@ -111,6 +149,7 @@ class RawTrade:
     - timestamp_ms > 0.
     - price > 0.
     - amount > 0.
+    - source: instancia de TradeSource — declaración explícita obligatoria.
     """
 
     # -- identidad --------------------------------------------------------------
@@ -128,6 +167,9 @@ class RawTrade:
 
     # -- microestructura --------------------------------------------------------
     side:         TradeSide  # dirección agresora del taker
+
+    # -- provenance (Kappa) -----------------------------------------------------
+    source:       TradeSource  # transporte productor — SSOT para dedup downstream
 
     # -- validación en construcción (fail-fast) ---------------------------------
 
@@ -154,6 +196,11 @@ class RawTrade:
         if self.amount <= Decimal(0):
             raise ValueError(
                 f"RawTrade.amount must be > 0, got {self.amount}"
+            )
+        if not isinstance(self.source, TradeSource):
+            raise ValueError(
+                f"RawTrade.source must be TradeSource, "
+                f"got {type(self.source).__name__!r}: {self.source!r}"
             )
 
     # -- propiedades derivadas --------------------------------------------------
@@ -188,9 +235,10 @@ class RawTrade:
             f"ts_ms={self.timestamp_ms}, "
             f"price={self.price}, "
             f"amount={self.amount}, "
-            f"side={self.side.value!r}"
+            f"side={self.side.value!r}, "
+            f"source={self.source.value!r}"
             f")"
         )
 
 
-__all__ = ["RawTrade", "TradeSide"]
+__all__ = ["RawTrade", "TradeSide", "TradeSource"]
