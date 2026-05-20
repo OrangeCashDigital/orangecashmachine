@@ -61,6 +61,33 @@ class ConcretePipelineFactory:
     # Builders concretos — SRP: uno por tipo de pipeline
     # ------------------------------------------------------------------
 
+    def _build_kafka_publisher(self):
+        """
+        Construye KafkaOHLCVPublisher respetando el feature flag KAFKA_ENABLED.
+
+        Composition Root — único lugar autorizado para instanciar infra de Kafka.
+        Movido desde application/pipelines/ohlcv_pipeline.py (DIP: application
+        no debe conocer infrastructure directamente).
+
+        Retorna None si Kafka está deshabilitado o no disponible (modo degradado).
+        """
+        import os
+        from ocm.config.env_vars import KAFKA_ENABLED as _KAFKA_ENABLED_VAR
+        kafka_flag = os.environ.get(_KAFKA_ENABLED_VAR, "false").strip().lower()
+        if kafka_flag not in ("1", "true", "yes"):
+            return None
+        try:
+            from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+            from market_data.infrastructure.kafka.ohlcv_publisher import KafkaOHLCVPublisher
+            producer = KafkaProducerAdapter.from_env()
+            return KafkaOHLCVPublisher(producer=producer)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "KafkaOHLCVPublisher no disponible — modo degradado: %s", exc
+            )
+            return None
+
     def _build_ohlcv(self, request: Any) -> Any:
         """Cabla OHLCVPipeline con CCXTAdapter y sus dependencias concretas."""
         # Imports lazy — evitan circularidades y coste en import-time.
@@ -146,6 +173,7 @@ class ConcretePipelineFactory:
             "start_date":         request.start_date,
             "auto_lookback_days": request.auto_lookback_days or 3650,
             "_chunk_converter":   chunk_converter,
+            "publisher":          kafka_publisher,
         }
 
         return OHLCVPipeline(**pipeline_kwargs)
