@@ -1,25 +1,48 @@
+# -*- coding: utf-8 -*-
 """
-market_data.application.source_manager
-=====================================
-Árbitro de fuente de trades — SSOT operacional.
+market_data/application/source_manager
+=======================================
+
+TradesSourceManager — árbitro de fuente de trades y SSOT operacional.
 
 Responsabilidades
 -----------------
-1. Selección de fuente  : REST (backfill) → WS (live) → Replay (testing)
+1. Selección de modo    : Backfill (REST) → Live (WS/GapAwareStream) → Replay
 2. Cursor monotónico    : garantiza que ningún trade del pasado llegue al consumer
 3. Deduplicación        : clave compuesta (exchange, symbol, timestamp_ms, trade_id)
-4. Fallback transparente: si WS falla/termina, continúa con REST desde el cursor
 
-Principios aplicados
---------------------
-- SSOT        : cursor y dedup centralizados aquí
-- DIP         : depende de TradesSourceProtocol (ports/inbound), no de implementaciones
-- Clean Arch  : orquestación entre domain y adapters
-- Bounded ctx : decisión de fuente es responsabilidad exclusiva de este componente
-- Fail-fast   : constructor valida invariantes
-- SafeOps     : stop() nunca lanza
+División de responsabilidades con GapAwareStream
+-------------------------------------------------
+  GapAwareStream        — resiliencia del TRANSPORTE WS
+                          (timeout, desconexión, gap recovery vía REST_RECOVERY)
+                          Nunca lanza StopAsyncIteration si puede recuperar.
+
+  TradesSourceManager   — árbitro de MODO operacional
+                          (Backfill vs Live vs Replay)
+                          Cursor monotónico + dedup cross-source.
+
+Por esta razón, el manager NO hace fallback WS→REST internamente:
+GapAwareStream ya absorbió esa responsabilidad. Si GapAwareStream
+lanza StopAsyncIteration, significa que agotó todos sus reintentos
+y el stream ya no puede continuar — el manager para limpiamente.
+
+Política de selección de fuente
+--------------------------------
+  1. Replay  — si está configurado (testing / reconstrucción histórica)
+  2. Live WS — si ws_source es provisto (GapAwareStream envuelve WSTradesSource)
+  3. Backfill REST — si solo rest_source (TradesBackfillFetcher)
+
+Parámetros
+----------
+rest_source   : TradesBackfillFetcher — bootstrap histórico (obligatorio).
+                Fallback si ws_source no está disponible.
+ws_source     : GapAwareStream(WSTradesSource) — live stream con auto-recovery.
+                Opcional — ausente en modo backfill puro.
+replay_source : ReplayTradesSource — testing / reconstrucción.
+                Opcional.
+
+Principios: SSOT · DIP · Clean Arch · Bounded Ctx · Fail-Fast · SafeOps
 """
-
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -28,76 +51,82 @@ from typing import AsyncIterator, Optional
 
 from loguru import logger
 
-# DIP: depende del port canónico, no de una implementación concreta
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
 
 
-# ─── Constantes ──────────────────────────────────────────────────────────────
+# ─── Constantes ───────────────────────────────────────────────────────────────
 
 _DEDUP_MAX_SIZE: int = 10_000
 
 
-# ─── Enum de fuente ───────────────────────────────────────────────────────────
+# ─── Enum de modo ─────────────────────────────────────────────────────────────
 
 class TradesSourceKind(str, Enum):
-    """Identifica el rol semántico de la fuente activa."""
-    REST      = "rest"
+    """
+    Modo operacional de la fuente activa.
+
+    BACKFILL  — REST paginado histórico (TradesBackfillFetcher).
+    WEBSOCKET — Live stream con auto-recovery (GapAwareStream).
+    REPLAY    — Replay de eventos almacenados (testing / reconstrucción).
+    """
+    BACKFILL  = "backfill"
     WEBSOCKET = "ws"
     REPLAY    = "replay"
 
 
-# ─── Manager ─────────────────────────────────────────────────────────────────
+# ─── Manager ──────────────────────────────────────────────────────────────────
 
 class TradesSourceManager:
     """
     Árbitro de fuente de trades. Expone un único AsyncIterator al consumer.
 
-    Política de selección de fuente
-    --------------------------------
-    1. Replay  — si está configurado (testing / reconstrucción)
-    2. WS      — si está configurado y emite datos (live stream)
-    3. REST    — fallback universal (backfill / recovery)
+    El consumer hace:
 
-    Si WS levanta StopAsyncIteration, el manager hace fallback a REST
-    preservando el cursor — sin pérdida de posición.
+        async for trade in manager:
+            process(trade)
 
-    Parámetros
-    ----------
-    rest_source    : fuente REST (requerida — fallback universal)
-    ws_source      : fuente WS   (opcional — live stream)
-    replay_source  : fuente Replay (opcional — testing)
+    y no conoce si el trade vino de REST, WS o replay.
+
+    Ciclo de vida
+    -------------
+    1. __aiter__()  → selecciona fuente (lazy, en primer __anext__)
+    2. __anext__()  → cursor monotónico + dedup + yield
+    3. stop()       → SafeOps, para la fuente activa
     """
 
     def __init__(
         self,
         *,
-        rest_source: TradesSourceProtocol,
-        ws_source: Optional[TradesSourceProtocol] = None,
+        rest_source:   TradesSourceProtocol,
+        ws_source:     Optional[TradesSourceProtocol] = None,
         replay_source: Optional[TradesSourceProtocol] = None,
     ) -> None:
-        # Fail-fast
+        # -- Fail-fast: rest_source es obligatorio — fallback universal --------
         if rest_source is None:
-            raise ValueError("rest_source es requerido (fallback universal)")
+            raise ValueError(
+                "TradesSourceManager: rest_source es obligatorio. "
+                "Proveer TradesBackfillFetcher como fallback universal."
+            )
         if not isinstance(rest_source, TradesSourceProtocol):
             raise TypeError(
-                f"rest_source debe implementar TradesSourceProtocol, "
-                f"recibido: {type(rest_source)!r}"
+                f"TradesSourceManager: rest_source debe implementar "
+                f"TradesSourceProtocol, recibido: {type(rest_source)!r}"
             )
 
         self._rest   = rest_source
         self._ws     = ws_source
         self._replay = replay_source
 
-        # Estado interno
-        self._cursor_ms: int = 0
-        self._dedup: OrderedDict[str, None] = OrderedDict()
-        self._active: Optional[TradesSourceProtocol] = None
-        self._kind:   Optional[TradesSourceKind]     = None
+        # -- Estado interno ----------------------------------------------------
+        self._cursor_ms: int                         = 0
+        self._dedup:     OrderedDict[str, None]      = OrderedDict()
+        self._active:    Optional[TradesSourceProtocol] = None
+        self._kind:      Optional[TradesSourceKind]  = None
 
         self._log = logger.bind(component="TradesSourceManager")
 
     # ------------------------------------------------------------------ #
-    # Propiedades públicas  (satisfacen TradesSourceProtocol)              #
+    # Propiedades públicas                                                  #
     # ------------------------------------------------------------------ #
 
     @property
@@ -112,11 +141,12 @@ class TradesSourceManager:
 
     @property
     def cursor_ms(self) -> int:
-        """Último timestamp confirmado. Útil para métricas y supervisión."""
+        """Último timestamp confirmado. SSOT del offset del consumer."""
         return self._cursor_ms
 
     @property
     def active_kind(self) -> Optional[TradesSourceKind]:
+        """Modo operacional activo. Útil para métricas y observabilidad."""
         return self._kind
 
     # ------------------------------------------------------------------ #
@@ -127,7 +157,17 @@ class TradesSourceManager:
         return self
 
     async def __anext__(self):
-        # Inicialización lazy — selecciona fuente en el primer __anext__
+        """
+        Retorna el siguiente RawTrade validado.
+
+        Loop interno:
+          1. Selección lazy de fuente en primer __anext__
+          2. Fetch del siguiente trade de la fuente activa
+          3. Descarte por cursor monotónico (trade estale)
+          4. Descarte por dedup (trade duplicado cross-source)
+          5. Avance de cursor + yield
+        """
+        # Selección lazy de fuente — una sola vez por sesión
         if self._active is None:
             self._active, self._kind = self._select_source()
             self._log.info(
@@ -137,9 +177,11 @@ class TradesSourceManager:
             )
 
         while True:
-            trade = await self._fetch_next_with_fallback()
+            # Propaga StopAsyncIteration si la fuente se agotó.
+            # GapAwareStream solo lanza SAI si agotó todos los reintentos.
+            trade = await self._active.__anext__()
 
-            # ── Cursor monotónico — descarta solapamientos de backfill ──
+            # ── Cursor monotónico: descarta solapamientos de backfill ──────
             if trade.timestamp_ms < self._cursor_ms:
                 self._log.debug(
                     "descartado trade estale | ts={} cursor={}",
@@ -147,7 +189,7 @@ class TradesSourceManager:
                 )
                 continue
 
-            # ── Deduplicación ───────────────────────────────────────────
+            # ── Deduplicación cross-source ─────────────────────────────────
             if self._is_duplicate(trade):
                 self._log.debug(
                     "descartado duplicado | trade_id={} ts={}",
@@ -155,7 +197,7 @@ class TradesSourceManager:
                 )
                 continue
 
-            # ── Avanzar cursor ──────────────────────────────────────────
+            # ── Avanzar cursor y retornar ──────────────────────────────────
             self._advance_cursor(trade)
             return trade
 
@@ -164,35 +206,30 @@ class TradesSourceManager:
     # ------------------------------------------------------------------ #
 
     def _select_source(self) -> tuple[TradesSourceProtocol, TradesSourceKind]:
-        """Árbitro. Orden de prioridad: Replay > WS > REST."""
+        """
+        Árbitro de modo. Orden de prioridad: Replay > WS > Backfill REST.
+
+        La decisión se toma una sola vez — el manager no cambia de fuente
+        en runtime. GapAwareStream es responsable de la resiliencia interna
+        del WS (fallback a REST_RECOVERY ante gaps o desconexiones).
+        """
         if self._replay is not None:
             self._log.info("modo replay activado")
             return self._replay, TradesSourceKind.REPLAY
         if self._ws is not None:
-            self._log.info("WS disponible — intentando fuente live")
+            self._log.info(
+                "modo live WS activado | source_id={}",
+                getattr(self._ws, "source_id", "ws"),
+            )
             return self._ws, TradesSourceKind.WEBSOCKET
-        self._log.info("usando REST (backfill / fallback)")
-        return self._rest, TradesSourceKind.REST
-
-    async def _fetch_next_with_fallback(self):
-        """
-        Obtiene el siguiente trade. Si WS termina, hace fallback a REST
-        preservando el cursor.
-        """
-        try:
-            return await self._active.__anext__()
-        except StopAsyncIteration:
-            if self._kind is TradesSourceKind.WEBSOCKET:
-                self._log.warning(
-                    "WS terminó inesperadamente — fallback a REST | cursor_ms={}",
-                    self._cursor_ms,
-                )
-                self._active = self._rest
-                self._kind   = TradesSourceKind.REST
-                return await self._active.__anext__()
-            raise  # REST o Replay agotados → propaga StopAsyncIteration
+        self._log.info(
+            "modo backfill REST | source_id={}",
+            getattr(self._rest, "source_id", "rest"),
+        )
+        return self._rest, TradesSourceKind.BACKFILL
 
     def _make_dedup_key(self, trade) -> str:
+        """Clave compuesta para dedup cross-source determinista."""
         return (
             f"{getattr(trade, 'exchange', '')}:"
             f"{getattr(trade, 'symbol', '')}:"
@@ -201,15 +238,17 @@ class TradesSourceManager:
         )
 
     def _is_duplicate(self, trade) -> bool:
+        """LRU dedup en memoria. O(1) por operación."""
         key = self._make_dedup_key(trade)
         if key in self._dedup:
             return True
         if len(self._dedup) >= _DEDUP_MAX_SIZE:
-            self._dedup.popitem(last=False)
+            self._dedup.popitem(last=False)  # FIFO eviction
         self._dedup[key] = None
         return False
 
     def _advance_cursor(self, trade) -> None:
+        """Cursor monotónico — solo avanza, nunca retrocede."""
         if trade.timestamp_ms > self._cursor_ms:
             self._cursor_ms = trade.timestamp_ms
 
@@ -218,7 +257,7 @@ class TradesSourceManager:
     # ------------------------------------------------------------------ #
 
     async def stop(self) -> None:
-        """SafeOps: detiene la fuente activa. Nunca lanza."""
+        """SafeOps: para la fuente activa. Nunca lanza. Idempotente."""
         try:
             if self._active is not None:
                 await self._active.stop()
@@ -226,8 +265,10 @@ class TradesSourceManager:
                 "TradesSourceManager detenido | kind={} cursor_ms={}",
                 self._kind, self._cursor_ms,
             )
-        except Exception:
-            pass  # SafeOps
+        except Exception as _stop_exc:  # SafeOps — nunca propaga
+            self._log.warning(
+                "stop() raised unexpectedly | error={}", _stop_exc
+            )
 
     def __repr__(self) -> str:
         return (

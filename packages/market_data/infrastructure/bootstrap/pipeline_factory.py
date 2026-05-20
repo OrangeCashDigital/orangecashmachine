@@ -43,9 +43,10 @@ class ConcretePipelineFactory:
             Si request.pipeline no está registrado.
         """
         dispatch = {
-            "ohlcv":       self._build_ohlcv,
-            "trades":      self._build_trades,
-            "derivatives": self._build_derivatives,
+            "ohlcv":         self._build_ohlcv,
+            "trades":        self._build_trades,
+            "trades_stream": self._build_trades_stream,
+            "derivatives":   self._build_derivatives,
         }
         # FIX C-01: el campo del DTO es `pipeline`, no `pipeline_type`.
         # PipelineRequest.__post_init__ valida los valores aceptados — SSOT.
@@ -204,6 +205,119 @@ class ConcretePipelineFactory:
             market_type     = request.market_type,
             dry_run         = request.dry_run,
         )
+
+    def _build_trades_stream(self, request: Any) -> Any:
+        """
+        Ensambla el pipeline de trades Kappa con GapAwareStream.
+
+        Grafo de dependencias:
+          CCXTAdapter
+              ↓
+          WSTradesSource            (stub WS — reemplazar con impl real)
+              ↓
+          GapAwareStream            (resiliencia: timeout + gap recovery)
+              ↑ recovery_factory
+          GapRecoveryFetcher(ccxt)  (source=REST_RECOVERY para gaps)
+              ↓
+          TradesSourceManager       (árbitro: cursor monotónico + dedup)
+
+        Backfill:
+          TradesBackfillFetcher(ccxt) → rest_source del manager
+
+        El consumer downstream lee de TradesSourceManager — nunca conoce
+        ni WSTradesSource ni GapRecoveryFetcher directamente (DIP).
+
+        Fail-Fast
+        ---------
+        - request.symbols obligatorio (al menos un símbolo)
+        - request.exchange obligatorio
+        - gap_threshold_ms configurable via request.gap_threshold_ms (default 30s)
+        """
+        if not request.symbols:
+            raise ValueError(
+                "PipelineRequest.symbols es obligatorio para pipeline='trades_stream'. "
+                f"Request recibido: {request}"
+            )
+        if not getattr(request, "exchange", None):
+            raise ValueError(
+                "PipelineRequest.exchange es obligatorio para pipeline='trades_stream'."
+            )
+
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
+        from market_data.adapters.inbound.websocket.gap_aware_stream import GapAwareStream
+        from market_data.adapters.inbound.rest.gap_recovery_fetcher import GapRecoveryFetcher
+        from market_data.adapters.inbound.rest.trades_backfill_fetcher import TradesBackfillFetcher
+        from market_data.application.source_manager import TradesSourceManager
+
+        adapter_kwargs: dict[str, Any] = {
+            "exchange_id": request.exchange,
+            "market_type": request.market_type,
+        }
+        if request.credentials is not None:
+            adapter_kwargs["credentials"] = request.credentials
+        if request.resilience is not None:
+            adapter_kwargs["resilience"] = request.resilience
+
+        exchange_client = CCXTAdapter(**adapter_kwargs)
+
+        # gap_threshold_ms: configurable por símbolo/exchange en el futuro.
+        # Default: 30s — apropiado para mercados líquidos (BTC/USDT perp).
+        gap_threshold_ms: int = getattr(request, "gap_threshold_ms", 30_000)
+
+        # Un manager por símbolo — cada símbolo tiene su propio cursor y dedup.
+        managers: dict[str, TradesSourceManager] = {}
+
+        for symbol in request.symbols:
+            # WS source (stub — reemplazar cuando WSTradesSource tenga impl real)
+            ws_source = WSTradesSource(
+                exchange_id = request.exchange,
+                symbol      = symbol,
+                market_type = request.market_type,
+            )
+
+            # RecoveryFactory: closure que captura exchange_client y symbol.
+            # Signature: (gap_start_ms: int, gap_end_ms: int) → TradesSourceProtocol
+            def _make_recovery_factory(sym: str, client: Any):
+                def _factory(gap_start_ms: int, gap_end_ms: int) -> GapRecoveryFetcher:
+                    return GapRecoveryFetcher(
+                        exchange_adapter = client,
+                        exchange_id      = request.exchange,
+                        symbol           = sym,
+                        market_type      = request.market_type,
+                        gap_start_ms     = gap_start_ms,
+                        gap_end_ms       = gap_end_ms,
+                    )
+                return _factory
+
+            gap_stream = GapAwareStream(
+                source           = ws_source,
+                recovery_factory = _make_recovery_factory(symbol, exchange_client),
+                exchange_id      = request.exchange,
+                symbol           = symbol,
+                gap_threshold_ms = gap_threshold_ms,
+                reconnect        = True,
+            )
+
+            # Backfill REST: bootstrap histórico antes de que el WS arranque.
+            # since_ms desde request (None = desde el más antiguo disponible).
+            rest_source = TradesBackfillFetcher(
+                exchange_adapter = exchange_client,
+                exchange_id      = request.exchange,
+                symbol           = symbol,
+                market_type      = request.market_type,
+                since_ms         = getattr(request, "since_ms", None),
+            )
+
+            managers[symbol] = TradesSourceManager(
+                rest_source = rest_source,
+                ws_source   = gap_stream,
+            )
+
+        # Retornar el dict de managers — el caller (Dagster asset, test)
+        # itera sobre ellos por símbolo. Un wrapper de pipeline puede
+        # envolverlos en un PipelineTriggerPort si se necesita.
+        return managers
 
     def _build_derivatives(self, request: Any) -> Any:
         """Cabla DerivativesPipeline con CCXTAdapter + fetchers + DerivativesStorage."""
