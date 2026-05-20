@@ -198,18 +198,28 @@ class TestCompositionRoot:
         )
 
     def test_pipeline_factory_not_imported_outside_bootstrap(self):
-        """PipelineFactory solo debe importarse desde infrastructure/bootstrap/."""
-        BOOTSTRAP = INFRA / "bootstrap"
+        """
+        PipelineFactory (concreta) solo se importa desde infrastructure/bootstrap/.
+
+        NOTA: ports/inbound/pipeline_factory.py es un Port abstracto — nombre
+        coincidente legítimo que NO viola BC-38. La verificación usa AST para
+        detectar el import del módulo concreto de infraestructura, no coincidencias
+        de string (lo que causaría falsos positivos en los propios ports).
+        """
+        INFRA_MODULE = "market_data.infrastructure.bootstrap.pipeline_factory"
         violations: list[str] = []
         forbidden_layers = [APPLICATION, DOMAIN, PORTS, ADAPTERS]
         for layer_dir in forbidden_layers:
             if not layer_dir.exists():
                 continue
             for f in _python_files(layer_dir):
-                src = f.read_text()
-                if "pipeline_factory" in src and "PipelineFactory" in src:
-                    violations.append(str(f.relative_to(ROOT)))
+                for imp in _imports_in(f):
+                    if INFRA_MODULE in imp:
+                        violations.append(
+                            f"{f.relative_to(ROOT)}: imports {imp}"
+                        )
         assert not violations, (
-            "PipelineFactory importada fuera de infrastructure/bootstrap/ (BC-38):\n"
+            "PipelineFactory de infra importada fuera de infrastructure/bootstrap/ (BC-38):\n"
             + "\n".join(f"  {v}" for v in violations)
+            + "\n\nNota: ports/inbound/pipeline_factory.py es un Port abstracto — legítimo."
         )

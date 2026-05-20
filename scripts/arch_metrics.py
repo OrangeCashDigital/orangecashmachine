@@ -31,14 +31,23 @@ ROOT = Path(__file__).resolve().parent.parent
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _run(cmd: list[str]) -> tuple[str, int]:
-    """Ejecuta un comando y retorna (stdout+stderr, returncode)."""
+    """
+    Ejecuta un comando y retorna (stdout+stderr combinados, returncode).
+
+    Usa stdout=PIPE + stderr=STDOUT para captura en stream único —
+    evita race conditions entre buffers y garantiza que la línea de
+    resumen de lint-imports llegue aunque vaya a stderr.
+    """
     result = subprocess.run(
         cmd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=ROOT,
     )
-    return result.stdout + result.stderr, result.returncode
+    return result.stdout or "", result.returncode
 
 
 def count_contracts() -> int:
@@ -49,28 +58,42 @@ def count_contracts() -> int:
 
 def run_lint_imports() -> tuple[int, int, list[str]]:
     """
-    Ejecuta lint-imports.
+    Ejecuta lint-imports y parsea el resumen.
+
     Retorna (kept, broken, broken_names).
+
+    Parser robusto: usa regex para la línea de resumen en lugar de split()
+    posicional, que es frágil ante variaciones de formato o encoding.
+    Formato esperado: "Contracts: N kept, M broken."
     """
+    import re
+
     out, _ = _run([str(ROOT / ".venv/bin/lint-imports")])
 
     kept = broken = 0
     broken_names: list[str] = []
 
+    # Regex tolerante: captura dígitos independientemente del formato exacto
+    SUMMARY_RE = re.compile(
+        r"Contracts?:\s*(\d+)\s+kept[,.]\s*(\d+)\s+broken",
+        re.IGNORECASE,
+    )
+    # Contrato roto: "BC-XX: nombre  BROKEN"
+    BROKEN_RE = re.compile(r"^(BC-\d+[a-z]?)\s*:", re.IGNORECASE)
+
     for line in out.splitlines():
         stripped = line.strip()
-        # Línea de resumen: "Contracts: N kept, M broken."
-        if stripped.startswith("Contracts:") and "kept" in stripped:
-            parts = stripped.split()
-            try:
-                kept   = int(parts[1])
-                broken = int(parts[3].rstrip(",").rstrip("."))
-            except (ValueError, IndexError):
-                pass
-        # Línea de contrato roto: "BC-XX: nombre BROKEN"
-        if "BROKEN" in stripped and stripped.startswith("BC-"):
-            name = stripped.split(":")[0].strip()
-            broken_names.append(name)
+
+        m = SUMMARY_RE.search(stripped)
+        if m:
+            kept   = int(m.group(1))
+            broken = int(m.group(2))
+            continue
+
+        if "BROKEN" in stripped:
+            bm = BROKEN_RE.match(stripped)
+            if bm:
+                broken_names.append(bm.group(1))
 
     return kept, broken, broken_names
 
