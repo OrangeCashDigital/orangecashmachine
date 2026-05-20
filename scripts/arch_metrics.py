@@ -52,8 +52,14 @@ def _run(cmd: list[str]) -> tuple[str, int]:
 
 def count_contracts() -> int:
     """Cuenta contratos declarados en pyproject.toml."""
-    toml = (ROOT / "pyproject.toml").read_text()
-    return toml.count("[[tool.importlinter.contracts]]")
+    import tomllib
+    with open(ROOT / "pyproject.toml", "rb") as fh:
+        data = tomllib.load(fh)
+    return len(
+        data.get("tool", {})
+            .get("importlinter", {})
+            .get("contracts", [])
+    )
 
 
 def run_lint_imports() -> tuple[int, int, list[str]]:
@@ -68,7 +74,9 @@ def run_lint_imports() -> tuple[int, int, list[str]]:
     """
     import re
 
-    out, _ = _run([str(ROOT / ".venv/bin/lint-imports")])
+    import shutil
+    lint_bin = shutil.which("lint-imports") or str(ROOT / ".venv/bin/lint-imports")
+    out, _ = _run([lint_bin])
 
     kept = broken = 0
     broken_names: list[str] = []
@@ -100,23 +108,36 @@ def run_lint_imports() -> tuple[int, int, list[str]]:
 
 def detect_cycles() -> list[str]:
     """
-    Detecta ciclos de importación via grimp.
-    Retorna lista de strings describiendo cada ciclo.
+    Detecta TODOS los ciclos de importación via grimp.
+
+    Estrategia: find_any_cycle() retorna solo el primero; iteramos
+    removiendo los módulos del ciclo encontrado y re-corriendo hasta
+    que el grafo quede limpio. Límite de 20 ciclos para evitar loops
+    infinitos en grafos muy degradados.
     """
     script = (
-        "import sys, grimp\n"
+        "import grimp, json\n"
         "g = grimp.build_graph('market_data', include_external_packages=False,\n"
         "    exclude_type_checking_imports=True)\n"
-        "if hasattr(g, 'find_any_cycle'):\n"
+        "cycles = []\n"
+        "if not hasattr(g, 'find_any_cycle'):\n"
+        "    print('NO_SUPPORT'); raise SystemExit(0)\n"
+        "for _ in range(20):\n"
         "    c = g.find_any_cycle()\n"
-        "    if c: print('CYCLE:' + '->'.join(str(m) for m in c))\n"
+        "    if not c: break\n"
+        "    cycles.append('->'.join(str(m) for m in c))\n"
+        "    # remover nodos del ciclo para buscar el siguiente\n"
+        "    for m in c:\n"
+        "        try: g.remove_module(m)\n"
+        "        except Exception: pass\n"
+        "print('CYCLES:' + json.dumps(cycles))\n"
     )
     out, _ = _run([sys.executable, "-c", script])
-    return [
-        line[len("CYCLE:"):]
-        for line in out.splitlines()
-        if line.startswith("CYCLE:")
-    ]
+    for line in out.splitlines():
+        if line.startswith("CYCLES:"):
+            import json as _json
+            return _json.loads(line[len("CYCLES:"):])
+    return []
 
 
 def count_tests() -> dict[str, int]:
@@ -141,7 +162,7 @@ def count_adr() -> int:
 
 def main() -> None:
     as_json = "--json" in sys.argv
-    strict  = "--strict" in sys.argv or "--json" in sys.argv
+    strict  = "--strict" in sys.argv
 
     kept, broken, broken_names = run_lint_imports()
     contracts_total = count_contracts()

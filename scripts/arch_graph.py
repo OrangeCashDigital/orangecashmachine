@@ -90,8 +90,10 @@ def text_report() -> None:
             importers = graph.find_modules_that_directly_import(m)
             if importers:
                 fan_in[str(m)] = len(importers)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            # grimp puede lanzar por módulo no encontrado u otros motivos;
+            # logueamos en lugar de silenciar completamente
+            print(f"  ⚠ fan-in error en {m}: {exc}")
     for mod, count in sorted(fan_in.items(), key=lambda x: -x[1])[:10]:
         print(f"  {count:>3}  {mod}")
 
@@ -105,12 +107,15 @@ def main() -> None:
     if gen_svg:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         targets = [
-            (ROOT / "packages" / "market_data",              "import_graph_market_data.svg",    4),
-            (ROOT / "packages" / "market_data" / "application", "import_graph_application.svg", 3),
+            (ROOT / "market_data",                "import_graph_market_data.svg",    4),
+            (ROOT / "market_data" / "application", "import_graph_application.svg", 3),
         ]
         for pkg_path, fname, bacon in targets:
             out = OUT_DIR / fname
             print(f"\nGenerando {fname}...")
+            if not pkg_path.exists():
+                print(f"  ⚠ path no encontrado: {pkg_path}")
+                continue
             if _pydeps_svg(pkg_path, out, bacon):
                 print(f"  ✓ {out}")
                 if do_open:
