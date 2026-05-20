@@ -107,8 +107,8 @@ def main() -> None:
     if gen_svg:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         targets = [
-            (ROOT / "market_data",                "import_graph_market_data.svg",    4),
-            (ROOT / "market_data" / "application", "import_graph_application.svg", 3),
+            (ROOT / "packages" / "market_data",                "import_graph_market_data.svg",    4),
+            (ROOT / "packages" / "market_data" / "application", "import_graph_application.svg", 3),
         ]
         for pkg_path, fname, bacon in targets:
             out = OUT_DIR / fname
