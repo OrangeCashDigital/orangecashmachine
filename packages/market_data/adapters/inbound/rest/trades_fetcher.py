@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/ingestion/rest/trades_fetcher.py
+market_data/adapters/inbound/rest/trades_fetcher.py
 ============================================
 
 Fetcher incremental de trades (tick data) con cursor real.
@@ -82,9 +82,10 @@ def _parse_trades(raw: list) -> pd.DataFrame:
             "side":     str(t.get("side") or ""),
             "price":    float(t.get("price") or 0.0),
             "amount":   float(t.get("amount") or 0.0),
-            "cost":     float(t.get("cost") or
-                             (float(t.get("price") or 0.0) *
-                              float(t.get("amount") or 0.0))),
+            "cost":     float(
+                t.get("cost")
+                or float(t.get("price") or 0.0) * float(t.get("amount") or 0.0)
+            ),
         })
 
     return pd.DataFrame(records) if records else pd.DataFrame()
@@ -118,9 +119,9 @@ class TradesFetcher:
         if storage is None:
             raise ValueError("TradesFetcher: storage es obligatorio")
 
-        # Imports locales — rompen dependencia adapter → infrastructure en nivel módulo (BC-06)
-        from market_data.infrastructure.storage.silver.trades_storage import TradesStorage  # noqa: F401
-        from ocm.runtime.state.factories import build_cursor_store as _build_cursor_store
+        # Import local — rompe dependencia adapter → infrastructure en nivel módulo (BC-06).
+        # Cursor factory centralizada: DRY, OCP — un único punto de cambio.
+        from market_data.adapters.inbound.rest._cursor_factory import build_cursor_store as _build_cursor_store
 
         self._client      = exchange_client
         self._storage     = storage
@@ -139,7 +140,7 @@ class TradesFetcher:
             self._log.warning(
                 "CursorStore no disponible — usando storage fallback | error={}", exc
             )
-            self._cursor: CursorStore | None = None
+            self._cursor = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -263,35 +264,27 @@ class TradesFetcher:
         symbol:   str,
         since_ms: Optional[int],
     ) -> pd.DataFrame:
-        """Fetcha una página con retry + backoff exponencial."""
-        last_exc: Exception | None = None
+        """Fetcha una página delegando retry a _retry.retry_async (DRY)."""
+        from market_data.adapters.inbound.rest._retry import retry_async
 
-        for attempt in range(1, _RETRY_ATTEMPTS + 1):
-            try:
-                raw = await self._client.fetch_trades(
-                    symbol,
-                    since=since_ms,
-                    limit=_PAGE_LIMIT,
-                )
-                return _parse_trades(raw or [])
-            except Exception as exc:
-                last_exc = exc
-                backoff = min(
-                    _BACKOFF_BASE ** attempt,
-                    _MAX_BACKOFF_S,
-                )
-                self._log.warning(
-                    "fetch_trades error (intento {}/{}) | "
-                    "symbol={} error={} retry_in={:.1f}s",
-                    attempt, _RETRY_ATTEMPTS, symbol, exc, backoff,
-                )
-                if attempt < _RETRY_ATTEMPTS:
-                    await asyncio.sleep(backoff)
+        async def _call() -> pd.DataFrame:
+            raw = await self._client.fetch_trades(
+                symbol,
+                since=since_ms,
+                limit=_PAGE_LIMIT,
+            )
+            return _parse_trades(raw or [])
 
-        raise RuntimeError(
-            f"TradesFetcher: {_RETRY_ATTEMPTS} intentos fallidos | "
-            f"symbol={symbol} last_error={last_exc}"
-        ) from last_exc
+        result = await retry_async(
+            _call,
+            attempts=_RETRY_ATTEMPTS,
+            backoff_base=_BACKOFF_BASE,
+            backoff_cap=_MAX_BACKOFF_S,
+            context=f"TradesFetcher.fetch_trades symbol={symbol}",
+        )
+        # retry_async lanza si agota intentos — result no puede ser None aquí
+        assert result is not None
+        return result
 
     async def _update_cursor(self, symbol: str, ts_ms: int) -> None:
         """Actualiza cursor en Redis (silencia errores — no crítico)."""
