@@ -54,7 +54,6 @@ Principios: DIP · ACL · Kappa · SafeOps · Fail-Soft · SSOT
 from __future__ import annotations
 
 import asyncio
-import time
 from collections import OrderedDict
 from decimal import Decimal, InvalidOperation
 from typing import AsyncIterator, Optional
@@ -181,6 +180,8 @@ class RESTTradesPoller:
 
         self._running        = False
         self._stop_event     = asyncio.Event()
+        # OrderedDict: LRU manual via popitem(last=False).
+        # dict normal no garantiza popitem FIFO en CPython < 3.8.
         self._dedup: OrderedDict[str, None] = OrderedDict()
 
         self._log = logger.bind(
@@ -207,6 +208,8 @@ class RESTTradesPoller:
         self._stop_event.clear()
         return self
 
+    # TECH-DEBT: __anext__ mezcla fetch, parsing/dedup y yield (SRP).
+    # Pendiente: extraer _fetch_batch() y _process_batch() como helpers.
     async def __anext__(self) -> RawTrade:
         """
         Retorna el siguiente RawTrade del stream REST.
@@ -245,6 +248,8 @@ class RESTTradesPoller:
 
             # ACL: convertir batch completo, filtrar inválidos y duplicados
             new_trades: list[RawTrade] = []
+            # None or 0 → arranca en 0; cualquier trade.timestamp_ms > 0
+            # garantiza que max_ts avanza en el primer batch.
             max_ts = self._cursor_ms or 0
 
             for raw in raw_trades:
@@ -289,8 +294,8 @@ class RESTTradesPoller:
             self._stop_event.set()
             self._running = False
             self._log.debug("RESTTradesPoller stopped")
-        except Exception:
-            pass  # SafeOps
+        except Exception as _stop_exc:  # SafeOps — nunca propaga
+            self._log.warning("stop() raised unexpectedly | error={}", _stop_exc)
 
     def __repr__(self) -> str:
         return (
