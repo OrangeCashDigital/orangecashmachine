@@ -61,10 +61,7 @@ from market_data.application.strategies.repair      import RepairStrategy
 from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
-from ocm.runtime.state import (
-    build_cursor_store_from_env,
-    InMemoryCursorStore,
-)
+
 from ocm.runtime.state import build_gap_registry
 
 
@@ -100,23 +97,7 @@ class _ExchangeAbortError(Exception):
         super().__init__(f"Circuit open — aborting exchange={exchange_id}")
 
 
-def _build_cursor_store_safe() -> CursorStorePort:
-    """
-    Construye CursorStore desde variables de entorno con fallback seguro.
-
-    build_cursor_store_from_env() resuelve config desde variables de entorno,
-    consistente con el resto del sistema (factories.py).
-    Si Redis no está disponible, usa InMemoryCursorStore como fallback.
-    """
-    try:
-        store = build_cursor_store_from_env()
-        if store.is_healthy():
-            return store  # type: ignore[return-value]
-        _log.warning("Redis no disponible — cursor store en memoria (fallback)")
-        return InMemoryCursorStore()  # type: ignore[return-value]
-    except Exception as exc:
-        _log.bind(error=str(exc)).warning("CursorStore init failed — fallback")
-        return InMemoryCursorStore()  # type: ignore[return-value]
+# _build_cursor_store_safe() eliminado — BC-38: cursor_store obligatorio desde composition root.
 
 
 def _classify_pair_error(result: PairResult) -> str:
@@ -234,12 +215,22 @@ class OHLCVPipeline(PipelineTriggerPort):
         self._throttle       = throttle
 
         # Dependencias inyectadas — sin resolución de infraestructura aquí (DIP).
-        cursor     = cursor_store or _build_cursor_store_safe()
-        # DIP: quality inyectada desde ConcretePipelineFactory (composition root).
-        # Fallback solo para tests unitarios que instancian OHLCVPipeline directamente.
+        # BC-38: cursor_store es obligatorio — debe inyectarse desde ConcretePipelineFactory.
+        # Fail-Fast: falla en construcción, no en el primer request.
+        if cursor_store is None:
+            raise TypeError(
+                "OHLCVPipeline: 'cursor_store' es obligatorio. "
+                "Inyectar CursorStorePort desde ConcretePipelineFactory (composition root). "
+                "Ver infrastructure/bootstrap/pipeline_factory.py._build_ohlcv()."
+            )
+        cursor = cursor_store
+        # BC-38: quality es obligatorio — debe inyectarse desde ConcretePipelineFactory.
         if quality is None:
-            from market_data.application.quality.pipeline import QualityPipeline  # noqa: PLC0415
-            quality = QualityPipeline()
+            raise TypeError(
+                "OHLCVPipeline: 'quality' es obligatorio. "
+                "Inyectar QualityPipeline desde ConcretePipelineFactory (composition root). "
+                "Ver infrastructure/bootstrap/pipeline_factory.py._build_ohlcv()."
+            )
         _publisher: OHLCVPublisherPort = NullPublisher()  # Inyectado por CompositionRoot
 
         self._ctx = PipelineContext(
