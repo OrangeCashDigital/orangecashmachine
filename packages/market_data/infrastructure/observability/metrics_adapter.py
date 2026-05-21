@@ -42,24 +42,66 @@ class PrometheusQualityMetrics:
 
 
 class PrometheusResampleMetrics:
-    """Implementa ResampleMetricsPort."""
+    """
+    Implementa ResampleMetricsPort delegando a contadores Prometheus.
+
+    DIP: ResamplePipeline y ResampleUseCase dependen del port, no de esta clase.
+    SRP: adapta la API de métodos del port a la API .labels().inc() de Prometheus.
+    SafeOps: nunca propaga excepciones al caller — el bloque try/except
+             está en el caller (ResamplePipeline._resample_pair).
+    """
 
     def __init__(self) -> None:
         from market_data.infrastructure.observability.metrics import (
+            PIPELINE_ERRORS,
             RESAMPLE_DURATION_MS,
             RESAMPLE_ROWS_TOTAL,
         )
 
         self._resample_rows_total = RESAMPLE_ROWS_TOTAL
         self._resample_duration_ms = RESAMPLE_DURATION_MS
+        self._pipeline_errors = PIPELINE_ERRORS
 
-    @property
-    def resample_rows_total(self) -> object:
-        return self._resample_rows_total
+    def resample_rows_inc(
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        market_type: str,
+        count: int = 1,
+    ) -> None:
+        """Incrementa contador de filas resampled escritas."""
+        self._resample_rows_total.labels(
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            market_type=market_type,
+        ).inc(count)
 
-    @property
-    def resample_duration_ms(self) -> object:
-        return self._resample_duration_ms
+    def resample_duration_observe(
+        self,
+        exchange: str,
+        timeframe: str,
+        market_type: str,
+        duration_ms: int,
+    ) -> None:
+        """Observa duración de resampling de un par en ms."""
+        self._resample_duration_ms.labels(
+            exchange=exchange,
+            timeframe=timeframe,
+            market_type=market_type,
+        ).observe(duration_ms)
+
+    def pipeline_errors_inc(
+        self,
+        exchange: str,
+        error_type: str,
+    ) -> None:
+        """Incrementa contador de errores de pipeline."""
+        self._pipeline_errors.labels(
+            exchange=exchange,
+            error_type=error_type,
+        ).inc()
 
 
 class PrometheusPipelineMetrics:
