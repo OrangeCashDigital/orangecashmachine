@@ -20,6 +20,11 @@ Principios: SRP · DIP · SSOT · KISS · Fail-Fast
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from market_data.ports.outbound.data_quality_checker import DataQualityCheckerPort
+
 import subprocess
 from datetime import datetime, timezone
 from typing import Dict, List
