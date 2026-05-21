@@ -23,9 +23,9 @@ Principios: SRP (adapter puro) · DIP · OCP · SSOT
 from __future__ import annotations
 
 from dagster import AssetIn, Output, asset
+from market_data.application import ResampleRequest, ResampleUseCase
 
 from infrastructure.dagster.resources import OCMResource
-from market_data.application import ResampleUseCase, ResampleRequest
 
 # _resample_use_case se construye lazy en el asset (DIP · Composition Root).
 # IcebergStorageFactory no se carga en import-time — solo al primer run.

@@ -127,10 +127,11 @@ class NullChecker:
         symbol: str,
     ) -> "DataQualityReport":
         # Late import — BC-31: port no importa quality/ en module-level
+        from datetime import datetime, timezone
+
         from market_data.domain.quality.types import (
             DataQualityReport,
         )
-        from datetime import datetime, timezone
 
         return DataQualityReport(
             symbol=symbol,

@@ -11,10 +11,11 @@ las mismas garantías de auditoría o fallar de forma idéntica y explícita.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 import yaml
 from omegaconf import OmegaConf
-from unittest.mock import patch
 
 from ocm.config.hydra_loader import load_appconfig_from_hydra
 
@@ -125,6 +126,7 @@ def test_standalone_propagates_run_id_to_snapshot(tmp_path, monkeypatch):
     real, compatible con cualquier entorno CI.
     """
     import os
+
     from ocm.config.hydra_loader import load_appconfig_standalone
 
     # Aislar env vars que L2 aplicaría sobre credenciales del YAML de test

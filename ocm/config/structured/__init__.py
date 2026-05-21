@@ -14,14 +14,14 @@ SSOT · OCP · Fail-Fast en import time.
 
 from __future__ import annotations
 
+from ocm.config.structured.observability import ObservabilityConfig
 from ocm.config.structured.pipeline import (
-    PipelineConfig,
     HistoricalConfig,
-    ResampleConfig,
+    PipelineConfig,
     RealtimeConfig,
+    ResampleConfig,
     RetryPolicyConfig,
 )
-from ocm.config.structured.observability import ObservabilityConfig
 
 __all__ = [
     "PipelineConfig",

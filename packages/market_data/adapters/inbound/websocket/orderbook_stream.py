@@ -39,11 +39,11 @@ SRP    — este módulo declara el contrato; manager.py gestiona el ciclo de vid
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 
 from market_data.domain.value_objects.order_book import (
-    OrderBookSnapshot,
     OrderBookDelta,
+    OrderBookSnapshot,
 )
 
 # ---------------------------------------------------------------------------

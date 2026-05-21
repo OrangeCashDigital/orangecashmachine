@@ -49,8 +49,8 @@ from typing import List, Optional
 from loguru import logger
 
 from ocm.runtime.state.encoding import encode_redis_key as _encode
-from ocm.runtime.state.retry import redis_retry as _retry
 from ocm.runtime.state.gap_store import GapStorePort
+from ocm.runtime.state.retry import redis_retry as _retry
 
 _GAP_TTL_DAYS = 90
 _GAP_TTL = _GAP_TTL_DAYS * 86_400

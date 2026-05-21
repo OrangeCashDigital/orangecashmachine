@@ -12,7 +12,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
 from trading.strategies.base import Signal, SignalType
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

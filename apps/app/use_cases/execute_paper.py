@@ -28,8 +28,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from trading.engine import EngineResult
     from trading.analytics.performance import PerformanceSummary
+    from trading.engine import EngineResult
 
 from loguru import logger
 
@@ -92,9 +92,10 @@ class SyntheticDataSource:
         market_type: str = "spot",
         **kwargs,
     ):
+        from datetime import datetime, timedelta, timezone
+
         import numpy as np
         import pandas as pd
-        from datetime import datetime, timedelta, timezone
 
         rng = np.random.default_rng(self._SEED)  # reproducible, no muta global state
         n = 100
@@ -159,14 +160,14 @@ def build_paper_engine(args: argparse.Namespace, tracker):
     -------
     tuple[TradingEngine, PortfolioService]
     """
+    from portfolio.services.portfolio_service import PortfolioService
+    from trading.engine import TradingEngine
     from trading.risk.models import (
-        RiskConfig,
-        PositionConfig,
         OrderLimits,
+        PositionConfig,
+        RiskConfig,
         SignalFilterConfig,
     )
-    from trading.engine import TradingEngine
-    from portfolio.services.portfolio_service import PortfolioService
 
     risk_config = RiskConfig(
         position=PositionConfig(
@@ -332,8 +333,8 @@ def execute(args: argparse.Namespace) -> PaperRunResult:
     -------
     PaperRunResult con todo lo necesario para que el CLI loguee y salga.
     """
-    from trading.analytics.trade_tracker import TradeTracker
     from trading.analytics.performance import PerformanceEngine
+    from trading.analytics.trade_tracker import TradeTracker
 
     tracker = TradeTracker(exchange=args.exchange)
 

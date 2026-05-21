@@ -44,14 +44,12 @@ if TYPE_CHECKING:
 import pandas as pd
 from loguru import logger
 
+from market_data.adapters.inbound.rest._cursor_factory import (
+    build_cursor_store as _build_cursor_store,
+)
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
-)
-
-
-from market_data.adapters.inbound.rest._cursor_factory import (
-    build_cursor_store as _build_cursor_store,
 )
 
 # ---------------------------------------------------------------------------

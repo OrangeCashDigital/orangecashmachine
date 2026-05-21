@@ -30,13 +30,6 @@ Principios: Clean Architecture (facade) · DIP · Encapsulamiento.
 """
 
 # -- yaml_loader ----------------------------------------------------------
-from .yaml_loader import (
-    load,
-    merge,
-    compute_hash,
-    YamlLoader,  # shim de compatibilidad — ver yaml_loader.py
-)
-
 # -- env_resolver ---------------------------------------------------------
 from .env_resolver import (
     EnvResolver,
@@ -47,14 +40,20 @@ from .env_resolver import (
 
 # -- exceptions -----------------------------------------------------------
 from .exceptions import (
-    ConfigurationError,
     ConfigFileNotFoundError,
     ConfigParseError,
+    ConfigurationError,
     ConfigValidationError,
 )
 
 # -- snapshot -------------------------------------------------------------
 from .snapshot import write_config_snapshot
+from .yaml_loader import (
+    YamlLoader,  # shim de compatibilidad — ver yaml_loader.py
+    compute_hash,
+    load,
+    merge,
+)
 
 __all__ = [
     # yaml_loader

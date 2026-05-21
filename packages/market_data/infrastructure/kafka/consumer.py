@@ -32,30 +32,30 @@ from loguru import logger
 from market_data.ports.outbound.kafka_consumer import (
     KafkaMessage,
 )  # noqa
+from ocm.config.env_vars import (
+    KAFKA_AUTO_OFFSET_RESET,
+    KAFKA_BOOTSTRAP_SERVERS,
+    KAFKA_CONSUMER_HEARTBEAT_MS,
+    KAFKA_CONSUMER_SESSION_TIMEOUT_MS,
+)
 
 # SSOT de topics y consumer groups — shared.kafka.topics, nunca strings literales.
 # Fix C-NUEVO: los topics NO viven en kafka_producer.py (port); ese módulo solo
 # define KafkaProducerPort. Importar desde shared cumple BC-01 y elimina el
 # acoplamiento entre el port del producer y el adapter del consumer.
 from shared.kafka.topics import (
+    GROUP_BRONZE_WRITER,
+    GROUP_EXECUTION,
+    GROUP_FEATURES,
+    GROUP_PORTFOLIO,
+    GROUP_RISK_GATE,
+    GROUP_STRATEGY,
+    TOPIC_OHLCV_FEATURES,
     TOPIC_OHLCV_RAW,
     TOPIC_OHLCV_VALIDATED,
-    TOPIC_OHLCV_FEATURES,
-    TOPIC_SIGNALS_RAW,
-    TOPIC_SIGNALS_APPROVED,
     TOPIC_ORDERS_FILLED,
-    GROUP_BRONZE_WRITER,
-    GROUP_FEATURES,
-    GROUP_STRATEGY,
-    GROUP_RISK_GATE,
-    GROUP_EXECUTION,
-    GROUP_PORTFOLIO,
-)
-from ocm.config.env_vars import (
-    KAFKA_BOOTSTRAP_SERVERS,
-    KAFKA_AUTO_OFFSET_RESET,
-    KAFKA_CONSUMER_SESSION_TIMEOUT_MS,
-    KAFKA_CONSUMER_HEARTBEAT_MS,
+    TOPIC_SIGNALS_APPROVED,
+    TOPIC_SIGNALS_RAW,
 )
 
 

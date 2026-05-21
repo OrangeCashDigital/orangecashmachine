@@ -11,45 +11,45 @@ Nombres canónicos: los de metrics.py. Este archivo NO renombra.
 """
 
 from market_data.infrastructure.observability.metrics import (
-    # ── Pipeline ─────────────────────────────────────────────
-    ROWS_INGESTED,
-    PAIR_DURATION,
-    PIPELINE_ERRORS,
     ACTIVE_PAIRS,  # nombre real en metrics.py
-    QUALITY_DECISIONS,
+    CANDLE_DELAY_MS,
+    EXCHANGE_CIRCUIT_OPEN,
+    EXCHANGE_CLOCK_DRIFT,
+    # ── Exchange ─────────────────────────────────────────────
+    EXCHANGE_LATENCY,
+    EXCHANGE_RATE_LIMIT,
     # ── Fetch ────────────────────────────────────────────────
     FETCH_ABORTS_TOTAL,
     FETCH_CHUNK_DURATION,
-    FETCH_CHUNKS_TOTAL,
     FETCH_CHUNK_ERRORS_TOTAL,  # nombre real en metrics.py
-    # ── Exchange ─────────────────────────────────────────────
-    EXCHANGE_LATENCY,
-    EXCHANGE_CLOCK_DRIFT,
-    EXCHANGE_RATE_LIMIT,
-    EXCHANGE_CIRCUIT_OPEN,
-    CANDLE_DELAY_MS,
-    # ── Storage ──────────────────────────────────────────────
-    STORAGE_WRITE_DURATION,
-    STORAGE_PARTITION_SIZE_ROWS,  # nombre real en metrics.py
-    # ── Write lock ───────────────────────────────────────────
-    WRITE_LOCK_WAIT_DURATION,
-    WRITE_LOCK_CONFLICTS,
-    WRITE_LOCK_STARVATION,
+    FETCH_CHUNKS_TOTAL,
     MANIFEST_CHECKSUM_FAILURES,
+    PAIR_DURATION,
+    PIPELINE_ERRORS,
+    QUALITY_DECISIONS,
+    QUALITY_GAPS_TOTAL,
     # ── Repair / gaps ────────────────────────────────────────
     REPAIR_GAPS_FOUND,
     REPAIR_GAPS_HEALED,
     REPAIR_GAPS_SKIPPED,
-    QUALITY_GAPS_TOTAL,
+    RESAMPLE_DURATION_MS,
     # ── Resample ─────────────────────────────────────────────
     RESAMPLE_ROWS_TOTAL,
-    RESAMPLE_DURATION_MS,
+    # ── Pipeline ─────────────────────────────────────────────
+    ROWS_INGESTED,
+    STORAGE_PARTITION_SIZE_ROWS,  # nombre real en metrics.py
+    # ── Storage ──────────────────────────────────────────────
+    STORAGE_WRITE_DURATION,
     # ── Timestamps ───────────────────────────────────────────
     TIMESTAMP_DRIFT_CORRECTED,
     TIMESTAMP_GRID_COLLISIONS,
+    WRITE_LOCK_CONFLICTS,
+    WRITE_LOCK_STARVATION,
+    # ── Write lock ───────────────────────────────────────────
+    WRITE_LOCK_WAIT_DURATION,
+    record_exchange_probe_metrics,
     # ── Functions ────────────────────────────────────────────
     record_pipeline_pair_metrics,
-    record_exchange_probe_metrics,
 )
 
 __all__ = [

@@ -14,10 +14,10 @@ Regla: ZERO imports de módulos internos del proyecto.
 
 from shared.contracts.boundaries import (
     FeatureSource,
-    SignalProtocol,
     FillHandler,
-    TradeHistory,
     RiskGate,
+    SignalProtocol,
+    TradeHistory,
 )
 
 __all__ = [

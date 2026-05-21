@@ -12,6 +12,8 @@ El dominio importa únicamente market_data.ports.state.CursorStorePort.
 
 from ocm.runtime.state.cursor_store import (
     CursorStore as RedisCursorStore,
+)
+from ocm.runtime.state.cursor_store import (
     InMemoryCursorStore,
 )
 from ocm.runtime.state.factories import build_cursor_store

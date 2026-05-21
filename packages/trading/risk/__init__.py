@@ -5,13 +5,13 @@ trading/risk/
 Gestión de riesgo — modelos y manager.
 """
 
-from trading.risk.models import (
-    RiskConfig,
-    PositionConfig,
-    StopLossConfig,
-    DrawdownConfig,
-)
 from trading.risk.manager import RiskManager, RiskViolation
+from trading.risk.models import (
+    DrawdownConfig,
+    PositionConfig,
+    RiskConfig,
+    StopLossConfig,
+)
 
 __all__ = [
     "RiskConfig",

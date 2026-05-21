@@ -37,8 +37,8 @@ from market_data.application.use_cases.pipeline_orchestrator import (  # noqa: F
     PipelineRequest,
 )
 from market_data.application.use_cases.resample_ohlcv import (  # noqa: F401
-    ResampleUseCase,
     ResampleRequest,
+    ResampleUseCase,
 )
 
 __all__ = [

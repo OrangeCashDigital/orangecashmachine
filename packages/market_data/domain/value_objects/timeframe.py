@@ -24,11 +24,11 @@ BC-09  — shared no importa market_data; market_data sí puede importar shared
 from __future__ import annotations
 
 from shared.types.timeframe import (  # noqa: F401
-    Timeframe,
-    timeframe_to_ms,
-    InvalidTimeframeError,
     VALID_TIMEFRAMES,
+    InvalidTimeframeError,
+    Timeframe,
     align_to_grid,
+    timeframe_to_ms,
 )
 
 __all__ = [

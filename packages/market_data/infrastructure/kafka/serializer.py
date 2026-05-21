@@ -25,14 +25,16 @@ from __future__ import annotations
 
 import warnings
 
+from shared.kafka.schemas.ohlcv import EventPayload
 from shared.kafka.serializer import (
-    serialize,
-    make_ohlcv_key,
-    make_symbol_key,
-    make_routing_key,
     deserialize as _shared_deserialize,
 )
-from shared.kafka.schemas.ohlcv import EventPayload
+from shared.kafka.serializer import (
+    make_ohlcv_key,
+    make_routing_key,
+    make_symbol_key,
+    serialize,
+)
 
 
 def deserialize(data: bytes) -> EventPayload:

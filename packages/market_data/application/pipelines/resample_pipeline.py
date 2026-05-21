@@ -48,22 +48,21 @@ Ref: Pandas resample docs — https://pandas.pydata.org/docs/reference/resamplin
 from __future__ import annotations
 
 import asyncio
-
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 import pandas as pd
 
-from ocm.observability import bind_pipeline
 from market_data.domain.value_objects.timeframe import (
-    timeframe_to_ms,
     VALID_TIMEFRAMES,
     InvalidTimeframeError,
+    align_to_grid,
+    timeframe_to_ms,
 )
-from market_data.domain.value_objects.timeframe import align_to_grid
-from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.ports.outbound.metrics import ResampleMetricsPort
+from market_data.ports.outbound.storage import OHLCVStorage
+from ocm.observability import bind_pipeline
 
 _log = bind_pipeline("resample_pipeline")
 

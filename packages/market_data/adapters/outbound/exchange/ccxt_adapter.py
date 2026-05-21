@@ -28,29 +28,29 @@ throttle.py   — concurrencia adaptiva por pipeline
 from __future__ import annotations
 
 import asyncio
-import random
 import copy
+import random
 import time
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-import ccxt.async_support as ccxt
 import ccxt as ccxt_sync  # sync — parse8601, iso8601, inspect_required_credentials
+import ccxt.async_support as ccxt
 from loguru import logger
 
 from market_data.adapters.outbound.exchange.base import ExchangeAdapter
-from market_data.adapters.outbound.exchange.exchange_quirks import get_quirks
 from market_data.adapters.outbound.exchange.errors import (
     ExchangeAdapterError,
-    UnsupportedExchangeError,
-    ExchangeConnectionError,
     ExchangeCircuitOpenError,
+    ExchangeConnectionError,
+    UnsupportedExchangeError,
 )
+from market_data.adapters.outbound.exchange.exchange_quirks import get_quirks
 from market_data.adapters.outbound.exchange.limiter import (
     get_or_create_limiter,
 )
 from market_data.adapters.outbound.exchange.resilience import (
-    RetryExhaustedError,
     ResilienceLayer,
+    RetryExhaustedError,
 )
 from market_data.adapters.outbound.exchange.throttle import (
     get_or_create_throttle,

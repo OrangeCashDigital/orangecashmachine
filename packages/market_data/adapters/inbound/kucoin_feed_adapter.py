@@ -18,8 +18,8 @@ from cryptofeed.defines import TRADES
 from cryptofeed.exchanges import KuCoin
 from loguru import logger
 
-from market_data.ports.inbound.market_data_source import TradeCallback
 from market_data.domain.value_objects.normalized_trade import NormalizedTrade
+from market_data.ports.inbound.market_data_source import TradeCallback
 
 if TYPE_CHECKING:
     from cryptofeed.types import Trade as CryptoTrade

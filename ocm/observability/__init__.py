@@ -11,16 +11,16 @@ SSOT · OCP · Fail-Fast en import time.
 
 from __future__ import annotations
 
+from ocm.observability.bootstrap import (
+    drain,
+    pre_log,
+)
 from ocm.observability.logger import (
+    bind_pipeline,
     bootstrap_logging,
     configure_logging,
-    bind_pipeline,
     is_logging_configured,
     setup_logging,
-)
-from ocm.observability.bootstrap import (
-    pre_log,
-    drain,
 )
 
 __all__ = [
@@ -42,17 +42,17 @@ __all__ = [
 ]
 
 # ── Metrics runtime + Prometheus ─────────────────────────────────────────────
+from ocm.observability.metrics_runtime import (
+    MetricsMode,
+    MetricsRuntime,
+    get_metrics_runtime,
+    init_metrics_runtime,
+)
 from ocm.observability.prometheus import (
     push_metrics,
     start_metrics_server,
 )
-from ocm.observability.metrics_runtime import (
-    MetricsRuntime,
-    MetricsMode,
-    init_metrics_runtime,
-    get_metrics_runtime,
-)
 from ocm.observability.pushers import (
-    PrometheusPusher,
     NoopPusher,
+    PrometheusPusher,
 )

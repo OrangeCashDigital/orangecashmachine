@@ -22,7 +22,7 @@ DIP: Dagster depende de la abstracción, no del pipeline concreto.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     # Evitar import circular — solo para type hints

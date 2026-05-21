@@ -26,10 +26,10 @@ from typing import Callable, Optional
 
 from loguru import logger
 
+from ocm.runtime.guard import ExecutionGuard
 from shared.contracts.boundaries import (
     FeatureSource,
 )  # SSOT — unica definicion del contrato
-from ocm.runtime.guard import ExecutionGuard
 from trading.execution.order import Order, OrderStatus
 from trading.risk.models import RiskConfig
 from trading.strategies.base import BaseStrategy
@@ -234,8 +234,8 @@ class TradingEngine:
         on_fill   : callback(order) — TradeTracker + PortfolioService via composite.
         on_reject : callback(order) — alerting / logging externo.
         """
-        from trading.execution.oms import OMS
         from trading.execution.live_executor import LiveExecutor
+        from trading.execution.oms import OMS
         from trading.risk.manager import RiskManager
 
         # Fail-Fast: guard obligatorio en live — sin kill switch no hay live trading

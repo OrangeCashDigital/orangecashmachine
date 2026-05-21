@@ -51,24 +51,24 @@ Exports públicos
 import hashlib
 import json
 import logging as std_logging
-import types
 import os
 import sys
+import types
 from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from loguru import logger
 import loguru  # noqa: F401 — loguru.Logger en type hint
+from loguru import logger
 
 from ocm.observability.bootstrap import drain as _drain_bootstrap
+from ocm.observability.config import (
+    ALLOWED_ENVS as VALID_ENVS,
+)  # SSOT: ocm.observability.config (BC-26)
 from ocm.observability.config import LoggingConfig
 from ocm.observability.formats import CONSOLE, FILE
 from ocm.observability.processors import build_processor_chain, process_event
 from ocm.observability.sinks import LokiSink, PrometheusLogSink
-from ocm.observability.config import (
-    ALLOWED_ENVS as VALID_ENVS,
-)  # SSOT: ocm.observability.config (BC-26)
 
 # ---------------------------------------------------------------------------
 # Estado global — protegido por _CONFIG_LOCK en toda operación de escritura

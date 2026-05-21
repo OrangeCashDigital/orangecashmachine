@@ -25,10 +25,10 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
+from loguru import logger
+
 from market_data.application.pipelines._worker_pool import run_worker_pool
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
-
-from loguru import logger
 
 # Dependencias concretas eliminadas del application layer (DIP — BC-05/BC-08).
 # CCXTAdapter, TradesFetcher, TradesStorage se inyectan por constructor

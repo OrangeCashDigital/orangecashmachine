@@ -39,24 +39,27 @@ from __future__ import annotations
 
 import uuid as _uuid
 
+from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
+from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from shared.kafka.schemas.ohlcv import (
-    DataSource,
     DATASOURCE_BACKFILL,
     DATASOURCE_LIVE,
     DATASOURCE_REPLAY,
+    DataSource,
     EventPayload,
     KafkaOHLCVBar,
+)
+from shared.kafka.schemas.ohlcv import (
     OHLCV_SCHEMA_VERSION as PAYLOAD_SCHEMA_VERSION,
 )
-from shared.kafka.serializer import serialize, make_ohlcv_key as make_routing_key
+from shared.kafka.serializer import make_ohlcv_key as make_routing_key
+from shared.kafka.serializer import serialize
 from shared.kafka.topics import (
     HEADER_RUN_ID,
     HEADER_SOURCE,
     HEADER_VERSION,
     TOPIC_OHLCV_RAW,
 )
-from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
-from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
 # ---------------------------------------------------------------------------
 # ACL: domain source → wire DataSource

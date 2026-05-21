@@ -41,6 +41,9 @@ if TYPE_CHECKING:
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
+from ocm.config.hydra_loader import strip_hydra_internals
+from ocm.config.layers.coercion import coerce_scalar_values
+
 # strip_hydra_internals — elimina claves _hydra_* del dict post-to_container.
 # Vive en hydra_loader.py junto a _HYDRA_INTERNAL (SSOT de la whitelist).
 #
@@ -48,8 +51,6 @@ from omegaconf import DictConfig, OmegaConf
 # Vive en layers/coercion.py junto a BOOL_TRUE/BOOL_FALSE y _NULLABLE_PATHS.
 # _NULLABLE_KEYS: frozenset[str] — matching por nombre de clave (nodos dinámicos, ej: exchanges).
 from ocm.config.loader.exceptions import ConfigurationError
-from ocm.config.hydra_loader import strip_hydra_internals
-from ocm.config.layers.coercion import coerce_scalar_values
 
 __all__ = [
     "ConfigPipelineError",  # excepción pública del bounded context

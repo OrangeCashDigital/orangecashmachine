@@ -38,14 +38,14 @@ Uso
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 
 from loguru import logger
 
 from market_data.infrastructure.storage.iceberg.catalog import (
-    get_catalog,
     ensure_bronze_table,
+    get_catalog,
 )
 
 # =============================================================================

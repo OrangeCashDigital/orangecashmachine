@@ -53,8 +53,8 @@ from typing import Optional
 
 from loguru import logger
 
-from ocm.runtime.state.gap_store import GapStorePort
 from ocm.runtime.state.encoding import encode_redis_key as _encode
+from ocm.runtime.state.gap_store import GapStorePort
 from ocm.runtime.state.retry import redis_retry as _retry
 
 _CALIBRATION_TTL_DAYS = 7

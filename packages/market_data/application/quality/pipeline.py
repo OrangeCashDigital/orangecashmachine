@@ -44,22 +44,18 @@ from __future__ import annotations
 # stdlib
 from dataclasses import dataclass
 from typing import Optional
-from market_data.ports.outbound.data_quality_checker import CheckerFactory
-from market_data.application.quality.data_quality import native_checker_factory
 
 # terceros
 import pandas as pd
 from loguru import logger
 
+# DataQualityReport: type usado en QualityPipelineResult y _resolve_tier
+# DataQualityChecker: NO importar aquí — pipeline usa self._checker_factory (DIP)
+from market_data.application.quality.data_quality import DataQualityReport, native_checker_factory
+
 # dominio
 from market_data.domain.entities import DataTier
 from market_data.domain.events import LineageEvent, LineageStatus, PipelineLayer
-from market_data.domain.value_objects.gap_utils import scan_gaps
-
-# ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta
-from market_data.ports.outbound.lineage import LineageTrackerPort
-from market_data.ports.outbound.metrics import NullQualityMetrics, QualityMetricsPort
-from market_data.ports.outbound.quality import AnomalyRegistryPort
 
 # quality internals
 from market_data.domain.policies.data_quality_policy import (
@@ -68,10 +64,13 @@ from market_data.domain.policies.data_quality_policy import (
     QualityDecision,
     default_policy,
 )
+from market_data.domain.value_objects.gap_utils import scan_gaps
+from market_data.ports.outbound.data_quality_checker import CheckerFactory
 
-# DataQualityReport: type usado en QualityPipelineResult y _resolve_tier
-# DataQualityChecker: NO importar aquí — pipeline usa self._checker_factory (DIP)
-from market_data.application.quality.data_quality import DataQualityReport
+# ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta
+from market_data.ports.outbound.lineage import LineageTrackerPort
+from market_data.ports.outbound.metrics import NullQualityMetrics, QualityMetricsPort
+from market_data.ports.outbound.quality import AnomalyRegistryPort
 
 # ===========================================================================
 # Resultado del pipeline

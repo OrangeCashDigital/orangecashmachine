@@ -39,18 +39,17 @@ import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from ocm.observability import bind_pipeline, bootstrap_logging, configure_logging
-from ocm.runtime.guard import ExecutionGuard, ExecutionStoppedError
-from ocm.runtime.context import RuntimeContext
 from ocm.config import env_vars
-
+from ocm.observability import bind_pipeline, bootstrap_logging, configure_logging
 from ocm.runtime import guard_context
+from ocm.runtime.context import RuntimeContext
+from ocm.runtime.guard import ExecutionGuard, ExecutionStoppedError
 
 
 def build_context() -> RuntimeContext:
@@ -63,6 +62,7 @@ def build_context() -> RuntimeContext:
     Fail-Fast: lanza ConfigurationError si AppConfig es inválido.
     """
     from datetime import datetime, timezone
+
     from ocm.config.hydra_loader import load_appconfig_standalone
     from ocm.runtime.run_config import RunConfig
 
@@ -240,9 +240,9 @@ async def _bronze_writer_loop() -> None:
 
     # Imports lazy — infra no se importa en module level (DIP · startup cost)
     try:
+        from market_data.infrastructure.kafka.bronze_writer import KafkaBronzeWriter
         from market_data.infrastructure.kafka.consumer import KafkaConsumerAdapter
         from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
-        from market_data.infrastructure.kafka.bronze_writer import KafkaBronzeWriter
         from market_data.infrastructure.storage.bronze.bronze_storage import (
             BronzeStorage,
         )

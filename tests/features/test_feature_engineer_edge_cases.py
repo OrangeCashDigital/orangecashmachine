@@ -30,7 +30,6 @@ import math
 
 import numpy as np
 import pandas as pd
-
 from market_data.infrastructure.storage.gold.transformer import GoldTransformer
 
 # ── constantes de prueba — SSOT local ────────────────────────────────────────

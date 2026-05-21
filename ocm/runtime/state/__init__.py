@@ -50,20 +50,18 @@ Principios: Clean Architecture (facade) · DIP · SRP · Fail-Fast en import tim
 from __future__ import annotations
 
 # ── Protocols / Ports ─────────────────────────────────────────────────────────
-from ocm.runtime.state.cursor_store import CursorStore
-from ocm.runtime.state.gap_store import GapStorePort
+from ocm.runtime.state.cursor_store import (
+    CursorStore,
+    InMemoryCursorStore,
+)
 
 # ── Implementaciones concretas ────────────────────────────────────────────────
 from ocm.runtime.state.cursor_store import (
     CursorStore as RedisCursorStore,
-    InMemoryCursorStore,
 )
-from ocm.runtime.state.gap_store import (
-    RedisGapStore,
-    InMemoryGapStore,
-)
-from ocm.runtime.state.gap_registry import GapRegistry
-from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
+
+# ── Encoding — uso excepcional documentado ────────────────────────────────────
+from ocm.runtime.state.encoding import encode_redis_key
 
 # ── Factories — composition root únicamente ───────────────────────────────────
 from ocm.runtime.state.factories import (
@@ -71,9 +69,13 @@ from ocm.runtime.state.factories import (
     build_gap_registry,
     build_lateness_calibration_store,
 )
-
-# ── Encoding — uso excepcional documentado ────────────────────────────────────
-from ocm.runtime.state.encoding import encode_redis_key
+from ocm.runtime.state.gap_registry import GapRegistry
+from ocm.runtime.state.gap_store import (
+    GapStorePort,
+    InMemoryGapStore,
+    RedisGapStore,
+)
+from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
 
 __all__ = [
     "CursorStore",

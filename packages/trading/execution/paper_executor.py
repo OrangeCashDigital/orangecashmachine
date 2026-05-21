@@ -12,6 +12,7 @@ Siempre acepta la orden y loguea el fill al precio de señal.
 from __future__ import annotations
 
 from loguru import logger
+
 from trading.execution.order import Order
 
 

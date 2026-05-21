@@ -36,13 +36,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from dagster import ConfigurableResource
+from market_data.ports.outbound.storage import OHLCVStorage
+from market_data.ports.outbound.storage_factory import StorageFactoryPort
 from pydantic import PrivateAttr
 
 from ocm.config.hydra_loader import load_appconfig_standalone
-from ocm.runtime.run_config import RunConfig
 from ocm.runtime.context import RuntimeContext
-from market_data.ports.outbound.storage import OHLCVStorage
-from market_data.ports.outbound.storage_factory import StorageFactoryPort
+from ocm.runtime.run_config import RunConfig
 
 
 class OCMResource(ConfigurableResource):

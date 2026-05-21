@@ -10,14 +10,15 @@ No contiene contadores de dominio — esos viven en market_data/observability/me
 from __future__ import annotations
 
 import time as _time
+
 from loguru import logger as _log
 from prometheus_client import (
+    REGISTRY,
     CollectorRegistry,
     Counter,
     Gauge,
     push_to_gateway,
     start_http_server,
-    REGISTRY,
 )
 
 PIPELINE_LAST_RUN = Gauge(

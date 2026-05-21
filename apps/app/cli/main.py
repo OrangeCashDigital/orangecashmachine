@@ -36,13 +36,13 @@ from typing import Callable
 
 import hydra
 from hydra.core.config_store import ConfigStore
-from omegaconf import DictConfig
 from loguru import logger
+from omegaconf import DictConfig
 
 from ocm.config.structured import (
-    PipelineConfig,
     HistoricalConfig,
     ObservabilityConfig,
+    PipelineConfig,
     ResampleConfig,
 )
 
@@ -72,25 +72,26 @@ def _register_structured_configs() -> None:
 _register_structured_configs()
 
 # Imports post-registration — Hydra requiere que ConfigStore esté listo primero
-from ocm.config.loader.exceptions import (
-    ConfigurationError,
-    ConfigValidationError,
-)
-from ocm.config.hydra_loader import load_appconfig_from_hydra
-from ocm.config.schema import AppConfig
-from ocm.runtime.run_config import RunConfig
-from ocm.runtime.context import RuntimeContext
-from ocm.observability import bootstrap_logging, configure_logging
-from ocm.observability.metrics_runtime import init_metrics_runtime
-from ocm.observability.pushers import PrometheusPusher, NoopPusher
 from market_data.application.pipelines.ohlcv_pipeline import (
     OHLCVPipeline as _default_pipeline_runner,
 )
 from market_data.ports.outbound.observability import MetricsPusherPort
-from ocm.runtime.environment_validator import (
-    EnvironmentValidator,
-    EnvironmentMismatchError,
+
+from ocm.config.hydra_loader import load_appconfig_from_hydra
+from ocm.config.loader.exceptions import (
+    ConfigurationError,
+    ConfigValidationError,
 )
+from ocm.config.schema import AppConfig
+from ocm.observability import bootstrap_logging, configure_logging
+from ocm.observability.metrics_runtime import init_metrics_runtime
+from ocm.observability.pushers import NoopPusher, PrometheusPusher
+from ocm.runtime.context import RuntimeContext
+from ocm.runtime.environment_validator import (
+    EnvironmentMismatchError,
+    EnvironmentValidator,
+)
+from ocm.runtime.run_config import RunConfig
 
 # Tipo del pipeline runner — explícito para mypy y legibilidad (OCP: inyectable en tests)
 PipelineRunner = Callable[[RuntimeContext, MetricsPusherPort | None], int]

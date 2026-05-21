@@ -28,14 +28,14 @@ import importlib
 
 import pytest
 
+from ocm.config.layers.rules import ConfigRuleViolation
 from ocm.config.loader.exceptions import (
-    ConfigurationError,
     ConfigFileNotFoundError,
     ConfigParseError,
+    ConfigurationError,
     ConfigValidationError,
 )
 from ocm.config.pipeline import ConfigPipelineError, ConfigStage
-from ocm.config.layers.rules import ConfigRuleViolation
 
 # ── E1: toda excepción del bounded context hereda de ConfigurationError ────────
 

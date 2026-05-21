@@ -36,11 +36,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ocm.config.schema import AppConfig
     from market_data.application.feed_orchestrator import FeedOrchestrator
     from market_data.infrastructure.bootstrap.pipeline_factory import (
         ConcretePipelineFactory,
     )
+    from ocm.config.schema import AppConfig
 
 __all__ = ["CompositionRoot", "assemble"]
 
@@ -112,9 +112,10 @@ class CompositionRoot:
         Returns:
             FeedOrchestrator listo para run(), o None si WS feeds no aplican.
         """
+        from pathlib import Path
+
         import yaml  # type: ignore[import-untyped]
         from loguru import logger
-        from pathlib import Path
 
         from market_data.adapters.outbound.kafka_trade_publisher import (
             KafkaTradePublisher,

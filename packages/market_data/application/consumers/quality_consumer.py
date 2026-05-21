@@ -19,21 +19,21 @@ Fail-soft — errores en _process() logueados, nunca propagados al bus
 
 from __future__ import annotations
 
-from loguru import logger
 import pandas as pd
+from loguru import logger
 
+from market_data.application.consumers.base import BaseConsumer
+from market_data.application.quality.data_quality import native_checker_factory
+from market_data.application.quality.pipeline import (
+    _null_registry,
+)  # Null Object — DRY/SSOT (definido en pipeline.py)
 from market_data.domain.events import (
     LineageEvent,
     LineageStatus,
     PipelineLayer,
 )
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
-from market_data.application.consumers.base import BaseConsumer
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
-from market_data.application.quality.data_quality import native_checker_factory
-from market_data.application.quality.pipeline import (
-    _null_registry,
-)  # Null Object — DRY/SSOT (definido en pipeline.py)
 from market_data.ports.outbound.event_bus import EventBusPort
 
 # Columnas del DataFrame OHLCV — SSOT con OHLCVChunk.candles

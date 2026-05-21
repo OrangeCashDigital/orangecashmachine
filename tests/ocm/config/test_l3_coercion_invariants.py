@@ -26,8 +26,8 @@ from __future__ import annotations
 import pytest
 
 from ocm.config.layers.coercion import (
-    BOOL_TRUE,
     BOOL_FALSE,
+    BOOL_TRUE,
     coerce_scalar_values,
     coerce_string,
 )

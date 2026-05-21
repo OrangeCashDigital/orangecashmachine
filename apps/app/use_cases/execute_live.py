@@ -34,8 +34,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from trading.engine import EngineResult
     from trading.analytics.performance import PerformanceSummary
+    from trading.engine import EngineResult
 
 import redis as redis_lib
 from loguru import logger
@@ -82,18 +82,19 @@ def build_live_engine(args: argparse.Namespace, tracker):
     -------
     tuple[TradingEngine, PortfolioService]
     """
-    from trading.risk.models import (
-        RiskConfig,
-        PositionConfig,
-        OrderLimits,
-        SignalFilterConfig,
-    )
+    from portfolio.infra.redis_store import RedisPositionStore
+    from portfolio.services.portfolio_service import PortfolioService
+    from trading.data.gold_adapter import GoldLoaderAdapter
     from trading.engine import TradingEngine
     from trading.execution.order import OrderSide
-    from trading.data.gold_adapter import GoldLoaderAdapter
+    from trading.risk.models import (
+        OrderLimits,
+        PositionConfig,
+        RiskConfig,
+        SignalFilterConfig,
+    )
+
     from ocm.runtime.guard import ExecutionGuard
-    from portfolio.services.portfolio_service import PortfolioService
-    from portfolio.infra.redis_store import RedisPositionStore
 
     # Fail-Fast: guard obligatorio en live — sin kill switch no hay ejecución
     guard = ExecutionGuard(
@@ -210,8 +211,8 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
     -------
     LiveRunResult con todo lo necesario para que el CLI loguee y salga.
     """
-    from trading.analytics.trade_tracker import TradeTracker
     from trading.analytics.performance import PerformanceEngine
+    from trading.analytics.trade_tracker import TradeTracker
 
     tracker = TradeTracker(exchange=args.exchange)
 

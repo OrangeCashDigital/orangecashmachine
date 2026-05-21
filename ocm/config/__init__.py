@@ -29,33 +29,28 @@ Principios: Clean Architecture (facade) · DIP · Encapsulamiento ·
 """
 
 # -- Tipos de configuración (schema) --------------------------------------
-from .schema import (
-    AppConfig,
-    ExchangeConfig,
-    RiskConfig,
-    SafetyConfig,
-    RedisConfig,
-    CONFIG_PATH,
-)
-
 # -- Excepciones (todas desde loader — SSOT) ------------------------------
+# -- Bootstrap de entorno y dotenv ----------------------------------------
+# -- Snapshot de run -------------------------------------------------------
 from .loader import (
-    ConfigurationError,
     ConfigFileNotFoundError,
     ConfigParseError,
+    ConfigurationError,
     ConfigValidationError,
-)
-from .pipeline import ConfigPipelineError
-
-# -- Bootstrap de entorno y dotenv ----------------------------------------
-from .loader import (
     bootstrap_dotenv,
     load_dotenv_for_env,
     resolve_env,
+    write_config_snapshot,
 )
-
-# -- Snapshot de run -------------------------------------------------------
-from .loader import write_config_snapshot
+from .pipeline import ConfigPipelineError
+from .schema import (
+    CONFIG_PATH,
+    AppConfig,
+    ExchangeConfig,
+    RedisConfig,
+    RiskConfig,
+    SafetyConfig,
+)
 
 __all__ = [
     # schema

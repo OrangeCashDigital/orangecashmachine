@@ -27,15 +27,16 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 from __future__ import annotations
 
-import pandas as pd
-from loguru import logger
 from typing import TYPE_CHECKING
 
+import pandas as pd
+from loguru import logger
+
 if TYPE_CHECKING:
-    from pyiceberg.table import Table
     import pyiceberg
     import pyiceberg.catalog
     import pyiceberg.table
+    from pyiceberg.table import Table
 
 # ---------------------------------------------------------------------------
 # Schema Iceberg — definido una sola vez (DRY)
@@ -48,10 +49,10 @@ if TYPE_CHECKING:
 def _build_schema() -> "pyiceberg.schema.Schema":  # noqa: F821
     from pyiceberg.schema import Schema
     from pyiceberg.types import (
+        DoubleType,
         NestedField,
         StringType,
         TimestamptzType,
-        DoubleType,
     )
 
     return Schema(
@@ -68,7 +69,7 @@ def _build_schema() -> "pyiceberg.schema.Schema":  # noqa: F821
 
 
 def _build_partition_spec() -> "pyiceberg.partitioning.PartitionSpec":  # noqa: F821
-    from pyiceberg.partitioning import PartitionSpec, PartitionField
+    from pyiceberg.partitioning import PartitionField, PartitionSpec
     from pyiceberg.transforms import IdentityTransform
 
     return PartitionSpec(

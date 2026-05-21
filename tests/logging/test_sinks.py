@@ -20,11 +20,12 @@ _attempt no recibe attempt; _schedule_retry sí.
 """
 
 import json
-import pytest
-from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
-from ocm.observability.sinks import LokiSink, PrometheusLogSink, _LOG_COUNTER
+import pytest
+
+from ocm.observability.sinks import _LOG_COUNTER, LokiSink, PrometheusLogSink
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

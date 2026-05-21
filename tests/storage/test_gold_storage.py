@@ -26,20 +26,23 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
-
-from market_data.infrastructure.storage.gold.transformer import (
-    VERSION as TRANSFORMER_VERSION,
+from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
+from market_data.domain.exceptions import (
+    DataNotFoundError,
+    VersionNotFoundError,
+)
+from market_data.domain.exceptions import (
+    DataNotFoundError as GoldLoaderError,
+)
+from market_data.domain.exceptions import (
+    VersionNotFoundError as GoldVersionNotFound,
 )
 from market_data.infrastructure.storage.gold.gold_storage import (
     GoldStorage,
     _prepare_gold_df,
 )
-from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
-from market_data.domain.exceptions import (
-    DataNotFoundError,
-    DataNotFoundError as GoldLoaderError,
-    VersionNotFoundError,
-    VersionNotFoundError as GoldVersionNotFound,
+from market_data.infrastructure.storage.gold.transformer import (
+    VERSION as TRANSFORMER_VERSION,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

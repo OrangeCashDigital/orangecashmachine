@@ -23,38 +23,9 @@ from __future__ import annotations
 from typing import Tuple
 
 # ---------------------------------------------------------------------------
-# Timeframe
-# ---------------------------------------------------------------------------
-from market_data.domain.value_objects.timeframe import (  # noqa: F401
-    Timeframe,
-    timeframe_to_ms,
-    InvalidTimeframeError,
-    VALID_TIMEFRAMES,
-    align_to_grid,
-)
-
-# ---------------------------------------------------------------------------
 # Candle
 # ---------------------------------------------------------------------------
 from market_data.domain.value_objects.candle import Candle  # noqa: F401
-
-# ---------------------------------------------------------------------------
-# Symbol
-# ---------------------------------------------------------------------------
-from market_data.domain.value_objects.symbol import Symbol  # noqa: F401
-
-# ---------------------------------------------------------------------------
-# OHLCVChunk + OHLCVSource (SSOT de origen)
-# ---------------------------------------------------------------------------
-from market_data.domain.value_objects.ohlcv_chunk import (  # noqa: F401
-    OHLCVChunk,
-    OHLCVSource,
-)
-
-# ---------------------------------------------------------------------------
-# QualityLabel — SSOT en quality_label.py
-# ---------------------------------------------------------------------------
-from market_data.domain.value_objects.quality_label import QualityLabel  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # GapRange — SSOT en gap_range.py
@@ -70,13 +41,42 @@ from market_data.domain.value_objects.normalized_trade import (  # noqa: F401
 )
 
 # ---------------------------------------------------------------------------
+# OHLCVChunk + OHLCVSource (SSOT de origen)
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.ohlcv_chunk import (  # noqa: F401
+    OHLCVChunk,
+    OHLCVSource,
+)
+
+# ---------------------------------------------------------------------------
 # Order Book — Nivel 0 (microestructura nativa del exchange)
 # ---------------------------------------------------------------------------
 from market_data.domain.value_objects.order_book import (  # noqa: F401
-    OrderBookSide,
-    PriceLevel,
-    OrderBookSnapshot,
     OrderBookDelta,
+    OrderBookSide,
+    OrderBookSnapshot,
+    PriceLevel,
+)
+
+# ---------------------------------------------------------------------------
+# QualityLabel — SSOT en quality_label.py
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.quality_label import QualityLabel  # noqa: F401
+
+# ---------------------------------------------------------------------------
+# Symbol
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.symbol import Symbol  # noqa: F401
+
+# ---------------------------------------------------------------------------
+# Timeframe
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.timeframe import (  # noqa: F401
+    VALID_TIMEFRAMES,
+    InvalidTimeframeError,
+    Timeframe,
+    align_to_grid,
+    timeframe_to_ms,
 )
 
 # ---------------------------------------------------------------------------

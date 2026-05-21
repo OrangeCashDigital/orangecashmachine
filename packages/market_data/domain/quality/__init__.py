@@ -8,13 +8,13 @@ Tipos y contratos de calidad en el dominio OHLCV.
   invariants.py — InvariantResult, check_dataset_invariants
 """
 
-from market_data.domain.quality.types import (  # noqa: F401
-    QualityIssue,
-    DataQualityReport,
-)
 from market_data.domain.quality.invariants import (  # noqa: F401
     InvariantResult,
     check_dataset_invariants,
+)
+from market_data.domain.quality.types import (  # noqa: F401
+    DataQualityReport,
+    QualityIssue,
 )
 
 __all__ = [

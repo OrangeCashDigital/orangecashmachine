@@ -103,16 +103,17 @@ class ConcretePipelineFactory:
         Retorna None si Kafka está deshabilitado o no disponible (fail-soft).
         """
         import os
+
         from ocm.config.env_vars import KAFKA_ENABLED as _KAFKA_ENABLED_VAR
 
         kafka_flag = os.environ.get(_KAFKA_ENABLED_VAR, "false").strip().lower()
         if kafka_flag not in ("1", "true", "yes"):
             return None
         try:
-            from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
             from market_data.infrastructure.kafka.ohlcv_publisher import (
                 KafkaOHLCVPublisher,
             )
+            from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
             from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
             producer = KafkaProducerAdapter.from_env()
@@ -152,23 +153,23 @@ class ConcretePipelineFactory:
           estructuralmente (runtime_checkable Protocol). mypy no infiere subtyping
           desde ABC sin anotación explícita en la clase concreta — cast es correcto.
         """
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.ohlcv_fetcher import (
             HistoricalFetcherAsync,
         )
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
+        from market_data.application.quality.pipeline import QualityPipeline
         from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
         from market_data.infrastructure.observability.metrics_adapter import (
             PrometheusPipelineMetrics,
         )
-        from market_data.application.quality.pipeline import QualityPipeline
         from market_data.infrastructure.quality.anomaly_registry import default_registry
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
         from market_data.ports.outbound.state import (
-            CursorStorePort,
             AsyncCursorStorePort,
+            CursorStorePort,
         )
-        from ocm.runtime.state import build_cursor_store, InMemoryCursorStore
+        from ocm.runtime.state import InMemoryCursorStore, build_cursor_store
 
         raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
         # cast: CCXTAdapter satisface ExchangeClientPort (runtime_checkable Protocol).
@@ -225,12 +226,12 @@ class ConcretePipelineFactory:
         TradesStoragePort, ExchangeClientPort). Las implementaciones concretas
         se construyen aquí y nunca se importan desde application/.
         """
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.trades_fetcher import TradesFetcher
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.application.pipelines.trades_pipeline import TradesPipeline
         from market_data.infrastructure.storage.silver.trades_storage import (
             TradesStorage,
         )
-        from market_data.application.pipelines.trades_pipeline import TradesPipeline
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
         raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
@@ -271,19 +272,19 @@ class ConcretePipelineFactory:
         if not getattr(request, "exchange", None):
             raise ValueError("PipelineRequest.exchange es obligatorio para pipeline='trades_stream'.")
 
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
-        from market_data.adapters.inbound.websocket.ws_trades_source import (
-            WSTradesSource,
-        )
-        from market_data.adapters.inbound.websocket.gap_aware_stream import (
-            GapAwareStream,
-        )
         from market_data.adapters.inbound.rest.gap_recovery_fetcher import (
             GapRecoveryFetcher,
         )
         from market_data.adapters.inbound.rest.trades_backfill_fetcher import (
             TradesBackfillFetcher,
         )
+        from market_data.adapters.inbound.websocket.gap_aware_stream import (
+            GapAwareStream,
+        )
+        from market_data.adapters.inbound.websocket.ws_trades_source import (
+            WSTradesSource,
+        )
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.application.source_manager import TradesSourceManager
 
         exchange_client = CCXTAdapter(**self._resolve_adapter_kwargs(request))
@@ -344,17 +345,17 @@ class ConcretePipelineFactory:
 
         SafeOps — Si datasets no se especifica, usa todos los soportados (fail-soft).
         """
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.derivatives_fetcher import (
             FundingRateFetcher,
             OpenInterestFetcher,
         )
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.application.pipelines.derivatives_pipeline import (
+            SUPPORTED_DERIVATIVE_DATASETS,
+            DerivativesPipeline,
+        )
         from market_data.infrastructure.storage.silver.derivatives_storage import (
             DerivativesStorage,
-        )
-        from market_data.application.pipelines.derivatives_pipeline import (
-            DerivativesPipeline,
-            SUPPORTED_DERIVATIVE_DATASETS,
         )
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
 

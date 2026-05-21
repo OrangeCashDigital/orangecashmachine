@@ -12,12 +12,19 @@ Fail-Fast en versión incompatible, normalización de wire format.
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from shared.kafka.schemas.ohlcv import (
-    EventPayload,
-    KafkaOHLCVBar as OHLCVBar,
     OHLCV_SCHEMA_VERSION as PAYLOAD_SCHEMA_VERSION,
+)
+from shared.kafka.schemas.ohlcv import (
+    EventPayload,
+)
+from shared.kafka.schemas.ohlcv import (
+    KafkaOHLCVBar as OHLCVBar,
+)
+from shared.kafka.schemas.ohlcv import (
     OHLCVSchemaVersionError as SchemaVersionError,
 )
 

@@ -35,7 +35,6 @@ from datetime import datetime
 from typing import Optional
 
 from loguru import logger
-
 from portfolio.services.rebalance_service import RebalanceSignal
 
 # ---------------------------------------------------------------------------
@@ -143,12 +142,12 @@ def execute(
     RebalanceResult con todo lo necesario para que el CLI reporte.
     SafeOps: nunca lanza.
     """
+    from portfolio.infra.redis_store import RedisPositionStore
     from portfolio.services.portfolio_service import (
-        PortfolioService,
         InMemoryPositionStore,
+        PortfolioService,
     )
     from portfolio.services.rebalance_service import RebalanceService
-    from portfolio.infra.redis_store import RedisPositionStore
 
     # Construir PortfolioService con Redis (o in-memory en dry-run)
     try:
@@ -222,10 +221,10 @@ def execute(
     # o 0.0 si es una posición nueva (BUY desde cero).
     # En producción: consultar el precio actual via GoldLoader o CCXT.
     try:
-        from trading.risk.models import RiskConfig
         from trading.execution.oms import OMS
         from trading.execution.paper_executor import PaperExecutor
         from trading.risk.manager import RiskManager
+        from trading.risk.models import RiskConfig
 
         risk_manager = RiskManager(
             config=RiskConfig(),

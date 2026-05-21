@@ -28,11 +28,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # DataQualityReport: tipo de dominio usado solo en anotaciones de retorno.
@@ -151,6 +149,7 @@ class GEChecker:
         symbol: str,
     ) -> "DataQualityReport":
         import great_expectations as gx
+
         from market_data.infrastructure.quality.ge_suite import build_ohlcv_suite
 
         ctx = self._context

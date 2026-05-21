@@ -14,21 +14,21 @@ Principios: DRY · Fail-Fast · Resiliencia ante versiones de pyiceberg.
 from __future__ import annotations
 
 from loguru import logger
-from pyiceberg.schema import Schema
 from pyiceberg.partitioning import PartitionSpec
+from pyiceberg.schema import Schema
 
 from market_data.infrastructure.storage.iceberg._catalog_singleton import get_catalog
-from market_data.infrastructure.storage.iceberg.schemas import (
-    BRONZE_SCHEMA,
-    SILVER_SCHEMA,
-    GOLD_SCHEMA,
-    TRADES_SCHEMA,
-    DERIVATIVES_SCHEMA,
-)
 from market_data.infrastructure.storage.iceberg.partitions import (
+    derivatives_partition_spec,
     ohlcv_partition_spec,
     trades_partition_spec,
-    derivatives_partition_spec,
+)
+from market_data.infrastructure.storage.iceberg.schemas import (
+    BRONZE_SCHEMA,
+    DERIVATIVES_SCHEMA,
+    GOLD_SCHEMA,
+    SILVER_SCHEMA,
+    TRADES_SCHEMA,
 )
 
 # ---------------------------------------------------------------------------

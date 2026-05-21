@@ -24,11 +24,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-
 from market_data.infrastructure.storage.gold.transformer import (
     FEATURE_COLUMNS,
-    GoldTransformer,
     VERSION,
+    GoldTransformer,
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

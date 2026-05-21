@@ -21,9 +21,9 @@ TODO: deprecar en la siguiente major version.
 
 from market_data.domain.exceptions import (  # noqa: F401
     ExchangeAdapterError,
-    UnsupportedExchangeError,
-    ExchangeConnectionError,
     ExchangeCircuitOpenError,
+    ExchangeConnectionError,
+    UnsupportedExchangeError,
 )
 
 __all__ = [

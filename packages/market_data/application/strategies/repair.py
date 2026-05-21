@@ -18,10 +18,11 @@ import time
 from typing import Optional
 
 import pandas as pd
-from ocm.observability import bind_pipeline
 
-# ── Domain (tipos y contratos) ────────────────────────────────────────────────
-from market_data.ports.outbound.metrics import RepairMetricsPort
+from market_data.domain.exceptions import (
+    ChunkFetchError,
+    NoDataAvailableError,
+)
 from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
@@ -29,15 +30,15 @@ from market_data.domain.policies.base import (
     StrategyMixin,
     classify_error,
 )
-from market_data.domain.exceptions import (
-    ChunkFetchError,
-    NoDataAvailableError,
-)
-from market_data.domain.value_objects.timeframe import timeframe_to_ms
-from market_data.domain.value_objects.gap_utils import GapRange, scan_gaps
 from market_data.domain.value_objects.exchange_quirks import (
     get_quirks,
 )  # domain VO — BC-05
+from market_data.domain.value_objects.gap_utils import GapRange, scan_gaps
+from market_data.domain.value_objects.timeframe import timeframe_to_ms
+
+# ── Domain (tipos y contratos) ────────────────────────────────────────────────
+from market_data.ports.outbound.metrics import RepairMetricsPort
+from ocm.observability import bind_pipeline
 
 # ── Infrastructure (métricas — import local por BC-05: application aislada de infrastructure) ──
 # Los imports concretos ocurren dentro de los métodos que los usan (ver execute_pair, _heal_gap).

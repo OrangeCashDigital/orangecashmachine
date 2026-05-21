@@ -14,7 +14,8 @@ Cobertura:
 """
 
 import json
-from importlib.metadata import version as _pkg_version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 import pytest
 

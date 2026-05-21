@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-
 import base64
 import os
 import time
@@ -9,8 +8,8 @@ from itertools import islice
 from typing import Iterator, Optional, Protocol, runtime_checkable
 
 import redis
-from redis import ConnectionPool
 from loguru import logger
+from redis import ConnectionPool
 
 try:
     from prometheus_client import Counter, Gauge, Histogram
@@ -438,8 +437,9 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
         se resuelve via resolve_env() respetando OCM_ENV → settings.yaml → 'development'.
     """
     try:
-        from dotenv import load_dotenv as _load_dotenv
         import pathlib as _pathlib
+
+        from dotenv import load_dotenv as _load_dotenv
 
         # Buscar .env desde la raíz del proyecto (2 niveles arriba de este módulo)
         _env_path = _pathlib.Path(__file__).parent.parent.parent.parent / ".env"

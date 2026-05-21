@@ -24,11 +24,10 @@ import asyncio
 from typing import Awaitable, Callable, Optional, TypeVar
 
 import aioresilience
-from aioresilience import CircuitBreakerOpenError as AioResilienceCBError
-from aioresilience import RetryPolicy, RetryConfig
-from aioresilience.config import CircuitConfig
-
 import ccxt.async_support as _ccxt_async
+from aioresilience import CircuitBreakerOpenError as AioResilienceCBError
+from aioresilience import RetryConfig, RetryPolicy
+from aioresilience.config import CircuitConfig
 
 from ocm.config.schema import ResilienceConfig, ResilienceRetryPolicy
 

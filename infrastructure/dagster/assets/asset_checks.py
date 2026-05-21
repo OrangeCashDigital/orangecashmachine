@@ -31,9 +31,9 @@ from dagster import (
     AssetKey,
     asset_check,
 )
+from market_data.domain.value_objects.gap_utils import scan_gaps
 
 from infrastructure.dagster.resources import OCMResource
-from market_data.domain.value_objects.gap_utils import scan_gaps
 
 _REQUIRED_COLS = frozenset(
     {

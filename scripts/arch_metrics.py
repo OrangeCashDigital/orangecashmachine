@@ -72,7 +72,6 @@ def run_lint_imports() -> tuple[int, int, list[str]]:
     Formato esperado: "Contracts: N kept, M broken."
     """
     import re
-
     import shutil
 
     lint_bin = shutil.which("lint-imports") or str(ROOT / ".venv/bin/lint-imports")

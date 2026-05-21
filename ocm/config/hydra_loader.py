@@ -60,9 +60,9 @@ from typing import Any, Optional
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
-from ocm.config.schema import AppConfig
-from ocm.config.loader.snapshot import write_config_snapshot
 from ocm.config.loader.exceptions import ConfigValidationError
+from ocm.config.loader.snapshot import write_config_snapshot
+from ocm.config.schema import AppConfig
 
 _HYDRA_INTERNAL: frozenset[str] = frozenset({"_target_", "_recursive_", "_convert_", "hydra"})
 # Coerción nullable delegada a layers/coercion.py (SSOT):
@@ -207,6 +207,7 @@ def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
             ``pydantic.ValidationError`` para mantener el bounded context del paquete.
     """
     from pydantic import ValidationError as _PydanticValidationError
+
     from ocm.config.pipeline import ConfigPipeline
 
     try:
@@ -300,7 +301,7 @@ def load_appconfig_standalone(
         ConfigValidationError: Si la configuración resultante no es válida.
             Envuelve ``pydantic.ValidationError`` — bounded context preservado.
     """
-    from ocm.config.loader.env_resolver import resolve_env, load_dotenv_for_env
+    from ocm.config.loader.env_resolver import load_dotenv_for_env, resolve_env
 
     _env = resolve_env(env)
     load_dotenv_for_env(_env)

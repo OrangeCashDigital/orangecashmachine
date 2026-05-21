@@ -41,7 +41,7 @@ Principios: SRP · DIP · SSOT · KISS · Fail-Fast en construcción.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 
@@ -60,8 +60,8 @@ def _build_redis_client(cfg: "AppConfig") -> Optional[object]:
     Retorna None si Redis no está configurado (Fail-Soft para entornos sin Redis).
     """
     try:
-        from infrastructure.timeouts import Timeouts
         import redis
+        from infrastructure.timeouts import Timeouts
 
         redis_cfg = getattr(cfg, "redis", None)
         if redis_cfg is None:
@@ -149,12 +149,12 @@ class OCMContainer:
 
         # 2. Use cases — no dependen de infra directamente (DIP)
         from market_data.application import PipelineOrchestrator, ResampleUseCase
-        from market_data.infrastructure.observability.metrics_adapter import (
-            PrometheusResampleMetrics,
-            PrometheusRepairMetrics,
-        )
         from market_data.infrastructure.bootstrap.pipeline_factory import (
             ConcretePipelineFactory,
+        )
+        from market_data.infrastructure.observability.metrics_adapter import (
+            PrometheusRepairMetrics,
+            PrometheusResampleMetrics,
         )
 
         self.orchestrator = PipelineOrchestrator(factory=ConcretePipelineFactory())

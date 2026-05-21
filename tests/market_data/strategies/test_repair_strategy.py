@@ -46,7 +46,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
-
 from market_data.application.strategies.repair import RepairStrategy
 from market_data.ports.outbound.metrics import RepairMetricsPort
 
@@ -97,11 +96,11 @@ def _make_metrics() -> MagicMock:
     return m
 
 
-from market_data.domain.policies.base import (
-    PipelineContext,
-)
 from market_data.domain.exceptions import (
     ChunkFetchError,
+)
+from market_data.domain.policies.base import (
+    PipelineContext,
 )
 from market_data.domain.value_objects.gap_utils import GapRange
 

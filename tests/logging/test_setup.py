@@ -13,19 +13,20 @@ Invariantes críticos:
   • setup_logging() está eliminada — cualquier llamada lanza RuntimeError
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 import ocm.observability.logger as _setup_mod
 from ocm.observability.config import LoggingConfig
 from ocm.observability.logger import (
-    bootstrap_logging,
-    configure_logging,
-    bind_pipeline,
-    is_logging_configured,
-    setup_logging,
     _resolve_config,
     _stable,
+    bind_pipeline,
+    bootstrap_logging,
+    configure_logging,
+    is_logging_configured,
+    setup_logging,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

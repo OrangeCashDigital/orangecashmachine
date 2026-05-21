@@ -28,7 +28,6 @@ import time
 from typing import Optional
 
 import pandas as pd
-from ocm.observability import bind_pipeline
 
 # ── Domain ───────────────────────────────────────────────────────────────────
 from market_data.domain.constants import DEFAULT_CHUNK_LIMIT, MAX_BACKFILL_CHUNKS
@@ -38,14 +37,15 @@ from market_data.domain.policies.base import (
     PipelineMode,
     StrategyMixin,
 )
-from market_data.domain.value_objects.timeframe import timeframe_to_ms
 from market_data.domain.value_objects.exchange_quirks import (
     get_origin_fallback_ms,
     get_quirks,
 )
+from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
 # ── Ports ─────────────────────────────────────────────────────────────────────
 from market_data.ports.outbound.publisher import SOURCE_BACKFILL
+from ocm.observability import bind_pipeline
 
 # ── Ports ─────────────────────────────────────────────────────────────────────
 from ocm.runtime.state import encode_redis_key as _encode

@@ -95,7 +95,7 @@ class _StreamSourceAdapter:
         pass  # ciclo de vida gestionado por el caller
 
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 

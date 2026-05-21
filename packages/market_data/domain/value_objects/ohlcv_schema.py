@@ -27,12 +27,12 @@ from __future__ import annotations
 
 import pandas as pd
 import pandera.pandas as pa
-from pandera.pandas import Column, Check, DataFrameSchema
 from loguru import logger
+from pandera.pandas import Check, Column, DataFrameSchema
 
 from market_data.domain.value_objects.timeframe import (
-    timeframe_to_ms,
     InvalidTimeframeError,
+    timeframe_to_ms,
 )
 
 # ==========================================================

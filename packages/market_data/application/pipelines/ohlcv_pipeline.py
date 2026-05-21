@@ -38,8 +38,8 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.throttle import ThrottlePort
 
 from market_data.ports.outbound.publisher_port import (
-    OHLCVPublisherPort,
     NullPublisher,
+    OHLCVPublisherPort,
 )
 from ocm.observability import bind_pipeline
 
@@ -47,6 +47,9 @@ _log = bind_pipeline("pipeline")
 
 
 from market_data.application.pipelines._worker_pool import run_worker_pool
+from market_data.application.strategies.backfill import BackfillStrategy
+from market_data.application.strategies.incremental import IncrementalStrategy
+from market_data.application.strategies.repair import RepairStrategy
 from market_data.domain.policies.base import (
     PairResult,
     PipelineContext,
@@ -54,13 +57,9 @@ from market_data.domain.policies.base import (
     PipelineStrategy,
     PipelineSummary,
 )
-from market_data.application.strategies.backfill import BackfillStrategy
-from market_data.application.strategies.incremental import IncrementalStrategy
-from market_data.application.strategies.repair import RepairStrategy
-from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
-
+from market_data.ports.outbound.state import CursorStorePort
 from ocm.runtime.state import build_gap_registry
 
 # ==============================================================================

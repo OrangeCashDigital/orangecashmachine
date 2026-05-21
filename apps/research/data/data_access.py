@@ -35,9 +35,8 @@ if TYPE_CHECKING:
 
 import pandas as pd
 from loguru import logger
-
-from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
+from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 from market_data.domain.exceptions import (
     DataNotFoundError,
     DataReadError,
@@ -59,6 +58,8 @@ __all__ = [
 # Exchange por defecto para research
 from ocm.config.env_vars import (
     OCM_EXCHANGE as _OCM_EXCHANGE,
+)
+from ocm.config.env_vars import (
     OCM_MARKET_TYPE as _OCM_MARKET_TYPE,
 )
 

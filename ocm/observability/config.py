@@ -20,6 +20,7 @@ loki_labels : Labels estáticos adicionales enviados a Loki.
 """
 
 from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 

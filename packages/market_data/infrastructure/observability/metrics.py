@@ -43,9 +43,7 @@ Métricas disponibles
 from __future__ import annotations
 
 # Servidor de métricas y push → infra.observability.server
-
 from loguru import logger as _log
-
 from prometheus_client import (
     Counter,
     Gauge,

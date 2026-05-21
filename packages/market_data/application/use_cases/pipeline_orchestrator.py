@@ -59,11 +59,11 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 from loguru import logger
 
 from market_data.domain.exceptions import PipelineBuildError, PipelineExecutionError
-from market_data.ports.inbound.pipeline_trigger import (
-    PipelineTriggerPort,
-    PipelineModeStr,
-)
 from market_data.ports.inbound.pipeline_factory import PipelineFactoryPort
+from market_data.ports.inbound.pipeline_trigger import (
+    PipelineModeStr,
+    PipelineTriggerPort,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from ocm.config.schema import ResilienceConfig

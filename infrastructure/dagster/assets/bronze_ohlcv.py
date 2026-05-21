@@ -44,9 +44,9 @@ from collections.abc import Coroutine
 from typing import Any
 
 from dagster import Output, asset
+from market_data.application import PipelineOrchestrator, PipelineRequest
 
 from infrastructure.dagster.resources import OCMResource
-from market_data.application import PipelineOrchestrator, PipelineRequest
 
 # ==============================================================================
 # Helper: ejecución async segura desde threads Dagster

@@ -25,11 +25,9 @@ death cross — patrón verificado numéricamente:
 
 from __future__ import annotations
 
-
 import numpy as np
 import pandas as pd
 import pytest
-
 from trading.strategies.ema_crossover import EMACrossoverStrategy
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

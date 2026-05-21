@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Optional
 
 from loguru import logger as _log
-from prometheus_client import CollectorRegistry, REGISTRY
+from prometheus_client import REGISTRY, CollectorRegistry
 
 
 class MetricsMode(str, Enum):
@@ -139,8 +139,8 @@ class MetricsRuntime:
         job = f"ocm_pipeline_{exchange}"
         try:
             from ocm.observability.prometheus import (
-                PIPELINE_LAST_RUN,
                 PIPELINE_HEARTBEAT,
+                PIPELINE_LAST_RUN,
             )
 
             PIPELINE_LAST_RUN.labels(exchange=exchange).set(_time.time())

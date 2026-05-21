@@ -14,6 +14,7 @@ Cobertura:
 """
 
 import pytest
+
 from ocm.observability.filters import pipeline_filter, strict_pipeline_filter
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

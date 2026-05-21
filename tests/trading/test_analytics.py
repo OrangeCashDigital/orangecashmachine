@@ -9,13 +9,12 @@ Sin I/O — lógica pura.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
-
+from trading.analytics.performance import PerformanceEngine
 from trading.analytics.trade_record import TradeRecord
 from trading.analytics.trade_tracker import TradeTracker
-from trading.analytics.performance import PerformanceEngine
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.strategies.base import Signal
 

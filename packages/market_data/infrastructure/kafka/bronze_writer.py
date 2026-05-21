@@ -59,14 +59,14 @@ from typing import Optional
 import pandas as pd
 from loguru import logger
 
-# SSOT del wire format — shared, no local
-from shared.kafka.serializer import deserialize as _shared_deserialize
-from shared.kafka.schemas.ohlcv import EventPayload
-from shared.kafka.topics import TOPIC_DLQ
-
 from market_data.infrastructure.kafka.dedup import SeenFilter
 from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
+from shared.kafka.schemas.ohlcv import EventPayload
+
+# SSOT del wire format — shared, no local
+from shared.kafka.serializer import deserialize as _shared_deserialize
+from shared.kafka.topics import TOPIC_DLQ
 
 
 class KafkaBronzeWriter:

@@ -36,9 +36,9 @@ from typing import Optional
 from ocm.config.env_vars import (
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
-    OCM_STORAGE__DATA_LAKE__PATH,
     OCM_DATA_LAKE_PATH,  # DEPRECATED — legacy, transicion controlada
     OCM_GOLD_PATH,
+    OCM_STORAGE__DATA_LAKE__PATH,
 )
 from shared.utils.repo import (
     repo_root,
@@ -186,8 +186,8 @@ def _read_yaml_lake_path() -> Optional[str]:
     de configuración durante desarrollo.
     """
     try:
-        from ocm.config.loader.yaml_loader import YamlLoader
         from ocm.config.loader.env_resolver import resolve_env
+        from ocm.config.loader.yaml_loader import YamlLoader
 
         config_dir = _find_config_dir()
         if config_dir is None:

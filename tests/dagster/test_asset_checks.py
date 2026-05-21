@@ -66,8 +66,8 @@ class TestRowCountCheck:
         ocm = _make_ocm()
         context = MagicMock()
 
-        import pandas as pd
         import numpy as np
+        import pandas as pd
 
         mock_storage = MagicMock()
         mock_df = pd.DataFrame(

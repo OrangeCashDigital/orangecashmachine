@@ -10,9 +10,14 @@ Re-exports públicos del módulo exchange adapters.
 from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
 from market_data.adapters.outbound.exchange.errors import (
     ExchangeAdapterError,
-    UnsupportedExchangeError,
-    ExchangeConnectionError,
     ExchangeCircuitOpenError,
+    ExchangeConnectionError,
+    UnsupportedExchangeError,
+)
+from market_data.adapters.outbound.exchange.limiter import (
+    AdaptiveLimiter,
+    get_limiter_state,
+    get_or_create_limiter,
 )
 from market_data.adapters.outbound.exchange.resilience import (
     CircuitBreakerOpenError,
@@ -24,11 +29,6 @@ from market_data.adapters.outbound.exchange.throttle import (
     AdaptiveThrottle,
     get_or_create_throttle,
     get_throttle_state,
-)
-from market_data.adapters.outbound.exchange.limiter import (
-    AdaptiveLimiter,
-    get_or_create_limiter,
-    get_limiter_state,
 )
 
 __all__ = [

@@ -24,44 +24,9 @@
 # ==============================================================================
 from __future__ import annotations
 
-# ── Jerarquía de excepciones (SSOT: loader/exceptions.py) ────────────────────
-from ocm.config.loader.exceptions import (  # noqa: F401
-    ConfigurationError,
-    ConfigFileNotFoundError,
-    ConfigParseError,
-    ConfigValidationError,
-)
-
-# ── Pipeline L1→L5 (SSOT: pipeline.py) ───────────────────────────────────────
-from ocm.config.pipeline import (  # noqa: F401
-    ConfigPipeline,
-    ConfigPipelineError,
-    ConfigStage,
-    ConfigTransition,
-)
-
-# ── L3: Coerción canónica (SSOT: layers/coercion.py) ─────────────────────────
-from ocm.config.layers.coercion import (  # noqa: F401
-    BOOL_TRUE,
-    BOOL_FALSE,
-    coerce_scalar_values,
-    coerce_string,
-)
-
-# ── L2: Override de entorno (SSOT: layers/env_override.py) ───────────────────
-from ocm.config.layers.env_override import (  # noqa: F401
-    apply_env_overrides,
-)
-
-# ── L4: Validación Pydantic (SSOT: layers/validation.py) ─────────────────────
-from ocm.config.layers.validation import (  # noqa: F401
-    validate_config,
-)
-
-# ── L5: Reglas de negocio (SSOT: layers/rules.py) ────────────────────────────
-from ocm.config.layers.rules import (  # noqa: F401
-    ConfigRuleViolation,
-    apply_business_rules,
+# ── Facade del bounded context (SSOT: __init__.py) ───────────────────────────
+from ocm.config import (  # noqa: F401
+    ConfigurationError as _ce,  # re-export verificado
 )
 
 # ── Loaders públicos (SSOT: hydra_loader.py) ─────────────────────────────────
@@ -71,9 +36,42 @@ from ocm.config.hydra_loader import (  # noqa: F401
     load_appconfig_standalone,
 )
 
-# ── Facade del bounded context (SSOT: __init__.py) ───────────────────────────
-from ocm.config import (  # noqa: F401
-    ConfigurationError as _ce,  # re-export verificado
-    ConfigValidationError as _cve,  # re-export verificado
-    ConfigPipelineError as _cpe,  # re-export verificado
+# ── L3: Coerción canónica (SSOT: layers/coercion.py) ─────────────────────────
+from ocm.config.layers.coercion import (  # noqa: F401
+    BOOL_FALSE,
+    BOOL_TRUE,
+    coerce_scalar_values,
+    coerce_string,
+)
+
+# ── L2: Override de entorno (SSOT: layers/env_override.py) ───────────────────
+from ocm.config.layers.env_override import (  # noqa: F401
+    apply_env_overrides,
+)
+
+# ── L5: Reglas de negocio (SSOT: layers/rules.py) ────────────────────────────
+from ocm.config.layers.rules import (  # noqa: F401
+    ConfigRuleViolation,
+    apply_business_rules,
+)
+
+# ── L4: Validación Pydantic (SSOT: layers/validation.py) ─────────────────────
+from ocm.config.layers.validation import (  # noqa: F401
+    validate_config,
+)
+
+# ── Jerarquía de excepciones (SSOT: loader/exceptions.py) ────────────────────
+from ocm.config.loader.exceptions import (  # noqa: F401
+    ConfigFileNotFoundError,
+    ConfigParseError,
+    ConfigurationError,
+    ConfigValidationError,
+)
+
+# ── Pipeline L1→L5 (SSOT: pipeline.py) ───────────────────────────────────────
+from ocm.config.pipeline import (  # noqa: F401
+    ConfigPipeline,
+    ConfigPipelineError,
+    ConfigStage,
+    ConfigTransition,
 )

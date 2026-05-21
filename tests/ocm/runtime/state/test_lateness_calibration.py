@@ -39,8 +39,8 @@ from __future__ import annotations
 
 import pytest
 
-from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
 from ocm.runtime.state.gap_store import InMemoryGapStore
+from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
 
 # ── Constantes de test ───────────────────────────────────────────────────────
 _ENV = "test"

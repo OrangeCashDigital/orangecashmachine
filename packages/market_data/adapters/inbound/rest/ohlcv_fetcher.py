@@ -17,17 +17,19 @@ SafeOps Ready 🚀
 
 from __future__ import annotations
 
-from loguru import logger
 import asyncio
 import math
 import random
 from dataclasses import dataclass
-from typing import cast, TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, cast
+
+from loguru import logger
 
 if TYPE_CHECKING:
     from market_data.ports.outbound.transformer import OHLCVTransformerPort
 
 import pandas as pd
+
 from ocm.observability import bind_pipeline
 
 if TYPE_CHECKING:
@@ -37,35 +39,35 @@ if TYPE_CHECKING:
     # y evitando conexiones Redis en tests (SafeOps · DIP).
     from ocm.runtime.state.factories import LatenessCalibrationStore
 
-from market_data.ports.outbound.state import AsyncCursorStorePort as CursorStore
-from market_data.ports.outbound.storage import OHLCVStorage
-from market_data.ports.outbound.transformer import OHLCVTransformerPort
-from ocm.runtime.state import InMemoryCursorStore  # fachada pública — BC-22
+import time
+
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
     ExchangeCircuitOpenError,
     RetryExhaustedError,
 )
-import time
 
 # ==========================================================
 # Constants
 # ==========================================================
-
 # DEFAULT_CHUNK_LIMIT: SSOT en domain/constants.py.
 # Re-exportado aquí para compat con callers legacy que importan desde el fetcher.
 from market_data.domain.constants import DEFAULT_CHUNK_LIMIT  # noqa: F401
 from market_data.domain.value_objects.timeframe import (
     timeframe_to_ms,
 )  # noqa: E402 — after constants block, before runtime code
+from market_data.ports.outbound.state import AsyncCursorStorePort as CursorStore
+from market_data.ports.outbound.storage import OHLCVStorage
+from market_data.ports.outbound.transformer import OHLCVTransformerPort
+from ocm.runtime.state import InMemoryCursorStore  # fachada pública — BC-22
 
 
 def _fetcher_metrics():
     from market_data.infrastructure.observability.metrics import (
-        FETCH_CHUNK_DURATION,
-        FETCH_CHUNKS_TOTAL,
         CANDLE_DELAY_MS,
+        FETCH_CHUNK_DURATION,
         FETCH_CHUNK_ERRORS_TOTAL,
+        FETCH_CHUNKS_TOTAL,
     )
 
     return {
@@ -238,9 +240,9 @@ OHLCV_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 # ==========================================================
 # Exceptions
 from market_data.domain.exceptions import (  # noqa: E402
-    MissingStartDateError,
     ChunkFetchError,
     InvalidMarketTypeError,
+    MissingStartDateError,
 )
 
 # ==========================================================

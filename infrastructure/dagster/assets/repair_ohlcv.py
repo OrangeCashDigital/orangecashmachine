@@ -25,9 +25,9 @@ from __future__ import annotations
 import asyncio
 
 from dagster import AssetIn, Output, asset
+from market_data.application import PipelineOrchestrator, PipelineRequest
 
 from infrastructure.dagster.resources import OCMResource
-from market_data.application import PipelineOrchestrator, PipelineRequest
 
 
 def make_repair_ohlcv_asset(exchange_name: str, market_type: str = "spot"):

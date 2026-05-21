@@ -26,7 +26,6 @@ import ast
 import re
 from pathlib import Path
 
-
 import ocm.config.env_vars as env_vars_module
 from ocm.config.env_vars import (
     OCM_DATA_LAKE_PATH,

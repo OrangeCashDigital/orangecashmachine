@@ -11,8 +11,8 @@ módulo — este __init__ no necesita cambiar al añadir estrategias.
 
 from trading.strategies.base import BaseStrategy, Signal, SignalType
 from trading.strategies.registry import (
-    StrategyRegistry,
     StrategyNotFoundError,
+    StrategyRegistry,
     register_strategy,
 )
 
