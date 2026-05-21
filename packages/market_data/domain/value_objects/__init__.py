@@ -102,12 +102,23 @@ __all__ = [
     "QualityLabel",
     # Gap
     "GapRange",
+    # Normalized trade
+    "NormalizedTrade",
+    "Side",
     # Order Book — Nivel 0
     "OrderBookSide",
     "PriceLevel",
     "OrderBookSnapshot",
     "OrderBookDelta",
 ]
+
+# ---------------------------------------------------------------------------
+# NormalizedTrade + Side (SSOT en normalized_trade.py)
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.normalized_trade import (  # noqa: F401
+    NormalizedTrade,
+    Side,
+)
 
 # ---------------------------------------------------------------------------
 # Order Book — Nivel 0 (microestructura nativa del exchange)

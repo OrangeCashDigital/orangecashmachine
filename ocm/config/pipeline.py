@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig
@@ -172,7 +172,7 @@ class ConfigPipeline:
                 ConfigStage.RAW,
                 (
                     f"Missing required top-level keys: {missing}. "
-                    f"Present: {sorted(top_level_keys)}. "
+                    f"Present: {sorted(top_level_keys)}. "  # type: ignore[type-var]
                     "Verificar config/base.yaml y defaults list en config.yaml."
                 ),
             )
@@ -180,7 +180,7 @@ class ConfigPipeline:
         logger.debug(
             "config_pipeline_l1 | keys_count={} top_keys={} required_ok={}",
             len(top_level_keys),
-            sorted(top_level_keys),
+            sorted(top_level_keys),  # type: ignore[type-var]
             required_keys,
         )
         # Guard lazy: OmegaConf.to_yaml() es costoso — solo en DEBUG activo.
@@ -231,10 +231,10 @@ class ConfigPipeline:
         """
         try:
             raw_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-            strip_hydra_internals(raw_dict)   # muta in-place — no reasignar
-            coerce_scalar_values(raw_dict)    # muta in-place — str→bool/None (SSOT: coercion.py); int/float → Pydantic L4
+            strip_hydra_internals(raw_dict)   # muta in-place — no reasignar  # type: ignore[arg-type]
+            coerce_scalar_values(raw_dict)    # muta in-place — str→bool/None (SSOT: coercion.py); int/float → Pydantic L4  # type: ignore[arg-type]
             # normalize_empty_strings eliminada — absorbida por coerce_scalar_values() (DRY/SSOT)
-            logger.debug("config_pipeline_l3 | coerce=ok keys={}", list(raw_dict.keys()))
+            logger.debug("config_pipeline_l3 | coerce=ok keys={}", list(raw_dict.keys()))  # type: ignore[union-attr]
             self._record(ConfigStage.COERCED, ConfigStage.VALIDATED)
             return raw_dict  # type: ignore[return-value]
         except Exception as exc:

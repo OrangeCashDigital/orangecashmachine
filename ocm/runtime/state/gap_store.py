@@ -177,6 +177,6 @@ class _InMemoryPipeline:
                 results.append(self._store.get(cmd[1]))
             elif cmd[0] == "set":
                 self._store.set(cmd[1], cmd[2], ex=cmd[3])
-                results.append(True)
+                results.append(True)  # type: ignore[arg-type]
         self._cmds.clear()
         return results

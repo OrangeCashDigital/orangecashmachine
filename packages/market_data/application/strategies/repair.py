@@ -117,9 +117,7 @@ class RepairStrategy(StrategyMixin):
             gaps              = scan_gaps(df_existing, timeframe, tolerance=self._tolerance)
             result.gaps_found = len(gaps)
             if gaps:
-                _m.repair_gaps_found.labels(
-                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-                ).inc(len(gaps))
+                _m.repair_gaps_found_inc(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, count=len(gaps))
 
             if not gaps:
                 result.skipped     = True
@@ -144,9 +142,7 @@ class RepairStrategy(StrategyMixin):
                         "Gap demasiado grande — skip",
                         expected=gap.expected, max=_MAX_HEALABLE_GAP_CANDLES,
                     )
-                    _m.repair_gaps_skipped.labels(
-                        exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-                    ).inc()
+                    _m.repair_gaps_skipped_inc(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe)
                     return False, 0, 0.0
 
                 try:
@@ -159,10 +155,7 @@ class RepairStrategy(StrategyMixin):
                             "Gap skip — conocido irrecuperable",
                             gap=str(gap),
                         )
-                        _m.repair_gaps_skipped.labels(
-                            exchange=ctx.exchange_id, symbol=symbol,
-                            timeframe=timeframe,
-                        ).inc()
+                        _m.repair_gaps_skipped_inc(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe)
                         return False, 0, 0.0
                 except Exception as _irr_exc:
                     log.debug(
@@ -200,10 +193,7 @@ class RepairStrategy(StrategyMixin):
                     total_healed_rows += rows
                     if fill_ratio >= _FULL_HEAL_THRESHOLD:
                         healed_count += 1
-                        _m.repair_gaps_healed.labels(
-                            exchange=ctx.exchange_id, symbol=symbol,
-                            timeframe=timeframe,
-                        ).inc()
+                        _m.repair_gaps_healed_inc(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe)
                     else:
                         partial_count += 1
                         log.warning(
@@ -226,9 +216,7 @@ class RepairStrategy(StrategyMixin):
             )
 
             if total_healed_rows > 0:
-                _m.rows_ingested.labels(
-                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe,
-                ).inc(total_healed_rows)
+                _m.rows_ingested_inc(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, count=total_healed_rows)
 
         except asyncio.CancelledError:
             raise
@@ -426,9 +414,7 @@ class RepairStrategy(StrategyMixin):
                     "Gap heal: fetch transitorio",
                     error=str(exc), is_transient=True,
                 )
-                self._metrics.pipeline_errors.labels(
-                    exchange=ctx.exchange_id, error_type="transient",
-                ).inc()
+                self._metrics.pipeline_errors_inc(exchange=ctx.exchange_id, error_type="transient",)
             else:
                 _is_transient = classify_error(exc)
                 log.error(
@@ -437,8 +423,5 @@ class RepairStrategy(StrategyMixin):
                     error=str(exc),
                     is_transient=_is_transient,
                 )
-                self._metrics.pipeline_errors.labels(
-                    exchange=ctx.exchange_id,
-                    error_type="transient" if _is_transient else "fatal",
-                ).inc()
+                self._metrics.pipeline_errors_inc(exchange=ctx.exchange_id, error_type="transient" if _is_transient else "fatal",)
             return False, 0, 0.0

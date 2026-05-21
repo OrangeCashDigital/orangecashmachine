@@ -127,6 +127,8 @@ dev = [
     "httpx>=0.28.1",
     "bandit>=1.9.4",
     "pre-commit>=3.8.0",
+    "pydeps>=3.0.6",
+    "types-pyyaml>=6.0.12.20260518",
 ]
 
 # =============================================================================
@@ -401,6 +403,10 @@ ignore_imports = [
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.use_cases.ohlcv_transformer",
     # Composition Root: pipeline_factory construye QualityPipeline (DIP-safe — inyección explícita).
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.quality.pipeline",
+    # Composition Root: composition_root ensambla feed_orchestrator.
+    "market_data.infrastructure.bootstrap.composition_root -> market_data.application.feed_orchestrator",
+    # Composition Root: pipeline_factory inyecta source_manager para gap recovery.
+    "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.source_manager",
 
 ]
 
@@ -426,7 +432,6 @@ ignore_imports = [
     # Adapters que implementan ports e importan infra concreta (lazy en método).
     # Deuda técnica: migrar a ports cuando MetricsPort/StoragePort cubran todos los casos.
     "market_data.adapters.inbound.rest.trades_fetcher -> market_data.infrastructure.storage.silver.trades_storage",
-    "market_data.adapters.inbound.rest.derivatives_fetcher -> market_data.infrastructure.storage.silver.derivatives_storage",
     "market_data.adapters.inbound.rest.ohlcv_fetcher -> market_data.infrastructure.observability.metrics",
     "market_data.adapters.outbound.storage.gold_reader -> market_data.infrastructure.storage.iceberg.catalog",
     "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
@@ -443,6 +448,26 @@ forbidden_modules = [
     "pyiceberg", "redis", "ccxt", "dagster", "sqlalchemy", "boto3",
     "cryptofeed", "websockets",
 ]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 1 (detalle feeds) — boundary DIP del módulo WebSocket
+# ─────────────────────────────────────────────────────────────────────────────
+
+# BC-39: COMENTADO — market_data.feeds.protocol/types no existen aún.
+# El módulo feeds/ está en desarrollo (WebSocket gap-aware streaming).
+# Re-activar cuando feeds/protocol.py y feeds/types.py existan en el árbol.
+# [[tool.importlinter.contracts]]
+# name = "BC-39: market_data.feeds — vendor SDKs forbidden in protocol/types boundary"
+# type = "forbidden"
+# source_modules = [
+#     "market_data.feeds.protocol",
+#     "market_data.feeds.types",
+# ]
+# forbidden_modules = [
+#     "cryptofeed",
+#     "websockets",
+#     "ccxt",
+# ]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 2 — bounded contexts: independencia entre packages

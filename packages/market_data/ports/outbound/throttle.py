@@ -28,7 +28,17 @@ class ThrottlePort(Protocol):
     La implementación (AdaptiveThrottle) ajusta la concurrencia dinámicamente.
 
     Fire-and-forget: ningún método lanza excepciones.
+
+    Propiedades de lectura
+    ----------------------
+    current : concurrencia activa en este momento. OHLCVPipeline la lee
+              tras cada par para sincronizar max_concurrency con el throttle.
     """
+
+    @property
+    def current(self) -> int:
+        """Nivel de concurrencia activo según el throttle."""
+        ...
 
     def record_success(self, latency_ms: Optional[float] = None) -> None:
         """Registra una operación exitosa con latencia opcional."""
@@ -54,13 +64,23 @@ class ThrottlePort(Protocol):
         """
         ...
 
+    def record_rate_limit_hit(self) -> None:
+        """Registra un hit de rate limit — señal de presión máxima."""
+        ...
+
 
 class NullThrottle:
     """
     Implementación vacía de ThrottlePort.
 
     Uso: tests, entornos sin throttle inyectado (modo Kappa — sin Bronze directo).
+
+    current siempre retorna 1 — concurrencia mínima segura para modo no-throttled.
     """
+
+    @property
+    def current(self) -> int:
+        return 1
 
     def record_success(self, latency_ms: Optional[float] = None) -> None:
         pass
@@ -73,6 +93,9 @@ class NullThrottle:
         pass
 
     def record_occ_conflict(self) -> None:
+        pass
+
+    def record_rate_limit_hit(self) -> None:
         pass
 
 

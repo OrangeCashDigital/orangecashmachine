@@ -1789,11 +1789,13 @@ dev = [
     { name = "import-linter" },
     { name = "mypy" },
     { name = "pre-commit" },
+    { name = "pydeps" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "structlog" },
+    { name = "types-pyyaml" },
 ]
 
 [package.metadata]
@@ -1839,11 +1841,13 @@ dev = [
     { name = "import-linter", specifier = ">=2.1,<3.0" },
     { name = "mypy", specifier = ">=1.9,<2.0" },
     { name = "pre-commit", specifier = ">=3.8.0" },
+    { name = "pydeps", specifier = ">=3.0.6" },
     { name = "pytest", specifier = ">=8.0,<9.0" },
     { name = "pytest-asyncio", specifier = ">=0.23,<1.0" },
     { name = "pytest-cov", specifier = ">=5.0,<6.0" },
     { name = "ruff", specifier = ">=0.4,<1.0" },
     { name = "structlog", specifier = ">=24.4.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20260518" },
 ]
 
 [[package]]
@@ -2300,6 +2304,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/52/6d/fffca34caecc4a3f97bda81b2098da5e8ab7efc9a66e819074a11955d87e/pydantic_settings-2.13.1.tar.gz", hash = "sha256:b4c11847b15237fb0171e1462bf540e294affb9b86db4d9aa5c01730bdbe4025", size = 223826, upload-time = "2026-02-19T13:45:08.055Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/00/4b/ccc026168948fec4f7555b9164c724cf4125eac006e176541483d2c959be/pydantic_settings-2.13.1-py3-none-any.whl", hash = "sha256:d56fd801823dbeae7f0975e1f8c8e25c258eb75d278ea7abb5d9cebb01b56237", size = 58929, upload-time = "2026-02-19T13:45:06.034Z" },
+]
+
+[[package]]
+name = "pydeps"
+version = "3.0.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "stdlib-list" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/15/1b/b5dfc2ed2d5fc4e281b319562bae323c4dbb83dedc91f952e15a565a41c4/pydeps-3.0.6.tar.gz", hash = "sha256:7f8b12c9db90f5a2e009fe0ef75f2945bf698d6cc5fb064423a525823d423085", size = 54777, upload-time = "2026-04-23T10:34:50.012Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d6/93/f152a9d5c669efdce1c4e4328256eb2a61486134a2ff4dce8cb93bcd8e9d/pydeps-3.0.6-py3-none-any.whl", hash = "sha256:fc102c0ee2ad25a1596714c7175d8060fa138aaa87eafb308e820e88a709e5fc", size = 48106, upload-time = "2026-04-23T10:34:48.622Z" },
 ]
 
 [[package]]
@@ -3017,6 +3033,15 @@ wheels = [
 ]
 
 [[package]]
+name = "stdlib-list"
+version = "0.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/25/f1540879c8815387980e56f973e54605bd924612399ace31487f7444171c/stdlib_list-0.12.0.tar.gz", hash = "sha256:517824f27ee89e591d8ae7c1dd9ff34f672eae50ee886ea31bb8816d77535675", size = 60923, upload-time = "2025-10-24T19:21:22.849Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/3d/2970b27a11ae17fb2d353e7a179763a2fe6f37d6d2a9f4d40104a2f132e9/stdlib_list-0.12.0-py3-none-any.whl", hash = "sha256:df2d11e97f53812a1756fb5510393a11e3b389ebd9239dc831c7f349957f62f2", size = 87615, upload-time = "2025-10-24T19:21:20.619Z" },
+]
+
+[[package]]
 name = "stevedore"
 version = "5.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3140,6 +3165,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2b/e8/66e25efcc18542d58706ce4e50415710593721aae26e794ab1dec34fb66f/typeguard-4.5.1.tar.gz", hash = "sha256:f6f8ecbbc819c9bc749983cc67c02391e16a9b43b8b27f15dc70ed7c4a007274", size = 80121, upload-time = "2026-02-19T16:09:03.392Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/91/88/b55b3117287a8540b76dbdd87733808d4d01c8067a3b339408c250bb3600/typeguard-4.5.1-py3-none-any.whl", hash = "sha256:44d2bf329d49a244110a090b55f5f91aa82d9a9834ebfd30bcc73651e4a8cc40", size = 36745, upload-time = "2026-02-19T16:09:01.6Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20260518"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/83/4a1afc3fbfcf5b8d46fc390cd95ed6b0dc9010a265f4e9f46314efffa37a/types_pyyaml-6.0.12.20260518.tar.gz", hash = "sha256:d917f83fb38462550338c1297faedd860b3ec83912b96b1e3d73255f7473e466", size = 17850, upload-time = "2026-05-18T06:01:58.675Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/06/a2/c01db32be2ae7d6a1689972f3c492b149ee4e164b12fdfd9f64b50888215/types_pyyaml-6.0.12.20260518-py3-none-any.whl", hash = "sha256:d2150f75a231c9fe9c7463bd29487d93e60bac90400287351384bc2284eba7cd", size = 20312, upload-time = "2026-05-18T06:01:57.368Z" },
 ]
 
 [[package]]

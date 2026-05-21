@@ -202,6 +202,26 @@ class RepairMetricsPort(Protocol):
     DIP: RepairStrategy depende de este port, no de Prometheus directamente.
     """
 
+    # -- Métodos de escritura (API preferida) ---------------------
+    def pipeline_errors_inc(self, exchange: str, error_type: str) -> None: ...
+
+    def repair_gaps_found_inc(
+        self, exchange: str, symbol: str, timeframe: str, count: int = 1,
+    ) -> None: ...
+
+    def repair_gaps_healed_inc(
+        self, exchange: str, symbol: str, timeframe: str,
+    ) -> None: ...
+
+    def repair_gaps_skipped_inc(
+        self, exchange: str, symbol: str, timeframe: str,
+    ) -> None: ...
+
+    def rows_ingested_inc(
+        self, exchange: str, symbol: str, timeframe: str, count: int = 1,
+    ) -> None: ...
+
+    # -- Properties legacy (compatibilidad con Prometheus directo) --
     @property
     def pipeline_errors(self) -> object: ...
 

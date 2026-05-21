@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-market_data/factories/pipeline_factory.py
-==========================================
+market_data/infrastructure/bootstrap/pipeline_factory.py
+=========================================================
 
-ConcretePipelineFactory — composition root de pipelines.
+ConcretePipelineFactory — Composition Root de pipelines.
 
-Responsabilidad única
----------------------
+Responsabilidad única (SRP)
+---------------------------
 Instanciar el grafo completo de dependencias concretas para cada
 tipo de pipeline y devolverlo como PipelineTriggerPort.
 
@@ -14,26 +14,50 @@ Licencia arquitectónica (BC-28)
 --------------------------------
 Este módulo PUEDE importar desde todas las capas de market_data:
 domain, ports, application, adapters, infrastructure.
-Es el único módulo con esa licencia — el precio es que nadie
-importa desde aquí excepto el entrypoint / Dagster assets.
+Es el único módulo con esa licencia — nadie importa desde aquí
+excepto el entrypoint y los Dagster assets.
 
-Principios: DIP · SRP · KISS · SafeOps
+Principios: DIP · SRP · KISS · SafeOps · Fail-Fast
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
+
+# --------------------------------------------------------------------------- #
+# Catalog builder — DRY, único punto de construcción del catalog Iceberg       #
+# --------------------------------------------------------------------------- #
+
+def _build_catalog() -> Any:
+    """
+    Construye y retorna el catalog PyIceberg desde variables de entorno.
+
+    Composition Root — único lugar autorizado para instanciar el catalog.
+    Fail-Fast: lanza si la configuración de Iceberg es inválida o
+    el REST catalog no está disponible.
+
+    Returns
+    -------
+    pyiceberg.catalog.Catalog
+    """
+    from market_data.infrastructure.storage.catalog import build_catalog
+    return build_catalog()
+
+
+# --------------------------------------------------------------------------- #
+# ConcretePipelineFactory                                                      #
+# --------------------------------------------------------------------------- #
 
 class ConcretePipelineFactory:
     """
     Implementación concreta de PipelineFactoryPort.
 
     Todos los imports concretos ocurren lazy dentro de cada builder
-    para evitar coste de inicialización en import time y mantener
+    para evitar coste de inicialización en import-time y mantener
     el feedback de errores near-fail-fast en construcción, no en import.
     """
 
-    def build(self, request: Any) -> Any:  # PipelineRequest → PipelineTriggerPort
+    def build(self, request: Any) -> Any:
         """
         Enruta la construcción según request.pipeline.
 
@@ -48,8 +72,6 @@ class ConcretePipelineFactory:
             "trades_stream": self._build_trades_stream,
             "derivatives":   self._build_derivatives,
         }
-        # FIX C-01: el campo del DTO es `pipeline`, no `pipeline_type`.
-        # PipelineRequest.__post_init__ valida los valores aceptados — SSOT.
         builder = dispatch.get(request.pipeline)
         if builder is None:
             raise ValueError(
@@ -58,30 +80,43 @@ class ConcretePipelineFactory:
             )
         return builder(request)
 
-    # ------------------------------------------------------------------
-    # Builders concretos — SRP: uno por tipo de pipeline
-    # ------------------------------------------------------------------
+    # ----------------------------------------------------------------------- #
+    # Helpers internos                                                          #
+    # ----------------------------------------------------------------------- #
 
-    def _build_kafka_publisher(self):
+    def _resolve_adapter_kwargs(self, request: Any) -> dict[str, Any]:
+        """Extrae kwargs de CCXTAdapter desde el request (DRY)."""
+        kwargs: dict[str, Any] = {
+            "exchange_id": request.exchange,
+            "market_type": request.market_type,
+        }
+        if request.credentials is not None:
+            kwargs["credentials"] = request.credentials
+        if request.resilience is not None:
+            kwargs["resilience"] = request.resilience
+        return kwargs
+
+    def _build_kafka_publisher(self) -> Any:
         """
         Construye KafkaOHLCVPublisher respetando el feature flag KAFKA_ENABLED.
 
-        Composition Root — único lugar autorizado para instanciar infra de Kafka.
-        Movido desde application/pipelines/ohlcv_pipeline.py (DIP: application
-        no debe conocer infrastructure directamente).
-
-        Retorna None si Kafka está deshabilitado o no disponible (modo degradado).
+        Retorna None si Kafka está deshabilitado o no disponible (fail-soft).
         """
         import os
         from ocm.config.env_vars import KAFKA_ENABLED as _KAFKA_ENABLED_VAR
+
         kafka_flag = os.environ.get(_KAFKA_ENABLED_VAR, "false").strip().lower()
         if kafka_flag not in ("1", "true", "yes"):
             return None
         try:
             from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
             from market_data.infrastructure.kafka.ohlcv_publisher import KafkaOHLCVPublisher
+            from market_data.ports.outbound.kafka_producer import KafkaProducerPort
             producer = KafkaProducerAdapter.from_env()
-            return KafkaOHLCVPublisher(producer=producer)
+            # cast: KafkaProducerAdapter satisface KafkaProducerPort estructuralmente.
+            # mypy no infiere structural subtyping desde clases concretas — cast explicita
+            # la intención sin ocultar bugs reales (el runtime verifica en uso).
+            return KafkaOHLCVPublisher(producer=cast(KafkaProducerPort, producer))
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning(
@@ -89,119 +124,136 @@ class ConcretePipelineFactory:
             )
             return None
 
+    # ----------------------------------------------------------------------- #
+    # Builders concretos — SRP: uno por tipo de pipeline                       #
+    # ----------------------------------------------------------------------- #
+
     def _build_ohlcv(self, request: Any) -> Any:
-        """Cabla OHLCVPipeline con CCXTAdapter y sus dependencias concretas."""
-        # Imports lazy — evitan circularidades y coste en import-time.
-        # ge_checker_factory y PrometheusPipelineMetrics pertenecen a infra:
-        # van aquí (lazy) para mantener la arquitectura de capas.
+        """
+        Cabla OHLCVPipeline con CCXTAdapter y sus dependencias concretas.
+
+        Grafo de dependencias
+        ---------------------
+        CCXTAdapter  →  HistoricalFetcherAsync  →  OHLCVPipeline
+                                                        ↑
+        QualityPipeline ─────────────────────────────────┤
+        PrometheusPipelineMetrics ───────────────────────┤
+        RedisCursorStore | InMemoryCursorStore ───────────┘
+
+        Notas de cableado
+        -----------------
+        - publisher: OHLCVPipeline lo gestiona internamente (NullPublisher por
+          defecto). No se pasa como kwarg — no es parte del contrato público.
+        - _chunk_converter: vive en PipelineContext, no en OHLCVPipeline.__init__.
+          Se inyecta via ctx si la estrategia lo necesita.
+        - cast(ExchangeClientPort): CCXTAdapter satisface ExchangeClientPort
+          estructuralmente (runtime_checkable Protocol). mypy no infiere subtyping
+          desde ABC sin anotación explícita en la clase concreta — cast es correcto.
+        """
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
         from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
-        from market_data.infrastructure.quality.ge_checker import ge_checker_factory
-        from market_data.infrastructure.observability.metrics_adapter import PrometheusPipelineMetrics
-        from ocm.runtime.state import build_cursor_store_from_env, InMemoryCursorStore
-
-        adapter_kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
-        }
-        if request.credentials is not None:
-            adapter_kwargs["credentials"] = request.credentials
-        if request.resilience is not None:
-            adapter_kwargs["resilience"] = request.resilience
-
-        exchange_client = CCXTAdapter(**adapter_kwargs)
-
-        # Composition root: construye QualityPipeline con registry inyectado (D-05).
-        # BC-28: única licencia para importar infrastructure/ desde aquí.
+        from market_data.infrastructure.observability.metrics_adapter import (
+            PrometheusPipelineMetrics,
+        )
         from market_data.application.quality.pipeline import QualityPipeline
         from market_data.infrastructure.quality.anomaly_registry import default_registry
+        from market_data.ports.outbound.exchange_client import ExchangeClientPort
+        from market_data.ports.outbound.state import CursorStorePort, AsyncCursorStorePort
+        from ocm.runtime.state import build_cursor_store, InMemoryCursorStore
+
+        raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        # cast: CCXTAdapter satisface ExchangeClientPort (runtime_checkable Protocol).
+        exchange_client = raw_adapter
+
         quality = QualityPipeline(registry=default_registry)
-        from market_data.adapters.outbound.chunk_converter import PassthroughChunkConverter
-        chunk_converter = PassthroughChunkConverter()
 
+        # Cursor store: Redis en producción, InMemory en degradación controlada.
+        # cast a CursorStorePort: ambas implementaciones satisfacen el protocolo
+        # estructuralmente; mypy no lo infiere sin la anotación explícita.
         try:
-            cursor = build_cursor_store_from_env()
+            cursor = cast(CursorStorePort, build_cursor_store())
         except Exception:
-            cursor = InMemoryCursorStore()
+            cursor = cast(CursorStorePort, InMemoryCursorStore())
 
-        # Kappa: el fetcher no toca Iceberg — cursor Redis es SSOT del offset
-        # del productor. Iceberg solo lo escribe el consumer downstream (BronzeWriter).
         fetcher = HistoricalFetcherAsync(
             storage            = None,
             transformer        = OHLCVTransformer(),
-            exchange_client    = exchange_client,
-            cursor_store       = cursor,
+            exchange_client    = raw_adapter,
+            cursor_store       = cast(AsyncCursorStorePort, cursor),
             backfill_mode      = True,
             market_type        = request.market_type,
             config_start_date  = request.start_date or "auto",
             auto_lookback_days = request.auto_lookback_days or 3650,
         )
 
-        # Fail-Fast: OHLCVPipeline.__init__ valida que symbols/timeframes/start_date
-        # no estén vacíos. Si el request no los provee, la factory debe proveer
-        # un fallback explícito — no silencioso — para que el error sea claro (C-03).
+        # Fail-Fast: validar campos obligatorios antes de construir el pipeline.
         if not request.symbols:
             raise ValueError(
-                f"PipelineRequest.symbols es obligatorio para pipeline='ohlcv'. "
-                f"Request recibido: {request}"
+                "PipelineRequest.symbols es obligatorio para pipeline='ohlcv'. "
+                f"Request: {request}"
             )
         if not request.timeframes:
             raise ValueError(
-                f"PipelineRequest.timeframes es obligatorio para pipeline='ohlcv'. "
-                f"Request recibido: {request}"
+                "PipelineRequest.timeframes es obligatorio para pipeline='ohlcv'. "
+                f"Request: {request}"
             )
         if not request.start_date:
             raise ValueError(
-                f"PipelineRequest.start_date es obligatorio para pipeline='ohlcv'. "
-                f"Request recibido: {request}"
+                "PipelineRequest.start_date es obligatorio para pipeline='ohlcv'. "
+                f"Request: {request}"
             )
 
-        # Kafka publisher — construido aquí (Composition Root), no en application/
-        kafka_publisher = self._build_kafka_publisher()
-
-        pipeline_kwargs: dict[str, Any] = {
-
-            "exchange_client":    exchange_client,
-            "fetcher":            fetcher,
-            "metrics":            PrometheusPipelineMetrics(),
-            "quality":            quality,
-            "market_type":        request.market_type,
-            "dry_run":            request.dry_run,
-            "symbols":            request.symbols,
-            "timeframes":         request.timeframes,
-            "start_date":         request.start_date,
-            "auto_lookback_days": request.auto_lookback_days or 3650,
-            "_chunk_converter":   chunk_converter,
-            "publisher":          kafka_publisher,
-        }
-
-        return OHLCVPipeline(**pipeline_kwargs)
+        return OHLCVPipeline(
+            symbols            = request.symbols,
+            timeframes         = request.timeframes,
+            start_date         = request.start_date,
+            exchange_client    = cast(ExchangeClientPort, exchange_client),
+            fetcher            = fetcher,
+            metrics            = PrometheusPipelineMetrics(),
+            quality            = quality,
+            cursor_store       = cast(CursorStorePort, cursor),
+            market_type        = request.market_type,
+            dry_run            = request.dry_run,
+            auto_lookback_days = request.auto_lookback_days or 3650,
+        )
 
     def _build_trades(self, request: Any) -> Any:
-        """Cabla TradesPipeline con CCXTAdapter + TradesFetcher + TradesStorage."""
+        """
+        Cabla TradesPipeline con CCXTAdapter + TradesFetcher + TradesStorage.
+
+        DIP — TradesPipeline recibe abstracciones (TradesFetcherPort,
+        TradesStoragePort, ExchangeClientPort). Las implementaciones concretas
+        se construyen aquí y nunca se importan desde application/.
+        """
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.trades_fetcher import TradesFetcher
         from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
         from market_data.application.pipelines.trades_pipeline import TradesPipeline
+        from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
-        adapter_kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
-        }
-        if request.credentials is not None:
-            adapter_kwargs["credentials"] = request.credentials
-        if request.resilience is not None:
-            adapter_kwargs["resilience"] = request.resilience
+        raw_adapter     = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        exchange_client = raw_adapter
 
-        exchange_client = CCXTAdapter(**adapter_kwargs)
+        catalog = _build_catalog()
+        storage = TradesStorage(
+            exchange    = request.exchange,
+            market_type = request.market_type,
+            catalog     = catalog,
+        )
+        fetcher = TradesFetcher(
+            exchange_client = raw_adapter,
+            storage         = storage,
+            market_type     = request.market_type,
+            dry_run         = request.dry_run,
+        )
 
         return TradesPipeline(
             symbols         = request.symbols or [],
-            exchange_client = exchange_client,
-            fetcher         = TradesFetcher(exchange_client=exchange_client),
-            storage         = TradesStorage(exchange=request.exchange),
+            exchange_client = cast(ExchangeClientPort, exchange_client),
+            fetcher         = fetcher,
+            storage         = storage,
             market_type     = request.market_type,
             dry_run         = request.dry_run,
         )
@@ -210,33 +262,12 @@ class ConcretePipelineFactory:
         """
         Ensambla el pipeline de trades Kappa con GapAwareStream.
 
-        Grafo de dependencias:
-          CCXTAdapter
-              ↓
-          WSTradesSource            (stub WS — reemplazar con impl real)
-              ↓
-          GapAwareStream            (resiliencia: timeout + gap recovery)
-              ↑ recovery_factory
-          GapRecoveryFetcher(ccxt)  (source=REST_RECOVERY para gaps)
-              ↓
-          TradesSourceManager       (árbitro: cursor monotónico + dedup)
-
-        Backfill:
-          TradesBackfillFetcher(ccxt) → rest_source del manager
-
-        El consumer downstream lee de TradesSourceManager — nunca conoce
-        ni WSTradesSource ni GapRecoveryFetcher directamente (DIP).
-
-        Fail-Fast
-        ---------
-        - request.symbols obligatorio (al menos un símbolo)
-        - request.exchange obligatorio
-        - gap_threshold_ms configurable via request.gap_threshold_ms (default 30s)
+        Fail-Fast: request.symbols y request.exchange son obligatorios.
         """
         if not request.symbols:
             raise ValueError(
                 "PipelineRequest.symbols es obligatorio para pipeline='trades_stream'. "
-                f"Request recibido: {request}"
+                f"Request: {request}"
             )
         if not getattr(request, "exchange", None):
             raise ValueError(
@@ -247,37 +278,23 @@ class ConcretePipelineFactory:
         from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
         from market_data.adapters.inbound.websocket.gap_aware_stream import GapAwareStream
         from market_data.adapters.inbound.rest.gap_recovery_fetcher import GapRecoveryFetcher
-        from market_data.adapters.inbound.rest.trades_backfill_fetcher import TradesBackfillFetcher
+        from market_data.adapters.inbound.rest.trades_backfill_fetcher import (
+            TradesBackfillFetcher,
+        )
         from market_data.application.source_manager import TradesSourceManager
 
-        adapter_kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
-        }
-        if request.credentials is not None:
-            adapter_kwargs["credentials"] = request.credentials
-        if request.resilience is not None:
-            adapter_kwargs["resilience"] = request.resilience
-
-        exchange_client = CCXTAdapter(**adapter_kwargs)
-
-        # gap_threshold_ms: configurable por símbolo/exchange en el futuro.
-        # Default: 30s — apropiado para mercados líquidos (BTC/USDT perp).
+        exchange_client = CCXTAdapter(**self._resolve_adapter_kwargs(request))
         gap_threshold_ms: int = getattr(request, "gap_threshold_ms", 30_000)
-
-        # Un manager por símbolo — cada símbolo tiene su propio cursor y dedup.
         managers: dict[str, TradesSourceManager] = {}
 
         for symbol in request.symbols:
-            # WS source (stub — reemplazar cuando WSTradesSource tenga impl real)
             ws_source = WSTradesSource(
                 exchange_id = request.exchange,
                 symbol      = symbol,
                 market_type = request.market_type,
             )
 
-            # RecoveryFactory: closure que captura exchange_client y symbol.
-            # Signature: (gap_start_ms: int, gap_end_ms: int) → TradesSourceProtocol
+            # Closure que captura client y symbol — evita late-binding.
             def _make_recovery_factory(sym: str, client: Any):
                 def _factory(gap_start_ms: int, gap_end_ms: int) -> GapRecoveryFetcher:
                     return GapRecoveryFetcher(
@@ -299,8 +316,6 @@ class ConcretePipelineFactory:
                 reconnect        = True,
             )
 
-            # Backfill REST: bootstrap histórico antes de que el WS arranque.
-            # since_ms desde request (None = desde el más antiguo disponible).
             rest_source = TradesBackfillFetcher(
                 exchange_adapter = exchange_client,
                 exchange_id      = request.exchange,
@@ -314,38 +329,77 @@ class ConcretePipelineFactory:
                 ws_source   = gap_stream,
             )
 
-        # Retornar el dict de managers — el caller (Dagster asset, test)
-        # itera sobre ellos por símbolo. Un wrapper de pipeline puede
-        # envolverlos en un PipelineTriggerPort si se necesita.
         return managers
 
     def _build_derivatives(self, request: Any) -> Any:
-        """Cabla DerivativesPipeline con CCXTAdapter + fetchers + DerivativesStorage."""
+        """
+        Cabla DerivativesPipeline con CCXTAdapter + fetchers inyectados.
+
+        DIP — DerivativesPipeline recibe un dict de fetchers (DerivativesFetcherPort).
+        No conoce FundingRateFetcher ni OpenInterestFetcher directamente.
+
+        SafeOps — Si datasets no se especifica, usa todos los soportados (fail-soft).
+        """
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.derivatives_fetcher import (
             FundingRateFetcher,
             OpenInterestFetcher,
         )
-        from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
-        from market_data.application.pipelines.derivatives_pipeline import DerivativesPipeline
+        from market_data.infrastructure.storage.silver.derivatives_storage import (
+            DerivativesStorage,
+        )
+        from market_data.application.pipelines.derivatives_pipeline import (
+            DerivativesPipeline,
+            SUPPORTED_DERIVATIVE_DATASETS,
+        )
+        from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
-        adapter_kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
+        raw_adapter     = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        exchange_client = raw_adapter
+
+        catalog = _build_catalog()
+
+        # Un storage por dataset — DerivativesStorage es SRP: una tabla por dataset.
+        storage_fr = DerivativesStorage(
+            exchange    = request.exchange,
+            dataset     = "funding_rate",
+            market_type = request.market_type,
+            catalog     = catalog,
+        )
+        storage_oi = DerivativesStorage(
+            exchange    = request.exchange,
+            dataset     = "open_interest",
+            market_type = request.market_type,
+            catalog     = catalog,
+        )
+
+        # Fetchers inyectados como dict — clave = nombre del dataset (SSOT).
+        fetchers: dict[str, Any] = {
+            "funding_rate": FundingRateFetcher(
+                exchange_client = raw_adapter,
+                storage         = storage_fr,
+                market_type     = request.market_type,
+                dry_run         = request.dry_run,
+            ),
+            "open_interest": OpenInterestFetcher(
+                exchange_client = raw_adapter,
+                storage         = storage_oi,
+                market_type     = request.market_type,
+                dry_run         = request.dry_run,
+            ),
         }
-        if request.credentials is not None:
-            adapter_kwargs["credentials"] = request.credentials
-        if request.resilience is not None:
-            adapter_kwargs["resilience"] = request.resilience
 
-        exchange_client = CCXTAdapter(**adapter_kwargs)
+        datasets: list[str] = (
+            list(request.datasets)
+            if getattr(request, "datasets", None)
+            else list(SUPPORTED_DERIVATIVE_DATASETS)
+        )
 
         return DerivativesPipeline(
-            symbols               = request.symbols or [],
-            exchange_client       = exchange_client,
-            funding_rate_fetcher  = FundingRateFetcher(exchange_client=exchange_client),
-            open_interest_fetcher = OpenInterestFetcher(exchange_client=exchange_client),
-            storage               = DerivativesStorage(exchange=request.exchange),
-            market_type           = request.market_type,
-            dry_run               = request.dry_run,
+            symbols         = request.symbols or [],
+            datasets        = datasets,
+            exchange_client = cast(ExchangeClientPort, exchange_client),
+            fetchers        = fetchers,
+            market_type     = request.market_type,
+            dry_run         = request.dry_run,
         )

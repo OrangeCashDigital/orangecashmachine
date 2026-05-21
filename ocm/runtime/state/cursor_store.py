@@ -161,7 +161,7 @@ class RedisCursorStore:
 
     def is_healthy(self) -> bool:
         try:
-            return self._client.ping()
+            return bool(self._client.ping())  # type: ignore[return-value]
         except Exception:
             return False
 
@@ -234,7 +234,7 @@ class RedisCursorStore:
         try:
             for batch in _batched(self._scan_iter(pattern), _DELETE_BATCH_SIZE):
                 if batch:
-                    deleted += int(self._client.delete(*batch))
+                    deleted += int(self._client.delete(*batch))  # type: ignore[arg-type]
             if _active_cursors:
                 _active_cursors.labels(exchange=exchange).set(0)
             logger.info("All cursors deleted | exchange={} count={}", exchange, deleted)
@@ -311,7 +311,7 @@ class RedisCursorStore:
         cursor = 0
         while True:
             result = self._client.scan(cursor=cursor, match=pattern, count=_SCAN_COUNT)
-            cursor, keys = result[0], result[1]
+            cursor, keys = result[0], result[1]  # type: ignore[index]
             for k in keys:
                 yield k
             if cursor == 0:

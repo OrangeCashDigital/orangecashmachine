@@ -119,7 +119,7 @@ class InterceptHandler(std_logging.Handler):
             frame.f_code.co_filename == std_logging.__file__
             or frame.f_globals.get("__name__") == __name__
         ):
-            frame = frame.f_back
+            frame = frame.f_back  # type: ignore[assignment]
             depth += 1
 
         logger.opt(depth=depth, exception=record.exc_info).log(
@@ -357,7 +357,7 @@ def _install_sinks(
         }
         loki_sink = LokiSink(url=loki_url, labels=loki_labels)
 
-        def _loki_loguru_sink(message: Any, _sink: LokiSink = loki_sink) -> None:
+        def _loki_loguru_sink(message: Any, _sink: LokiSink = loki_sink) -> None:  # type: ignore[assignment]
             """Bridge Loguru → structlog processor chain → LokiSink.
 
             ``_sink`` capturado por default arg (bind-at-definition) para

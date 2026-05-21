@@ -1,31 +1,29 @@
 # -*- coding: utf-8 -*-
 """
-market_data/ports/exchange.py
-==============================
+market_data/ports/outbound/exchange.py
+=======================================
 
 Puerto abstracto para adapters de exchange.
 
 Responsabilidad
 ---------------
-Declarar el contrato que cualquier implementación de exchange debe cumplir.
-Los pipelines y tasks dependen de esta abstracción — nunca de CCXTAdapter
-directamente (DIP — SOLID).
+Declarar el contrato mínimo que cualquier implementación de exchange debe
+cumplir. Los pipelines y tasks dependen de esta abstracción — nunca de
+CCXTAdapter directamente (DIP · SOLID).
+
+ISP — Interface Segregation Principle
+--------------------------------------
+fetch_order_book NO es abstracto: solo el pipeline de order book lo
+necesita. Declararlo abstracto forzaría a CCXTAdapter (y a todos los mocks)
+a implementar un método que la mayoría de consumidores nunca invoca.
+Adapters que necesiten order book lo sobreescriben; el resto hereda la
+implementación base que lanza NotImplementedError con mensaje claro.
 
 Implementación de referencia
 -----------------------------
 market_data.adapters.outbound.exchange.ccxt_adapter.CCXTAdapter
 
-Principios aplicados
---------------------
-DIP   — consumidores importan desde ports/, nunca desde adapters/
-OCP   — agregar un nuevo exchange no modifica este contrato
-KISS  — interfaz mínima; solo lo que los pipelines realmente necesitan
-SafeOps — close() NUNCA debe lanzar excepción en ninguna implementación
-
-Context manager
----------------
-__aenter__ / __aexit__ implementados en la base en términos de connect/close.
-Las subclases no necesitan sobreescribirlos.
+Principios: DIP · OCP · ISP · KISS · SafeOps
 """
 from __future__ import annotations
 
@@ -37,26 +35,26 @@ class ExchangeAdapter(ABC):
     """
     Interfaz abstracta para cualquier exchange (ccxt, mock, sandbox).
 
-    Todas las subclases deben implementar los métodos @abstractmethod.
-    Python lanzará TypeError en instanciación si alguno falta — Fail-Fast
-    en construcción, no en runtime al llamar el método (SOLID — LSP).
+    Subclases deben implementar los métodos @abstractmethod.
+    Python lanza TypeError en instanciación si alguno falta — Fail-Fast
+    en construcción, no en runtime (SOLID · LSP).
 
     SafeOps
     -------
     close() NUNCA debe lanzar excepción en ninguna implementación.
-    Las subclases deben capturar todos los errores internamente en close().
+    Las subclases capturan todos los errores internamente en close().
     """
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    # Lifecycle                                                            #
+    # ------------------------------------------------------------------ #
 
     @abstractmethod
     async def connect(self) -> None:
         """
         Inicializa la conexión al exchange.
 
-        Idempotente: llamar dos veces no debe causar error ni doble conexión.
+        Idempotente: llamar dos veces no causa error ni doble conexión.
         """
 
     @abstractmethod
@@ -65,25 +63,24 @@ class ExchangeAdapter(ABC):
         Cierra la conexión y libera recursos.
 
         Idempotente. NUNCA lanza excepción — capturar todos los errores
-        internamente. El caller no debe necesitar try/except alrededor de close().
+        internamente. El caller no necesita try/except alrededor de close().
         """
 
     @abstractmethod
     async def is_healthy(self) -> bool:
-        """Retorna True si la conexión está activa y puede recibir requests."""
+        """True si la conexión está activa y puede recibir requests."""
 
     @abstractmethod
     async def reconnect(self) -> None:
         """
         Fuerza reconexión cerrando el cliente actual y creando uno nuevo.
 
-        Llamado por el fetcher cuando detecta sesión muerta (aiohttp
-        "Session is closed" / "Event loop is closed").
+        Llamado por el fetcher cuando detecta sesión muerta.
         """
 
-    # ------------------------------------------------------------------
-    # Market data
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    # Market data — contrato obligatorio                                   #
+    # ------------------------------------------------------------------ #
 
     @abstractmethod
     async def load_markets(self) -> Dict[str, Any]:
@@ -91,16 +88,11 @@ class ExchangeAdapter(ABC):
         Carga y retorna el mapa de mercados del exchange.
 
         El resultado se cachea internamente por el adapter.
-        La primera llamada establece el universo de símbolos disponibles.
         """
 
     @abstractmethod
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
-        """
-        Retorna el ticker actual para el símbolo dado.
-
-        Usado por validate_exchange_connection para medir latencia y spread.
-        """
+        """Retorna el ticker actual para el símbolo dado."""
 
     @abstractmethod
     async def fetch_ohlcv(
@@ -113,14 +105,6 @@ class ExchangeAdapter(ABC):
     ) -> List[List[Any]]:
         """
         Retorna datos OHLCV crudos para el símbolo y timeframe dados.
-
-        Parameters
-        ----------
-        symbol      : Par de trading, e.g. "BTC/USDT".
-        timeframe   : Intervalo, e.g. "1m", "1h".
-        since       : Timestamp Unix en ms (inicio del rango). None = más reciente.
-        limit       : Máximo de velas a retornar.
-        market_type : Tipo de mercado override ("spot", "swap"). None = default.
 
         Returns
         -------
@@ -138,14 +122,13 @@ class ExchangeAdapter(ABC):
         """
         Retorna trades recientes para el símbolo dado.
 
-        Usado por TradesPipeline — dominio distinto a OHLCV.
+        Usado por TradesPipeline.
         """
 
-    # ------------------------------------------------------------------
-    # Context manager — implementado en base, no sobreescribir
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    # Market data — contrato opcional (ISP)                               #
+    # ------------------------------------------------------------------ #
 
-    @abstractmethod
     async def fetch_order_book(
         self,
         symbol:      str,
@@ -155,33 +138,38 @@ class ExchangeAdapter(ABC):
         """
         Retorna snapshot L2 del order book para el símbolo dado.
 
-        Usado por OrderBookSnapshotAdapter para obtener el estado inicial
-        del libro antes de conectar el stream WebSocket (bootstrap snapshot).
+        Implementación base: lanza NotImplementedError con mensaje claro.
+        Solo los adapters que soporten order book (CCXTAdapter, mocks L2)
+        deben sobreescribir este método.
+
+        ISP — No abstracto: la mayoría de pipelines no necesitan order book.
+        Forzar implementación en todos los adapters violaría ISP y
+        contaminaría los mocks de tests con lógica irrelevante.
 
         Parameters
         ----------
         symbol      : Par de trading, e.g. "BTC/USDT".
-        depth       : Número de niveles L2 a solicitar (0 = máximo del exchange).
-        market_type : Tipo de mercado override ("spot", "swap"). None = default.
+        depth       : Niveles L2 a solicitar (0 = máximo del exchange).
+        market_type : Override de tipo de mercado. None = default del adapter.
 
         Returns
         -------
-        dict
-            Formato CCXT crudo:
-            {
-                "bids": [[price, qty], ...],   # ordenados DESC por precio
-                "asks": [[price, qty], ...],   # ordenados ASC  por precio
-                "timestamp": int | None,       # Unix ms UTC (None si exchange no lo reporta)
-                "datetime":  str | None,
-                "nonce":     int | None,
-            }
+        dict CCXT crudo: {"bids": [...], "asks": [...], "timestamp": int|None, ...}
 
         Nota para implementadores
         -------------------------
-        Si el exchange no reporta timestamp, el adapter debe usar
-        ``int(time.time() * 1000)`` como fallback (SafeOps).
-        NUNCA retornar None — retornar dict con bids/asks vacíos si falla.
+        Si el exchange no reporta timestamp, usar int(time.time() * 1000)
+        como fallback (SafeOps). NUNCA retornar None.
         """
+        raise NotImplementedError(
+            f"{type(self).__name__} no implementa fetch_order_book. "
+            "Solo los adapters con soporte L2 deben implementar este método. "
+            "Si tu pipeline necesita order book, usa un adapter que lo soporte."
+        )
+
+    # ------------------------------------------------------------------ #
+    # Context manager — implementado en base, no sobreescribir            #
+    # ------------------------------------------------------------------ #
 
     async def __aenter__(self) -> "ExchangeAdapter":
         await self.connect()
