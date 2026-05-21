@@ -51,6 +51,7 @@ Exports públicos
 import hashlib
 import json
 import logging as std_logging
+import types
 import os
 import sys
 from pathlib import Path
@@ -114,12 +115,13 @@ class InterceptHandler(std_logging.Handler):
         except ValueError:
             level = str(record.levelno)
 
-        frame, depth = std_logging.currentframe(), 2
+        frame: types.FrameType | None = std_logging.currentframe()
+        depth = 2
         while frame and (
             frame.f_code.co_filename == std_logging.__file__
             or frame.f_globals.get("__name__") == __name__
         ):
-            frame = frame.f_back  # type: ignore[assignment]
+            frame = frame.f_back
             depth += 1
 
         logger.opt(depth=depth, exception=record.exc_info).log(
@@ -355,16 +357,22 @@ def _install_sinks(
             "service": "orangecashmachine",
             **resolved.get("loki_labels", {}),
         }
-        loki_sink = LokiSink(url=loki_url, labels=loki_labels)
+        # _bound_sink: captura explícita con tipo narrowed (LokiSink, no LokiSink|None).
+        # Dentro de "if loki_url:" la construcción siempre tiene éxito — el tipo
+        # está narrowed por el bloque condicional. La closure cierra sobre
+        # _bound_sink directamente; más legible que el default-arg trick.
+        _bound_sink: LokiSink = LokiSink(url=loki_url, labels=loki_labels)
 
-        def _loki_loguru_sink(message: Any, _sink: LokiSink = loki_sink) -> None:  # type: ignore[assignment]
+        def _loki_loguru_sink(message: Any) -> None:
             """Bridge Loguru → structlog processor chain → LokiSink.
 
-            ``_sink`` capturado por default arg (bind-at-definition) para
-            evitar referencia forward sobre variable local del scope exterior.
+            Cierra sobre ``_bound_sink`` definido en el scope inmediato superior.
+            Binding garantizado: esta función sólo se define cuando loki_url
+            está presente y LokiSink fue construido sin error.
             ``_LokiMessage`` es de nivel de módulo: cero allocaciones extra
             por evento.
             """
+            _sink = _bound_sink
             record     = message.record
             event_dict: dict[str, Any] = {
                 "event":   record["message"],

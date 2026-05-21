@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig
@@ -230,13 +230,13 @@ class ConfigPipeline:
           - throw_on_missing=True: fail-fast si algún ${oc.env:VAR} no está seteado
         """
         try:
-            raw_dict = cast(dict, OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
+            raw_dict: dict[str, Any] = cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
             strip_hydra_internals(raw_dict)   # muta in-place — no reasignar
             coerce_scalar_values(raw_dict)    # muta in-place — str→bool/None (SSOT: coercion.py); int/float → Pydantic L4
             # normalize_empty_strings eliminada — absorbida por coerce_scalar_values() (DRY/SSOT)
-            logger.debug("config_pipeline_l3 | coerce=ok keys={}", list(raw_dict.keys()))  # type: ignore[union-attr]
+            logger.debug("config_pipeline_l3 | coerce=ok keys={}", list(raw_dict.keys()))
             self._record(ConfigStage.COERCED, ConfigStage.VALIDATED)
-            return raw_dict  # type: ignore[return-value]
+            return raw_dict
         except Exception as exc:
             raise ConfigPipelineError(
                 ConfigStage.COERCED,

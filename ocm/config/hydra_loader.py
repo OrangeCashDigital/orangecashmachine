@@ -345,8 +345,17 @@ def load_appconfig_standalone(
         "load_appconfig_standalone | env={} config_dir={} snapshot={}",
         _env, _dir, _snapshot,
     )
+    # Invariante de dominio: todos los YAMLs de OCM son mapas, nunca listas.
+    # OmegaConf.merge() tiene firma -> DictConfig | ListConfig en sus stubs,
+    # pero load_appconfig_standalone sólo opera sobre config trees de mapa.
+    # El assert documenta el contrato y proporciona type narrowing para mypy.
+    assert isinstance(cfg, DictConfig), (
+        f"load_appconfig_standalone: cfg debe ser DictConfig, "
+        f"got {type(cfg).__name__!r}. "
+        "Verificar que todos los YAMLs en config_dir son mappings, no listas."
+    )
     return load_appconfig_from_hydra(
-        cfg,  # type: ignore[arg-type]
+        cfg,
         env=_env,
         run_id=run_id,
         write_snapshot=_snapshot,
