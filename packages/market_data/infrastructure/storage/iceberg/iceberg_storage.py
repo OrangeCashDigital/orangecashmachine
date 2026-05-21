@@ -145,12 +145,12 @@ class IcebergStorage:
         market_type = self._market_type or "unknown"
         return And(
             And(
-                EqualTo(term="exchange", literal=exchange),  # type: ignore[call-arg,arg-type]
-                EqualTo(term="symbol", literal=symbol),  # type: ignore[call-arg,arg-type]
+                EqualTo(term="exchange", literal=exchange),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs: term/literal no declarados como kwargs
+                EqualTo(term="symbol", literal=symbol),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs: term/literal no declarados como kwargs
             ),
             And(
-                EqualTo(term="timeframe", literal=timeframe),  # type: ignore[call-arg,arg-type]
-                EqualTo(term="market_type", literal=market_type),  # type: ignore[call-arg,arg-type]
+                EqualTo(term="timeframe", literal=timeframe),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs
+                EqualTo(term="market_type", literal=market_type),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs
             ),
         )
 

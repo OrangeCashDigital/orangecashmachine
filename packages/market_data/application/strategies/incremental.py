@@ -83,7 +83,7 @@ class IncrementalStrategy(StrategyMixin):
 
         # ── Kappa router — dominio preservado hasta el publisher ─────────────
         if ctx.publisher is not None:
-            converter: OHLCVChunkConverterPort = ctx._chunk_converter  # type: ignore[attr-defined, assignment]
+            converter = ctx.get_chunk_converter()  # fail-fast si no inyectado
             chunk = converter.to_chunk(
                 df        = qres.df,
                 exchange  = ctx.exchange_id,

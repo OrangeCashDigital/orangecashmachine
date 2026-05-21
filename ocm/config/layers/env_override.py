@@ -129,7 +129,14 @@ def apply_env_overrides(
 
     logger.info("config_l2_env_override | ocm_overrides_applied={}", mutation_count)
 
-    return merged, mutation_count  # type: ignore[return-value]
+    # Invariante: apply_env_overrides opera siempre sobre DictConfig de mapa.
+    # OmegaConf.merge() tiene firma -> DictConfig | ListConfig en sus stubs.
+    assert isinstance(merged, DictConfig), (
+        f"apply_env_overrides: merged debe ser DictConfig, "
+        f"got {type(merged).__name__!r}. "
+        "Verificar que cfg y override_cfg son mappings, no listas."
+    )
+    return merged, mutation_count
 
 
 def _coerce_value(value: str) -> bool | str:

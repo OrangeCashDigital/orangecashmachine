@@ -37,6 +37,7 @@ Principios: SRP · optional dependency · zero overhead sin Prometheus
 from __future__ import annotations
 
 import time
+from typing import Protocol, runtime_checkable
 
 try:
     from prometheus_client import Counter, Histogram
@@ -48,6 +49,20 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # No-op fallbacks — misma interfaz, cero overhead
 # ---------------------------------------------------------------------------
+
+@runtime_checkable
+class _CounterProtocol(Protocol):
+    """Interfaz minima compartida entre prometheus_client.Counter y _NoOpCounter."""
+    def labels(self, **kwargs: str) -> "_CounterProtocol": ...
+    def inc(self, amount: float = 1) -> None: ...
+
+
+@runtime_checkable
+class _HistogramProtocol(Protocol):
+    """Interfaz minima compartida entre prometheus_client.Histogram y _NoOpHistogram."""
+    def labels(self, **kwargs: str) -> "_HistogramProtocol": ...
+    def observe(self, amount: float) -> None: ...
+
 
 class _NoOpCounter:
     def labels(self, **_): return self
@@ -63,11 +78,11 @@ class _NoOpHistogram:
 # Registro global — una sola instancia por proceso
 # ---------------------------------------------------------------------------
 
-def _make_counter(name: str, doc: str, labels: list) -> "_NoOpCounter | Counter":
+def _make_counter(name: str, doc: str, labels: list) -> "_CounterProtocol":
     return Counter(name, doc, labels) if _PROMETHEUS_AVAILABLE else _NoOpCounter()
 
 
-def _make_histogram(name: str, doc: str, labels: list, buckets: list) -> "_NoOpHistogram | Histogram":
+def _make_histogram(name: str, doc: str, labels: list, buckets: list) -> "_HistogramProtocol":
     return (
         Histogram(name, doc, labels, buckets=buckets)
         if _PROMETHEUS_AVAILABLE
@@ -123,7 +138,7 @@ class KafkaMetrics:
 
     def event_published(self, exchange: str = "unknown") -> None:
         """Incrementa el contador de mensajes publicados."""
-        _events_published.labels(topic=self._topic, exchange=exchange).inc()  # type: ignore[attr-defined]
+        _events_published.labels(topic=self._topic, exchange=exchange).inc()
 
     def event_processed(
         self,
@@ -131,8 +146,8 @@ class KafkaMetrics:
         latency_ms: float = 0.0,
     ) -> None:
         """Registra un mensaje procesado con commit y su latencia."""
-        _events_processed.labels(topic=self._topic, exchange=exchange).inc()  # type: ignore[attr-defined]
-        _processing_latency.labels(topic=self._topic, exchange=exchange).observe(latency_ms)  # type: ignore[attr-defined]
+        _events_processed.labels(topic=self._topic, exchange=exchange).inc()
+        _processing_latency.labels(topic=self._topic, exchange=exchange).observe(latency_ms)
 
     def event_failed(
         self,
@@ -144,7 +159,7 @@ class KafkaMetrics:
 
         reason: deserialize_error | schema_mismatch | write_error | dlq_sent
         """
-        _events_failed.labels(  # type: ignore[attr-defined]
+        _events_failed.labels(
             topic    = self._topic,
             exchange = exchange,
             reason   = reason,

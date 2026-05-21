@@ -130,6 +130,15 @@ class KafkaConsumerPort(Protocol):
         """
         ...
 
+    async def start(self) -> None:
+        """
+        Inicializa la conexion al broker y arranca el consumer group.
+
+        Llamar una vez antes del primer poll().
+        Idempotente si ya esta iniciado.
+        """
+        ...
+
     async def seek_to_beginning(self) -> None:
         """
         Reposiciona el consumer al inicio de todas las particiones asignadas.

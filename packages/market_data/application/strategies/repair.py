@@ -69,7 +69,7 @@ class RepairStrategy(StrategyMixin):
     def __init__(
         self,
         gap_tolerance: int = 0,
-        metrics: "RepairMetricsPort" = None,  # type: ignore[assignment]
+        metrics: "RepairMetricsPort | None" = None,
     ) -> None:
         # Fail-fast: metrics es obligatorio — inyectar desde composition root.
         # RepairStrategy no puede importar infrastructure/ (DIP — BC-05).

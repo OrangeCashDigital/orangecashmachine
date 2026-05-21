@@ -71,7 +71,7 @@ def _fetcher_metrics():
     }
 
 
-_m = _fetcher_metrics()  # type: ignore[unused-variable]
+_metrics_registry = _fetcher_metrics()  # módulo-level: registra métricas al importar
 MAX_CHUNKS_PER_RUN    = 100_000
 DEFAULT_OVERLAP_BARS  = 3
 
@@ -186,6 +186,7 @@ class _LazyCalibrationStore:
     def __init__(self) -> None:
         self._store: "LatenessCalibrationStore | None" = None
         self._initialized = False
+        self._log = logger.bind(component="lateness_calibration")
 
     def _get(self, exchange: str, timeframe: str) -> "int | None":
         try:
@@ -281,7 +282,11 @@ class HistoricalFetcherAsync:
             )
         self._transformer       = transformer
         self._overlap           = overlap_bars
-        self._cursor: CursorStore = cursor_store or InMemoryCursorStore()
+        # InMemoryCursorStore implementa AsyncCursorStorePort estructuralmente
+        # (async def get/update) — usado como fallback en tests y sin-Redis.
+        self._cursor: CursorStore = (
+            cursor_store if cursor_store is not None else InMemoryCursorStore()
+        )
         self._backfill_mode     = backfill_mode
         self._market_type       = market_type
         self._config_start_date  = config_start_date

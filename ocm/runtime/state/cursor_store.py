@@ -138,7 +138,7 @@ class RedisCursorStore:
             retry_on_timeout=True,
             decode_responses=True,
         )
-        self._client     = redis.Redis(connection_pool=pool)
+        self._client = redis.Redis(connection_pool=pool)  # stubs no genericos en esta version
         self._cas_script = self._client.register_script(_CAS_SCRIPT)
         logger.debug(
             "CursorStore v5 ready | host={}:{} db={} env={} ttl_days={}",
@@ -161,7 +161,8 @@ class RedisCursorStore:
 
     def is_healthy(self) -> bool:
         try:
-            return bool(self._client.ping())  # type: ignore[return-value]
+            result = self._client.ping()
+            return bool(result)
         except Exception:
             return False
 
@@ -234,7 +235,8 @@ class RedisCursorStore:
         try:
             for batch in _batched(self._scan_iter(pattern), _DELETE_BATCH_SIZE):
                 if batch:
-                    deleted += int(self._client.delete(*batch))  # type: ignore[arg-type]
+                    n = self._client.delete(*batch)
+                    deleted += int(n) if not hasattr(n, '__await__') else 0  # type: ignore[arg-type]  # redis-py stubs: delete() -> int en cliente sync
             if _active_cursors:
                 _active_cursors.labels(exchange=exchange).set(0)
             logger.info("All cursors deleted | exchange={} count={}", exchange, deleted)
@@ -310,8 +312,8 @@ class RedisCursorStore:
     def _scan_iter(self, pattern: str) -> Iterator[str]:
         cursor = 0
         while True:
-            result = self._client.scan(cursor=cursor, match=pattern, count=_SCAN_COUNT)
-            cursor, keys = result[0], result[1]  # type: ignore[index]
+            _scan_result = self._client.scan(cursor=cursor, match=pattern, count=_SCAN_COUNT)
+            cursor, keys = int(_scan_result[0]), list(_scan_result[1])  # type: ignore[index]  # redis-py stubs: scan() -> tuple[int, list[str]]
             for k in keys:
                 yield k
             if cursor == 0:

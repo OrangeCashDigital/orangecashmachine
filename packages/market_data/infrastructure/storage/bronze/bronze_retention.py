@@ -140,7 +140,7 @@ def run_retention(
     expired = 0
     try:
         (
-            table.expire_snapshots()  # type: ignore[attr-defined]
+            table.expire_snapshots()  # type: ignore[attr-defined]  # pyiceberg stubs: expire_snapshots() ausente hasta pyiceberg 0.7+
             .expire_older_than(effective)
             .commit()
         )

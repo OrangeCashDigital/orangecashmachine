@@ -65,3 +65,18 @@ class PipelineContext:
     start_date:         Optional[Any]             = None
     auto_lookback_days: int                       = 30
     _chunk_converter:   Optional[OHLCVChunkConverterPort] = None
+
+    def get_chunk_converter(self) -> OHLCVChunkConverterPort:
+        """
+        Acceso tipado al converter DataFrame->OHLCVChunk.
+
+        Fail-fast: lanza si _chunk_converter no fue inyectado.
+        El pipeline Kappa debe inyectarlo antes de procesar eventos.
+        """
+        if self._chunk_converter is None:
+            raise RuntimeError(
+                "PipelineContext.chunk_converter no inyectado. "
+                "Verificar pipeline_factory._build_ohlcv — debe setear "
+                "_chunk_converter antes de pasar el contexto a las strategies."
+            )
+        return self._chunk_converter
