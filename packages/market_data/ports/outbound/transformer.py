@@ -18,6 +18,13 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class OHLCVTransformerPort(Protocol):
-    """Contrato de transformación de candles crudas a DataFrame Silver."""
+    """Contrato de transformación DataFrame OHLCV crudo → DataFrame Silver."""
 
-    def transform(self, raw_candles: list, **kwargs: object) -> "pd.DataFrame": ...
+    def transform(
+        self,
+        df:        "pd.DataFrame",
+        symbol:    str = "unknown",
+        timeframe: str = "unknown",
+        exchange:  str = "unknown",
+        run_id:    str | None = None,
+    ) -> "pd.DataFrame": ...
