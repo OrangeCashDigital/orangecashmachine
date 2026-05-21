@@ -51,10 +51,6 @@ from market_data.domain.value_objects.ohlcv_chunk import (  # noqa: F401
     OHLCVSource,
 )
 
-# ---------------------------------------------------------------------------
-# RawCandle — tipo alias para wire format CCXT crudo (ACL boundary)
-# ---------------------------------------------------------------------------
-RawCandle = Tuple[int, float, float, float, float, float]
 
 # ---------------------------------------------------------------------------
 # QualityLabel — SSOT en quality_label.py
@@ -83,6 +79,11 @@ from market_data.domain.value_objects.order_book import (  # noqa: F401
     OrderBookSnapshot,
     OrderBookDelta,
 )
+
+# ---------------------------------------------------------------------------
+# RawCandle — tipo alias para wire format CCXT crudo (ACL boundary)
+# ---------------------------------------------------------------------------
+RawCandle = Tuple[int, float, float, float, float, float]
 
 # ---------------------------------------------------------------------------
 # __all__ — catálogo público explícito (PEP 8)
