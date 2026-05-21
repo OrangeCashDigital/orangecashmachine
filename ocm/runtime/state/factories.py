@@ -213,7 +213,7 @@ def build_stream_publisher(
 
 
 def build_stream_source(
-    router: "EventRouter",  # noqa: F821
+    router: object,
     stream_name: str = "ohlcv",
     consumer_name: str = "worker-1",
     env: Optional[str] = None,
