@@ -17,11 +17,12 @@ SafeOps Ready 🚀
 
 from __future__ import annotations
 
+from loguru import logger
 import asyncio
 import math
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional
+from typing import cast, TYPE_CHECKING, List, Optional
 if TYPE_CHECKING:
     from market_data.ports.outbound.transformer import OHLCVTransformerPort
 
@@ -282,11 +283,14 @@ class HistoricalFetcherAsync:
             )
         self._transformer       = transformer
         self._overlap           = overlap_bars
-        # InMemoryCursorStore implementa AsyncCursorStorePort estructuralmente
-        # (async def get/update) — usado como fallback en tests y sin-Redis.
-        self._cursor: CursorStore = (
-            cursor_store if cursor_store is not None else InMemoryCursorStore()
-        )
+                # InMemoryCursorStore satisface AsyncCursorStorePort estructuralmente
+        # (async get/update + sync get_raw/set_raw). Cast explícito documenta
+        # la intención y evita dependencia circular market_data → ocm.runtime.
+        # if/else: mypy estrecha el tipo por rama — evita inferencia Union.
+        if cursor_store is not None:
+            self._cursor: CursorStore = cursor_store
+        else:
+            self._cursor = cast(CursorStore, InMemoryCursorStore())
         self._backfill_mode     = backfill_mode
         self._market_type       = market_type
         self._config_start_date  = config_start_date

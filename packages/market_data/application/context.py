@@ -66,6 +66,39 @@ class PipelineContext:
     auto_lookback_days: int                       = 30
     _chunk_converter:   Optional[OHLCVChunkConverterPort] = None
 
+    # ── Invariantes de construcción ──────────────────────────────────────────
+
+    def __post_init__(self) -> None:
+        """
+        Validación fail-fast de dependencias requeridas.
+
+        Detecta inyección incompleta en construction-time, no en primer uso.
+        Principio: fail-fast donde importa (SOLID — ISP + DIP).
+
+        fetcher y bronze se declaran como Any para evitar circular import
+        en runtime; __post_init__ compensa la pérdida de static safety
+        con una guarda explícita de runtime.
+        """
+        if self.fetcher is None:
+            raise TypeError(
+                "PipelineContext.fetcher es requerido. "
+                "pipeline_factory debe inyectar el fetcher antes de construir el contexto."
+            )
+        if self.bronze is None:
+            raise TypeError(
+                "PipelineContext.bronze es requerido. "
+                "pipeline_factory debe inyectar BronzeStorage antes de construir el contexto."
+            )
+        if self.storage is None:
+            raise TypeError("PipelineContext.storage es requerido.")
+        if self.cursor_store is None:
+            raise TypeError(
+                "PipelineContext.cursor_store es requerido. "
+                "Usar InMemoryCursorStore() como fallback mínimo si no hay Redis."
+            )
+
+    # ── Accesores tipados ─────────────────────────────────────────────────────
+
     def get_chunk_converter(self) -> OHLCVChunkConverterPort:
         """
         Acceso tipado al converter DataFrame->OHLCVChunk.
