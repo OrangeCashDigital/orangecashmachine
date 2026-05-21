@@ -28,6 +28,7 @@ incluso bajo carga concurrente (Dagster workers, asyncio tasks).
 
 Ref: https://py.iceberg.apache.org/configuration/#sql-catalog
 """
+
 from __future__ import annotations
 
 import threading
@@ -39,7 +40,7 @@ from pyiceberg.catalog.sql import SqlCatalog
 from ocm.config.paths import data_lake_root
 
 _CATALOG: Optional[SqlCatalog] = None
-_LOCK:    threading.Lock        = threading.Lock()
+_LOCK: threading.Lock = threading.Lock()
 
 
 def get_catalog() -> SqlCatalog:
@@ -68,9 +69,9 @@ def get_catalog() -> SqlCatalog:
 
         # SSOT: data_lake_root() resuelve en orden:
         #   OCM_STORAGE__DATA_LAKE__PATH → OCM_DATA_LAKE_PATH (deprecated) → YAML → fallback
-        lake     = data_lake_root()
-        base     = lake.parent          # data_platform/ (o el parent del lake path)
-        cat_path  = base / "iceberg_catalog"
+        lake = data_lake_root()
+        base = lake.parent  # data_platform/ (o el parent del lake path)
+        cat_path = base / "iceberg_catalog"
         ware_path = base / "iceberg_warehouse"
 
         cat_path.mkdir(parents=True, exist_ok=True)
@@ -79,7 +80,7 @@ def get_catalog() -> SqlCatalog:
         _CATALOG = SqlCatalog(
             "ocm",
             **{
-                "uri":       f"sqlite:///{cat_path}/catalog.db",
+                "uri": f"sqlite:///{cat_path}/catalog.db",
                 "warehouse": str(ware_path.absolute()),
             },
         )

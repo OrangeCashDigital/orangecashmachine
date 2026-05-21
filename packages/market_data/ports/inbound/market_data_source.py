@@ -7,6 +7,7 @@ Orchestrators and consumers depend ONLY on these abstractions —
 never on concrete adapter classes.  Structural subtyping via
 runtime_checkable Protocol: adapters need not inherit, only conform.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine

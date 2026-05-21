@@ -35,6 +35,7 @@ DRY    — _insert() centraliza toda escritura
 SafeOps — fallos en lineage: loguear, nunca propagar al pipeline
 SSOT   — tracker singleton a nivel de módulo, injectable para tests
 """
+
 from __future__ import annotations
 
 import json
@@ -90,6 +91,7 @@ VALUES
 # LineageTracker — repositorio
 # ===========================================================================
 
+
 class LineageTracker:
     """
     Repositorio append-only de eventos de lineage.
@@ -142,18 +144,23 @@ class LineageTracker:
         try:
             self._insert(event)
             logger.debug(
-                "Lineage | run={} layer={} {}/{} exchange={} "
-                "rows={}/{} loss={:.1%} status={}",
-                event.run_id[:8], event.layer.value,
-                event.symbol, event.timeframe, event.exchange,
-                event.rows_out, event.rows_in,
-                event.loss_rate, event.status.value,
+                "Lineage | run={} layer={} {}/{} exchange={} rows={}/{} loss={:.1%} status={}",
+                event.run_id[:8],
+                event.layer.value,
+                event.symbol,
+                event.timeframe,
+                event.exchange,
+                event.rows_out,
+                event.rows_in,
+                event.loss_rate,
+                event.status.value,
             )
         except Exception as exc:
             logger.warning(
-                "LineageTracker.record() failed (non-critical) | "
-                "run={} layer={} err={}",
-                event.run_id[:8], event.layer, exc,
+                "LineageTracker.record() failed (non-critical) | run={} layer={} err={}",
+                event.run_id[:8],
+                event.layer,
+                exc,
             )
 
     def get_run(self, run_id: str) -> List[LineageEvent]:
@@ -174,16 +181,17 @@ class LineageTracker:
         except Exception as exc:
             logger.warning(
                 "LineageTracker.get_run() failed | run={} err={}",
-                run_id[:8], exc,
+                run_id[:8],
+                exc,
             )
             return []
 
     def get_symbol_history(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        limit:     int = 100,
+        limit: int = 100,
     ) -> List[LineageEvent]:
         """
         Historial de procesamiento de un par/timeframe.
@@ -203,7 +211,8 @@ class LineageTracker:
             return [self._row_to_event(r) for r in rows]
         except Exception as exc:
             logger.warning(
-                "LineageTracker.get_symbol_history() failed | err={}", exc,
+                "LineageTracker.get_symbol_history() failed | err={}",
+                exc,
             )
             return []
 
@@ -211,34 +220,37 @@ class LineageTracker:
 
     def _insert(self, event: LineageEvent) -> None:
         with self._connect() as conn:
-            conn.execute(_INSERT, (
-                event.run_id,
-                event.layer.value,
-                event.exchange,
-                event.symbol,
-                event.timeframe,
-                event.rows_in,
-                event.rows_out,
-                event.status.value,
-                event.quality_score,
-                json.dumps(event.params),
-                event.ts,
-            ))
+            conn.execute(
+                _INSERT,
+                (
+                    event.run_id,
+                    event.layer.value,
+                    event.exchange,
+                    event.symbol,
+                    event.timeframe,
+                    event.rows_in,
+                    event.rows_out,
+                    event.status.value,
+                    event.quality_score,
+                    json.dumps(event.params),
+                    event.ts,
+                ),
+            )
 
     @staticmethod
     def _row_to_event(row: tuple) -> LineageEvent:
         return LineageEvent(
-            run_id        = row[0],
-            layer         = PipelineLayer(row[1]),
-            exchange      = row[2],
-            symbol        = row[3],
-            timeframe     = row[4],
-            rows_in       = row[5],
-            rows_out      = row[6],
-            status        = LineageStatus(row[7]),
-            quality_score = row[8],
-            params        = json.loads(row[9]) if row[9] else {},
-            ts            = row[10],
+            run_id=row[0],
+            layer=PipelineLayer(row[1]),
+            exchange=row[2],
+            symbol=row[3],
+            timeframe=row[4],
+            rows_in=row[5],
+            rows_out=row[6],
+            status=LineageStatus(row[7]),
+            quality_score=row[8],
+            params=json.loads(row[9]) if row[9] else {},
+            ts=row[10],
         )
 
 

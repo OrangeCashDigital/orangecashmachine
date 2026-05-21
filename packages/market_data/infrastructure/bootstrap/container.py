@@ -37,6 +37,7 @@ Uso (Dagster resource)
 
 Principios: SRP · DIP · SSOT · KISS · Fail-Fast en construcción.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
 # =============================================================================
 # Helpers de construcción — privados al módulo
 # =============================================================================
+
 
 def _build_redis_client(cfg: "AppConfig") -> Optional[object]:
     """
@@ -67,13 +69,13 @@ def _build_redis_client(cfg: "AppConfig") -> Optional[object]:
             return None
 
         client = redis.Redis(
-            host             = redis_cfg.host,
-            port             = redis_cfg.port,
-            db               = getattr(redis_cfg, "db", 0),
-            password         = getattr(redis_cfg, "password", None),
-            socket_connect_timeout = Timeouts.REDIS_CONNECT_S,
-            socket_timeout         = Timeouts.REDIS_OPERATION_S,
-            decode_responses       = True,
+            host=redis_cfg.host,
+            port=redis_cfg.port,
+            db=getattr(redis_cfg, "db", 0),
+            password=getattr(redis_cfg, "password", None),
+            socket_connect_timeout=Timeouts.REDIS_CONNECT_S,
+            socket_timeout=Timeouts.REDIS_OPERATION_S,
+            decode_responses=True,
         )
         # Ping de verificación — Fail-Fast si Redis está caído en inicio
         client.ping()
@@ -83,34 +85,35 @@ def _build_redis_client(cfg: "AppConfig") -> Optional[object]:
         logger.warning("Container: redis-py no instalado — CursorStore en memoria")
         return None
     except Exception:
-        logger.opt(exception=True).warning(
-            "Container: Redis no disponible — CursorStore en memoria (Fail-Soft)"
-        )
+        logger.opt(exception=True).warning("Container: Redis no disponible — CursorStore en memoria (Fail-Soft)")
         return None
 
 
 def _build_cursor_store(
     redis_client: Optional[object],
-    exchange:     str,
-    market_type:  str,
+    exchange: str,
+    market_type: str,
 ) -> object:
     """Construye CursorStore con backend Redis o memoria."""
     from infrastructure.storage.iceberg.cursor_store import CursorStore
+
     return CursorStore(
-        exchange     = exchange,
-        market_type  = market_type,
-        redis_client = redis_client,
+        exchange=exchange,
+        market_type=market_type,
+        redis_client=redis_client,
     )
 
 
 def _build_snapshot_manager(exchange: str, market_type: str) -> object:
     from infrastructure.storage.iceberg.snapshot_manager import SnapshotManager
+
     return SnapshotManager(exchange=exchange, market_type=market_type)
 
 
 # =============================================================================
 # OCMContainer — Composition Root
 # =============================================================================
+
 
 @dataclass
 class OCMContainer:
@@ -131,22 +134,18 @@ class OCMContainer:
     _app_cfg       : configuración completa de la aplicación.
     """
 
-    orchestrator:  object = field(init=False)
-    resample_uc:   object = field(init=False)
+    orchestrator: object = field(init=False)
+    resample_uc: object = field(init=False)
 
-    _app_cfg:      Optional["AppConfig"] = field(default=None, repr=False)
-    _redis_client: Optional[object]      = field(default=None, repr=False, init=False)
+    _app_cfg: Optional["AppConfig"] = field(default=None, repr=False)
+    _redis_client: Optional[object] = field(default=None, repr=False, init=False)
 
     def __post_init__(self) -> None:
         """Construcción en orden de dependencias (dependency-satisfaction)."""
         logger.info("OCMContainer: inicializando Composition Root")
 
         # 1. Infraestructura de bajo nivel (sin dependencias)
-        self._redis_client = (
-            _build_redis_client(self._app_cfg)
-            if self._app_cfg is not None
-            else None
-        )
+        self._redis_client = _build_redis_client(self._app_cfg) if self._app_cfg is not None else None
 
         # 2. Use cases — no dependen de infra directamente (DIP)
         from market_data.application import PipelineOrchestrator, ResampleUseCase
@@ -155,15 +154,17 @@ class OCMContainer:
             PrometheusRepairMetrics,
         )
         from market_data.infrastructure.bootstrap.pipeline_factory import ConcretePipelineFactory
+
         self.orchestrator = PipelineOrchestrator(factory=ConcretePipelineFactory())
         from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
-        self.resample_uc  = ResampleUseCase(
-            storage_factory = IcebergStorageFactory(),
-            metrics         = PrometheusResampleMetrics(),
+
+        self.resample_uc = ResampleUseCase(
+            storage_factory=IcebergStorageFactory(),
+            metrics=PrometheusResampleMetrics(),
         )
         # Exponer factories de métricas para pipelines construidos externamente.
         self.resample_metrics = PrometheusResampleMetrics
-        self.repair_metrics   = PrometheusRepairMetrics
+        self.repair_metrics = PrometheusRepairMetrics
 
         logger.info("OCMContainer: listo")
 
@@ -177,6 +178,7 @@ class OCMContainer:
         Fail-Fast: lanza ConfigurationError si la configuración es inválida.
         """
         from market_data.domain.exceptions import ConfigurationError
+
         if app_cfg is None:
             raise ConfigurationError("OCMContainer.from_app_config: app_cfg es None")
         logger.info("OCMContainer: construyendo desde AppConfig")

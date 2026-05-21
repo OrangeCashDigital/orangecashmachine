@@ -11,6 +11,7 @@ DDD   — VO puro: definido por (base, quote); sin identidad de negocio
 SSOT  — única definición del concepto "par de trading" en el dominio
 KISS  — solo lo que el dominio necesita: base, quote, representación canónica
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from dataclasses import dataclass
 # ===========================================================================
 # Symbol — Value Object
 # ===========================================================================
+
 
 @dataclass(frozen=True)
 class Symbol:
@@ -37,7 +39,8 @@ class Symbol:
     -----------------------
     str(symbol) → "BTC/USDT"  (formato CCXT estándar)
     """
-    base:  str
+
+    base: str
     quote: str
 
     def __str__(self) -> str:
@@ -64,10 +67,7 @@ class Symbol:
         """
         parts = s.split("/")
         if len(parts) != 2 or not parts[0] or not parts[1]:
-            raise ValueError(
-                f"Symbol.from_string esperaba formato 'BASE/QUOTE', "
-                f"recibió: {s!r}"
-            )
+            raise ValueError(f"Symbol.from_string esperaba formato 'BASE/QUOTE', recibió: {s!r}")
         return cls(base=parts[0].upper(), quote=parts[1].upper())
 
     @property

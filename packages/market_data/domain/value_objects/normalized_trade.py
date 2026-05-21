@@ -9,6 +9,7 @@ RULES:
   • Use Decimal for price/amount — never float (financial precision).
   • This module has ZERO internal imports (no circular risk).
 """
+
 from __future__ import annotations
 
 import time
@@ -69,7 +70,5 @@ class NormalizedTrade:
 
     def __repr__(self) -> str:
         return (
-            f"NormalizedTrade({self.exchange} {self.symbol} "
-            f"{self.side} {self.amount}@{self.price} "
-            f"id={self.trade_id})"
+            f"NormalizedTrade({self.exchange} {self.symbol} {self.side} {self.amount}@{self.price} id={self.trade_id})"
         )

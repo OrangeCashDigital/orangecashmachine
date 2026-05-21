@@ -28,6 +28,7 @@ load_features: lanza DataNotFoundError / DataReadError — errores explícitos.
 
 Principios: DIP · SRP · KISS · SafeOps · Fail-Fast en load, Fail-Soft en meta
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional
@@ -48,15 +49,28 @@ from market_data.domain.exceptions import (
 # ---------------------------------------------------------------------------
 
 _BASE_COLS = (
-    "timestamp", "open", "high", "low", "close", "volume",
-    "exchange", "market_type", "symbol", "timeframe",
-    "return_1", "log_return", "volatility_20", "high_low_spread", "vwap",
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "exchange",
+    "market_type",
+    "symbol",
+    "timeframe",
+    "return_1",
+    "log_return",
+    "volatility_20",
+    "high_low_spread",
+    "vwap",
 )
 
 
 # ---------------------------------------------------------------------------
 # GoldReader
 # ---------------------------------------------------------------------------
+
 
 class GoldReader:
     """
@@ -80,7 +94,7 @@ class GoldReader:
 
     def __init__(self, exchange: Optional[str] = None) -> None:
         self._exchange = exchange.lower() if exchange else None
-        self._table    = None  # lazy — inicializado en primer acceso real
+        self._table = None  # lazy — inicializado en primer acceso real
         logger.debug(
             "GoldReader created | backend=iceberg exchange={}",
             self._exchange or "any",
@@ -101,6 +115,7 @@ class GoldReader:
                 ensure_gold_table,
                 get_catalog,
             )
+
             ensure_gold_table()
             self._table = get_catalog().load_table("gold.features")
             logger.info(
@@ -113,13 +128,13 @@ class GoldReader:
 
     def load_features(
         self,
-        symbol:      str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
-        version:     str                 = "latest",
-        as_of:       Optional[str]       = None,
-        columns:     Optional[List[str]] = None,
-        exchange:    Optional[str]       = None,
+        timeframe: str,
+        version: str = "latest",
+        as_of: Optional[str] = None,
+        columns: Optional[List[str]] = None,
+        exchange: Optional[str] = None,
     ) -> pd.DataFrame:
         """
         Carga features Gold para un símbolo/timeframe desde Iceberg.
@@ -127,14 +142,14 @@ class GoldReader:
         Fail-Fast: lanza DataNotFoundError si no hay datos.
         Fail-Fast: lanza DataReadError si Iceberg falla.
         """
-        exch       = (exchange or self._exchange or "").lower()
+        exch = (exchange or self._exchange or "").lower()
         row_filter = _build_filter(exch, symbol, market_type, timeframe)
-        snap_id    = self._resolve_snapshot(version, as_of)
+        snap_id = self._resolve_snapshot(version, as_of)
 
         try:
             scan = self._get_table().scan(
-                row_filter      = row_filter,
-                selected_fields = tuple(columns) if columns else _BASE_COLS,
+                row_filter=row_filter,
+                selected_fields=tuple(columns) if columns else _BASE_COLS,
                 **({"snapshot_id": snap_id} if snap_id is not None else {}),
             )
             df = scan.to_arrow().to_pandas()
@@ -142,46 +157,47 @@ class GoldReader:
             raise
         except Exception as exc:
             raise DataReadError(
-                f"Gold Iceberg read failed | "
-                f"{exch}/{symbol}/{market_type}/{timeframe} | {exc}"
+                f"Gold Iceberg read failed | {exch}/{symbol}/{market_type}/{timeframe} | {exc}"
             ) from exc
 
         if df is None or df.empty:
-            raise DataNotFoundError(
-                f"No Gold data | {exch}/{symbol}/{market_type}/{timeframe}"
-            )
+            raise DataNotFoundError(f"No Gold data | {exch}/{symbol}/{market_type}/{timeframe}")
 
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
         df = df.sort_values("timestamp").reset_index(drop=True)
 
         logger.info(
             "Gold features loaded | {}/{}/{}/{} rows={} snap={}",
-            exch, symbol, market_type, timeframe,
-            len(df), snap_id or "latest",
+            exch,
+            symbol,
+            market_type,
+            timeframe,
+            len(df),
+            snap_id or "latest",
         )
         return df
 
     def list_versions(
         self,
-        exchange:    str,
-        symbol:      str,
+        exchange: str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
+        timeframe: str,
     ) -> List[int]:
         """Snapshot_ids que construyeron este dataset. SafeOps: retorna [] ante error."""
         try:
             result = []
             _tbl = self._get_table()
             for entry in _tbl.history():
-                snap  = _tbl.snapshot_by_id(entry.snapshot_id)
+                snap = _tbl.snapshot_by_id(entry.snapshot_id)
                 if snap is None:
                     continue
                 props = getattr(snap.summary, "additional_properties", {}) or {}
                 if (
-                    props.get("ocm.exchange")    == exchange
-                    and props.get("ocm.symbol")      == symbol
+                    props.get("ocm.exchange") == exchange
+                    and props.get("ocm.symbol") == symbol
                     and props.get("ocm.market_type") == market_type
-                    and props.get("ocm.timeframe")   == timeframe
+                    and props.get("ocm.timeframe") == timeframe
                 ):
                     result.append(entry.snapshot_id)
             return result
@@ -190,23 +206,23 @@ class GoldReader:
 
     def list_datasets(
         self,
-        exchange:    str,
+        exchange: str,
         market_type: str,
     ) -> List[Dict]:
         """Datasets Gold disponibles para exchange/market_type. SafeOps: retorna [] ante error."""
         try:
-            seen:   set        = set()
+            seen: set = set()
             result: List[Dict] = []
             _tbl = self._get_table()
             for entry in _tbl.history():
-                snap  = _tbl.snapshot_by_id(entry.snapshot_id)
+                snap = _tbl.snapshot_by_id(entry.snapshot_id)
                 if snap is None:
                     continue
                 props = getattr(snap.summary, "additional_properties", {}) or {}
-                exch  = props.get("ocm.exchange")
-                sym   = props.get("ocm.symbol")
-                mkt   = props.get("ocm.market_type")
-                tf    = props.get("ocm.timeframe")
+                exch = props.get("ocm.exchange")
+                sym = props.get("ocm.symbol")
+                mkt = props.get("ocm.market_type")
+                tf = props.get("ocm.timeframe")
                 if not all([exch, sym, mkt, tf]):
                     continue
                 if exch != exchange or mkt != market_type:
@@ -214,12 +230,14 @@ class GoldReader:
                 key = (exch, sym, mkt, tf)
                 if key not in seen:
                     seen.add(key)
-                    result.append({
-                        "exchange":    exch,
-                        "symbol":      sym,
-                        "market_type": mkt,
-                        "timeframe":   tf,
-                    })
+                    result.append(
+                        {
+                            "exchange": exch,
+                            "symbol": sym,
+                            "market_type": mkt,
+                            "timeframe": tf,
+                        }
+                    )
             return sorted(result, key=lambda d: (d["symbol"], d["timeframe"]))
         except Exception as exc:
             logger.warning("GoldReader.list_datasets failed: {}", exc)
@@ -227,12 +245,12 @@ class GoldReader:
 
     def get_manifest(
         self,
-        exchange:    str,
-        symbol:      str,
+        exchange: str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
-        version:     str           = "latest",
-        as_of:       Optional[str] = None,
+        timeframe: str,
+        version: str = "latest",
+        as_of: Optional[str] = None,
     ) -> Optional[Dict]:
         """Metadata del snapshot resuelto. SafeOps: retorna None ante error."""
         snap_id = self._resolve_snapshot(version, as_of)
@@ -246,17 +264,17 @@ class GoldReader:
                 return None
             props = getattr(snap.summary, "additional_properties", {}) or {}
             return {
-                "snapshot_id":   snap.snapshot_id,
-                "timestamp_ms":  snap.timestamp_ms,
-                "exchange":      props.get("ocm.exchange",    exchange),
-                "symbol":        props.get("ocm.symbol",      symbol),
-                "market_type":   props.get("ocm.market_type", market_type),
-                "timeframe":     props.get("ocm.timeframe",   timeframe),
-                "run_id":        props.get("ocm.run_id",      ""),
+                "snapshot_id": snap.snapshot_id,
+                "timestamp_ms": snap.timestamp_ms,
+                "exchange": props.get("ocm.exchange", exchange),
+                "symbol": props.get("ocm.symbol", symbol),
+                "market_type": props.get("ocm.market_type", market_type),
+                "timeframe": props.get("ocm.timeframe", timeframe),
+                "run_id": props.get("ocm.run_id", ""),
                 "added_records": props.get("added-records"),
                 "total_records": props.get("total-records"),
-                "total_files":   props.get("total-data-files"),
-                "total_size":    props.get("total-files-size"),
+                "total_files": props.get("total-data-files"),
+                "total_size": props.get("total-files-size"),
             }
         except Exception:
             return None
@@ -266,7 +284,7 @@ class GoldReader:
     def _resolve_snapshot(
         self,
         version: str,
-        as_of:   Optional[str],
+        as_of: Optional[str],
     ) -> Optional[int]:
         """
         Resuelve snapshot_id desde version/as_of.
@@ -279,13 +297,11 @@ class GoldReader:
         if as_of is not None:
             target_ms = int(pd.Timestamp(as_of, tz="UTC").timestamp() * 1000)
             try:
-                _tbl     = self._get_table()
-                history  = _tbl.history()
+                _tbl = self._get_table()
+                history = _tbl.history()
                 eligible = [s for s in history if s.timestamp_ms <= target_ms]
                 if not eligible:
-                    raise VersionNotFoundError(
-                        f"No Gold snapshot before as_of={as_of}"
-                    )
+                    raise VersionNotFoundError(f"No Gold snapshot before as_of={as_of}")
                 return max(eligible, key=lambda s: s.timestamp_ms).snapshot_id
             except VersionNotFoundError:
                 raise
@@ -297,16 +313,14 @@ class GoldReader:
 
         if isinstance(version, str) and version.startswith("v"):
             raise VersionNotFoundError(
-                f"Formato legacy '{version}' incompatible con Iceberg. "
-                "Usa snapshot_id entero o version='latest'."
+                f"Formato legacy '{version}' incompatible con Iceberg. Usa snapshot_id entero o version='latest'."
             )
 
         try:
             return int(version)
         except (ValueError, TypeError):
             raise VersionNotFoundError(
-                f"Versión inválida '{version}' — "
-                "usa 'latest', snapshot_id entero, o as_of=ISO timestamp"
+                f"Versión inválida '{version}' — usa 'latest', snapshot_id entero, o as_of=ISO timestamp"
             )
 
 
@@ -314,11 +328,12 @@ class GoldReader:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_filter(
-    exchange:    str,
-    symbol:      str,
+    exchange: str,
+    symbol: str,
     market_type: str,
-    timeframe:   str,
+    timeframe: str,
 ):
     """
     Construye el filtro Iceberg para el cuarteto (exchange, symbol, market_type, timeframe).

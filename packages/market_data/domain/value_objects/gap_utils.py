@@ -29,6 +29,7 @@ DIP    — GapRange importado desde domain/value_objects
 KISS   — algoritmo lineal O(n), sin dependencias externas salvo pandas
 DRY    — lógica de threshold centralizada en una sola constante
 """
+
 from __future__ import annotations
 
 from typing import List
@@ -45,7 +46,7 @@ _GAP_FACTOR = 2
 
 
 def scan_gaps(
-    df:        pd.DataFrame,
+    df: pd.DataFrame,
     timeframe: str,
     tolerance: int = 0,
 ) -> List[GapRange]:
@@ -71,11 +72,11 @@ def scan_gaps(
     if df is None or df.empty or len(df) < 2:
         return []
 
-    tf_ms     = timeframe_to_ms(timeframe)
+    tf_ms = timeframe_to_ms(timeframe)
     threshold = tf_ms * (_GAP_FACTOR + tolerance)
 
     df_sorted = df.sort_values("timestamp").reset_index(drop=True)
-    ts_col    = df_sorted["timestamp"]
+    ts_col = df_sorted["timestamp"]
 
     # Normalizar a milisegundos epoch (int) independiente de si es tz-aware o no
     if hasattr(ts_col.dtype, "tz"):
@@ -88,15 +89,17 @@ def scan_gaps(
         delta = int(ts_ms[i + 1]) - int(ts_ms[i])
         if delta >= threshold:
             expected = delta // tf_ms - 1
-            gaps.append(GapRange(
-                start_ms = int(ts_ms[i]),
-                end_ms   = int(ts_ms[i + 1]),
-                expected = int(expected),
-            ))
+            gaps.append(
+                GapRange(
+                    start_ms=int(ts_ms[i]),
+                    end_ms=int(ts_ms[i + 1]),
+                    expected=int(expected),
+                )
+            )
     return gaps
 
 
 __all__ = [
-    "GapRange",   # re-export backward-compat
+    "GapRange",  # re-export backward-compat
     "scan_gaps",
 ]

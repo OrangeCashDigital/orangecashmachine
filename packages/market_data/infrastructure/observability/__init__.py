@@ -9,18 +9,19 @@ Esto permite reorganizar metrics.py sin romper callers (OCP).
 
 Nombres canónicos: los de metrics.py. Este archivo NO renombra.
 """
+
 from market_data.infrastructure.observability.metrics import (
     # ── Pipeline ─────────────────────────────────────────────
     ROWS_INGESTED,
     PAIR_DURATION,
     PIPELINE_ERRORS,
-    ACTIVE_PAIRS,                    # nombre real en metrics.py
+    ACTIVE_PAIRS,  # nombre real en metrics.py
     QUALITY_DECISIONS,
     # ── Fetch ────────────────────────────────────────────────
     FETCH_ABORTS_TOTAL,
     FETCH_CHUNK_DURATION,
     FETCH_CHUNKS_TOTAL,
-    FETCH_CHUNK_ERRORS_TOTAL,        # nombre real en metrics.py
+    FETCH_CHUNK_ERRORS_TOTAL,  # nombre real en metrics.py
     # ── Exchange ─────────────────────────────────────────────
     EXCHANGE_LATENCY,
     EXCHANGE_CLOCK_DRIFT,
@@ -29,7 +30,7 @@ from market_data.infrastructure.observability.metrics import (
     CANDLE_DELAY_MS,
     # ── Storage ──────────────────────────────────────────────
     STORAGE_WRITE_DURATION,
-    STORAGE_PARTITION_SIZE_ROWS,     # nombre real en metrics.py
+    STORAGE_PARTITION_SIZE_ROWS,  # nombre real en metrics.py
     # ── Write lock ───────────────────────────────────────────
     WRITE_LOCK_WAIT_DURATION,
     WRITE_LOCK_CONFLICTS,

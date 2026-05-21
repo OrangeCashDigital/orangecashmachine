@@ -16,6 +16,7 @@ para backward compat durante la transición.
 
 Principios: DDD (Value Object) · SSOT · DIP · KISS
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,31 +34,32 @@ class ExchangeQuirks:
     origin_fallback_date : Fecha ISO 8601 usada como origen cuando el exchange
                            no soporta since=1. SSOT para _discover_origin().
     """
-    backward_pagination:  bool = False
-    requires_end_at:      bool = False
-    reject_zero_since:    bool = False
-    origin_fallback_date: str  = "2017-01-01"
+
+    backward_pagination: bool = False
+    requires_end_at: bool = False
+    reject_zero_since: bool = False
+    origin_fallback_date: str = "2017-01-01"
 
 
 # SSOT por exchange_id. Exchanges no listados usan defaults (todo False, 2017-01-01).
 EXCHANGE_QUIRKS: dict[str, ExchangeQuirks] = {
     "kucoin": ExchangeQuirks(
-        backward_pagination  = True,
-        requires_end_at      = True,
-        reject_zero_since    = True,
-        origin_fallback_date = "2018-01-01",
+        backward_pagination=True,
+        requires_end_at=True,
+        reject_zero_since=True,
+        origin_fallback_date="2018-01-01",
     ),
     "kucoinfutures": ExchangeQuirks(
-        backward_pagination  = True,
-        requires_end_at      = True,
-        reject_zero_since    = True,
-        origin_fallback_date = "2020-01-01",
+        backward_pagination=True,
+        requires_end_at=True,
+        reject_zero_since=True,
+        origin_fallback_date="2020-01-01",
     ),
     "bybit": ExchangeQuirks(
-        origin_fallback_date = "2021-04-01",
+        origin_fallback_date="2021-04-01",
     ),
     "bybit_futures": ExchangeQuirks(
-        origin_fallback_date = "2019-10-01",
+        origin_fallback_date="2019-10-01",
     ),
 }
 
@@ -78,9 +80,10 @@ def get_origin_fallback_ms(exchange_id: str, market_type: str = "spot") -> int:
     Fallback conservador a 2017-01-01 para exchanges no registrados.
     """
     import pandas as _pd  # pandas es herramienta de datos, no infraestructura
+
     _is_futures = market_type.lower() not in ("spot", "")
-    lookup_key  = f"{exchange_id}_futures" if _is_futures else exchange_id
-    quirks      = EXCHANGE_QUIRKS.get(lookup_key) or get_quirks(exchange_id)
+    lookup_key = f"{exchange_id}_futures" if _is_futures else exchange_id
+    quirks = EXCHANGE_QUIRKS.get(lookup_key) or get_quirks(exchange_id)
     return int(_pd.Timestamp(quirks.origin_fallback_date, tz="UTC").value // 1_000_000)
 
 

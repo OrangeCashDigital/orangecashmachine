@@ -23,7 +23,6 @@ from market_data.domain.policies.base import (
     StrategyMixin,
 )
 from market_data.ports.outbound.publisher import SOURCE_LIVE
-from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
 
 
 class IncrementalStrategy(StrategyMixin):
@@ -31,52 +30,65 @@ class IncrementalStrategy(StrategyMixin):
 
     async def _run(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        idx:       int,
-        total:     int,
-        ctx:       PipelineContext,
-        result:    PairResult,
+        idx: int,
+        total: int,
+        ctx: PipelineContext,
+        result: PairResult,
     ) -> None:
 
         logger.debug(
             "Incremental [{}/{}] | exchange={} symbol={} timeframe={}",
-            idx, total, ctx.exchange_id, symbol, timeframe,
+            idx,
+            total,
+            ctx.exchange_id,
+            symbol,
+            timeframe,
         )
 
         df = await ctx.fetcher.download_data(
-            symbol     = symbol,
-            timeframe  = timeframe,
-            start_date = ctx.start_date,
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=ctx.start_date,
         )
 
         if df is None or df.empty:
             result.skipped = True
             logger.debug(
                 "Sin datos nuevos [{}/{}] | symbol={} timeframe={}",
-                idx, total, symbol, timeframe,
+                idx,
+                total,
+                symbol,
+                timeframe,
             )
             return
 
         # ── Quality gate ──────────────────────────────────────────────────────
         qres = ctx.quality.run(
-            df=df, symbol=symbol,
-            timeframe=timeframe, exchange=ctx.exchange_id,
+            df=df,
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=ctx.exchange_id,
         )
 
         ctx.metrics.quality_decisions_inc(
-            exchange    = ctx.exchange_id,
-            market_type = ctx.market_type,
-            symbol      = symbol,
-            timeframe   = timeframe,
-            decision    = qres.tier.value,
+            exchange=ctx.exchange_id,
+            market_type=ctx.market_type,
+            symbol=symbol,
+            timeframe=timeframe,
+            decision=qres.tier.value,
         )
 
         if not qres.accepted:
             logger.warning(
-                "Par rechazado por calidad [{}/{}] | exchange={} symbol={} "
-                "timeframe={} score={:.1f}",
-                idx, total, ctx.exchange_id, symbol, timeframe, qres.score,
+                "Par rechazado por calidad [{}/{}] | exchange={} symbol={} timeframe={} score={:.1f}",
+                idx,
+                total,
+                ctx.exchange_id,
+                symbol,
+                timeframe,
+                qres.score,
             )
             result.skipped = True
             return
@@ -85,22 +97,25 @@ class IncrementalStrategy(StrategyMixin):
         if ctx.publisher is not None:
             converter = ctx.get_chunk_converter()  # fail-fast si no inyectado
             chunk = converter.to_chunk(
-                df        = qres.df,
-                exchange  = ctx.exchange_id,
-                symbol    = symbol,
-                timeframe = timeframe,
-                source    = SOURCE_LIVE,
-                run_id    = getattr(ctx, "run_id", ""),
+                df=qres.df,
+                exchange=ctx.exchange_id,
+                symbol=symbol,
+                timeframe=timeframe,
+                source=SOURCE_LIVE,
+                run_id=getattr(ctx, "run_id", ""),
             )
             ok = await ctx.publisher.publish_chunk(chunk)
             if not ok:
                 logger.warning(
-                    "Incremental kafka publish failed — cursor NO actualizado "
-                    "[{}/{}] | symbol={} timeframe={}",
-                    idx, total, symbol, timeframe,
+                    "Incremental kafka publish failed — cursor NO actualizado [{}/{}] | symbol={} timeframe={}",
+                    idx,
+                    total,
+                    symbol,
+                    timeframe,
                 )
                 ctx.metrics.pipeline_errors_inc(
-                    exchange=ctx.exchange_id, error_type="transient",
+                    exchange=ctx.exchange_id,
+                    error_type="transient",
                 )
                 result.skipped = True
                 return
@@ -109,10 +124,14 @@ class IncrementalStrategy(StrategyMixin):
                 "publisher=None — Kappa requiere publisher. "
                 "Verificar KAFKA_ENABLED y broker. Abortando par. "
                 "[{}/{}] | symbol={} timeframe={}",
-                idx, total, symbol, timeframe,
+                idx,
+                total,
+                symbol,
+                timeframe,
             )
             ctx.metrics.pipeline_errors_inc(
-                exchange=ctx.exchange_id, error_type="fatal",
+                exchange=ctx.exchange_id,
+                error_type="fatal",
             )
             result.skipped = True
             return
@@ -124,16 +143,25 @@ class IncrementalStrategy(StrategyMixin):
         result.rows = chunk.count
 
         ctx.metrics.rows_ingested_inc(
-            exchange=ctx.exchange_id, timeframe=timeframe, delta=result.rows,
+            exchange=ctx.exchange_id,
+            timeframe=timeframe,
+            delta=result.rows,
         )
         ctx.metrics.pair_duration_observe(
-            exchange=ctx.exchange_id, symbol=symbol,
-            timeframe=timeframe, seconds=result.duration_ms / 1000,
+            exchange=ctx.exchange_id,
+            symbol=symbol,
+            timeframe=timeframe,
+            seconds=result.duration_ms / 1000,
         )
 
         logger.info(
-            "Incremental completado [{}/{}] | exchange={} market={} "
-            "symbol={} timeframe={} rows={} duration={}ms",
-            idx, total, ctx.exchange_id, ctx.market_type,
-            symbol, timeframe, result.rows, result.duration_ms,
+            "Incremental completado [{}/{}] | exchange={} market={} symbol={} timeframe={} rows={} duration={}ms",
+            idx,
+            total,
+            ctx.exchange_id,
+            ctx.market_type,
+            symbol,
+            timeframe,
+            result.rows,
+            result.duration_ms,
         )

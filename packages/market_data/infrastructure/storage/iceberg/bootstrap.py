@@ -10,6 +10,7 @@ Seguro llamar en cada __init__ de storage sin overhead significativo.
 
 Principios: DRY · Fail-Fast · Resiliencia ante versiones de pyiceberg.
 """
+
 from __future__ import annotations
 
 from loguru import logger
@@ -35,6 +36,7 @@ from market_data.infrastructure.storage.iceberg.partitions import (
 # Helpers internos
 # ---------------------------------------------------------------------------
 
+
 def _namespace_exists(cat, namespace: str) -> bool:
     """Verifica si un namespace existe de forma defensiva.
 
@@ -51,7 +53,8 @@ def _namespace_exists(cat, namespace: str) -> bool:
     except Exception as exc:
         logger.warning(
             "bootstrap._namespace_exists error | namespace={} err={}",
-            namespace, exc,
+            namespace,
+            exc,
         )
         return False
 
@@ -69,16 +72,18 @@ def _table_exists(cat, namespace: str, table: str) -> bool:
     except Exception as exc:
         logger.warning(
             "bootstrap._table_exists error | {}.{} err={}",
-            namespace, table, exc,
+            namespace,
+            table,
+            exc,
         )
         return False
 
 
 def _ensure_table(
     namespace: str,
-    table:     str,
-    schema:    Schema,
-    spec:      PartitionSpec,
+    table: str,
+    schema: Schema,
+    spec: PartitionSpec,
 ) -> None:
     """Crea namespace y tabla si no existen. Idempotente.
 
@@ -95,8 +100,8 @@ def _ensure_table(
     if not _table_exists(cat, namespace, table):
         cat.create_table(
             f"{namespace}.{table}",
-            schema         = schema,
-            partition_spec = spec,
+            schema=schema,
+            partition_spec=spec,
         )
         logger.debug("bootstrap | table_created={}.{}", namespace, table)
 
@@ -104,6 +109,7 @@ def _ensure_table(
 # ---------------------------------------------------------------------------
 # API pública — un ensure por tabla (SRP)
 # ---------------------------------------------------------------------------
+
 
 def ensure_bronze_table() -> None:
     """Crea bronze.ohlcv si no existe."""

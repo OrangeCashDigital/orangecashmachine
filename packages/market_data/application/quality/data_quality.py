@@ -18,9 +18,10 @@ Este módulo solo contiene el checker (lógica pandas — application layer).
 
 Principios: SRP · DIP · SSOT · KISS · Fail-Fast
 """
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from market_data.ports.outbound.data_quality_checker import DataQualityCheckerPort
@@ -41,12 +42,15 @@ from market_data.domain.value_objects.timeframe import timeframe_to_ms
 # Helpers
 # ===========================================================================
 
+
 def _get_git_hash() -> str:
     """Retorna el git hash corto del HEAD. Fail-soft: retorna 'unknown'."""
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=2,
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         return result.stdout.strip() or "unknown"
     except Exception:
@@ -57,20 +61,21 @@ def _get_git_hash() -> str:
 # Constantes — SSOT
 # ===========================================================================
 
-_TF_MS: Dict[str, int] = {
-    tf: timeframe_to_ms(tf)
-    for tf in ["1m", "5m", "15m", "1h", "4h", "1d"]
-}
+_TF_MS: Dict[str, int] = {tf: timeframe_to_ms(tf) for tf in ["1m", "5m", "15m", "1h", "4h", "1d"]}
 
-_MAD_THRESHOLD:        float = 3.5
-_ZSCORE_WINDOW:        int   = 20
-_ZSCORE_THRESHOLD:     float = 4.0
+_MAD_THRESHOLD: float = 3.5
+_ZSCORE_WINDOW: int = 20
+_ZSCORE_THRESHOLD: float = 4.0
 _GAP_TOLERANCE_FACTOR: float = 1.5
-_CRITICAL_GAP_PCT:     float = 0.05
+_CRITICAL_GAP_PCT: float = 0.05
 
 _FLATLINE_THRESHOLD_BY_TF: Dict[str, float] = {
-    "1m":  0.0001, "5m":  0.0001, "15m": 0.0002,
-    "1h":  0.0005, "4h":  0.001,  "1d":  0.002,
+    "1m": 0.0001,
+    "5m": 0.0001,
+    "15m": 0.0002,
+    "1h": 0.0005,
+    "4h": 0.001,
+    "1d": 0.002,
 }
 _FLATLINE_THRESHOLD_DEFAULT: float = 0.0001
 
@@ -78,6 +83,7 @@ _FLATLINE_THRESHOLD_DEFAULT: float = 0.0001
 # ===========================================================================
 # Checker
 # ===========================================================================
+
 
 class DataQualityChecker:
     """
@@ -94,24 +100,30 @@ class DataQualityChecker:
     """
 
     def __init__(self, timeframe: str, exchange: str = "unknown", rows_removed: int = 0) -> None:
-        self._timeframe          = timeframe
-        self._exchange           = exchange
-        self._tf_ms              = _TF_MS.get(timeframe)
+        self._timeframe = timeframe
+        self._exchange = exchange
+        self._tf_ms = _TF_MS.get(timeframe)
         self._flatline_threshold = _FLATLINE_THRESHOLD_BY_TF.get(timeframe, _FLATLINE_THRESHOLD_DEFAULT)
-        self._rows_removed       = max(0, int(rows_removed))
+        self._rows_removed = max(0, int(rows_removed))
 
     def check(self, df: pd.DataFrame, symbol: str) -> DataQualityReport:
         report = DataQualityReport(
-            symbol=symbol, timeframe=self._timeframe, exchange=self._exchange,
+            symbol=symbol,
+            timeframe=self._timeframe,
+            exchange=self._exchange,
             rows=len(df) if df is not None else 0,
             checked_at=datetime.now(timezone.utc).isoformat(),
             git_hash=_get_git_hash(),
         )
         if df is None or df.empty:
-            report.issues.append(QualityIssue(
-                check="empty_dataset", severity="critical",
-                description="DataFrame vacío", affected_rows=0,
-            ))
+            report.issues.append(
+                QualityIssue(
+                    check="empty_dataset",
+                    severity="critical",
+                    description="DataFrame vacío",
+                    affected_rows=0,
+                )
+            )
             return report
 
         ts = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
@@ -131,57 +143,81 @@ class DataQualityChecker:
             level = "error" if report.has_critical_issues else "warning"
             getattr(logger, level)(
                 "Data quality issues | {}/{} exchange={} warnings={} criticals={}",
-                symbol, self._timeframe, self._exchange,
-                len(report.warnings), len(report.criticals),
+                symbol,
+                self._timeframe,
+                self._exchange,
+                len(report.warnings),
+                len(report.criticals),
             )
 
     @staticmethod
     def _check_future_timestamps(ts: pd.Series, report: DataQualityReport) -> None:
         now = pd.Timestamp.now(tz="UTC")
-        n   = int((ts > now).sum())
+        n = int((ts > now).sum())
         if n > 0:
-            report.issues.append(QualityIssue(
-                check="future_timestamps", severity="critical",
-                description=f"{n} timestamps en el futuro", affected_rows=n,
-                details={"max_ts": str(ts.max()), "now": str(now)},
-            ))
+            report.issues.append(
+                QualityIssue(
+                    check="future_timestamps",
+                    severity="critical",
+                    description=f"{n} timestamps en el futuro",
+                    affected_rows=n,
+                    details={"max_ts": str(ts.max()), "now": str(now)},
+                )
+            )
 
     def _check_gaps(self, ts: pd.Series, report: DataQualityReport) -> None:
         if self._tf_ms is None:
             return
-        ts_s  = ts.sort_values().dropna()
+        ts_s = ts.sort_values().dropna()
         if len(ts_s) < 2:
             return
         diffs = ts_s.diff().dt.total_seconds() * 1000
-        mask  = diffs > (self._tf_ms * _GAP_TOLERANCE_FACTOR)
-        n     = max(0, int(mask.sum()) - self._rows_removed)
+        mask = diffs > (self._tf_ms * _GAP_TOLERANCE_FACTOR)
+        n = max(0, int(mask.sum()) - self._rows_removed)
         if n == 0:
             return
-        pct     = n / len(ts_s)
+        pct = n / len(ts_s)
         missing = int((diffs[mask] / self._tf_ms).sum() - n)
-        report.issues.append(QualityIssue(
-            check="temporal_gaps",
-            severity="critical" if pct >= _CRITICAL_GAP_PCT else "warning",
-            description=f"{n} gaps ({missing} velas faltantes)", affected_rows=n,
-            details={"gap_pct": round(pct*100,2), "missing_bars": missing,
-                     "largest_gap_s": round(float(diffs[mask].max()/1000),1)},
-        ))
+        report.issues.append(
+            QualityIssue(
+                check="temporal_gaps",
+                severity="critical" if pct >= _CRITICAL_GAP_PCT else "warning",
+                description=f"{n} gaps ({missing} velas faltantes)",
+                affected_rows=n,
+                details={
+                    "gap_pct": round(pct * 100, 2),
+                    "missing_bars": missing,
+                    "largest_gap_s": round(float(diffs[mask].max() / 1000), 1),
+                },
+            )
+        )
 
     @staticmethod
     def _check_ohlc_inconsistencies(df: pd.DataFrame, report: DataQualityReport) -> None:
-        if not {"high","low","open","close"}.issubset(df.columns):
+        if not {"high", "low", "open", "close"}.issubset(df.columns):
             return
         h, lo, o, c = df["high"], df["low"], df["open"], df["close"]
-        violations = {k: int(m.sum()) for k, m in {
-            "high_lt_low": h<lo, "close_gt_high": c>h, "close_lt_low": c<lo,
-            "open_gt_high": o>h, "open_lt_low": o<lo,
-        }.items() if m.sum() > 0}
+        violations = {
+            k: int(m.sum())
+            for k, m in {
+                "high_lt_low": h < lo,
+                "close_gt_high": c > h,
+                "close_lt_low": c < lo,
+                "open_gt_high": o > h,
+                "open_lt_low": o < lo,
+            }.items()
+            if m.sum() > 0
+        }
         if violations:
-            report.issues.append(QualityIssue(
-                check="ohlc_inconsistencies", severity="critical",
-                description=f"Violaciones OHLC en {sum(violations.values())} filas",
-                affected_rows=sum(violations.values()), details=violations,
-            ))
+            report.issues.append(
+                QualityIssue(
+                    check="ohlc_inconsistencies",
+                    severity="critical",
+                    description=f"Violaciones OHLC en {sum(violations.values())} filas",
+                    affected_rows=sum(violations.values()),
+                    details=violations,
+                )
+            )
 
     @staticmethod
     def _check_outliers_mad(df: pd.DataFrame, report: DataQualityReport) -> None:
@@ -190,52 +226,72 @@ class DataQualityChecker:
         p = df["close"].dropna()
         if len(p) < 5:
             return
-        window = min(100, max(10, len(p)//5))
+        window = min(100, max(10, len(p) // 5))
         med = p.rolling(window, min_periods=10, center=True).median()
-        mad = (p-med).abs().rolling(window, min_periods=10, center=True).median().replace(0, np.nan)
-        mz  = (0.6745*(p-med).abs()/mad).fillna(0)
-        n   = int((mz > _MAD_THRESHOLD).sum())
+        mad = (p - med).abs().rolling(window, min_periods=10, center=True).median().replace(0, np.nan)
+        mz = (0.6745 * (p - med).abs() / mad).fillna(0)
+        n = int((mz > _MAD_THRESHOLD).sum())
         if n > 0:
-            report.issues.append(QualityIssue(
-                check="price_outliers_mad", severity="warning",
-                description=f"{n} outliers via MAD", affected_rows=n,
-                details={"method":"rolling_MAD","window":window,
-                         "threshold":_MAD_THRESHOLD,"max_zscore":round(float(mz.max()),2)},
-            ))
+            report.issues.append(
+                QualityIssue(
+                    check="price_outliers_mad",
+                    severity="warning",
+                    description=f"{n} outliers via MAD",
+                    affected_rows=n,
+                    details={
+                        "method": "rolling_MAD",
+                        "window": window,
+                        "threshold": _MAD_THRESHOLD,
+                        "max_zscore": round(float(mz.max()), 2),
+                    },
+                )
+            )
 
     @staticmethod
     def _check_outliers_rolling_zscore(df: pd.DataFrame, report: DataQualityReport) -> None:
-        if "close" not in df.columns or len(df) < _ZSCORE_WINDOW+1:
+        if "close" not in df.columns or len(df) < _ZSCORE_WINDOW + 1:
             return
         p = df["close"].dropna()
-        if len(p) < _ZSCORE_WINDOW+1:
+        if len(p) < _ZSCORE_WINDOW + 1:
             return
         rm = p.rolling(_ZSCORE_WINDOW, min_periods=10).mean()
         rs = p.rolling(_ZSCORE_WINDOW, min_periods=10).std().replace(0, np.nan)
-        z  = ((p-rm)/rs).abs()
-        n  = int((z > _ZSCORE_THRESHOLD).sum())
+        z = ((p - rm) / rs).abs()
+        n = int((z > _ZSCORE_THRESHOLD).sum())
         if n > 0:
-            report.issues.append(QualityIssue(
-                check="price_outliers_zscore", severity="warning",
-                description=f"{n} spikes via rolling z-score (window={_ZSCORE_WINDOW})",
-                affected_rows=n,
-                details={"method":"rolling_zscore","window":_ZSCORE_WINDOW,
-                         "threshold":_ZSCORE_THRESHOLD,
-                         "max_zscore": round(float(z.max()),2) if not z.isna().all() else None},
-            ))
+            report.issues.append(
+                QualityIssue(
+                    check="price_outliers_zscore",
+                    severity="warning",
+                    description=f"{n} spikes via rolling z-score (window={_ZSCORE_WINDOW})",
+                    affected_rows=n,
+                    details={
+                        "method": "rolling_zscore",
+                        "window": _ZSCORE_WINDOW,
+                        "threshold": _ZSCORE_THRESHOLD,
+                        "max_zscore": round(float(z.max()), 2) if not z.isna().all() else None,
+                    },
+                )
+            )
 
     def _check_flatlines(self, df: pd.DataFrame, report: DataQualityReport) -> None:
-        if not all(c in df.columns for c in ("high","low","close")):
+        if not all(c in df.columns for c in ("high", "low", "close")):
             return
-        n = int(((df["high"]-df["low"]) < df["close"]*self._flatline_threshold).sum())
+        n = int(((df["high"] - df["low"]) < df["close"] * self._flatline_threshold).sum())
         if n > 0:
-            report.issues.append(QualityIssue(
-                check="flatline_candles", severity="warning",
-                description=f"{n} velas congeladas (high≈low)", affected_rows=n,
-                details={"threshold_pct":self._flatline_threshold*100,
-                         "timeframe":self._timeframe,"adaptive":True},
-            ))
-
+            report.issues.append(
+                QualityIssue(
+                    check="flatline_candles",
+                    severity="warning",
+                    description=f"{n} velas congeladas (high≈low)",
+                    affected_rows=n,
+                    details={
+                        "threshold_pct": self._flatline_threshold * 100,
+                        "timeframe": self._timeframe,
+                        "adaptive": True,
+                    },
+                )
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +300,10 @@ class DataQualityChecker:
 # ports/ no puede instanciar clases concretas de application/.
 # ---------------------------------------------------------------------------
 
+
 def native_checker_factory(
-    timeframe:    str,
-    exchange:     str,
+    timeframe: str,
+    exchange: str,
     rows_removed: int,
 ) -> "DataQualityCheckerPort":
     """
@@ -259,10 +316,11 @@ def native_checker_factory(
     viven juntos en application/quality/ — no en ports/.
     """
     from market_data.ports.outbound.data_quality_checker import DataQualityCheckerPort  # noqa: F401
+
     return DataQualityChecker(
-        timeframe    = timeframe,
-        exchange     = exchange,
-        rows_removed = rows_removed,
+        timeframe=timeframe,
+        exchange=exchange,
+        rows_removed=rows_removed,
     )
 
 

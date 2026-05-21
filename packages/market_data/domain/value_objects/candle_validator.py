@@ -47,6 +47,7 @@ DRY        — reglas encapsuladas en métodos privados
 
 Ref: CCXT OHLCV schema — https://docs.ccxt.com/#/?id=ohlcv-structure
 """
+
 from __future__ import annotations
 
 import math
@@ -62,6 +63,7 @@ from market_data.domain.value_objects.timeframe import timeframe_to_ms
 # Resultado de validación
 # ===========================================================================
 
+
 @dataclass(frozen=True)
 class ValidationResult:
     """
@@ -76,22 +78,29 @@ class ValidationResult:
     violations : códigos de regla violada, e.g. ["C3", "S1"]
     reason     : descripción del primer fallo determinante (None si CLEAN)
     """
-    label:      QualityLabel
-    candle:     RawCandle
-    violations: List[str]     = field(default_factory=list)
-    reason:     Optional[str] = None
+
+    label: QualityLabel
+    candle: RawCandle
+    violations: List[str] = field(default_factory=list)
+    reason: Optional[str] = None
 
     @property
-    def is_clean(self)   -> bool: return self.label == QualityLabel.CLEAN
+    def is_clean(self) -> bool:
+        return self.label == QualityLabel.CLEAN
+
     @property
-    def is_suspect(self) -> bool: return self.label == QualityLabel.SUSPECT
+    def is_suspect(self) -> bool:
+        return self.label == QualityLabel.SUSPECT
+
     @property
-    def is_corrupt(self) -> bool: return self.label == QualityLabel.CORRUPT
+    def is_corrupt(self) -> bool:
+        return self.label == QualityLabel.CORRUPT
 
 
 # ===========================================================================
 # Resumen de validación de lote
 # ===========================================================================
+
 
 @dataclass
 class ValidationSummary:
@@ -108,25 +117,26 @@ class ValidationSummary:
         summary.quality_ratio * 100,
     )
     """
-    total:           int
-    clean:           int
-    suspect:         int
-    corrupt:         int
+
+    total: int
+    clean: int
+    suspect: int
+    corrupt: int
     corrupt_results: List[ValidationResult] = field(default_factory=list)
     suspect_results: List[ValidationResult] = field(default_factory=list)
 
     @classmethod
     def from_results(cls, results: List[ValidationResult]) -> "ValidationSummary":
-        clean_r   = [r for r in results if r.is_clean]
+        clean_r = [r for r in results if r.is_clean]
         suspect_r = [r for r in results if r.is_suspect]
         corrupt_r = [r for r in results if r.is_corrupt]
         return cls(
-            total           = len(results),
-            clean           = len(clean_r),
-            suspect         = len(suspect_r),
-            corrupt         = len(corrupt_r),
-            corrupt_results = corrupt_r,
-            suspect_results = suspect_r,
+            total=len(results),
+            clean=len(clean_r),
+            suspect=len(suspect_r),
+            corrupt=len(corrupt_r),
+            corrupt_results=corrupt_r,
+            suspect_results=suspect_r,
         )
 
     @property
@@ -144,6 +154,7 @@ class ValidationSummary:
 # Validador
 # ===========================================================================
 
+
 class CandleValidator:
     """
     Valida velas OHLCV individuales contra las reglas C0–C6 y S1–S3.
@@ -160,14 +171,14 @@ class CandleValidator:
     """
 
     def __init__(self, timeframe: str) -> None:
-        self._timeframe    = timeframe
+        self._timeframe = timeframe
         self._timeframe_ms = timeframe_to_ms(timeframe)
 
     # ── API pública ───────────────────────────────────────────────────────────
 
     def validate(
         self,
-        candle:            RawCandle,
+        candle: RawCandle,
         prev_timestamp_ms: Optional[int] = None,
     ) -> ValidationResult:
         """
@@ -179,19 +190,19 @@ class CandleValidator:
         if corrupt is not None:
             code, reason = corrupt
             return ValidationResult(
-                label      = QualityLabel.CORRUPT,
-                candle     = candle,
-                violations = [code],
-                reason     = reason,
+                label=QualityLabel.CORRUPT,
+                candle=candle,
+                violations=[code],
+                reason=reason,
             )
 
         suspect = self._check_suspect(candle, prev_timestamp_ms)
         if suspect:
             return ValidationResult(
-                label      = QualityLabel.SUSPECT,
-                candle     = candle,
-                violations = suspect,
-                reason     = f"Suspect flags: {', '.join(suspect)}",
+                label=QualityLabel.SUSPECT,
+                candle=candle,
+                violations=suspect,
+                reason=f"Suspect flags: {', '.join(suspect)}",
             )
 
         return ValidationResult(label=QualityLabel.CLEAN, candle=candle)
@@ -258,7 +269,7 @@ class CandleValidator:
 
     def _check_suspect(
         self,
-        candle:            RawCandle,
+        candle: RawCandle,
         prev_timestamp_ms: Optional[int],
     ) -> List[str]:
         """

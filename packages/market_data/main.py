@@ -32,6 +32,7 @@ Uso
     python market_data/main.py
     uvicorn market_data.main:app --host 0.0.0.0 --port 8001
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -50,6 +51,8 @@ from ocm.runtime.context import RuntimeContext
 from ocm.config import env_vars
 
 from ocm.runtime import guard_context
+
+
 def build_context() -> RuntimeContext:
     """
     Construye RuntimeContext standalone — sin Hydra, sin CLI.
@@ -66,10 +69,11 @@ def build_context() -> RuntimeContext:
     run_cfg = RunConfig.from_env()
     app_cfg = load_appconfig_standalone(env=run_cfg.env)
     return RuntimeContext(
-        app_config = app_cfg,
-        run_config = run_cfg,
-        started_at = datetime.now(timezone.utc),
+        app_config=app_cfg,
+        run_config=run_cfg,
+        started_at=datetime.now(timezone.utc),
     )
+
 
 _log = bind_pipeline("market_data.main")
 
@@ -77,11 +81,11 @@ _log = bind_pipeline("market_data.main")
 # Configuración del servicio — leída de env vars con defaults sensatos
 # ---------------------------------------------------------------------------
 
-_HOST:             str   = os.getenv(env_vars.MARKET_DATA_HOST,   "0.0.0.0")  # nosec B104 — bind a todas las interfaces intencional en contenedor Docker
-_PORT:             int   = int(os.getenv(env_vars.MARKET_DATA_PORT, "8001"))
+_HOST: str = os.getenv(env_vars.MARKET_DATA_HOST, "0.0.0.0")  # nosec B104 — bind a todas las interfaces intencional en contenedor Docker
+_PORT: int = int(os.getenv(env_vars.MARKET_DATA_PORT, "8001"))
 _INGESTION_INTERVAL_S: float = float(os.getenv(env_vars.INGESTION_INTERVAL_S, "300"))  # 5 min entre runs
-_SERVICE_NAME:     str   = "market-data-service"
-_VERSION:          str   = "1.0.0"
+_SERVICE_NAME: str = "market-data-service"
+_VERSION: str = "1.0.0"
 
 
 # ---------------------------------------------------------------------------
@@ -92,15 +96,18 @@ _VERSION:          str   = "1.0.0"
 if TYPE_CHECKING:  # pragma: no cover
     from market_data.ports.outbound.storage_factory import StorageFactoryPort
 
+
 class _ServiceState:
     """Estado mutable del proceso. Un único instancia por proceso (singleton)."""
-    guard:           Optional[ExecutionGuard]   = None
-    ctx:             Optional[RuntimeContext]   = None
+
+    guard: Optional[ExecutionGuard] = None
+    ctx: Optional[RuntimeContext] = None
     storage_factory: Optional["StorageFactoryPort"] = None  # inyectado en lifespan
-    started:         float                     = 0.0
-    healthy:         bool                      = False
-    last_run:        Optional[float]           = None
-    last_result:     str                       = "pending"
+    started: float = 0.0
+    healthy: bool = False
+    last_run: Optional[float] = None
+    last_result: str = "pending"
+
 
 _state = _ServiceState()
 
@@ -108,6 +115,7 @@ _state = _ServiceState()
 # ---------------------------------------------------------------------------
 # Ingestion loop — corre en background sin bloquear FastAPI
 # ---------------------------------------------------------------------------
+
 
 async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
     """
@@ -135,7 +143,7 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
     )
 
     orchestrator = PipelineOrchestrator()
-    app_cfg      = ctx.app_config
+    app_cfg = ctx.app_config
 
     while not guard.should_stop():
         run_start = time.monotonic()
@@ -151,25 +159,25 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
                     continue
 
                 for market_type, symbols in [
-                    ("spot",    getattr(exc_cfg.markets, "spot_symbols",    [])),
+                    ("spot", getattr(exc_cfg.markets, "spot_symbols", [])),
                     ("futures", getattr(exc_cfg.markets, "futures_symbols", [])),
                 ]:
                     if not symbols:
                         continue
 
                     request = PipelineRequest(
-                        exchange           = exc_name,
-                        market_type        = market_type,
-                        pipeline           = "ohlcv",
-                        mode               = "incremental",
-                        credentials        = exc_cfg.ccxt_credentials(),
-                        resilience         = exc_cfg.resilience,
-                        symbols            = symbols,
-                        timeframes         = app_cfg.pipeline.historical.timeframes,
-                        start_date         = app_cfg.pipeline.historical.start_date,
-                        auto_lookback_days = app_cfg.pipeline.historical.auto_lookback_days,
-                        run_id             = ctx.run_id,
-                        dry_run            = app_cfg.safety.dry_run,
+                        exchange=exc_name,
+                        market_type=market_type,
+                        pipeline="ohlcv",
+                        mode="incremental",
+                        credentials=exc_cfg.ccxt_credentials(),
+                        resilience=exc_cfg.resilience,
+                        symbols=symbols,
+                        timeframes=app_cfg.pipeline.historical.timeframes,
+                        start_date=app_cfg.pipeline.historical.start_date,
+                        auto_lookback_days=app_cfg.pipeline.historical.auto_lookback_days,
+                        run_id=ctx.run_id,
+                        dry_run=app_cfg.safety.dry_run,
                     )
                     await orchestrator.run(request)
 
@@ -242,7 +250,7 @@ async def _bronze_writer_loop() -> None:
 
     # Construir dependencias — BronzeStorage sin exchange fijo:
     # el exchange se extrae del EventPayload en cada mensaje (SSOT del wire format).
-    bronze   = BronzeStorage()  # exchange=None → se setea por mensaje
+    bronze = BronzeStorage()  # exchange=None → se setea por mensaje
     consumer = KafkaConsumerAdapter.for_bronze_writer()
 
     # DLQ producer — opcional, SafeOps: None = mensajes malos solo se loguean
@@ -253,9 +261,9 @@ async def _bronze_writer_loop() -> None:
         dlq_producer = None
 
     writer = KafkaBronzeWriter(
-        consumer       = consumer,
-        bronze_storage = bronze,
-        dlq_producer   = dlq_producer,
+        consumer=consumer,
+        bronze_storage=bronze,
+        dlq_producer=dlq_producer,
     )
 
     try:
@@ -276,6 +284,7 @@ async def _bronze_writer_loop() -> None:
 # ---------------------------------------------------------------------------
 # Lifespan — startup / shutdown del servicio
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
@@ -319,10 +328,11 @@ async def _lifespan(app: FastAPI):
     # StorageFactoryPort: una factory cacheada por (exchange, market_type).
     # Ningún handler instancia adaptadores — todos consumen el port (DIP).
     from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+
     _state.storage_factory = IcebergStorageFactory()
 
-    _state.guard   = guard
-    _state.ctx     = ctx
+    _state.guard = guard
+    _state.ctx = ctx
     _state.started = time.monotonic()
     _state.healthy = True
 
@@ -394,6 +404,7 @@ app = FastAPI(
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health", tags=["ops"])
 async def health() -> JSONResponse:
     """
@@ -407,18 +418,18 @@ async def health() -> JSONResponse:
         return JSONResponse(
             status_code=503,
             content={
-                "status":      "unhealthy",
-                "reason":      guard.stop_reason if guard else "not_started",
-                "service":     _SERVICE_NAME,
+                "status": "unhealthy",
+                "reason": guard.stop_reason if guard else "not_started",
+                "service": _SERVICE_NAME,
             },
         )
     return JSONResponse(
         status_code=200,
         content={
-            "status":      "healthy",
-            "service":     _SERVICE_NAME,
-            "version":     _VERSION,
-            "uptime_s":    round(time.monotonic() - _state.started, 1),
+            "status": "healthy",
+            "service": _SERVICE_NAME,
+            "version": _VERSION,
+            "uptime_s": round(time.monotonic() - _state.started, 1),
             "last_result": _state.last_result,
         },
     )
@@ -443,25 +454,22 @@ async def ready() -> JSONResponse:
     return JSONResponse(
         status_code=200,
         content={
-            "status":      "ready",
-            "service":     _SERVICE_NAME,
-            "env":         _state.ctx.environment,
-            "last_run_s":  (
-                round(time.monotonic() - _state.last_run, 1)
-                if _state.last_run else None
-            ),
+            "status": "ready",
+            "service": _SERVICE_NAME,
+            "env": _state.ctx.environment,
+            "last_run_s": (round(time.monotonic() - _state.last_run, 1) if _state.last_run else None),
         },
     )
 
 
 @app.get("/ohlcv/{exchange}/{symbol}/{timeframe}", tags=["data"])
 async def get_ohlcv(
-    exchange:  str,
-    symbol:    str,
+    exchange: str,
+    symbol: str,
     timeframe: str,
-    start:     Optional[str] = Query(default=None, description="ISO 8601 UTC start"),
-    end:       Optional[str] = Query(default=None, description="ISO 8601 UTC end"),
-    limit:     int           = Query(default=500, ge=1, le=10_000),
+    start: Optional[str] = Query(default=None, description="ISO 8601 UTC start"),
+    end: Optional[str] = Query(default=None, description="ISO 8601 UTC end"),
+    limit: int = Query(default=500, ge=1, le=10_000),
 ) -> JSONResponse:
     """
     Lee OHLCV desde Silver (Iceberg).
@@ -493,28 +501,28 @@ async def get_ohlcv(
         if _state.storage_factory is None:
             raise RuntimeError("storage_factory_not_initialized")
         storage = _state.storage_factory.get_storage(
-            exchange    = exchange,
-            market_type = "spot",      # TODO: exponer como query param si se necesita futures
+            exchange=exchange,
+            market_type="spot",  # TODO: exponer como query param si se necesita futures
         )
 
         ts_start = pd.Timestamp(start, tz="UTC") if start else None
-        ts_end   = pd.Timestamp(end,   tz="UTC") if end   else None
+        ts_end = pd.Timestamp(end, tz="UTC") if end else None
 
         df = await asyncio.to_thread(
             storage.load_ohlcv,
-            symbol    = symbol_norm,
-            timeframe = timeframe,
-            start     = ts_start,
-            end       = ts_end,
+            symbol=symbol_norm,
+            timeframe=timeframe,
+            start=ts_start,
+            end=ts_end,
         )
 
         if df is None or df.empty:
             return JSONResponse(
                 status_code=404,
                 content={
-                    "detail":    "no_data",
-                    "exchange":  exchange,
-                    "symbol":    symbol_norm,
+                    "detail": "no_data",
+                    "exchange": exchange,
+                    "symbol": symbol_norm,
                     "timeframe": timeframe,
                 },
             )
@@ -522,25 +530,25 @@ async def get_ohlcv(
         # Aplicar limit después de filtros temporales
         df = df.tail(limit)
 
-        records = df.assign(
-            timestamp=df["timestamp"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        ).to_dict(orient="records")
+        records = df.assign(timestamp=df["timestamp"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")).to_dict(orient="records")
 
         return JSONResponse(
             status_code=200,
             content={
-                "exchange":  exchange,
-                "symbol":    symbol_norm,
+                "exchange": exchange,
+                "symbol": symbol_norm,
                 "timeframe": timeframe,
-                "count":     len(records),
-                "data":      records,
+                "count": len(records),
+                "data": records,
             },
         )
 
     except Exception as exc:
         _log.opt(exception=True).error(
             "ohlcv_endpoint_error",
-            exchange=exchange, symbol=symbol_norm, timeframe=timeframe,
+            exchange=exchange,
+            symbol=symbol_norm,
+            timeframe=timeframe,
             error=str(exc),
         )
         raise HTTPException(status_code=500, detail=f"storage_error:{type(exc).__name__}")
@@ -557,11 +565,11 @@ async def get_ohlcv(
 if __name__ == "__main__":
     uvicorn.run(
         "market_data.main:app",
-        host       = _HOST,
-        port       = _PORT,
-        log_level  = "info",
+        host=_HOST,
+        port=_PORT,
+        log_level="info",
         # reload=False en producción — reload no es compatible con background tasks
-        reload     = False,
+        reload=False,
         # workers=1: el ingestion loop usa asyncio — no es fork-safe con >1 workers
-        workers    = 1,
+        workers=1,
     )

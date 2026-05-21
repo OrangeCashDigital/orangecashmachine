@@ -9,6 +9,7 @@ SSOT: definición canónica. Importar desde aquí, nunca desde __init__.
 
 Principios: DDD · SSOT · KISS · frozen VO
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,14 +36,15 @@ class GapRange:
     duration_ms : duración total del gap en milisegundos.
     severity    : "low" / "medium" / "high" según velas faltantes.
     """
+
     start_ms: int
-    end_ms:   int
+    end_ms: int
     expected: int
-    run_id:   str = ""
+    run_id: str = ""
 
     def __str__(self) -> str:
         start = pd.Timestamp(self.start_ms, unit="ms", tz="UTC").isoformat()
-        end   = pd.Timestamp(self.end_ms,   unit="ms", tz="UTC").isoformat()
+        end = pd.Timestamp(self.end_ms, unit="ms", tz="UTC").isoformat()
         return f"Gap[{start} → {end} expected={self.expected}]"
 
     @property

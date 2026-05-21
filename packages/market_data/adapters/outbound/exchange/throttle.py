@@ -69,12 +69,12 @@ __all__ = [
 ]
 
 # ── Constantes de módulo ─────────────────────────────────────────────────────
-_MIN_WINDOW_SAMPLES:    int   = 5     # mínimo de observaciones antes de actuar
+_MIN_WINDOW_SAMPLES: int = 5  # mínimo de observaciones antes de actuar
 _RATE_LIMIT_COOLDOWN_S: float = 30.0  # hard pause post-429 / CircuitOpen (s)
 
 # Umbrales del health score — invariantes de dominio, no expuestos como parámetros
 _HEALTH_DOWN_THRESHOLD: float = 0.40  # por debajo → scale_down
-_HEALTH_UP_THRESHOLD:   float = 0.85  # por encima (+ condiciones) → scale_up
+_HEALTH_UP_THRESHOLD: float = 0.85  # por encima (+ condiciones) → scale_up
 
 
 class AdaptiveThrottle:
@@ -99,19 +99,19 @@ class AdaptiveThrottle:
 
     # Pesos de error — contribución al error rate ponderado
     _RATE_LIMIT_WEIGHT: float = 2.0  # 429 → máxima penalización
-    _TIMEOUT_WEIGHT:    float = 1.0  # timeout → penalización estándar
-    _NETWORK_WEIGHT:    float = 0.5  # glitch transitorio → penalización suave
+    _TIMEOUT_WEIGHT: float = 1.0  # timeout → penalización estándar
+    _NETWORK_WEIGHT: float = 0.5  # glitch transitorio → penalización suave
 
     # Factores de reducción de concurrencia según causa dominante
     _FACTOR_RATE_LIMIT: float = 0.5  # 429 → reducción agresiva (-50%)
-    _FACTOR_LATENCY:    float = 0.7  # latencia/timeout → reducción moderada (-30%)
-    _FACTOR_OCC:        float = 0.8  # storage → reducción suave (-20%)
+    _FACTOR_LATENCY: float = 0.7  # latencia/timeout → reducción moderada (-30%)
+    _FACTOR_OCC: float = 0.8  # storage → reducción suave (-20%)
 
     # Pesos del health score compuesto (suman 1.0)
     _HEALTH_W_LATENCY: float = 0.35  # p95 — señal más predictiva de saturación
-    _HEALTH_W_SLOPE:   float = 0.30  # slope — tendencia más informativa que estado puntual
-    _HEALTH_W_ERRORS:  float = 0.25  # error rate — señal definitiva cuando alta
-    _HEALTH_W_OCC:     float = 0.10  # occ rate — menor impacto en throughput
+    _HEALTH_W_SLOPE: float = 0.30  # slope — tendencia más informativa que estado puntual
+    _HEALTH_W_ERRORS: float = 0.25  # error rate — señal definitiva cuando alta
+    _HEALTH_W_OCC: float = 0.10  # occ rate — menor impacto en throughput
 
     def __init__(
         self,
@@ -140,28 +140,28 @@ class AdaptiveThrottle:
         window            : tamaño de las ventanas deslizantes de métricas
         limiter           : AdaptiveLimiter a sincronizar cuando cambia current
         """
-        self._exchange_id       = exchange_id
-        self.current            = max(minimum, min(initial, maximum))
-        self._maximum           = maximum
-        self._minimum           = minimum
-        self._error_threshold   = error_threshold
+        self._exchange_id = exchange_id
+        self.current = max(minimum, min(initial, maximum))
+        self._maximum = maximum
+        self._minimum = minimum
+        self._error_threshold = error_threshold
         self._latency_target_ms = latency_target_ms
-        self._occ_threshold     = occ_threshold
-        self._limiter           = limiter
+        self._occ_threshold = occ_threshold
+        self._limiter = limiter
 
         # Cooldowns direccionales anti-thrashing (ratio 2:1 reducción:aumento)
         self._reduction_cooldown_s: float = cooldown_seconds
-        self._increase_cooldown_s:  float = max(1.0, cooldown_seconds / 2.0)
+        self._increase_cooldown_s: float = max(1.0, cooldown_seconds / 2.0)
 
         # Ventanas deslizantes con maxlen — sin _trim() manual
         _w = max(window, _MIN_WINDOW_SAMPLES * 2)
-        self._results:    deque[float] = deque(maxlen=_w)  # 0.0=ok, >0=peso error
-        self._latencies:  deque[float] = deque(maxlen=_w)  # ms por operación
-        self._occ_window: deque[int]   = deque(maxlen=_w)  # 0=ok, 1=conflict
+        self._results: deque[float] = deque(maxlen=_w)  # 0.0=ok, >0=peso error
+        self._latencies: deque[float] = deque(maxlen=_w)  # ms por operación
+        self._occ_window: deque[int] = deque(maxlen=_w)  # 0=ok, 1=conflict
 
         # Timestamps de último ajuste (cooldowns direccionales)
         self._last_reduction_ts: float = 0.0
-        self._last_increase_ts:  float = 0.0
+        self._last_increase_ts: float = 0.0
 
         # Hard cooldown post-rate-limit
         self._rate_limit_cooldown_until: float = 0.0
@@ -196,8 +196,8 @@ class AdaptiveThrottle:
         """
         weight = {
             "rate_limit": self._RATE_LIMIT_WEIGHT,
-            "timeout":    self._TIMEOUT_WEIGHT,
-            "network":    self._NETWORK_WEIGHT,
+            "timeout": self._TIMEOUT_WEIGHT,
+            "network": self._NETWORK_WEIGHT,
         }.get(error_type, self._TIMEOUT_WEIGHT)
         self._results.append(weight)
         if latency_ms is not None:
@@ -240,8 +240,7 @@ class AdaptiveThrottle:
                 self._limiter.update_concurrency(self.current)
 
         logger.warning(
-            "AdaptiveThrottle RATE_LIMIT_COOLDOWN | exchange={} "
-            "current={}/{} cooldown_s={:.0f}",
+            "AdaptiveThrottle RATE_LIMIT_COOLDOWN | exchange={} current={}/{} cooldown_s={:.0f}",
             self._exchange_id,
             self.current,
             self._maximum,
@@ -320,28 +319,22 @@ class AdaptiveThrottle:
 
         Retorna 1.0 cuando la ventana está vacía (sin datos = sin presión conocida).
         """
-        p95   = self._p95_latency()
+        p95 = self._p95_latency()
         slope = self._latency_slope()
         error = self._error_rate()
-        occ   = self._occ_rate()
+        occ = self._occ_rate()
 
         # Cada componente normalizado → [0.0, 1.0] donde 1.0 = sano
-        lat_score   = max(0.0, 1.0 - p95 / self._latency_target_ms)   if p95 > 0   else 1.0
-        slope_score = max(0.0, 1.0 - slope / self._latency_target_ms)  if slope > 0 else 1.0
-        err_score   = (
-            max(0.0, 1.0 - error / self._error_threshold)
-            if self._error_threshold > 0 else 1.0
-        )
-        occ_score   = (
-            max(0.0, 1.0 - occ / self._occ_threshold)
-            if self._occ_threshold > 0 else 1.0
-        )
+        lat_score = max(0.0, 1.0 - p95 / self._latency_target_ms) if p95 > 0 else 1.0
+        slope_score = max(0.0, 1.0 - slope / self._latency_target_ms) if slope > 0 else 1.0
+        err_score = max(0.0, 1.0 - error / self._error_threshold) if self._error_threshold > 0 else 1.0
+        occ_score = max(0.0, 1.0 - occ / self._occ_threshold) if self._occ_threshold > 0 else 1.0
 
         return (
-            lat_score   * self._HEALTH_W_LATENCY
+            lat_score * self._HEALTH_W_LATENCY
             + slope_score * self._HEALTH_W_SLOPE
-            + err_score   * self._HEALTH_W_ERRORS
-            + occ_score   * self._HEALTH_W_OCC
+            + err_score * self._HEALTH_W_ERRORS
+            + occ_score * self._HEALTH_W_OCC
         )
 
     # ── Lógica de escala ──────────────────────────────────────────────────────
@@ -357,10 +350,7 @@ class AdaptiveThrottle:
         Bloquea scale_up durante el hard cooldown post-429: aumentar
         concurrencia mientras el exchange está saturado amplificaría el error.
         """
-        return (
-            (now - self._last_increase_ts) >= self._increase_cooldown_s
-            and not self.is_in_cooldown()
-        )
+        return (now - self._last_increase_ts) >= self._increase_cooldown_s and not self.is_in_cooldown()
 
     def _maybe_scale(self) -> None:
         """
@@ -379,18 +369,18 @@ class AdaptiveThrottle:
         if len(self._results) < _MIN_WINDOW_SAMPLES:
             return
 
-        now        = time.monotonic()
+        now = time.monotonic()
         error_rate = self._error_rate()
-        p95        = self._p95_latency()
-        slope      = self._latency_slope()
-        occ_rate   = self._occ_rate()
-        health     = self._health_score()
+        p95 = self._p95_latency()
+        slope = self._latency_slope()
+        occ_rate = self._occ_rate()
+        health = self._health_score()
 
         # ── Safety net: condiciones individuales duras ───────────────────────
-        high_errors  = error_rate > self._error_threshold
+        high_errors = error_rate > self._error_threshold
         high_latency = p95 > 0 and p95 > self._latency_target_ms
-        high_occ     = occ_rate > self._occ_threshold
-        low_health   = health < _HEALTH_DOWN_THRESHOLD
+        high_occ = occ_rate > self._occ_threshold
+        low_health = health < _HEALTH_DOWN_THRESHOLD
 
         should_down = (
             (high_errors or high_latency or high_occ or low_health)
@@ -403,7 +393,7 @@ class AdaptiveThrottle:
             health > _HEALTH_UP_THRESHOLD
             and error_rate < self._error_threshold / 2.0
             and (p95 == 0.0 or p95 < self._latency_target_ms * 0.7)
-            and slope <= 0.0          # slope guard: no subir si tendencia creciente
+            and slope <= 0.0  # slope guard: no subir si tendencia creciente
             and occ_rate < self._occ_threshold / 2.0
             and self.current < self._maximum
             and self._can_increase(now)
@@ -413,16 +403,16 @@ class AdaptiveThrottle:
             # Causa dominante: errores > latencia > occ > health_score_bajo
             if high_errors:
                 factor = self._FACTOR_RATE_LIMIT
-                cause  = "rate_limit_pressure"
+                cause = "rate_limit_pressure"
             elif high_latency:
                 factor = self._FACTOR_LATENCY
-                cause  = "latency_pressure"
+                cause = "latency_pressure"
             elif high_occ:
                 factor = self._FACTOR_OCC
-                cause  = "occ_pressure"
+                cause = "occ_pressure"
             else:
                 factor = self._FACTOR_LATENCY
-                cause  = "health_score_low"
+                cause = "health_score_low"
 
             self.current = max(self._minimum, int(self.current * factor))
             self._last_reduction_ts = now
@@ -431,8 +421,15 @@ class AdaptiveThrottle:
             logger.debug(
                 "AdaptiveThrottle DOWN | exchange={} current={}/{} cause={} "
                 "health={:.2f} error={:.0%} p95={:.0f}ms slope={:+.0f}ms occ={:.0%}",
-                self._exchange_id, self.current, self._maximum, cause,
-                health, error_rate, p95, slope, occ_rate,
+                self._exchange_id,
+                self.current,
+                self._maximum,
+                cause,
+                health,
+                error_rate,
+                p95,
+                slope,
+                occ_rate,
             )
 
         elif should_up:
@@ -443,8 +440,14 @@ class AdaptiveThrottle:
             logger.debug(
                 "AdaptiveThrottle UP | exchange={} current={}/{} "
                 "health={:.2f} error={:.0%} p95={:.0f}ms slope={:+.0f}ms occ={:.0%}",
-                self._exchange_id, self.current, self._maximum,
-                health, error_rate, p95, slope, occ_rate,
+                self._exchange_id,
+                self.current,
+                self._maximum,
+                health,
+                error_rate,
+                p95,
+                slope,
+                occ_rate,
             )
 
 
@@ -502,13 +505,13 @@ def get_throttle_state(
     """
     key = f"{exchange_id}:{market_type}:{dataset}"
     _empty: dict = {
-        "key":         key,
-        "concurrent":  0,
-        "maximum":     0,
-        "error_rate":  0.0,
-        "p95_ms":      0.0,
-        "occ_rate":    0.0,
-        "health":      1.0,
+        "key": key,
+        "concurrent": 0,
+        "maximum": 0,
+        "error_rate": 0.0,
+        "p95_ms": 0.0,
+        "occ_rate": 0.0,
+        "health": 1.0,
         "in_cooldown": False,
     }
     try:
@@ -516,13 +519,13 @@ def get_throttle_state(
         if t is None:
             return _empty
         return {
-            "key":         key,
-            "concurrent":  t.current,
-            "maximum":     t._maximum,
-            "error_rate":  t._error_rate(),
-            "p95_ms":      t._p95_latency(),
-            "occ_rate":    t._occ_rate(),
-            "health":      t._health_score(),
+            "key": key,
+            "concurrent": t.current,
+            "maximum": t._maximum,
+            "error_rate": t._error_rate(),
+            "p95_ms": t._p95_latency(),
+            "occ_rate": t._occ_rate(),
+            "health": t._health_score(),
             "in_cooldown": t.is_in_cooldown(),
         }
     except Exception:

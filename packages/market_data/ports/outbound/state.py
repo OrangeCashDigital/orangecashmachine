@@ -14,12 +14,14 @@ define la semántica de las claves, no al backend de storage.
 Movida desde infra.state.cursor_store para eliminar la
 dependencia inversa.
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
 
 
 # ── Función pura de dominio ──────────────────────────────────────────────────
+
 
 def encode_cursor_key(exchange: str, symbol: str, timeframe: str) -> str:
     """Codifica una clave canónica de cursor.
@@ -37,6 +39,7 @@ def encode_cursor_key(exchange: str, symbol: str, timeframe: str) -> str:
 
 
 # ── Puerto (contrato) ────────────────────────────────────────────────────────
+
 
 @runtime_checkable
 class CursorStorePort(Protocol):
@@ -90,10 +93,10 @@ class CursorStorePort(Protocol):
 
     def update(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        ts_ms:     int,
+        ts_ms: int,
     ) -> None:
         """
         Persiste el último timestamp procesado usando la clave canónica.
@@ -108,6 +111,7 @@ class CursorStorePort(Protocol):
 
 
 # ── Puerto async de cursores (fetchers) ──────────────────────────────────────
+
 
 @runtime_checkable
 class AsyncCursorStorePort(Protocol):
@@ -132,8 +136,8 @@ class AsyncCursorStorePort(Protocol):
 
     async def get(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
     ) -> Optional[int]:
         """Retorna el último timestamp procesado (ms) o None si no existe."""
@@ -141,9 +145,9 @@ class AsyncCursorStorePort(Protocol):
 
     async def update(
         self,
-        exchange:     str,
-        symbol:       str,
-        timeframe:    str,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
         timestamp_ms: int,
     ) -> bool:
         """Persiste el último timestamp procesado. Retorna True si exitoso."""

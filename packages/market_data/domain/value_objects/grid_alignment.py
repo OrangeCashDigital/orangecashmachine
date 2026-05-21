@@ -46,6 +46,7 @@ DIP    — Prometheus se recibe por callback (no por import)
 KISS   — lógica lineal sin estado
 SafeOps — callbacks en try/except; nunca lanzan
 """
+
 from __future__ import annotations
 
 from typing import Callable, Optional
@@ -56,11 +57,11 @@ from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
 
 def align_to_grid(
-    df:           pd.DataFrame,
-    timeframe:    str,
-    exchange:     str = "unknown",
-    symbol:       str = "unknown",
-    on_drift:     Optional[Callable[[int], None]] = None,
+    df: pd.DataFrame,
+    timeframe: str,
+    exchange: str = "unknown",
+    symbol: str = "unknown",
+    on_drift: Optional[Callable[[int], None]] = None,
     on_collision: Optional[Callable[[int], None]] = None,
 ) -> pd.DataFrame:
     """
@@ -93,7 +94,7 @@ def align_to_grid(
     InvalidTimeframeError
         Si el timeframe no es reconocido por timeframe_to_ms().
     """
-    tf_ms     = timeframe_to_ms(timeframe)
+    tf_ms = timeframe_to_ms(timeframe)
     tf_offset = pd.tseries.frequencies.to_offset(f"{tf_ms}ms")
 
     # ── Floor al grid ──────────────────────────────────────────────────────
@@ -124,10 +125,10 @@ def align_to_grid(
     df = (
         df.groupby("timestamp", sort=False)
         .agg(
-            open=("open",     "first"),
-            high=("high",     "max"),
-            low=("low",       "min"),
-            close=("close",   "last"),
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
             volume=("volume", "sum"),
         )
         .reset_index()

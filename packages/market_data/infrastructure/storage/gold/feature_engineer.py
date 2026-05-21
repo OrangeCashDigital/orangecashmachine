@@ -24,6 +24,7 @@ Ahora:
 
 Eliminación programada: v3.0.0
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -56,16 +57,17 @@ class FeatureEngineer:
 
     def compute(
         self,
-        df:        "pd.DataFrame",
-        symbol:    str = "",
+        df: "pd.DataFrame",
+        symbol: str = "",
         timeframe: str = "",
     ) -> "pd.DataFrame":
         warnings.warn(_DEPRECATED_MSG, DeprecationWarning, stacklevel=2)
 
         from market_data.infrastructure.storage.gold.transformer import GoldTransformer
+
         return GoldTransformer.transform(
             df,
-            symbol    = symbol,
-            timeframe = timeframe,
-            exchange  = "unknown",  # FeatureEngineer no tenía exchange — degradación segura
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange="unknown",  # FeatureEngineer no tenía exchange — degradación segura
         )

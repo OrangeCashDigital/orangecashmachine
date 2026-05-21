@@ -35,6 +35,7 @@ Principios
 - Fail-Soft: vacío in → vacío out, sin excepción.
 - No destructivo: nunca muta el DataFrame de entrada.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -53,20 +54,20 @@ from market_data.infrastructure.lineage.tracker import (
 # ------------------------------------------------------------------
 
 _ROLLING_WINDOW: int = 20
-_MIN_PERIODS:    int = 5      # features disponibles desde barra 5
+_MIN_PERIODS: int = 5  # features disponibles desde barra 5
 
 # Factores de anualización: periodos completos por año calendario (crypto 24/7).
 # Se pasa a np.sqrt() en _compute_volatility — no almacenar la raíz aquí.
 _ANNUALIZATION_MAP: dict[str, int] = {
-    "1m":  525_600,
-    "5m":  105_120,
-    "15m":  35_040,
-    "30m":  17_520,
-    "1h":    8_760,
-    "4h":    2_190,
-    "8h":    1_095,
-    "1d":      365,
-    "1w":       52,
+    "1m": 525_600,
+    "5m": 105_120,
+    "15m": 35_040,
+    "30m": 17_520,
+    "1h": 8_760,
+    "4h": 2_190,
+    "8h": 1_095,
+    "1d": 365,
+    "1w": 52,
 }
 _DEFAULT_ANNUALIZATION: int = 365  # fallback conservador
 
@@ -113,11 +114,11 @@ class GoldTransformer:
     @classmethod
     def transform(
         cls,
-        df:        pd.DataFrame,
-        symbol:    str,
+        df: pd.DataFrame,
+        symbol: str,
         timeframe: str,
-        exchange:  str,
-        run_id:    str | None = None,
+        exchange: str,
+        run_id: str | None = None,
     ) -> pd.DataFrame:
         """
         Pipeline principal Silver → Gold.
@@ -127,12 +128,14 @@ class GoldTransformer:
         if df is None or df.empty:
             logger.warning(
                 "GoldTransformer: empty input | {}/{} exchange={}",
-                symbol, timeframe, exchange,
+                symbol,
+                timeframe,
+                exchange,
             )
             return pd.DataFrame()
 
         rows_in = len(df)
-        gold    = df.copy().sort_values("timestamp").reset_index(drop=True)
+        gold = df.copy().sort_values("timestamp").reset_index(drop=True)
 
         gold = cls._compute_log_return(gold)
         gold = cls._compute_return_1(gold)
@@ -145,31 +148,38 @@ class GoldTransformer:
         gold = cls._compute_is_suspect(gold)
         gold = cls._sanitize(gold)
 
-        rows_out  = len(gold)
-        new_cols  = [c for c in gold.columns if c not in df.columns]
+        rows_out = len(gold)
+        new_cols = [c for c in gold.columns if c not in df.columns]
 
         logger.info(
             "GoldTransformer | {}/{} exchange={} rows={} features={} v={}",
-            symbol, timeframe, exchange, rows_out, new_cols, VERSION,
+            symbol,
+            timeframe,
+            exchange,
+            rows_out,
+            new_cols,
+            VERSION,
         )
 
         if run_id is not None:
-            lineage_tracker.record(LineageEvent(
-                run_id    = run_id,
-                layer     = PipelineLayer.GOLD,
-                exchange  = exchange,
-                symbol    = symbol,
-                timeframe = timeframe,
-                rows_in   = rows_in,
-                rows_out  = rows_out,
-                status    = LineageStatus.SUCCESS,
-                params    = {
-                    "rolling_window": _ROLLING_WINDOW,
-                    "min_periods":    _MIN_PERIODS,
-                    "timeframe":      timeframe,
-                    "version":        VERSION,
-                },
-            ))
+            lineage_tracker.record(
+                LineageEvent(
+                    run_id=run_id,
+                    layer=PipelineLayer.GOLD,
+                    exchange=exchange,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    rows_in=rows_in,
+                    rows_out=rows_out,
+                    status=LineageStatus.SUCCESS,
+                    params={
+                        "rolling_window": _ROLLING_WINDOW,
+                        "min_periods": _MIN_PERIODS,
+                        "timeframe": timeframe,
+                        "version": VERSION,
+                    },
+                )
+            )
 
         return gold
 
@@ -187,7 +197,7 @@ class GoldTransformer:
         Primera fila: NaN por diseño (no hay t-1).
         Preferido sobre retorno simple: aditivo en tiempo, sin sesgo compounding.
         """
-        df         = df.copy()
+        df = df.copy()
         safe_close = df["close"].replace(0, float("nan"))
         df["log_return"] = np.log(safe_close / safe_close.shift(1))
         return df
@@ -195,7 +205,7 @@ class GoldTransformer:
     @staticmethod
     def _compute_return_1(df: pd.DataFrame) -> pd.DataFrame:
         """Retorno simple período a período. Complementa log_return."""
-        df             = df.copy()
+        df = df.copy()
         df["return_1"] = df["close"].pct_change()
         return df
 
@@ -207,14 +217,9 @@ class GoldTransformer:
         std(log_returns, window=20) × sqrt(periodos_por_año).
         _ANNUALIZATION_MAP almacena enteros — np.sqrt() se aplica aquí.
         """
-        df  = df.copy()
+        df = df.copy()
         ann = _ANNUALIZATION_MAP.get(timeframe, _DEFAULT_ANNUALIZATION)
-        df["volatility_20"] = (
-            df["log_return"]
-            .rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
-            .std()
-            * np.sqrt(ann)
-        )
+        df["volatility_20"] = df["log_return"].rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS).std() * np.sqrt(ann)
         return df
 
     @staticmethod
@@ -232,10 +237,10 @@ class GoldTransformer:
         En backtesting diario/semanal genera look-ahead bias implícito.
         Typical-price rolling es la convención estándar (Bloomberg, QuantLib).
         """
-        df   = df.copy()
-        tp   = (df["high"] + df["low"] + df["close"]) / 3
-        vol  = df["volume"].replace(0, float("nan"))
-        tpv  = tp * vol
+        df = df.copy()
+        tp = (df["high"] + df["low"] + df["close"]) / 3
+        vol = df["volume"].replace(0, float("nan"))
+        tpv = tp * vol
 
         roll_tpv = tpv.rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS).sum()
         roll_vol = vol.rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS).sum()
@@ -255,8 +260,8 @@ class GoldTransformer:
         Normalizar por close (no por open) es la convención estándar
         porque close es el precio de referencia de la sesión.
         """
-        df              = df.copy()
-        safe_close      = df["close"].replace(0, float("nan"))
+        df = df.copy()
+        safe_close = df["close"].replace(0, float("nan"))
         df["high_low_spread"] = (df["high"] - df["low"]) / safe_close
         return df
 
@@ -269,12 +274,9 @@ class GoldTransformer:
         volume_z < -2 → vacío de liquidez.
         std=0 → NaN (no división por cero).
         """
-        df   = df.copy()
+        df = df.copy()
         roll = df["volume"].rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
-        df["volume_z"] = (
-            (df["volume"] - roll.mean())
-            / roll.std().replace(0, float("nan"))
-        )
+        df["volume_z"] = (df["volume"] - roll.mean()) / roll.std().replace(0, float("nan"))
         return df
 
     @staticmethod
@@ -285,8 +287,8 @@ class GoldTransformer:
         Siempre >= 0 por invariante OHLC (high >= low).
         open=0 → NaN (no división por cero).
         """
-        df              = df.copy()
-        safe_open       = df["open"].replace(0, float("nan"))
+        df = df.copy()
+        safe_open = df["open"].replace(0, float("nan"))
         df["price_range_pct"] = (df["high"] - df["low"]) / safe_open
         return df
 
@@ -298,8 +300,8 @@ class GoldTransformer:
         Alto → decisión direccional clara.
         Bajo → doji / indecisión.
         """
-        df          = df.copy()
-        safe_open   = df["open"].replace(0, float("nan"))
+        df = df.copy()
+        safe_open = df["open"].replace(0, float("nan"))
         df["body_pct"] = (df["close"] - df["open"]).abs() / safe_open
         return df
 
@@ -312,11 +314,7 @@ class GoldTransformer:
         False si quality_flag no existe — degradación segura.
         """
         df = df.copy()
-        df["is_suspect"] = (
-            df["quality_flag"] == "suspect"
-            if "quality_flag" in df.columns
-            else False
-        )
+        df["is_suspect"] = df["quality_flag"] == "suspect" if "quality_flag" in df.columns else False
         return df
 
     @staticmethod
@@ -334,16 +332,12 @@ class GoldTransformer:
 
         Fail-soft: nunca lanza excepción.
         """
-        numeric  = df.select_dtypes(include="number")
+        numeric = df.select_dtypes(include="number")
         inf_mask = np.isinf(numeric)
-        n_inf    = int(inf_mask.values.sum())
+        n_inf = int(inf_mask.values.sum())
 
         if n_inf:
-            logger.warning(
-                "GoldTransformer._sanitize: ±inf→NaN | count={}", n_inf
-            )
+            logger.warning("GoldTransformer._sanitize: ±inf→NaN | count={}", n_inf)
             df = df.copy()
-            df[numeric.columns] = numeric.replace(
-                [np.inf, -np.inf], float("nan")
-            )
+            df[numeric.columns] = numeric.replace([np.inf, -np.inf], float("nan"))
         return df

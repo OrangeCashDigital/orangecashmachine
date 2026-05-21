@@ -18,6 +18,7 @@ SRP    — única responsabilidad: adaptar PIPELINE_ERRORS al protocolo esperado
 SafeOps — record_error nunca lanza; fallo de métricas no interrumpe pipeline
 SSOT   — PIPELINE_ERRORS sigue siendo SSOT en metrics.py; aquí solo delegamos
 """
+
 from __future__ import annotations
 
 from market_data.infrastructure.observability.metrics import PIPELINE_ERRORS

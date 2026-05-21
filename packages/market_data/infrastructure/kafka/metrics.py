@@ -34,6 +34,7 @@ Uso
 
 Principios: SRP · optional dependency · zero overhead sin Prometheus
 """
+
 from __future__ import annotations
 
 import time
@@ -41,6 +42,7 @@ from typing import Protocol, runtime_checkable
 
 try:
     from prometheus_client import Counter, Histogram
+
     _PROMETHEUS_AVAILABLE = True
 except ImportError:
     _PROMETHEUS_AVAILABLE = False
@@ -50,9 +52,11 @@ except ImportError:
 # No-op fallbacks — misma interfaz, cero overhead
 # ---------------------------------------------------------------------------
 
+
 @runtime_checkable
 class _CounterProtocol(Protocol):
     """Interfaz minima compartida entre prometheus_client.Counter y _NoOpCounter."""
+
     def labels(self, **kwargs: str) -> "_CounterProtocol": ...
     def inc(self, amount: float = 1) -> None: ...
 
@@ -60,34 +64,38 @@ class _CounterProtocol(Protocol):
 @runtime_checkable
 class _HistogramProtocol(Protocol):
     """Interfaz minima compartida entre prometheus_client.Histogram y _NoOpHistogram."""
+
     def labels(self, **kwargs: str) -> "_HistogramProtocol": ...
     def observe(self, amount: float) -> None: ...
 
 
 class _NoOpCounter:
-    def labels(self, **_): return self
-    def inc(self, _=1):    return
+    def labels(self, **_):
+        return self
+
+    def inc(self, _=1):
+        return
 
 
 class _NoOpHistogram:
-    def labels(self, **_): return self
-    def observe(self, _):  return
+    def labels(self, **_):
+        return self
+
+    def observe(self, _):
+        return
 
 
 # ---------------------------------------------------------------------------
 # Registro global — una sola instancia por proceso
 # ---------------------------------------------------------------------------
 
+
 def _make_counter(name: str, doc: str, labels: list) -> "_CounterProtocol":
     return Counter(name, doc, labels) if _PROMETHEUS_AVAILABLE else _NoOpCounter()
 
 
 def _make_histogram(name: str, doc: str, labels: list, buckets: list) -> "_HistogramProtocol":
-    return (
-        Histogram(name, doc, labels, buckets=buckets)
-        if _PROMETHEUS_AVAILABLE
-        else _NoOpHistogram()
-    )
+    return Histogram(name, doc, labels, buckets=buckets) if _PROMETHEUS_AVAILABLE else _NoOpHistogram()
 
 
 _LATENCY_BUCKETS = [1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000]
@@ -122,6 +130,7 @@ _processing_latency = _make_histogram(
 # KafkaMetrics — interfaz de alto nivel
 # ---------------------------------------------------------------------------
 
+
 class KafkaMetrics:
     """
     Interfaz de métricas para el pipeline Kafka.
@@ -142,7 +151,7 @@ class KafkaMetrics:
 
     def event_processed(
         self,
-        exchange:   str   = "unknown",
+        exchange: str = "unknown",
         latency_ms: float = 0.0,
     ) -> None:
         """Registra un mensaje procesado con commit y su latencia."""
@@ -152,7 +161,7 @@ class KafkaMetrics:
     def event_failed(
         self,
         exchange: str = "unknown",
-        reason:   str = "unknown",
+        reason: str = "unknown",
     ) -> None:
         """
         Registra un mensaje fallado.
@@ -160,15 +169,16 @@ class KafkaMetrics:
         reason: deserialize_error | schema_mismatch | write_error | dlq_sent
         """
         _events_failed.labels(
-            topic    = self._topic,
-            exchange = exchange,
-            reason   = reason,
+            topic=self._topic,
+            exchange=exchange,
+            reason=reason,
         ).inc()
 
 
 # ---------------------------------------------------------------------------
 # timer — context manager para latencia
 # ---------------------------------------------------------------------------
+
 
 class timer:
     """

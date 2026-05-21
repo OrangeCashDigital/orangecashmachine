@@ -36,6 +36,7 @@ SSOT       — OrderBookSide vive aquí; importar desde aquí, nunca redefinir.
 SRP        — este módulo solo define tipos de order book.
 Clean Arch — sin dependencias de infraestructura ni de OHLCV.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -46,6 +47,7 @@ from enum import Enum
 # OrderBookSide
 # ---------------------------------------------------------------------------
 
+
 class OrderBookSide(str, Enum):
     """
     Lado del libro de órdenes.
@@ -55,6 +57,7 @@ class OrderBookSide(str, Enum):
 
     Hereda ``str`` para serialización JSON directa sin encoder personalizado.
     """
+
     BID = "bid"
     ASK = "ask"
 
@@ -62,6 +65,7 @@ class OrderBookSide(str, Enum):
 # ---------------------------------------------------------------------------
 # PriceLevel
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class PriceLevel:
@@ -77,18 +81,15 @@ class PriceLevel:
     - price    > 0  (un precio negativo o cero no existe en mercados reales).
     - quantity >= 0 (0.0 es válido: representa un nivel a eliminar en deltas).
     """
-    price:    float
+
+    price: float
     quantity: float
 
     def __post_init__(self) -> None:
         if self.price <= 0.0:
-            raise ValueError(
-                f"PriceLevel.price must be > 0, got {self.price}"
-            )
+            raise ValueError(f"PriceLevel.price must be > 0, got {self.price}")
         if self.quantity < 0.0:
-            raise ValueError(
-                f"PriceLevel.quantity must be >= 0, got {self.quantity}"
-            )
+            raise ValueError(f"PriceLevel.quantity must be >= 0, got {self.quantity}")
 
     @property
     def is_empty(self) -> bool:
@@ -102,6 +103,7 @@ class PriceLevel:
 # ---------------------------------------------------------------------------
 # OrderBookSnapshot
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class OrderBookSnapshot:
@@ -139,12 +141,12 @@ class OrderBookSnapshot:
     - asks ordenados ASCENDENTE:  asks[i].price <= asks[i+1].price.
     """
 
-    exchange:     str
-    symbol:       str
+    exchange: str
+    symbol: str
     timestamp_ms: int
-    bids:         tuple[PriceLevel, ...]   # ordenado DESCENDENTE por precio
-    asks:         tuple[PriceLevel, ...]   # ordenado ASCENDENTE  por precio
-    depth:        int = 0                  # 0 = ilimitado / desconocido
+    bids: tuple[PriceLevel, ...]  # ordenado DESCENDENTE por precio
+    asks: tuple[PriceLevel, ...]  # ordenado ASCENDENTE  por precio
+    depth: int = 0  # 0 = ilimitado / desconocido
 
     def __post_init__(self) -> None:
         self._validate()
@@ -155,14 +157,9 @@ class OrderBookSnapshot:
         if not self.symbol:
             raise ValueError("OrderBookSnapshot.symbol must be non-empty")
         if self.timestamp_ms <= 0:
-            raise ValueError(
-                f"OrderBookSnapshot.timestamp_ms must be > 0, "
-                f"got {self.timestamp_ms}"
-            )
+            raise ValueError(f"OrderBookSnapshot.timestamp_ms must be > 0, got {self.timestamp_ms}")
         if not self.bids and not self.asks:
-            raise ValueError(
-                "OrderBookSnapshot: bids and asks cannot both be empty"
-            )
+            raise ValueError("OrderBookSnapshot: bids and asks cannot both be empty")
 
         # Orden bids — DESCENDENTE
         for i in range(len(self.bids) - 1):
@@ -170,7 +167,7 @@ class OrderBookSnapshot:
                 raise ValueError(
                     f"OrderBookSnapshot.bids must be sorted DESCENDING by price. "
                     f"Violation at index {i}: "
-                    f"{self.bids[i].price} < {self.bids[i+1].price}. "
+                    f"{self.bids[i].price} < {self.bids[i + 1].price}. "
                     f"Use OrderBookSnapshot.from_raw() if order is not guaranteed."
                 )
 
@@ -180,7 +177,7 @@ class OrderBookSnapshot:
                 raise ValueError(
                     f"OrderBookSnapshot.asks must be sorted ASCENDING by price. "
                     f"Violation at index {i}: "
-                    f"{self.asks[i].price} > {self.asks[i+1].price}. "
+                    f"{self.asks[i].price} > {self.asks[i + 1].price}. "
                     f"Use OrderBookSnapshot.from_raw() if order is not guaranteed."
                 )
 
@@ -189,12 +186,12 @@ class OrderBookSnapshot:
     @classmethod
     def from_raw(
         cls,
-        exchange:     str,
-        symbol:       str,
+        exchange: str,
+        symbol: str,
         timestamp_ms: int,
-        bids:         list[list[float]],   # [[price, qty], ...]
-        asks:         list[list[float]],   # [[price, qty], ...]
-        depth:        int = 0,
+        bids: list[list[float]],  # [[price, qty], ...]
+        asks: list[list[float]],  # [[price, qty], ...]
+        depth: int = 0,
     ) -> OrderBookSnapshot:
         """
         Construye desde el formato crudo de CCXT / cryptofeed.
@@ -210,12 +207,10 @@ class OrderBookSnapshot:
         asks : lista de [price, qty] de órdenes de venta  (puede estar desordenada).
         """
         sorted_bids = tuple(
-            PriceLevel(price=float(b[0]), quantity=float(b[1]))
-            for b in sorted(bids, key=lambda x: x[0], reverse=True)
+            PriceLevel(price=float(b[0]), quantity=float(b[1])) for b in sorted(bids, key=lambda x: x[0], reverse=True)
         )
         sorted_asks = tuple(
-            PriceLevel(price=float(a[0]), quantity=float(a[1]))
-            for a in sorted(asks, key=lambda x: x[0])
+            PriceLevel(price=float(a[0]), quantity=float(a[1])) for a in sorted(asks, key=lambda x: x[0])
         )
         return cls(
             exchange=exchange,
@@ -305,6 +300,7 @@ class OrderBookSnapshot:
 # OrderBookDelta
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class OrderBookDelta:
     """
@@ -337,12 +333,12 @@ class OrderBookDelta:
     - quantity >= 0 (0.0 es válido — eliminar nivel).
     """
 
-    exchange:     str
-    symbol:       str
+    exchange: str
+    symbol: str
     timestamp_ms: int
-    side:         OrderBookSide
-    price:        float
-    quantity:     float          # 0.0 = eliminar este nivel
+    side: OrderBookSide
+    price: float
+    quantity: float  # 0.0 = eliminar este nivel
 
     def __post_init__(self) -> None:
         self._validate()
@@ -353,18 +349,11 @@ class OrderBookDelta:
         if not self.symbol:
             raise ValueError("OrderBookDelta.symbol must be non-empty")
         if self.timestamp_ms <= 0:
-            raise ValueError(
-                f"OrderBookDelta.timestamp_ms must be > 0, "
-                f"got {self.timestamp_ms}"
-            )
+            raise ValueError(f"OrderBookDelta.timestamp_ms must be > 0, got {self.timestamp_ms}")
         if self.price <= 0.0:
-            raise ValueError(
-                f"OrderBookDelta.price must be > 0, got {self.price}"
-            )
+            raise ValueError(f"OrderBookDelta.price must be > 0, got {self.price}")
         if self.quantity < 0.0:
-            raise ValueError(
-                f"OrderBookDelta.quantity must be >= 0, got {self.quantity}"
-            )
+            raise ValueError(f"OrderBookDelta.quantity must be >= 0, got {self.quantity}")
 
     # -- propiedades semánticas ------------------------------------------------
 

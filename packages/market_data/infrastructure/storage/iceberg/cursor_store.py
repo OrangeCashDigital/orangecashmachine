@@ -8,6 +8,7 @@ procesado por símbolo+timeframe) sobre Redis con fallback en memoria.
 Bounded context: Infrastructure / Storage / Iceberg.
 Depende de: ports.outbound.cache (abstracto), nunca de IcebergStorage.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -31,15 +32,15 @@ class CursorStore:
 
     def __init__(
         self,
-        redis_client,           # redis.Redis | FakeRedis | None
-        exchange:    str,
+        redis_client,  # redis.Redis | FakeRedis | None
+        exchange: str,
         market_type: str,
-        ttl_s:       int = _DEFAULT_TTL_S,
+        ttl_s: int = _DEFAULT_TTL_S,
     ) -> None:
-        self._redis      = redis_client
-        self._exchange   = exchange
+        self._redis = redis_client
+        self._exchange = exchange
         self._market_type = market_type
-        self._ttl_s      = ttl_s
+        self._ttl_s = ttl_s
         self._l1: dict[tuple[str, str], Optional[int]] = {}
 
     # ── key helper ────────────────────────────────────────────────────────
@@ -67,7 +68,9 @@ class CursorStore:
                     return val
             except Exception:
                 logger.opt(exception=True).warning(
-                    "CursorStore.get Redis error | {}/{}", symbol, timeframe,
+                    "CursorStore.get Redis error | {}/{}",
+                    symbol,
+                    timeframe,
                 )
 
         return None
@@ -76,7 +79,7 @@ class CursorStore:
 
     def set(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
         timestamp_ms: int,
     ) -> None:
@@ -93,7 +96,9 @@ class CursorStore:
                 )
             except Exception:
                 logger.opt(exception=True).warning(
-                    "CursorStore.set Redis error | {}/{}", symbol, timeframe,
+                    "CursorStore.set Redis error | {}/{}",
+                    symbol,
+                    timeframe,
                 )
 
     # ── invalidación ──────────────────────────────────────────────────────
@@ -108,5 +113,7 @@ class CursorStore:
                 self._redis.delete(self._key(symbol, timeframe))
             except Exception:
                 logger.opt(exception=True).debug(
-                    "CursorStore.invalidate Redis error | {}/{}", symbol, timeframe,
+                    "CursorStore.invalidate Redis error | {}/{}",
+                    symbol,
+                    timeframe,
                 )

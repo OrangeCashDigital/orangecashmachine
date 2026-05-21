@@ -20,6 +20,7 @@ El shim expone la firma legacy para compatibilidad, pero llama a shared
 internamente con EventPayload como clase concreta.
 Callers que necesiten deserializar otros tipos deben migrar a shared directamente.
 """
+
 from __future__ import annotations
 
 import warnings

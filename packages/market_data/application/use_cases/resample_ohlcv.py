@@ -46,6 +46,7 @@ Diagrama
 
 Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Fast · SafeOps
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -65,6 +66,7 @@ if TYPE_CHECKING:
 # =============================================================================
 # DTO de request — entrada al caso de uso
 # =============================================================================
+
 
 @dataclass
 class ResampleRequest:
@@ -88,13 +90,14 @@ class ResampleRequest:
                    None = ResamplePipeline usa time.time() internamente.
                    Inyectable en tests para reproducibilidad.
     """
-    exchange:    str
-    market_type: str
-    app_config:  Any   # AppConfig — tipado como Any para evitar import circular
 
-    dry_run:     bool          = False
-    run_id:      Optional[str] = None
-    now_ms:      Optional[int] = None
+    exchange: str
+    market_type: str
+    app_config: Any  # AppConfig — tipado como Any para evitar import circular
+
+    dry_run: bool = False
+    run_id: Optional[str] = None
+    now_ms: Optional[int] = None
 
     def __post_init__(self) -> None:
         """Fail-Fast: valida invariantes del DTO."""
@@ -106,15 +109,13 @@ class ResampleRequest:
             raise ValueError("ResampleRequest.app_config no puede ser None")
 
     def __str__(self) -> str:
-        return (
-            f"ResampleRequest({self.exchange}/{self.market_type}"
-            f" dry_run={self.dry_run} run_id={self.run_id})"
-        )
+        return f"ResampleRequest({self.exchange}/{self.market_type} dry_run={self.dry_run} run_id={self.run_id})"
 
 
 # =============================================================================
 # Result type — salida del caso de uso
 # =============================================================================
+
 
 @dataclass
 class ResampleUseCaseResult:
@@ -123,15 +124,16 @@ class ResampleUseCaseResult:
 
     status: "ok" | "skipped" | "partial" | "failed"
     """
-    status:       str
-    exchange:     str
-    market_type:  str
-    rows:         int  = 0
-    symbols:      List[str] = field(default_factory=list)
-    targets:      List[str] = field(default_factory=list)
-    source_tf:    str  = "1m"
-    run_id:       Optional[str] = None
-    error:        str  = ""
+
+    status: str
+    exchange: str
+    market_type: str
+    rows: int = 0
+    symbols: List[str] = field(default_factory=list)
+    targets: List[str] = field(default_factory=list)
+    source_tf: str = "1m"
+    run_id: Optional[str] = None
+    error: str = ""
 
     @property
     def succeeded(self) -> bool:
@@ -141,6 +143,7 @@ class ResampleUseCaseResult:
 # =============================================================================
 # ResampleUseCase
 # =============================================================================
+
 
 class ResampleUseCase:
     """
@@ -167,8 +170,7 @@ class ResampleUseCase:
     def __init__(self, storage_factory: StorageFactoryPort) -> None:
         if storage_factory is None:
             raise ValueError(
-                "ResampleUseCase: storage_factory no puede ser None —"
-                " inyéctalo desde el composition root."
+                "ResampleUseCase: storage_factory no puede ser None — inyéctalo desde el composition root."
             )
         self._storage_factory = storage_factory
 
@@ -194,91 +196,100 @@ class ResampleUseCase:
             symbols, targets, source_tf = self._resolve_config(request)
         except Exception as exc:
             logger.error(
-                "ResampleUseCase: config error | {} err={}", request, exc,
+                "ResampleUseCase: config error | {} err={}",
+                request,
+                exc,
             )
             return ResampleUseCaseResult(
-                status      = "failed",
-                exchange    = request.exchange,
-                market_type = request.market_type,
-                run_id      = request.run_id,
-                error       = str(exc),
+                status="failed",
+                exchange=request.exchange,
+                market_type=request.market_type,
+                run_id=request.run_id,
+                error=str(exc),
             )
 
         # ── 2. Guard: sin símbolos configurados → skip explícito ──────────────────
         if not symbols:
             logger.warning(
                 "ResampleUseCase: sin símbolos para {}/{} — skip",
-                request.exchange, request.market_type,
+                request.exchange,
+                request.market_type,
             )
             return ResampleUseCaseResult(
-                status      = "skipped",
-                exchange    = request.exchange,
-                market_type = request.market_type,
-                symbols     = [],
-                targets     = targets,
-                source_tf   = source_tf,
-                run_id      = request.run_id,
+                status="skipped",
+                exchange=request.exchange,
+                market_type=request.market_type,
+                symbols=[],
+                targets=targets,
+                source_tf=source_tf,
+                run_id=request.run_id,
             )
 
         # ── 3. Construir storage via factory (DIP) ────────────────────────────
         try:
             storage = self._storage_factory.get_storage(
-                exchange    = request.exchange,
-                market_type = request.market_type,
-                dry_run     = request.dry_run,
+                exchange=request.exchange,
+                market_type=request.market_type,
+                dry_run=request.dry_run,
             )
         except Exception as exc:
             logger.error(
-                "ResampleUseCase: storage error | {} err={}", request, exc,
+                "ResampleUseCase: storage error | {} err={}",
+                request,
+                exc,
             )
             return ResampleUseCaseResult(
-                status      = "failed",
-                exchange    = request.exchange,
-                market_type = request.market_type,
-                symbols     = symbols,
-                targets     = targets,
-                source_tf   = source_tf,
-                run_id      = request.run_id,
-                error       = f"storage init failed: {exc}",
+                status="failed",
+                exchange=request.exchange,
+                market_type=request.market_type,
+                symbols=symbols,
+                targets=targets,
+                source_tf=source_tf,
+                run_id=request.run_id,
+                error=f"storage init failed: {exc}",
             )
 
         # ── 4. Instanciar y ejecutar ResamplePipeline ─────────────────────────
         try:
             summary = self._run_pipeline(
-                request   = request,
-                symbols   = symbols,
-                targets   = targets,
-                source_tf = source_tf,
-                storage   = storage,
+                request=request,
+                symbols=symbols,
+                targets=targets,
+                source_tf=source_tf,
+                storage=storage,
             )
         except Exception as exc:
             logger.error(
-                "ResampleUseCase: pipeline error | {} err={}", request, exc,
+                "ResampleUseCase: pipeline error | {} err={}",
+                request,
+                exc,
             )
             return ResampleUseCaseResult(
-                status      = "failed",
-                exchange    = request.exchange,
-                market_type = request.market_type,
-                symbols     = symbols,
-                targets     = targets,
-                source_tf   = source_tf,
-                run_id      = request.run_id,
-                error       = str(exc),
+                status="failed",
+                exchange=request.exchange,
+                market_type=request.market_type,
+                symbols=symbols,
+                targets=targets,
+                source_tf=source_tf,
+                run_id=request.run_id,
+                error=str(exc),
             )
 
         result = ResampleUseCaseResult(
-            status      = summary.status,
-            exchange    = request.exchange,
-            market_type = request.market_type,
-            rows        = summary.total_rows,
-            symbols     = symbols,
-            targets     = targets,
-            source_tf   = source_tf,
-            run_id      = request.run_id,
+            status=summary.status,
+            exchange=request.exchange,
+            market_type=request.market_type,
+            rows=summary.total_rows,
+            symbols=symbols,
+            targets=targets,
+            source_tf=source_tf,
+            run_id=request.run_id,
         )
         logger.info(
             "ResampleUseCase.execute OK | {} status={} rows={}",
-            request, result.status, result.rows,
+            request,
+            result.status,
+            result.rows,
         )
         return result
 
@@ -308,23 +319,19 @@ class ResampleUseCase:
                 f"Exchanges configurados: {[e.name for e in app_cfg.exchanges]}"
             )
 
-        symbols = (
-            exc_cfg.markets.spot_symbols
-            if request.market_type == "spot"
-            else exc_cfg.markets.futures_symbols
-        )
-        targets   = list(app_cfg.pipeline.resample.targets)
+        symbols = exc_cfg.markets.spot_symbols if request.market_type == "spot" else exc_cfg.markets.futures_symbols
+        targets = list(app_cfg.pipeline.resample.targets)
         source_tf = app_cfg.pipeline.resample.source_tf
 
         return list(symbols), targets, source_tf
 
     def _run_pipeline(
         self,
-        request:   ResampleRequest,
-        symbols:   List[str],
-        targets:   List[str],
+        request: ResampleRequest,
+        symbols: List[str],
+        targets: List[str],
         source_tf: str,
-        storage:   OHLCVStorage,
+        storage: OHLCVStorage,
     ) -> Any:
         """
         Instancia ResamplePipeline y ejecuta su loop async.
@@ -338,18 +345,21 @@ class ResampleUseCase:
         from market_data.application.pipelines.resample_pipeline import ResamplePipeline
 
         pipeline = ResamplePipeline(
-            symbols     = symbols,
-            timeframes  = targets,
-            exchange    = request.exchange,
-            market_type = request.market_type,
-            storage     = storage,
-            dry_run     = request.dry_run,
+            symbols=symbols,
+            timeframes=targets,
+            exchange=request.exchange,
+            market_type=request.market_type,
+            storage=storage,
+            dry_run=request.dry_run,
         )
 
         logger.info(
             "ResampleUseCase: pipeline iniciando | {}/{} symbols={} targets={} source_tf={}",
-            request.exchange, request.market_type,
-            len(symbols), targets, source_tf,
+            request.exchange,
+            request.market_type,
+            len(symbols),
+            targets,
+            source_tf,
         )
 
         # asyncio.run() es el único path — producción y tests ejecutan lo mismo.

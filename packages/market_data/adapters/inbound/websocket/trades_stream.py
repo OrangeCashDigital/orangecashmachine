@@ -16,6 +16,7 @@ Migración
     # después
     from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
 """
+
 from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
 
 # Alias de compatibilidad — remover en siguiente iteración

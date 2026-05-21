@@ -20,6 +20,7 @@ SSOT   — definición única en shared/types/timeframe.py
 OCP    — callers existentes no necesitan cambiar sus imports
 BC-09  — shared no importa market_data; market_data sí puede importar shared
 """
+
 from __future__ import annotations
 
 from shared.types.timeframe import (  # noqa: F401

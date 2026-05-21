@@ -43,6 +43,7 @@ replay_source : ReplayTradesSource — testing / reconstrucción.
 
 Principios: SSOT · DIP · Clean Arch · Bounded Ctx · Fail-Fast · SafeOps
 """
+
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -61,6 +62,7 @@ _DEDUP_MAX_SIZE: int = 10_000
 
 # ─── Enum de modo ─────────────────────────────────────────────────────────────
 
+
 class TradesSourceKind(str, Enum):
     """
     Modo operacional de la fuente activa.
@@ -69,12 +71,14 @@ class TradesSourceKind(str, Enum):
     WEBSOCKET — Live stream con auto-recovery (GapAwareStream).
     REPLAY    — Replay de eventos almacenados (testing / reconstrucción).
     """
-    BACKFILL  = "backfill"
+
+    BACKFILL = "backfill"
     WEBSOCKET = "ws"
-    REPLAY    = "replay"
+    REPLAY = "replay"
 
 
 # ─── Manager ──────────────────────────────────────────────────────────────────
+
 
 class TradesSourceManager:
     """
@@ -97,8 +101,8 @@ class TradesSourceManager:
     def __init__(
         self,
         *,
-        rest_source:   TradesSourceProtocol,
-        ws_source:     Optional[TradesSourceProtocol] = None,
+        rest_source: TradesSourceProtocol,
+        ws_source: Optional[TradesSourceProtocol] = None,
         replay_source: Optional[TradesSourceProtocol] = None,
     ) -> None:
         # -- Fail-fast: rest_source es obligatorio — fallback universal --------
@@ -113,15 +117,15 @@ class TradesSourceManager:
                 f"TradesSourceProtocol, recibido: {type(rest_source)!r}"
             )
 
-        self._rest   = rest_source
-        self._ws     = ws_source
+        self._rest = rest_source
+        self._ws = ws_source
         self._replay = replay_source
 
         # -- Estado interno ----------------------------------------------------
-        self._cursor_ms: int                         = 0
-        self._dedup:     OrderedDict[str, None]      = OrderedDict()
-        self._active:    Optional[TradesSourceProtocol] = None
-        self._kind:      Optional[TradesSourceKind]  = None
+        self._cursor_ms: int = 0
+        self._dedup: OrderedDict[str, None] = OrderedDict()
+        self._active: Optional[TradesSourceProtocol] = None
+        self._kind: Optional[TradesSourceKind] = None
 
         self._log = logger.bind(component="TradesSourceManager")
 
@@ -131,7 +135,7 @@ class TradesSourceManager:
 
     @property
     def source_id(self) -> str:
-        kind      = self._kind.value if self._kind else "uninitialized"
+        kind = self._kind.value if self._kind else "uninitialized"
         active_id = self._active.source_id if self._active else "none"
         return f"manager:{kind}:{active_id}"
 
@@ -185,7 +189,8 @@ class TradesSourceManager:
             if trade.timestamp_ms < self._cursor_ms:
                 self._log.debug(
                     "descartado trade estale | ts={} cursor={}",
-                    trade.timestamp_ms, self._cursor_ms,
+                    trade.timestamp_ms,
+                    self._cursor_ms,
                 )
                 continue
 
@@ -193,7 +198,8 @@ class TradesSourceManager:
             if self._is_duplicate(trade):
                 self._log.debug(
                     "descartado duplicado | trade_id={} ts={}",
-                    getattr(trade, "trade_id", "?"), trade.timestamp_ms,
+                    getattr(trade, "trade_id", "?"),
+                    trade.timestamp_ms,
                 )
                 continue
 
@@ -263,12 +269,11 @@ class TradesSourceManager:
                 await self._active.stop()
             self._log.debug(
                 "TradesSourceManager detenido | kind={} cursor_ms={}",
-                self._kind, self._cursor_ms,
+                self._kind,
+                self._cursor_ms,
             )
         except Exception as _stop_exc:  # SafeOps — nunca propaga
-            self._log.warning(
-                "stop() raised unexpectedly | error={}", _stop_exc
-            )
+            self._log.warning("stop() raised unexpectedly | error={}", _stop_exc)
 
     def __repr__(self) -> str:
         return (

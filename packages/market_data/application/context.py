@@ -13,14 +13,15 @@ domain/ no puede conocer ports — este archivo resuelve BC-08.
 Inmutable en runtime: se construye en pipeline_factory.py (Composition Root)
 y se pasa hacia abajo sin mutación.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from market_data.ports.outbound.storage        import OHLCVStorage
-from market_data.ports.outbound.state          import CursorStorePort
-from market_data.ports.outbound.gap_registry   import GapRegistryPort
+from market_data.ports.outbound.storage import OHLCVStorage
+from market_data.ports.outbound.state import CursorStorePort
+from market_data.ports.outbound.gap_registry import GapRegistryPort
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
 
@@ -50,21 +51,22 @@ class PipelineContext:
         auto_lookback_days — días de lookback automático
         _chunk_converter   — port de conversión DataFrame→OHLCVChunk
     """
-    exchange_id:        str
-    market_type:        str
-    fetcher:            Any                       # HistoricalFetcherAsync — evita circular
-    bronze:             Any                       # BronzeStorage — evita circular
-    storage:            OHLCVStorage
-    cursor_store:       CursorStorePort
-    gap_registry:       Optional[GapRegistryPort] = None
-    kafka_producer:     Optional[KafkaProducerPort] = None
-    credentials:        dict                      = field(default_factory=dict)
-    resilience:         Any                       = None
-    symbols:            list                      = field(default_factory=list)
-    timeframes:         list                      = field(default_factory=list)
-    start_date:         Optional[Any]             = None
-    auto_lookback_days: int                       = 30
-    _chunk_converter:   Optional[OHLCVChunkConverterPort] = None
+
+    exchange_id: str
+    market_type: str
+    fetcher: Any  # HistoricalFetcherAsync — evita circular
+    bronze: Any  # BronzeStorage — evita circular
+    storage: OHLCVStorage
+    cursor_store: CursorStorePort
+    gap_registry: Optional[GapRegistryPort] = None
+    kafka_producer: Optional[KafkaProducerPort] = None
+    credentials: dict = field(default_factory=dict)
+    resilience: Any = None
+    symbols: list = field(default_factory=list)
+    timeframes: list = field(default_factory=list)
+    start_date: Optional[Any] = None
+    auto_lookback_days: int = 30
+    _chunk_converter: Optional[OHLCVChunkConverterPort] = None
 
     # ── Invariantes de construcción ──────────────────────────────────────────
 

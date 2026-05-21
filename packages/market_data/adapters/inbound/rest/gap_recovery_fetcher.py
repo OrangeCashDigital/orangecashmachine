@@ -56,6 +56,7 @@ SafeOps
 
 Principios: SOLID · DIP · ACL · Kappa · DRY · SafeOps · KISS · SRP
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -65,7 +66,6 @@ from typing import AsyncIterator, Optional
 from loguru import logger
 
 from market_data.domain.value_objects.raw_trade import RawTrade, TradeSide, TradeSource
-from market_data.ports.inbound.trades_source import TradesSourceProtocol
 from market_data.ports.outbound.exchange import ExchangeAdapter
 
 
@@ -73,22 +73,23 @@ from market_data.ports.outbound.exchange import ExchangeAdapter
 # Constantes operacionales
 # ---------------------------------------------------------------------------
 
-_DEFAULT_PAGE_LIMIT: int   = 1_000   # trades por request REST
-_MAX_PAGES:          int   = 500     # guard anti-loop (SafeOps)
-_RETRY_ATTEMPTS:     int   = 3
-_BACKOFF_BASE:       float = 1.5
-_MAX_BACKOFF_S:      float = 15.0
+_DEFAULT_PAGE_LIMIT: int = 1_000  # trades por request REST
+_MAX_PAGES: int = 500  # guard anti-loop (SafeOps)
+_RETRY_ATTEMPTS: int = 3
+_BACKOFF_BASE: float = 1.5
+_MAX_BACKOFF_S: float = 15.0
 
 
 # ---------------------------------------------------------------------------
 # ACL — conversión CCXT raw → RawTrade  (pura, sin efectos secundarios)
 # ---------------------------------------------------------------------------
 
+
 def _parse_raw_trade(
-    raw:         dict,
+    raw: dict,
     exchange_id: str,
     market_type: str,
-    symbol:      str,
+    symbol: str,
 ) -> Optional[RawTrade]:
     """
     ACL: convierte un trade CCXT crudo a RawTrade del dominio.
@@ -101,31 +102,31 @@ def _parse_raw_trade(
     No lanza — un trade malformado no debe abortar el recovery.
     """
     try:
-        trade_id     = str(raw.get("id") or "").strip()
+        trade_id = str(raw.get("id") or "").strip()
         timestamp_ms = int(raw.get("timestamp") or 0)
-        price_raw    = raw.get("price")
-        amount_raw   = raw.get("amount")
-        side_raw     = raw.get("side", "")
+        price_raw = raw.get("price")
+        amount_raw = raw.get("amount")
+        side_raw = raw.get("side", "")
 
         if not trade_id or timestamp_ms <= 0:
             return None
 
-        price  = Decimal(str(price_raw))
+        price = Decimal(str(price_raw))
         amount = Decimal(str(amount_raw))
 
         if price <= 0 or amount <= 0:
             return None
 
         return RawTrade(
-            exchange     = exchange_id,
-            market_type  = market_type,
-            symbol       = symbol,
-            trade_id     = trade_id,
-            timestamp_ms = timestamp_ms,
-            price        = price,
-            amount       = amount,
-            side         = TradeSide.from_raw(side_raw),
-            source       = TradeSource.REST_RECOVERY,
+            exchange=exchange_id,
+            market_type=market_type,
+            symbol=symbol,
+            trade_id=trade_id,
+            timestamp_ms=timestamp_ms,
+            price=price,
+            amount=amount,
+            side=TradeSide.from_raw(side_raw),
+            source=TradeSource.REST_RECOVERY,
         )
     except (InvalidOperation, TypeError, ValueError):
         return None
@@ -134,6 +135,7 @@ def _parse_raw_trade(
 # ---------------------------------------------------------------------------
 # GapRecoveryFetcher — AsyncIterator[RawTrade]
 # ---------------------------------------------------------------------------
+
 
 class GapRecoveryFetcher:
     """
@@ -162,12 +164,12 @@ class GapRecoveryFetcher:
     def __init__(
         self,
         exchange_adapter: ExchangeAdapter,
-        exchange_id:      str,
-        symbol:           str,
-        market_type:      str  = "spot",
-        gap_start_ms:     int  = 0,
-        gap_end_ms:       int  = 0,
-        page_limit:       int  = _DEFAULT_PAGE_LIMIT,
+        exchange_id: str,
+        symbol: str,
+        market_type: str = "spot",
+        gap_start_ms: int = 0,
+        gap_end_ms: int = 0,
+        page_limit: int = _DEFAULT_PAGE_LIMIT,
     ) -> None:
         # -- fail-fast: invariantes de construcción --------------------------
         if exchange_adapter is None:
@@ -177,42 +179,35 @@ class GapRecoveryFetcher:
         if not symbol:
             raise ValueError("GapRecoveryFetcher: symbol no puede ser vacío")
         if gap_start_ms <= 0:
-            raise ValueError(
-                f"GapRecoveryFetcher: gap_start_ms debe ser > 0, got {gap_start_ms}"
-            )
+            raise ValueError(f"GapRecoveryFetcher: gap_start_ms debe ser > 0, got {gap_start_ms}")
         if gap_end_ms <= 0:
-            raise ValueError(
-                f"GapRecoveryFetcher: gap_end_ms debe ser > 0, got {gap_end_ms}"
-            )
+            raise ValueError(f"GapRecoveryFetcher: gap_end_ms debe ser > 0, got {gap_end_ms}")
         if gap_end_ms <= gap_start_ms:
-            raise ValueError(
-                f"GapRecoveryFetcher: gap_end_ms ({gap_end_ms}) "
-                f"debe ser > gap_start_ms ({gap_start_ms})"
-            )
+            raise ValueError(f"GapRecoveryFetcher: gap_end_ms ({gap_end_ms}) debe ser > gap_start_ms ({gap_start_ms})")
 
-        self._adapter      = exchange_adapter
-        self._exchange_id  = exchange_id
-        self._symbol       = symbol
-        self._market_type  = market_type.lower()
+        self._adapter = exchange_adapter
+        self._exchange_id = exchange_id
+        self._symbol = symbol
+        self._market_type = market_type.lower()
         self._gap_start_ms = gap_start_ms
-        self._gap_end_ms   = gap_end_ms
-        self._page_limit   = page_limit
+        self._gap_end_ms = gap_end_ms
+        self._page_limit = page_limit
 
         # -- estado mutable del iterador (reset en __aiter__) ----------------
-        self._cursor_ms:  int               = gap_start_ms
-        self._buffer:     list[RawTrade]    = []
-        self._exhausted:  bool              = False
-        self._running:    bool              = False
-        self._pages_read: int               = 0
-        self._stop_event: asyncio.Event     = asyncio.Event()
+        self._cursor_ms: int = gap_start_ms
+        self._buffer: list[RawTrade] = []
+        self._exhausted: bool = False
+        self._running: bool = False
+        self._pages_read: int = 0
+        self._stop_event: asyncio.Event = asyncio.Event()
 
         self._log = logger.bind(
-            component    = "GapRecoveryFetcher",
-            exchange     = exchange_id,
-            symbol       = symbol,
-            market_type  = market_type,
-            gap_start_ms = gap_start_ms,
-            gap_end_ms   = gap_end_ms,
+            component="GapRecoveryFetcher",
+            exchange=exchange_id,
+            symbol=symbol,
+            market_type=market_type,
+            gap_start_ms=gap_start_ms,
+            gap_end_ms=gap_end_ms,
         )
 
     # ------------------------------------------------------------------
@@ -229,11 +224,11 @@ class GapRecoveryFetcher:
 
     def __aiter__(self) -> AsyncIterator[RawTrade]:
         # Reset de estado — permite reusar la instancia (idempotente)
-        self._cursor_ms  = self._gap_start_ms
-        self._buffer     = []
-        self._exhausted  = False
+        self._cursor_ms = self._gap_start_ms
+        self._buffer = []
+        self._exhausted = False
         self._pages_read = 0
-        self._running    = True
+        self._running = True
         self._stop_event.clear()
         self._log.info(
             "gap recovery start | gap=[{}, {}] duration_ms={}",
@@ -272,12 +267,12 @@ class GapRecoveryFetcher:
         # 4. Guard anti-loop
         if self._pages_read >= _MAX_PAGES:
             self._log.warning(
-                "gap recovery: límite de páginas alcanzado | "
-                "symbol={} max_pages={} — gap demasiado grande",
-                self._symbol, _MAX_PAGES,
+                "gap recovery: límite de páginas alcanzado | symbol={} max_pages={} — gap demasiado grande",
+                self._symbol,
+                _MAX_PAGES,
             )
             self._exhausted = True
-            self._running   = False
+            self._running = False
             raise StopAsyncIteration
 
         # 5. Fetch página desde cursor actual
@@ -286,12 +281,13 @@ class GapRecoveryFetcher:
 
         if not raw_page:
             self._log.info(
-                "gap recovery exhausted (página vacía) | "
-                "symbol={} pages={} gap_end_ms={}",
-                self._symbol, self._pages_read, self._gap_end_ms,
+                "gap recovery exhausted (página vacía) | symbol={} pages={} gap_end_ms={}",
+                self._symbol,
+                self._pages_read,
+                self._gap_end_ms,
             )
             self._exhausted = True
-            self._running   = False
+            self._running = False
             raise StopAsyncIteration
 
         # 6. ACL + filtro de rango [gap_start_ms, gap_end_ms)
@@ -300,9 +296,7 @@ class GapRecoveryFetcher:
         reached_end = False
 
         for raw in raw_page:
-            trade = _parse_raw_trade(
-                raw, self._exchange_id, self._market_type, self._symbol
-            )
+            trade = _parse_raw_trade(raw, self._exchange_id, self._market_type, self._symbol)
             if trade is None:
                 continue
             # Corte superior: gap_end_ms exclusivo
@@ -325,11 +319,13 @@ class GapRecoveryFetcher:
         if reached_end or page_incomplete or not self._buffer:
             if not self._buffer:
                 self._exhausted = True
-                self._running   = False
+                self._running = False
                 reason = "gap_end_ms" if reached_end else "page_incomplete"
                 self._log.info(
                     "gap recovery complete | symbol={} pages={} reason={}",
-                    self._symbol, self._pages_read, reason,
+                    self._symbol,
+                    self._pages_read,
+                    reason,
                 )
                 raise StopAsyncIteration
             # Hay trades en buffer pero no vendrán más páginas
@@ -337,7 +333,10 @@ class GapRecoveryFetcher:
 
         self._log.debug(
             "gap recovery page | symbol={} page={} trades={} cursor_ms={}",
-            self._symbol, self._pages_read, len(new_trades), self._cursor_ms,
+            self._symbol,
+            self._pages_read,
+            len(new_trades),
+            self._cursor_ms,
         )
 
         # 9. Retornar primer trade del buffer recién rellenado
@@ -365,18 +364,21 @@ class GapRecoveryFetcher:
         from market_data.adapters.inbound.rest._retry import retry_async
 
         async def _call() -> list:
-            return await self._adapter.fetch_trades(
-                symbol = self._symbol,
-                since  = since_ms,
-                limit  = self._page_limit,
-            ) or []
+            return (
+                await self._adapter.fetch_trades(
+                    symbol=self._symbol,
+                    since=since_ms,
+                    limit=self._page_limit,
+                )
+                or []
+            )
 
         return await retry_async(
             _call,
-            attempts     = _RETRY_ATTEMPTS,
-            backoff_base = _BACKOFF_BASE,
-            backoff_cap  = _MAX_BACKOFF_S,
-            context      = f"GapRecoveryFetcher.fetch_trades symbol={self._symbol}",
+            attempts=_RETRY_ATTEMPTS,
+            backoff_base=_BACKOFF_BASE,
+            backoff_cap=_MAX_BACKOFF_S,
+            context=f"GapRecoveryFetcher.fetch_trades symbol={self._symbol}",
         )
 
     def __repr__(self) -> str:

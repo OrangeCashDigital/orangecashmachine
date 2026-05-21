@@ -8,6 +8,7 @@ Responsabilidad única: consultar metadatos de snapshots Iceberg
 No escribe datos — solo lectura de metadatos de Table.
 Bounded context: Infrastructure / Storage / Iceberg.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
@@ -27,13 +28,13 @@ class SnapshotManager:
     """
 
     def __init__(self, exchange: str, market_type: str) -> None:
-        self._exchange    = exchange
+        self._exchange = exchange
         self._market_type = market_type
 
     def get_version(
         self,
-        table:     "Table",
-        symbol:    str,
+        table: "Table",
+        symbol: str,
         timeframe: str,
     ) -> Optional[dict]:
         """
@@ -47,29 +48,32 @@ class SnapshotManager:
             if snap is None:
                 logger.debug(
                     "SnapshotManager.get_version: sin snapshot | {}/{}",
-                    symbol, timeframe,
+                    symbol,
+                    timeframe,
                 )
                 return None
             return {
-                "version_id":  str(snap.snapshot_id),
-                "written_at":  str(snap.timestamp_ms),
-                "symbol":      symbol,
-                "timeframe":   timeframe,
-                "exchange":    self._exchange,
+                "version_id": str(snap.snapshot_id),
+                "written_at": str(snap.timestamp_ms),
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "exchange": self._exchange,
                 "market_type": self._market_type,
             }
         except Exception:
             logger.opt(exception=True).debug(
-                "SnapshotManager.get_version failed | {}/{}", symbol, timeframe,
+                "SnapshotManager.get_version failed | {}/{}",
+                symbol,
+                timeframe,
             )
             return None
 
     def is_fresh(
         self,
-        table:          "Table",
-        symbol:         str,
-        timeframe:      str,
-        max_age_ms:     int = 3_600_000,  # 1 hora por defecto
+        table: "Table",
+        symbol: str,
+        timeframe: str,
+        max_age_ms: int = 3_600_000,  # 1 hora por defecto
     ) -> bool:
         """
         Heurístico: ¿el snapshot fue escrito en los últimos max_age_ms ms?
@@ -83,10 +87,13 @@ class SnapshotManager:
         try:
             written_at_ms = int(meta["written_at"])
             import time
+
             age_ms = int(time.time() * 1000) - written_at_ms
             return age_ms <= max_age_ms
         except Exception:
             logger.opt(exception=True).debug(
-                "SnapshotManager.is_fresh error | {}/{}", symbol, timeframe,
+                "SnapshotManager.is_fresh error | {}/{}",
+                symbol,
+                timeframe,
             )
             return False

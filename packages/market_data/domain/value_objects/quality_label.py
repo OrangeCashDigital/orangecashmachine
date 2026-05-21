@@ -9,6 +9,7 @@ SSOT: definición canónica. Importar desde aquí, nunca desde __init__.
 
 Principios: DDD · SSOT · KISS
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -24,7 +25,8 @@ class QualityLabel(str, Enum):
     SUSPECT — anomalía detectada, se escribe con quality_flag="suspect"
     CORRUPT — inválida, no se escribe en Silver, va a quarantine log
     """
-    CLEAN   = "clean"
+
+    CLEAN = "clean"
     SUSPECT = "suspect"
     CORRUPT = "corrupt"
 

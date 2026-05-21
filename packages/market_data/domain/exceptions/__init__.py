@@ -46,12 +46,14 @@ OCP    — agregar subclases no modifica la jerarquía existente
 DRY    — elimina duplicación entre exceptions.py y processing/exceptions.py
 Clean Architecture — excepciones de dominio no dependen de frameworks externos
 """
+
 from __future__ import annotations
 
 
 # ===========================================================================
 # Raíz del bounded context
 # ===========================================================================
+
 
 class MarketDataError(Exception):
     """Raíz de todas las excepciones del bounded context market_data."""
@@ -60,6 +62,7 @@ class MarketDataError(Exception):
 # ===========================================================================
 # Ingestión
 # ===========================================================================
+
 
 class IngestionError(MarketDataError):
     """Fallo durante la ingestión de datos desde un exchange o proveedor."""
@@ -103,6 +106,7 @@ class RetryExhaustedError(IngestionError):
 # Storage
 # ===========================================================================
 
+
 class StorageError(MarketDataError):
     """Fallo durante escritura o lectura en Bronze/Silver/Gold."""
 
@@ -119,6 +123,7 @@ class ChunkRejectedError(StorageError):
 # ===========================================================================
 # Calidad de datos
 # ===========================================================================
+
 
 class QualityError(MarketDataError):
     """Violación de una regla de calidad de datos."""
@@ -155,6 +160,7 @@ class DataQualityError(QualityError):
 # Pipeline / Orquestación
 # ===========================================================================
 
+
 class PipelineError(MarketDataError):
     """Fallo de orquestación — el pipeline no puede continuar."""
 
@@ -176,6 +182,7 @@ class CursorError(PipelineError):
 # Exchange adapter
 # ===========================================================================
 
+
 class ExchangeAdapterError(MarketDataError):
     """
     Fallo en la capa de adaptador de exchange (CCXT wrapper).
@@ -186,6 +193,7 @@ class ExchangeAdapterError(MarketDataError):
     sin isinstance() contra subclases concretas (OCP · DIP).
     is_transient=False por defecto — asumir permanente si no se especifica.
     """
+
     is_transient: bool = False
 
 
@@ -194,6 +202,7 @@ class UnsupportedExchangeError(ExchangeAdapterError):
     El exchange solicitado no está soportado por CCXT o por OCM.
     Permanente: no tiene sentido reintentar con la misma config.
     """
+
     is_transient: bool = False
 
 
@@ -202,6 +211,7 @@ class ExchangeConnectionError(ExchangeAdapterError):
     Fallo de red o conexión al conectar con el exchange.
     Transitorio: la red o el exchange pueden recuperarse.
     """
+
     is_transient: bool = True
 
 
@@ -212,12 +222,14 @@ class ExchangeCircuitOpenError(ExchangeAdapterError):
     Transitorio: el breaker se cerrará tras reset_timeout.
     Fail-fast: mientras esté abierto, las llamadas se rechazan inmediatamente.
     """
+
     is_transient: bool = True
 
 
 # ===========================================================================
 # Gold Reader / Data Access
 # ===========================================================================
+
 
 class DataNotFoundError(StorageError):
     """
@@ -247,6 +259,7 @@ class VersionNotFoundError(StorageError):
     - snapshot_id entero no existe en el catálogo
     """
 
+
 class MarketDataLoaderError(StorageError):
     """
     Error genérico de carga de datos de mercado.
@@ -256,15 +269,16 @@ class MarketDataLoaderError(StorageError):
     Permite captura amplia con un solo except sin silenciar errores no relacionados.
     """
 
+
 # ===========================================================================
 # __all__ — API pública explícita
 # ===========================================================================
 
 
-
 # ===========================================================================
 # Pipeline — subclases adicionales (migradas desde exceptions.py raíz)
 # ===========================================================================
+
 
 class PipelineBuildError(PipelineError):
     """
@@ -297,6 +311,7 @@ class PipelineTimeoutError(PipelineExecutionError):
 # Configuración
 # ===========================================================================
 
+
 class ConfigurationError(MarketDataError):
     """
     Error de configuración del sistema.
@@ -305,6 +320,7 @@ class ConfigurationError(MarketDataError):
     o cuando un parámetro requerido está ausente o es inválido.
     Fail-Fast: sin config válida el proceso no debe arrancar.
     """
+
 
 __all__ = [
     # Raíz
@@ -330,7 +346,6 @@ __all__ = [
     "PipelineError",
     "MissingStartDateError",
     "CursorError",
-
     # Pipeline (adicionales)
     "PipelineBuildError",
     "PipelineExecutionError",

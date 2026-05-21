@@ -58,6 +58,7 @@ REQUIRED_COLUMNS: tuple[str, ...] = ("timestamp", *NUMERIC_COLUMNS)
 # Retornan bool para ser usadas directamente como Pandera Checks.
 # ==========================================================
 
+
 def _check_ohlc_relationship(df: pd.DataFrame) -> bool:
     """
     Verifica las relaciones lógicas entre columnas OHLC.
@@ -68,12 +69,12 @@ def _check_ohlc_relationship(df: pd.DataFrame) -> bool:
 
     Nota: vectorizado sobre todo el DataFrame, O(n) sin loops.
     """
-    low  = df["low"]
+    low = df["low"]
     high = df["high"]
     open_ = df["open"]
     close = df["close"]
 
-    low_valid  = (low  <= open_) & (low  <= close) & (low  <= high)
+    low_valid = (low <= open_) & (low <= close) & (low <= high)
     high_valid = (high >= open_) & (high >= close) & (high >= low)
 
     return bool((low_valid & high_valid).all())
@@ -113,6 +114,7 @@ def _check_no_duplicate_timestamps(df: pd.DataFrame) -> bool:
 # lo definimos una vez y lo referenciamos.
 # ==========================================================
 
+
 def _positive_price_check() -> Check:
     """Precio debe ser estrictamente mayor que 0."""
     return Check.gt(0, error="Price columns must be > 0")
@@ -121,7 +123,6 @@ def _positive_price_check() -> Check:
 def _non_negative_volume_check() -> Check:
     """Volumen puede ser 0 (mercado ilíquido) pero nunca negativo."""
     return Check.ge(0, error="Volume must be >= 0")
-
 
 
 def make_grid_alignment_check(timeframe: str) -> Check | None:
@@ -161,9 +162,7 @@ def make_grid_alignment_check(timeframe: str) -> Check | None:
 # ==========================================================
 
 OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
-
     columns={
-
         "timestamp": Column(
             pd.DatetimeTZDtype(tz="UTC"),
             nullable=False,
@@ -177,7 +176,6 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             ],
             description="Marca temporal UTC de apertura de la vela",
         ),
-
         "open": Column(
             float,
             nullable=False,
@@ -185,7 +183,6 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             checks=_positive_price_check(),
             description="Precio de apertura",
         ),
-
         "high": Column(
             float,
             nullable=False,
@@ -193,7 +190,6 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             checks=_positive_price_check(),
             description="Precio máximo de la vela",
         ),
-
         "low": Column(
             float,
             nullable=False,
@@ -201,7 +197,6 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             checks=_positive_price_check(),
             description="Precio mínimo de la vela",
         ),
-
         "close": Column(
             float,
             nullable=False,
@@ -209,7 +204,6 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             checks=_positive_price_check(),
             description="Precio de cierre",
         ),
-
         "volume": Column(
             float,
             nullable=False,
@@ -218,31 +212,26 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             description="Volumen negociado en la vela",
         ),
     },
-
     # Checks a nivel DataFrame (invariantes multi-columna)
     checks=[
-
         Check(
             _check_ohlc_relationship,
             element_wise=False,
             error="OHLC relationship violated: low > open/close/high or high < open/close/low",
         ),
-
         Check(
             _check_timestamp_monotonic,
             element_wise=False,
             error="Timestamps are not monotonically increasing",
         ),
-
         Check(
             _check_no_duplicate_timestamps,
             element_wise=False,
             error="Duplicate timestamps detected – possible double ingestion",
         ),
     ],
-
-    strict=True,    # Rechaza columnas extra no declaradas
-    coerce=True,    # Intenta coerción de tipos antes de validar
+    strict=True,  # Rechaza columnas extra no declaradas
+    coerce=True,  # Intenta coerción de tipos antes de validar
     name="ohlcv_schema",
 )
 
@@ -250,6 +239,7 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
 # ==========================================================
 # Public Validation API
 # ==========================================================
+
 
 def validate_ohlcv(df: pd.DataFrame, timeframe: str = "unknown") -> pd.DataFrame:
     """
@@ -317,6 +307,7 @@ def validate_ohlcv(df: pd.DataFrame, timeframe: str = "unknown") -> pd.DataFrame
 # Private Helpers
 # ==========================================================
 
+
 def _assert_utc(df: pd.DataFrame) -> None:
     """
     Lanza TypeError si timestamp no es tz-aware UTC.
@@ -354,7 +345,7 @@ def _log_validation_failure(exc: pa.errors.SchemaErrors) -> None:
     el triage en producción sin volcar tablas enteras en ERROR.
     """
     failure_cases = exc.failure_cases
-    n_errors      = len(failure_cases)
+    n_errors = len(failure_cases)
     checks_failed = failure_cases["check"].unique().tolist()
 
     logger.error(

@@ -60,6 +60,7 @@ SafeOps
 
 Principios: SOLID · DIP · ACL · Kappa · DRY · SafeOps · KISS
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -69,7 +70,6 @@ from typing import AsyncIterator, Optional
 from loguru import logger
 
 from market_data.domain.value_objects.raw_trade import RawTrade, TradeSide, TradeSource
-from market_data.ports.inbound.trades_source import TradesSourceProtocol
 from market_data.ports.outbound.exchange import ExchangeAdapter
 
 
@@ -77,22 +77,23 @@ from market_data.ports.outbound.exchange import ExchangeAdapter
 # Constantes operacionales
 # ---------------------------------------------------------------------------
 
-_DEFAULT_PAGE_LIMIT: int   = 1_000   # trades por request REST
-_MAX_PAGES:          int   = 500     # guard anti-loop (SafeOps)
-_RETRY_ATTEMPTS:     int   = 3
-_BACKOFF_BASE:       float = 1.5
-_MAX_BACKOFF_S:      float = 15.0
+_DEFAULT_PAGE_LIMIT: int = 1_000  # trades por request REST
+_MAX_PAGES: int = 500  # guard anti-loop (SafeOps)
+_RETRY_ATTEMPTS: int = 3
+_BACKOFF_BASE: float = 1.5
+_MAX_BACKOFF_S: float = 15.0
 
 
 # ---------------------------------------------------------------------------
 # ACL — conversión CCXT raw → RawTrade  (pura, sin efectos secundarios)
 # ---------------------------------------------------------------------------
 
+
 def _parse_raw_trade(
-    raw:         dict,
+    raw: dict,
     exchange_id: str,
     market_type: str,
-    symbol:      str,
+    symbol: str,
 ) -> Optional[RawTrade]:
     """
     ACL: convierte un trade CCXT crudo a RawTrade del dominio.
@@ -104,31 +105,31 @@ def _parse_raw_trade(
     No lanza — un trade malformado no debe abortar el stream.
     """
     try:
-        trade_id     = str(raw.get("id") or "").strip()
+        trade_id = str(raw.get("id") or "").strip()
         timestamp_ms = int(raw.get("timestamp") or 0)
-        price_raw    = raw.get("price")
-        amount_raw   = raw.get("amount")
-        side_raw     = raw.get("side", "")
+        price_raw = raw.get("price")
+        amount_raw = raw.get("amount")
+        side_raw = raw.get("side", "")
 
         if not trade_id or timestamp_ms <= 0:
             return None
 
-        price  = Decimal(str(price_raw))
+        price = Decimal(str(price_raw))
         amount = Decimal(str(amount_raw))
 
         if price <= 0 or amount <= 0:
             return None
 
         return RawTrade(
-            exchange     = exchange_id,
-            market_type  = market_type,
-            symbol       = symbol,
-            trade_id     = trade_id,
-            timestamp_ms = timestamp_ms,
-            price        = price,
-            amount       = amount,
-            side         = TradeSide.from_raw(side_raw),
-            source       = TradeSource.REST_BACKFILL,
+            exchange=exchange_id,
+            market_type=market_type,
+            symbol=symbol,
+            trade_id=trade_id,
+            timestamp_ms=timestamp_ms,
+            price=price,
+            amount=amount,
+            side=TradeSide.from_raw(side_raw),
+            source=TradeSource.REST_BACKFILL,
         )
     except (InvalidOperation, TypeError, ValueError):
         return None
@@ -137,6 +138,7 @@ def _parse_raw_trade(
 # ---------------------------------------------------------------------------
 # TradesBackfillFetcher — AsyncIterator[RawTrade]
 # ---------------------------------------------------------------------------
+
 
 class TradesBackfillFetcher:
     """
@@ -162,12 +164,12 @@ class TradesBackfillFetcher:
     def __init__(
         self,
         exchange_adapter: ExchangeAdapter,
-        exchange_id:      str,
-        symbol:           str,
-        market_type:      str            = "spot",
-        since_ms:         Optional[int]  = None,
-        until_ms:         Optional[int]  = None,
-        page_limit:       int            = _DEFAULT_PAGE_LIMIT,
+        exchange_id: str,
+        symbol: str,
+        market_type: str = "spot",
+        since_ms: Optional[int] = None,
+        until_ms: Optional[int] = None,
+        page_limit: int = _DEFAULT_PAGE_LIMIT,
     ) -> None:
         # -- fail-fast: invariantes de construcción --------------------------
         if exchange_adapter is None:
@@ -177,32 +179,29 @@ class TradesBackfillFetcher:
         if not symbol:
             raise ValueError("TradesBackfillFetcher: symbol no puede ser vacío")
         if until_ms is not None and since_ms is not None and until_ms <= since_ms:
-            raise ValueError(
-                f"TradesBackfillFetcher: until_ms ({until_ms}) "
-                f"debe ser > since_ms ({since_ms})"
-            )
+            raise ValueError(f"TradesBackfillFetcher: until_ms ({until_ms}) debe ser > since_ms ({since_ms})")
 
-        self._adapter     = exchange_adapter
+        self._adapter = exchange_adapter
         self._exchange_id = exchange_id
-        self._symbol      = symbol
+        self._symbol = symbol
         self._market_type = market_type.lower()
-        self._since_ms    = since_ms
-        self._until_ms    = until_ms
-        self._page_limit  = page_limit
+        self._since_ms = since_ms
+        self._until_ms = until_ms
+        self._page_limit = page_limit
 
         # -- estado mutable del iterador (reset en __aiter__) ----------------
-        self._cursor_ms:  Optional[int]      = since_ms
-        self._buffer:     list[RawTrade]     = []
-        self._exhausted:  bool               = False
-        self._running:    bool               = False
-        self._pages_read: int                = 0
-        self._stop_event: asyncio.Event      = asyncio.Event()
+        self._cursor_ms: Optional[int] = since_ms
+        self._buffer: list[RawTrade] = []
+        self._exhausted: bool = False
+        self._running: bool = False
+        self._pages_read: int = 0
+        self._stop_event: asyncio.Event = asyncio.Event()
 
         self._log = logger.bind(
-            component   = "TradesBackfillFetcher",
-            exchange    = exchange_id,
-            symbol      = symbol,
-            market_type = market_type,
+            component="TradesBackfillFetcher",
+            exchange=exchange_id,
+            symbol=symbol,
+            market_type=market_type,
         )
 
     # ------------------------------------------------------------------
@@ -219,15 +218,16 @@ class TradesBackfillFetcher:
 
     def __aiter__(self) -> AsyncIterator[RawTrade]:
         # Reset de estado — permite reusar la instancia (idempotente)
-        self._cursor_ms  = self._since_ms
-        self._buffer     = []
-        self._exhausted  = False
+        self._cursor_ms = self._since_ms
+        self._buffer = []
+        self._exhausted = False
         self._pages_read = 0
-        self._running    = True
+        self._running = True
         self._stop_event.clear()
         self._log.debug(
             "backfill start | since_ms={} until_ms={}",
-            self._since_ms, self._until_ms,
+            self._since_ms,
+            self._until_ms,
         )
         return self
 
@@ -259,12 +259,12 @@ class TradesBackfillFetcher:
         # 4. Guard anti-loop
         if self._pages_read >= _MAX_PAGES:
             self._log.warning(
-                "backfill: límite de páginas alcanzado | "
-                "symbol={} max_pages={} — verificar volumen",
-                self._symbol, _MAX_PAGES,
+                "backfill: límite de páginas alcanzado | symbol={} max_pages={} — verificar volumen",
+                self._symbol,
+                _MAX_PAGES,
             )
             self._exhausted = True
-            self._running   = False
+            self._running = False
             raise StopAsyncIteration
 
         # 5. Fetch página
@@ -273,11 +273,12 @@ class TradesBackfillFetcher:
 
         if not raw_page:
             self._log.debug(
-                "backfill exhausted (página vacía) | "
-                "symbol={} pages={}", self._symbol, self._pages_read,
+                "backfill exhausted (página vacía) | symbol={} pages={}",
+                self._symbol,
+                self._pages_read,
             )
             self._exhausted = True
-            self._running   = False
+            self._running = False
             raise StopAsyncIteration
 
         # 6. ACL + filtro temporal
@@ -286,9 +287,7 @@ class TradesBackfillFetcher:
         reached_until = False
 
         for raw in raw_page:
-            trade = _parse_raw_trade(
-                raw, self._exchange_id, self._market_type, self._symbol
-            )
+            trade = _parse_raw_trade(raw, self._exchange_id, self._market_type, self._symbol)
             if trade is None:
                 continue
             # Corte temporal: until_ms exclusivo
@@ -311,11 +310,11 @@ class TradesBackfillFetcher:
         if page_incomplete or reached_until or not self._buffer:
             if not self._buffer:
                 self._exhausted = True
-                self._running   = False
+                self._running = False
                 self._log.debug(
-                    "backfill exhausted | symbol={} pages={} "
-                    "reason={}",
-                    self._symbol, self._pages_read,
+                    "backfill exhausted | symbol={} pages={} reason={}",
+                    self._symbol,
+                    self._pages_read,
                     "until_ms" if reached_until else "page_incomplete",
                 )
                 raise StopAsyncIteration
@@ -324,7 +323,10 @@ class TradesBackfillFetcher:
 
         self._log.debug(
             "backfill page | symbol={} page={} trades={} cursor_ms={}",
-            self._symbol, self._pages_read, len(new_trades), self._cursor_ms,
+            self._symbol,
+            self._pages_read,
+            len(new_trades),
+            self._cursor_ms,
         )
 
         # 9. Retornar primer trade del buffer recién rellenado
@@ -355,18 +357,21 @@ class TradesBackfillFetcher:
         from market_data.adapters.inbound.rest._retry import retry_async
 
         async def _call() -> list:
-            return await self._adapter.fetch_trades(
-                symbol = self._symbol,
-                since  = since_ms,
-                limit  = self._page_limit,
-            ) or []
+            return (
+                await self._adapter.fetch_trades(
+                    symbol=self._symbol,
+                    since=since_ms,
+                    limit=self._page_limit,
+                )
+                or []
+            )
 
         return await retry_async(
             _call,
-            attempts    = _RETRY_ATTEMPTS,
-            backoff_base = _BACKOFF_BASE,
-            backoff_cap  = _MAX_BACKOFF_S,
-            context      = f"TradesBackfillFetcher.fetch_trades symbol={self._symbol}",
+            attempts=_RETRY_ATTEMPTS,
+            backoff_base=_BACKOFF_BASE,
+            backoff_cap=_MAX_BACKOFF_S,
+            context=f"TradesBackfillFetcher.fetch_trades symbol={self._symbol}",
         )
 
     def __repr__(self) -> str:

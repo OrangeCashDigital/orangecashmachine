@@ -18,6 +18,7 @@ SSOT   — única fuente de verdad para classify_error y _TransientProxy
 DRY    — StrategyMixin centraliza timeout, error handling y métricas
 SafeOps — classify_error nunca lanza; StrategyMixin captura todo excepto CancelledError
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,15 +41,17 @@ _log = bind_pipeline("base")
 # PipelineMode
 # ==========================================================================
 
+
 class PipelineMode(str, Enum):
     INCREMENTAL = "incremental"
-    BACKFILL    = "backfill"
-    REPAIR      = "repair"
+    BACKFILL = "backfill"
+    REPAIR = "repair"
 
 
 # ==========================================================================
 # PipelineContext
 # ==========================================================================
+
 
 @dataclass
 class PipelineContext:
@@ -70,13 +73,14 @@ class PipelineContext:
 
     Principios: DIP · SRP · Kappa · Fail-Fast
     """
+
     # ── Productores ───────────────────────────────────────────────────────────
-    fetcher:     Any  # HistoricalFetcherPort — REST poller (backfill + incremental)
-    cursor:      Any  # CursorStorePort       — Redis, SSOT del offset del productor
-    quality:     Any  # QualityPipeline       — gate de calidad antes de publicar
+    fetcher: Any  # HistoricalFetcherPort — REST poller (backfill + incremental)
+    cursor: Any  # CursorStorePort       — Redis, SSOT del offset del productor
+    quality: Any  # QualityPipeline       — gate de calidad antes de publicar
     exchange_id: str
     market_type: str
-    start_date:  str
+    start_date: str
 
     # ── Publisher Kappa ───────────────────────────────────────────────────────
     # Obligatorio en producción — backfill/incremental fallan si es None.
@@ -89,9 +93,29 @@ class PipelineContext:
     storage: Any = field(default=None)  # OHLCVStoragePort → Iceberg Silver (repair only)
 
     # ── Observabilidad ────────────────────────────────────────────────────────
-    metrics:      Any = field(default=None)  # PipelineMetricsPort — SafeOps: None = sin métricas
+    metrics: Any = field(default=None)  # PipelineMetricsPort — SafeOps: None = sin métricas
     gap_registry: Any = field(default=None)  # GapRegistryPort     — SafeOps: None = sin estado
-    throttle:     Any = field(default=None)  # ThrottlePort        — None = sin rate limiting
+    throttle: Any = field(default=None)  # ThrottlePort        — None = sin rate limiting
+    # ── Kappa chunk converter (opcional) ──────────────────────────────────────
+    # Inyectado por pipeline_factory antes de pasar el contexto a las strategies.
+    # None es válido hasta que el pipeline Kappa esté activo.
+    _chunk_converter: Any = field(default=None)  # OHLCVChunkConverterPort
+
+    def get_chunk_converter(self) -> "Any":
+        """
+        Retorna el chunk converter inyectado.
+
+        Fail-fast: lanza RuntimeError si _chunk_converter no fue inyectado.
+        El pipeline Kappa debe inyectarlo antes de llamar a las strategies.
+        domain/ usa Any para evitar importar ports/ en runtime (BC-08).
+        """
+        if self._chunk_converter is None:
+            raise RuntimeError(
+                "PipelineContext._chunk_converter no inyectado. "
+                "pipeline_factory debe setear _chunk_converter "
+                "antes de pasar el contexto a BackfillStrategy/IncrementalStrategy."
+            )
+        return self._chunk_converter
 
 
 # ==========================================================================
@@ -103,7 +127,7 @@ class PipelineContext:
 # declarado en la clase — más robusto que isinstance con tipos externos.
 _TRANSIENT_STDLIB_TYPES: tuple[type, ...] = (
     TimeoutError,
-    ConnectionError,        # incluye ConnectionRefusedError, ConnectionResetError
+    ConnectionError,  # incluye ConnectionRefusedError, ConnectionResetError
     BrokenPipeError,
     OSError,
 )
@@ -111,17 +135,30 @@ _TRANSIENT_STDLIB_TYPES: tuple[type, ...] = (
 # Substrings en el mensaje de error que indican error transitorio de red/exchange.
 # Usado solo como fallback cuando no hay información de tipo disponible.
 _TRANSIENT_ERROR_MSGS: tuple[str, ...] = (
-    "timeout", "timed out", "rate limit", "429", "503", "502",
-    "connection", "network", "session is closed", "temporarily",
-    "too many requests", "service unavailable",
+    "timeout",
+    "timed out",
+    "rate limit",
+    "429",
+    "503",
+    "502",
+    "connection",
+    "network",
+    "session is closed",
+    "temporarily",
+    "too many requests",
+    "service unavailable",
 )
 
 # Nombres de clase de aiohttp/ccxt (no importables sin instalar).
 # Mantenemos strings para no crear dependencias en tiempo de importación.
-_TRANSIENT_EXTERNAL_NAMES: frozenset[str] = frozenset({
-    "ClientConnectorError", "ServerDisconnectedError",
-    "ClientOSError", "ClientResponseError",
-})
+_TRANSIENT_EXTERNAL_NAMES: frozenset[str] = frozenset(
+    {
+        "ClientConnectorError",
+        "ServerDisconnectedError",
+        "ClientOSError",
+        "ClientResponseError",
+    }
+)
 
 
 def classify_error(exc: BaseException) -> bool:
@@ -166,18 +203,33 @@ class _TransientProxy(Exception):
       2. fallback de strings sobre __str__() → para tipos externos/desconocidos
     """
 
-    _KNOWN_TRANSIENT: frozenset[str] = frozenset({
-        "ChunkFetchError", "ExchangeConnectionError", "ExchangeCircuitOpenError",
-        "TimeoutError", "ConnectionError", "OSError", "ConnectionRefusedError",
-        "ConnectionResetError", "BrokenPipeError",
-        "ClientConnectorError", "ServerDisconnectedError",
-        "ClientOSError", "ClientResponseError",
-    })
-    _KNOWN_PERMANENT: frozenset[str] = frozenset({
-        "NoDataAvailableError", "MissingStartDateError",
-        "SymbolNotFoundError", "InvalidMarketTypeError",
-        "UnsupportedExchangeError", "AuthenticationError",
-    })
+    _KNOWN_TRANSIENT: frozenset[str] = frozenset(
+        {
+            "ChunkFetchError",
+            "ExchangeConnectionError",
+            "ExchangeCircuitOpenError",
+            "TimeoutError",
+            "ConnectionError",
+            "OSError",
+            "ConnectionRefusedError",
+            "ConnectionResetError",
+            "BrokenPipeError",
+            "ClientConnectorError",
+            "ServerDisconnectedError",
+            "ClientOSError",
+            "ClientResponseError",
+        }
+    )
+    _KNOWN_PERMANENT: frozenset[str] = frozenset(
+        {
+            "NoDataAvailableError",
+            "MissingStartDateError",
+            "SymbolNotFoundError",
+            "InvalidMarketTypeError",
+            "UnsupportedExchangeError",
+            "AuthenticationError",
+        }
+    )
 
     def __init__(self, error_type: str, error_msg: str | None) -> None:
         super().__init__(error_msg or "")
@@ -196,6 +248,7 @@ class _TransientProxy(Exception):
 # PairResult
 # ==========================================================================
 
+
 @dataclass
 class PairResult:
     """
@@ -204,19 +257,20 @@ class PairResult:
     Inmutable post-construcción excepto por los campos que la estrategia
     actualiza durante la ejecución (rows, skipped, error, etc.).
     """
-    symbol:       str
-    timeframe:    str
-    mode:         PipelineMode
-    exchange_id:  str  = ""
-    rows:         int  = 0
-    skipped:      bool = False
-    error:        str | None = None
-    error_type:   str  = ""
-    duration_ms:  int  = 0
-    gaps_found:   int  = 0
-    gaps_healed:  int  = 0
-    gaps_partial: int  = 0
-    chunks:       int  = 0
+
+    symbol: str
+    timeframe: str
+    mode: PipelineMode
+    exchange_id: str = ""
+    rows: int = 0
+    skipped: bool = False
+    error: str | None = None
+    error_type: str = ""
+    duration_ms: int = 0
+    gaps_found: int = 0
+    gaps_healed: int = 0
+    gaps_partial: int = 0
+    chunks: int = 0
 
     @property
     def success(self) -> bool:
@@ -238,10 +292,7 @@ class PairResult:
     def __str__(self) -> str:
         if self.error:
             tag = "TRANSIENT" if self.is_transient_error else "FATAL"
-            return (
-                f"[{self.mode.value}] {self.symbol}/{self.timeframe} "
-                f"ERROR[{tag}]: {self.error}"
-            )
+            return f"[{self.mode.value}] {self.symbol}/{self.timeframe} ERROR[{tag}]: {self.error}"
         if self.skipped:
             return f"[{self.mode.value}] {self.symbol}/{self.timeframe} SKIPPED"
         if self.mode == PipelineMode.REPAIR:
@@ -256,15 +307,13 @@ class PairResult:
                 f"[backfill] {self.symbol}/{self.timeframe} "
                 f"chunks={self.chunks} rows={self.rows} duration={self.duration_ms}ms"
             )
-        return (
-            f"[incremental] {self.symbol}/{self.timeframe} "
-            f"rows={self.rows} duration={self.duration_ms}ms"
-        )
+        return f"[incremental] {self.symbol}/{self.timeframe} rows={self.rows} duration={self.duration_ms}ms"
 
 
 # ==========================================================================
 # PipelineSummary
 # ==========================================================================
+
 
 @dataclass
 class PipelineSummary:
@@ -274,10 +323,11 @@ class PipelineSummary:
     Calculado al finalizar run() en OHLCVPipeline y equivalentes.
     Inmutable post-construcción.
     """
-    results:            List[PairResult] = field(default_factory=list)
-    duration_ms:        int              = 0
-    mode:               PipelineMode     = PipelineMode.INCREMENTAL
-    degraded_exchanges: List[str]        = field(default_factory=list)
+
+    results: List[PairResult] = field(default_factory=list)
+    duration_ms: int = 0
+    mode: PipelineMode = PipelineMode.INCREMENTAL
+    degraded_exchanges: List[str] = field(default_factory=list)
 
     @property
     def failed_exchanges(self) -> List[str]:
@@ -299,28 +349,36 @@ class PipelineSummary:
         return "failed"
 
     @property
-    def total(self)      -> int: return len(self.results)
+    def total(self) -> int:
+        return len(self.results)
 
     @property
-    def succeeded(self)  -> int: return sum(1 for r in self.results if r.success)
+    def succeeded(self) -> int:
+        return sum(1 for r in self.results if r.success)
 
     @property
-    def skipped(self)    -> int: return sum(1 for r in self.results if r.skipped)
+    def skipped(self) -> int:
+        return sum(1 for r in self.results if r.skipped)
 
     @property
-    def failed(self)     -> int: return sum(1 for r in self.results if r.error)
+    def failed(self) -> int:
+        return sum(1 for r in self.results if r.error)
 
     @property
-    def total_rows(self) -> int: return sum(r.rows for r in self.results)
+    def total_rows(self) -> int:
+        return sum(r.rows for r in self.results)
 
     @property
-    def total_gaps_found(self)   -> int: return sum(r.gaps_found   for r in self.results)
+    def total_gaps_found(self) -> int:
+        return sum(r.gaps_found for r in self.results)
 
     @property
-    def total_gaps_healed(self)  -> int: return sum(r.gaps_healed  for r in self.results)
+    def total_gaps_healed(self) -> int:
+        return sum(r.gaps_healed for r in self.results)
 
     @property
-    def total_gaps_partial(self) -> int: return sum(r.gaps_partial for r in self.results)
+    def total_gaps_partial(self) -> int:
+        return sum(r.gaps_partial for r in self.results)
 
     @property
     def throughput_rows_per_sec(self) -> float:
@@ -336,10 +394,7 @@ class PipelineSummary:
         """
         all_degraded = (
             self.degraded_exchanges
-            + [
-                f"{e}(errors)" for e in self.failed_exchanges
-                if e not in self.degraded_exchanges
-            ]
+            + [f"{e}(errors)" for e in self.failed_exchanges if e not in self.degraded_exchanges]
         ) or ["none"]
 
         log.info(
@@ -364,11 +419,11 @@ class PipelineSummary:
             )
         for r in self.results:
             if r.error:
-                log.warning("Pair result", status="error",  pair=str(r))
+                log.warning("Pair result", status="error", pair=str(r))
             elif r.skipped:
-                log.debug(  "Pair result", status="skipped", pair=str(r))
+                log.debug("Pair result", status="skipped", pair=str(r))
             else:
-                log.debug(  "Pair result", status="ok",      pair=str(r))
+                log.debug("Pair result", status="ok", pair=str(r))
 
 
 # ==========================================================================
@@ -380,20 +435,21 @@ class PipelineSummary:
 # Repair usa _PAIR_TIMEOUT_REPAIR_S independientemente del timeframe porque
 # el gap healing pagina en ambas direcciones sobre rangos arbitrarios.
 _PAIR_TIMEOUT_BY_TF: dict[str, int] = {
-    "1m":  7200,   # 2h  — backfill completo de 1m puede ser meses
-    "5m":  3600,   # 1h
-    "15m": 1800,   # 30 min
-    "1h":   600,   # 10 min
-    "4h":   300,   # 5 min
-    "1d":   300,   # 5 min
+    "1m": 7200,  # 2h  — backfill completo de 1m puede ser meses
+    "5m": 3600,  # 1h
+    "15m": 1800,  # 30 min
+    "1h": 600,  # 10 min
+    "4h": 300,  # 5 min
+    "1d": 300,  # 5 min
 }
-_PAIR_TIMEOUT_S:        int = 300    # fallback para timeframes no mapeados
-_PAIR_TIMEOUT_REPAIR_S: int = 1800   # 30 min — repair (gaps grandes paginados)
+_PAIR_TIMEOUT_S: int = 300  # fallback para timeframes no mapeados
+_PAIR_TIMEOUT_REPAIR_S: int = 1800  # 30 min — repair (gaps grandes paginados)
 
 
 # ==========================================================================
 # StrategyMixin
 # ==========================================================================
+
 
 class StrategyMixin:
     """
@@ -418,15 +474,17 @@ class StrategyMixin:
 
     async def execute_pair(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        idx:       int,
-        total:     int,
-        ctx:       "PipelineContext",
+        idx: int,
+        total: int,
+        ctx: "PipelineContext",
     ) -> "PairResult":
-        result     = PairResult(
-            symbol=symbol, timeframe=timeframe,
-            mode=self._mode, exchange_id=ctx.exchange_id,
+        result = PairResult(
+            symbol=symbol,
+            timeframe=timeframe,
+            mode=self._mode,
+            exchange_id=ctx.exchange_id,
         )
         pair_start = time.monotonic()
 
@@ -443,14 +501,16 @@ class StrategyMixin:
             )
 
         except asyncio.TimeoutError:
-            result.error      = f"Pair timeout after {pair_timeout}s"
+            result.error = f"Pair timeout after {pair_timeout}s"
             result.error_type = "TimeoutError"
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             if ctx.metrics is not None:  # fail-soft — modo degradado sin métricas
                 ctx.metrics.record_error(ctx.exchange_id, "transient")
             _log.bind(
-                mode=self._mode.value, exchange=ctx.exchange_id,
-                symbol=symbol, timeframe=timeframe,
+                mode=self._mode.value,
+                exchange=ctx.exchange_id,
+                symbol=symbol,
+                timeframe=timeframe,
                 timeout_s=pair_timeout,
             ).error("Pair timeout — worker liberado")
 
@@ -458,7 +518,7 @@ class StrategyMixin:
             raise  # nunca capturar — permite shutdown limpio
 
         except Exception as exc:
-            result.error      = str(exc)
+            result.error = str(exc)
             result.error_type = type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             is_transient = classify_error(exc)
@@ -468,9 +528,12 @@ class StrategyMixin:
                     "transient" if is_transient else "fatal",
                 )
             _log.bind(
-                mode=self._mode.value, exchange=ctx.exchange_id,
-                symbol=symbol, timeframe=timeframe,
-                idx=idx, total=total,
+                mode=self._mode.value,
+                exchange=ctx.exchange_id,
+                symbol=symbol,
+                timeframe=timeframe,
+                idx=idx,
+                total=total,
                 error_type=result.error_type,
                 error=str(exc),
                 is_transient=is_transient,
@@ -485,21 +548,20 @@ class StrategyMixin:
 
     async def _run(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        idx:       int,
-        total:     int,
-        ctx:       "PipelineContext",
-        result:    "PairResult",
+        idx: int,
+        total: int,
+        ctx: "PipelineContext",
+        result: "PairResult",
     ) -> None:
-        raise NotImplementedError(
-            f"{type(self).__name__} debe implementar _run()"
-        )
+        raise NotImplementedError(f"{type(self).__name__} debe implementar _run()")
 
 
 # ==========================================================================
 # PipelineStrategy Protocol
 # ==========================================================================
+
 
 @runtime_checkable
 class PipelineStrategy(Protocol):
@@ -509,12 +571,12 @@ class PipelineStrategy(Protocol):
     Permite duck typing en OHLCVPipeline sin depender de StrategyMixin.
     Los mocks de test solo necesitan implementar execute_pair().
     """
+
     async def execute_pair(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        idx:       int,
-        total:     int,
+        idx: int,
+        total: int,
         ctx: "PipelineContext",
-    ) -> PairResult:
-        ...
+    ) -> PairResult: ...

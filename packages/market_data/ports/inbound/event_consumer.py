@@ -24,6 +24,7 @@ DIP  — use cases dependen de este protocolo, nunca de InMemoryEventBus
 ISP  — solo subscribe/unsubscribe; publish vive en su propio puerto
 OCP  — Kafka, Redis Streams, SQS implementan este contrato sin tocar callers
 """
+
 from __future__ import annotations
 
 from typing import Callable, Protocol, Type, runtime_checkable
@@ -51,7 +52,7 @@ class EventConsumerPort(Protocol):
     def subscribe(
         self,
         event_type: Type[DomainEvent],
-        handler:    Handler,
+        handler: Handler,
     ) -> None:
         """
         Registra un handler para un tipo de evento.
@@ -64,7 +65,7 @@ class EventConsumerPort(Protocol):
     def unsubscribe(
         self,
         event_type: Type[DomainEvent],
-        handler:    Handler,
+        handler: Handler,
     ) -> None:
         """
         Elimina un handler.

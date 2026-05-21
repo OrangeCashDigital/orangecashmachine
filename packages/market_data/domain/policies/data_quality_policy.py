@@ -43,6 +43,7 @@ DIP    — depende de DataQualityReport (abstracción), no de implementaciones
 SSOT   — _SCORE_WEIGHTS y umbrales declarados como constantes de módulo
 KISS   — flujo lineal: compute_score → collect_reasons → decide
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -58,6 +59,7 @@ from market_data.domain.quality.types import DataQualityReport
 # Tipos públicos
 # ===========================================================================
 
+
 class QualityDecision(str, Enum):
     """
     Decisión de negocio sobre un batch de datos.
@@ -66,9 +68,10 @@ class QualityDecision(str, Enum):
     ACCEPT_WITH_FLAGS — datos usables, con anomalías registradas
     REJECT            — datos inutilizables, no escribir en Silver
     """
-    ACCEPT            = "accept"
+
+    ACCEPT = "accept"
     ACCEPT_WITH_FLAGS = "accept_with_flags"
-    REJECT            = "reject"
+    REJECT = "reject"
 
 
 @dataclass
@@ -84,10 +87,11 @@ class PolicyResult:
     report            : report de origen (para trazabilidad)
     penalty_breakdown : desglose de penalización por tipo de issue
     """
-    decision:          QualityDecision
-    score:             float
-    reasons:           List[str]
-    report:            DataQualityReport
+
+    decision: QualityDecision
+    score: float
+    reasons: List[str]
+    report: DataQualityReport
     penalty_breakdown: Dict[str, float] = field(default_factory=dict)
 
     @property
@@ -101,22 +105,17 @@ class PolicyResult:
         return self.decision == QualityDecision.ACCEPT_WITH_FLAGS
 
     def summary(self) -> str:
-        breakdown_str = " ".join(
-            f"{k}={v:.3f}" for k, v in self.penalty_breakdown.items()
-        )
+        breakdown_str = " ".join(f"{k}={v:.3f}" for k, v in self.penalty_breakdown.items())
         suffix = f" penalties=[{breakdown_str}]" if breakdown_str else ""
-        return (
-            f"PolicyResult | decision={self.decision.value} "
-            f"score={self.score:.1f} reasons={self.reasons}{suffix}"
-        )
+        return f"PolicyResult | decision={self.decision.value} score={self.score:.1f} reasons={self.reasons}{suffix}"
 
     def to_dict(self) -> Dict:
         return {
-            "decision":          self.decision.value,
-            "score":             round(self.score, 4),
-            "accepted":          self.accepted,
-            "flagged":           self.flagged,
-            "reasons":           self.reasons,
+            "decision": self.decision.value,
+            "score": round(self.score, 4),
+            "accepted": self.accepted,
+            "flagged": self.flagged,
+            "reasons": self.reasons,
             "penalty_breakdown": self.penalty_breakdown,
         }
 
@@ -126,23 +125,24 @@ class PolicyResult:
 # ===========================================================================
 
 _SCORE_WEIGHTS: Dict[str, float] = {
-    "future_timestamps":     1.0,
-    "ohlc_inconsistencies":  0.9,
-    "temporal_gaps":         0.5,
-    "price_outliers_mad":    0.3,
+    "future_timestamps": 1.0,
+    "ohlc_inconsistencies": 0.9,
+    "temporal_gaps": 0.5,
+    "price_outliers_mad": 0.3,
     "price_outliers_zscore": 0.2,
-    "flatline_candles":      0.1,
-    "empty_dataset":         1.0,
+    "flatline_candles": 0.1,
+    "empty_dataset": 1.0,
 }
 
-_REJECT_THRESHOLD:      float = 40.0
-_FLAG_THRESHOLD:        float = 99.0
+_REJECT_THRESHOLD: float = 40.0
+_FLAG_THRESHOLD: float = 99.0
 _MAX_CRITICAL_ROWS_PCT: float = 0.10
 
 
 # ===========================================================================
 # Domain Service
 # ===========================================================================
+
 
 class DataQualityPolicy:
     """
@@ -166,27 +166,30 @@ class DataQualityPolicy:
         """
         if not report.rows:
             return PolicyResult(
-                decision          = QualityDecision.REJECT,
-                score             = 0.0,
-                reasons           = ["empty dataset"],
-                report            = report,
-                penalty_breakdown = {},
+                decision=QualityDecision.REJECT,
+                score=0.0,
+                reasons=["empty dataset"],
+                report=report,
+                penalty_breakdown={},
             )
 
         score, breakdown = self._compute_score(report)
-        reasons          = self._collect_reasons(report)
-        decision         = self._decide(report, score)
+        reasons = self._collect_reasons(report)
+        decision = self._decide(report, score)
 
         result = PolicyResult(
-            decision          = decision,
-            score             = score,
-            reasons           = reasons,
-            report            = report,
-            penalty_breakdown = breakdown,
+            decision=decision,
+            score=score,
+            reasons=reasons,
+            report=report,
+            penalty_breakdown=breakdown,
         )
         logger.debug(
             "Policy | {}/{} exchange={} {}",
-            report.symbol, report.timeframe, report.exchange, result.summary(),
+            report.symbol,
+            report.timeframe,
+            report.exchange,
+            result.summary(),
         )
         return result
 
@@ -213,18 +216,16 @@ class DataQualityPolicy:
         if not report.issues:
             return 100.0, {}
 
-        penalty:   float            = 0.0
+        penalty: float = 0.0
         breakdown: Dict[str, float] = {}
 
         for issue in report.issues:
-            weight        = _SCORE_WEIGHTS.get(issue.check, 0.3)
-            row_pct       = issue.affected_rows / max(report.rows, 1)
+            weight = _SCORE_WEIGHTS.get(issue.check, 0.3)
+            row_pct = issue.affected_rows / max(report.rows, 1)
             severity_mult = 2.0 if issue.severity == "critical" else 1.0
-            p             = weight * row_pct * severity_mult * 100
-            penalty      += p
-            breakdown[issue.check] = round(
-                breakdown.get(issue.check, 0.0) + p, 4
-            )
+            p = weight * row_pct * severity_mult * 100
+            penalty += p
+            breakdown[issue.check] = round(breakdown.get(issue.check, 0.0) + p, 4)
 
         return max(0.0, 100.0 - penalty), breakdown
 
@@ -246,10 +247,7 @@ class DataQualityPolicy:
 
     def _collect_reasons(self, report: DataQualityReport) -> List[str]:
         """Genera lista de razones legibles desde los issues del report."""
-        return [
-            f"{i.check}({i.severity}): {i.description}"
-            for i in report.issues
-        ]
+        return [f"{i.check}({i.severity}): {i.description}" for i in report.issues]
 
 
 # ===========================================================================

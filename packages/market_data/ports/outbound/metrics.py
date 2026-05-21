@@ -14,6 +14,7 @@ Implementaciones:
 
 Principios: DIP · ISP · Protocol (structural subtyping) · SafeOps
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
@@ -32,16 +33,16 @@ class MetricsPort(Protocol):
 
     def rows_ingested_inc(
         self,
-        exchange:  str,
+        exchange: str,
         timeframe: str,
-        delta:     int = 1,
+        delta: int = 1,
     ) -> None:
         """Incrementa contador de candles almacenados con éxito."""
         ...
 
     def pipeline_errors_inc(
         self,
-        exchange:   str,
+        exchange: str,
         error_type: str,
     ) -> None:
         """Incrementa contador de errores de pipeline. error_type: transient|fatal"""
@@ -71,21 +72,21 @@ class MetricsPort(Protocol):
 
     def pair_duration_observe(
         self,
-        exchange:   str,
-        symbol:     str,
-        timeframe:  str,
-        seconds:    float,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        seconds: float,
     ) -> None:
         """Observa la duración de procesamiento de un par (histogram)."""
         ...
 
     def quality_decisions_inc(
         self,
-        exchange:    str,
+        exchange: str,
         market_type: str,
-        symbol:      str,
-        timeframe:   str,
-        decision:    str,
+        symbol: str,
+        timeframe: str,
+        decision: str,
     ) -> None:
         """Incrementa contador de decisiones del quality gate."""
         ...
@@ -94,18 +95,18 @@ class MetricsPort(Protocol):
 
     def repair_gaps_found_inc(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        count:     int = 1,
+        count: int = 1,
     ) -> None:
         """Incrementa contador de gaps detectados en repair."""
         ...
 
     def repair_gaps_healed_inc(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
     ) -> None:
         """Incrementa contador de gaps reparados exitosamente."""
@@ -113,8 +114,8 @@ class MetricsPort(Protocol):
 
     def repair_gaps_skipped_inc(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
     ) -> None:
         """Incrementa contador de gaps omitidos (demasiado grandes / irrecuperables)."""
@@ -124,20 +125,20 @@ class MetricsPort(Protocol):
 
     def timestamp_drift_inc(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        count:     int = 1,
+        count: int = 1,
     ) -> None:
         """Incrementa contador de timestamps corregidos al grid (align_to_grid)."""
         ...
 
     def timestamp_collisions_inc(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        count:     int = 1,
+        count: int = 1,
     ) -> None:
         """Incrementa contador de colisiones post-floor (align_to_grid)."""
         ...
@@ -173,7 +174,9 @@ class NullMetrics:
     def pair_duration_observe(self, exchange: str, symbol: str, timeframe: str, seconds: float) -> None:
         pass
 
-    def quality_decisions_inc(self, exchange: str, market_type: str, symbol: str, timeframe: str, decision: str) -> None:
+    def quality_decisions_inc(
+        self, exchange: str, market_type: str, symbol: str, timeframe: str, decision: str
+    ) -> None:
         pass
 
     def repair_gaps_found_inc(self, exchange: str, symbol: str, timeframe: str, count: int = 1) -> None:
@@ -206,19 +209,33 @@ class RepairMetricsPort(Protocol):
     def pipeline_errors_inc(self, exchange: str, error_type: str) -> None: ...
 
     def repair_gaps_found_inc(
-        self, exchange: str, symbol: str, timeframe: str, count: int = 1,
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        count: int = 1,
     ) -> None: ...
 
     def repair_gaps_healed_inc(
-        self, exchange: str, symbol: str, timeframe: str,
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
     ) -> None: ...
 
     def repair_gaps_skipped_inc(
-        self, exchange: str, symbol: str, timeframe: str,
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
     ) -> None: ...
 
     def rows_ingested_inc(
-        self, exchange: str, symbol: str, timeframe: str, count: int = 1,
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        count: int = 1,
     ) -> None: ...
 
     # -- Properties legacy (compatibilidad con Prometheus directo) --
@@ -253,18 +270,18 @@ class QualityMetricsPort(Protocol):
 
     def quality_gaps_inc(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        severity:  str,
-        count:     int = 1,
+        severity: str,
+        count: int = 1,
     ) -> None:
         """Incrementa contador de gaps detectados por severidad."""
         ...
 
     def pipeline_errors_inc(
         self,
-        exchange:   str,
+        exchange: str,
         error_type: str,
     ) -> None:
         """Incrementa contador de errores de pipeline. error_type: quality_reject|fatal"""
@@ -279,9 +296,7 @@ class NullQualityMetrics:
     Todos los métodos son no-op — SafeOps garantizado por diseño.
     """
 
-    def quality_gaps_inc(
-        self, exchange: str, symbol: str, timeframe: str, severity: str, count: int = 1
-    ) -> None:
+    def quality_gaps_inc(self, exchange: str, symbol: str, timeframe: str, severity: str, count: int = 1) -> None:
         pass
 
     def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:

@@ -23,6 +23,7 @@ market_data.infrastructure.event_bus.in_memory.InMemoryEventBus
 market_data.infrastructure.event_bus.redis_streams.RedisStreamsEventBus  (futuro)
 market_data.infrastructure.event_bus.kafka.KafkaEventBus                 (futuro)
 """
+
 from __future__ import annotations
 
 from typing import Callable, Protocol, Type, runtime_checkable
@@ -39,6 +40,7 @@ Handler = Callable[[DomainEvent], None]
 # ===========================================================================
 # EventBusPort — Protocol (structural subtyping via runtime_checkable)
 # ===========================================================================
+
 
 @runtime_checkable
 class EventBusPort(Protocol):

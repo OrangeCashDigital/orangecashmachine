@@ -10,6 +10,7 @@ CCXTAdapter (adapters/outbound/exchange/) lo implementa.
 Tests inyectan fakes/mocks que lo satisfacen estructuralmente
 (Protocol + runtime_checkable → no herencia requerida).
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable

@@ -17,6 +17,7 @@ market_data.adapters.chunk_converter.PassthroughChunkConverter
 
 Principios: DIP · ISP · SRP · runtime_checkable · Clean Architecture
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
@@ -44,13 +45,13 @@ class OHLCVChunkConverterPort(Protocol):
 
     def to_chunk(
         self,
-        df:           pd.DataFrame,
-        exchange:     str,
-        symbol:       str,
-        timeframe:    str,
-        source:       str           = "rest",
-        run_id:       str           = "",
-        chunk_index:  int           = 0,
+        df: pd.DataFrame,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        source: str = "rest",
+        run_id: str = "",
+        chunk_index: int = 0,
         total_chunks: Optional[int] = None,
     ) -> OHLCVChunk:
         """

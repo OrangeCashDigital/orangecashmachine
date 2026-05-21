@@ -18,6 +18,7 @@ Diferencias vs OHLCVPipeline
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 import time
@@ -46,14 +47,16 @@ TradesPipelineMode = Literal["incremental", "backfill", "repair"]
 # Result / Summary
 # ---------------------------------------------------------------------------
 
+
 @dataclass(slots=True)
 class TradesResult:
     """Resultado de ingestion para un símbolo."""
-    symbol:      str
-    success:     bool          = False
-    rows:        int           = 0
-    error:       Optional[str] = None
-    duration_ms: int           = 0
+
+    symbol: str
+    success: bool = False
+    rows: int = 0
+    error: Optional[str] = None
+    duration_ms: int = 0
 
     @property
     def skipped(self) -> bool:
@@ -63,9 +66,10 @@ class TradesResult:
 @dataclass
 class TradesSummary:
     """Resumen agregado de un run de TradesPipeline."""
-    results:     List[TradesResult] = field(default_factory=list)
-    duration_ms: int                = 0
-    mode:        str                = "incremental"
+
+    results: List[TradesResult] = field(default_factory=list)
+    duration_ms: int = 0
+    mode: str = "incremental"
 
     @property
     def total(self) -> int:
@@ -95,10 +99,10 @@ class TradesSummary:
             return "partial"
         return "failed"
 
+
 # ---------------------------------------------------------------------------
 # Pipeline
 # ---------------------------------------------------------------------------
-
 
 
 class TradesPipeline(PipelineTriggerPort):
@@ -116,13 +120,13 @@ class TradesPipeline(PipelineTriggerPort):
 
     def __init__(
         self,
-        symbols:         List[str],
+        symbols: List[str],
         exchange_client: "ExchangeClientPort",
-        fetcher:         "TradesFetcherPort",   # obligatorio — inyectar desde factory (DIP)
-        storage:         "TradesStoragePort",   # obligatorio — inyectar desde factory (DIP)
-        market_type:     str  = "spot",
-        dry_run:         bool = False,
-        max_concurrency: int  = 4,
+        fetcher: "TradesFetcherPort",  # obligatorio — inyectar desde factory (DIP)
+        storage: "TradesStoragePort",  # obligatorio — inyectar desde factory (DIP)
+        market_type: str = "spot",
+        dry_run: bool = False,
+        max_concurrency: int = 4,
     ) -> None:
         # Fail-fast: todas las dependencias concretas se inyectan desde
         # ConcretePipelineFactory — TradesPipeline no resuelve infraestructura.
@@ -132,26 +136,23 @@ class TradesPipeline(PipelineTriggerPort):
             raise TypeError("TradesPipeline: 'exchange_client' es obligatorio")
         if fetcher is None:
             raise TypeError(
-                "TradesPipeline: 'fetcher' es obligatorio. "
-                "Inyectar TradesFetcher desde el composition root."
+                "TradesPipeline: 'fetcher' es obligatorio. Inyectar TradesFetcher desde el composition root."
             )
         if storage is None:
             raise TypeError(
-                "TradesPipeline: 'storage' es obligatorio. "
-                "Inyectar TradesStorage desde el composition root."
+                "TradesPipeline: 'storage' es obligatorio. Inyectar TradesStorage desde el composition root."
             )
         if max_concurrency < 1:
             raise ValueError("TradesPipeline: max_concurrency debe ser >= 1")
 
-        self.symbols:         List[str] = symbols
-        self.market_type:     str       = market_type.lower()
-        self.dry_run:         bool      = dry_run
-        self.max_concurrency: int       = max_concurrency
-        self._exchange_id:    str       = getattr(
-            exchange_client, "_exchange_id", "unknown"
-        )
+        self.symbols: List[str] = symbols
+        self.market_type: str = market_type.lower()
+        self.dry_run: bool = dry_run
+        self.max_concurrency: int = max_concurrency
+        self._exchange_id: str = getattr(exchange_client, "_exchange_id", "unknown")
         self._log = logger.bind(
-            exchange=self._exchange_id, pipeline="trades",
+            exchange=self._exchange_id,
+            pipeline="trades",
         )
 
         # DIP: fetcher y storage inyectados desde ConcretePipelineFactory.
@@ -171,24 +172,29 @@ class TradesPipeline(PipelineTriggerPort):
         """
         self._log.info(
             "TradesPipeline start | mode={} symbols={} concurrency={}",
-            mode, len(self.symbols), self.max_concurrency,
+            mode,
+            len(self.symbols),
+            self.max_concurrency,
         )
 
         pipeline_start = time.monotonic()
-        results        = await self._run_worker_pool(mode)
-        duration_ms    = int((time.monotonic() - pipeline_start) * 1000)
+        results = await self._run_worker_pool(mode)
+        duration_ms = int((time.monotonic() - pipeline_start) * 1000)
 
         summary = TradesSummary(
-            results     = results,
-            duration_ms = duration_ms,
-            mode        = mode,
+            results=results,
+            duration_ms=duration_ms,
+            mode=mode,
         )
 
         self._log.info(
-            "TradesPipeline done | mode={} ok={} failed={} skipped={}"
-            " total_rows={} duration_ms={}",
-            mode, summary.succeeded, summary.failed,
-            summary.skipped, summary.total_rows, duration_ms,
+            "TradesPipeline done | mode={} ok={} failed={} skipped={} total_rows={} duration_ms={}",
+            mode,
+            summary.succeeded,
+            summary.failed,
+            summary.skipped,
+            summary.total_rows,
+            duration_ms,
         )
         return summary
 
@@ -201,17 +207,15 @@ class TradesPipeline(PipelineTriggerPort):
             return await self._fetch_symbol(symbol, mode, idx)
 
         results, _ = await run_worker_pool(
-            items           = items,
-            execute_fn      = _execute,
-            max_concurrency = self.max_concurrency,
-            exchange_id     = self._exchange_id,
-            log             = self._log,
+            items=items,
+            execute_fn=_execute,
+            max_concurrency=self.max_concurrency,
+            exchange_id=self._exchange_id,
+            log=self._log,
         )
         return results
 
-    async def _fetch_symbol(
-        self, symbol: str, mode: str, idx: int
-    ) -> TradesResult:
+    async def _fetch_symbol(self, symbol: str, mode: str, idx: int) -> TradesResult:
         """Fetcha trades para un símbolo con captura de errores."""
         start = time.monotonic()
         try:
@@ -220,25 +224,33 @@ class TradesPipeline(PipelineTriggerPort):
             duration_ms = int((time.monotonic() - start) * 1000)
             self._log.info(
                 "  [{}/{}] {} | rows={} duration={}ms",
-                idx, len(self.symbols), symbol, rows, duration_ms,
+                idx,
+                len(self.symbols),
+                symbol,
+                rows,
+                duration_ms,
             )
             return TradesResult(
-                symbol      = symbol,
-                success     = True,
-                rows        = rows,
-                duration_ms = duration_ms,
+                symbol=symbol,
+                success=True,
+                rows=rows,
+                duration_ms=duration_ms,
             )
         except Exception as exc:
             duration_ms = int((time.monotonic() - start) * 1000)
             self._log.error(
                 "  [{}/{}] {} FAILED | err={} duration={}ms",
-                idx, len(self.symbols), symbol, exc, duration_ms,
+                idx,
+                len(self.symbols),
+                symbol,
+                exc,
+                duration_ms,
             )
             return TradesResult(
-                symbol      = symbol,
-                success     = False,
-                error       = str(exc),
-                duration_ms = duration_ms,
+                symbol=symbol,
+                success=False,
+                error=str(exc),
+                duration_ms=duration_ms,
             )
 
     def __repr__(self) -> str:

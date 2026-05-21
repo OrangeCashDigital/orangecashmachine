@@ -24,6 +24,7 @@ DIP  — adapters inbound dependen de este protocolo, no del bus concreto
 ISP  — solo publish; subscribe vive en EventConsumerPort
 OCP  — Kafka, Redis, InMemory implementan este contrato
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable

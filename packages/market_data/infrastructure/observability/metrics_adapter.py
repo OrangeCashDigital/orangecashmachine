@@ -13,6 +13,7 @@ se envuelven en objetos que satisfacen los protocolos de puerto.
 SRP: un adaptador por puerto de métricas.
 DIP: application/quality dependen de los puertos, nunca de estos adaptadores.
 """
+
 from __future__ import annotations
 
 
@@ -27,8 +28,9 @@ class PrometheusQualityMetrics:
             PIPELINE_ERRORS,
             QUALITY_GAPS_TOTAL,
         )
-        self._quality_gaps_total  = QUALITY_GAPS_TOTAL
-        self._pipeline_errors     = PIPELINE_ERRORS
+
+        self._quality_gaps_total = QUALITY_GAPS_TOTAL
+        self._pipeline_errors = PIPELINE_ERRORS
 
     @property
     def quality_gaps_total(self) -> object:
@@ -47,6 +49,7 @@ class PrometheusResampleMetrics:
             RESAMPLE_DURATION_MS,
             RESAMPLE_ROWS_TOTAL,
         )
+
         self._resample_rows_total = RESAMPLE_ROWS_TOTAL
         self._resample_duration_ms = RESAMPLE_DURATION_MS
 
@@ -72,13 +75,14 @@ class PrometheusPipelineMetrics:
             FETCH_CHUNKS_TOTAL,
             PIPELINE_ERRORS,
         )
-        self._active_pairs             = ACTIVE_PAIRS
-        self._candle_delay_ms          = CANDLE_DELAY_MS
-        self._fetch_aborts_total       = FETCH_ABORTS_TOTAL
-        self._fetch_chunk_duration     = FETCH_CHUNK_DURATION
-        self._fetch_chunks_total       = FETCH_CHUNKS_TOTAL
+
+        self._active_pairs = ACTIVE_PAIRS
+        self._candle_delay_ms = CANDLE_DELAY_MS
+        self._fetch_aborts_total = FETCH_ABORTS_TOTAL
+        self._fetch_chunk_duration = FETCH_CHUNK_DURATION
+        self._fetch_chunks_total = FETCH_CHUNKS_TOTAL
         self._fetch_chunk_errors_total = FETCH_CHUNK_ERRORS_TOTAL
-        self._pipeline_errors          = PIPELINE_ERRORS
+        self._pipeline_errors = PIPELINE_ERRORS
 
     # ── PipelineMetricsPort: propiedades raw (usadas por ohlcv_fetcher) ─────
 
@@ -111,7 +115,8 @@ class PrometheusPipelineMetrics:
 
     def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:
         self._pipeline_errors.labels(
-            exchange=exchange, error_type=error_type,
+            exchange=exchange,
+            error_type=error_type,
         ).inc()
 
     def record_error(self, exchange: str, error_type: str) -> None:
@@ -122,13 +127,15 @@ class PrometheusPipelineMetrics:
         pass  # gauge opcional — no todos los deployments lo exponen
 
     def pair_duration_observe(
-        self, exchange: str, symbol: str, timeframe: str, seconds: float,
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        seconds: float,
     ) -> None:
         pass  # histogram opcional — pendiente de añadir a metrics.py
 
-    def quality_decisions_inc(
-        self, exchange: str, market_type: str, **kwargs: object
-    ) -> None:
+    def quality_decisions_inc(self, exchange: str, market_type: str, **kwargs: object) -> None:
         pass  # opcional — implementar cuando se añada el counter a metrics.py
 
 
@@ -143,11 +150,12 @@ class PrometheusRepairMetrics:
             REPAIR_GAPS_SKIPPED,
             ROWS_INGESTED,
         )
-        self._pipeline_errors      = PIPELINE_ERRORS
-        self._repair_gaps_found    = REPAIR_GAPS_FOUND
-        self._repair_gaps_healed   = REPAIR_GAPS_HEALED
-        self._repair_gaps_skipped  = REPAIR_GAPS_SKIPPED
-        self._rows_ingested        = ROWS_INGESTED
+
+        self._pipeline_errors = PIPELINE_ERRORS
+        self._repair_gaps_found = REPAIR_GAPS_FOUND
+        self._repair_gaps_healed = REPAIR_GAPS_HEALED
+        self._repair_gaps_skipped = REPAIR_GAPS_SKIPPED
+        self._rows_ingested = ROWS_INGESTED
 
     @property
     def pipeline_errors(self) -> object:
@@ -168,4 +176,3 @@ class PrometheusRepairMetrics:
     @property
     def rows_ingested(self) -> object:
         return self._rows_ingested
-

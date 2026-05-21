@@ -18,6 +18,7 @@ ninguna información al migrar desde este módulo.
 
 TODO: deprecar en la siguiente major version.
 """
+
 from market_data.domain.exceptions import (  # noqa: F401
     ExchangeAdapterError,
     UnsupportedExchangeError,

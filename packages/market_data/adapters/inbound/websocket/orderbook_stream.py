@@ -35,6 +35,7 @@ OCP    — agregar un exchange nuevo no modifica el protocolo.
 SSOT   — la interfaz define qué es "stream de order book" para el sistema.
 SRP    — este módulo declara el contrato; manager.py gestiona el ciclo de vida.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -51,12 +52,13 @@ from market_data.domain.value_objects.order_book import (
 # ---------------------------------------------------------------------------
 
 SnapshotCallback = Callable[[OrderBookSnapshot], Awaitable[None]]
-DeltaCallback    = Callable[[OrderBookDelta],    Awaitable[None]]
+DeltaCallback = Callable[[OrderBookDelta], Awaitable[None]]
 
 
 # ---------------------------------------------------------------------------
 # Protocolo / Port del stream de order book
 # ---------------------------------------------------------------------------
+
 
 class OrderBookStreamProtocol(ABC):
     """
@@ -126,6 +128,7 @@ class OrderBookStreamProtocol(ABC):
 # Stub — NOT IMPLEMENTED
 # ---------------------------------------------------------------------------
 
+
 class OrderBookStream(OrderBookStreamProtocol):
     """
     Stub de stream L2 de order book. NOT IMPLEMENTED.
@@ -140,17 +143,17 @@ class OrderBookStream(OrderBookStreamProtocol):
 
     def __init__(
         self,
-        exchange:      str,
-        symbols:       list[str],
-        on_snapshot:   SnapshotCallback,
-        on_delta:      DeltaCallback,
-        depth:         int = 20,
+        exchange: str,
+        symbols: list[str],
+        on_snapshot: SnapshotCallback,
+        on_delta: DeltaCallback,
+        depth: int = 20,
     ) -> None:
-        self._exchange   = exchange
-        self._symbols    = symbols
+        self._exchange = exchange
+        self._symbols = symbols
         self._on_snapshot = on_snapshot
-        self._on_delta    = on_delta
-        self._depth      = depth
+        self._on_delta = on_delta
+        self._depth = depth
 
     async def start(self) -> None:
         raise NotImplementedError(
@@ -173,13 +176,7 @@ class OrderBookStream(OrderBookStreamProtocol):
         pass  # Fail-soft: no hay nada que desuscribir
 
     def __repr__(self) -> str:
-        return (
-            f"OrderBookStream("
-            f"exchange={self._exchange!r}, "
-            f"symbols={self._symbols!r}, "
-            f"[NOT IMPLEMENTED]"
-            f")"
-        )
+        return f"OrderBookStream(exchange={self._exchange!r}, symbols={self._symbols!r}, [NOT IMPLEMENTED])"
 
 
 __all__ = [

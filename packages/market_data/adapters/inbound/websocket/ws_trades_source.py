@@ -28,8 +28,6 @@ from typing import AsyncIterator
 
 from loguru import logger
 
-from market_data.domain.value_objects.raw_trade import TradeSource
-
 
 class WSTradesSource:
     """
@@ -86,8 +84,7 @@ class WSTradesSource:
     async def __anext__(self):
         # TODO: implementar conexión WS real (cryptofeed / ccxt-pro)
         self._log.warning(
-            "WSTradesSource no implementado — StopAsyncIteration inmediato | "
-            "source_id={}",
+            "WSTradesSource no implementado — StopAsyncIteration inmediato | source_id={}",
             self.source_id,
         )
         raise StopAsyncIteration
@@ -102,12 +99,7 @@ class WSTradesSource:
             self._log.warning("stop() raised unexpectedly | error={}", _stop_exc)
 
     def __repr__(self) -> str:
-        return (
-            f"WSTradesSource("
-            f"exchange={self._exchange_id!r}, "
-            f"symbol={self._symbol!r}, "
-            f"running={self._running})"
-        )
+        return f"WSTradesSource(exchange={self._exchange_id!r}, symbol={self._symbol!r}, running={self._running})"
 
 
 __all__ = ["WSTradesSource"]

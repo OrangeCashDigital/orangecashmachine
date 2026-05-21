@@ -10,6 +10,7 @@ Nadie escribe "KAFKA_BOOTSTRAP_SERVERS" directamente aquí.
 
 Principios: DIP · SRP · SafeOps · Resiliencia · SSOT
 """
+
 from __future__ import annotations
 
 import os
@@ -41,25 +42,25 @@ class KafkaProducerAdapter:
 
     def __init__(
         self,
-        bootstrap_servers: str    = "kafka:9092",
-        client_id:         str    = "ocm-producer",
-        compression_type:  str    = "gzip",
-        acks:              object  = "all",
-        max_batch_size:    int    = 16_384,
-        linger_ms:         int    = 5,
+        bootstrap_servers: str = "kafka:9092",
+        client_id: str = "ocm-producer",
+        compression_type: str = "gzip",
+        acks: object = "all",
+        max_batch_size: int = 16_384,
+        linger_ms: int = 5,
     ) -> None:
         self._bootstrap_servers = bootstrap_servers
-        self._client_id         = client_id
-        self._compression_type  = compression_type
-        self._acks              = acks
-        self._max_batch_size    = max_batch_size
-        self._linger_ms         = linger_ms
-        self._producer          = None
-        self._started           = False
-        self._log               = logger.bind(
-            component = "KafkaProducerAdapter",
-            broker    = bootstrap_servers,
-            client_id = client_id,
+        self._client_id = client_id
+        self._compression_type = compression_type
+        self._acks = acks
+        self._max_batch_size = max_batch_size
+        self._linger_ms = linger_ms
+        self._producer = None
+        self._started = False
+        self._log = logger.bind(
+            component="KafkaProducerAdapter",
+            broker=bootstrap_servers,
+            client_id=client_id,
         )
 
     # ------------------------------------------------------------------
@@ -75,12 +76,12 @@ class KafkaProducerAdapter:
         Nunca strings literales aquí.
         """
         return cls(
-            bootstrap_servers = os.environ.get(KAFKA_BOOTSTRAP_SERVERS, "kafka:9092"),
-            client_id         = os.environ.get(KAFKA_CLIENT_ID_PRODUCER, "ocm-producer"),
-            compression_type  = os.environ.get(KAFKA_COMPRESSION_TYPE,   "gzip"),
-            acks              = os.environ.get(KAFKA_ACKS,                "all"),
-            linger_ms         = int(os.environ.get(KAFKA_LINGER_MS,      "5")),
-            max_batch_size    = int(os.environ.get(KAFKA_MAX_BATCH_SIZE,  "16384")),
+            bootstrap_servers=os.environ.get(KAFKA_BOOTSTRAP_SERVERS, "kafka:9092"),
+            client_id=os.environ.get(KAFKA_CLIENT_ID_PRODUCER, "ocm-producer"),
+            compression_type=os.environ.get(KAFKA_COMPRESSION_TYPE, "gzip"),
+            acks=os.environ.get(KAFKA_ACKS, "all"),
+            linger_ms=int(os.environ.get(KAFKA_LINGER_MS, "5")),
+            max_batch_size=int(os.environ.get(KAFKA_MAX_BATCH_SIZE, "16384")),
         )
 
     # ------------------------------------------------------------------
@@ -92,15 +93,16 @@ class KafkaProducerAdapter:
         if self._started:
             return
         from aiokafka import AIOKafkaProducer
+
         self._producer = AIOKafkaProducer(
-            bootstrap_servers  = self._bootstrap_servers,
-            client_id          = self._client_id,
-            compression_type   = self._compression_type,
-            acks               = self._acks,
-            max_batch_size     = self._max_batch_size,
-            linger_ms          = self._linger_ms,
-            request_timeout_ms = 30_000,
-            retry_backoff_ms   = 500,
+            bootstrap_servers=self._bootstrap_servers,
+            client_id=self._client_id,
+            compression_type=self._compression_type,
+            acks=self._acks,
+            max_batch_size=self._max_batch_size,
+            linger_ms=self._linger_ms,
+            request_timeout_ms=30_000,
+            retry_backoff_ms=500,
         )
         if self._producer is None:
             raise RuntimeError("producer_not_initialized")
@@ -125,10 +127,10 @@ class KafkaProducerAdapter:
 
     async def send_async(
         self,
-        topic:   str,
-        value:   bytes,
-        key:     Optional[bytes] = None,
-        headers: Optional[dict]  = None,
+        topic: str,
+        value: bytes,
+        key: Optional[bytes] = None,
+        headers: Optional[dict] = None,
     ) -> bool:
         """
         Publica un mensaje a Kafka.
@@ -143,15 +145,13 @@ class KafkaProducerAdapter:
             return False
         try:
             kafka_headers = (
-                [(k, v.encode() if isinstance(v, str) else v)
-                 for k, v in headers.items()]
-                if headers else []
+                [(k, v.encode() if isinstance(v, str) else v) for k, v in headers.items()] if headers else []
             )
             await self._producer.send_and_wait(
                 topic,
-                value   = value,
-                key     = key,
-                headers = kafka_headers,
+                value=value,
+                key=key,
+                headers=kafka_headers,
             )
             self._log.bind(topic=topic).debug("kafka_message_sent")
             return True
@@ -168,13 +168,12 @@ class KafkaProducerAdapter:
         except Exception as exc:
             self._log.warning("kafka_flush_error", error=str(exc))
 
-
     async def produce(
         self,
-        topic:   str,
-        value:   bytes,
-        key      = None,
-        headers  = None,
+        topic: str,
+        value: bytes,
+        key=None,
+        headers=None,
     ) -> None:
         """
         Método canónico de KafkaProducerPort.

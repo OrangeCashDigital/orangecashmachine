@@ -24,6 +24,7 @@ InMemoryEventBus — in-process, thread-safe. Único backend necesario
 
 Principios: SRP · DIP · OCP · thread-safe · fail-soft
 """
+
 from market_data.infrastructure.event_bus.in_memory import InMemoryEventBus  # noqa: F401
 
 #: Singleton de proceso — compartido por adapters y consumers del mismo proceso.

@@ -33,6 +33,7 @@ DIP  — application depende de abstracción, nunca de infra concreta
 OCP  — nuevos backends (e.g. Postgres, in-memory) no modifican este contrato
 KISS — interfaz mínima: solo los 2 métodos usados por RepairStrategy
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
@@ -57,10 +58,10 @@ class GapRegistryPort(Protocol):
 
     def is_irrecoverable(
         self,
-        exchange:   str,
-        symbol:     str,
-        timeframe:  str,
-        start_ms:   int,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        start_ms: int,
     ) -> bool:
         """
         Retorna True si este gap fue marcado previamente como sin datos
@@ -73,10 +74,10 @@ class GapRegistryPort(Protocol):
 
     def mark_healed(
         self,
-        exchange:     str,
-        symbol:       str,
-        timeframe:    str,
-        start_ms:     int,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        start_ms: int,
         irreversible: bool = False,
     ) -> None:
         """

@@ -55,6 +55,7 @@ Ref
 - Stevens, "Unix Network Programming" — thundering herd prevention
 - asyncio queue docs: https://docs.python.org/3/library/asyncio-queue.html
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -71,15 +72,15 @@ _DEFAULT_TIMEOUT_S: float = 3600.0
 
 
 async def run_worker_pool(
-    items:           Sequence,
-    execute_fn:      Callable[..., Awaitable[T]],
+    items: Sequence,
+    execute_fn: Callable[..., Awaitable[T]],
     max_concurrency: int,
-    exchange_id:     str,
+    exchange_id: str,
     log,
     *,
-    stagger_s:  float                                    = _DEFAULT_STAGGER_S,
-    timeout_s:  float                                    = _DEFAULT_TIMEOUT_S,
-    on_abort:   Callable[..., bool] | None               = None,
+    stagger_s: float = _DEFAULT_STAGGER_S,
+    timeout_s: float = _DEFAULT_TIMEOUT_S,
+    on_abort: Callable[..., bool] | None = None,
 ) -> tuple[list[T], bool]:
     """
     Ejecuta execute_fn sobre cada item con concurrencia limitada.
@@ -106,8 +107,8 @@ async def run_worker_pool(
     if not items:
         return [], False
 
-    queue:       asyncio.Queue = asyncio.Queue()
-    results:     list[T]       = []
+    queue: asyncio.Queue = asyncio.Queue()
+    results: list[T] = []
     abort_event: asyncio.Event = asyncio.Event()
 
     for item in items:
@@ -154,7 +155,8 @@ async def run_worker_pool(
                             break
                     log.warning(
                         "worker_pool_aborted | exchange={} drained={}",
-                        exchange_id, drained,
+                        exchange_id,
+                        drained,
                     )
                     return
                 raise
@@ -166,32 +168,28 @@ async def run_worker_pool(
             await asyncio.sleep(delay_s)
         await worker()
 
-    worker_tasks = [
-        asyncio.create_task(_staggered_worker(i * stagger_s))
-        for i in range(max_concurrency)
-    ]
+    worker_tasks = [asyncio.create_task(_staggered_worker(i * stagger_s)) for i in range(max_concurrency)]
 
     try:
         await asyncio.wait_for(queue.join(), timeout=timeout_s)
     except asyncio.TimeoutError:
         log.error(
             "worker_pool_timeout | exchange={} timeout_s={}",
-            exchange_id, timeout_s,
+            exchange_id,
+            timeout_s,
         )
         for w in worker_tasks:
             w.cancel()
         await asyncio.gather(*worker_tasks, return_exceptions=True)
-        raise RuntimeError(
-            f"Worker pool timed out after {timeout_s:.0f}s"
-            f" | exchange={exchange_id}"
-        )
+        raise RuntimeError(f"Worker pool timed out after {timeout_s:.0f}s | exchange={exchange_id}")
     except asyncio.CancelledError:
         for w in worker_tasks:
             w.cancel()
         await asyncio.gather(*worker_tasks, return_exceptions=True)
         log.warning(
             "worker_pool_cancelled | exchange={} workers={}",
-            exchange_id, len(worker_tasks),
+            exchange_id,
+            len(worker_tasks),
         )
         raise
     finally:

@@ -13,6 +13,7 @@ Lifecycle (managed by FeedOrchestrator):
     # ... adapter calls publisher(trade) for each trade ...
     await publisher.stop()
 """
+
 from __future__ import annotations
 
 import json
@@ -67,8 +68,7 @@ class KafkaTradePublisher:
         """Publish a normalized trade.  Fail-fast if producer not started."""
         if self._producer is None:
             raise RuntimeError(
-                "KafkaTradePublisher: __call__ invoked before start(). "
-                "Call await publisher.start() first."
+                "KafkaTradePublisher: __call__ invoked before start(). Call await publisher.start() first."
             )
         payload: bytes = json.dumps(trade.to_dict()).encode("utf-8")
         key: bytes = trade.symbol.encode("utf-8")

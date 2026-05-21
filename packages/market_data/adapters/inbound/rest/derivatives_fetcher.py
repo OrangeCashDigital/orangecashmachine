@@ -33,12 +33,13 @@ SafeOps
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
-    from ocm.runtime.state.ports import CursorStorePort as CursorStore
+    pass
 
 import pandas as pd
 from loguru import logger
@@ -57,14 +58,15 @@ from market_data.adapters.inbound.rest._cursor_factory import (
 # Constants
 # ---------------------------------------------------------------------------
 
-MAX_RETRIES:         int   = 3
-BACKOFF_BASE:        float = 1.5
+MAX_RETRIES: int = 3
+BACKOFF_BASE: float = 1.5
 MAX_BACKOFF_SECONDS: float = 20.0
 
 
 # ---------------------------------------------------------------------------
 # Parsers CCXT → DataFrame  (puros — sin efectos secundarios)
 # ---------------------------------------------------------------------------
+
 
 def _parse_funding_rate(raw: Dict[str, Any]) -> pd.DataFrame:
     """
@@ -74,15 +76,19 @@ def _parse_funding_rate(raw: Dict[str, Any]) -> pd.DataFrame:
     Ref: https://docs.ccxt.com/#/?id=funding-rate-structure
     """
     ts_ms = raw.get("timestamp")
-    rate  = raw.get("fundingRate")
+    rate = raw.get("fundingRate")
 
     if ts_ms is None or rate is None:
         return pd.DataFrame()
 
-    return pd.DataFrame([{
-        "timestamp":    pd.Timestamp(int(ts_ms), unit="ms", tz="UTC"),
-        "funding_rate": float(rate),
-    }])
+    return pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp(int(ts_ms), unit="ms", tz="UTC"),
+                "funding_rate": float(rate),
+            }
+        ]
+    )
 
 
 def _parse_open_interest(raw: Dict[str, Any]) -> pd.DataFrame:
@@ -93,20 +99,25 @@ def _parse_open_interest(raw: Dict[str, Any]) -> pd.DataFrame:
     Ref: https://docs.ccxt.com/#/?id=open-interest-structure
     """
     ts_ms = raw.get("timestamp")
-    oi    = raw.get("openInterest")
+    oi = raw.get("openInterest")
 
     if ts_ms is None or oi is None:
         return pd.DataFrame()
 
-    return pd.DataFrame([{
-        "timestamp":     pd.Timestamp(int(ts_ms), unit="ms", tz="UTC"),
-        "open_interest": float(oi),
-    }])
+    return pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp(int(ts_ms), unit="ms", tz="UTC"),
+                "open_interest": float(oi),
+            }
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
 # Base interna — lógica de cursor y retry compartida (DRY)
 # ---------------------------------------------------------------------------
+
 
 class _BaseDerivativesFetcher:
     """
@@ -116,26 +127,26 @@ class _BaseDerivativesFetcher:
     ``_fetch_raw(symbol)`` y ``_parse(raw)``.
     """
 
-    _dataset: str   # definido por subclase
+    _dataset: str  # definido por subclase
 
     def __init__(
         self,
         exchange_client: CCXTAdapter,
-        storage:         object,
-        market_type:     str  = "swap",
-        dry_run:         bool = False,
+        storage: object,
+        market_type: str = "swap",
+        dry_run: bool = False,
     ) -> None:
         if exchange_client is None:
             raise ValueError(f"{type(self).__name__}: exchange_client es obligatorio")
         if storage is None:
             raise ValueError(f"{type(self).__name__}: storage es obligatorio")
 
-        self._client      = exchange_client
-        self._storage     = storage
+        self._client = exchange_client
+        self._storage = storage
         self._market_type = market_type
-        self._dry_run     = dry_run
+        self._dry_run = dry_run
         self._exchange_id = getattr(exchange_client, "_exchange_id", "unknown")
-        self._log         = logger.bind(
+        self._log = logger.bind(
             exchange=self._exchange_id,
             dataset=self._dataset,
         )
@@ -144,9 +155,7 @@ class _BaseDerivativesFetcher:
         try:
             self._cursor = _build_cursor_store()
         except Exception as exc:
-            self._log.warning(
-                "CursorStore no disponible — usando storage fallback | error={}", exc
-            )
+            self._log.warning("CursorStore no disponible — usando storage fallback | error={}", exc)
             self._cursor = None
 
     # ------------------------------------------------------------------
@@ -170,12 +179,13 @@ class _BaseDerivativesFetcher:
 
         # Dedup por cursor: si el timestamp ya está almacenado, skip
         snapshot_ts_ms = int(df["timestamp"].iloc[0].timestamp() * 1000)
-        last_ts_ms     = await self._resolve_cursor(symbol)
+        last_ts_ms = await self._resolve_cursor(symbol)
 
         if last_ts_ms is not None and snapshot_ts_ms <= last_ts_ms:
             self._log.debug(
                 "Snapshot ya almacenado — skip | symbol={} ts_ms={}",
-                symbol, snapshot_ts_ms,
+                symbol,
+                snapshot_ts_ms,
             )
             return 0
 
@@ -201,9 +211,7 @@ class _BaseDerivativesFetcher:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _fetch_raw_with_retry(
-        self, symbol: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _fetch_raw_with_retry(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Llama a _fetch_raw delegando retry a retry_async (DRY).
 
         Retorna None si el endpoint no está soportado (Fail-Soft).
@@ -225,15 +233,14 @@ class _BaseDerivativesFetcher:
         """Nivel 1: Redis. Nivel 2: storage. Nivel 3: None."""
         if self._cursor is not None:
             try:
-                ts = await self._cursor.get(
-                    self._exchange_id, symbol, self._dataset
-                )
+                ts = await self._cursor.get(self._exchange_id, symbol, self._dataset)
                 if ts is not None:
                     return ts
             except Exception as exc:
                 self._log.warning(
                     "CursorStore.get falló — fallback | symbol={} error={}",
-                    symbol, exc,
+                    symbol,
+                    exc,
                 )
         return self._storage.last_timestamp_ms(symbol)
 
@@ -242,14 +249,13 @@ class _BaseDerivativesFetcher:
         if self._dry_run or self._cursor is None:
             return
         try:
-            await self._cursor.update(
-                self._exchange_id, symbol, self._dataset, ts_ms
-            )
+            await self._cursor.update(self._exchange_id, symbol, self._dataset, ts_ms)
         except Exception as exc:
             self._log.warning(
-                "CursorStore.update falló (no crítico) | "
-                "symbol={} ts_ms={} error={}",
-                symbol, ts_ms, exc,
+                "CursorStore.update falló (no crítico) | symbol={} ts_ms={} error={}",
+                symbol,
+                ts_ms,
+                exc,
             )
 
     def __repr__(self) -> str:
@@ -264,6 +270,7 @@ class _BaseDerivativesFetcher:
 # ---------------------------------------------------------------------------
 # Fetchers concretos — SRP: uno por dataset
 # ---------------------------------------------------------------------------
+
 
 class FundingRateFetcher(_BaseDerivativesFetcher):
     """Fetcher de funding_rate para mercados perpetuos."""

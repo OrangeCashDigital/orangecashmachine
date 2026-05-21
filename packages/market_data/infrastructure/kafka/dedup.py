@@ -27,6 +27,7 @@ Degradación controlada
 
 Principios: SRP · DIP · SafeOps · fail-open · KISS · Resiliencia
 """
+
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -45,6 +46,7 @@ _DEDUP_KEY_PREFIX: str = "ocm:kafka:dedup:"
 # ---------------------------------------------------------------------------
 # DeduplicatonStoreProtocol — contrato del backend externo (DIP)
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class DeduplicationStoreProtocol(Protocol):
@@ -69,6 +71,7 @@ class DeduplicationStoreProtocol(Protocol):
 # SeenFilter — L1, en memoria, LRU
 # ---------------------------------------------------------------------------
 
+
 class SeenFilter:
     """
     Filtro de deduplicación en memoria (LRU).
@@ -82,8 +85,8 @@ class SeenFilter:
     """
 
     def __init__(self, max_size: int = _DEFAULT_MAX_SIZE) -> None:
-        self._seen:     OrderedDict[str, None] = OrderedDict()
-        self._max_size: int                    = max_size
+        self._seen: OrderedDict[str, None] = OrderedDict()
+        self._max_size: int = max_size
 
     def is_duplicate(self, event_id: str) -> bool:
         return event_id in self._seen
@@ -107,6 +110,7 @@ class SeenFilter:
 # PersistentSeenFilter — L2, backend externo
 # ---------------------------------------------------------------------------
 
+
 class PersistentSeenFilter:
     """
     Filtro de deduplicación con backend externo (Redis u otro).
@@ -123,10 +127,10 @@ class PersistentSeenFilter:
 
     def __init__(
         self,
-        store:    DeduplicationStoreProtocol,
+        store: DeduplicationStoreProtocol,
         ttl_days: int = _DEFAULT_TTL_DAYS,
     ) -> None:
-        self._store    = store
+        self._store = store
         self._ttl_secs = ttl_days * 86_400
 
     def is_duplicate(self, event_id: str) -> bool:
@@ -154,6 +158,7 @@ class PersistentSeenFilter:
 # CompositeSeenFilter — L1 + L2
 # ---------------------------------------------------------------------------
 
+
 class CompositeSeenFilter:
     """
     Filtro compuesto: L1 (memoria) + L2 (backend externo).
@@ -170,15 +175,13 @@ class CompositeSeenFilter:
 
     def __init__(
         self,
-        store         = None,
+        store=None,
         max_size: int = _DEFAULT_MAX_SIZE,
         ttl_days: int = _DEFAULT_TTL_DAYS,
     ) -> None:
         self._l1 = SeenFilter(max_size=max_size)
         self._l2: Optional[PersistentSeenFilter] = (
-            PersistentSeenFilter(store=store, ttl_days=ttl_days)
-            if store is not None
-            else None
+            PersistentSeenFilter(store=store, ttl_days=ttl_days) if store is not None else None
         )
 
     def is_duplicate(self, event_id: str) -> bool:

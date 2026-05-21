@@ -28,6 +28,7 @@ KISS      — solo los campos que el dominio necesita
 No pandas — el dominio no depende de infraestructura de análisis
 Kappa     — chunk = bounded stream fragment, no batch offline
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -43,6 +44,7 @@ from market_data.domain.value_objects.candle import Candle
 # OHLCVSource — SSOT de etiquetas de origen de datos
 # ===========================================================================
 
+
 class OHLCVSource:
     """
     Constantes canónicas de origen de un chunk OHLCV.
@@ -55,10 +57,11 @@ class OHLCVSource:
     backfill : backfill histórico explícito (distingue REST backfill de incremental)
     replay   : replay de eventos históricos desde Kafka (Kappa reprocessing)
     """
-    REST:     str = "rest"
-    LIVE:     str = "live"
+
+    REST: str = "rest"
+    LIVE: str = "live"
     BACKFILL: str = "backfill"
-    REPLAY:   str = "replay"
+    REPLAY: str = "replay"
 
     ALL: frozenset = frozenset({"rest", "live", "backfill", "replay"})
 
@@ -71,6 +74,7 @@ class OHLCVSource:
 # ===========================================================================
 # OHLCVChunk — Value Object
 # ===========================================================================
+
 
 @dataclass(frozen=True)
 class OHLCVChunk:
@@ -103,14 +107,15 @@ class OHLCVChunk:
     end_ms       : timestamp_ms de la última vela (None si vacío)
     valid_count  : número de velas que pasan is_valid()
     """
-    exchange:     str                  = ""
-    symbol:       str                  = ""
-    timeframe:    str                  = ""
-    candles:      tuple[Candle, ...]   = field(default_factory=tuple)
-    source:       str                  = "rest"
-    run_id:       str                  = ""
-    chunk_index:  int                  = 0
-    total_chunks: Optional[int]        = None
+
+    exchange: str = ""
+    symbol: str = ""
+    timeframe: str = ""
+    candles: tuple[Candle, ...] = field(default_factory=tuple)
+    source: str = "rest"
+    run_id: str = ""
+    chunk_index: int = 0
+    total_chunks: Optional[int] = None
 
     # ----------------------------------------------------------
     # Properties
@@ -159,13 +164,13 @@ class OHLCVChunk:
     @classmethod
     def from_tuples(
         cls,
-        tuples:      list[tuple[int, float, float, float, float, float]],
-        exchange:    str,
-        symbol:      str,
-        timeframe:   str,
-        source:      str           = "rest",
-        run_id:      str           = "",
-        chunk_index: int           = 0,
+        tuples: list[tuple[int, float, float, float, float, float]],
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        source: str = "rest",
+        run_id: str = "",
+        chunk_index: int = 0,
         total_chunks: Optional[int] = None,
     ) -> "OHLCVChunk":
         """
@@ -180,14 +185,14 @@ class OHLCVChunk:
         """
         candles = tuple(Candle.from_tuple(t) for t in tuples)
         return cls(
-            exchange     = exchange,
-            symbol       = symbol,
-            timeframe    = timeframe,
-            candles      = candles,
-            source       = source,
-            run_id       = run_id,
-            chunk_index  = chunk_index,
-            total_chunks = total_chunks,
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            candles=candles,
+            source=source,
+            run_id=run_id,
+            chunk_index=chunk_index,
+            total_chunks=total_chunks,
         )
 
 

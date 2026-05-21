@@ -17,6 +17,7 @@ Estructura interna (SRP):
 
 Ref: https://iceberg.apache.org/spec/
 """
+
 from __future__ import annotations
 
 from market_data.infrastructure.storage.iceberg._catalog_singleton import get_catalog

@@ -57,6 +57,7 @@ SafeOps
 
 Principios: DIP · OCP · Kappa · DRY · SafeOps · KISS · SRP
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -82,14 +83,15 @@ RecoveryFactory = Callable[[int, int], TradesSourceProtocol]
 # Constantes
 # ---------------------------------------------------------------------------
 
-_DEFAULT_GAP_THRESHOLD_MS: int = 30_000   # 30s de silencio → gap
-_MAX_RESTART_ATTEMPTS:     int = 3        # reintentos de reconexión WS
-_RESTART_BACKOFF_S:        float = 2.0   # segundos entre reintentos
+_DEFAULT_GAP_THRESHOLD_MS: int = 30_000  # 30s de silencio → gap
+_MAX_RESTART_ATTEMPTS: int = 3  # reintentos de reconexión WS
+_RESTART_BACKOFF_S: float = 2.0  # segundos entre reintentos
 
 
 # ---------------------------------------------------------------------------
 # GapAwareStream
 # ---------------------------------------------------------------------------
+
 
 class GapAwareStream:
     """
@@ -111,12 +113,12 @@ class GapAwareStream:
 
     def __init__(
         self,
-        source:           TradesSourceProtocol,
+        source: TradesSourceProtocol,
         recovery_factory: RecoveryFactory,
-        exchange_id:      str,
-        symbol:           str,
-        gap_threshold_ms: int   = _DEFAULT_GAP_THRESHOLD_MS,
-        reconnect:        bool  = True,
+        exchange_id: str,
+        symbol: str,
+        gap_threshold_ms: int = _DEFAULT_GAP_THRESHOLD_MS,
+        reconnect: bool = True,
     ) -> None:
         # -- fail-fast -------------------------------------------------------
         if source is None:
@@ -128,29 +130,27 @@ class GapAwareStream:
         if not symbol:
             raise ValueError("GapAwareStream: symbol no puede ser vacío")
         if gap_threshold_ms < 0:
-            raise ValueError(
-                f"GapAwareStream: gap_threshold_ms debe ser >= 0, got {gap_threshold_ms}"
-            )
+            raise ValueError(f"GapAwareStream: gap_threshold_ms debe ser >= 0, got {gap_threshold_ms}")
 
-        self._source           = source
+        self._source = source
         self._recovery_factory = recovery_factory
-        self._exchange_id      = exchange_id
-        self._symbol           = symbol
+        self._exchange_id = exchange_id
+        self._symbol = symbol
         self._gap_threshold_ms = gap_threshold_ms
-        self._reconnect        = reconnect
+        self._reconnect = reconnect
 
         # -- estado interno --------------------------------------------------
-        self._last_trade_ms:  Optional[int]  = None
-        self._running:        bool           = False
-        self._stop_event:     asyncio.Event  = asyncio.Event()
+        self._last_trade_ms: Optional[int] = None
+        self._running: bool = False
+        self._stop_event: asyncio.Event = asyncio.Event()
         # Buffer de trades de recovery pendientes de emitir
         self._recovery_buffer: list[RawTrade] = []
 
         self._log = logger.bind(
-            component    = "GapAwareStream",
-            exchange     = exchange_id,
-            symbol       = symbol,
-            threshold_ms = gap_threshold_ms,
+            component="GapAwareStream",
+            exchange=exchange_id,
+            symbol=symbol,
+            threshold_ms=gap_threshold_ms,
         )
 
     # ------------------------------------------------------------------
@@ -167,13 +167,14 @@ class GapAwareStream:
         return getattr(self._source, "source_id", f"ws:{self._exchange_id}:{self._symbol}")
 
     def __aiter__(self) -> AsyncIterator[RawTrade]:
-        self._running      = True
+        self._running = True
         self._last_trade_ms = None
         self._recovery_buffer = []
         self._stop_event.clear()
         self._log.info(
             "GapAwareStream start | gap_threshold_ms={} reconnect={}",
-            self._gap_threshold_ms, self._reconnect,
+            self._gap_threshold_ms,
+            self._reconnect,
         )
         return self
 
@@ -200,7 +201,6 @@ class GapAwareStream:
 
         # 3-5. Obtener trade del source principal
         while not self._stop_event.is_set():
-
             # Emitir recovery buffer si se rellenó en iteración anterior
             if self._recovery_buffer:
                 return self._recovery_buffer.pop(0)
@@ -229,9 +229,7 @@ class GapAwareStream:
 
             except Exception as exc:
                 # Error inesperado del source — loguear y continuar
-                self._log.warning(
-                    "source error inesperado | error={}", exc
-                )
+                self._log.warning("source error inesperado | error={}", exc)
                 await asyncio.sleep(1.0)
 
         self._running = False
@@ -271,20 +269,19 @@ class GapAwareStream:
 
         Calcula el rango y ejecuta recovery.
         """
-        now_ms       = int(time.time() * 1_000)
-        gap_start_ms = (self._last_trade_ms + 1) if self._last_trade_ms else (
-            now_ms - self._gap_threshold_ms
-        )
-        gap_end_ms   = now_ms
+        now_ms = int(time.time() * 1_000)
+        gap_start_ms = (self._last_trade_ms + 1) if self._last_trade_ms else (now_ms - self._gap_threshold_ms)
+        gap_end_ms = now_ms
 
         if gap_start_ms >= gap_end_ms:
             # Gap demasiado pequeño — no vale la pena
             return
 
         self._log.warning(
-            "gap por silencio detectado | "
-            "gap=[{}, {}] duration_ms={}",
-            gap_start_ms, gap_end_ms, gap_end_ms - gap_start_ms,
+            "gap por silencio detectado | gap=[{}, {}] duration_ms={}",
+            gap_start_ms,
+            gap_end_ms,
+            gap_end_ms - gap_start_ms,
         )
         await self._run_recovery(gap_start_ms, gap_end_ms)
 
@@ -302,12 +299,13 @@ class GapAwareStream:
 
         if self._last_trade_ms is not None:
             gap_start_ms = self._last_trade_ms + 1
-            gap_end_ms   = now_ms
+            gap_end_ms = now_ms
             if gap_start_ms < gap_end_ms:
                 self._log.warning(
-                    "gap por desconexión WS | "
-                    "gap=[{}, {}] duration_ms={}",
-                    gap_start_ms, gap_end_ms, gap_end_ms - gap_start_ms,
+                    "gap por desconexión WS | gap=[{}, {}] duration_ms={}",
+                    gap_start_ms,
+                    gap_end_ms,
+                    gap_end_ms - gap_start_ms,
                 )
                 await self._run_recovery(gap_start_ms, gap_end_ms)
 
@@ -327,20 +325,23 @@ class GapAwareStream:
                 # Verificar que el trade es REST_RECOVERY (SSOT check)
                 if trade.source is not TradeSource.REST_RECOVERY:
                     self._log.warning(
-                        "recovery trade con source inesperado | "
-                        "expected=REST_RECOVERY got={}", trade.source.value,
+                        "recovery trade con source inesperado | expected=REST_RECOVERY got={}",
+                        trade.source.value,
                     )
                 self._recovery_buffer.append(trade)
                 count += 1
             self._log.info(
                 "recovery completo | gap=[{}, {}] trades={}",
-                gap_start_ms, gap_end_ms, count,
+                gap_start_ms,
+                gap_end_ms,
+                count,
             )
         except Exception as exc:
             self._log.error(
-                "recovery falló (fail-soft) | "
-                "gap=[{}, {}] error={}",
-                gap_start_ms, gap_end_ms, exc,
+                "recovery falló (fail-soft) | gap=[{}, {}] error={}",
+                gap_start_ms,
+                gap_end_ms,
+                exc,
             )
 
     async def _restart_source(self) -> bool:
@@ -355,16 +356,17 @@ class GapAwareStream:
             if self._stop_event.is_set():
                 return False
             try:
-                self._source.__aiter__()   # reset del iterador
-                self._log.info(
-                    "WS source reiniciado | intento={}/{}", attempt, _MAX_RESTART_ATTEMPTS
-                )
+                self._source.__aiter__()  # reset del iterador
+                self._log.info("WS source reiniciado | intento={}/{}", attempt, _MAX_RESTART_ATTEMPTS)
                 return True
             except Exception as exc:
                 backoff = _RESTART_BACKOFF_S * attempt
                 self._log.warning(
                     "restart falló (intento {}/{}) | error={} retry_in={:.1f}s",
-                    attempt, _MAX_RESTART_ATTEMPTS, exc, backoff,
+                    attempt,
+                    _MAX_RESTART_ATTEMPTS,
+                    exc,
+                    backoff,
                 )
                 await asyncio.sleep(backoff)
 

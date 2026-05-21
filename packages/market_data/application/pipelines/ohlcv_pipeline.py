@@ -30,7 +30,6 @@ una callable en lugar de un int.
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from typing import TYPE_CHECKING, Any, List, Literal, Optional
 
@@ -55,9 +54,9 @@ from market_data.domain.policies.base import (
     PipelineStrategy,
     PipelineSummary,
 )
-from market_data.application.strategies.backfill    import BackfillStrategy
+from market_data.application.strategies.backfill import BackfillStrategy
 from market_data.application.strategies.incremental import IncrementalStrategy
-from market_data.application.strategies.repair      import RepairStrategy
+from market_data.application.strategies.repair import RepairStrategy
 from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
@@ -83,6 +82,7 @@ PipelineModeStr = Literal["incremental", "backfill", "repair"]
 # Helpers internos
 # ==============================================================================
 
+
 class _ExchangeAbortError(Exception):
     """
     Señal interna: abortar todos los pares de este exchange.
@@ -90,6 +90,7 @@ class _ExchangeAbortError(Exception):
     No es CancelledError — no mata el pipeline global.
     Seguro para uso futuro con múltiples exchanges en paralelo.
     """
+
     __slots__ = ("exchange_id",)
 
     def __init__(self, exchange_id: str) -> None:
@@ -120,7 +121,7 @@ def _classify_pair_error(result: PairResult) -> str:
     Ref: AdaptiveThrottle._RATE_LIMIT_WEIGHT / _TIMEOUT_WEIGHT / _NETWORK_WEIGHT
     """
     error_type = (result.error_type or "").lower()
-    error_msg  = str(result.error   or "").lower()
+    error_msg = str(result.error or "").lower()
 
     if "ratelimit" in error_type or "429" in error_msg or "rate limit" in error_msg:
         return "rate_limit"
@@ -132,6 +133,7 @@ def _classify_pair_error(result: PairResult) -> str:
 # ==============================================================================
 # OHLCVPipeline
 # ==============================================================================
+
 
 class OHLCVPipeline(PipelineTriggerPort):
     """
@@ -168,20 +170,20 @@ class OHLCVPipeline(PipelineTriggerPort):
 
     def __init__(
         self,
-        symbols:            List[str],
-        timeframes:         List[str],
-        start_date:         str,
-        exchange_client:    "ExchangeClientPort",
-        fetcher:            object,   # HistoricalFetcherPort — inyectar desde factory
-        metrics:            object,   # PipelineMetricsPort  — inyectar desde factory
-        quality:            object                     = None,   # QualityPipeline — DIP: inyectar desde factory
-        max_concurrency:    int                        = DEFAULT_MAX_CONCURRENCY,
-        cursor_store:       Optional[CursorStorePort]  = None,
-        backfill_mode:      bool                       = True,
-        market_type:        str                        = "spot",
-        dry_run:            bool                       = False,
-        auto_lookback_days: int                        = 3650,
-        throttle:           "Optional[ThrottlePort]" = None,
+        symbols: List[str],
+        timeframes: List[str],
+        start_date: str,
+        exchange_client: "ExchangeClientPort",
+        fetcher: object,  # HistoricalFetcherPort — inyectar desde factory
+        metrics: object,  # PipelineMetricsPort  — inyectar desde factory
+        quality: object = None,  # QualityPipeline — DIP: inyectar desde factory
+        max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+        cursor_store: Optional[CursorStorePort] = None,
+        backfill_mode: bool = True,
+        market_type: str = "spot",
+        dry_run: bool = False,
+        auto_lookback_days: int = 3650,
+        throttle: "Optional[ThrottlePort]" = None,
     ) -> None:
         # Fail-fast: dependencias de infraestructura obligatorias.
         # OHLCVPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).
@@ -196,23 +198,21 @@ class OHLCVPipeline(PipelineTriggerPort):
             raise TypeError("OHLCVPipeline: 'exchange_client' es obligatorio")
         if fetcher is None:
             raise TypeError(
-                "OHLCVPipeline: 'fetcher' es obligatorio. "
-                "Inyectar HistoricalFetcherAsync desde el composition root."
+                "OHLCVPipeline: 'fetcher' es obligatorio. Inyectar HistoricalFetcherAsync desde el composition root."
             )
         if metrics is None:
             raise TypeError(
-                "OHLCVPipeline: 'metrics' es obligatorio. "
-                "Inyectar PrometheusPipelineMetrics desde el composition root."
+                "OHLCVPipeline: 'metrics' es obligatorio. Inyectar PrometheusPipelineMetrics desde el composition root."
             )
 
-        self.symbols         = symbols
-        self.timeframes      = timeframes
-        self.start_date      = start_date
+        self.symbols = symbols
+        self.timeframes = timeframes
+        self.start_date = start_date
         self.max_concurrency = max_concurrency
-        self.market_type     = market_type.lower()
-        self.backfill_mode   = backfill_mode
-        self._exchange_id    = getattr(exchange_client, "_exchange_id", "unknown")
-        self._throttle       = throttle
+        self.market_type = market_type.lower()
+        self.backfill_mode = backfill_mode
+        self._exchange_id = getattr(exchange_client, "_exchange_id", "unknown")
+        self._throttle = throttle
 
         # Dependencias inyectadas — sin resolución de infraestructura aquí (DIP).
         # BC-38: cursor_store es obligatorio — debe inyectarse desde ConcretePipelineFactory.
@@ -234,21 +234,21 @@ class OHLCVPipeline(PipelineTriggerPort):
         _publisher: OHLCVPublisherPort = NullPublisher()  # Inyectado por CompositionRoot
 
         self._ctx = PipelineContext(
-            fetcher      = fetcher,
-            cursor       = cursor,
-            quality      = quality,
-            exchange_id  = self._exchange_id,
-            market_type  = self.market_type,
-            start_date   = start_date,
-            publisher    = _publisher,
-            metrics      = metrics,
-            gap_registry = build_gap_registry(),  # type: ignore[arg-type]
+            fetcher=fetcher,
+            cursor=cursor,
+            quality=quality,
+            exchange_id=self._exchange_id,
+            market_type=self.market_type,
+            start_date=start_date,
+            publisher=_publisher,
+            metrics=metrics,
+            gap_registry=build_gap_registry(),  # type: ignore[arg-type]
         )
 
         self._strategies: dict[PipelineMode, PipelineStrategy] = {
             PipelineMode.INCREMENTAL: IncrementalStrategy(),
-            PipelineMode.BACKFILL:    BackfillStrategy(),
-            PipelineMode.REPAIR:      RepairStrategy(),
+            PipelineMode.BACKFILL: BackfillStrategy(),
+            PipelineMode.REPAIR: RepairStrategy(),
         }
         self._log = bind_pipeline("pipeline", exchange=self._exchange_id)
 
@@ -258,58 +258,56 @@ class OHLCVPipeline(PipelineTriggerPort):
 
     async def run(self, mode: PipelineModeStr = "incremental") -> PipelineSummary:
         pipeline_mode = PipelineMode(mode)
-        strategy      = self._strategies[pipeline_mode]
-        pairs         = [(s, tf) for s in self.symbols for tf in self.timeframes]
-        total_pairs   = len(pairs)
+        strategy = self._strategies[pipeline_mode]
+        pairs = [(s, tf) for s in self.symbols for tf in self.timeframes]
+        total_pairs = len(pairs)
 
         await self._ctx.fetcher.ensure_exchange()
 
         self._log.bind(
-            mode             = mode,
-            market           = self.market_type,
-            symbols          = len(self.symbols),
-            timeframes       = len(self.timeframes),
-            pairs            = total_pairs,
-            concurrency      = self.max_concurrency,
-            throttle_enabled = self._throttle is not None,
+            mode=mode,
+            market=self.market_type,
+            symbols=len(self.symbols),
+            timeframes=len(self.timeframes),
+            pairs=total_pairs,
+            concurrency=self.max_concurrency,
+            throttle_enabled=self._throttle is not None,
         ).info("OHLCVPipeline iniciando")
 
         pipeline_start = time.monotonic()
-        results, degraded_exchanges = await self._run_worker_pool(
-            strategy, pairs, pipeline_mode
-        )
+        results, degraded_exchanges = await self._run_worker_pool(strategy, pairs, pipeline_mode)
         duration_ms = int((time.monotonic() - pipeline_start) * 1000)
 
         summary = PipelineSummary(
-            results            = results,
-            duration_ms        = duration_ms,
-            mode               = pipeline_mode,
-            degraded_exchanges = degraded_exchanges,
+            results=results,
+            duration_ms=duration_ms,
+            mode=pipeline_mode,
+            degraded_exchanges=degraded_exchanges,
         )
         summary.log(self._log)
 
         if summary.status == "degraded":
             self._log.bind(
-                mode               = mode,
-                degraded_exchanges = summary.degraded_exchanges,
-                failed             = summary.failed,
-                total              = summary.total,
-                transient          = sum(1 for r in summary.results if r.is_transient_error),
+                mode=mode,
+                degraded_exchanges=summary.degraded_exchanges,
+                failed=summary.failed,
+                total=summary.total,
+                transient=sum(1 for r in summary.results if r.is_transient_error),
             ).warning("Pipeline DEGRADED")
         elif summary.status == "failed":
             self._log.bind(
-                mode      = mode,
-                failed    = summary.failed,
-                total     = summary.total,
-                transient = sum(1 for r in summary.results if r.is_transient_error),
+                mode=mode,
+                failed=summary.failed,
+                total=summary.total,
+                transient=sum(1 for r in summary.results if r.is_transient_error),
             ).error("Pipeline FAILED")
         else:
             self._log.bind(
-                mode                    = mode,
-                rows                    = summary.total_rows,
-                pairs                   = summary.total,
-                throughput_rows_per_sec = summary.throughput_rows_per_sec,
-                duration_ms             = duration_ms,
+                mode=mode,
+                rows=summary.total_rows,
+                pairs=summary.total,
+                throughput_rows_per_sec=summary.throughput_rows_per_sec,
+                duration_ms=duration_ms,
             ).success("Pipeline OK")
 
         # Validación de completitud post-pipeline (non-blocking)
@@ -344,8 +342,8 @@ class OHLCVPipeline(PipelineTriggerPort):
         try:
             if result.error:
                 self._throttle.record_error(
-                    error_type = _classify_pair_error(result),
-                    latency_ms = result.duration_ms,
+                    error_type=_classify_pair_error(result),
+                    latency_ms=result.duration_ms,
                 )
             else:
                 self._throttle.record_success(latency_ms=result.duration_ms)
@@ -364,8 +362,8 @@ class OHLCVPipeline(PipelineTriggerPort):
     async def _run_worker_pool(
         self,
         strategy: PipelineStrategy,
-        pairs:    List[tuple[str, str]],
-        mode:     PipelineMode,
+        pairs: List[tuple[str, str]],
+        mode: PipelineMode,
     ) -> tuple[List[PairResult], List[str]]:
         """
         Delega al worker pool genérico con circuit breaker via on_abort.
@@ -385,7 +383,7 @@ class OHLCVPipeline(PipelineTriggerPort):
 
         Ref: Stevens, "Unix Network Programming" — thundering herd prevention
         """
-        total:    int       = len(pairs)
+        total: int = len(pairs)
         degraded: List[str] = []
 
         abort_event: asyncio.Event = asyncio.Event()
@@ -393,9 +391,7 @@ class OHLCVPipeline(PipelineTriggerPort):
 
         async def _execute(item) -> PairResult:
             idx, symbol, tf = item
-            return await self._execute_pair(
-                strategy, symbol, tf, idx, total, mode, abort_event
-            )
+            return await self._execute_pair(strategy, symbol, tf, idx, total, mode, abort_event)
 
         def _on_abort(item, exc: Exception) -> bool:
             if not isinstance(exc, _ExchangeAbortError):
@@ -403,18 +399,16 @@ class OHLCVPipeline(PipelineTriggerPort):
             abort_event.set()
             if exc.exchange_id not in degraded:
                 degraded.append(exc.exchange_id)
-                self._log.bind(aborted_exchange=exc.exchange_id).warning(
-                    "Exchange aborted — circuit breaker"
-                )
+                self._log.bind(aborted_exchange=exc.exchange_id).warning("Exchange aborted — circuit breaker")
             return True
 
         results, _ = await run_worker_pool(
-            items           = items,
-            execute_fn      = _execute,
-            max_concurrency = self.max_concurrency,
-            exchange_id     = self._exchange_id,
-            log             = self._log,
-            on_abort        = _on_abort,
+            items=items,
+            execute_fn=_execute,
+            max_concurrency=self.max_concurrency,
+            exchange_id=self._exchange_id,
+            log=self._log,
+            on_abort=_on_abort,
         )
         return results, degraded
 
@@ -437,8 +431,8 @@ class OHLCVPipeline(PipelineTriggerPort):
         if not written:
             return
         self._log.bind(
-            mode           = "completeness",
-            series_checked = len(written),
+            mode="completeness",
+            series_checked=len(written),
         ).debug("Completeness check omitido — responsabilidad del consumer Kappa")
 
     # ======================================================
@@ -447,12 +441,12 @@ class OHLCVPipeline(PipelineTriggerPort):
 
     async def _execute_pair(
         self,
-        strategy:    PipelineStrategy,
-        symbol:      str,
-        timeframe:   str,
-        idx:         int,
-        total:       int,
-        mode:        PipelineMode,
+        strategy: PipelineStrategy,
+        symbol: str,
+        timeframe: str,
+        idx: int,
+        total: int,
+        mode: PipelineMode,
         abort_event: asyncio.Event,
     ) -> PairResult:
         """
@@ -476,18 +470,17 @@ class OHLCVPipeline(PipelineTriggerPort):
             self._ctx.metrics.active_pairs_inc(self._exchange_id)
         try:
             result = await strategy.execute_pair(
-                symbol    = symbol,
-                timeframe = timeframe,
-                idx       = idx,
-                total     = total,
-                ctx       = self._ctx,
+                symbol=symbol,
+                timeframe=timeframe,
+                idx=idx,
+                total=total,
+                ctx=self._ctx,
             )
             self._feed_throttle(result)
             return result
 
         except asyncio.CancelledError:
             raise  # nunca alimentar throttle — pipeline cancelado externamente
-
 
         except ExchangeCircuitOpenError as exc:
             # Si otro worker ya disparó el abort, salir sin duplicar cooldown.
@@ -499,10 +492,10 @@ class OHLCVPipeline(PipelineTriggerPort):
             # DIP: exc transporta el estado del breaker — sin consultar el adapter.
             _cooldown = max(1.0, exc.cooldown_remaining_ms / 1000)
             self._log.bind(
-                symbol     = symbol,
-                timeframe  = timeframe,
-                failures   = exc.fail_counter,
-                cooldown_s = round(_cooldown, 1),
+                symbol=symbol,
+                timeframe=timeframe,
+                failures=exc.fail_counter,
+                cooldown_s=round(_cooldown, 1),
             ).warning("Circuit open — sleeping cooldown")
             await asyncio.sleep(_cooldown)
 
@@ -511,15 +504,13 @@ class OHLCVPipeline(PipelineTriggerPort):
                 raise _ExchangeAbortError(self._exchange_id) from exc
 
             try:
-                self._log.bind(
-                    symbol=symbol, timeframe=timeframe
-                ).info("Circuit cooldown retry")
+                self._log.bind(symbol=symbol, timeframe=timeframe).info("Circuit cooldown retry")
                 result = await strategy.execute_pair(
-                    symbol    = symbol,
-                    timeframe = timeframe,
-                    idx       = idx,
-                    total     = total,
-                    ctx       = self._ctx,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    idx=idx,
+                    total=total,
+                    ctx=self._ctx,
                 )
                 self._feed_throttle(result)
                 return result
@@ -529,27 +520,27 @@ class OHLCVPipeline(PipelineTriggerPort):
                 if self._ctx.metrics is not None:
                     self._ctx.metrics.fetch_aborts_inc(self._exchange_id)
                 self._log.bind(
-                    symbol                = symbol,
-                    timeframe             = timeframe,
-                    failures              = _inner_exc.fail_counter,
-                    cooldown_remaining_ms = _inner_exc.cooldown_remaining_ms,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    failures=_inner_exc.fail_counter,
+                    cooldown_remaining_ms=_inner_exc.cooldown_remaining_ms,
                 ).warning("Circuit open after retry — aborting exchange")
                 raise _ExchangeAbortError(self._exchange_id) from exc
 
         except Exception as exc:
             self._log.bind(
-                symbol     = symbol,
-                timeframe  = timeframe,
-                error_type = type(exc).__name__,
-                error      = str(exc),
+                symbol=symbol,
+                timeframe=timeframe,
+                error_type=type(exc).__name__,
+                error=str(exc),
             ).error("execute_pair unhandled")
             result = PairResult(
-                symbol      = symbol,
-                timeframe   = timeframe,
-                mode        = mode,
-                exchange_id = self._exchange_id,
-                error       = str(exc),
-                error_type  = type(exc).__name__,
+                symbol=symbol,
+                timeframe=timeframe,
+                mode=mode,
+                exchange_id=self._exchange_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
             )
             self._feed_throttle(result)
             return result

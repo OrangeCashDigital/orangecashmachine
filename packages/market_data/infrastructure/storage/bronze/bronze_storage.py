@@ -21,6 +21,7 @@ particionados por dt=. Este módulo reemplaza esa lógica por un append
 atómico en Iceberg: sin archivos individuales por run, sin meta.json
 manuales — el versionado queda en snapshots de Iceberg.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -34,20 +35,28 @@ from loguru import logger
 from market_data.infrastructure.storage.iceberg.catalog import ensure_bronze_table, get_catalog
 
 # Columnas mínimas requeridas en el DataFrame de entrada
-REQUIRED_COLUMNS: frozenset[str] = frozenset(
-    {"timestamp", "open", "high", "low", "close", "volume"}
-)
+REQUIRED_COLUMNS: frozenset[str] = frozenset({"timestamp", "open", "high", "low", "close", "volume"})
 
 # Orden canónico de columnas para la tabla Iceberg
 _BRONZE_COLS = [
-    "timestamp", "open", "high", "low", "close", "volume",
-    "exchange", "market_type", "symbol", "timeframe", "ingestion_ts",
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "exchange",
+    "market_type",
+    "symbol",
+    "timeframe",
+    "ingestion_ts",
 ]
 
 
 # =============================================================================
 # Excepciones
 # =============================================================================
+
 
 class BronzeStorageError(Exception):
     """Error base de BronzeStorage."""
@@ -60,6 +69,7 @@ class BronzeWriteError(BronzeStorageError):
 # =============================================================================
 # BronzeStorage
 # =============================================================================
+
 
 class BronzeStorage:
     """
@@ -76,23 +86,25 @@ class BronzeStorage:
 
     def __init__(
         self,
-        exchange:    Optional[str] = None,
+        exchange: Optional[str] = None,
         market_type: Optional[str] = "spot",
-        dry_run:     bool          = False,
+        dry_run: bool = False,
         # base_path: ignorado — compat con código que usaba la API filesystem.
         # Bronze ya no usa el filesystem; este parámetro se acepta pero no
         # tiene efecto para no romper llamadas existentes durante la transición.
-        base_path:   object        = None,
+        base_path: object = None,
     ) -> None:
-        self._exchange    = (exchange    or "unknown").lower()
+        self._exchange = (exchange or "unknown").lower()
         self._market_type = (market_type or "spot").lower()
-        self._dry_run     = dry_run
+        self._dry_run = dry_run
         if not dry_run:
             ensure_bronze_table()
             self._table = get_catalog().load_table("bronze.ohlcv")
         logger.debug(
             "BronzeStorage ready | exchange={} market_type={} dry_run={}",
-            self._exchange, self._market_type, self._dry_run,
+            self._exchange,
+            self._market_type,
+            self._dry_run,
         )
 
     # =========================================================================
@@ -101,11 +113,11 @@ class BronzeStorage:
 
     def append(
         self,
-        df:        pd.DataFrame,
-        symbol:    str,
+        df: pd.DataFrame,
+        symbol: str,
         timeframe: str,
-        run_id:    Optional[str] = None,
-        exchange:  Optional[str] = None,
+        run_id: Optional[str] = None,
+        exchange: Optional[str] = None,
     ) -> str:
         """
         Inserta un batch OHLCV en bronze.ohlcv (Iceberg).
@@ -139,7 +151,10 @@ class BronzeStorage:
         if self._dry_run:
             logger.info(
                 "[DRY RUN] BronzeStorage.append skipped | {}/{} exchange={} rows={}",
-                symbol, timeframe, self._exchange, len(df),
+                symbol,
+                timeframe,
+                self._exchange,
+                len(df),
             )
             return run_id
 
@@ -149,10 +164,10 @@ class BronzeStorage:
         effective_exchange = (exchange or self._exchange).lower()
         prepared = _normalize_df(
             df,
-            symbol      = symbol,
-            timeframe   = timeframe,
-            exchange    = effective_exchange,
-            market_type = self._market_type,
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=effective_exchange,
+            market_type=self._market_type,
         )
 
         # Refresh antes de cada append — garantiza snapshot actual.
@@ -165,20 +180,21 @@ class BronzeStorage:
             self._table.append(
                 pa.Table.from_pandas(
                     prepared,
-                    schema         = self._table.schema().as_arrow(),
-                    preserve_index = False,
+                    schema=self._table.schema().as_arrow(),
+                    preserve_index=False,
                 )
             )
         except Exception as exc:
-            raise BronzeWriteError(
-                f"Bronze Iceberg append failed | {symbol}/{timeframe} | {exc}"
-            ) from exc
+            raise BronzeWriteError(f"Bronze Iceberg append failed | {symbol}/{timeframe} | {exc}") from exc
 
         logger.debug(
-            "Bronze append | exchange={} market_type={} symbol={} timeframe={}"
-            " run_id={} rows={}",
-            self._exchange, self._market_type, symbol, timeframe,
-            run_id, len(prepared),
+            "Bronze append | exchange={} market_type={} symbol={} timeframe={} run_id={} rows={}",
+            self._exchange,
+            self._market_type,
+            symbol,
+            timeframe,
+            run_id,
+            len(prepared),
         )
         return run_id
 
@@ -187,11 +203,12 @@ class BronzeStorage:
 # Helpers internos
 # =============================================================================
 
+
 def _normalize_df(
-    df:          pd.DataFrame,
-    symbol:      str,
-    timeframe:   str,
-    exchange:    str,
+    df: pd.DataFrame,
+    symbol: str,
+    timeframe: str,
+    exchange: str,
     market_type: str,
 ) -> pd.DataFrame:
     """
@@ -201,20 +218,14 @@ def _normalize_df(
     - Ordena por timestamp (sin dedup — eso es responsabilidad de Silver).
     """
     df = df.copy()
-    df["timestamp"] = (
-        pd.to_datetime(df["timestamp"], utc=True)
-        .astype("datetime64[us, UTC]")
-    )
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[us, UTC]")
     now_us = pd.Timestamp(datetime.now(timezone.utc)).floor("us")
     df["ingestion_ts"] = now_us.tz_localize(None)  # se reinterpreta como UTC al escribir
-    df["ingestion_ts"] = (
-        pd.to_datetime(df["ingestion_ts"], utc=True)
-        .astype("datetime64[us, UTC]")
-    )
-    df["exchange"]     = exchange
-    df["market_type"]  = market_type
-    df["symbol"]       = symbol
-    df["timeframe"]    = timeframe
+    df["ingestion_ts"] = pd.to_datetime(df["ingestion_ts"], utc=True).astype("datetime64[us, UTC]")
+    df["exchange"] = exchange
+    df["market_type"] = market_type
+    df["symbol"] = symbol
+    df["timeframe"] = timeframe
     return df[_BRONZE_COLS].sort_values("timestamp").reset_index(drop=True)
 
 
@@ -227,6 +238,6 @@ def _validate_dataframe(df: pd.DataFrame) -> None:
 
 
 def _generate_run_id() -> str:
-    ts  = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     uid = uuid.uuid4().hex[:8]
     return f"{ts}-{uid}"

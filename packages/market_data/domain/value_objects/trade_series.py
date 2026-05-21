@@ -28,6 +28,7 @@ El constructor directo asume orden garantizado (fail-fast si viola).
 Usar ``TradeSeries.from_unsorted()`` o ``TradeSeries.from_event()``
 cuando el orden no esté garantizado.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # TradeSeries
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class TradeSeries:
@@ -74,10 +76,10 @@ class TradeSeries:
     no a servicios de aplicación ni a adaptadores de features.
     """
 
-    exchange:    str
+    exchange: str
     market_type: str
-    symbol:      str
-    trades:      tuple[RawTrade, ...]   # ordenado asc por timestamp_ms
+    symbol: str
+    trades: tuple[RawTrade, ...]  # ordenado asc por timestamp_ms
 
     # -- validación en construcción (fail-fast) ---------------------------------
 
@@ -92,27 +94,18 @@ class TradeSeries:
         if not self.symbol:
             raise ValueError("TradeSeries.symbol must be non-empty")
         if not self.trades:
-            raise ValueError(
-                "TradeSeries must contain at least one trade"
-            )
+            raise ValueError("TradeSeries must contain at least one trade")
 
         # Cohesión de lote
         for t in self.trades:
             if t.exchange != self.exchange:
-                raise ValueError(
-                    f"TradeSeries: trade.exchange={t.exchange!r} "
-                    f"!= series.exchange={self.exchange!r}"
-                )
+                raise ValueError(f"TradeSeries: trade.exchange={t.exchange!r} != series.exchange={self.exchange!r}")
             if t.market_type != self.market_type:
                 raise ValueError(
-                    f"TradeSeries: trade.market_type={t.market_type!r} "
-                    f"!= series.market_type={self.market_type!r}"
+                    f"TradeSeries: trade.market_type={t.market_type!r} != series.market_type={self.market_type!r}"
                 )
             if t.symbol != self.symbol:
-                raise ValueError(
-                    f"TradeSeries: trade.symbol={t.symbol!r} "
-                    f"!= series.symbol={self.symbol!r}"
-                )
+                raise ValueError(f"TradeSeries: trade.symbol={t.symbol!r} != series.symbol={self.symbol!r}")
 
         # Orden temporal estricto — un lote desordenado es bug del adaptador
         for i in range(len(self.trades) - 1):
@@ -129,10 +122,10 @@ class TradeSeries:
     @classmethod
     def from_unsorted(
         cls,
-        trades:      Sequence[RawTrade],
-        exchange:    str,
+        trades: Sequence[RawTrade],
+        exchange: str,
         market_type: str,
-        symbol:      str,
+        symbol: str,
     ) -> TradeSeries:
         """
         Ordena por timestamp_ms ascendente y construye la serie.
@@ -307,12 +300,8 @@ class TradeSeries:
         end_ms   : timestamp superior del rango (inclusive).
         """
         if start_ms > end_ms:
-            raise ValueError(
-                f"TradeSeries.slice_ms: start_ms={start_ms} > end_ms={end_ms}"
-            )
-        sliced = tuple(
-            t for t in self.trades if start_ms <= t.timestamp_ms <= end_ms
-        )
+            raise ValueError(f"TradeSeries.slice_ms: start_ms={start_ms} > end_ms={end_ms}")
+        sliced = tuple(t for t in self.trades if start_ms <= t.timestamp_ms <= end_ms)
         if not sliced:
             raise ValueError(
                 f"TradeSeries.slice_ms({start_ms}, {end_ms}) produced an empty series "

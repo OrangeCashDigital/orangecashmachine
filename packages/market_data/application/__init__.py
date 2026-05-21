@@ -30,6 +30,7 @@ El dominio y los ports NO deben importar desde aquí.
 
 Principios: SRP · DIP · OCP · KISS · Clean Architecture
 """
+
 # Re-exports para Composition Roots (Dagster assets)
 from market_data.application.use_cases.pipeline_orchestrator import (  # noqa: F401
     PipelineOrchestrator,

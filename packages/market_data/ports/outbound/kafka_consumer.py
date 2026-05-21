@@ -32,6 +32,7 @@ ISP     — interfaz mínima: poll · commit · close
 OCP     — KafkaConsumerAdapter implementa sin modificar este contrato
 SafeOps — poll() retorna lista vacía si Kafka no responde (no lanza)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -41,6 +42,7 @@ from typing import List, Optional, Protocol, runtime_checkable
 # ---------------------------------------------------------------------------
 # KafkaMessage — value object inmutable del mensaje recibido
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class KafkaMessage:
@@ -57,18 +59,20 @@ class KafkaMessage:
     timestamp : timestamp del mensaje en ms (epoch)
     headers   : metadatos opcionales del mensaje
     """
-    topic:     str
+
+    topic: str
     partition: int
-    offset:    int
-    key:       Optional[bytes]
-    value:     bytes
+    offset: int
+    key: Optional[bytes]
+    value: bytes
     timestamp: int
-    headers:   tuple = ()   # tuple para inmutabilidad (frozen=True)
+    headers: tuple = ()  # tuple para inmutabilidad (frozen=True)
 
 
 # ---------------------------------------------------------------------------
 # KafkaConsumerPort — Protocol (DIP)
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class KafkaConsumerPort(Protocol):

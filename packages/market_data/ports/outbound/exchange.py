@@ -25,6 +25,7 @@ market_data.adapters.outbound.exchange.ccxt_adapter.CCXTAdapter
 
 Principios: DIP · OCP · ISP · KISS · SafeOps
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -97,10 +98,10 @@ class ExchangeAdapter(ABC):
     @abstractmethod
     async def fetch_ohlcv(
         self,
-        symbol:      str,
-        timeframe:   str,
-        since:       Optional[int] = None,
-        limit:       int           = 100,
+        symbol: str,
+        timeframe: str,
+        since: Optional[int] = None,
+        limit: int = 100,
         market_type: Optional[str] = None,
     ) -> List[List[Any]]:
         """
@@ -116,8 +117,8 @@ class ExchangeAdapter(ABC):
     async def fetch_trades(
         self,
         symbol: str,
-        since:  Optional[int] = None,
-        limit:  int = 100,
+        since: Optional[int] = None,
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """
         Retorna trades recientes para el símbolo dado.
@@ -131,8 +132,8 @@ class ExchangeAdapter(ABC):
 
     async def fetch_order_book(
         self,
-        symbol:      str,
-        depth:       int           = 20,
+        symbol: str,
+        depth: int = 20,
         market_type: Optional[str] = None,
     ) -> dict:
         """

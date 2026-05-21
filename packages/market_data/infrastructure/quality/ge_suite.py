@@ -21,6 +21,7 @@ Dependencias
 ------------
 Solo great_expectations — sin imports de market_data (infra pura).
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -43,7 +44,7 @@ _MIN_PRICE_ABSOLUTE: float = 0.0
 _MIN_VOLUME: float = 0.0
 
 # Tasa máxima de nulos tolerable antes de escalar a issue crítico
-_MAX_NULL_RATE: float = 0.01   # 1 %
+_MAX_NULL_RATE: float = 0.01  # 1 %
 
 # Ratio máximo aceptable open/close vs high (sanity check OHLCV)
 _MAX_PRICE_SPREAD_RATIO: float = 10.0  # high no puede ser 10x > low
@@ -53,20 +54,17 @@ _MAX_PRICE_SPREAD_RATIO: float = 10.0  # high no puede ser 10x > low
 # Builders de expectativas por categoría
 # ---------------------------------------------------------------------------
 
+
 def _add_schema_expectations(suite: "ExpectationSuite") -> None:
     """Columnas requeridas y tipos correctos."""
     import great_expectations.expectations as gxe
 
     for col in _OHLCV_REQUIRED_COLUMNS:
-        suite.add_expectation(
-            gxe.ExpectColumnToExist(column=col)
-        )
+        suite.add_expectation(gxe.ExpectColumnToExist(column=col))
 
     # Tipos numéricos para todas las columnas OHLCV
     for col in _OHLCV_REQUIRED_COLUMNS:
-        suite.add_expectation(
-            gxe.ExpectColumnValuesToBeOfType(column=col, type_="float64")
-        )
+        suite.add_expectation(gxe.ExpectColumnValuesToBeOfType(column=col, type_="float64"))
 
 
 def _add_null_expectations(suite: "ExpectationSuite") -> None:
@@ -74,9 +72,7 @@ def _add_null_expectations(suite: "ExpectationSuite") -> None:
     import great_expectations.expectations as gxe
 
     for col in _OHLCV_REQUIRED_COLUMNS:
-        suite.add_expectation(
-            gxe.ExpectColumnValuesToNotBeNull(column=col)
-        )
+        suite.add_expectation(gxe.ExpectColumnValuesToNotBeNull(column=col))
 
 
 def _add_price_sanity_expectations(suite: "ExpectationSuite") -> None:
@@ -169,9 +165,7 @@ def _add_index_expectations(suite: "ExpectationSuite") -> None:
     suite.add_expectation(gxe.ExpectTableRowCountToBeGreaterThan(value=0))
 
     # GE valida el índice como columna reset; el checker lo resetea antes
-    suite.add_expectation(
-        gxe.ExpectColumnValuesToBeUnique(column="_ts_index")
-    )
+    suite.add_expectation(gxe.ExpectColumnValuesToBeUnique(column="_ts_index"))
     suite.add_expectation(
         gxe.ExpectColumnValuesToBeIncreasing(
             column="_ts_index",
@@ -183,6 +177,7 @@ def _add_index_expectations(suite: "ExpectationSuite") -> None:
 # ---------------------------------------------------------------------------
 # API pública: builder de suite completa
 # ---------------------------------------------------------------------------
+
 
 def build_ohlcv_suite(context: "gx.DataContext") -> "ExpectationSuite":
     """

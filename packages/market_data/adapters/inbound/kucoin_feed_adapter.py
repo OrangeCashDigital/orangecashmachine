@@ -6,6 +6,7 @@ Anti-Corruption Layer: cryptofeed KuCoin WebSocket → NormalizedTrade.
 KuCoin supports spot only in cryptofeed (channel: /market/match).
 Symbols use format: BTC-USDT  (no -PERP suffix).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,9 +42,7 @@ class KuCoinFeedAdapter:
         callback: TradeCallback,
     ) -> None:
         if self._running:
-            raise RuntimeError(
-                "KuCoinFeedAdapter: subscribe_trades() called after start()."
-            )
+            raise RuntimeError("KuCoinFeedAdapter: subscribe_trades() called after start().")
         if not symbols:
             raise ValueError("KuCoinFeedAdapter: symbols list must not be empty.")
 
@@ -54,10 +53,7 @@ class KuCoinFeedAdapter:
 
     async def start(self) -> None:
         if not self._symbols:
-            raise RuntimeError(
-                "KuCoinFeedAdapter: no symbols registered. "
-                "Call subscribe_trades() before start()."
-            )
+            raise RuntimeError("KuCoinFeedAdapter: no symbols registered. Call subscribe_trades() before start().")
         if self._running:
             logger.warning("[kucoin] start() called while already running — ignored.")
             return

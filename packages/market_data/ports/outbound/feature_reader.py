@@ -22,6 +22,7 @@ OCP  — agregar backend alternativo no modifica este contrato
 SSOT — definición única del contrato FeatureReaderPort
 SRP  — solo lectura; escritura Gold es responsabilidad de GoldStorage
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional, Protocol, runtime_checkable
@@ -50,13 +51,13 @@ class FeatureReaderPort(Protocol):
 
     def load_features(
         self,
-        symbol:      str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
-        version:     str                 = "latest",
-        as_of:       Optional[str]       = None,
-        columns:     Optional[List[str]] = None,
-        exchange:    Optional[str]       = None,
+        timeframe: str,
+        version: str = "latest",
+        as_of: Optional[str] = None,
+        columns: Optional[List[str]] = None,
+        exchange: Optional[str] = None,
     ) -> pd.DataFrame:
         """
         Carga features Gold para un símbolo/timeframe.
@@ -85,10 +86,10 @@ class FeatureReaderPort(Protocol):
 
     def list_versions(
         self,
-        exchange:    str,
-        symbol:      str,
+        exchange: str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
+        timeframe: str,
     ) -> List[int]:
         """
         Retorna snapshot_ids que construyeron este dataset, cronológico.
@@ -100,7 +101,7 @@ class FeatureReaderPort(Protocol):
 
     def list_datasets(
         self,
-        exchange:    str,
+        exchange: str,
         market_type: str,
     ) -> List[Dict]:
         """
@@ -115,12 +116,12 @@ class FeatureReaderPort(Protocol):
 
     def get_manifest(
         self,
-        exchange:    str,
-        symbol:      str,
+        exchange: str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
-        version:     str           = "latest",
-        as_of:       Optional[str] = None,
+        timeframe: str,
+        version: str = "latest",
+        as_of: Optional[str] = None,
     ) -> Optional[Dict]:
         """
         Metadata del snapshot resuelto: identidad, lineage y estadísticas.

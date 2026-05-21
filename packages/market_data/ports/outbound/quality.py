@@ -22,6 +22,7 @@ OCP   — nuevas implementaciones (Redis, Postgres) sin modificar este contrato
 ISP   — interfaz mínima: solo lo que los pipelines realmente necesitan
 SSOT  — única definición del contrato; reemplaza la declaración en domain/boundaries.py
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
@@ -51,10 +52,10 @@ class AnomalyRegistryPort(Protocol):
 
     def is_new(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        reason:    str,
+        reason: str,
     ) -> bool:
         """
         Retorna True si esta anomalía no había sido vista antes.

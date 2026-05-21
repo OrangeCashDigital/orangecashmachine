@@ -10,6 +10,7 @@ OpenInterestFetcher, TradesFetcher y OHLCVFetcher no la dupliquen.
 
 Principios: DRY · SafeOps · SRP
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,12 +24,12 @@ _log = logger.bind(module="adapters.inbound.rest._retry")
 async def retry_async(
     coro_fn: Callable[[], Coroutine[Any, Any, Any]],
     *,
-    attempts:                  int                        = 3,
-    backoff_base:              float                      = 1.5,
-    backoff_cap:               float                      = 20.0,
-    context:                   str                        = "",
-    circuit_open_exc:          Optional[Type[BaseException]] = None,
-    not_supported_passthrough: bool                       = False,
+    attempts: int = 3,
+    backoff_base: float = 1.5,
+    backoff_cap: float = 20.0,
+    context: str = "",
+    circuit_open_exc: Optional[Type[BaseException]] = None,
+    not_supported_passthrough: bool = False,
 ) -> Any:
     """
     Ejecuta ``coro_fn()`` con retry + backoff exponencial.
@@ -63,7 +64,6 @@ async def retry_async(
             return await coro_fn()
 
         except Exception as exc:
-
             # Fail-Fast: circuit breaker abierto — no reintentar.
             if circuit_open_exc is not None and isinstance(exc, circuit_open_exc):
                 raise
@@ -72,25 +72,28 @@ async def retry_async(
             if not_supported_passthrough:
                 err_lower = str(exc).lower()
                 if "notsupported" in err_lower or "not supported" in err_lower:
-                    _log.debug(
-                        "Endpoint not supported — skipping | context={}", context
-                    )
+                    _log.debug("Endpoint not supported — skipping | context={}", context)
                     return None
 
             last_exc = exc
 
             if attempt < attempts:
-                backoff = min(backoff_base ** attempt, backoff_cap)
+                backoff = min(backoff_base**attempt, backoff_cap)
                 _log.warning(
-                    "Attempt {}/{} failed — retrying in {:.1f}s | "
-                    "context={} error={}",
-                    attempt, attempts, backoff, context, exc,
+                    "Attempt {}/{} failed — retrying in {:.1f}s | context={} error={}",
+                    attempt,
+                    attempts,
+                    backoff,
+                    context,
+                    exc,
                 )
                 await asyncio.sleep(backoff)
             else:
                 _log.warning(
                     "All {} attempts exhausted | context={} last_error={}",
-                    attempts, context, exc,
+                    attempts,
+                    context,
+                    exc,
                 )
 
     # Intentos agotados.

@@ -34,6 +34,7 @@ EventPayload.should_generate_signal() es el árbitro en consumers.
 
 Principios: SRP · DIP · SafeOps · Kappa · SSOT · ACL · Clean Architecture
 """
+
 from __future__ import annotations
 
 import uuid as _uuid
@@ -73,10 +74,10 @@ from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 #
 # Fail-Soft: source desconocido → BACKFILL (seguro — no genera señales).
 _CHUNK_SOURCE_TO_DATASOURCE: dict[str, DataSource] = {
-    "rest":     DATASOURCE_BACKFILL,
+    "rest": DATASOURCE_BACKFILL,
     "backfill": DATASOURCE_BACKFILL,
-    "live":     DATASOURCE_LIVE,
-    "replay":   DATASOURCE_REPLAY,
+    "live": DATASOURCE_LIVE,
+    "replay": DATASOURCE_REPLAY,
 }
 
 
@@ -93,6 +94,7 @@ def _map_source(source: str) -> DataSource:
 # ---------------------------------------------------------------------------
 # KafkaOHLCVPublisher
 # ---------------------------------------------------------------------------
+
 
 class KafkaOHLCVPublisher:
     """
@@ -169,14 +171,14 @@ class KafkaOHLCVPublisher:
             )
 
             payload_bytes = serialize(event)
-            routing_key   = make_routing_key(chunk.exchange, chunk.symbol, chunk.timeframe)
+            routing_key = make_routing_key(chunk.exchange, chunk.symbol, chunk.timeframe)
 
             # HEADER_SOURCE lleva el source del dominio (legible para observabilidad).
             # EventPayload.source lleva el wire DataSource (legible para consumers).
             headers = {
-                HEADER_SOURCE:  chunk.source,
+                HEADER_SOURCE: chunk.source,
                 HEADER_VERSION: str(PAYLOAD_SCHEMA_VERSION),
-                HEADER_RUN_ID:  chunk.run_id,
+                HEADER_RUN_ID: chunk.run_id,
             }
 
             await self._producer.produce(

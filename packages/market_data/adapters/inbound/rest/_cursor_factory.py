@@ -9,6 +9,7 @@ fetchers no lo repitan cada uno.
 
 Principios: DRY · SafeOps · SRP
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -43,11 +44,11 @@ def build_cursor_store(context: str = "") -> Optional[object]:
     """
     try:
         from ocm.runtime.state.factories import build_cursor_store as _build
+
         return _build()
     except Exception as exc:
         _log.warning(
-            "CursorStore unavailable — degraded mode (no Redis cursor) | "
-            "context={} error={}",
+            "CursorStore unavailable — degraded mode (no Redis cursor) | context={} error={}",
             context or "unknown",
             exc,
         )

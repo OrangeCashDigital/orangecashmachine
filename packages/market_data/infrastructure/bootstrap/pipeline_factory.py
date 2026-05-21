@@ -19,6 +19,7 @@ excepto el entrypoint y los Dagster assets.
 
 Principios: DIP · SRP · KISS · SafeOps · Fail-Fast
 """
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -27,6 +28,7 @@ from typing import Any, cast
 # --------------------------------------------------------------------------- #
 # Catalog builder — DRY, único punto de construcción del catalog Iceberg       #
 # --------------------------------------------------------------------------- #
+
 
 def _build_catalog() -> Any:
     """
@@ -41,12 +43,14 @@ def _build_catalog() -> Any:
     pyiceberg.catalog.Catalog
     """
     from market_data.infrastructure.storage.catalog import build_catalog
+
     return build_catalog()
 
 
 # --------------------------------------------------------------------------- #
 # ConcretePipelineFactory                                                      #
 # --------------------------------------------------------------------------- #
+
 
 class ConcretePipelineFactory:
     """
@@ -67,17 +71,14 @@ class ConcretePipelineFactory:
             Si request.pipeline no está registrado.
         """
         dispatch = {
-            "ohlcv":         self._build_ohlcv,
-            "trades":        self._build_trades,
+            "ohlcv": self._build_ohlcv,
+            "trades": self._build_trades,
             "trades_stream": self._build_trades_stream,
-            "derivatives":   self._build_derivatives,
+            "derivatives": self._build_derivatives,
         }
         builder = dispatch.get(request.pipeline)
         if builder is None:
-            raise ValueError(
-                f"PipelineType desconocido: {request.pipeline!r}. "
-                f"Registrados: {list(dispatch)}"
-            )
+            raise ValueError(f"PipelineType desconocido: {request.pipeline!r}. Registrados: {list(dispatch)}")
         return builder(request)
 
     # ----------------------------------------------------------------------- #
@@ -112,6 +113,7 @@ class ConcretePipelineFactory:
             from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
             from market_data.infrastructure.kafka.ohlcv_publisher import KafkaOHLCVPublisher
             from market_data.ports.outbound.kafka_producer import KafkaProducerPort
+
             producer = KafkaProducerAdapter.from_env()
             # cast: KafkaProducerAdapter satisface KafkaProducerPort estructuralmente.
             # mypy no infiere structural subtyping desde clases concretas — cast explicita
@@ -119,9 +121,8 @@ class ConcretePipelineFactory:
             return KafkaOHLCVPublisher(producer=cast(KafkaProducerPort, producer))
         except Exception as exc:
             import logging
-            logging.getLogger(__name__).warning(
-                "KafkaOHLCVPublisher no disponible — modo degradado: %s", exc
-            )
+
+            logging.getLogger(__name__).warning("KafkaOHLCVPublisher no disponible — modo degradado: %s", exc)
             return None
 
     # ----------------------------------------------------------------------- #
@@ -178,45 +179,36 @@ class ConcretePipelineFactory:
             cursor = cast(CursorStorePort, InMemoryCursorStore())
 
         fetcher = HistoricalFetcherAsync(
-            storage            = None,
-            transformer        = OHLCVTransformer(),
-            exchange_client    = raw_adapter,
-            cursor_store       = cast(AsyncCursorStorePort, cursor),
-            backfill_mode      = True,
-            market_type        = request.market_type,
-            config_start_date  = request.start_date or "auto",
-            auto_lookback_days = request.auto_lookback_days or 3650,
+            storage=None,
+            transformer=OHLCVTransformer(),
+            exchange_client=raw_adapter,
+            cursor_store=cast(AsyncCursorStorePort, cursor),
+            backfill_mode=True,
+            market_type=request.market_type,
+            config_start_date=request.start_date or "auto",
+            auto_lookback_days=request.auto_lookback_days or 3650,
         )
 
         # Fail-Fast: validar campos obligatorios antes de construir el pipeline.
         if not request.symbols:
-            raise ValueError(
-                "PipelineRequest.symbols es obligatorio para pipeline='ohlcv'. "
-                f"Request: {request}"
-            )
+            raise ValueError(f"PipelineRequest.symbols es obligatorio para pipeline='ohlcv'. Request: {request}")
         if not request.timeframes:
-            raise ValueError(
-                "PipelineRequest.timeframes es obligatorio para pipeline='ohlcv'. "
-                f"Request: {request}"
-            )
+            raise ValueError(f"PipelineRequest.timeframes es obligatorio para pipeline='ohlcv'. Request: {request}")
         if not request.start_date:
-            raise ValueError(
-                "PipelineRequest.start_date es obligatorio para pipeline='ohlcv'. "
-                f"Request: {request}"
-            )
+            raise ValueError(f"PipelineRequest.start_date es obligatorio para pipeline='ohlcv'. Request: {request}")
 
         return OHLCVPipeline(
-            symbols            = request.symbols,
-            timeframes         = request.timeframes,
-            start_date         = request.start_date,
-            exchange_client    = cast(ExchangeClientPort, exchange_client),
-            fetcher            = fetcher,
-            metrics            = PrometheusPipelineMetrics(),
-            quality            = quality,
-            cursor_store       = cast(CursorStorePort, cursor),
-            market_type        = request.market_type,
-            dry_run            = request.dry_run,
-            auto_lookback_days = request.auto_lookback_days or 3650,
+            symbols=request.symbols,
+            timeframes=request.timeframes,
+            start_date=request.start_date,
+            exchange_client=cast(ExchangeClientPort, exchange_client),
+            fetcher=fetcher,
+            metrics=PrometheusPipelineMetrics(),
+            quality=quality,
+            cursor_store=cast(CursorStorePort, cursor),
+            market_type=request.market_type,
+            dry_run=request.dry_run,
+            auto_lookback_days=request.auto_lookback_days or 3650,
         )
 
     def _build_trades(self, request: Any) -> Any:
@@ -233,29 +225,29 @@ class ConcretePipelineFactory:
         from market_data.application.pipelines.trades_pipeline import TradesPipeline
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
-        raw_adapter     = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
         exchange_client = raw_adapter
 
         catalog = _build_catalog()
         storage = TradesStorage(
-            exchange    = request.exchange,
-            market_type = request.market_type,
-            catalog     = catalog,
+            exchange=request.exchange,
+            market_type=request.market_type,
+            catalog=catalog,
         )
         fetcher = TradesFetcher(
-            exchange_client = raw_adapter,
-            storage         = storage,
-            market_type     = request.market_type,
-            dry_run         = request.dry_run,
+            exchange_client=raw_adapter,
+            storage=storage,
+            market_type=request.market_type,
+            dry_run=request.dry_run,
         )
 
         return TradesPipeline(
-            symbols         = request.symbols or [],
-            exchange_client = cast(ExchangeClientPort, exchange_client),
-            fetcher         = fetcher,
-            storage         = storage,
-            market_type     = request.market_type,
-            dry_run         = request.dry_run,
+            symbols=request.symbols or [],
+            exchange_client=cast(ExchangeClientPort, exchange_client),
+            fetcher=fetcher,
+            storage=storage,
+            market_type=request.market_type,
+            dry_run=request.dry_run,
         )
 
     def _build_trades_stream(self, request: Any) -> Any:
@@ -266,13 +258,10 @@ class ConcretePipelineFactory:
         """
         if not request.symbols:
             raise ValueError(
-                "PipelineRequest.symbols es obligatorio para pipeline='trades_stream'. "
-                f"Request: {request}"
+                f"PipelineRequest.symbols es obligatorio para pipeline='trades_stream'. Request: {request}"
             )
         if not getattr(request, "exchange", None):
-            raise ValueError(
-                "PipelineRequest.exchange es obligatorio para pipeline='trades_stream'."
-            )
+            raise ValueError("PipelineRequest.exchange es obligatorio para pipeline='trades_stream'.")
 
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
@@ -289,44 +278,45 @@ class ConcretePipelineFactory:
 
         for symbol in request.symbols:
             ws_source = WSTradesSource(
-                exchange_id = request.exchange,
-                symbol      = symbol,
-                market_type = request.market_type,
+                exchange_id=request.exchange,
+                symbol=symbol,
+                market_type=request.market_type,
             )
 
             # Closure que captura client y symbol — evita late-binding.
             def _make_recovery_factory(sym: str, client: Any):
                 def _factory(gap_start_ms: int, gap_end_ms: int) -> GapRecoveryFetcher:
                     return GapRecoveryFetcher(
-                        exchange_adapter = client,
-                        exchange_id      = request.exchange,
-                        symbol           = sym,
-                        market_type      = request.market_type,
-                        gap_start_ms     = gap_start_ms,
-                        gap_end_ms       = gap_end_ms,
+                        exchange_adapter=client,
+                        exchange_id=request.exchange,
+                        symbol=sym,
+                        market_type=request.market_type,
+                        gap_start_ms=gap_start_ms,
+                        gap_end_ms=gap_end_ms,
                     )
+
                 return _factory
 
             gap_stream = GapAwareStream(
-                source           = ws_source,
-                recovery_factory = _make_recovery_factory(symbol, exchange_client),
-                exchange_id      = request.exchange,
-                symbol           = symbol,
-                gap_threshold_ms = gap_threshold_ms,
-                reconnect        = True,
+                source=ws_source,
+                recovery_factory=_make_recovery_factory(symbol, exchange_client),
+                exchange_id=request.exchange,
+                symbol=symbol,
+                gap_threshold_ms=gap_threshold_ms,
+                reconnect=True,
             )
 
             rest_source = TradesBackfillFetcher(
-                exchange_adapter = exchange_client,
-                exchange_id      = request.exchange,
-                symbol           = symbol,
-                market_type      = request.market_type,
-                since_ms         = getattr(request, "since_ms", None),
+                exchange_adapter=exchange_client,
+                exchange_id=request.exchange,
+                symbol=symbol,
+                market_type=request.market_type,
+                since_ms=getattr(request, "since_ms", None),
             )
 
             managers[symbol] = TradesSourceManager(
-                rest_source = rest_source,
-                ws_source   = gap_stream,
+                rest_source=rest_source,
+                ws_source=gap_stream,
             )
 
         return managers
@@ -354,52 +344,50 @@ class ConcretePipelineFactory:
         )
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
-        raw_adapter     = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
         exchange_client = raw_adapter
 
         catalog = _build_catalog()
 
         # Un storage por dataset — DerivativesStorage es SRP: una tabla por dataset.
         storage_fr = DerivativesStorage(
-            exchange    = request.exchange,
-            dataset     = "funding_rate",
-            market_type = request.market_type,
-            catalog     = catalog,
+            exchange=request.exchange,
+            dataset="funding_rate",
+            market_type=request.market_type,
+            catalog=catalog,
         )
         storage_oi = DerivativesStorage(
-            exchange    = request.exchange,
-            dataset     = "open_interest",
-            market_type = request.market_type,
-            catalog     = catalog,
+            exchange=request.exchange,
+            dataset="open_interest",
+            market_type=request.market_type,
+            catalog=catalog,
         )
 
         # Fetchers inyectados como dict — clave = nombre del dataset (SSOT).
         fetchers: dict[str, Any] = {
             "funding_rate": FundingRateFetcher(
-                exchange_client = raw_adapter,
-                storage         = storage_fr,
-                market_type     = request.market_type,
-                dry_run         = request.dry_run,
+                exchange_client=raw_adapter,
+                storage=storage_fr,
+                market_type=request.market_type,
+                dry_run=request.dry_run,
             ),
             "open_interest": OpenInterestFetcher(
-                exchange_client = raw_adapter,
-                storage         = storage_oi,
-                market_type     = request.market_type,
-                dry_run         = request.dry_run,
+                exchange_client=raw_adapter,
+                storage=storage_oi,
+                market_type=request.market_type,
+                dry_run=request.dry_run,
             ),
         }
 
         datasets: list[str] = (
-            list(request.datasets)
-            if getattr(request, "datasets", None)
-            else list(SUPPORTED_DERIVATIVE_DATASETS)
+            list(request.datasets) if getattr(request, "datasets", None) else list(SUPPORTED_DERIVATIVE_DATASETS)
         )
 
         return DerivativesPipeline(
-            symbols         = request.symbols or [],
-            datasets        = datasets,
-            exchange_client = cast(ExchangeClientPort, exchange_client),
-            fetchers        = fetchers,
-            market_type     = request.market_type,
-            dry_run         = request.dry_run,
+            symbols=request.symbols or [],
+            datasets=datasets,
+            exchange_client=cast(ExchangeClientPort, exchange_client),
+            fetchers=fetchers,
+            market_type=request.market_type,
+            dry_run=request.dry_run,
         )

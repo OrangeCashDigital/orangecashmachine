@@ -20,6 +20,7 @@ SafeOps — Lecturas: retornar None / DataFrame vacío, nunca lanzar.
 
 Principios: DIP · ISP · OCP · SSOT · runtime_checkable
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
@@ -30,6 +31,7 @@ import pandas as pd
 # =========================================================================== #
 # OHLCV — Silver layer                                                        #
 # =========================================================================== #
+
 
 @runtime_checkable
 class OHLCVStorage(Protocol):
@@ -51,11 +53,11 @@ class OHLCVStorage(Protocol):
 
     def save_ohlcv(
         self,
-        df:              pd.DataFrame,
-        symbol:          str,
-        timeframe:       str,
-        run_id:          Optional[str] = None,
-        skip_versioning: bool          = False,
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        run_id: Optional[str] = None,
+        skip_versioning: bool = False,
     ) -> None:
         """
         Persiste un DataFrame OHLCV en modo append (Iceberg es append-only).
@@ -71,7 +73,7 @@ class OHLCVStorage(Protocol):
 
     def get_last_timestamp(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
         """
@@ -85,7 +87,7 @@ class OHLCVStorage(Protocol):
 
     def get_oldest_timestamp(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
         """
@@ -101,10 +103,10 @@ class OHLCVStorage(Protocol):
 
     def load_ohlcv(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        start:     Optional[pd.Timestamp] = None,
-        end:       Optional[pd.Timestamp] = None,
+        start: Optional[pd.Timestamp] = None,
+        end: Optional[pd.Timestamp] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Lee datos OHLCV con filtros temporales opcionales.
@@ -119,6 +121,7 @@ class OHLCVStorage(Protocol):
 # =========================================================================== #
 # Trades — Silver layer                                                        #
 # =========================================================================== #
+
 
 @runtime_checkable
 class TradesStoragePort(Protocol):
@@ -172,6 +175,7 @@ class TradesStoragePort(Protocol):
 # Derivatives — Silver layer                                                   #
 # =========================================================================== #
 
+
 @runtime_checkable
 class DerivativesStoragePort(Protocol):
     """
@@ -218,6 +222,7 @@ class DerivativesStoragePort(Protocol):
 # Bronze layer                                                                 #
 # =========================================================================== #
 
+
 @runtime_checkable
 class BronzeStoragePort(Protocol):
     """
@@ -230,10 +235,10 @@ class BronzeStoragePort(Protocol):
 
     def append(
         self,
-        df:        pd.DataFrame,
-        symbol:    str,
+        df: pd.DataFrame,
+        symbol: str,
         timeframe: str,
-        run_id:    Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> None:
         """
         Persiste un batch de candles crudas en Bronze (append-only).
@@ -256,6 +261,7 @@ class BronzeStoragePort(Protocol):
 # Storage factory                                                              #
 # =========================================================================== #
 
+
 @runtime_checkable
 class StorageFactoryPort(Protocol):
     """
@@ -270,9 +276,9 @@ class StorageFactoryPort(Protocol):
 
     def get_storage(
         self,
-        exchange:    str,
-        market_type: str  = "spot",
-        dry_run:     bool = False,
+        exchange: str,
+        market_type: str = "spot",
+        dry_run: bool = False,
     ) -> OHLCVStorage:
         """
         Retorna instancia de OHLCVStorage para (exchange, market_type).
@@ -286,6 +292,7 @@ class StorageFactoryPort(Protocol):
 # =========================================================================== #
 # Snapshottable — extensión ISP para lineage tracking                         #
 # =========================================================================== #
+
 
 class SnapshottableStoragePort(OHLCVStorage, Protocol):
     """

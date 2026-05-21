@@ -32,6 +32,7 @@ SSOT de implementaciones
 - GE (producción):  market_data.infrastructure.quality.ge_checker.GEChecker
 - Null (tests):     NullChecker (este módulo)
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Protocol, runtime_checkable
@@ -62,7 +63,7 @@ class DataQualityCheckerPort(Protocol):
 
     def check(
         self,
-        df:     pd.DataFrame,
+        df: pd.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":
@@ -86,7 +87,7 @@ class DataQualityCheckerPort(Protocol):
 # ---------------------------------------------------------------------------
 
 CheckerFactory = Callable[
-    [str, str, int],   # (timeframe, exchange, rows_removed)
+    [str, str, int],  # (timeframe, exchange, rows_removed)
     DataQualityCheckerPort,
 ]
 """
@@ -121,7 +122,7 @@ class NullChecker:
 
     def check(
         self,
-        df:     pd.DataFrame,
+        df: pd.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":
@@ -130,16 +131,16 @@ class NullChecker:
             DataQualityReport,
         )
         from datetime import datetime, timezone
-        return DataQualityReport(
-            symbol     = symbol,
-            timeframe  = "unknown",
-            exchange   = "unknown",
-            rows       = len(df),
-            checked_at = datetime.now(timezone.utc).isoformat(),
-            git_hash   = "null-checker",
-            issues     = [],
-        )
 
+        return DataQualityReport(
+            symbol=symbol,
+            timeframe="unknown",
+            exchange="unknown",
+            rows=len(df),
+            checked_at=datetime.now(timezone.utc).isoformat(),
+            git_hash="null-checker",
+            issues=[],
+        )
 
 
 __all__ = [

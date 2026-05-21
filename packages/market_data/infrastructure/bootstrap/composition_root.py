@@ -29,6 +29,7 @@ Martin, Robert C. «Clean Architecture», capítulo 26.
 
 Contratos enforced: BC-38.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -131,10 +132,7 @@ class CompositionRoot:
         feeds_path = _repo_root / "conf" / "market_data" / "feeds.yaml"
 
         if not feeds_path.exists():
-            logger.warning(
-                "[composition-root] conf/market_data/feeds.yaml not found — "
-                "WS feeds disabled"
-            )
+            logger.warning("[composition-root] conf/market_data/feeds.yaml not found — WS feeds disabled")
             return None
 
         with feeds_path.open() as f:
@@ -143,9 +141,7 @@ class CompositionRoot:
         # ── Fail-Soft: modo REST no necesita WS feeds ─────────────────────
         ingestion_mode: str = raw.get("ingestion_mode", "rest")
         if ingestion_mode == "rest":
-            logger.info(
-                "[composition-root] ingestion_mode=rest — WS feeds not started"
-            )
+            logger.info("[composition-root] ingestion_mode=rest — WS feeds not started")
             return None
 
         # ── Construir lista de feeds habilitados ──────────────────────────
@@ -161,10 +157,7 @@ class CompositionRoot:
         ]
 
         if not feed_configs:
-            logger.warning(
-                "[composition-root] No enabled feeds in feeds.yaml — "
-                "WS feeds disabled"
-            )
+            logger.warning("[composition-root] No enabled feeds in feeds.yaml — WS feeds disabled")
             return None
 
         orch_cfg = OrchestratorConfig(
@@ -175,9 +168,7 @@ class CompositionRoot:
         # ── Kafka publisher ───────────────────────────────────────────────
         # brokers: AppConfig.integrations.kafka (SSOT de infraestructura)
         # topic:   feeds.yaml (SSOT de configuración de WS feeds)
-        kafka_topic: str = (
-            raw.get("kafka", {}).get("topic_trades", "market.trades.raw")
-        )
+        kafka_topic: str = raw.get("kafka", {}).get("topic_trades", "market.trades.raw")
         publisher = KafkaTradePublisher(
             bootstrap_servers=config.integrations.kafka.bootstrap_servers,
             topic=kafka_topic,

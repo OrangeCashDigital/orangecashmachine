@@ -31,6 +31,7 @@ DIP  — el dominio no depende de infraestructura (processing, pandas, CCXT)
 SSOT — tipos definidos aquí, no re-exportados desde otras capas
 DDD  — separación clara entre entidades (identidad) y VOs (valor)
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -39,6 +40,7 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 # DataTier — clasificación de tier de calidad de un dataset Silver
 # ---------------------------------------------------------------------------
+
 
 class DataTier(str, Enum):
     """
@@ -50,8 +52,9 @@ class DataTier(str, Enum):
 
     str-compatible: DataTier.CLEAN == "clean" → True.
     """
-    CLEAN    = "clean"
-    FLAGGED  = "flagged"
+
+    CLEAN = "clean"
+    FLAGGED = "flagged"
     REJECTED = "rejected"
 
 

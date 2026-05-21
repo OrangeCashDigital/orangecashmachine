@@ -16,6 +16,7 @@ Lifecycle
     await adapter.stop()
     await task
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -55,8 +56,7 @@ class BybitFeedAdapter:
         """Register symbols and callback.  Fail-fast if already started."""
         if self._running:
             raise RuntimeError(
-                "BybitFeedAdapter: subscribe_trades() called after start(). "
-                "Subscribe before starting the feed."
+                "BybitFeedAdapter: subscribe_trades() called after start(). Subscribe before starting the feed."
             )
         if not symbols:
             raise ValueError("BybitFeedAdapter: symbols list must not be empty.")
@@ -69,10 +69,7 @@ class BybitFeedAdapter:
     async def start(self) -> None:
         """Start WebSocket feed.  Blocks until stop() is called."""
         if not self._symbols:
-            raise RuntimeError(
-                "BybitFeedAdapter: no symbols registered. "
-                "Call subscribe_trades() before start()."
-            )
+            raise RuntimeError("BybitFeedAdapter: no symbols registered. Call subscribe_trades() before start().")
         if self._running:
             logger.warning("[bybit] start() called while already running — ignored.")
             return

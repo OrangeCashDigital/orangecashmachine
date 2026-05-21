@@ -19,6 +19,7 @@ DIP  — application depende de abstracción, no de CCXT
 OCP  — binance, okx, kraken, CSV replay implementan sin tocar callers
 ISP  — solo fetch_ohlcv; watch_ohlcv en un puerto separado si se requiere
 """
+
 from __future__ import annotations
 
 from typing import Protocol, Sequence, runtime_checkable
@@ -41,10 +42,10 @@ class MarketDataSourcePort(Protocol):
 
     async def fetch_ohlcv(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        since:     int | None = None,
-        limit:     int        = 500,
+        since: int | None = None,
+        limit: int = 500,
     ) -> RawOHLCV:
         """
         Obtiene velas OHLCV en formato crudo del exchange.

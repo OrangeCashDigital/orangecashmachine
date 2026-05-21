@@ -23,13 +23,22 @@ infrastructure/ puede importar quality/ (ports y domain).
 quality/pipeline.py importa DataQualityCheckerPort (port), nunca este módulo.
 El cableado vive en el Composition Root (pipeline_factory.py).
 """
+
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # DataQualityReport: tipo de dominio usado solo en anotaciones de retorno.
+    # Import bajo TYPE_CHECKING evita dependencia circular infra → domain en runtime.
+    # from __future__ import annotations garantiza evaluación lazy (PEP 563).
+    from market_data.domain.quality.types import DataQualityReport
 
 log = logging.getLogger(__name__)
 
@@ -38,38 +47,42 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _GE_DATASOURCE_NAME = "market_data_pipeline"
-_GE_ASSET_NAME      = "ohlcv_frames"
-_GE_BATCH_DEF_NAME  = "full_batch"
+_GE_ASSET_NAME = "ohlcv_frames"
+_GE_BATCH_DEF_NAME = "full_batch"
 _GE_VALIDATION_NAME = "ohlcv_validation"
 
 # Expectativas cuyo fallo se clasifica como CRITICAL (no WARNING)
-_CRITICAL_EXPECTATIONS = frozenset({
-    "expect_column_to_exist",
-    "expect_column_values_to_not_be_null",
-    "expect_column_pair_values_a_to_be_greater_than_b",
-    "expect_column_values_to_be_unique",
-    "expect_column_values_to_be_increasing",
-})
+_CRITICAL_EXPECTATIONS = frozenset(
+    {
+        "expect_column_to_exist",
+        "expect_column_values_to_not_be_null",
+        "expect_column_pair_values_a_to_be_greater_than_b",
+        "expect_column_values_to_be_unique",
+        "expect_column_values_to_be_increasing",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Dataclass de issue GE (traducción intermedia antes de DataQualityReport)
 # ---------------------------------------------------------------------------
 
+
 @dataclass(slots=True, frozen=True)
 class _GEIssue:
     expectation_type: str
-    column:           str | None
-    element_count:    int
+    column: str | None
+    element_count: int
     unexpected_count: int
-    unexpected_rate:  float
-    severity:         str   # "critical" | "warning"
-    message:          str
+    unexpected_rate: float
+    severity: str  # "critical" | "warning"
+    message: str
 
 
 # ---------------------------------------------------------------------------
 # Adaptador principal
 # ---------------------------------------------------------------------------
+
 
 class GEChecker:
     """
@@ -90,20 +103,20 @@ class GEChecker:
 
     def __init__(
         self,
-        timeframe:    str,
-        exchange:     str,
+        timeframe: str,
+        exchange: str,
         rows_removed: int = 0,
     ) -> None:
-        self._timeframe    = timeframe
-        self._exchange     = exchange
+        self._timeframe = timeframe
+        self._exchange = exchange
         self._rows_removed = rows_removed
-        self._context      = self._build_context()
+        self._context = self._build_context()
 
     # ── Port ────────────────────────────────────────────────────────────────
 
     def check(
         self,
-        df:     pd.DataFrame,
+        df: pd.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":
@@ -128,11 +141,12 @@ class GEChecker:
     def _build_context(self) -> Any:
         """Construye un DataContext efímero de GE (sin filesystem)."""
         import great_expectations as gx
+
         return gx.get_context(mode="ephemeral")
 
     def _run_ge(
         self,
-        df:     pd.DataFrame,
+        df: pd.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":
@@ -147,11 +161,11 @@ class GEChecker:
         # ── 2. Datasource + Asset + BatchDefinition ──────────────────────
         if _GE_DATASOURCE_NAME not in [s.name for s in ctx.data_sources.all()]:
             source = ctx.data_sources.add_pandas(_GE_DATASOURCE_NAME)
-            asset  = source.add_dataframe_asset(_GE_ASSET_NAME)
+            asset = source.add_dataframe_asset(_GE_ASSET_NAME)
             _batch_def = asset.add_batch_definition_whole_dataframe(_GE_BATCH_DEF_NAME)
         else:
-            source     = ctx.data_sources.get(_GE_DATASOURCE_NAME)
-            asset      = source.get_asset(_GE_ASSET_NAME)
+            source = ctx.data_sources.get(_GE_DATASOURCE_NAME)
+            asset = source.get_asset(_GE_ASSET_NAME)
             _batch_def = asset.get_batch_definition(_GE_BATCH_DEF_NAME)
 
         # ── 3. Suite ─────────────────────────────────────────────────────
@@ -166,9 +180,9 @@ class GEChecker:
         except Exception:
             val_def = ctx.validation_definitions.add(
                 gx.ValidationDefinition(
-                    name  = _GE_VALIDATION_NAME,
-                    data  = _batch_def,
-                    suite = suite,
+                    name=_GE_VALIDATION_NAME,
+                    data=_batch_def,
+                    suite=suite,
                 )
             )
 
@@ -215,25 +229,27 @@ class GEChecker:
                 continue
 
             exp_type = self._get_expectation_type(res)
-            col      = self._get_column(res)
-            counts   = self._get_counts(res)
+            col = self._get_column(res)
+            counts = self._get_counts(res)
             severity = "critical" if exp_type in _CRITICAL_EXPECTATIONS else "warning"
 
-            issues.append(_GEIssue(
-                expectation_type = exp_type,
-                column           = col,
-                element_count    = counts["element_count"],
-                unexpected_count = counts["unexpected_count"],
-                unexpected_rate  = counts["unexpected_rate"],
-                severity         = severity,
-                message          = self._format_message(exp_type, col, counts),
-            ))
+            issues.append(
+                _GEIssue(
+                    expectation_type=exp_type,
+                    column=col,
+                    element_count=counts["element_count"],
+                    unexpected_count=counts["unexpected_count"],
+                    unexpected_rate=counts["unexpected_rate"],
+                    severity=severity,
+                    message=self._format_message(exp_type, col, counts),
+                )
+            )
 
         return issues
 
     def _build_report(
         self,
-        df:     pd.DataFrame,
+        df: pd.DataFrame,
         symbol: str,
         issues: list[_GEIssue],
     ) -> "DataQualityReport":
@@ -248,44 +264,46 @@ class GEChecker:
 
         domain_issues = [
             QualityIssue(
-                type     = issue.expectation_type,
-                column   = issue.column,
-                count    = issue.unexpected_count,
-                rate     = issue.unexpected_rate,
-                severity = issue.severity,
-                message  = issue.message,
-                source   = "great_expectations",
+                type=issue.expectation_type,
+                column=issue.column,
+                count=issue.unexpected_count,
+                rate=issue.unexpected_rate,
+                severity=issue.severity,
+                message=issue.message,
+                source="great_expectations",
             )
             for issue in issues
         ]
 
         return DataQualityReport(
-            symbol = symbol,
-            rows   = len(df),
-            issues = domain_issues,
+            symbol=symbol,
+            rows=len(df),
+            issues=domain_issues,
         )
 
     def _degraded_report(
         self,
         symbol: str,
-        df:     pd.DataFrame,
-        error:  Exception,
+        df: pd.DataFrame,
+        error: Exception,
     ) -> "DataQualityReport":
         """Reporte mínimo de fallback cuando GE falla internamente."""
         from market_data.domain.quality.types import DataQualityReport, QualityIssue
 
         return DataQualityReport(
-            symbol = symbol,
-            rows   = len(df),
-            issues = [QualityIssue(
-                type     = "ge_internal_error",
-                column   = None,
-                count    = 0,
-                rate     = 0.0,
-                severity = "warning",
-                message  = f"GE checker error: {type(error).__name__}: {error}",
-                source   = "great_expectations",
-            )],
+            symbol=symbol,
+            rows=len(df),
+            issues=[
+                QualityIssue(
+                    type="ge_internal_error",
+                    column=None,
+                    count=0,
+                    rate=0.0,
+                    severity="warning",
+                    message=f"GE checker error: {type(error).__name__}: {error}",
+                    source="great_expectations",
+                )
+            ],
         )
 
     # ── Helpers de parseo de resultados GE (multi-versión) ───────────────────
@@ -324,33 +342,31 @@ class GEChecker:
         if not isinstance(result_dict, dict):
             result_dict = {}
         return {
-            "element_count":    result_dict.get("element_count", 0),
+            "element_count": result_dict.get("element_count", 0),
             "unexpected_count": result_dict.get("unexpected_count", 0),
-            "unexpected_rate":  result_dict.get("unexpected_percent", 0.0) / 100.0,
+            "unexpected_rate": result_dict.get("unexpected_percent", 0.0) / 100.0,
         }
 
     def _format_message(
         self,
         exp_type: str,
-        column:   str | None,
-        counts:   dict,
+        column: str | None,
+        counts: dict,
     ) -> str:
         col_str = f"[{column}]" if column else ""
-        rate    = counts["unexpected_rate"]
-        n       = counts["unexpected_count"]
-        return (
-            f"{exp_type}{col_str}: {n} valores inesperados "
-            f"({rate:.1%})"
-        )
+        rate = counts["unexpected_rate"]
+        n = counts["unexpected_count"]
+        return f"{exp_type}{col_str}: {n} valores inesperados ({rate:.1%})"
 
 
 # ---------------------------------------------------------------------------
 # Factory — Composition Root la inyecta en QualityPipeline
 # ---------------------------------------------------------------------------
 
+
 def ge_checker_factory(
-    timeframe:    str,
-    exchange:     str,
+    timeframe: str,
+    exchange: str,
     rows_removed: int,
 ) -> GEChecker:
     """
@@ -361,9 +377,9 @@ def ge_checker_factory(
         pipeline = QualityPipeline(checker_factory=ge_checker_factory)
     """
     return GEChecker(
-        timeframe    = timeframe,
-        exchange     = exchange,
-        rows_removed = rows_removed,
+        timeframe=timeframe,
+        exchange=exchange,
+        rows_removed=rows_removed,
     )
 
 

@@ -16,6 +16,7 @@ NullObject — NullPublisher es el modo degradado declarado.
 
 Contratos enforced: BC-04 (ports dependen solo de domain), BC-05, BC-29.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable

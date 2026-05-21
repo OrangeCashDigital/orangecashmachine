@@ -25,6 +25,7 @@ y obliga a asyncio.to_thread() ocultando latencia real.
 
 Principios: DIP · ISP · SRP · async-first
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
@@ -53,10 +54,10 @@ class KafkaProducerPort(Protocol):
 
     async def produce(
         self,
-        topic:   str,
-        value:   bytes,
-        key:     Optional[bytes] = None,
-        headers: Optional[dict]  = None,
+        topic: str,
+        value: bytes,
+        key: Optional[bytes] = None,
+        headers: Optional[dict] = None,
     ) -> None:
         """
         Encola un mensaje para publicación.

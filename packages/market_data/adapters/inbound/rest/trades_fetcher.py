@@ -28,14 +28,13 @@ SafeOps
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
-    from ocm.runtime.state.ports import CursorStorePort as CursorStore
 
 import pandas as pd
 from loguru import logger
@@ -48,17 +47,18 @@ from market_data.adapters.outbound.exchange import CCXTAdapter
 # Constants
 # ---------------------------------------------------------------------------
 
-_CURSOR_TIMEFRAME = "trades"     # key virtual para CursorStore
-_MAX_PAGES        = 500          # límite anti-loop (SafeOps)
-_PAGE_LIMIT       = 1_000        # trades por página CCXT
-_RETRY_ATTEMPTS   = 3
-_BACKOFF_BASE     = 1.5
-_MAX_BACKOFF_S    = 15.0
+_CURSOR_TIMEFRAME = "trades"  # key virtual para CursorStore
+_MAX_PAGES = 500  # límite anti-loop (SafeOps)
+_PAGE_LIMIT = 1_000  # trades por página CCXT
+_RETRY_ATTEMPTS = 3
+_BACKOFF_BASE = 1.5
+_MAX_BACKOFF_S = 15.0
 
 
 # ---------------------------------------------------------------------------
 # Parser CCXT → DataFrame (puro, sin efectos secundarios)
 # ---------------------------------------------------------------------------
+
 
 def _parse_trades(raw: list) -> pd.DataFrame:
     """
@@ -72,21 +72,20 @@ def _parse_trades(raw: list) -> pd.DataFrame:
     records = []
     for t in raw:
         trade_id = str(t.get("id") or "").strip()
-        ts_ms    = t.get("timestamp")
+        ts_ms = t.get("timestamp")
         if not trade_id or ts_ms is None:
             continue
-        records.append({
-            "trade_id": trade_id,
-            "timestamp": int(ts_ms),
-            "symbol":   str(t.get("symbol") or ""),
-            "side":     str(t.get("side") or ""),
-            "price":    float(t.get("price") or 0.0),
-            "amount":   float(t.get("amount") or 0.0),
-            "cost":     float(
-                t.get("cost")
-                or float(t.get("price") or 0.0) * float(t.get("amount") or 0.0)
-            ),
-        })
+        records.append(
+            {
+                "trade_id": trade_id,
+                "timestamp": int(ts_ms),
+                "symbol": str(t.get("symbol") or ""),
+                "side": str(t.get("side") or ""),
+                "price": float(t.get("price") or 0.0),
+                "amount": float(t.get("amount") or 0.0),
+                "cost": float(t.get("cost") or float(t.get("price") or 0.0) * float(t.get("amount") or 0.0)),
+            }
+        )
 
     return pd.DataFrame(records) if records else pd.DataFrame()
 
@@ -94,6 +93,7 @@ def _parse_trades(raw: list) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # TradesFetcher
 # ---------------------------------------------------------------------------
+
 
 class TradesFetcher:
     """
@@ -110,9 +110,9 @@ class TradesFetcher:
     def __init__(
         self,
         exchange_client: CCXTAdapter,
-        storage:         TradesStorage,
-        market_type:     str  = "spot",
-        dry_run:         bool = False,
+        storage: TradesStorage,
+        market_type: str = "spot",
+        dry_run: bool = False,
     ) -> None:
         if exchange_client is None:
             raise ValueError("TradesFetcher: exchange_client es obligatorio")
@@ -123,12 +123,12 @@ class TradesFetcher:
         # Cursor factory centralizada: DRY, OCP — un único punto de cambio.
         from market_data.adapters.inbound.rest._cursor_factory import build_cursor_store as _build_cursor_store
 
-        self._client      = exchange_client
-        self._storage     = storage
+        self._client = exchange_client
+        self._storage = storage
         self._market_type = market_type.lower()
-        self._dry_run     = dry_run
+        self._dry_run = dry_run
         self._exchange_id = getattr(exchange_client, "_exchange_id", "unknown")
-        self._log         = logger.bind(
+        self._log = logger.bind(
             fetcher="trades",
             exchange=self._exchange_id,
         )
@@ -137,9 +137,7 @@ class TradesFetcher:
         try:
             self._cursor = _build_cursor_store()
         except Exception as exc:
-            self._log.warning(
-                "CursorStore no disponible — usando storage fallback | error={}", exc
-            )
+            self._log.warning("CursorStore no disponible — usando storage fallback | error={}", exc)
             self._cursor = None
 
     # ------------------------------------------------------------------
@@ -148,7 +146,7 @@ class TradesFetcher:
 
     async def fetch_symbol(
         self,
-        symbol:   str,
+        symbol: str,
         since_ms: Optional[int] = None,
     ) -> int:
         """
@@ -165,13 +163,11 @@ class TradesFetcher:
         int : total de filas escritas en esta ejecución.
         """
         cursor_ms = await self._resolve_cursor(symbol, since_ms)
-        self._log.debug(
-            "fetch_symbol start | symbol={} cursor_ms={}", symbol, cursor_ms
-        )
+        self._log.debug("fetch_symbol start | symbol={} cursor_ms={}", symbol, cursor_ms)
 
-        total_rows  = 0
-        last_ts_ms  = cursor_ms
-        pages_read  = 0
+        total_rows = 0
+        last_ts_ms = cursor_ms
+        pages_read = 0
 
         while pages_read < _MAX_PAGES:
             df = await self._fetch_page_with_retry(symbol, last_ts_ms)
@@ -179,7 +175,9 @@ class TradesFetcher:
             if df.empty:
                 self._log.debug(
                     "fetch_symbol done (vacío) | symbol={} pages={} rows={}",
-                    symbol, pages_read, total_rows,
+                    symbol,
+                    pages_read,
+                    total_rows,
                 )
                 break
 
@@ -192,22 +190,23 @@ class TradesFetcher:
             pages_read += 1
 
             await self._update_cursor(symbol, page_max_ts)
-            last_ts_ms = page_max_ts + 1   # +1ms evita re-fetch del último trade
+            last_ts_ms = page_max_ts + 1  # +1ms evita re-fetch del último trade
 
             # Condición de fin: página incompleta → no hay más datos
             if len(df) < _PAGE_LIMIT:
                 self._log.debug(
-                    "fetch_symbol done (página incompleta) | "
-                    "symbol={} pages={} rows={}",
-                    symbol, pages_read, total_rows,
+                    "fetch_symbol done (página incompleta) | symbol={} pages={} rows={}",
+                    symbol,
+                    pages_read,
+                    total_rows,
                 )
                 break
 
         if pages_read >= _MAX_PAGES:
             self._log.warning(
-                "fetch_symbol: límite de páginas alcanzado | "
-                "symbol={} max_pages={} — verificar volumen",
-                symbol, _MAX_PAGES,
+                "fetch_symbol: límite de páginas alcanzado | symbol={} max_pages={} — verificar volumen",
+                symbol,
+                _MAX_PAGES,
             )
 
         return total_rows
@@ -218,7 +217,7 @@ class TradesFetcher:
 
     async def _resolve_cursor(
         self,
-        symbol:   str,
+        symbol: str,
         since_ms: Optional[int],
     ) -> Optional[int]:
         """
@@ -232,27 +231,21 @@ class TradesFetcher:
         # Nivel 1 — Redis
         if self._cursor is not None:
             try:
-                ts = await self._cursor.get(
-                    self._exchange_id, symbol, _CURSOR_TIMEFRAME
-                )
+                ts = await self._cursor.get(self._exchange_id, symbol, _CURSOR_TIMEFRAME)
                 if ts is not None:
-                    self._log.debug(
-                        "Cursor desde Redis | symbol={} ts_ms={}", symbol, ts
-                    )
+                    self._log.debug("Cursor desde Redis | symbol={} ts_ms={}", symbol, ts)
                     return ts
             except Exception as exc:
                 self._log.warning(
-                    "CursorStore.get falló — fallback a storage | "
-                    "symbol={} error={}",
-                    symbol, exc,
+                    "CursorStore.get falló — fallback a storage | symbol={} error={}",
+                    symbol,
+                    exc,
                 )
 
         # Nivel 2 — Storage fallback
         ts = self._storage.last_timestamp_ms(symbol)
         if ts is not None:
-            self._log.debug(
-                "Cursor desde storage | symbol={} ts_ms={}", symbol, ts
-            )
+            self._log.debug("Cursor desde storage | symbol={} ts_ms={}", symbol, ts)
             return ts
 
         # Nivel 3 — backfill completo
@@ -261,7 +254,7 @@ class TradesFetcher:
 
     async def _fetch_page_with_retry(
         self,
-        symbol:   str,
+        symbol: str,
         since_ms: Optional[int],
     ) -> pd.DataFrame:
         """Fetcha una página delegando retry a _retry.retry_async (DRY)."""
@@ -291,22 +284,18 @@ class TradesFetcher:
         if self._dry_run or self._cursor is None:
             return
         try:
-            await self._cursor.update(
-                self._exchange_id, symbol, _CURSOR_TIMEFRAME, ts_ms
-            )
+            await self._cursor.update(self._exchange_id, symbol, _CURSOR_TIMEFRAME, ts_ms)
         except Exception as exc:
             self._log.warning(
-                "CursorStore.update falló (no crítico) | "
-                "symbol={} ts_ms={} error={}",
-                symbol, ts_ms, exc,
+                "CursorStore.update falló (no crítico) | symbol={} ts_ms={} error={}",
+                symbol,
+                ts_ms,
+                exc,
             )
 
     def __repr__(self) -> str:
         return (
-            f"TradesFetcher("
-            f"exchange={self._exchange_id!r}, "
-            f"market_type={self._market_type!r}, "
-            f"dry_run={self._dry_run})"
+            f"TradesFetcher(exchange={self._exchange_id!r}, market_type={self._market_type!r}, dry_run={self._dry_run})"
         )
 
 

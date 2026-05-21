@@ -30,6 +30,7 @@ Limitaciones conocidas
 • Sin persistencia: eventos no sobreviven reinicios del proceso
 • Sin replay: eventos perdidos si el consumer no estaba suscrito al momento
 """
+
 from __future__ import annotations
 
 import threading
@@ -60,7 +61,7 @@ class InMemoryEventBus:
     def __init__(self) -> None:
         # dict[EventType → set[Handler]] — no list, para idempotencia O(1)
         self._handlers: DefaultDict[Type[DomainEvent], Set[Handler]] = defaultdict(set)
-        self._lock = threading.RLock()   # RLock: permite re-entrar desde el mismo thread
+        self._lock = threading.RLock()  # RLock: permite re-entrar desde el mismo thread
 
     # ----------------------------------------------------------
     # EventBusPort implementation
@@ -141,11 +142,7 @@ class InMemoryEventBus:
         Omite tipos sin handlers activos.
         """
         with self._lock:
-            return {
-                t.__name__: len(h)
-                for t, h in self._handlers.items()
-                if h
-            }
+            return {t.__name__: len(h) for t, h in self._handlers.items() if h}
 
 
 # ===========================================================================

@@ -36,7 +36,7 @@ class CoinMarketCapAdapter(DataProviderAdapter):
     """
 
     def __init__(self, api_key: str) -> None:
-        self.api_key  = api_key
+        self.api_key = api_key
         self.base_url = "https://pro-api.coinmarketcap.com"
         self._session: Optional[aiohttp.ClientSession] = None
 
@@ -57,8 +57,10 @@ class CoinMarketCapAdapter(DataProviderAdapter):
             except Exception as _sess_exc:
                 # SafeOps: sesión ya cerrada o rota — ignorar, limpiar referencia.
                 import logging as _logging
+
                 _logging.getLogger(__name__).debug(
-                    "CoinMarketCapAdapter.close: session.close() failed: %s", _sess_exc,
+                    "CoinMarketCapAdapter.close: session.close() failed: %s",
+                    _sess_exc,
                 )
         self._session = None
 

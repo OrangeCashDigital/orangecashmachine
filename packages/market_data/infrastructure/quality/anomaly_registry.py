@@ -75,6 +75,7 @@ DO UPDATE SET
 # AnomalyRegistry
 # ==========================================================
 
+
 class AnomalyRegistry:
     """
     Registro thread-safe y persistente de anomalías de calidad.
@@ -94,8 +95,8 @@ class AnomalyRegistry:
 
     def __init__(self, db_path: Path = _DEFAULT_DB_PATH) -> None:
         self._db_path = db_path
-        self._lock    = threading.Lock()
-        self._cache:  set[_AnomalyKey] = set()
+        self._lock = threading.Lock()
+        self._cache: set[_AnomalyKey] = set()
         self._init_db()
         self._warm_cache()
 
@@ -107,7 +108,7 @@ class AnomalyRegistry:
         """Crea directorio y tabla DDL si no existen. Fail-fast en error de FS."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")   # escrituras concurrentes más seguras
+            conn.execute("PRAGMA journal_mode=WAL;")  # escrituras concurrentes más seguras
             conn.execute(_DDL)
 
     def _connect(self) -> sqlite3.Connection:
@@ -122,9 +123,7 @@ class AnomalyRegistry:
         """
         try:
             with self._connect() as conn:
-                rows = conn.execute(
-                    "SELECT exchange, symbol, timeframe, reason_key FROM anomalies"
-                ).fetchall()
+                rows = conn.execute("SELECT exchange, symbol, timeframe, reason_key FROM anomalies").fetchall()
             with self._lock:
                 self._cache = {(r[0], r[1], r[2], r[3]) for r in rows}
             logger.debug(
@@ -146,10 +145,10 @@ class AnomalyRegistry:
 
     def is_new(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        reason:    str,
+        reason: str,
     ) -> bool:
         """
         Retorna True si esta anomalía no había sido vista antes y la registra.
@@ -175,7 +174,7 @@ class AnomalyRegistry:
                 self._cache.add(key)
 
         if already_known:
-            self._upsert(key)   # incrementa count en background
+            self._upsert(key)  # incrementa count en background
             return False
 
         self._upsert(key)
@@ -215,10 +214,13 @@ class AnomalyRegistry:
                 ).fetchall()
             return [
                 {
-                    "exchange":   r[0], "symbol":     r[1],
-                    "timeframe":  r[2], "reason_key": r[3],
-                    "first_seen": r[4], "last_seen":  r[5],
-                    "count":      r[6],
+                    "exchange": r[0],
+                    "symbol": r[1],
+                    "timeframe": r[2],
+                    "reason_key": r[3],
+                    "first_seen": r[4],
+                    "last_seen": r[5],
+                    "count": r[6],
                 }
                 for r in rows
             ]
@@ -244,7 +246,8 @@ class AnomalyRegistry:
         except Exception as exc:
             logger.warning(
                 "AnomalyRegistry: _upsert failed (non-critical) | key={} err={}",
-                key, exc,
+                key,
+                exc,
             )
 
 

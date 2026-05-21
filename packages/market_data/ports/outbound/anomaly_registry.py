@@ -23,6 +23,7 @@ DIP  — application depende de abstracción, no de SQLite
 OCP  — Redis, Postgres, InMemory implementan este contrato
 ISP  — interfaz mínima: is_new · stats · wipe
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
@@ -42,10 +43,10 @@ class AnomalyRegistryPort(Protocol):
 
     def is_new(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        reason:    str,
+        reason: str,
     ) -> bool:
         """
         True si esta anomalía es nueva y la registra.

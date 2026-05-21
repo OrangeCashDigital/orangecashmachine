@@ -50,6 +50,7 @@ El caller decide si recuperar o propagar — este módulo no silencia fallos.
 
 Principios: SRP · DIP · OCP · SSOT · KISS · Fail-Fast
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -81,6 +82,7 @@ PipelineType = Literal["ohlcv", "trades", "derivatives"]
 # =============================================================================
 # DTO de request — entrada al caso de uso
 # =============================================================================
+
 
 @dataclass
 class PipelineRequest:
@@ -115,30 +117,30 @@ class PipelineRequest:
     extra    : dict abierto para extensión sin romper el contrato (OCP).
     """
 
-    exchange:    str
+    exchange: str
     market_type: str
-    pipeline:    PipelineType
+    pipeline: PipelineType
 
     # Modo de ejecución
     mode: PipelineModeStr = "incremental"
 
     # Parámetros de construcción del adapter
-    credentials: Optional[dict]                                         = None
-    resilience:  "Optional[Union[ResilienceConfig, dict[str, Any]]]"   = None
+    credentials: Optional[dict] = None
+    resilience: "Optional[Union[ResilienceConfig, dict[str, Any]]]" = None
 
     # Parámetros de selección de datos
-    symbols:             Optional[list[str]] = None
-    timeframes:          Optional[list[str]] = None
-    start_date:          Optional[str]       = None
-    auto_lookback_days:  Optional[int]       = None
+    symbols: Optional[list[str]] = None
+    timeframes: Optional[list[str]] = None
+    start_date: Optional[str] = None
+    auto_lookback_days: Optional[int] = None
 
     # Datasets para DerivativesPipeline — ej: ['funding_rate', 'open_interest']
     datasets: Optional[list[str]] = None
 
     # Parámetros de control
-    run_id:  Optional[str]    = None
-    dry_run: bool             = False
-    extra:   dict[str, Any]   = field(default_factory=dict)
+    run_id: Optional[str] = None
+    dry_run: bool = False
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Fail-Fast: valida invariantes del DTO en construcción."""
@@ -153,8 +155,7 @@ class PipelineRequest:
             )
         if self.mode not in ("incremental", "backfill", "repair"):
             raise ValueError(
-                f"PipelineRequest.mode inválido: {self.mode!r}. "
-                f"Valores válidos: 'incremental', 'backfill', 'repair'"
+                f"PipelineRequest.mode inválido: {self.mode!r}. Valores válidos: 'incremental', 'backfill', 'repair'"
             )
 
     def __str__(self) -> str:
@@ -167,6 +168,7 @@ class PipelineRequest:
 # =============================================================================
 # PipelineOrchestrator — caso de uso principal
 # =============================================================================
+
 
 class PipelineOrchestrator:
     """
@@ -239,8 +241,7 @@ class PipelineOrchestrator:
         f = factory or self._factory
         if f is None:
             raise PipelineBuildError(
-                "PipelineOrchestrator: se requiere factory — "
-                "inyectar via constructor o parámetro run()"
+                "PipelineOrchestrator: se requiere factory — inyectar via constructor o parámetro run()"
             )
 
         pipeline = self._build_pipeline(request, factory=f)
@@ -253,11 +254,10 @@ class PipelineOrchestrator:
             raise  # Ya es el tipo correcto — re-lanzar sin wrappear
         except Exception as exc:
             logger.opt(exception=True).error(
-                "PipelineOrchestrator.run FAILED | {}", request,
+                "PipelineOrchestrator.run FAILED | {}",
+                request,
             )
-            raise PipelineExecutionError(
-                f"Fallo durante ejecución del pipeline: {request}"
-            ) from exc
+            raise PipelineExecutionError(f"Fallo durante ejecución del pipeline: {request}") from exc
 
     def _build_pipeline(
         self,
@@ -280,8 +280,7 @@ class PipelineOrchestrator:
             raise  # Re-lanzar sin wrappear — ya tiene contexto
         except Exception as exc:
             logger.opt(exception=True).error(
-                "PipelineOrchestrator._build_pipeline FAILED | {}", request,
+                "PipelineOrchestrator._build_pipeline FAILED | {}",
+                request,
             )
-            raise PipelineBuildError(
-                f"Error construyendo pipeline para: {request}"
-            ) from exc
+            raise PipelineBuildError(f"Error construyendo pipeline para: {request}") from exc

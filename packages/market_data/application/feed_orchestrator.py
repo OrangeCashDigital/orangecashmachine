@@ -19,6 +19,7 @@ Migration phases
 
 Dependencies are injected — not instantiated here (DIP).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,6 +34,7 @@ from market_data.ports.inbound.market_data_source import MarketDataSource, Trade
 
 # ── config dataclass ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class ExchangeFeedConfig:
     exchange: str
@@ -46,11 +48,13 @@ class OrchestratorConfig:
 
     Populated from Hydra/Pydantic — see core/config/schema.py FeedsConfig.
     """
-    ingestion_mode: str                      # 'rest' | 'websocket' | 'dual'
+
+    ingestion_mode: str  # 'rest' | 'websocket' | 'dual'
     feeds: list[ExchangeFeedConfig] = field(default_factory=list)
 
 
 # ── orchestrator ──────────────────────────────────────────────────────────────
+
 
 class FeedOrchestrator:
     """Manages the full lifecycle of event-driven market data feeds.
@@ -90,8 +94,7 @@ class FeedOrchestrator:
 
         if mode not in ("websocket", "dual"):
             raise ValueError(
-                f"[orchestrator] Unknown ingestion_mode={mode!r}. "
-                "Valid values: 'rest', 'websocket', 'dual'."
+                f"[orchestrator] Unknown ingestion_mode={mode!r}. Valid values: 'rest', 'websocket', 'dual'."
             )
 
         self._install_signal_handlers()
@@ -100,17 +103,11 @@ class FeedOrchestrator:
         self._adapters = self._build_adapters()
 
         if not self._adapters:
-            logger.warning(
-                "[orchestrator] No adapters enabled. "
-                "Check feeds config — all exchanges may be disabled."
-            )
+            logger.warning("[orchestrator] No adapters enabled. Check feeds config — all exchanges may be disabled.")
             return
 
         # Launch each adapter as an independent Task.
-        tasks = [
-            asyncio.create_task(adapter.start(), name=f"feed-{adapter.exchange}")
-            for adapter in self._adapters
-        ]
+        tasks = [asyncio.create_task(adapter.start(), name=f"feed-{adapter.exchange}") for adapter in self._adapters]
         logger.info(
             "[orchestrator] started | mode={} adapters={}",
             mode,

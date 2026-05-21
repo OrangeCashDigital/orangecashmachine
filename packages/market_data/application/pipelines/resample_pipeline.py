@@ -44,6 +44,7 @@ recibida — no tiene opinión sobre el schedule.
 
 Ref: Pandas resample docs — https://pandas.pydata.org/docs/reference/resampling.html
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -73,9 +74,20 @@ _log = bind_pipeline("resample_pipeline")
 # Timeframes que ResamplePipeline puede producir.
 # 1m NO está aquí — es la fuente, no un target de resampling.
 # OCP: agregar un TF = agregar su string aquí. Cero cambios en lógica.
-_RESAMPLE_TARGETS: frozenset[str] = frozenset({
-    "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d",
-})
+_RESAMPLE_TARGETS: frozenset[str] = frozenset(
+    {
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "4h",
+        "6h",
+        "8h",
+        "12h",
+        "1d",
+    }
+)
 
 # Multiplicador de ventana de lectura.
 # Leemos 2× el período del TF target para garantizar al menos 1 vela cerrada
@@ -92,17 +104,19 @@ _MIN_SOURCE_CANDLES: int = 2
 # Result types
 # ==============================================================================
 
+
 @dataclass
 class ResampleResult:
     """Resultado de resampling de un par (symbol, target_timeframe)."""
-    symbol:      str
-    timeframe:   str          # target timeframe (ej: "5m")
-    exchange:    str  = ""
-    market_type: str  = ""
-    rows:        int  = 0
-    skipped:     bool = False  # True si no había datos 1m suficientes
-    error:       str  = ""
-    duration_ms: int  = 0
+
+    symbol: str
+    timeframe: str  # target timeframe (ej: "5m")
+    exchange: str = ""
+    market_type: str = ""
+    rows: int = 0
+    skipped: bool = False  # True si no había datos 1m suficientes
+    error: str = ""
+    duration_ms: int = 0
 
     @property
     def success(self) -> bool:
@@ -112,21 +126,31 @@ class ResampleResult:
 @dataclass
 class ResampleSummary:
     """Resumen agregado de una ejecución de ResamplePipeline."""
-    results:     List[ResampleResult] = field(default_factory=list)
-    duration_ms: int                  = 0
-    exchange:    str                  = ""
-    market_type: str                  = ""
+
+    results: List[ResampleResult] = field(default_factory=list)
+    duration_ms: int = 0
+    exchange: str = ""
+    market_type: str = ""
 
     @property
-    def total(self)     -> int: return len(self.results)
+    def total(self) -> int:
+        return len(self.results)
+
     @property
-    def succeeded(self) -> int: return sum(1 for r in self.results if r.success)
+    def succeeded(self) -> int:
+        return sum(1 for r in self.results if r.success)
+
     @property
-    def skipped(self)   -> int: return sum(1 for r in self.results if r.skipped)
+    def skipped(self) -> int:
+        return sum(1 for r in self.results if r.skipped)
+
     @property
-    def failed(self)    -> int: return sum(1 for r in self.results if r.error)
+    def failed(self) -> int:
+        return sum(1 for r in self.results if r.error)
+
     @property
-    def total_rows(self) -> int: return sum(r.rows for r in self.results)
+    def total_rows(self) -> int:
+        return sum(r.rows for r in self.results)
 
     @property
     def status(self) -> str:
@@ -140,28 +164,41 @@ class ResampleSummary:
         log.info(
             "ResampleSummary | exchange=%s market=%s status=%s "
             "total=%s ok=%s skipped=%s failed=%s rows=%s duration_ms=%s",
-            self.exchange, self.market_type, self.status,
-            self.total, self.succeeded, self.skipped, self.failed,
-            self.total_rows, self.duration_ms,
+            self.exchange,
+            self.market_type,
+            self.status,
+            self.total,
+            self.succeeded,
+            self.skipped,
+            self.failed,
+            self.total_rows,
+            self.duration_ms,
         )
         for r in self.results:
             if r.error:
                 log.warning(
                     "  \u2717 %s/%s error=%s duration=%sms",
-                    r.symbol, r.timeframe, r.error, r.duration_ms,
+                    r.symbol,
+                    r.timeframe,
+                    r.error,
+                    r.duration_ms,
                 )
             elif r.skipped:
                 log.debug("  \u2197 %s/%s skipped (sin datos 1m)", r.symbol, r.timeframe)
             else:
                 log.info(
                     "  \u2713 %s/%s rows=%s duration=%sms",
-                    r.symbol, r.timeframe, r.rows, r.duration_ms,
+                    r.symbol,
+                    r.timeframe,
+                    r.rows,
+                    r.duration_ms,
                 )
 
 
 # ==============================================================================
 # Helpers internos
 # ==============================================================================
+
 
 def _validate_targets(timeframes: List[str]) -> None:
     """
@@ -181,8 +218,7 @@ def _validate_targets(timeframes: List[str]) -> None:
             raise InvalidTimeframeError(tf)
         if tf not in _RESAMPLE_TARGETS:
             raise ValueError(
-                f"Timeframe '{tf}' no es un target de resampling v\xe1lido. "
-                f"V\xe1lidos: {sorted(_RESAMPLE_TARGETS)}"
+                f"Timeframe '{tf}' no es un target de resampling v\xe1lido. V\xe1lidos: {sorted(_RESAMPLE_TARGETS)}"
             )
 
 
@@ -196,16 +232,16 @@ def _lookback_candles(target_tf: str) -> int:
       "4h"  → 2 × 240 = 480 candles 1m
       "1d"  → 2 × 1440 = 2880 candles 1m
     """
-    period_ms    = timeframe_to_ms(target_tf)
-    candle_ms    = timeframe_to_ms("1m")
+    period_ms = timeframe_to_ms(target_tf)
+    candle_ms = timeframe_to_ms("1m")
     return _LOOKBACK_MULTIPLIER * (period_ms // candle_ms)
 
 
 def _resample_df(
-    df_1m:      pd.DataFrame,
-    target_tf:  str,
-    symbol:     str,
-    exchange:   str,
+    df_1m: pd.DataFrame,
+    target_tf: str,
+    symbol: str,
+    exchange: str,
 ) -> pd.DataFrame:
     """
     Resamplea un DataFrame OHLCV de 1m al target_tf.
@@ -226,10 +262,10 @@ def _resample_df(
         return pd.DataFrame()
 
     resampled = align_to_grid(  # type: ignore[call-arg]
-        df        = df_1m,
-        timeframe = target_tf,
-        exchange  = exchange,
-        symbol    = symbol,
+        df=df_1m,
+        timeframe=target_tf,
+        exchange=exchange,
+        symbol=symbol,
     )
 
     if resampled.empty:
@@ -245,6 +281,7 @@ def _resample_df(
 # ==============================================================================
 # ResamplePipeline
 # ==============================================================================
+
 
 class ResamplePipeline:
     """
@@ -265,29 +302,27 @@ class ResamplePipeline:
 
     def __init__(
         self,
-        symbols:     List[str],
-        timeframes:  List[str],
-        exchange:    str,
+        symbols: List[str],
+        timeframes: List[str],
+        exchange: str,
         storage: OHLCVStorage,
-        market_type: str  = "spot",
-        dry_run:     bool = False,
-        metrics:     "ResampleMetricsPort | None" = None,
+        market_type: str = "spot",
+        dry_run: bool = False,
+        metrics: "ResampleMetricsPort | None" = None,
     ) -> None:
         if not symbols:
             raise ValueError("symbols no puede estar vac\xedo")
         if not timeframes:
             raise ValueError("timeframes no puede estar vac\xedo")
         if storage is None:
-            raise ValueError(
-                "ResamplePipeline.storage no puede ser None — inyectar OHLCVStorage (DIP)"
-            )
-        _validate_targets(timeframes)   # Fail-Fast
+            raise ValueError("ResamplePipeline.storage no puede ser None — inyectar OHLCVStorage (DIP)")
+        _validate_targets(timeframes)  # Fail-Fast
 
-        self._symbols     = symbols
-        self._timeframes  = timeframes
-        self._exchange    = exchange.lower()
+        self._symbols = symbols
+        self._timeframes = timeframes
+        self._exchange = exchange.lower()
         self._market_type = market_type.lower()
-        self._dry_run     = dry_run
+        self._dry_run = dry_run
 
         # DIP: storage inyectado — no se instancia aquí (Clean Architecture).
         # Misma instancia para lectura (source 1m) y escritura (targets).
@@ -304,8 +339,8 @@ class ResamplePipeline:
         self._metrics: ResampleMetricsPort = metrics
         self._log = bind_pipeline(
             "resample_pipeline",
-            exchange    = self._exchange,
-            market_type = self._market_type,
+            exchange=self._exchange,
+            market_type=self._market_type,
         )
 
     # =========================================================================
@@ -332,32 +367,35 @@ class ResamplePipeline:
         if now_ms is None:
             now_ms = int(time.time() * 1000)
 
-        pairs      = [(s, tf) for s in self._symbols for tf in self._timeframes]
-        total      = len(pairs)
-        results    = []
-        run_start  = time.monotonic()
+        pairs = [(s, tf) for s in self._symbols for tf in self._timeframes]
+        total = len(pairs)
+        results = []
+        run_start = time.monotonic()
 
         self._log.info(
             "ResamplePipeline iniciando | symbols=%s timeframes=%s pairs=%s dry_run=%s",
-            len(self._symbols), len(self._timeframes), total, self._dry_run,
+            len(self._symbols),
+            len(self._timeframes),
+            total,
+            self._dry_run,
         )
 
         for idx, (symbol, target_tf) in enumerate(pairs, 1):
             result = await self._resample_pair(
-                symbol    = symbol,
-                target_tf = target_tf,
-                now_ms    = now_ms,
-                idx       = idx,
-                total     = total,
+                symbol=symbol,
+                target_tf=target_tf,
+                now_ms=now_ms,
+                idx=idx,
+                total=total,
             )
             results.append(result)
 
         duration_ms = int((time.monotonic() - run_start) * 1000)
         summary = ResampleSummary(
-            results     = results,
-            duration_ms = duration_ms,
-            exchange    = self._exchange,
-            market_type = self._market_type,
+            results=results,
+            duration_ms=duration_ms,
+            exchange=self._exchange,
+            market_type=self._market_type,
         )
         summary.log(self._log)
         return summary
@@ -368,11 +406,11 @@ class ResamplePipeline:
 
     async def _resample_pair(
         self,
-        symbol:    str,
+        symbol: str,
         target_tf: str,
-        now_ms:    int,
-        idx:       int,
-        total:     int,
+        now_ms: int,
+        idx: int,
+        total: int,
     ) -> ResampleResult:
         """
         Resamplea un par individual. SafeOps: nunca relanza excepción.
@@ -388,33 +426,37 @@ class ResamplePipeline:
         """
         pair_start = time.monotonic()
         result = ResampleResult(
-            symbol      = symbol,
-            timeframe   = target_tf,
-            exchange    = self._exchange,
-            market_type = self._market_type,
+            symbol=symbol,
+            timeframe=target_tf,
+            exchange=self._exchange,
+            market_type=self._market_type,
         )
 
         try:
             # Ventana de lectura: 2× período del TF target hacia atrás desde now_ms
-            lookback      = _lookback_candles(target_tf)
-            period_1m_ms  = timeframe_to_ms("1m")
+            lookback = _lookback_candles(target_tf)
+            period_1m_ms = timeframe_to_ms("1m")
             window_start_ms = now_ms - (lookback * period_1m_ms)
-            window_start    = pd.Timestamp(window_start_ms, unit="ms", tz="UTC")
+            window_start = pd.Timestamp(window_start_ms, unit="ms", tz="UTC")
 
             self._log.debug(
                 "Resampling pair %s/%s | idx=%s/%s lookback=%s",
-                symbol, target_tf, idx, total, lookback,
+                symbol,
+                target_tf,
+                idx,
+                total,
+                lookback,
             )
 
             # Carga sincrónica en hilo executor para no bloquear el event loop.
             # IcebergStorage.load_ohlcv es síncrono (scan Iceberg + to_pandas).
-            loop   = asyncio.get_event_loop()
-            df_1m  = await loop.run_in_executor(
+            loop = asyncio.get_event_loop()
+            df_1m = await loop.run_in_executor(
                 None,
                 lambda: self._storage.load_ohlcv(
-                    symbol    = symbol,
-                    timeframe = "1m",
-                    start     = window_start,
+                    symbol=symbol,
+                    timeframe="1m",
+                    start=window_start,
                 ),
             )
 
@@ -422,9 +464,9 @@ class ResamplePipeline:
             if df_1m is None or len(df_1m) < _MIN_SOURCE_CANDLES:
                 result.skipped = True
                 self._log.debug(
-                    "Resample skipped | %s/%s — sin datos 1m suficientes "
-                    "(candles=%s min=%s)",
-                    symbol, target_tf,
+                    "Resample skipped | %s/%s — sin datos 1m suficientes (candles=%s min=%s)",
+                    symbol,
+                    target_tf,
                     0 if df_1m is None else len(df_1m),
                     _MIN_SOURCE_CANDLES,
                 )
@@ -432,10 +474,10 @@ class ResamplePipeline:
 
             # Resampleado puro — CPU-bound, sin I/O
             resampled = _resample_df(
-                df_1m     = df_1m,
-                target_tf = target_tf,
-                symbol    = symbol,
-                exchange  = self._exchange,
+                df_1m=df_1m,
+                target_tf=target_tf,
+                symbol=symbol,
+                exchange=self._exchange,
             )
 
             if resampled.empty:
@@ -446,9 +488,9 @@ class ResamplePipeline:
             await loop.run_in_executor(
                 None,
                 lambda: self._storage.save_ohlcv(
-                    df        = resampled,
-                    symbol    = symbol,
-                    timeframe = target_tf,
+                    df=resampled,
+                    symbol=symbol,
+                    timeframe=target_tf,
                 ),
             )
 
@@ -457,15 +499,15 @@ class ResamplePipeline:
             # Métricas Prometheus (SafeOps: nunca lanza)
             try:
                 self._metrics.resample_rows_total.labels(
-                    exchange    = self._exchange,
-                    symbol      = symbol,
-                    timeframe   = target_tf,
-                    market_type = self._market_type,
+                    exchange=self._exchange,
+                    symbol=symbol,
+                    timeframe=target_tf,
+                    market_type=self._market_type,
                 ).inc(result.rows)
                 self._metrics.resample_duration_ms.labels(
-                    exchange    = self._exchange,
-                    timeframe   = target_tf,
-                    market_type = self._market_type,
+                    exchange=self._exchange,
+                    timeframe=target_tf,
+                    market_type=self._market_type,
                 ).observe(int((time.monotonic() - pair_start) * 1000))
             except Exception:
                 pass
@@ -473,10 +515,10 @@ class ResamplePipeline:
         except Exception as exc:
             result.error = str(exc)
             self._log.bind(
-                symbol    = symbol,
-                timeframe = target_tf,
-                error     = str(exc),
-                error_type = type(exc).__name__,
+                symbol=symbol,
+                timeframe=target_tf,
+                error=str(exc),
+                error_type=type(exc).__name__,
             ).error("Resample pair failed (non-fatal)")
 
         finally:

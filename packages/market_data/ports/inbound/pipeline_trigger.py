@@ -18,6 +18,7 @@ DerivativesPipeline, el asset de Dagster no cambia (OCP).
 OCP: añadir TradesPipeline implementando este port → Dagster no toca.
 DIP: Dagster depende de la abstracción, no del pipeline concreto.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

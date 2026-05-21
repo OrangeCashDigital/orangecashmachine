@@ -31,6 +31,7 @@ DIP   — depende de GoldTransformer (dominio), nunca del shim FeatureEngineer.
 SSOT  — GoldTransformer es la única fuente de feature engineering.
 SRP   — GoldStorage orquesta; GoldTransformer transforma.
 """
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -43,20 +44,36 @@ from pyiceberg.expressions import And, EqualTo
 from market_data.infrastructure.storage.gold.transformer import GoldTransformer, VERSION as _TRANSFORMER_VERSION
 from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
 from market_data.infrastructure.storage.iceberg.catalog import ensure_gold_table, get_catalog
-from market_data.ports.outbound.storage import OHLCVStorage, SnapshottableStoragePort
+from market_data.ports.outbound.storage import SnapshottableStoragePort
 
 # Columnas en orden canónico para gold.features
 _GOLD_COLS = [
-    "timestamp", "open", "high", "low", "close", "volume",
-    "exchange", "market_type", "symbol", "timeframe",
-    "return_1", "log_return", "volatility_20", "high_low_spread", "vwap",
-    "run_id", "engineer_version", "silver_snapshot_id", "silver_snapshot_ms",
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "exchange",
+    "market_type",
+    "symbol",
+    "timeframe",
+    "return_1",
+    "log_return",
+    "volatility_20",
+    "high_low_spread",
+    "vwap",
+    "run_id",
+    "engineer_version",
+    "silver_snapshot_id",
+    "silver_snapshot_ms",
 ]
 
 
 # =============================================================================
 # GoldStorage
 # =============================================================================
+
 
 class GoldStorage:
     """
@@ -77,11 +94,11 @@ class GoldStorage:
 
     def __init__(
         self,
-        dry_run:        bool            = False,
+        dry_run: bool = False,
         silver_storage: Optional[SnapshottableStoragePort] = None,
         # gold_path: aceptado por compatibilidad con código legacy.
         # Ya no tiene efecto — Gold usa Iceberg.
-        gold_path:      object          = None,
+        gold_path: object = None,
     ) -> None:
         """
         Parameters
@@ -94,7 +111,7 @@ class GoldStorage:
         DIP: GoldStorage depende de OHLCVStorage (abstracción), nunca de
         IcebergStorage directamente. Inyectar desde el composition root.
         """
-        self._dry_run          = dry_run
+        self._dry_run = dry_run
         self._engineer_version = _TRANSFORMER_VERSION
         # DIP: silver_storage inyectado — testeable sin Iceberg real.
         # None = lazy init en build() para compatibilidad con callers existentes.
@@ -103,8 +120,7 @@ class GoldStorage:
             ensure_gold_table()
             self._table = get_catalog().load_table("gold.features")
         logger.info(
-            "GoldStorage ready | backend=iceberg dry_run={} transformer_version={} "
-            "silver_injected={}",
+            "GoldStorage ready | backend=iceberg dry_run={} transformer_version={} silver_injected={}",
             self._dry_run,
             self._engineer_version,
             silver_storage is not None,
@@ -116,13 +132,13 @@ class GoldStorage:
 
     def build(
         self,
-        exchange:    str,
-        symbol:      str,
+        exchange: str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
-        start:       Optional[pd.Timestamp] = None,
-        end:         Optional[pd.Timestamp] = None,
-        run_id:      Optional[str]          = None,
+        timeframe: str,
+        start: Optional[pd.Timestamp] = None,
+        end: Optional[pd.Timestamp] = None,
+        run_id: Optional[str] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Lee Silver (Iceberg), calcula features y hace overwrite en Gold.
@@ -151,26 +167,36 @@ class GoldStorage:
 
         # Capturar snapshot ANTES del load — ancla el lineage al punto exacto
         # en el tiempo que Gold usó como fuente.
-        _snap    = silver.get_current_snapshot() or {}
+        _snap = silver.get_current_snapshot() or {}
         _snap_id = _snap.get("snapshot_id", 0)
         _snap_ms = _snap.get("timestamp_ms", 0)
 
         # ── Cargar Silver ─────────────────────────────────────────────────────
         try:
             df = silver.load_ohlcv(
-                symbol=symbol, timeframe=timeframe, start=start, end=end,
+                symbol=symbol,
+                timeframe=timeframe,
+                start=start,
+                end=end,
             )
         except Exception as exc:
             logger.warning(
                 "Gold build: Silver load failed | {}/{}/{}/{} err={}",
-                exchange, symbol, market_type, timeframe, exc,
+                exchange,
+                symbol,
+                market_type,
+                timeframe,
+                exc,
             )
             return None
 
         if df is None or df.empty:
             logger.warning(
                 "Gold build: sin datos en Silver | {}/{}/{}/{}",
-                exchange, symbol, market_type, timeframe,
+                exchange,
+                symbol,
+                market_type,
+                timeframe,
             )
             return None
 
@@ -179,86 +205,103 @@ class GoldStorage:
         if nan_ts > 0:
             logger.warning(
                 "Gold build: {} timestamps NaN eliminados | {}/{}/{}/{}",
-                nan_ts, exchange, symbol, market_type, timeframe,
+                nan_ts,
+                exchange,
+                symbol,
+                market_type,
+                timeframe,
             )
             df = df.dropna(subset=["timestamp"]).reset_index(drop=True)
 
         # ── Feature engineering — GoldTransformer (estático, sin estado) ──────
         df = GoldTransformer.transform(
             df,
-            symbol    = symbol,
-            timeframe = timeframe,
-            exchange  = exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=exchange,
         )
 
         # ── DRY RUN ───────────────────────────────────────────────────────────
         if self._dry_run:
             logger.info(
                 "[DRY RUN] Gold build skipped | {}/{}/{}/{} rows={} run_id={}",
-                exchange, symbol, market_type, timeframe, len(df), run_id,
+                exchange,
+                symbol,
+                market_type,
+                timeframe,
+                len(df),
+                run_id,
             )
             return df
 
         # ── Preparar DataFrame para Iceberg ───────────────────────────────────
         prepared = _prepare_gold_df(
             df,
-            exchange           = exchange,
-            symbol             = symbol,
-            market_type        = market_type,
-            timeframe          = timeframe,
-            run_id             = run_id,
-            engineer_version   = self._engineer_version,
-            silver_snapshot_id = _snap_id,
-            silver_snapshot_ms = _snap_ms,
+            exchange=exchange,
+            symbol=symbol,
+            market_type=market_type,
+            timeframe=timeframe,
+            run_id=run_id,
+            engineer_version=self._engineer_version,
+            silver_snapshot_id=_snap_id,
+            silver_snapshot_ms=_snap_ms,
         )
 
         # ── Overwrite atómico — reemplaza solo este dataset ───────────────────
         self._table.overwrite(
             pa.Table.from_pandas(
                 prepared,
-                schema         = self._table.schema().as_arrow(),
-                preserve_index = False,
+                schema=self._table.schema().as_arrow(),
+                preserve_index=False,
             ),
-            overwrite_filter    = _dataset_filter(
-                exchange, symbol, market_type, timeframe,
+            overwrite_filter=_dataset_filter(
+                exchange,
+                symbol,
+                market_type,
+                timeframe,
             ),
-            snapshot_properties = {
-                "ocm.exchange":    exchange,
-                "ocm.symbol":      symbol,
+            snapshot_properties={
+                "ocm.exchange": exchange,
+                "ocm.symbol": symbol,
                 "ocm.market_type": market_type,
-                "ocm.timeframe":   timeframe,
-                "ocm.run_id":      run_id or "",
+                "ocm.timeframe": timeframe,
+                "ocm.run_id": run_id or "",
             },
         )
 
         logger.info(
             "Gold saved | {}/{}/{}/{} rows={} features={} silver_snap={}",
-            exchange, symbol, market_type, timeframe,
-            len(df), len(df.columns), _snap_id,
+            exchange,
+            symbol,
+            market_type,
+            timeframe,
+            len(df),
+            len(df.columns),
+            _snap_id,
         )
         return df
 
     def build_all(
         self,
-        exchange:    str,
-        symbols:     List[str],
+        exchange: str,
+        symbols: List[str],
         market_type: str,
-        timeframes:  List[str],
-        run_id:      Optional[str] = None,
+        timeframes: List[str],
+        run_id: Optional[str] = None,
     ) -> None:
         """Construye Gold para todos los pares/timeframes de un exchange."""
-        total  = len(symbols) * len(timeframes)
-        done   = 0
+        total = len(symbols) * len(timeframes)
+        done = 0
         failed = 0
         for symbol in symbols:
             for tf in timeframes:
                 try:
                     result = self.build(
-                        exchange    = exchange,
-                        symbol      = symbol,
-                        market_type = market_type,
-                        timeframe   = tf,
-                        run_id      = run_id,
+                        exchange=exchange,
+                        symbol=symbol,
+                        market_type=market_type,
+                        timeframe=tf,
+                        run_id=run_id,
                     )
                     if result is None:
                         failed += 1
@@ -268,23 +311,34 @@ class GoldStorage:
                     failed += 1
                     logger.error(
                         "Gold build_all error | {}/{}/{}/{} err={}",
-                        exchange, symbol, market_type, tf, exc,
+                        exchange,
+                        symbol,
+                        market_type,
+                        tf,
+                        exc,
                     )
                 logger.debug(
                     "Gold build_all progress | {}/{} done={} failed={}",
-                    done + failed, total, done, failed,
+                    done + failed,
+                    total,
+                    done,
+                    failed,
                 )
         logger.info(
             "Gold build_all finished | exchange={} market={} done={} failed={}/{}",
-            exchange, market_type, done, failed, total,
+            exchange,
+            market_type,
+            done,
+            failed,
+            total,
         )
 
     def list_versions(
         self,
-        exchange:    str,
-        symbol:      str,
+        exchange: str,
+        symbol: str,
         market_type: str,
-        timeframe:   str,
+        timeframe: str,
     ) -> List[int]:
         """
         Retorna snapshot_ids que construyeron este dataset específico,
@@ -301,10 +355,10 @@ class GoldStorage:
                     continue
                 props = getattr(snap.summary, "additional_properties", {}) or {}
                 if (
-                    props.get("ocm.exchange")    == exchange
-                    and props.get("ocm.symbol")      == symbol
+                    props.get("ocm.exchange") == exchange
+                    and props.get("ocm.symbol") == symbol
                     and props.get("ocm.market_type") == market_type
-                    and props.get("ocm.timeframe")   == timeframe
+                    and props.get("ocm.timeframe") == timeframe
                 ):
                     result.append(entry.snapshot_id)
             return result
@@ -319,11 +373,12 @@ class GoldStorage:
 # Helpers internos
 # =============================================================================
 
+
 def _dataset_filter(
-    exchange:    str,
-    symbol:      str,
+    exchange: str,
+    symbol: str,
     market_type: str,
-    timeframe:   str,
+    timeframe: str,
 ):
     """Filtro Iceberg que identifica un dataset específico."""
     return And(
@@ -333,13 +388,13 @@ def _dataset_filter(
 
 
 def _prepare_gold_df(
-    df:                 pd.DataFrame,
-    exchange:           str,
-    symbol:             str,
-    market_type:        str,
-    timeframe:          str,
-    run_id:             Optional[str],
-    engineer_version:   str,
+    df: pd.DataFrame,
+    exchange: str,
+    symbol: str,
+    market_type: str,
+    timeframe: str,
+    run_id: Optional[str],
+    engineer_version: str,
     silver_snapshot_id: int,
     silver_snapshot_ms: int,
 ) -> pd.DataFrame:
@@ -351,16 +406,13 @@ def _prepare_gold_df(
     - Reordena al orden canónico _GOLD_COLS.
     """
     df = df.copy()
-    df["timestamp"] = (
-        pd.to_datetime(df["timestamp"], utc=True)
-        .astype("datetime64[us, UTC]")
-    )
-    df["exchange"]           = exchange
-    df["market_type"]        = market_type
-    df["symbol"]             = symbol
-    df["timeframe"]          = timeframe
-    df["run_id"]             = run_id or ""
-    df["engineer_version"]   = engineer_version
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[us, UTC]")
+    df["exchange"] = exchange
+    df["market_type"] = market_type
+    df["symbol"] = symbol
+    df["timeframe"] = timeframe
+    df["run_id"] = run_id or ""
+    df["engineer_version"] = engineer_version
     df["silver_snapshot_id"] = silver_snapshot_id
     df["silver_snapshot_ms"] = silver_snapshot_ms
 

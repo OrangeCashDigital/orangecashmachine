@@ -50,6 +50,7 @@ B-NEW-06: exchange propagado desde event.exchange al append() de BronzeStorage
 
 Principios: SRP · DIP · SafeOps · Kappa · at-least-once · SSOT
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -83,20 +84,20 @@ class KafkaBronzeWriter:
 
     def __init__(
         self,
-        consumer:         KafkaConsumerPort,
-        bronze_storage:   object,
-        dlq_producer:     Optional[KafkaProducerPort] = None,
-        poll_timeout_ms:  int = 1_000,
+        consumer: KafkaConsumerPort,
+        bronze_storage: object,
+        dlq_producer: Optional[KafkaProducerPort] = None,
+        poll_timeout_ms: int = 1_000,
         max_poll_records: int = 500,
     ) -> None:
-        self._consumer         = consumer
-        self._bronze           = bronze_storage
-        self._dlq              = dlq_producer
-        self._poll_timeout_ms  = poll_timeout_ms
+        self._consumer = consumer
+        self._bronze = bronze_storage
+        self._dlq = dlq_producer
+        self._poll_timeout_ms = poll_timeout_ms
         self._max_poll_records = max_poll_records
-        self._dedup            = SeenFilter(max_size=10_000)
-        self._running          = False
-        self._log              = logger.bind(component="KafkaBronzeWriter")
+        self._dedup = SeenFilter(max_size=10_000)
+        self._running = False
+        self._log = logger.bind(component="KafkaBronzeWriter")
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -148,14 +149,14 @@ class KafkaBronzeWriter:
 
     async def _run_once(self) -> tuple[int, int]:
         messages = await self._consumer.poll(  # type: ignore[union-attr]
-            timeout_ms  = self._poll_timeout_ms,
-            max_records = self._max_poll_records,
+            timeout_ms=self._poll_timeout_ms,
+            max_records=self._max_poll_records,
         )
         if not messages:
             return 0, 0
 
-        processed    = 0
-        handled      = 0
+        processed = 0
+        handled = 0
         write_errors = 0
 
         for msg in messages:
@@ -174,19 +175,16 @@ class KafkaBronzeWriter:
             await self._consumer.commit()  # type: ignore[union-attr]
         elif write_errors > 0:
             self._log.bind(
-                write_errors = write_errors,
-                processed    = processed,
-                handled      = handled,
-            ).warning(
-                "bronze_writer_commit_skipped — write errors en batch, "
-                "se reintentará en el próximo poll"
-            )
+                write_errors=write_errors,
+                processed=processed,
+                handled=handled,
+            ).warning("bronze_writer_commit_skipped — write errors en batch, se reintentará en el próximo poll")
 
         self._log.bind(
-            processed    = processed,
-            handled      = handled,
-            write_errors = write_errors,
-            total        = len(messages),
+            processed=processed,
+            handled=handled,
+            write_errors=write_errors,
+            total=len(messages),
         ).debug("bronze_writer_cycle")
 
         return processed, write_errors
@@ -207,8 +205,8 @@ class KafkaBronzeWriter:
         except Exception as exc:
             self._log.warning(
                 "bronze_writer_deserialize_error",
-                offset = msg.offset,
-                error  = str(exc),
+                offset=msg.offset,
+                error=str(exc),
             )
             await self._send_to_dlq(msg, reason=f"deserialize_error:{exc}")
             return "handled"
@@ -221,24 +219,24 @@ class KafkaBronzeWriter:
 
         # ── Validar barras ────────────────────────────────────────────
         if not event.bars:
-            self._log.bind(event_id=event.event_id).warning(
-                "bronze_writer_empty_bars — descartado"
-            )
+            self._log.bind(event_id=event.event_id).warning("bronze_writer_empty_bars — descartado")
             await self._send_to_dlq(msg, reason="empty_bars")
             return "handled"
 
         # ── Construir DataFrame ───────────────────────────────────────
-        df = pd.DataFrame([
-            {
-                "timestamp": pd.Timestamp(b.ts, unit="ms", tz="UTC"),
-                "open":      b.open,
-                "high":      b.high,
-                "low":       b.low,
-                "close":     b.close,
-                "volume":    b.volume,
-            }
-            for b in event.bars
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "timestamp": pd.Timestamp(b.ts, unit="ms", tz="UTC"),
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                }
+                for b in event.bars
+            ]
+        )
 
         # ── Escribir a Bronze — exchange del wire, no del constructor ─
         # BUG-5 fix: el exchange correcto viene en event.exchange.
@@ -247,29 +245,29 @@ class KafkaBronzeWriter:
         try:
             await asyncio.to_thread(
                 self._bronze.append,  # type: ignore[attr-defined]
-                df        = df,
-                symbol    = event.symbol,
-                timeframe = event.timeframe,
-                exchange  = event.exchange,   # FIX B-NEW-06
-                run_id    = event.event_id,
+                df=df,
+                symbol=event.symbol,
+                timeframe=event.timeframe,
+                exchange=event.exchange,  # FIX B-NEW-06
+                run_id=event.event_id,
             )
             self._log.bind(
-                event_id  = event.event_id,
-                exchange  = event.exchange,
-                symbol    = event.symbol,
-                timeframe = event.timeframe,
-                bars      = len(event.bars),
-                source    = event.source,
+                event_id=event.event_id,
+                exchange=event.exchange,
+                symbol=event.symbol,
+                timeframe=event.timeframe,
+                bars=len(event.bars),
+                source=event.source,
             ).info("bronze_written")
             return "written"
         except Exception as exc:
             self._log.error(
                 "bronze_write_error",
-                event_id  = event.event_id,
-                exchange  = event.exchange,
-                symbol    = event.symbol,
-                timeframe = event.timeframe,
-                error     = str(exc),
+                event_id=event.event_id,
+                exchange=event.exchange,
+                symbol=event.symbol,
+                timeframe=event.timeframe,
+                error=str(exc),
             )
             return "write_error"
 
@@ -280,9 +278,9 @@ class KafkaBronzeWriter:
         try:
             # produce() — método canónico del port (FIX B-NEW-02)
             await self._dlq.produce(
-                topic   = TOPIC_DLQ,
-                value   = msg.value,
-                headers = {"reason": reason, "original_topic": msg.topic},
+                topic=TOPIC_DLQ,
+                value=msg.value,
+                headers={"reason": reason, "original_topic": msg.topic},
             )
         except Exception as exc:
             self._log.warning("dlq_send_error", error=str(exc))

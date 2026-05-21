@@ -27,6 +27,7 @@ Uso
 
 Principios: SRP · SSOT · DIP · KISS
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -62,9 +63,9 @@ class TimestampCacheService:
 
     def get(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        exchange:  str = "unknown",
+        exchange: str = "unknown",
         market_type: str = "unknown",
     ) -> Optional[pd.Timestamp]:
         """
@@ -91,9 +92,9 @@ class TimestampCacheService:
 
     def set(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        ts:        Optional[pd.Timestamp],
+        ts: Optional[pd.Timestamp],
     ) -> None:
         """Actualiza L1 con timestamp conocido (post-scan L3)."""
         self._l1[(symbol, timeframe)] = ts
@@ -112,9 +113,9 @@ class TimestampCacheService:
 
     def _l2_get(
         self,
-        symbol:      str,
-        timeframe:   str,
-        exchange:    str,
+        symbol: str,
+        timeframe: str,
+        exchange: str,
         market_type: str,
     ) -> Optional[pd.Timestamp]:
         """
@@ -124,19 +125,17 @@ class TimestampCacheService:
         try:
             if self._cursor is None:
                 return None
-            raw = self._cursor.get_raw(
-                f"{exchange.lower()}:{symbol}:{market_type.lower()}:{timeframe}"
-            )
+            raw = self._cursor.get_raw(f"{exchange.lower()}:{symbol}:{market_type.lower()}:{timeframe}")
             if raw is None:
                 logger.debug("TimestampCache L2 miss | {}/{}", symbol, timeframe)
                 return None
             ts = pd.Timestamp(int(raw), unit="ms", tz="UTC")
-            logger.debug(
-                "TimestampCache L2 hit | {}/{} ts={}", symbol, timeframe, ts
-            )
+            logger.debug("TimestampCache L2 hit | {}/{} ts={}", symbol, timeframe, ts)
             return ts
         except Exception:
             logger.opt(exception=True).debug(
-                "TimestampCache L2 error | {}/{}", symbol, timeframe,
+                "TimestampCache L2 error | {}/{}",
+                symbol,
+                timeframe,
             )
             return None

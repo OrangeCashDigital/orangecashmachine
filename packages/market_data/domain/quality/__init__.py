@@ -7,6 +7,7 @@ Tipos y contratos de calidad en el dominio OHLCV.
   types.py      — DataQualityReport, QualityIssue (Value Objects puros)
   invariants.py — InvariantResult, check_dataset_invariants
 """
+
 from market_data.domain.quality.types import (  # noqa: F401
     QualityIssue,
     DataQualityReport,

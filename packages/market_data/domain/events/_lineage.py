@@ -16,6 +16,7 @@ SSOT  — única definición; __init__.py re-exporta, nadie más importa directo
 DDD   — value objects puros: frozen dataclass + enum, sin efectos laterales
 KISS  — sin lógica de negocio; solo representación y una propiedad derivada
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -28,23 +29,27 @@ from typing import Any, Dict, Optional
 # Enums
 # ===========================================================================
 
+
 class PipelineLayer(str, Enum):
     """Capa de destino de un evento de lineage."""
-    RAW    = "raw"
+
+    RAW = "raw"
     SILVER = "silver"
-    GOLD   = "gold"
+    GOLD = "gold"
 
 
 class LineageStatus(str, Enum):
     """Resultado del procesamiento de un lote en una capa."""
+
     SUCCESS = "success"
-    PARTIAL = "partial"   # algunos registros descartados
-    FAILED  = "failed"    # lote rechazado completamente
+    PARTIAL = "partial"  # algunos registros descartados
+    FAILED = "failed"  # lote rechazado completamente
 
 
 # ===========================================================================
 # LineageEvent — Value Object
 # ===========================================================================
+
 
 @dataclass(frozen=True)
 class LineageEvent:
@@ -69,19 +74,18 @@ class LineageEvent:
     ----------
     loss_rate : fracción de filas descartadas [0.0–1.0]
     """
-    run_id:        str
-    layer:         PipelineLayer
-    exchange:      str
-    symbol:        str
-    timeframe:     str
-    rows_in:       int
-    rows_out:      int
-    status:        LineageStatus
-    quality_score: Optional[float]   = None
-    params:        Dict[str, Any]    = field(default_factory=dict)
-    ts:            str               = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+
+    run_id: str
+    layer: PipelineLayer
+    exchange: str
+    symbol: str
+    timeframe: str
+    rows_in: int
+    rows_out: int
+    status: LineageStatus
+    quality_score: Optional[float] = None
+    params: Dict[str, Any] = field(default_factory=dict)
+    ts: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @property
     def loss_rate(self) -> float:

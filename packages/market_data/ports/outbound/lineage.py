@@ -9,6 +9,7 @@ El application layer y quality/pipeline inyectan este protocolo;
 la implementación concreta (SQLite / Redis / noop) vive en
 infrastructure.lineage y se cabla en factories.
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable

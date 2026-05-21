@@ -22,6 +22,7 @@ Diferencias vs OHLCVPipeline
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 import time
@@ -43,23 +44,23 @@ from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
 DerivativesPipelineMode = Literal["incremental", "backfill", "repair"]
 
-SUPPORTED_DERIVATIVE_DATASETS: frozenset[str] = frozenset(
-    {"funding_rate", "open_interest"}
-)
+SUPPORTED_DERIVATIVE_DATASETS: frozenset[str] = frozenset({"funding_rate", "open_interest"})
 
 # ---------------------------------------------------------------------------
 # Result / Summary
 # ---------------------------------------------------------------------------
 
+
 @dataclass(slots=True)
 class DerivativesResult:
     """Resultado de ingestion para un par (dataset, símbolo)."""
-    dataset:     str
-    symbol:      str
-    success:     bool          = False
-    rows:        int           = 0
-    error:       Optional[str] = None
-    duration_ms: int           = 0
+
+    dataset: str
+    symbol: str
+    success: bool = False
+    rows: int = 0
+    error: Optional[str] = None
+    duration_ms: int = 0
 
     @property
     def skipped(self) -> bool:
@@ -69,9 +70,10 @@ class DerivativesResult:
 @dataclass
 class DerivativesSummary:
     """Resumen agregado de un run de DerivativesPipeline."""
-    results:     List[DerivativesResult] = field(default_factory=list)
-    duration_ms: int                     = 0
-    mode:        str                     = "incremental"
+
+    results: List[DerivativesResult] = field(default_factory=list)
+    duration_ms: int = 0
+    mode: str = "incremental"
 
     @property
     def total(self) -> int:
@@ -101,10 +103,10 @@ class DerivativesSummary:
             return "partial"
         return "failed"
 
+
 # ---------------------------------------------------------------------------
 # Pipeline
 # ---------------------------------------------------------------------------
-
 
 
 class DerivativesPipeline(PipelineTriggerPort):
@@ -122,13 +124,13 @@ class DerivativesPipeline(PipelineTriggerPort):
 
     def __init__(
         self,
-        symbols:         List[str],
-        datasets:        List[str],
+        symbols: List[str],
+        datasets: List[str],
         exchange_client: "ExchangeClientPort",
-        fetchers:        "dict[str, object]",  # obligatorio — inyectar desde factory (DIP)
-        market_type:     str  = "swap",
-        dry_run:         bool = False,
-        max_concurrency: int  = 4,
+        fetchers: "dict[str, object]",  # obligatorio — inyectar desde factory (DIP)
+        market_type: str = "swap",
+        dry_run: bool = False,
+        max_concurrency: int = 4,
     ) -> None:
         # Fail-fast: fetchers es obligatorio — inyectar desde ConcretePipelineFactory.
         # DerivativesPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).
@@ -151,25 +153,22 @@ class DerivativesPipeline(PipelineTriggerPort):
                 f"Soportados: {sorted(SUPPORTED_DERIVATIVE_DATASETS)}"
             )
 
-        self.symbols:         List[str] = symbols
-        self.datasets:        List[str] = list(datasets)
-        self.market_type:     str       = market_type.lower()
-        self.dry_run:         bool      = dry_run
-        self.max_concurrency: int       = max_concurrency
-        self._exchange_id:    str       = getattr(
-            exchange_client, "_exchange_id", "unknown"
-        )
+        self.symbols: List[str] = symbols
+        self.datasets: List[str] = list(datasets)
+        self.market_type: str = market_type.lower()
+        self.dry_run: bool = dry_run
+        self.max_concurrency: int = max_concurrency
+        self._exchange_id: str = getattr(exchange_client, "_exchange_id", "unknown")
         self._log = logger.bind(
-            exchange=self._exchange_id, pipeline="derivatives",
+            exchange=self._exchange_id,
+            pipeline="derivatives",
         )
 
         # DIP: fetchers inyectados desde ConcretePipelineFactory.
         # DerivativesPipeline no conoce implementaciones concretas (Clean Architecture).
         self._fetchers: dict[str, object] = fetchers
 
-    async def run(
-        self, mode: DerivativesPipelineMode = "incremental"
-    ) -> DerivativesSummary:
+    async def run(self, mode: DerivativesPipelineMode = "incremental") -> DerivativesSummary:
         """
         Ejecuta la ingestion de derivados para todos los pares (dataset × símbolo).
 
@@ -179,33 +178,35 @@ class DerivativesPipeline(PipelineTriggerPort):
         pairs = [(ds, sym) for ds in self.datasets for sym in self.symbols]
 
         self._log.info(
-            "DerivativesPipeline start | mode={} datasets={}"
-            " symbols={} pairs={} concurrency={}",
-            mode, self.datasets, len(self.symbols),
-            len(pairs), self.max_concurrency,
+            "DerivativesPipeline start | mode={} datasets={} symbols={} pairs={} concurrency={}",
+            mode,
+            self.datasets,
+            len(self.symbols),
+            len(pairs),
+            self.max_concurrency,
         )
 
         pipeline_start = time.monotonic()
-        results        = await self._run_worker_pool(pairs)
-        duration_ms    = int((time.monotonic() - pipeline_start) * 1000)
+        results = await self._run_worker_pool(pairs)
+        duration_ms = int((time.monotonic() - pipeline_start) * 1000)
 
         summary = DerivativesSummary(
-            results     = results,
-            duration_ms = duration_ms,
-            mode        = mode,
+            results=results,
+            duration_ms=duration_ms,
+            mode=mode,
         )
 
         self._log.info(
-            "DerivativesPipeline done | ok={} failed={} skipped={}"
-            " total_rows={} duration_ms={}",
-            summary.succeeded, summary.failed,
-            summary.skipped, summary.total_rows, duration_ms,
+            "DerivativesPipeline done | ok={} failed={} skipped={} total_rows={} duration_ms={}",
+            summary.succeeded,
+            summary.failed,
+            summary.skipped,
+            summary.total_rows,
+            duration_ms,
         )
         return summary
 
-    async def _run_worker_pool(
-        self, pairs: List[tuple[str, str]]
-    ) -> List[DerivativesResult]:
+    async def _run_worker_pool(self, pairs: List[tuple[str, str]]) -> List[DerivativesResult]:
         """Delega al worker pool genérico — sin lógica de concurrencia local."""
         total = len(pairs)
         items = [(idx, ds, sym) for idx, (ds, sym) in enumerate(pairs, 1)]
@@ -215,54 +216,62 @@ class DerivativesPipeline(PipelineTriggerPort):
             return await self._fetch_pair(dataset, symbol, idx, total)
 
         results, _ = await run_worker_pool(
-            items           = items,
-            execute_fn      = _execute,
-            max_concurrency = self.max_concurrency,
-            exchange_id     = self._exchange_id,
-            log             = self._log,
+            items=items,
+            execute_fn=_execute,
+            max_concurrency=self.max_concurrency,
+            exchange_id=self._exchange_id,
+            log=self._log,
         )
         return results
 
-    async def _fetch_pair(
-        self, dataset: str, symbol: str, idx: int, total: int
-    ) -> DerivativesResult:
+    async def _fetch_pair(self, dataset: str, symbol: str, idx: int, total: int) -> DerivativesResult:
         """Fetcha un par (dataset, símbolo) con captura de errores."""
-        start   = time.monotonic()
+        start = time.monotonic()
         fetcher = self._fetchers.get(dataset)
         if fetcher is None:
             return DerivativesResult(
-                dataset     = dataset,
-                symbol      = symbol,
-                success     = False,
-                error       = f"No fetcher for dataset={dataset!r}",
-                duration_ms = 0,
+                dataset=dataset,
+                symbol=symbol,
+                success=False,
+                error=f"No fetcher for dataset={dataset!r}",
+                duration_ms=0,
             )
         try:
             rows = await fetcher.fetch_symbol(symbol)  # type: ignore[attr-defined]
             duration_ms = int((time.monotonic() - start) * 1000)
             self._log.info(
                 "  [{}/{}] {}/{} | rows={} duration={}ms",
-                idx, total, dataset, symbol, rows, duration_ms,
+                idx,
+                total,
+                dataset,
+                symbol,
+                rows,
+                duration_ms,
             )
             return DerivativesResult(
-                dataset     = dataset,
-                symbol      = symbol,
-                success     = True,
-                rows        = rows,
-                duration_ms = duration_ms,
+                dataset=dataset,
+                symbol=symbol,
+                success=True,
+                rows=rows,
+                duration_ms=duration_ms,
             )
         except Exception as exc:
             duration_ms = int((time.monotonic() - start) * 1000)
             self._log.error(
                 "  [{}/{}] {}/{} FAILED | err={} duration={}ms",
-                idx, total, dataset, symbol, exc, duration_ms,
+                idx,
+                total,
+                dataset,
+                symbol,
+                exc,
+                duration_ms,
             )
             return DerivativesResult(
-                dataset     = dataset,
-                symbol      = symbol,
-                success     = False,
-                error       = str(exc),
-                duration_ms = duration_ms,
+                dataset=dataset,
+                symbol=symbol,
+                success=False,
+                error=str(exc),
+                duration_ms=duration_ms,
             )
 
     def __repr__(self) -> str:

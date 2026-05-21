@@ -78,9 +78,7 @@ class OHLCVTransformer:
         missing = set(cls.REQUIRED_COLUMNS) - set(df.columns)
 
         if missing:
-            raise ValueError(
-                f"Missing OHLCV columns → {missing}"
-            )
+            raise ValueError(f"Missing OHLCV columns → {missing}")
 
     # ---------------------------------------------------------
     # Type Conversion
@@ -117,9 +115,9 @@ class OHLCVTransformer:
             # int/float/object → epoch ms (contrato CCXT)
             df["timestamp"] = pd.to_datetime(
                 pd.to_numeric(ts_col, errors="coerce"),
-                unit   = "ms",
-                utc    = True,
-                errors = "coerce",
+                unit="ms",
+                utc=True,
+                errors="coerce",
             )
 
         for col in cls.NUMERIC_COLUMNS:
@@ -151,17 +149,16 @@ class OHLCVTransformer:
 
         return df
 
-
     # ---------------------------------------------------------
     # Align to Temporal Grid
     # ---------------------------------------------------------
 
     @staticmethod
     def _align_to_grid(
-        df:        "pd.DataFrame",
+        df: "pd.DataFrame",
         timeframe: str,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
     ) -> "pd.DataFrame":
         """
         Alinea timestamps al grid canónico del timeframe.
@@ -181,10 +178,10 @@ class OHLCVTransformer:
     @classmethod
     def _validate_and_classify(
         cls,
-        df:        pd.DataFrame,
-        symbol:    str,
+        df: pd.DataFrame,
+        symbol: str,
         timeframe: str,
-        exchange:  str,
+        exchange: str,
     ) -> tuple["pd.DataFrame", "pd.Series"]:
         """
         Clasifica velas como CLEAN, SUSPECT o CORRUPT usando CandleValidator.
@@ -238,16 +235,20 @@ class OHLCVTransformer:
         ]
 
         validator = CandleValidator(timeframe=timeframe if timeframe != "unknown" else "1m")
-        results   = validator.validate_batch(raw_candles)
-        summary   = ValidationSummary.from_results(results)
+        results = validator.validate_batch(raw_candles)
+        summary = ValidationSummary.from_results(results)
 
         # Quarantine log — CORRUPT (fail-fast por vela)
         if summary.corrupt > 0:
             logger.warning(
                 "CandleValidator | {}/{} exchange={} corrupt={}/{} suspect={}/{}",
-                symbol, timeframe, exchange,
-                summary.corrupt, summary.total,
-                summary.suspect, summary.total,
+                symbol,
+                timeframe,
+                exchange,
+                summary.corrupt,
+                summary.total,
+                summary.suspect,
+                summary.total,
             )
             for r in summary.corrupt_results[:10]:  # max 10 para no saturar logs
                 logger.warning(
@@ -259,19 +260,19 @@ class OHLCVTransformer:
         elif summary.suspect > 0:
             logger.debug(
                 "CandleValidator | {}/{} exchange={} suspect={}/{} (no corrupt)",
-                symbol, timeframe, exchange, summary.suspect, summary.total,
+                symbol,
+                timeframe,
+                exchange,
+                summary.suspect,
+                summary.total,
             )
 
         # Filtrar CORRUPT del DataFrame
         accepted_mask = [not r.is_corrupt for r in results]
-        df_accepted   = df[accepted_mask].reset_index(drop=True)
+        df_accepted = df[accepted_mask].reset_index(drop=True)
 
         # Construir quality_flag solo para filas aceptadas
-        quality_flags = [
-            r.label.value
-            for r in results
-            if not r.is_corrupt
-        ]
+        quality_flags = [r.label.value for r in results if not r.is_corrupt]
         quality_flag_series = pd.Series(quality_flags, dtype="object")
 
         return df_accepted, quality_flag_series
@@ -292,7 +293,7 @@ class OHLCVTransformer:
         """
 
         before = len(df)
-        df     = df.dropna(subset=cls.REQUIRED_COLUMNS)
+        df = df.dropna(subset=cls.REQUIRED_COLUMNS)
         removed = before - len(df)
 
         if removed > 0:
@@ -310,10 +311,7 @@ class OHLCVTransformer:
         Ordena por timestamp.
         """
 
-        return (
-            df.sort_values("timestamp")
-            .reset_index(drop=True)
-        )
+        return df.sort_values("timestamp").reset_index(drop=True)
 
     # ---------------------------------------------------------
     # Transform Pipeline
@@ -322,11 +320,11 @@ class OHLCVTransformer:
     @classmethod
     def transform(
         cls,
-        df:        pd.DataFrame,
-        symbol:    str = "unknown",
+        df: pd.DataFrame,
+        symbol: str = "unknown",
         timeframe: str = "unknown",
-        exchange:  str = "unknown",
-        run_id:    str | None = None,
+        exchange: str = "unknown",
+        run_id: str | None = None,
     ) -> pd.DataFrame:
         """
         Pipeline completo de transformación OHLCV.
@@ -349,7 +347,6 @@ class OHLCVTransformer:
         """
 
         if df is None or df.empty:
-
             logger.warning("Received empty OHLCV dataframe")
 
             return pd.DataFrame(columns=cls.REQUIRED_COLUMNS)
@@ -380,7 +377,10 @@ class OHLCVTransformer:
         if df.empty:
             logger.warning(
                 "OHLCV transform | {}/{} exchange={} — all {} rows rejected (corrupt/invalid)",
-                symbol, timeframe, exchange, original_rows,
+                symbol,
+                timeframe,
+                exchange,
+                original_rows,
             )
             empty = pd.DataFrame(columns=[*cls.REQUIRED_COLUMNS, "quality_flag"])
             return empty
@@ -400,8 +400,11 @@ class OHLCVTransformer:
 
         logger.info(
             "OHLCV transformed | {}/{} exchange={} rows={}/{} quality_flag_counts={}",
-            symbol, timeframe, exchange,
-            len(df), original_rows,
+            symbol,
+            timeframe,
+            exchange,
+            len(df),
+            original_rows,
             dict(df["quality_flag"].value_counts()),
         )
 

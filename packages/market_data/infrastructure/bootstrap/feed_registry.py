@@ -8,6 +8,7 @@ The orchestrator reads this registry — it never imports adapters directly.
 Lives in infrastructure/bootstrap because mapping exchange → concrete adapter
 is wiring / composition root concern (avoids DIP leak from application layer).
 """
+
 from __future__ import annotations
 
 from typing import Final
@@ -28,8 +29,7 @@ _ADAPTER_REGISTRY: Final[dict[str, type[MarketDataSource]]] = {
 # ── import-time integrity guard (fail-fast) ───────────────────────────────────
 for _exchange, _cls in _ADAPTER_REGISTRY.items():
     assert isinstance(_cls(), MarketDataSource), (
-        f"_ADAPTER_REGISTRY integrity error: "
-        f"{_cls.__name__} does not satisfy MarketDataSource protocol."
+        f"_ADAPTER_REGISTRY integrity error: {_cls.__name__} does not satisfy MarketDataSource protocol."
     )
 
 
@@ -46,7 +46,4 @@ def get_adapter_class(exchange: str) -> type[MarketDataSource]:
         return _ADAPTER_REGISTRY[key]
     except KeyError:
         available = sorted(_ADAPTER_REGISTRY)
-        raise ValueError(
-            f"No adapter registered for exchange {exchange!r}. "
-            f"Available: {available}"
-        ) from None
+        raise ValueError(f"No adapter registered for exchange {exchange!r}. Available: {available}") from None

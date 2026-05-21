@@ -23,6 +23,7 @@ Consumidores esperados
 - Microestructura     → construye TradeSeries para análisis OFI/VWAP.
 Ninguno conoce a los demás — desacoplamiento por contrato de evento.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -36,6 +37,7 @@ from market_data.domain.value_objects.raw_trade import RawTrade
 # ---------------------------------------------------------------------------
 # TradeReceived
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class TradeReceived:
@@ -73,16 +75,14 @@ class TradeReceived:
     """
 
     # -- payload ----------------------------------------------------------------
-    trades:      tuple[RawTrade, ...]   # ordenado por timestamp_ms asc
-    exchange:    str
+    trades: tuple[RawTrade, ...]  # ordenado por timestamp_ms asc
+    exchange: str
     market_type: str
-    symbol:      str
+    symbol: str
 
     # -- metadatos del evento ---------------------------------------------------
-    event_id:    str      = field(default_factory=lambda: str(uuid.uuid4()))
-    occurred_at: datetime = field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
-    )
+    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
     # -- validación en construcción (fail-fast) ---------------------------------
 
@@ -91,10 +91,7 @@ class TradeReceived:
 
     def _validate(self) -> None:
         if not self.trades:
-            raise ValueError(
-                "TradeReceived: trades must be non-empty — "
-                "receiving zero trades is not a domain event"
-            )
+            raise ValueError("TradeReceived: trades must be non-empty — receiving zero trades is not a domain event")
         if not self.exchange:
             raise ValueError("TradeReceived: exchange must be non-empty")
         if not self.market_type:
@@ -112,8 +109,7 @@ class TradeReceived:
                 )
             if t.market_type != self.market_type:
                 raise ValueError(
-                    f"TradeReceived: trade.market_type={t.market_type!r} "
-                    f"!= event.market_type={self.market_type!r}."
+                    f"TradeReceived: trade.market_type={t.market_type!r} != event.market_type={self.market_type!r}."
                 )
             if t.symbol != self.symbol:
                 raise ValueError(
@@ -127,10 +123,10 @@ class TradeReceived:
     @classmethod
     def from_trades(
         cls,
-        trades:      Sequence[RawTrade],
-        exchange:    str,
+        trades: Sequence[RawTrade],
+        exchange: str,
         market_type: str,
-        symbol:      str,
+        symbol: str,
     ) -> TradeReceived:
         """
         Factory canónico: acepta cualquier Sequence, ordena y construye.

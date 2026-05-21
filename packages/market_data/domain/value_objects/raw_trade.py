@@ -24,6 +24,7 @@ Se usa ``Decimal`` para preservar la precisión del exchange.
 Los adaptadores (fetcher, storage) convierten float↔Decimal en la frontera.
 El dominio no conoce float ni DoubleType — esa es responsabilidad del adaptador.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 # TradeSide
 # ---------------------------------------------------------------------------
+
 
 class TradeSide(str, Enum):
     """
@@ -48,8 +50,8 @@ class TradeSide(str, Enum):
     Hereda ``str`` para serialización JSON directa sin encoder personalizado.
     """
 
-    BUY     = "buy"
-    SELL    = "sell"
+    BUY = "buy"
+    SELL = "sell"
     UNKNOWN = "unknown"
 
     @classmethod
@@ -78,6 +80,7 @@ class TradeSide(str, Enum):
 # TradeSource
 # ---------------------------------------------------------------------------
 
+
 class TradeSource(str, Enum):
     """
     Origen del transporte que produjo el RawTrade.
@@ -101,15 +104,16 @@ class TradeSource(str, Enum):
     Hereda ``str`` para serialización JSON directa sin encoder personalizado.
     """
 
-    WS            = "ws"
+    WS = "ws"
     REST_BACKFILL = "rest_backfill"
     REST_RECOVERY = "rest_recovery"
-    REPLAY        = "replay"
+    REPLAY = "replay"
 
 
 # ---------------------------------------------------------------------------
 # RawTrade
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class RawTrade:
@@ -153,23 +157,23 @@ class RawTrade:
     """
 
     # -- identidad --------------------------------------------------------------
-    exchange:     str        # "bybit", "kucoin", "kucoinfutures"
-    market_type:  str        # "spot" | "linear" | "inverse"
-    symbol:       str        # "BTC/USDT", "ETH/USDT:USDT"
-    trade_id:     str        # ID nativo del exchange
+    exchange: str  # "bybit", "kucoin", "kucoinfutures"
+    market_type: str  # "spot" | "linear" | "inverse"
+    symbol: str  # "BTC/USDT", "ETH/USDT:USDT"
+    trade_id: str  # ID nativo del exchange
 
     # -- temporalidad -----------------------------------------------------------
-    timestamp_ms: int        # Unix epoch milisegundos UTC
+    timestamp_ms: int  # Unix epoch milisegundos UTC
 
     # -- precio y volumen -------------------------------------------------------
-    price:        Decimal    # precio de ejecución (activo cotizado)
-    amount:       Decimal    # cantidad de activo base ejecutada
+    price: Decimal  # precio de ejecución (activo cotizado)
+    amount: Decimal  # cantidad de activo base ejecutada
 
     # -- microestructura --------------------------------------------------------
-    side:         TradeSide  # dirección agresora del taker
+    side: TradeSide  # dirección agresora del taker
 
     # -- provenance (Kappa) -----------------------------------------------------
-    source:       TradeSource  # transporte productor — SSOT para dedup downstream
+    source: TradeSource  # transporte productor — SSOT para dedup downstream
 
     # -- validación en construcción (fail-fast) ---------------------------------
 
@@ -186,21 +190,14 @@ class RawTrade:
         if not self.trade_id:
             raise ValueError("RawTrade.trade_id must be non-empty")
         if self.timestamp_ms <= 0:
-            raise ValueError(
-                f"RawTrade.timestamp_ms must be > 0, got {self.timestamp_ms}"
-            )
+            raise ValueError(f"RawTrade.timestamp_ms must be > 0, got {self.timestamp_ms}")
         if self.price <= Decimal(0):
-            raise ValueError(
-                f"RawTrade.price must be > 0, got {self.price}"
-            )
+            raise ValueError(f"RawTrade.price must be > 0, got {self.price}")
         if self.amount <= Decimal(0):
-            raise ValueError(
-                f"RawTrade.amount must be > 0, got {self.amount}"
-            )
+            raise ValueError(f"RawTrade.amount must be > 0, got {self.amount}")
         if not isinstance(self.source, TradeSource):
             raise ValueError(
-                f"RawTrade.source must be TradeSource, "
-                f"got {type(self.source).__name__!r}: {self.source!r}"
+                f"RawTrade.source must be TradeSource, got {type(self.source).__name__!r}: {self.source!r}"
             )
 
     # -- propiedades derivadas --------------------------------------------------

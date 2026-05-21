@@ -21,6 +21,7 @@ Fix C-NUEVO-2: for_portfolio tenía import interpolado mid-método con
 
 Principios: DIP · SRP · SafeOps · SSOT · Kappa
 """
+
 from __future__ import annotations
 
 import os
@@ -60,11 +61,14 @@ def _broker() -> str:
     """Bootstrap servers desde SSOT. No strings literales aquí."""
     return os.environ.get(KAFKA_BOOTSTRAP_SERVERS, "kafka:9092")
 
+
 def _offset_reset() -> str:
     return os.environ.get(KAFKA_AUTO_OFFSET_RESET, "earliest")
 
+
 def _session_timeout() -> int:
     return int(os.environ.get(KAFKA_CONSUMER_SESSION_TIMEOUT_MS, "30000"))
+
 
 def _heartbeat() -> int:
     return int(os.environ.get(KAFKA_CONSUMER_HEARTBEAT_MS, "10000"))
@@ -87,29 +91,29 @@ class KafkaConsumerAdapter:
 
     def __init__(
         self,
-        topics:                List[str],
-        group_id:              str,
-        bootstrap_servers:     str  = "kafka:9092",
-        auto_offset_reset:     str  = "earliest",
-        enable_auto_commit:    bool = False,
-        max_poll_records:      int  = 500,
-        session_timeout_ms:    int  = 30_000,
-        heartbeat_interval_ms: int  = 10_000,
+        topics: List[str],
+        group_id: str,
+        bootstrap_servers: str = "kafka:9092",
+        auto_offset_reset: str = "earliest",
+        enable_auto_commit: bool = False,
+        max_poll_records: int = 500,
+        session_timeout_ms: int = 30_000,
+        heartbeat_interval_ms: int = 10_000,
     ) -> None:
-        self._topics               = topics
-        self._group_id             = group_id
-        self._bootstrap_servers    = bootstrap_servers
-        self._auto_offset_reset    = auto_offset_reset
-        self._enable_auto_commit   = enable_auto_commit
-        self._max_poll_records     = max_poll_records
-        self._session_timeout_ms   = session_timeout_ms
+        self._topics = topics
+        self._group_id = group_id
+        self._bootstrap_servers = bootstrap_servers
+        self._auto_offset_reset = auto_offset_reset
+        self._enable_auto_commit = enable_auto_commit
+        self._max_poll_records = max_poll_records
+        self._session_timeout_ms = session_timeout_ms
         self._heartbeat_interval_ms = heartbeat_interval_ms
-        self._consumer             = None
-        self._started              = False
-        self._log                  = logger.bind(
-            component = "KafkaConsumerAdapter",
-            group_id  = group_id,
-            topics    = topics,
+        self._consumer = None
+        self._started = False
+        self._log = logger.bind(
+            component="KafkaConsumerAdapter",
+            group_id=group_id,
+            topics=topics,
         )
 
     # ------------------------------------------------------------------
@@ -123,12 +127,12 @@ class KafkaConsumerAdapter:
         Procesa TODOS los sources (live, backfill, replay).
         """
         return cls(
-            topics                = [TOPIC_OHLCV_RAW],
-            group_id              = GROUP_BRONZE_WRITER,
-            bootstrap_servers     = _broker(),
-            auto_offset_reset     = _offset_reset(),
-            session_timeout_ms    = _session_timeout(),
-            heartbeat_interval_ms = _heartbeat(),
+            topics=[TOPIC_OHLCV_RAW],
+            group_id=GROUP_BRONZE_WRITER,
+            bootstrap_servers=_broker(),
+            auto_offset_reset=_offset_reset(),
+            session_timeout_ms=_session_timeout(),
+            heartbeat_interval_ms=_heartbeat(),
         )
 
     @classmethod
@@ -138,12 +142,12 @@ class KafkaConsumerAdapter:
         Procesa TODOS los sources.
         """
         return cls(
-            topics                = [TOPIC_OHLCV_VALIDATED],
-            group_id              = GROUP_FEATURES,
-            bootstrap_servers     = _broker(),
-            auto_offset_reset     = _offset_reset(),
-            session_timeout_ms    = _session_timeout(),
-            heartbeat_interval_ms = _heartbeat(),
+            topics=[TOPIC_OHLCV_VALIDATED],
+            group_id=GROUP_FEATURES,
+            bootstrap_servers=_broker(),
+            auto_offset_reset=_offset_reset(),
+            session_timeout_ms=_session_timeout(),
+            heartbeat_interval_ms=_heartbeat(),
         )
 
     @classmethod
@@ -160,48 +164,48 @@ class KafkaConsumerAdapter:
         se configura via KAFKA_AUTO_OFFSET_RESET=latest.
         """
         return cls(
-            topics                = [TOPIC_OHLCV_FEATURES],
-            group_id              = GROUP_STRATEGY,
-            bootstrap_servers     = _broker(),
-            auto_offset_reset     = _offset_reset(),
-            session_timeout_ms    = _session_timeout(),
-            heartbeat_interval_ms = _heartbeat(),
+            topics=[TOPIC_OHLCV_FEATURES],
+            group_id=GROUP_STRATEGY,
+            bootstrap_servers=_broker(),
+            auto_offset_reset=_offset_reset(),
+            session_timeout_ms=_session_timeout(),
+            heartbeat_interval_ms=_heartbeat(),
         )
 
     @classmethod
     def for_risk_gate(cls) -> "KafkaConsumerAdapter":
         """signals.raw → RiskGateConsumer → signals.approved | rejected."""
         return cls(
-            topics                = [TOPIC_SIGNALS_RAW],
-            group_id              = GROUP_RISK_GATE,
-            bootstrap_servers     = _broker(),
-            auto_offset_reset     = "latest",
-            session_timeout_ms    = _session_timeout(),
-            heartbeat_interval_ms = _heartbeat(),
+            topics=[TOPIC_SIGNALS_RAW],
+            group_id=GROUP_RISK_GATE,
+            bootstrap_servers=_broker(),
+            auto_offset_reset="latest",
+            session_timeout_ms=_session_timeout(),
+            heartbeat_interval_ms=_heartbeat(),
         )
 
     @classmethod
     def for_execution(cls) -> "KafkaConsumerAdapter":
         """signals.approved → ExecutionConsumer → OMS → exchange."""
         return cls(
-            topics                = [TOPIC_SIGNALS_APPROVED],
-            group_id              = GROUP_EXECUTION,
-            bootstrap_servers     = _broker(),
-            auto_offset_reset     = "latest",
-            session_timeout_ms    = _session_timeout(),
-            heartbeat_interval_ms = _heartbeat(),
+            topics=[TOPIC_SIGNALS_APPROVED],
+            group_id=GROUP_EXECUTION,
+            bootstrap_servers=_broker(),
+            auto_offset_reset="latest",
+            session_timeout_ms=_session_timeout(),
+            heartbeat_interval_ms=_heartbeat(),
         )
 
     @classmethod
     def for_portfolio(cls) -> "KafkaConsumerAdapter":
         """orders.filled → PortfolioConsumer → TradeTracker."""
         return cls(
-            topics                = [TOPIC_ORDERS_FILLED],
-            group_id              = GROUP_PORTFOLIO,
-            bootstrap_servers     = _broker(),
-            auto_offset_reset     = "earliest",
-            session_timeout_ms    = _session_timeout(),
-            heartbeat_interval_ms = _heartbeat(),
+            topics=[TOPIC_ORDERS_FILLED],
+            group_id=GROUP_PORTFOLIO,
+            bootstrap_servers=_broker(),
+            auto_offset_reset="earliest",
+            session_timeout_ms=_session_timeout(),
+            heartbeat_interval_ms=_heartbeat(),
         )
 
     # ------------------------------------------------------------------
@@ -213,15 +217,16 @@ class KafkaConsumerAdapter:
         if self._started:
             return
         from aiokafka import AIOKafkaConsumer
+
         self._consumer = AIOKafkaConsumer(
             *self._topics,
-            bootstrap_servers     = self._bootstrap_servers,
-            group_id              = self._group_id,
-            auto_offset_reset     = self._auto_offset_reset,
-            enable_auto_commit    = self._enable_auto_commit,
-            max_poll_records      = self._max_poll_records,
-            session_timeout_ms    = self._session_timeout_ms,
-            heartbeat_interval_ms = self._heartbeat_interval_ms,
+            bootstrap_servers=self._bootstrap_servers,
+            group_id=self._group_id,
+            auto_offset_reset=self._auto_offset_reset,
+            enable_auto_commit=self._enable_auto_commit,
+            max_poll_records=self._max_poll_records,
+            session_timeout_ms=self._session_timeout_ms,
+            heartbeat_interval_ms=self._heartbeat_interval_ms,
         )
         if self._consumer is None:
             raise RuntimeError("consumer_not_initialized")
@@ -246,7 +251,7 @@ class KafkaConsumerAdapter:
 
     async def poll(
         self,
-        timeout_ms:  int = 1_000,
+        timeout_ms: int = 1_000,
         max_records: int = 500,
     ) -> List[KafkaMessage]:
         """Obtiene mensajes. SafeOps: retorna [] si falla."""
@@ -254,21 +259,23 @@ class KafkaConsumerAdapter:
             return []
         try:
             raw = await self._consumer.getmany(
-                timeout_ms  = timeout_ms,
-                max_records = max_records,
+                timeout_ms=timeout_ms,
+                max_records=max_records,
             )
             messages = []
             for _tp, records in raw.items():
                 for r in records:
-                    messages.append(KafkaMessage(
-                        topic     = r.topic,
-                        partition = r.partition,
-                        offset    = r.offset,
-                        key       = r.key,
-                        value     = r.value,
-                        timestamp = r.timestamp,
-                        headers   = tuple(r.headers) if r.headers else (),
-                    ))
+                    messages.append(
+                        KafkaMessage(
+                            topic=r.topic,
+                            partition=r.partition,
+                            offset=r.offset,
+                            key=r.key,
+                            value=r.value,
+                            timestamp=r.timestamp,
+                            headers=tuple(r.headers) if r.headers else (),
+                        )
+                    )
             return messages
         except Exception as exc:
             self._log.warning("kafka_poll_error", error=str(exc))

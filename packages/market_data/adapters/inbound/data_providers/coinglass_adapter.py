@@ -43,7 +43,7 @@ class CoinglassAdapter(DataProviderAdapter):
     """
 
     def __init__(self, api_key: str) -> None:
-        self.api_key  = api_key
+        self.api_key = api_key
         self.base_url = "https://open-api.coinglass.com/api"
         self._session: Optional[aiohttp.ClientSession] = None
 
@@ -64,8 +64,10 @@ class CoinglassAdapter(DataProviderAdapter):
             except Exception as _sess_exc:
                 # SafeOps: sesión ya cerrada o rota — ignorar, limpiar referencia.
                 import logging as _logging
+
                 _logging.getLogger(__name__).debug(
-                    "CoinglassAdapter.close: session.close() failed: %s", _sess_exc,
+                    "CoinglassAdapter.close: session.close() failed: %s",
+                    _sess_exc,
                 )
         self._session = None
 

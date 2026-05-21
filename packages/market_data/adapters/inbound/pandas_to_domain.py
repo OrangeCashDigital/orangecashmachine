@@ -30,19 +30,19 @@ from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 
 # ── Validación SSOT ──────────────────────────────────────────────────────────
 
-_REQUIRED_COLUMNS: frozenset[str] = frozenset(
-    {"timestamp", "open", "high", "low", "close", "volume"}
-)
+_REQUIRED_COLUMNS: frozenset[str] = frozenset({"timestamp", "open", "high", "low", "close", "volume"})
 """Columnas obligatorias del DataFrame OHLCV (SSOT)."""
 
 
 # ── Excepción específica ─────────────────────────────────────────────────────
+
 
 class DataFrameMappingError(ValueError):
     """Error de mapping DataFrame → dominio. Columnas faltantes o datos inválidos."""
 
 
 # ── Mapper ───────────────────────────────────────────────────────────────────
+
 
 def ohlcv_df_to_chunk(
     df: pd.DataFrame,
@@ -76,26 +76,26 @@ def ohlcv_df_to_chunk(
     missing = _REQUIRED_COLUMNS - set(df.columns)
     if missing:
         raise DataFrameMappingError(
-            f"DataFrame OHLCV faltan columnas: {sorted(missing)}. "
-            f"Requeridas: {sorted(_REQUIRED_COLUMNS)}."
+            f"DataFrame OHLCV faltan columnas: {sorted(missing)}. Requeridas: {sorted(_REQUIRED_COLUMNS)}."
         )
 
     if df.empty:
         return OHLCVChunk(
-            exchange=exchange, symbol=symbol, timeframe=timeframe,
-            candles=(), source=source, run_id=run_id,
-            chunk_index=chunk_index, total_chunks=total_chunks,
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            candles=(),
+            source=source,
+            run_id=run_id,
+            chunk_index=chunk_index,
+            total_chunks=total_chunks,
         )
 
     # ── Mapping con itertuples (10x más rápido que iterrows) ────────────────
     candles: list[Candle] = []
     for row in df.itertuples(index=False):
         ts = row.timestamp
-        ts_ms: int = (
-            int(ts.timestamp() * 1000)
-            if hasattr(ts, "timestamp")
-            else int(ts)
-        )
+        ts_ms: int = int(ts.timestamp() * 1000) if hasattr(ts, "timestamp") else int(ts)
         candle = Candle(
             timestamp_ms=ts_ms,
             open=float(row.open),

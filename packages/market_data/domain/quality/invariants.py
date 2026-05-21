@@ -39,12 +39,14 @@ from market_data.domain.value_objects.timeframe import timeframe_to_ms
 # Resultado de verificación
 # ==========================================================
 
+
 @dataclass
 class InvariantResult:
     """Resultado de verificar las invariantes de un dataset."""
-    ok:         bool
+
+    ok: bool
     violations: List[str] = field(default_factory=list)
-    warnings:   List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
 
     def add_violation(self, msg: str) -> None:
         self.violations.append(msg)
@@ -55,7 +57,7 @@ class InvariantResult:
 
     def summary(self) -> str:
         status = "OK" if self.ok else "VIOLATED"
-        lines  = [f"InvariantResult [{status}] violations={len(self.violations)} warnings={len(self.warnings)}"]
+        lines = [f"InvariantResult [{status}] violations={len(self.violations)} warnings={len(self.warnings)}"]
         for v in self.violations:
             lines.append(f"  VIOLATION: {v}")
         for w in self.warnings:
@@ -86,7 +88,7 @@ def _check_manifest_not_empty(manifest: Dict) -> tuple[bool, str]:
 def _check_required_fields(manifest: Dict) -> tuple[bool, str]:
     """El manifest debe tener todos los campos requeridos."""
     required = {"symbol", "timeframe", "exchange", "version", "partitions"}
-    missing  = required - set(manifest.keys())
+    missing = required - set(manifest.keys())
     if missing:
         return False, f"Campos requeridos ausentes en manifest: {sorted(missing)}"
     return True, ""
@@ -115,19 +117,13 @@ def _check_partition_rows(partition: Dict, idx: int) -> tuple[bool, str]:
 def _check_no_partition_overlap(partitions: List[Dict]) -> tuple[bool, str]:
     """Las particiones no deben solaparse temporalmente."""
     try:
-        ranges = [
-            (pd.Timestamp(p["min_ts"]), pd.Timestamp(p["max_ts"]), i)
-            for i, p in enumerate(partitions)
-        ]
+        ranges = [(pd.Timestamp(p["min_ts"]), pd.Timestamp(p["max_ts"]), i) for i, p in enumerate(partitions)]
         ranges.sort(key=lambda x: x[0])
         for i in range(len(ranges) - 1):
             _, end_i, idx_i = ranges[i]
             start_j, _, idx_j = ranges[i + 1]
             if end_i > start_j:
-                return False, (
-                    f"Particiones {idx_i} y {idx_j} se solapan: "
-                    f"end={end_i} > start={start_j}"
-                )
+                return False, (f"Particiones {idx_i} y {idx_j} se solapan: end={end_i} > start={start_j}")
         return True, ""
     except Exception as exc:
         return False, f"Error verificando solapamiento: {exc}"
@@ -141,15 +137,15 @@ def _check_dataset_lag(manifest: Dict) -> tuple[bool, str]:
     Si supera _MAX_LAG_CANDLES, el pipeline probablemente está caído.
     """
     try:
-        timeframe  = manifest.get("timeframe", "1h")
-        tf_ms      = timeframe_to_ms(timeframe)
+        timeframe = manifest.get("timeframe", "1h")
+        tf_ms = timeframe_to_ms(timeframe)
         partitions = manifest.get("partitions", [])
         if not partitions:
             return True, ""  # ya validado por _check_manifest_not_empty
 
-        max_ts  = max(pd.Timestamp(p["max_ts"]) for p in partitions)
-        now     = pd.Timestamp.now(tz="UTC")
-        lag_ms  = (now - max_ts).total_seconds() * 1000
+        max_ts = max(pd.Timestamp(p["max_ts"]) for p in partitions)
+        now = pd.Timestamp.now(tz="UTC")
+        lag_ms = (now - max_ts).total_seconds() * 1000
         lag_candles = int(lag_ms / tf_ms)
 
         if lag_candles > _MAX_LAG_CANDLES:
@@ -174,6 +170,7 @@ def _check_version_is_positive(manifest: Dict) -> tuple[bool, str]:
 # ==========================================================
 # API pública
 # ==========================================================
+
 
 def check_dataset_invariants(
     manifest: Dict,

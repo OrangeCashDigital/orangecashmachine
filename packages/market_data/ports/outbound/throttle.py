@@ -14,6 +14,7 @@ No-op (tests):           ports.outbound.throttle.NullThrottle
 
 Principios: DIP · ISP · Protocol (structural subtyping) · SafeOps
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable

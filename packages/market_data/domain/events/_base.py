@@ -37,10 +37,9 @@ class DomainEvent:
     event_id    : UUID v4 — idempotencia y deduplicación downstream
     occurred_at : ISO-8601 UTC del momento de creación del evento
     """
-    event_id:    str = field(default_factory=lambda: str(uuid.uuid4()))
-    occurred_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+
+    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    occurred_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 __all__ = ["DomainEvent"]

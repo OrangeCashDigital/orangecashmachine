@@ -16,14 +16,15 @@ SIEMPRE importar desde este __init__, nunca desde submódulos:
   ✔ from market_data.domain.events import PipelineLayer
   ✗ from market_data.domain.events._lineage import PipelineLayer
 """
+
 from __future__ import annotations
 
-from market_data.domain.events._lineage import (    # noqa: F401
+from market_data.domain.events._lineage import (  # noqa: F401
     LineageEvent,
     LineageStatus,
     PipelineLayer,
 )
-from market_data.domain.events.ingestion import (   # noqa: F401
+from market_data.domain.events.ingestion import (  # noqa: F401
     CandleReceived,
     DomainEvent,
     OHLCVBatchReceived,

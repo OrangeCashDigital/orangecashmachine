@@ -9,6 +9,7 @@ importan desde aquí. Ninguno redefine estas constantes localmente.
 
 Principios: SSOT · KISS · sin side-effects al importar.
 """
+
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ SSOT       — SILVER_DTYPE_MAP define tipos en un solo lugar
 DRY        — tipos aplicados desde el mapa, no inline por columna
 KISS       — sin lógica de negocio, solo coerción de tipos + enriquecimiento
 """
+
 from __future__ import annotations
 
 from typing import List
@@ -48,24 +49,33 @@ from market_data.domain.value_objects.candle_validator import (
 # ── Schema SSOT ──────────────────────────────────────────────────────────────
 
 SILVER_DTYPE_MAP: dict = {
-    "open":         "float64",
-    "high":         "float64",
-    "low":          "float64",
-    "close":        "float64",
-    "volume":       "float64",
+    "open": "float64",
+    "high": "float64",
+    "low": "float64",
+    "close": "float64",
+    "volume": "float64",
     "quality_flag": "object",
-    "exchange":     "object",
-    "symbol":       "object",
-    "timeframe":    "object",
+    "exchange": "object",
+    "symbol": "object",
+    "timeframe": "object",
 }
 
 _SILVER_COLUMNS = [
-    "timestamp", "open", "high", "low", "close", "volume",
-    "quality_flag", "exchange", "symbol", "timeframe",
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "quality_flag",
+    "exchange",
+    "symbol",
+    "timeframe",
 ]
 
 
 # ── Normalizador ──────────────────────────────────────────────────────────────
+
 
 class CandleNormalizer:
     """
@@ -78,8 +88,8 @@ class CandleNormalizer:
     """
 
     def __init__(self, exchange: str, symbol: str, timeframe: str) -> None:
-        self._exchange  = exchange
-        self._symbol    = symbol
+        self._exchange = exchange
+        self._symbol = symbol
         self._timeframe = timeframe
 
     def normalize(self, results: List[ValidationResult]) -> pd.DataFrame:
@@ -101,18 +111,20 @@ class CandleNormalizer:
         rows = []
         for result in accepted:
             c = result.candle
-            rows.append({
-                "timestamp":    pd.Timestamp(int(c[0]), unit="ms", tz="UTC"),
-                "open":         float(c[1]),
-                "high":         float(c[2]),
-                "low":          float(c[3]),
-                "close":        float(c[4]),
-                "volume":       float(c[5]),
-                "quality_flag": result.label.value,
-                "exchange":     self._exchange,
-                "symbol":       self._symbol,
-                "timeframe":    self._timeframe,
-            })
+            rows.append(
+                {
+                    "timestamp": pd.Timestamp(int(c[0]), unit="ms", tz="UTC"),
+                    "open": float(c[1]),
+                    "high": float(c[2]),
+                    "low": float(c[3]),
+                    "close": float(c[4]),
+                    "volume": float(c[5]),
+                    "quality_flag": result.label.value,
+                    "exchange": self._exchange,
+                    "symbol": self._symbol,
+                    "timeframe": self._timeframe,
+                }
+            )
 
         df = pd.DataFrame(rows)
         df = df.astype({k: v for k, v in SILVER_DTYPE_MAP.items() if k in df.columns})

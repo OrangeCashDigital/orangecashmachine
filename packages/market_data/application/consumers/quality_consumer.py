@@ -16,6 +16,7 @@ SRP      — un consumer, una responsabilidad: calidad de datos
 DIP      — checker inyectado via CheckerFactory (port), no instanciado directamente
 Fail-soft — errores en _process() logueados, nunca propagados al bus
 """
+
 from __future__ import annotations
 
 from loguru import logger
@@ -30,6 +31,7 @@ from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
 from market_data.application.consumers.base import BaseConsumer
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 from market_data.application.quality.data_quality import native_checker_factory
+from market_data.application.quality.pipeline import _null_registry  # Null Object — DRY/SSOT (definido en pipeline.py)
 from market_data.ports.outbound.event_bus import EventBusPort
 
 
@@ -60,8 +62,8 @@ class QualityPipelineConsumer(BaseConsumer):
         self,
         bus: EventBusPort,
         *,
-        registry        = None,
-        tracker,                       # obligatorio — inyectar desde composition root
+        registry=None,
+        tracker,  # obligatorio — inyectar desde composition root
         checker_factory: CheckerFactory | None = None,
     ) -> None:
         # Fail-fast: tracker es obligatorio.
@@ -76,7 +78,7 @@ class QualityPipelineConsumer(BaseConsumer):
         # AnomalyRegistryPort inyectado desde pipeline_factory (Composition Root).
         # NullAnomalyRegistry si no se provee — fail-soft sin acoplamiento a infra.
         self._registry = registry if registry is not None else _null_registry()
-        self._tracker         = tracker
+        self._tracker = tracker
         # DIP: checker inyectado — default = native (backward compat)
         self._checker_factory: CheckerFactory = checker_factory or native_checker_factory
 
@@ -97,10 +99,12 @@ class QualityPipelineConsumer(BaseConsumer):
             self._process(event)
         except Exception as exc:
             logger.error(
-                "QualityPipelineConsumer: unhandled error | "
-                "exchange={} symbol={} timeframe={} event_id={} err={}",
-                event.batch.exchange, event.batch.symbol, event.batch.timeframe,
-                event.event_id[:8], exc,
+                "QualityPipelineConsumer: unhandled error | exchange={} symbol={} timeframe={} event_id={} err={}",
+                event.batch.exchange,
+                event.batch.symbol,
+                event.batch.timeframe,
+                event.event_id[:8],
+                exc,
             )
 
     # ----------------------------------------------------------
@@ -116,9 +120,10 @@ class QualityPipelineConsumer(BaseConsumer):
         df = self._to_dataframe(event)
         if df.empty:
             logger.debug(
-                "QualityPipelineConsumer: empty batch — skipping | "
-                "exchange={} symbol={} timeframe={}",
-                event.batch.exchange, event.batch.symbol, event.batch.timeframe,
+                "QualityPipelineConsumer: empty batch — skipping | exchange={} symbol={} timeframe={}",
+                event.batch.exchange,
+                event.batch.symbol,
+                event.batch.timeframe,
             )
             return
 
@@ -136,27 +141,33 @@ class QualityPipelineConsumer(BaseConsumer):
 
         quality_score = getattr(report, "score", None)
 
-        self._tracker.record(LineageEvent(
-            run_id        = run_id,
-            layer         = PipelineLayer.SILVER,
-            exchange      = event.batch.exchange,
-            symbol        = event.batch.symbol,
-            timeframe     = event.batch.timeframe,
-            rows_in       = len(df),
-            rows_out      = len(df),
-            status        = status,
-            quality_score = quality_score,
-            params        = {
-                "source":      event.batch.source,
-                "chunk_index": event.batch.chunk_index,
-            },
-        ))
+        self._tracker.record(
+            LineageEvent(
+                run_id=run_id,
+                layer=PipelineLayer.SILVER,
+                exchange=event.batch.exchange,
+                symbol=event.batch.symbol,
+                timeframe=event.batch.timeframe,
+                rows_in=len(df),
+                rows_out=len(df),
+                status=status,
+                quality_score=quality_score,
+                params={
+                    "source": event.batch.source,
+                    "chunk_index": event.batch.chunk_index,
+                },
+            )
+        )
 
         logger.info(
-            "QualityPipelineConsumer: ✔ | {}/{} exchange={} rows={} "
-            "clean={} score={} run={}",
-            event.batch.symbol, event.batch.timeframe, event.batch.exchange,
-            len(df), report.is_clean, quality_score, run_id[:8],
+            "QualityPipelineConsumer: ✔ | {}/{} exchange={} rows={} clean={} score={} run={}",
+            event.batch.symbol,
+            event.batch.timeframe,
+            event.batch.exchange,
+            len(df),
+            report.is_clean,
+            quality_score,
+            run_id[:8],
         )
 
     # ----------------------------------------------------------

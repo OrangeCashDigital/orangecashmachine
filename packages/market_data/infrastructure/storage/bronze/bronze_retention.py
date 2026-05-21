@@ -34,6 +34,7 @@ Uso
     # Retención agresiva (3 días)
     python -m market_data.infrastructure.storage.bronze.bronze_retention --days 3 --execute
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,27 +51,29 @@ from market_data.infrastructure.storage.iceberg.catalog import get_catalog, ensu
 # =============================================================================
 
 RETENTION_DAYS_DEFAULT: int = 7
-MIN_KEEP_DAYS:          int = 2   # nunca expirar snapshots de los últimos N días
+MIN_KEEP_DAYS: int = 2  # nunca expirar snapshots de los últimos N días
 
 
 # =============================================================================
 # Data class resultado
 # =============================================================================
 
+
 class RetentionResult(NamedTuple):
-    scanned:  int   # snapshots inspeccionados
-    eligible: int   # snapshots anteriores al cutoff
-    expired:  int   # snapshots efectivamente expirados (0 en dry_run)
-    errors:   int
+    scanned: int  # snapshots inspeccionados
+    eligible: int  # snapshots anteriores al cutoff
+    expired: int  # snapshots efectivamente expirados (0 en dry_run)
+    errors: int
 
 
 # =============================================================================
 # Core
 # =============================================================================
 
+
 def run_retention(
-    retention_days: int  = RETENTION_DAYS_DEFAULT,
-    dry_run:        bool = True,
+    retention_days: int = RETENTION_DAYS_DEFAULT,
+    dry_run: bool = True,
 ) -> RetentionResult:
     """
     Expira snapshots Bronze con timestamp_ms anterior al cutoff.
@@ -89,10 +92,10 @@ def run_retention(
     ensure_bronze_table()
     table = get_catalog().load_table("bronze.ohlcv")
 
-    cutoff      = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     safe_cutoff = datetime.now(timezone.utc) - timedelta(days=MIN_KEEP_DAYS)
-    effective   = min(cutoff, safe_cutoff)
-    cutoff_ms   = int(effective.timestamp() * 1000)
+    effective = min(cutoff, safe_cutoff)
+    cutoff_ms = int(effective.timestamp() * 1000)
 
     logger.info(
         "Bronze retention | retention_days={} cutoff={} dry_run={}",
@@ -107,13 +110,14 @@ def run_retention(
         logger.error("Bronze retention: cannot read snapshot history | {}", exc)
         return RetentionResult(scanned=0, eligible=0, expired=0, errors=1)
 
-    scanned  = len(history)
+    scanned = len(history)
     eligible = [s for s in history if s.timestamp_ms < cutoff_ms]
-    errors   = 0
+    errors = 0
 
     logger.info(
         "Bronze retention | scanned={} snapshots eligible={}",
-        scanned, len(eligible),
+        scanned,
+        len(eligible),
     )
 
     for snap in eligible:
@@ -130,10 +134,10 @@ def run_retention(
             len(eligible),
         )
         return RetentionResult(
-            scanned  = scanned,
-            eligible = len(eligible),
-            expired  = 0,
-            errors   = 0,
+            scanned=scanned,
+            eligible=len(eligible),
+            expired=0,
+            errors=0,
         )
 
     # Expiración real vía Iceberg expire_snapshots
@@ -154,10 +158,10 @@ def run_retention(
         logger.error("Bronze retention: expire_snapshots failed | {}", exc)
 
     return RetentionResult(
-        scanned  = scanned,
-        eligible = len(eligible),
-        expired  = expired,
-        errors   = errors,
+        scanned=scanned,
+        eligible=len(eligible),
+        expired=expired,
+        errors=errors,
     )
 
 
@@ -168,18 +172,21 @@ def run_retention(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Bronze Iceberg retention policy")
     parser.add_argument(
-        "--days", type=int, default=RETENTION_DAYS_DEFAULT,
+        "--days",
+        type=int,
+        default=RETENTION_DAYS_DEFAULT,
         help=f"Expirar snapshots con más de N días (default: {RETENTION_DAYS_DEFAULT})",
     )
     parser.add_argument(
-        "--execute", action="store_true",
+        "--execute",
+        action="store_true",
         help="Ejecutar expiración real (sin este flag es dry-run)",
     )
     args = parser.parse_args()
 
     result = run_retention(
-        retention_days = args.days,
-        dry_run        = not args.execute,
+        retention_days=args.days,
+        dry_run=not args.execute,
     )
 
     label = "DRY-RUN" if not args.execute else "EXECUTED"

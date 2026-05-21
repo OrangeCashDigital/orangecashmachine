@@ -38,6 +38,7 @@ OCP    — agregar validators no modifica este pipeline
 SafeOps — lineage y registry: fail-soft, nunca bloquean el pipeline
 SSOT   — DataTier definida en domain/entities (no duplicada aquí)
 """
+
 from __future__ import annotations
 
 # stdlib
@@ -54,10 +55,12 @@ from loguru import logger
 from market_data.domain.entities import DataTier
 from market_data.domain.events import LineageEvent, LineageStatus, PipelineLayer
 from market_data.domain.value_objects.gap_utils import scan_gaps
+
 # ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta
 from market_data.ports.outbound.lineage import LineageTrackerPort
 from market_data.ports.outbound.metrics import NullQualityMetrics, QualityMetricsPort
 from market_data.ports.outbound.quality import AnomalyRegistryPort
+
 # quality internals
 from market_data.domain.policies.data_quality_policy import (
     DataQualityPolicy,
@@ -65,6 +68,7 @@ from market_data.domain.policies.data_quality_policy import (
     QualityDecision,
     default_policy,
 )
+
 # DataQualityReport: type usado en QualityPipelineResult y _resolve_tier
 # DataQualityChecker: NO importar aquí — pipeline usa self._checker_factory (DIP)
 from market_data.application.quality.data_quality import DataQualityReport
@@ -73,6 +77,7 @@ from market_data.application.quality.data_quality import DataQualityReport
 # ===========================================================================
 # Resultado del pipeline
 # ===========================================================================
+
 
 @dataclass
 class QualityPipelineResult:
@@ -86,10 +91,11 @@ class QualityPipelineResult:
     policy : PolicyResult con score, decision y desglose de penalización
     tier   : DataTier resultante (CLEAN / FLAGGED / REJECTED)
     """
-    df:     pd.DataFrame
+
+    df: pd.DataFrame
     report: DataQualityReport
     policy: PolicyResult
-    tier:   DataTier
+    tier: DataTier
 
     @property
     def accepted(self) -> bool:
@@ -111,6 +117,7 @@ class QualityPipelineResult:
 # Pipeline
 # ===========================================================================
 
+
 class QualityPipeline:
     """
     Orquesta el flujo completo de calidad para un DataFrame Silver.
@@ -128,28 +135,28 @@ class QualityPipeline:
 
     def __init__(
         self,
-        policy:          Optional[DataQualityPolicy]    = None,
-        registry:        Optional[AnomalyRegistryPort]  = None,
-        metrics:         Optional[QualityMetricsPort]   = None,
-        lineage_tracker: Optional[LineageTrackerPort]   = None,
-        checker_factory: Optional[CheckerFactory]       = None,
+        policy: Optional[DataQualityPolicy] = None,
+        registry: Optional[AnomalyRegistryPort] = None,
+        metrics: Optional[QualityMetricsPort] = None,
+        lineage_tracker: Optional[LineageTrackerPort] = None,
+        checker_factory: Optional[CheckerFactory] = None,
     ) -> None:
-        self._policy          = policy          or default_policy
+        self._policy = policy or default_policy
         # AnomalyRegistryPort inyectado desde pipeline_factory (Composition Root).
         # NullAnomalyRegistry si no se provee — fail-soft sin acoplamiento a infra.
-        self._registry        = registry if registry is not None else _null_registry()
-        self._metrics         = metrics         or NullQualityMetrics()
+        self._registry = registry if registry is not None else _null_registry()
+        self._metrics = metrics or NullQualityMetrics()
         self._lineage_tracker = lineage_tracker or _null_lineage_tracker()
         # DIP: checker inyectado — default = native (backward compat)
         self._checker_factory = checker_factory or native_checker_factory
 
     def run(
         self,
-        df:           pd.DataFrame,
-        symbol:       str,
-        timeframe:    str,
-        exchange:     str,
-        run_id:       Optional[str] = None,
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        exchange: str,
+        run_id: Optional[str] = None,
         rows_removed: int = 0,
     ) -> QualityPipelineResult:
         """
@@ -167,7 +174,7 @@ class QualityPipeline:
         # 1. Validación de calidad
         # DIP: checker inyectado por factory
         checker = self._checker_factory(timeframe, exchange, rows_removed)
-        report  = checker.check(df, symbol=symbol)
+        report = checker.check(df, symbol=symbol)
         result = self._policy.evaluate(report)
 
         # 2. Gap scan post-ingesta
@@ -185,10 +192,10 @@ class QualityPipeline:
 
     def _scan_and_emit_gaps(
         self,
-        df:           pd.DataFrame,
-        timeframe:    str,
-        symbol:       str,
-        exchange:     str,
+        df: pd.DataFrame,
+        timeframe: str,
+        symbol: str,
+        exchange: str,
         rows_removed: int,
     ) -> None:
         """
@@ -198,79 +205,106 @@ class QualityPipeline:
         como gaps reales de fuente.
         """
         gaps_raw = scan_gaps(df, timeframe)
-        gaps     = gaps_raw[rows_removed:] if rows_removed > 0 else gaps_raw
+        gaps = gaps_raw[rows_removed:] if rows_removed > 0 else gaps_raw
         if not gaps:
             return
 
-        high   = sum(1 for g in gaps if g.severity == "high")
+        high = sum(1 for g in gaps if g.severity == "high")
         medium = sum(1 for g in gaps if g.severity == "medium")
-        low    = len(gaps) - high - medium
+        low = len(gaps) - high - medium
         log_fn = logger.warning if high > 0 else logger.info
         suffix = f" (excluded {rows_removed} pipeline-removed)" if rows_removed else ""
 
         log_fn(
             "Gap scan | total={} high={} medium={} low={}{} | {}/{} exchange={}",
-            len(gaps), high, medium, low, suffix, symbol, timeframe, exchange,
+            len(gaps),
+            high,
+            medium,
+            low,
+            suffix,
+            symbol,
+            timeframe,
+            exchange,
         )
         for sev, cnt in (("high", high), ("medium", medium), ("low", low)):
             if cnt:
                 self._metrics.quality_gaps_inc(
-                    exchange=exchange, symbol=symbol,
-                    timeframe=timeframe, severity=sev, count=cnt,
+                    exchange=exchange,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    severity=sev,
+                    count=cnt,
                 )
 
     def _resolve_tier(
         self,
-        result:    PolicyResult,
-        report:    DataQualityReport,
-        symbol:    str,
+        result: PolicyResult,
+        report: DataQualityReport,
+        symbol: str,
         timeframe: str,
-        exchange:  str,
+        exchange: str,
     ) -> DataTier:
         """Traduce QualityDecision → DataTier con logging apropiado."""
         if result.decision == QualityDecision.REJECT:
             self._metrics.pipeline_errors_inc(
-                exchange=exchange, error_type="quality_reject",
+                exchange=exchange,
+                error_type="quality_reject",
             )
             logger.warning(
                 "QualityPipeline REJECT | {}/{} exchange={} score={:.1f} reasons={}",
-                symbol, timeframe, exchange, result.score, result.reasons,
+                symbol,
+                timeframe,
+                exchange,
+                result.score,
+                result.reasons,
             )
             return DataTier.REJECTED
 
         if result.decision == QualityDecision.ACCEPT_WITH_FLAGS:
             logger.info(
                 "QualityPipeline ACCEPT_WITH_FLAGS | {}/{} exchange={} score={:.1f}",
-                symbol, timeframe, exchange, result.score,
+                symbol,
+                timeframe,
+                exchange,
+                result.score,
             )
             for reason in result.reasons:
                 if self._registry.is_new(exchange, symbol, timeframe, reason):
                     logger.info(
                         "Quality anomaly (first occurrence) | {}/{} exchange={} | {}",
-                        symbol, timeframe, exchange, reason,
+                        symbol,
+                        timeframe,
+                        exchange,
+                        reason,
                     )
                 else:
                     logger.debug(
                         "Quality anomaly (recurring) | {}/{} exchange={} | {}",
-                        symbol, timeframe, exchange, reason,
+                        symbol,
+                        timeframe,
+                        exchange,
+                        reason,
                     )
             return DataTier.FLAGGED
 
         logger.debug(
             "QualityPipeline ACCEPT | {}/{} exchange={} score={:.1f}",
-            symbol, timeframe, exchange, result.score,
+            symbol,
+            timeframe,
+            exchange,
+            result.score,
         )
         return DataTier.CLEAN
 
     def _record_lineage(
         self,
-        run_id:    Optional[str],
-        tier:      DataTier,
-        result:    PolicyResult,
-        df:        pd.DataFrame,
-        symbol:    str,
+        run_id: Optional[str],
+        tier: DataTier,
+        result: PolicyResult,
+        df: pd.DataFrame,
+        symbol: str,
         timeframe: str,
-        exchange:  str,
+        exchange: str,
     ) -> None:
         """
         Registra evento de lineage. Fail-soft: nunca propaga excepciones.
@@ -282,43 +316,78 @@ class QualityPipeline:
             return
 
         if tier == DataTier.REJECTED:
-            self._lineage_tracker.record(LineageEvent(
-                run_id        = run_id,
-                layer         = PipelineLayer.SILVER,
-                exchange      = exchange,
-                symbol        = symbol,
-                timeframe     = timeframe,
-                rows_in       = len(df),
-                rows_out      = 0,
-                status        = LineageStatus.FAILED,
-                quality_score = result.score,
-                params        = {"reasons": result.reasons},
-            ))
+            self._lineage_tracker.record(
+                LineageEvent(
+                    run_id=run_id,
+                    layer=PipelineLayer.SILVER,
+                    exchange=exchange,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    rows_in=len(df),
+                    rows_out=0,
+                    status=LineageStatus.FAILED,
+                    quality_score=result.score,
+                    params={"reasons": result.reasons},
+                )
+            )
             return
 
-        self._lineage_tracker.record(LineageEvent(
-            run_id        = run_id,
-            layer         = PipelineLayer.SILVER,
-            exchange      = exchange,
-            symbol        = symbol,
-            timeframe     = timeframe,
-            rows_in       = len(df),
-            rows_out      = len(df),
-            status        = (
-                LineageStatus.PARTIAL
-                if tier == DataTier.FLAGGED
-                else LineageStatus.SUCCESS
-            ),
-            quality_score = result.score,
-            params        = {"tier": tier.value, "reasons": result.reasons},
-        ))
-
-
+        self._lineage_tracker.record(
+            LineageEvent(
+                run_id=run_id,
+                layer=PipelineLayer.SILVER,
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe,
+                rows_in=len(df),
+                rows_out=len(df),
+                status=(LineageStatus.PARTIAL if tier == DataTier.FLAGGED else LineageStatus.SUCCESS),
+                quality_score=result.score,
+                params={"tier": tier.value, "reasons": result.reasons},
+            )
+        )
 
 
 # ===========================================================================
 # Null object para LineageTrackerPort — SafeOps cuando no se inyecta tracker
 # ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Null Object — AnomalyRegistry (fail-soft, sin acoplamiento a infra)
+# ---------------------------------------------------------------------------
+# Mismo patrón que _NullLineageTracker: factoría explícita evita singleton
+# mutable compartido entre instancias del pipeline (thread-safety).
+# DIP: satisface AnomalyRegistryPort estructuralmente (duck typing / Protocol).
+# ---------------------------------------------------------------------------
+
+
+class _NullAnomalyRegistry:
+    """Null Object para AnomalyRegistryPort — descarta silenciosamente.
+
+    Implementa la interfaz mínima del Protocol AnomalyRegistryPort:
+      is_new  — considera toda anomalía nueva (no persiste estado)
+      stats   — retorna lista vacía
+      wipe    — no-op
+    DIP: satisface el Protocol estructuralmente (duck typing), sin herencia.
+    """
+
+    def is_new(self, *args: object, **kwargs: object) -> bool:  # noqa: ANN401
+        """Null: toda anomalía es nueva — no persiste estado entre llamadas."""
+        return True
+
+    def stats(self) -> list:
+        """Null: sin anomalías registradas."""
+        return []
+
+    def wipe(self) -> None:
+        """Null: no-op."""
+        pass
+
+def _null_registry() -> _NullAnomalyRegistry:
+    """Factoría del null object — evita singleton mutable compartido."""
+    return _NullAnomalyRegistry()
+
 
 class _NullLineageTracker:
     """
@@ -327,17 +396,20 @@ class _NullLineageTracker:
     Uso: cuando run_id=None o lineage_tracker no está configurado.
     No-op en todos los métodos — nunca propaga excepciones (SafeOps).
     """
+
     def record(self, event: object) -> None:
         pass
 
     def new_run_id(self) -> str:
         import uuid
+
         return str(uuid.uuid4())
 
 
 def _null_lineage_tracker() -> _NullLineageTracker:
     """Factoría del null object — evita singleton mutable compartido."""
     return _NullLineageTracker()
+
 
 # ===========================================================================
 # Singleton de módulo — injectable para tests

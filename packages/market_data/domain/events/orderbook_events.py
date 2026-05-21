@@ -46,6 +46,7 @@ Desacopl.  — consumidores reaccionan al evento sin conocerse.
 SSOT       — un único lugar define qué es "recibir order book data".
 Clean Arch — sin dependencias de infraestructura ni OHLCV.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -61,6 +62,7 @@ from market_data.domain.value_objects.order_book import (
 # ---------------------------------------------------------------------------
 # OrderBookSnapshotReceived
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class OrderBookSnapshotReceived(DomainEvent):
@@ -86,8 +88,8 @@ class OrderBookSnapshotReceived(DomainEvent):
     """
 
     snapshot: Optional[OrderBookSnapshot] = field(default=None)
-    source:   str                          = "rest"
-    run_id:   str                          = ""
+    source: str = "rest"
+    run_id: str = ""
 
     def __post_init__(self) -> None:
         # Llamar al __post_init__ de DomainEvent no es necesario
@@ -132,6 +134,7 @@ class OrderBookSnapshotReceived(DomainEvent):
 # OrderBookDeltaReceived
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class OrderBookDeltaReceived(DomainEvent):
     """
@@ -153,15 +156,14 @@ class OrderBookDeltaReceived(DomainEvent):
     El event object debe ser lightweight — no calcular nada en __post_init__.
     """
 
-    delta:  Optional[OrderBookDelta] = field(default=None)
-    source: str                      = "live"
-    run_id: str                      = ""
+    delta: Optional[OrderBookDelta] = field(default=None)
+    source: str = "live"
+    run_id: str = ""
 
     def __post_init__(self) -> None:
         if self.delta is None:
             raise ValueError(
-                "OrderBookDeltaReceived.delta is required — "
-                "use OrderBookDeltaReceived(delta=...) explicitly."
+                "OrderBookDeltaReceived.delta is required — use OrderBookDeltaReceived(delta=...) explicitly."
             )
 
     @property

@@ -8,6 +8,7 @@ Puerto del transformador OHLCV — DIP.
 Permite que adapters inbound anoten el tipo del transformer
 sin crear una dependencia runtime hacia application.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -22,9 +23,9 @@ class OHLCVTransformerPort(Protocol):
 
     def transform(
         self,
-        df:        "pd.DataFrame",
-        symbol:    str = "unknown",
+        df: "pd.DataFrame",
+        symbol: str = "unknown",
         timeframe: str = "unknown",
-        exchange:  str = "unknown",
-        run_id:    str | None = None,
+        exchange: str = "unknown",
+        run_id: str | None = None,
     ) -> "pd.DataFrame": ...

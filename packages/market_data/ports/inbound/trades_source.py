@@ -39,6 +39,7 @@ ISP    — interfaz mínima: iterate + stop + is_running
 KISS   — AsyncIterator[RawTrade] es el contrato más simple posible
 Kappa  — todos los transportes producen el mismo evento semántico
 """
+
 from __future__ import annotations
 
 from typing import AsyncIterator, Protocol, runtime_checkable
@@ -49,6 +50,7 @@ from market_data.domain.value_objects.raw_trade import RawTrade, TradeSource
 # ---------------------------------------------------------------------------
 # TradesSourceProtocol — contrato async del stream de trades
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class TradesSourceProtocol(Protocol):
@@ -126,6 +128,7 @@ class TradesSourceProtocol(Protocol):
 # ---------------------------------------------------------------------------
 # OrderBookSourceProtocol — contrato del stream L2
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class OrderBookSourceProtocol(Protocol):

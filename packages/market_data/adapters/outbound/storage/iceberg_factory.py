@@ -24,6 +24,7 @@ Registro en composition root (main.py / lifespan)
 
 Principios: DIP · SRP · SSOT · SafeOps · Lazy init
 """
+
 from __future__ import annotations
 
 from market_data.ports.outbound.storage import OHLCVStorage
@@ -51,9 +52,9 @@ class IcebergStorageFactory:
 
     def get_storage(
         self,
-        exchange:    str,
-        market_type: str  = "spot",
-        dry_run:     bool = False,
+        exchange: str,
+        market_type: str = "spot",
+        dry_run: bool = False,
     ) -> OHLCVStorage:
         """
         Retorna IcebergStorage para (exchange, market_type, dry_run), creándola
@@ -71,11 +72,12 @@ class IcebergStorageFactory:
         if key not in self._cache:
             # Import lazy — adaptador concreto no se carga en import time (DIP)
             from market_data.infrastructure.storage.iceberg.iceberg_storage import IcebergStorage
+
             try:
                 self._cache[key] = IcebergStorage(
-                    exchange    = exchange,
-                    market_type = market_type,
-                    dry_run     = dry_run,
+                    exchange=exchange,
+                    market_type=market_type,
+                    dry_run=dry_run,
                 )
             except Exception as exc:
                 raise RuntimeError(

@@ -198,9 +198,7 @@ class ResilienceLayer:
         # failure_threshold: número de fallos consecutivos para abrir el breaker.
         # Invariante de dominio: independiente de max_concurrency.
         # 5 fallos consecutivos → breaker abierto (conservador para exchanges cripto).
-        _CB_FAILURE_THRESHOLD = getattr(
-            self._config, "cb_failure_threshold", 5
-        )
+        _CB_FAILURE_THRESHOLD = getattr(self._config, "cb_failure_threshold", 5)
         circuit_config = CircuitConfig(
             failure_threshold=_CB_FAILURE_THRESHOLD,
             recovery_timeout=120.0,
@@ -293,14 +291,14 @@ class ResilienceLayer:
         policy     : RetryPolicy seleccionada por retry_call
         error_type : tipo ya clasificado (evita doble classify_error)
         """
+
         async def _breaker_guard() -> T:
             """Verifica el breaker antes de cada intento. Fail-Fast si abierto."""
             try:
                 can_exec = await self._breaker.can_execute()
                 if not can_exec:
                     raise AioResilienceCBError(
-                        f"Circuit breaker open for {self._exchange_id} "
-                        f"(checked inside retry loop)"
+                        f"Circuit breaker open for {self._exchange_id} (checked inside retry loop)"
                     )
             except AioResilienceCBError:
                 raise  # re-raise para que policy lo vea como fallo
@@ -383,7 +381,6 @@ class ResilienceLayer:
             await self._breaker.on_failure()
         except Exception:
             pass  # Fail-Soft — nunca interrumpir el flujo del caller
-
 
 
 # ===========================================================================

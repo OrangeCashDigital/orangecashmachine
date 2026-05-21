@@ -25,7 +25,6 @@ throttle.py   — concurrencia adaptiva por pipeline
 # Usar: from market_data.adapters.outbound.exchange import CCXTAdapter (API pública)
 # =============================================================================
 
-
 from __future__ import annotations
 
 import asyncio
@@ -168,6 +167,7 @@ class CCXTAdapter(ExchangeAdapter):
         # Registrar en registry de proceso para que get_breaker_state() funcione.
         # Idempotente: sobreescribe si ya existe (misma instancia en reconnect).
         from market_data.adapters.outbound.exchange.resilience import register_resilience_layer
+
         register_resilience_layer(self._exchange_id, self._resilience)
 
         self._closed: bool = False
@@ -208,7 +208,8 @@ class CCXTAdapter(ExchangeAdapter):
                     # debug — es ruido esperado, no un error accionable.
                     logger.debug(
                         "reconnect: old client close failed | {} | {}",
-                        self._exchange_id, _close_exc,
+                        self._exchange_id,
+                        _close_exc,
                     )
             await self._initialize()
 
@@ -255,6 +256,7 @@ class CCXTAdapter(ExchangeAdapter):
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
         client = await self._get_client()
         async with self._limiter.slot():
+
             async def _call():
                 return await asyncio.wait_for(
                     client.fetch_ticker(symbol),
@@ -298,6 +300,7 @@ class CCXTAdapter(ExchangeAdapter):
             params["endAt"] = min(_end_at_ms, now_ts) // 1000
 
         async with self._limiter.slot():
+
             async def _call():
                 return await asyncio.wait_for(
                     client.fetch_ohlcv(
@@ -332,18 +335,17 @@ class CCXTAdapter(ExchangeAdapter):
                 # Re-raise como ExchangeAdapterError para que el caller
                 # (ohlcv_fetcher) reciba un error tipado sin necesidad
                 # de importar ccxt directamente.
-                raise ExchangeAdapterError(
-                    f"Authentication failed for {self._exchange_id}: {exc}"
-                ) from exc
+                raise ExchangeAdapterError(f"Authentication failed for {self._exchange_id}: {exc}") from exc
 
     async def fetch_trades(
         self,
         symbol: str,
-        since:  Optional[int] = None,
-        limit:  int = 1_000,
+        since: Optional[int] = None,
+        limit: int = 1_000,
     ) -> List[Dict[str, Any]]:
         client = await self._get_client()
         async with self._limiter.slot():
+
             async def _call():
                 return await asyncio.wait_for(
                     client.fetch_trades(symbol, since=since, limit=limit),
@@ -409,9 +411,8 @@ class CCXTAdapter(ExchangeAdapter):
             from market_data.infrastructure.observability.metrics import (
                 EXCHANGE_CIRCUIT_OPEN as _EXCHANGE_CIRCUIT_OPEN,
             )
-            _EXCHANGE_CIRCUIT_OPEN.labels(
-                exchange=self._exchange_id, operation=operation
-            ).inc()
+
+            _EXCHANGE_CIRCUIT_OPEN.labels(exchange=self._exchange_id, operation=operation).inc()
             self._throttle.record_error(error_type="rate_limit")
             self._throttle.record_rate_limit_hit()
         except Exception:
@@ -572,7 +573,8 @@ class CCXTAdapter(ExchangeAdapter):
                 except Exception as _close_exc:
                     logger.debug(
                         "_initialize: client close after cancel failed | {} | {}",
-                        self._exchange_id, _close_exc,
+                        self._exchange_id,
+                        _close_exc,
                     )
                 client = None
 
@@ -592,7 +594,8 @@ class CCXTAdapter(ExchangeAdapter):
                 except Exception as _close_exc:
                     logger.debug(
                         "_initialize: client close before retry failed | {} | {}",
-                        self._exchange_id, _close_exc,
+                        self._exchange_id,
+                        _close_exc,
                     )
                 client = None
                 await asyncio.sleep(delay)

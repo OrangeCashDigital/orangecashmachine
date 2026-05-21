@@ -23,6 +23,12 @@ OHLCVSource           — constantes de origen: REST/LIVE/BACKFILL/REPLAY
 RawCandle             — tipo alias wire format CCXT (6-tupla tipada)
 QualityLabel          — clasificación de calidad CLEAN/SUSPECT/CORRUPT
 GapRange              — rango temporal de un gap en un dataset OHLCV
+NormalizedTrade       — trade normalizado post-ACL
+Side                  — lado del trade (BUY/SELL)
+OrderBookSide         — lado del order book (bid/ask)
+PriceLevel            — nivel de precio en el order book
+OrderBookSnapshot     — snapshot completo del order book
+OrderBookDelta        — delta incremental del order book
 
 Principios
 ----------
@@ -32,6 +38,7 @@ DIP  — infra nunca define tipos de dominio; dominio no depende de infra
 OCP  — agregar VOs aquí no modifica consumidores existentes
 KISS — sin lógica, solo imports
 """
+
 from __future__ import annotations
 
 from typing import Tuple
@@ -80,9 +87,27 @@ from market_data.domain.value_objects.quality_label import QualityLabel  # noqa:
 # ---------------------------------------------------------------------------
 from market_data.domain.value_objects.gap_range import GapRange  # noqa: F401
 
+# ---------------------------------------------------------------------------
+# NormalizedTrade + Side (SSOT en normalized_trade.py)
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.normalized_trade import (  # noqa: F401
+    NormalizedTrade,
+    Side,
+)
 
 # ---------------------------------------------------------------------------
-# __all__
+# Order Book — Nivel 0 (microestructura nativa del exchange)
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.order_book import (  # noqa: F401
+    OrderBookSide,
+    PriceLevel,
+    OrderBookSnapshot,
+    OrderBookDelta,
+)
+
+# ---------------------------------------------------------------------------
+# __all__ — catálogo público explícito (PEP 8 · SSOT de exports)
+# Posición al final: todos los símbolos ya están definidos arriba.
 # ---------------------------------------------------------------------------
 __all__ = [
     # Timeframe
@@ -111,21 +136,3 @@ __all__ = [
     "OrderBookSnapshot",
     "OrderBookDelta",
 ]
-
-# ---------------------------------------------------------------------------
-# NormalizedTrade + Side (SSOT en normalized_trade.py)
-# ---------------------------------------------------------------------------
-from market_data.domain.value_objects.normalized_trade import (  # noqa: F401
-    NormalizedTrade,
-    Side,
-)
-
-# ---------------------------------------------------------------------------
-# Order Book — Nivel 0 (microestructura nativa del exchange)
-# ---------------------------------------------------------------------------
-from market_data.domain.value_objects.order_book import (  # noqa: F401
-    OrderBookSide,
-    PriceLevel,
-    OrderBookSnapshot,
-    OrderBookDelta,
-)

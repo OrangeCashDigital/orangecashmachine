@@ -57,14 +57,22 @@ from market_data.infrastructure.storage.iceberg.timestamp_cache import Timestamp
 # Timeout conservador: suficientemente alto para scans legítimos,
 # suficientemente bajo para detectar deadlocks en CI/staging.
 # Ajustar via variable de entorno en el futuro si se necesita tuning.
-_ICEBERG_SCAN_TIMEOUT_S: float = 30.0   # get_last_timestamp, get_oldest_timestamp
+_ICEBERG_SCAN_TIMEOUT_S: float = 30.0  # get_last_timestamp, get_oldest_timestamp
 _ICEBERG_LOAD_TIMEOUT_S: float = 120.0  # load_ohlcv — puede retornar mucho volumen
 
 
 # Columnas OHLCV en el orden del schema Iceberg
 _OHLCV_COLS = [
-    "timestamp", "open", "high", "low", "close", "volume",
-    "exchange", "market_type", "symbol", "timeframe",
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "exchange",
+    "market_type",
+    "symbol",
+    "timeframe",
 ]
 
 
@@ -94,6 +102,7 @@ def _to_utc_timestamp(dt: object) -> Optional[pd.Timestamp]:
 # IcebergStorage
 # =============================================================================
 
+
 class IcebergStorage:
     """
     Capa Silver sobre Apache Iceberg.
@@ -103,21 +112,21 @@ class IcebergStorage:
 
     def __init__(
         self,
-        exchange:     Optional[str]           = None,
-        market_type:  Optional[str]           = None,
-        dry_run:      bool                    = False,
-        cursor_store: Optional[CursorStore]   = None,
+        exchange: Optional[str] = None,
+        market_type: Optional[str] = None,
+        dry_run: bool = False,
+        cursor_store: Optional[CursorStore] = None,
     ) -> None:
-        self._exchange    = exchange
+        self._exchange = exchange
         self._market_type = market_type
-        self._dry_run     = dry_run
+        self._dry_run = dry_run
         # TimestampCacheService gestiona L1 (in-process) y L2 (Redis).
         # SRP: IcebergStorage delega todo cache management aquí.
         # Inyectado desde container para testabilidad (DIP).
         # TimestampCacheService es SSOT del cache L1/L2.
         # No mantener un _last_ts_cache local — delegar todo a _ts_cache (SRP).
         self._ts_cache = TimestampCacheService(cursor_store=cursor_store)
-        self._cursor   = cursor_store  # CursorStorePort | None — acceso directo a Redis L2
+        self._cursor = cursor_store  # CursorStorePort | None — acceso directo a Redis L2
         # SafeOps: en dry_run skip bootstrap y carga de tabla — sin I/O al catálogo.
         # En tests/CI el catálogo SQLite puede no existir. Todos los métodos de
         # escritura son no-op en dry_run. Los de lectura retornan None si _table=None.
@@ -141,7 +150,7 @@ class IcebergStorage:
         pc.field() es PyArrow compute y lanza "Cannot visit unsupported
         expression" cuando se pasa a scan(). Son sistemas distintos.
         """
-        exchange    = self._exchange    or "unknown"
+        exchange = self._exchange or "unknown"
         market_type = self._market_type or "unknown"
         return And(
             And(
@@ -156,10 +165,10 @@ class IcebergStorage:
 
     @staticmethod
     def _normalize_df(
-        df:          pd.DataFrame,
-        symbol:      str,
-        timeframe:   str,
-        exchange:    str,
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        exchange: str,
         market_type: str,
     ) -> pd.DataFrame:
         """
@@ -169,14 +178,11 @@ class IcebergStorage:
         - Deduplica y ordena
         """
         df = df.copy()
-        df["timestamp"] = (
-            pd.to_datetime(df["timestamp"], utc=True)
-            .astype("datetime64[us, UTC]")
-        )
-        df["exchange"]    = exchange
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[us, UTC]")
+        df["exchange"] = exchange
         df["market_type"] = market_type
-        df["symbol"]      = symbol
-        df["timeframe"]   = timeframe
+        df["symbol"] = symbol
+        df["timeframe"] = timeframe
 
         return (
             df[_OHLCV_COLS]
@@ -191,11 +197,11 @@ class IcebergStorage:
 
     def save_ohlcv(
         self,
-        df:              pd.DataFrame,
-        symbol:          str,
-        timeframe:       str,
-        run_id:          Optional[str] = None,
-        skip_versioning: bool          = False,  # no-op — Iceberg versiona por snapshot
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        run_id: Optional[str] = None,
+        skip_versioning: bool = False,  # no-op — Iceberg versiona por snapshot
     ) -> None:
         """
         Persiste OHLCV en silver.ohlcv via append atómico (Iceberg snapshot).
@@ -209,9 +215,11 @@ class IcebergStorage:
         """
         if self._dry_run:
             logger.info(
-                "[DRY RUN] IcebergStorage.save_ohlcv skipped | {}/{} "
-                "exchange={} rows={}",
-                symbol, timeframe, self._exchange or "shared", len(df),
+                "[DRY RUN] IcebergStorage.save_ohlcv skipped | {}/{} exchange={} rows={}",
+                symbol,
+                timeframe,
+                self._exchange or "shared",
+                len(df),
             )
             return
 
@@ -224,20 +232,20 @@ class IcebergStorage:
                 "Llamar con dry_run=False o verificar bootstrap del catálogo."
             )
 
-        _t0      = time.monotonic()
+        _t0 = time.monotonic()
         prepared = self._normalize_df(
             df,
-            symbol      = symbol,
-            timeframe   = timeframe,
-            exchange    = self._exchange    or "unknown",
-            market_type = self._market_type or "unknown",
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=self._exchange or "unknown",
+            market_type=self._market_type or "unknown",
         )
 
         self._table.append(
             pa.Table.from_pandas(
                 prepared,
-                schema         = self._table.schema().as_arrow(),
-                preserve_index = False,
+                schema=self._table.schema().as_arrow(),
+                preserve_index=False,
             )
         )
 
@@ -246,13 +254,16 @@ class IcebergStorage:
 
         logger.debug(
             "IcebergStorage saved | {}/{} exchange={} rows={} duration={}ms",
-            symbol, timeframe, self._exchange or "shared",
-            len(prepared), int((time.monotonic() - _t0) * 1000),
+            symbol,
+            timeframe,
+            self._exchange or "shared",
+            len(prepared),
+            int((time.monotonic() - _t0) * 1000),
         )
 
     def get_last_timestamp(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
         """Obtiene el último timestamp disponible para symbol/timeframe.
@@ -267,10 +278,10 @@ class IcebergStorage:
         # L1/L2 — delegar a TimestampCacheService (SSOT del cache).
         # _last_ts_cache eliminado — IcebergStorage no gestiona cache directamente (SRP).
         ts_cached = self._ts_cache.get(
-            symbol      = symbol,
-            timeframe   = timeframe,
-            exchange    = self._exchange    or "unknown",
-            market_type = self._market_type or "unknown",
+            symbol=symbol,
+            timeframe=timeframe,
+            exchange=self._exchange or "unknown",
+            market_type=self._market_type or "unknown",
         )
         if ts_cached is not None:
             return ts_cached
@@ -280,19 +291,12 @@ class IcebergStorage:
         if self._table is None:
             return None
         try:
-            result = (
-                self._table  # type: ignore[union-attr]
-                .scan(
-                    row_filter      = self._base_filter(symbol, timeframe),
-                    selected_fields = ("timestamp",),
-                )
-                .to_arrow()
-            )
+            result = self._table.scan(  # type: ignore[union-attr]
+                row_filter=self._base_filter(symbol, timeframe),
+                selected_fields=("timestamp",),
+            ).to_arrow()
 
-            ts = (
-                None if result.num_rows == 0
-                else _to_utc_timestamp(pc.max(result.column("timestamp")).as_py())
-            )
+            ts = None if result.num_rows == 0 else _to_utc_timestamp(pc.max(result.column("timestamp")).as_py())
 
             # Poblar L1 con el resultado del scan L3 (fuente de verdad).
             # L2 (Redis) lo actualiza IncrementalStrategy tras cada write exitoso.
@@ -302,14 +306,14 @@ class IcebergStorage:
         except Exception:
             logger.opt(exception=True).warning(
                 "IcebergStorage.get_last_timestamp failed | {}/{}",
-                symbol, timeframe,
+                symbol,
+                timeframe,
             )
             return None
 
-
     def get_oldest_timestamp(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
     ) -> Optional[pd.Timestamp]:
         """
@@ -320,23 +324,21 @@ class IcebergStorage:
         if self._table is None:
             return None
         try:
-            result = (
-                self._table  # type: ignore[union-attr]
-                .scan(
-                    row_filter      = self._base_filter(symbol, timeframe),
-                    selected_fields = ("timestamp",),
-                )
-                .to_arrow()
-            )
+            result = self._table.scan(  # type: ignore[union-attr]
+                row_filter=self._base_filter(symbol, timeframe),
+                selected_fields=("timestamp",),
+            ).to_arrow()
             if result.num_rows == 0:
                 return None
             return _to_utc_timestamp(pc.min(result.column("timestamp")).as_py())
         except Exception:
             logger.opt(exception=True).warning(
                 "IcebergStorage.get_oldest_timestamp failed | {}/{}",
-                symbol, timeframe,
+                symbol,
+                timeframe,
             )
             return None
+
     def get_current_snapshot(self) -> Optional[dict]:
         # Expone el snapshot actual sin acceso directo a _table.
         # GoldStorage usa este metodo para anclar lineage antes del build.
@@ -347,21 +349,21 @@ class IcebergStorage:
             if snap is None:
                 return None
             return {
-                "snapshot_id":  snap.snapshot_id,
+                "snapshot_id": snap.snapshot_id,
                 "timestamp_ms": snap.timestamp_ms,
             }
         except Exception as _snap_exc:
             logger.debug(
                 "get_snapshot_info failed (tabla nueva o Iceberg no init)",
-        )
+            )
             return None
 
     def load_ohlcv(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        start:     Optional[pd.Timestamp] = None,
-        end:       Optional[pd.Timestamp] = None,
+        start: Optional[pd.Timestamp] = None,
+        end: Optional[pd.Timestamp] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Lee datos OHLCV desde Iceberg con pushdown de filtros temporales.
@@ -389,11 +391,11 @@ class IcebergStorage:
                 )
 
             import concurrent.futures as _cf
+
             with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
                 _future = _pool.submit(
                     lambda: (
-                        self._table  # type: ignore[union-attr]
-                        .scan(row_filter=row_filter)
+                        self._table.scan(row_filter=row_filter)  # type: ignore[union-attr]
                         .to_arrow()
                         .to_pandas()
                     )
@@ -402,8 +404,10 @@ class IcebergStorage:
                     df = _future.result(timeout=_ICEBERG_LOAD_TIMEOUT_S)
                 except _cf.TimeoutError:
                     logger.opt(exception=True).error(
-            "IcebergStorage.load_ohlcv TIMEOUT ({:.0f}s) | {}/{}",
-                        _ICEBERG_LOAD_TIMEOUT_S, symbol, timeframe,
+                        "IcebergStorage.load_ohlcv TIMEOUT ({:.0f}s) | {}/{}",
+                        _ICEBERG_LOAD_TIMEOUT_S,
+                        symbol,
+                        timeframe,
                     )
                     return None
 
@@ -411,16 +415,13 @@ class IcebergStorage:
                 return None
 
             df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-            return (
-                df.sort_values("timestamp")
-                .drop_duplicates(subset=["timestamp"])
-                .reset_index(drop=True)
-            )
+            return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
 
         except Exception:
             logger.opt(exception=True).warning(
                 "IcebergStorage.load_ohlcv failed | {}/{}",
-                symbol, timeframe,
+                symbol,
+                timeframe,
             )
             return None
 
@@ -430,18 +431,18 @@ class IcebergStorage:
 
     def commit_version(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        run_id:    Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> None:
         """No-op: Iceberg versiona automáticamente por snapshot."""
         pass
 
     def get_version(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        version:   str = "latest",
+        version: str = "latest",
     ) -> Optional[dict]:
         """Retorna metadata del snapshot actual como proxy de versión."""
         try:
@@ -450,25 +451,25 @@ class IcebergStorage:
             if snap is None:
                 return None
             return {
-                "version_id":  str(snap.snapshot_id),
-                "written_at":  str(snap.timestamp_ms),
-                "symbol":      symbol,
-                "timeframe":   timeframe,
-                "exchange":    self._exchange,
+                "version_id": str(snap.snapshot_id),
+                "written_at": str(snap.timestamp_ms),
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "exchange": self._exchange,
                 "market_type": self._market_type,
             }
         except Exception as _ver_exc:
             logger.debug(
                 "get_version_info failed (tabla nueva o Iceberg no init)",
-        )
+            )
             return None
 
     def find_partition_files(
         self,
-        symbol:    str,
+        symbol: str,
         timeframe: str,
-        since:     Optional[pd.Timestamp] = None,
-        until:     Optional[pd.Timestamp] = None,
+        since: Optional[pd.Timestamp] = None,
+        until: Optional[pd.Timestamp] = None,
     ) -> list:
         """
         No-op: Iceberg no expone archivos físicos de partición.

@@ -14,6 +14,7 @@ SSOT: ExchangeCircuitOpenError es el único lugar donde se define el
 
 SRP: este módulo sólo define contratos de resiliencia, no lógica.
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
@@ -51,13 +52,11 @@ class ExchangeCircuitOpenError(Exception):
         cooldown_remaining_ms: float = 0.0,
         fail_counter: int = 0,
     ) -> None:
-        self.exchange_id           = exchange_id
+        self.exchange_id = exchange_id
         self.cooldown_remaining_ms = cooldown_remaining_ms
-        self.fail_counter          = fail_counter
+        self.fail_counter = fail_counter
         super().__init__(
-            f"Circuit open for {exchange_id!r} "
-            f"(fails={fail_counter}, "
-            f"cooldown={cooldown_remaining_ms:.0f}ms)"
+            f"Circuit open for {exchange_id!r} (fails={fail_counter}, cooldown={cooldown_remaining_ms:.0f}ms)"
         )
 
 

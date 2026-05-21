@@ -43,6 +43,7 @@ SSOT       — este módulo es la única definición de replay contracts.
 Clean Arch — sin referencias a Kafka, Redis, Prefect ni Dagster.
 KISS       — los eventos son datos, no comportamiento.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -54,6 +55,7 @@ from market_data.domain.events._base import DomainEvent
 # ---------------------------------------------------------------------------
 # ReplayRequested
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ReplayRequested(DomainEvent):
@@ -81,13 +83,13 @@ class ReplayRequested(DomainEvent):
     - Si to_ms no es None: to_ms > from_ms.
     """
 
-    exchange:     str            = ""
-    symbol:       str            = ""
-    stream:       str            = "ohlcv"     # "ohlcv"|"trades"|"orderbook"|"all"
-    from_ms:      int            = 0
-    to_ms:        Optional[int]  = None        # None = hasta el presente
-    run_id:       str            = ""
-    requested_by: str            = "system"
+    exchange: str = ""
+    symbol: str = ""
+    stream: str = "ohlcv"  # "ohlcv"|"trades"|"orderbook"|"all"
+    from_ms: int = 0
+    to_ms: Optional[int] = None  # None = hasta el presente
+    run_id: str = ""
+    requested_by: str = "system"
 
     # Streams válidos — SSOT local (no crear enum para un único uso — KISS)
     _VALID_STREAMS: frozenset = field(
@@ -106,17 +108,12 @@ class ReplayRequested(DomainEvent):
             raise ValueError("ReplayRequested.stream must be non-empty")
         if self.stream not in self._VALID_STREAMS:
             raise ValueError(
-                f"ReplayRequested.stream={self.stream!r} is not valid. "
-                f"Must be one of: {sorted(self._VALID_STREAMS)}"
+                f"ReplayRequested.stream={self.stream!r} is not valid. Must be one of: {sorted(self._VALID_STREAMS)}"
             )
         if self.from_ms <= 0:
-            raise ValueError(
-                f"ReplayRequested.from_ms must be > 0, got {self.from_ms}"
-            )
+            raise ValueError(f"ReplayRequested.from_ms must be > 0, got {self.from_ms}")
         if self.to_ms is not None and self.to_ms <= self.from_ms:
-            raise ValueError(
-                f"ReplayRequested.to_ms ({self.to_ms}) must be > from_ms ({self.from_ms})"
-            )
+            raise ValueError(f"ReplayRequested.to_ms ({self.to_ms}) must be > from_ms ({self.from_ms})")
 
     @property
     def is_bounded(self) -> bool:
@@ -146,6 +143,7 @@ class ReplayRequested(DomainEvent):
 # ReplayCompleted
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ReplayCompleted(DomainEvent):
     """
@@ -168,14 +166,14 @@ class ReplayCompleted(DomainEvent):
     """
 
     replay_request_id: str = ""
-    exchange:          str = ""
-    symbol:            str = ""
-    stream:            str = ""
-    events_replayed:   int = 0
-    duration_ms:       int = 0
-    run_id:            str = ""
-    success:           bool = True
-    error_message:     str  = ""
+    exchange: str = ""
+    symbol: str = ""
+    stream: str = ""
+    events_replayed: int = 0
+    duration_ms: int = 0
+    run_id: str = ""
+    success: bool = True
+    error_message: str = ""
 
     def __post_init__(self) -> None:
         if not self.replay_request_id:
@@ -184,9 +182,7 @@ class ReplayCompleted(DomainEvent):
                 "must reference the originating ReplayRequested.event_id"
             )
         if not self.success and not self.error_message:
-            raise ValueError(
-                "ReplayCompleted: error_message is required when success=False"
-            )
+            raise ValueError("ReplayCompleted: error_message is required when success=False")
 
     def __repr__(self) -> str:
         status = "OK" if self.success else f"FAILED({self.error_message!r})"

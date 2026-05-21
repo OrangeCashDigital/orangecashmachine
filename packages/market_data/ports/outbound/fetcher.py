@@ -15,6 +15,7 @@ exactamente con estos contratos.
 
 Principios: DIP · ISP · SSOT · runtime_checkable
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
@@ -42,7 +43,7 @@ class TradesFetcherPort(Protocol):
 
     async def fetch_symbol(
         self,
-        symbol:   str,
+        symbol: str,
         since_ms: Optional[int] = None,
     ) -> int:
         """

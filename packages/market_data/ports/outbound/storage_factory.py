@@ -28,6 +28,7 @@ market_data.adapters.outbound.storage.iceberg_factory.IcebergStorageFactory
 
 Principios: DIP · OCP · SRP · SSOT · Factory Method (GoF)
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
@@ -57,9 +58,9 @@ class StorageFactoryPort(Protocol):
 
     def get_storage(
         self,
-        exchange:    str,
-        market_type: str  = "spot",
-        dry_run:     bool = False,
+        exchange: str,
+        market_type: str = "spot",
+        dry_run: bool = False,
     ) -> OHLCVStorage:
         """
         Retorna (o crea) una instancia de OHLCVStorage para el par dado.

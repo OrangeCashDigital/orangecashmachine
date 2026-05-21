@@ -48,6 +48,7 @@ DIP    — depende de OrderBookStreamProtocol, no de la impl concreta.
 OCP    — agregar un nuevo tipo de stream no modifica la interfaz.
 SafeOps — stop() siempre seguro; degradación parcial en fallos.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -57,6 +58,7 @@ from loguru import logger
 # ---------------------------------------------------------------------------
 # Protocolo del manager
 # ---------------------------------------------------------------------------
+
 
 class WebSocketManagerProtocol(ABC):
     """
@@ -101,6 +103,7 @@ class WebSocketManagerProtocol(ABC):
 # Stub — NOT IMPLEMENTED
 # ---------------------------------------------------------------------------
 
+
 class WebSocketManager(WebSocketManagerProtocol):
     """
     Stub del gestor de streams WebSocket. NOT IMPLEMENTED.
@@ -136,7 +139,7 @@ class WebSocketManager(WebSocketManagerProtocol):
     async def health_check(self) -> dict[str, bool]:
         return {
             "orderbook": False,
-            "trades":    False,
+            "trades": False,
         }
 
     def __repr__(self) -> str:

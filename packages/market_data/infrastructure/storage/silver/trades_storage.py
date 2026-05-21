@@ -24,6 +24,7 @@ SafeOps
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -43,27 +44,33 @@ if TYPE_CHECKING:
 # La función _build_schema() es pura — sin efectos secundarios.
 # ---------------------------------------------------------------------------
 
+
 def _build_schema() -> "pyiceberg.schema.Schema":  # noqa: F821
     from pyiceberg.schema import Schema
     from pyiceberg.types import (
-        NestedField, StringType, TimestamptzType, DoubleType,
+        NestedField,
+        StringType,
+        TimestamptzType,
+        DoubleType,
     )
+
     return Schema(
-        NestedField(1,  "trade_id",    StringType(),      required=True),
-        NestedField(2,  "timestamp",   TimestamptzType(), required=True),
-        NestedField(3,  "exchange",    StringType(),      required=True),
-        NestedField(4,  "market_type", StringType(),      required=True),
-        NestedField(5,  "symbol",      StringType(),      required=True),
-        NestedField(6,  "side",        StringType(),      required=False),
-        NestedField(7,  "price",       DoubleType(),      required=True),
-        NestedField(8,  "amount",      DoubleType(),      required=True),
-        NestedField(9,  "cost",        DoubleType(),      required=False),
+        NestedField(1, "trade_id", StringType(), required=True),
+        NestedField(2, "timestamp", TimestamptzType(), required=True),
+        NestedField(3, "exchange", StringType(), required=True),
+        NestedField(4, "market_type", StringType(), required=True),
+        NestedField(5, "symbol", StringType(), required=True),
+        NestedField(6, "side", StringType(), required=False),
+        NestedField(7, "price", DoubleType(), required=True),
+        NestedField(8, "amount", DoubleType(), required=True),
+        NestedField(9, "cost", DoubleType(), required=False),
     )
 
 
 def _build_partition_spec() -> "pyiceberg.partitioning.PartitionSpec":  # noqa: F821
     from pyiceberg.partitioning import PartitionSpec, PartitionField
     from pyiceberg.transforms import IdentityTransform
+
     return PartitionSpec(
         PartitionField(source_id=3, field_id=1000, transform=IdentityTransform(), name="exchange"),
         PartitionField(source_id=5, field_id=1001, transform=IdentityTransform(), name="symbol"),
@@ -91,10 +98,10 @@ class TradesStorage:
 
     def __init__(
         self,
-        exchange:    str,
+        exchange: str,
         market_type: str,
-        catalog:     object,          # pyiceberg.catalog.Catalog
-        dry_run:     bool = False,
+        catalog: object,  # pyiceberg.catalog.Catalog
+        dry_run: bool = False,
     ) -> None:
         if not exchange:
             raise ValueError("TradesStorage: exchange no puede estar vacío")
@@ -103,11 +110,11 @@ class TradesStorage:
         if catalog is None:
             raise ValueError("TradesStorage: catalog es obligatorio")
 
-        self._exchange    = exchange.lower()
+        self._exchange = exchange.lower()
         self._market_type = market_type.lower()
-        self._catalog     = catalog
-        self._dry_run     = dry_run
-        self._log         = logger.bind(
+        self._catalog = catalog
+        self._dry_run = dry_run
+        self._log = logger.bind(
             storage="silver.trades",
             exchange=self._exchange,
             market_type=self._market_type,
@@ -169,11 +176,8 @@ class TradesStorage:
         """
         try:
             table = self._get_or_create_table()
-            scan  = table.scan(
-                row_filter=(
-                    f"exchange = '{self._exchange}' "
-                    f"AND symbol = '{symbol}'"
-                ),
+            scan = table.scan(
+                row_filter=(f"exchange = '{self._exchange}' AND symbol = '{symbol}'"),
                 selected_fields=("timestamp",),
             )
             arrow = scan.to_arrow()
@@ -182,13 +186,15 @@ class TradesStorage:
             ts_col = arrow.column("timestamp")
             # TimestamptzType → int64 microseconds UTC en Arrow
             max_us = ts_col.to_pylist()
-            max_us_val = max(v.timestamp() * 1_000_000 if hasattr(v, "timestamp") else v
-                            for v in max_us if v is not None)
-            return int(max_us_val // 1_000)   # µs → ms
+            max_us_val = max(
+                v.timestamp() * 1_000_000 if hasattr(v, "timestamp") else v for v in max_us if v is not None
+            )
+            return int(max_us_val // 1_000)  # µs → ms
         except Exception as exc:
             self._log.warning(
                 "last_timestamp_ms: no se pudo leer cursor | symbol={} error={}",
-                symbol, exc,
+                symbol,
+                exc,
             )
             return None
 
@@ -219,10 +225,7 @@ class TradesStorage:
             if col not in df.columns:
                 df[col] = default
 
-        return df[
-            ["trade_id", "timestamp", "exchange", "market_type",
-             "symbol", "side", "price", "amount", "cost"]
-        ]
+        return df[["trade_id", "timestamp", "exchange", "market_type", "symbol", "side", "price", "amount", "cost"]]
 
     @staticmethod
     def _dedup(df: pd.DataFrame) -> pd.DataFrame:
@@ -242,18 +245,13 @@ class TradesStorage:
         except Exception:
             self._log.info("Creando tabla | table={}", _TABLE_NAME)
             self._table = self._catalog.create_table(  # type: ignore[attr-defined]
-                identifier      = _TABLE_NAME,
-                schema          = _build_schema(),
-                partition_spec  = _build_partition_spec(),
+                identifier=_TABLE_NAME,
+                schema=_build_schema(),
+                partition_spec=_build_partition_spec(),
             )
             self._log.info("Tabla creada | table={}", _TABLE_NAME)
 
         return self._table
 
     def __repr__(self) -> str:
-        return (
-            f"TradesStorage("
-            f"exchange={self._exchange!r}, "
-            f"market_type={self._market_type!r}, "
-            f"dry_run={self._dry_run})"
-        )
+        return f"TradesStorage(exchange={self._exchange!r}, market_type={self._market_type!r}, dry_run={self._dry_run})"

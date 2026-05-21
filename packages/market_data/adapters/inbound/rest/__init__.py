@@ -30,6 +30,7 @@ Ver: market_data/adapters/inbound/websocket/gap_aware_stream.py
 
 Principios: DIP · ACL · Kappa · SSOT · SafeOps
 """
+
 from market_data.adapters.inbound.rest.trades_backfill_fetcher import (
     TradesBackfillFetcher,
 )

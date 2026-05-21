@@ -17,6 +17,7 @@ DIP   — depende de EventBusPort (Protocol), no de InMemoryEventBus
 SRP   — cada consumer subclase tiene una sola razón de existir
 LSP   — start/stop/handle tienen contratos estables, subclases no los violan
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -51,7 +52,7 @@ class BaseConsumer(ABC):
             ...
     """
 
-    event_type: ClassVar[Type[DomainEvent]]   # subclases deben declarar esto
+    event_type: ClassVar[Type[DomainEvent]]  # subclases deben declarar esto
 
     def __init__(self, bus: EventBusPort) -> None:
         self._bus = bus

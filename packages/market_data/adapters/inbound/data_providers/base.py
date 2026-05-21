@@ -59,16 +59,10 @@ class DataProviderAdapter:
     # ----------------------------------------------------------
 
     async def fetch_funding_rates(self) -> Dict[str, Any]:
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement fetch_funding_rates()"
-        )
+        raise NotImplementedError(f"{type(self).__name__} does not implement fetch_funding_rates()")
 
     async def fetch_open_interest(self) -> Dict[str, Any]:
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement fetch_open_interest()"
-        )
+        raise NotImplementedError(f"{type(self).__name__} does not implement fetch_open_interest()")
 
     async def fetch_global_metrics(self) -> Dict[str, Any]:
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement fetch_global_metrics()"
-        )
+        raise NotImplementedError(f"{type(self).__name__} does not implement fetch_global_metrics()")

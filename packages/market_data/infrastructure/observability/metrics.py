@@ -260,13 +260,13 @@ EXCHANGE_CIRCUIT_OPEN = Counter(
 
 
 def record_pipeline_pair_metrics(
-    exchange:    str,
-    symbol:      str,
-    timeframe:   str,
+    exchange: str,
+    symbol: str,
+    timeframe: str,
     market_type: str,
-    rows:        int,
+    rows: int,
     duration_ms: int,
-    error_type:  str = "",
+    error_type: str = "",
     quality_decision: str = "",
 ) -> None:
     """
@@ -277,9 +277,7 @@ def record_pipeline_pair_metrics(
     """
     try:
         if error_type:
-            PIPELINE_ERRORS.labels(
-                exchange=exchange, error_type=error_type
-            ).inc()
+            PIPELINE_ERRORS.labels(exchange=exchange, error_type=error_type).inc()
             return
         if quality_decision:
             QUALITY_DECISIONS.labels(
@@ -290,17 +288,15 @@ def record_pipeline_pair_metrics(
                 decision=quality_decision,
             ).inc()
         if rows:
-            ROWS_INGESTED.labels(
-                exchange=exchange, symbol=symbol, timeframe=timeframe
-            ).inc(rows)
+            ROWS_INGESTED.labels(exchange=exchange, symbol=symbol, timeframe=timeframe).inc(rows)
         if duration_ms:
-            PAIR_DURATION.labels(
-                exchange=exchange, symbol=symbol, timeframe=timeframe
-            ).observe(duration_ms / 1000)
+            PAIR_DURATION.labels(exchange=exchange, symbol=symbol, timeframe=timeframe).observe(duration_ms / 1000)
     except Exception as exc:
         _log.warning(
             "record_pipeline_pair_metrics failed | exchange={} symbol={} error={}",
-            exchange, symbol, exc,
+            exchange,
+            symbol,
+            exc,
         )
 
 
@@ -323,5 +319,3 @@ def record_exchange_probe_metrics(probe) -> None:
             EXCHANGE_RATE_LIMIT.labels(exchange=probe.exchange).set(probe.rate_limit_ms)
     except Exception as exc:
         _log.warning("record_exchange_probe_metrics failed | exchange={} error={}", probe.exchange, exc)
-
-

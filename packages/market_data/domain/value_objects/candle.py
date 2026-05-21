@@ -14,6 +14,7 @@ Fail-Fast  — is_valid() expone invariantes de dominio; adapters validan en ACL
 No pandas  — el dominio no depende de infraestructura de análisis
 No CCXT    — el dominio no conoce el wire format externo
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from dataclasses import dataclass
 # ===========================================================================
 # Candle — Value Object
 # ===========================================================================
+
 
 @dataclass(frozen=True)
 class Candle:
@@ -48,12 +50,13 @@ class Candle:
     volume ≥ 0
     timestamp_ms > 0
     """
+
     timestamp_ms: int
-    open:         float
-    high:         float
-    low:          float
-    close:        float
-    volume:       float
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
 
     # ----------------------------------------------------------
     # Domain invariants
@@ -138,16 +141,14 @@ class Candle:
         Usado en el ACL de adapters inbound (normalizer).
         """
         if len(t) != 6:
-            raise ValueError(
-                f"Candle.from_tuple esperaba 6 elementos, recibió {len(t)}: {t!r}"
-            )
+            raise ValueError(f"Candle.from_tuple esperaba 6 elementos, recibió {len(t)}: {t!r}")
         return cls(
-            timestamp_ms = int(t[0]),
-            open         = float(t[1]),
-            high         = float(t[2]),
-            low          = float(t[3]),
-            close        = float(t[4]),
-            volume       = float(t[5]),
+            timestamp_ms=int(t[0]),
+            open=float(t[1]),
+            high=float(t[2]),
+            low=float(t[3]),
+            close=float(t[4]),
+            volume=float(t[5]),
         )
 
 

@@ -18,6 +18,7 @@ Actualizar todos los imports a:
 
 Una vez completada la migración, este archivo puede eliminarse.
 """
+
 from market_data.ports.outbound.exchange import ExchangeAdapter  # noqa: F401
 
 __all__ = ["ExchangeAdapter"]

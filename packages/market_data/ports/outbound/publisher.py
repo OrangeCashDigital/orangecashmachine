@@ -28,11 +28,12 @@ from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk, OHLCVSource
 # Estos aliases se mantienen por compatibilidad con callers existentes.
 
 SOURCE_BACKFILL: str = OHLCVSource.BACKFILL
-SOURCE_LIVE:     str = OHLCVSource.LIVE
-SOURCE_REPLAY:   str = OHLCVSource.REPLAY
+SOURCE_LIVE: str = OHLCVSource.LIVE
+SOURCE_REPLAY: str = OHLCVSource.REPLAY
 
 
 # ── Puerto ───────────────────────────────────────────────────────────────────
+
 
 @runtime_checkable
 class OHLCVPublisherPort(Protocol):
@@ -71,6 +72,7 @@ class OHLCVPublisherPort(Protocol):
 
 
 # ── Implementación nula (solo para tests unitarios) ──────────────────────────
+
 
 class NullOHLCVPublisher:
     """
