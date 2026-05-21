@@ -31,10 +31,11 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 if TYPE_CHECKING:
-    from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
+    from market_data.ports.outbound.state import AsyncCursorStorePort
+    from market_data.ports.outbound.storage import TradesStoragePort
 
 import pandas as pd
 from loguru import logger
@@ -111,7 +112,7 @@ class TradesFetcher:
     def __init__(
         self,
         exchange_client: CCXTAdapter,
-        storage: TradesStorage,
+        storage: "TradesStoragePort",
         market_type: str = "spot",
         dry_run: bool = False,
     ) -> None:
@@ -137,8 +138,9 @@ class TradesFetcher:
         )
 
         # Cursor store — degradación controlada si Redis no disponible
+        self._cursor: "AsyncCursorStorePort | None"
         try:
-            self._cursor = _build_cursor_store()
+            self._cursor = cast("AsyncCursorStorePort", _build_cursor_store())
         except Exception as exc:
             self._log.warning("CursorStore no disponible — usando storage fallback | error={}", exc)
             self._cursor = None

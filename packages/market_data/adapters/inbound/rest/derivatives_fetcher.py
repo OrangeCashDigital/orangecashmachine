@@ -36,7 +36,11 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
+
+if TYPE_CHECKING:
+    from market_data.ports.outbound.state import AsyncCursorStorePort
+    from market_data.ports.outbound.storage import DerivativesStoragePort
 
 if TYPE_CHECKING:
     pass
@@ -130,7 +134,7 @@ class _BaseDerivativesFetcher:
     def __init__(
         self,
         exchange_client: CCXTAdapter,
-        storage: object,
+        storage: "DerivativesStoragePort",
         market_type: str = "swap",
         dry_run: bool = False,
     ) -> None:
@@ -150,8 +154,9 @@ class _BaseDerivativesFetcher:
         )
 
         # Cursor store — degradación controlada si Redis no disponible
+        self._cursor: "AsyncCursorStorePort | None"
         try:
-            self._cursor = _build_cursor_store()
+            self._cursor = cast("AsyncCursorStorePort", _build_cursor_store())
         except Exception as exc:
             self._log.warning("CursorStore no disponible — usando storage fallback | error={}", exc)
             self._cursor = None
