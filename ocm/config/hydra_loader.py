@@ -219,7 +219,7 @@ def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
 
 
 def load_appconfig_from_hydra(
-    cfg: DictConfig,  # type: ignore[arg-type]
+    cfg: DictConfig,
     *,
     env: str = "unknown",
     run_id: Optional[str] = None,
@@ -345,7 +345,7 @@ def load_appconfig_standalone(
         "load_appconfig_standalone | env={} config_dir={} snapshot={}",
         _env, _dir, _snapshot,
     )
-    return load_appconfig_from_hydra(
+    return load_appconfig_from_hydra(  # type: ignore[arg-type]
         cfg,
         env=_env,
         run_id=run_id,

@@ -230,7 +230,7 @@ class ConfigPipeline:
           - throw_on_missing=True: fail-fast si algún ${oc.env:VAR} no está seteado
         """
         try:
-            raw_dict: Dict[str, Any] = cast(Dict[str, Any], OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
+            raw_dict: dict[str, Any] = cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
             strip_hydra_internals(raw_dict)   # muta in-place — no reasignar
             coerce_scalar_values(raw_dict)    # muta in-place — str→bool/None (SSOT: coercion.py); int/float → Pydantic L4
             # normalize_empty_strings eliminada — absorbida por coerce_scalar_values() (DRY/SSOT)
