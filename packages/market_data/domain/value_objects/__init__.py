@@ -9,27 +9,6 @@ Este módulo es SOLO re-exports — ningún tipo se define aquí (SSOT).
 Cada VO tiene su propio archivo canónico; este __init__ es la fachada
 de conveniencia para imports cortos.
 
-Catálogo
---------
-Timeframe             — enum canónico de timeframes (str-compatible)
-timeframe_to_ms       — conversión timeframe → milisegundos (O(1))
-InvalidTimeframeError — excepción Fail-Fast de timeframe inválido
-VALID_TIMEFRAMES      — frozenset[str] para validación O(1)
-align_to_grid         — alineación de timestamp al grid del timeframe
-Candle                — vela OHLCV inmutable con invariantes de dominio
-Symbol                — par de trading (base/quote), formato canónico
-OHLCVChunk            — fragmento inmutable del stream OHLCV (canónico)
-OHLCVSource           — constantes de origen: REST/LIVE/BACKFILL/REPLAY
-RawCandle             — tipo alias wire format CCXT (6-tupla tipada)
-QualityLabel          — clasificación de calidad CLEAN/SUSPECT/CORRUPT
-GapRange              — rango temporal de un gap en un dataset OHLCV
-NormalizedTrade       — trade normalizado post-ACL
-Side                  — lado del trade (BUY/SELL)
-OrderBookSide         — lado del order book (bid/ask)
-PriceLevel            — nivel de precio en el order book
-OrderBookSnapshot     — snapshot completo del order book
-OrderBookDelta        — delta incremental del order book
-
 Principios
 ----------
 DDD  — VOs puros: inmutables, definidos por valor, sin identidad
@@ -106,31 +85,24 @@ from market_data.domain.value_objects.order_book import (  # noqa: F401
 )
 
 # ---------------------------------------------------------------------------
-# __all__ — catálogo público explícito (PEP 8 · SSOT de exports)
-# Posición al final: todos los símbolos ya están definidos arriba.
+# __all__ — catálogo público explícito (PEP 8)
+# Posición al final: todos los símbolos ya definidos arriba.
 # ---------------------------------------------------------------------------
 __all__ = [
-    # Timeframe
     "Timeframe",
     "timeframe_to_ms",
     "InvalidTimeframeError",
     "VALID_TIMEFRAMES",
     "align_to_grid",
-    # Market data VOs
     "Candle",
     "Symbol",
     "OHLCVChunk",
     "OHLCVSource",
-    # Wire format alias (ACL boundary)
     "RawCandle",
-    # Quality
     "QualityLabel",
-    # Gap
     "GapRange",
-    # Normalized trade
     "NormalizedTrade",
     "Side",
-    # Order Book — Nivel 0
     "OrderBookSide",
     "PriceLevel",
     "OrderBookSnapshot",
