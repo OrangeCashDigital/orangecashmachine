@@ -898,3 +898,15 @@ allow_indirect_imports = true
 [[tool.mypy.overrides]]
 module        = ["pyiceberg.*"]
 ignore_errors = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []
