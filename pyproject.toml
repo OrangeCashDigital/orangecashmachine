@@ -143,11 +143,17 @@ log_cli_level = "DEBUG"
 
 [tool.ruff]
 line-length = 120
+target-version = "py313"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.ruff.lint]
 # E402 — module level import not at top of file.
 # Solo se permite en composition roots y entrypoints conocidos.
 # NO ignorar globalmente: acotar por archivo para no enmascarar imports mal ubicados.
+select = ["E", "F", "I"]
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
@@ -897,16 +903,3 @@ allow_indirect_imports = true
 # los imports a través de sus módulos internos.
 [[tool.mypy.overrides]]
 module        = ["pyiceberg.*"]
-ignore_errors = true
-
-[tool.ruff]
-line-length = 88
-target-version = "py313"
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-
-[tool.ruff.lint]
-select = ["E", "F", "I"]
-ignore = []
