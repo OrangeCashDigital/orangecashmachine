@@ -345,8 +345,8 @@ def load_appconfig_standalone(
         "load_appconfig_standalone | env={} config_dir={} snapshot={}",
         _env, _dir, _snapshot,
     )
-    return load_appconfig_from_hydra(  # type: ignore[arg-type]
-        cfg,
+    return load_appconfig_from_hydra(
+        cfg,  # type: ignore[arg-type]
         env=_env,
         run_id=run_id,
         write_snapshot=_snapshot,
