@@ -27,7 +27,6 @@ from dataclasses import dataclass, field
 from market_data.domain.events._base import DomainEvent
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 
-
 # ===========================================================================
 # Ingestión — entrada al stream
 # ===========================================================================

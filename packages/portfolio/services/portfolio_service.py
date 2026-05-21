@@ -35,6 +35,7 @@ Stores disponibles (OCP — mismo Protocol, intercambiables):
 
 Principios: SOLID · DDD · SafeOps · KISS · SRP
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -63,17 +64,15 @@ class PortfolioService:
     def __init__(
         self,
         capital_usd: float,
-        store:       Optional[PositionStore] = None,
-        exchange:    str = "unknown",
+        store: Optional[PositionStore] = None,
+        exchange: str = "unknown",
     ) -> None:
         if capital_usd <= 0:
-            raise ValueError(
-                f"PortfolioService: capital_usd debe ser positivo, recibido: {capital_usd}"
-            )
+            raise ValueError(f"PortfolioService: capital_usd debe ser positivo, recibido: {capital_usd}")
         self._capital_usd = capital_usd
-        self._store       = store or InMemoryPositionStore()
-        self._exchange    = exchange
-        self._log         = logger.bind(component="PortfolioService", exchange=exchange)
+        self._store = store or InMemoryPositionStore()
+        self._exchange = exchange
+        self._log = logger.bind(component="PortfolioService", exchange=exchange)
 
     # ------------------------------------------------------------------
     # Mutación — llamar desde callbacks OMS
@@ -81,12 +80,12 @@ class PortfolioService:
 
     def open_position(
         self,
-        order_id:    str,
-        symbol:      str,
-        side:        str,
+        order_id: str,
+        symbol: str,
+        side: str,
         entry_price: float,
-        size_pct:    float,
-        entry_at:    Optional[datetime] = None,
+        size_pct: float,
+        entry_at: Optional[datetime] = None,
     ) -> None:
         """
         Registra apertura de posición.
@@ -96,18 +95,22 @@ class PortfolioService:
         """
         try:
             position = PositionSnapshot(
-                symbol      = symbol,
-                exchange    = self._exchange,
-                side        = side,
-                entry_price = entry_price,
-                size_pct    = size_pct,
-                entry_at    = entry_at or datetime.now(timezone.utc),
-                order_id    = order_id,
+                symbol=symbol,
+                exchange=self._exchange,
+                side=side,
+                entry_price=entry_price,
+                size_pct=size_pct,
+                entry_at=entry_at or datetime.now(timezone.utc),
+                order_id=order_id,
             )
             self._store.save(position)
             self._log.info(
                 "position_opened | {} {} @ {:.4f} size={:.1%} order={}",
-                side.upper(), symbol, entry_price, size_pct, order_id,
+                side.upper(),
+                symbol,
+                entry_price,
+                size_pct,
+                order_id,
             )
         except Exception as exc:
             self._log.error("open_position_error | order={} err={}", order_id, exc)
@@ -131,7 +134,9 @@ class PortfolioService:
             self._store.delete(order_id)
             self._log.info(
                 "position_closed | {} {} order={}",
-                position.side.upper(), position.symbol, order_id,
+                position.side.upper(),
+                position.symbol,
+                order_id,
             )
             return position
         except Exception as exc:
@@ -151,14 +156,14 @@ class PortfolioService:
         try:
             positions = self._store.all()
             return PortfolioState(
-                positions   = tuple(positions),
-                capital_usd = self._capital_usd,
+                positions=tuple(positions),
+                capital_usd=self._capital_usd,
             )
         except Exception as exc:
             self._log.error("snapshot_error | {}", exc)
             return PortfolioState(
-                positions   = (),
-                capital_usd = self._capital_usd,
+                positions=(),
+                capital_usd=self._capital_usd,
             )
 
     @property
@@ -184,8 +189,8 @@ class PortfolioService:
             return {
                 "open_positions": snap.open_count,
                 "total_exposure": round(snap.total_exposure, 4),
-                "capital_usd":    self._capital_usd,
-                "is_flat":        snap.is_flat,
+                "capital_usd": self._capital_usd,
+                "is_flat": snap.is_flat,
             }
         except Exception:
             return {"open_positions": 0, "total_exposure": 0.0}

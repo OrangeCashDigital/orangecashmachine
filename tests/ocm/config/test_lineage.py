@@ -8,10 +8,10 @@ import pytest
 
 from ocm.runtime.lineage import build_lineage, get_git_hash
 
-
 # ---------------------------------------------------------------------------
 # get_git_hash — nunca lanza, siempre retorna string
 # ---------------------------------------------------------------------------
+
 
 def test_get_git_hash_returns_string():
     result = get_git_hash()
@@ -47,6 +47,7 @@ def test_get_git_hash_subprocess_exception():
 # LineageRecord — inmutabilidad y defaults
 # ---------------------------------------------------------------------------
 
+
 def test_lineage_record_immutable():
     rec = build_lineage(run_id="r1", version_id="v1")
     with pytest.raises((AttributeError, TypeError)):
@@ -66,31 +67,33 @@ def test_lineage_record_defaults():
 # to_manifest — serialización
 # ---------------------------------------------------------------------------
 
+
 def test_to_manifest_required_fields():
     rec = build_lineage(run_id="r1", version_id="v42")
     m = rec.to_manifest()
-    assert m["run_id"]     == "r1"
+    assert m["run_id"] == "r1"
     assert m["version_id"] == "v42"
-    assert m["layer"]      == "silver"
-    assert "git_hash"   in m
+    assert m["layer"] == "silver"
+    assert "git_hash" in m
     assert "written_at" in m
 
 
 def test_to_manifest_optional_fields_present():
     rec = build_lineage(
-        run_id="r1", version_id="v1",
+        run_id="r1",
+        version_id="v1",
         as_of="2026-01-01T00:00:00+00:00",
         exchange="binance",
     )
     m = rec.to_manifest()
-    assert m["as_of"]    == "2026-01-01T00:00:00+00:00"
+    assert m["as_of"] == "2026-01-01T00:00:00+00:00"
     assert m["exchange"] == "binance"
 
 
 def test_to_manifest_optional_fields_absent_when_none():
     rec = build_lineage(run_id="r1", version_id="v1")
     m = rec.to_manifest()
-    assert "as_of"    not in m
+    assert "as_of" not in m
     assert "exchange" not in m
 
 

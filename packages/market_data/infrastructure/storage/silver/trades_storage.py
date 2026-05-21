@@ -225,7 +225,19 @@ class TradesStorage:
             if col not in df.columns:
                 df[col] = default
 
-        return df[["trade_id", "timestamp", "exchange", "market_type", "symbol", "side", "price", "amount", "cost"]]
+        return df[
+            [
+                "trade_id",
+                "timestamp",
+                "exchange",
+                "market_type",
+                "symbol",
+                "side",
+                "price",
+                "amount",
+                "cost",
+            ]
+        ]
 
     @staticmethod
     def _dedup(df: pd.DataFrame) -> pd.DataFrame:

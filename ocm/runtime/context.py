@@ -51,17 +51,12 @@ class RuntimeContext:
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_config, RunConfig):
-            raise TypeError(
-                f"run_config debe ser RunConfig, recibido {type(self.run_config).__name__}"
-            )
+            raise TypeError(f"run_config debe ser RunConfig, recibido {type(self.run_config).__name__}")
         if not isinstance(self.app_config, AppConfig):
-            raise TypeError(
-                f"app_config debe ser AppConfig, recibido {type(self.app_config).__name__}"
-            )
+            raise TypeError(f"app_config debe ser AppConfig, recibido {type(self.app_config).__name__}")
         if self.started_at.tzinfo is None:
             raise ValueError(
-                "started_at debe ser timezone-aware (UTC). "
-                "Usa datetime.now(timezone.utc) en vez de datetime.utcnow()."
+                "started_at debe ser timezone-aware (UTC). Usa datetime.now(timezone.utc) en vez de datetime.utcnow()."
             )
 
     # ------------------------------------------------------------------
@@ -127,13 +122,10 @@ class RuntimeContext:
             started_at = datetime.fromisoformat(data["started_at"])
         except KeyError as exc:
             raise KeyError(
-                f"RuntimeContext.from_dict: clave obligatoria ausente — {exc}. "
-                f"Claves recibidas: {list(data.keys())}"
+                f"RuntimeContext.from_dict: clave obligatoria ausente — {exc}. Claves recibidas: {list(data.keys())}"
             ) from exc
         except (ValueError, TypeError) as exc:
-            raise type(exc)(
-                f"RuntimeContext.from_dict: datos inválidos — {exc}"
-            ) from exc
+            raise type(exc)(f"RuntimeContext.from_dict: datos inválidos — {exc}") from exc
 
         # Garantizar timezone-awareness tras deserialización
         if started_at.tzinfo is None:

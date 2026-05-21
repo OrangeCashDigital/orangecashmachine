@@ -28,6 +28,7 @@ La routing key determina la partición Kafka (hash(key)):
 
 Principios: SSOT · SRP · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 import json
@@ -41,6 +42,7 @@ P = TypeVar("P", bound=BasePayload)
 # ---------------------------------------------------------------------------
 # Serialización
 # ---------------------------------------------------------------------------
+
 
 def serialize(payload: BasePayload) -> bytes:
     """
@@ -74,6 +76,7 @@ def deserialize(data: bytes, payload_cls: Type[P]) -> P:
 # ---------------------------------------------------------------------------
 # Routing keys — SSOT de construcción de partition keys
 # ---------------------------------------------------------------------------
+
 
 def make_ohlcv_key(exchange: str, symbol: str, timeframe: str) -> bytes:
     """

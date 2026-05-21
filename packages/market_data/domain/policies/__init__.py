@@ -11,4 +11,5 @@ Importar directamente desde los módulos SSOT:
 No re-exportar desde aquí: data_quality_policy importa DataQualityReport
 de application/, lo que crea un ciclo si este __init__ hace eager imports.
 """
+
 # Namespace puro — sin imports eager para evitar ciclos de inicialización.

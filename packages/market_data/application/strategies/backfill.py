@@ -69,7 +69,6 @@ class BackfillStrategy(StrategyMixin):
         ctx: PipelineContext,
         result: PairResult,
     ) -> None:
-
         log = _log.bind(
             exchange=ctx.exchange_id,
             symbol=symbol,
@@ -285,7 +284,6 @@ class BackfillStrategy(StrategyMixin):
         origin_ms: int,
         ctx: PipelineContext,
     ) -> tuple[int, int]:
-
         tf_ms = timeframe_to_ms(timeframe)
         chunk_limit = DEFAULT_CHUNK_LIMIT
         current_end = since_ms

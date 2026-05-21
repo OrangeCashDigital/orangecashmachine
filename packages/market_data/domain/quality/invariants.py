@@ -34,7 +34,6 @@ import pandas as pd
 
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
-
 # ==========================================================
 # Resultado de verificación
 # ==========================================================

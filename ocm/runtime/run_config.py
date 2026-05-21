@@ -47,7 +47,9 @@ from ocm.config.env_vars import (
     PUSHGATEWAY_URL,
     default_debug_for,
 )
-from ocm.config.layers.coercion import BOOL_TRUE  # SSOT — única fuente para bool strings
+from ocm.config.layers.coercion import (
+    BOOL_TRUE,
+)  # SSOT — única fuente para bool strings
 
 # ---------------------------------------------------------------------------
 # Constantes de módulo — compiladas una vez (DRY + eficiencia)
@@ -95,10 +97,7 @@ class RunConfig:
 
     def __post_init__(self) -> None:
         if self.env not in VALID_ENVS:
-            raise ValueError(
-                f"env={self.env!r} no es válido. "
-                f"Valores permitidos: {sorted(VALID_ENVS)}"
-            )
+            raise ValueError(f"env={self.env!r} no es válido. Valores permitidos: {sorted(VALID_ENVS)}")
         if not self.run_id:
             raise ValueError("run_id no puede ser vacío.")
 
@@ -129,11 +128,7 @@ class RunConfig:
         env = resolve_env(explicit_env)
 
         raw_debug = os.getenv(OCM_DEBUG)
-        debug: bool = (
-            raw_debug.lower() in BOOL_TRUE
-            if raw_debug is not None
-            else default_debug_for(env)
-        )
+        debug: bool = raw_debug.lower() in BOOL_TRUE if raw_debug is not None else default_debug_for(env)
 
         raw_path = os.getenv(OCM_CONFIG_PATH) or os.getenv(OCM_CONFIG_DIR)
         config_path = Path(raw_path) if raw_path else None
@@ -147,7 +142,7 @@ class RunConfig:
             env=env,
             debug=debug,
             validate_only=validate_only,
-            run_id=uuid.uuid4().bytes.hex()[:_RUN_ID_BYTES * 2],
+            run_id=uuid.uuid4().bytes.hex()[: _RUN_ID_BYTES * 2],
             config_path=config_path,
             pushgateway=pushgateway,
         )
@@ -189,6 +184,5 @@ class RunConfig:
             return cls(**d)
         except (KeyError, TypeError) as exc:
             raise TypeError(
-                f"RunConfig.from_dict: datos inválidos — {exc}. "
-                f"Claves recibidas: {list(data.keys())}"
+                f"RunConfig.from_dict: datos inválidos — {exc}. Claves recibidas: {list(data.keys())}"
             ) from exc

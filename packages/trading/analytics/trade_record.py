@@ -10,6 +10,7 @@ Inmutable una vez cerrado — frozen dataclass.
 
 Principios: SOLID · KISS · SafeOps
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -42,54 +43,55 @@ class TradeRecord:
     pnl_pct     : (exit - entry) / entry
     duration_s  : segundos entre entry y exit
     """
-    trade_id:    str
-    symbol:      str
-    exchange:    str
-    timeframe:   str
+
+    trade_id: str
+    symbol: str
+    exchange: str
+    timeframe: str
     entry_price: float
-    exit_price:  float
-    size_pct:    float
-    entry_at:    datetime
-    exit_at:     datetime
+    exit_price: float
+    size_pct: float
+    entry_at: datetime
+    exit_at: datetime
 
     # Derivadas — calculadas externamente y pasadas al construir
-    pnl_pct:    float
+    pnl_pct: float
     duration_s: float
 
     @classmethod
     def close(
         cls,
-        trade_id:    str,
-        symbol:      str,
-        exchange:    str,
-        timeframe:   str,
+        trade_id: str,
+        symbol: str,
+        exchange: str,
+        timeframe: str,
         entry_price: float,
-        exit_price:  float,
-        size_pct:    float,
-        entry_at:    datetime,
-        exit_at:     Optional[datetime] = None,
+        exit_price: float,
+        size_pct: float,
+        entry_at: datetime,
+        exit_at: Optional[datetime] = None,
     ) -> "TradeRecord":
         """
         Factory — crea un TradeRecord calculando métricas automáticamente.
 
         Usar este método en lugar del constructor directo.
         """
-        closed_at  = exit_at or datetime.now(timezone.utc)
-        pnl_pct    = (exit_price - entry_price) / entry_price if entry_price > 0 else 0.0
+        closed_at = exit_at or datetime.now(timezone.utc)
+        pnl_pct = (exit_price - entry_price) / entry_price if entry_price > 0 else 0.0
         duration_s = (closed_at - entry_at).total_seconds()
 
         return cls(
-            trade_id    = trade_id,
-            symbol      = symbol,
-            exchange    = exchange,
-            timeframe   = timeframe,
-            entry_price = entry_price,
-            exit_price  = exit_price,
-            size_pct    = size_pct,
-            entry_at    = entry_at,
-            exit_at     = closed_at,
-            pnl_pct     = pnl_pct,
-            duration_s  = duration_s,
+            trade_id=trade_id,
+            symbol=symbol,
+            exchange=exchange,
+            timeframe=timeframe,
+            entry_price=entry_price,
+            exit_price=exit_price,
+            size_pct=size_pct,
+            entry_at=entry_at,
+            exit_at=closed_at,
+            pnl_pct=pnl_pct,
+            duration_s=duration_s,
         )
 
     @property

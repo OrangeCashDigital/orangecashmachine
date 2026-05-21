@@ -15,6 +15,7 @@ Uso:
     runtime.push(exchange)    # push — envía al Pushgateway
     runtime.shutdown()        # limpieza explícita
 """
+
 from __future__ import annotations
 
 import threading
@@ -27,9 +28,9 @@ from prometheus_client import CollectorRegistry, REGISTRY
 
 
 class MetricsMode(str, Enum):
-    PULL  = "pull"   # Prometheus scrape via HTTP
-    PUSH  = "push"   # Pushgateway batch
-    HYBRID = "hybrid" # ambos
+    PULL = "pull"  # Prometheus scrape via HTTP
+    PUSH = "push"  # Pushgateway batch
+    HYBRID = "hybrid"  # ambos
 
 
 class MetricsRuntime:
@@ -46,20 +47,20 @@ class MetricsRuntime:
 
     def __init__(
         self,
-        enabled:  bool             = False,
-        port:     int              = 8000,
-        mode:     MetricsMode      = MetricsMode.PULL,
-        gateway:  str              = "localhost:9091",
+        enabled: bool = False,
+        port: int = 8000,
+        mode: MetricsMode = MetricsMode.PULL,
+        gateway: str = "localhost:9091",
         registry: CollectorRegistry = REGISTRY,
     ) -> None:
-        self.enabled  = enabled
-        self.port     = port
-        self.mode     = mode
-        self.gateway  = gateway
+        self.enabled = enabled
+        self.port = port
+        self.mode = mode
+        self.gateway = gateway
         self.registry = registry
 
-        self._started  = False
-        self._lock     = threading.Lock()
+        self._started = False
+        self._lock = threading.Lock()
 
     @classmethod
     def from_config(cls, metrics_cfg) -> "MetricsRuntime":
@@ -71,11 +72,11 @@ class MetricsRuntime:
             mode = MetricsMode.PULL
 
         return cls(
-            enabled  = metrics_cfg.enabled,
-            port     = metrics_cfg.port,
-            mode     = mode,
-            gateway  = getattr(metrics_cfg, "gateway", "localhost:9091"),
-            registry = REGISTRY,
+            enabled=metrics_cfg.enabled,
+            port=metrics_cfg.port,
+            mode=mode,
+            gateway=getattr(metrics_cfg, "gateway", "localhost:9091"),
+            registry=REGISTRY,
         )
 
     @property
@@ -111,6 +112,7 @@ class MetricsRuntime:
 
             try:
                 from prometheus_client import start_http_server
+
                 start_http_server(self.port, registry=self.registry)
                 self._started = True
                 _log.bind(port=self.port, mode=self.mode).info("metrics_server_started")
@@ -136,7 +138,11 @@ class MetricsRuntime:
 
         job = f"ocm_pipeline_{exchange}"
         try:
-            from ocm.observability.prometheus import PIPELINE_LAST_RUN, PIPELINE_HEARTBEAT
+            from ocm.observability.prometheus import (
+                PIPELINE_LAST_RUN,
+                PIPELINE_HEARTBEAT,
+            )
+
             PIPELINE_LAST_RUN.labels(exchange=exchange).set(_time.time())
             PIPELINE_HEARTBEAT.labels(exchange=exchange).inc()
             push_to_gateway(self.gateway, job=job, registry=self.registry, timeout=5)

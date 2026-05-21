@@ -35,7 +35,9 @@ from market_data.domain.exceptions import (
 )
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 from market_data.domain.value_objects.gap_utils import GapRange, scan_gaps
-from market_data.domain.value_objects.exchange_quirks import get_quirks  # domain VO — BC-05
+from market_data.domain.value_objects.exchange_quirks import (
+    get_quirks,
+)  # domain VO — BC-05
 
 # ── Infrastructure (métricas — import local por BC-05: application aislada de infrastructure) ──
 # Los imports concretos ocurren dentro de los métodos que los usan (ver execute_pair, _heal_gap).
@@ -91,7 +93,6 @@ class RepairStrategy(StrategyMixin):
         total: int,
         ctx: PipelineContext,
     ) -> PairResult:
-
         _m = self._metrics  # RepairMetricsPort — inyectado en __init__
         result = PairResult(
             symbol=symbol,
@@ -125,7 +126,12 @@ class RepairStrategy(StrategyMixin):
             gaps = scan_gaps(df_existing, timeframe, tolerance=self._tolerance)
             result.gaps_found = len(gaps)
             if gaps:
-                _m.repair_gaps_found_inc(exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, count=len(gaps))
+                _m.repair_gaps_found_inc(
+                    exchange=ctx.exchange_id,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    count=len(gaps),
+                )
 
             if not gaps:
                 result.skipped = True
@@ -239,7 +245,10 @@ class RepairStrategy(StrategyMixin):
 
             if total_healed_rows > 0:
                 _m.rows_ingested_inc(
-                    exchange=ctx.exchange_id, symbol=symbol, timeframe=timeframe, count=total_healed_rows
+                    exchange=ctx.exchange_id,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    count=total_healed_rows,
                 )
 
         except asyncio.CancelledError:

@@ -54,7 +54,6 @@ from loguru import logger
 
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
 
-
 # ─── Constantes ───────────────────────────────────────────────────────────────
 
 _DEDUP_MAX_SIZE: int = 10_000

@@ -180,7 +180,7 @@ class ResilienceConfig(StrictBaseModel):
         )
     )
     network: ResilienceRetryPolicy = Field(
-        default_factory=lambda: ResilienceRetryPolicy(max_attempts=3, backoff_factor=1.5, jitter=True,  cap_seconds=10.0)
+        default_factory=lambda: ResilienceRetryPolicy(max_attempts=3, backoff_factor=1.5, jitter=True, cap_seconds=10.0)
     )
 
 
@@ -220,10 +220,12 @@ class ExchangeConfig(StrictBaseModel):
         Lee OCM_ENV directamente desde os.environ para evitar el import circular
         schema → env_resolver → schema. Fail-soft: entorno desconocido no es prod.
         """
-        from ocm.config.env_vars import OCM_ENV as _OCM_ENV  # import local: solo constante str
+        from ocm.config.env_vars import (
+            OCM_ENV as _OCM_ENV,
+        )  # import local: solo constante str
 
-        env      = (os.environ.get(_OCM_ENV) or "development").strip().lower()
-        is_prod  = env == "production"
+        env = (os.environ.get(_OCM_ENV) or "development").strip().lower()
+        is_prod = env == "production"
 
         if self.enabled and not self.has_credentials:
             msg = f"Exchange '{self.name.value}' is enabled but credentials are missing."
@@ -517,6 +519,8 @@ class RedisConfig(StrictBaseModel):
     # strings a bool/int/float antes de que Pydantic vea el dict.
     # Mantener este validator duplicaba coerción con constantes locales (DRY roto).
     # Ver: config/layers/coercion.py — motor canónico único.
+
+
 class KafkaConfig(StrictBaseModel):
     """Configuración de Kafka (streaming — future-ready)."""
 
@@ -538,7 +542,7 @@ class PostgresConfig(StrictBaseModel):
     enabled: bool = False
     host: str = "localhost"
     port: int = Field(default=5432, ge=1, le=65535)
-    user: Optional[SecretStr] = None    # SecretStr: evita leak de usuario en logs/tracebacks
+    user: Optional[SecretStr] = None  # SecretStr: evita leak de usuario en logs/tracebacks
     password: Optional[SecretStr] = None
     database: Optional[str] = None
 

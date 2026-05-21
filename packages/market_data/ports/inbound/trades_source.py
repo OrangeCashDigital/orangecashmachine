@@ -46,7 +46,6 @@ from typing import AsyncIterator, Protocol, runtime_checkable
 
 from market_data.domain.value_objects.raw_trade import RawTrade, TradeSource
 
-
 # ---------------------------------------------------------------------------
 # TradesSourceProtocol — contrato async del stream de trades
 # ---------------------------------------------------------------------------

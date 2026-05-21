@@ -58,7 +58,6 @@ from market_data.domain.value_objects.order_book import (
     OrderBookSnapshot,
 )
 
-
 # ---------------------------------------------------------------------------
 # OrderBookSnapshotReceived
 # ---------------------------------------------------------------------------

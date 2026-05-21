@@ -8,6 +8,7 @@ deben comportarse consistentemente respecto a write_snapshot + run_id.
 Principio: "Same config → same behavior" — ambos flows deben tener
 las mismas garantías de auditoría o fallar de forma idéntica y explícita.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -17,10 +18,10 @@ from unittest.mock import patch
 
 from ocm.config.hydra_loader import load_appconfig_from_hydra
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _exchange_block() -> dict:
     """
@@ -31,9 +32,9 @@ def _exchange_block() -> dict:
     SSOT: si el schema cambia, este helper es el único punto a actualizar.
     """
     return {
-        "enabled":      True,
-        "api_key":      "test-key",
-        "api_secret":   "test-secret",
+        "enabled": True,
+        "api_key": "test-key",
+        "api_secret": "test-secret",
         "api_password": "test-password",  # requerido por bybit credential validator
     }
 
@@ -41,8 +42,8 @@ def _exchange_block() -> dict:
 def _pipeline_block() -> dict:
     return {
         "historical": {"start_date": "auto", "timeframes": ["1m"]},
-        "resample":   {"targets": ["5m"], "source_tf": "1m"},
-        "realtime":   {},
+        "resample": {"targets": ["5m"], "source_tf": "1m"},
+        "realtime": {},
     }
 
 
@@ -50,20 +51,24 @@ def _pipeline_block() -> dict:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def minimal_cfg():
     """DictConfig mínimo que pasa L1-L5 del pipeline."""
-    return OmegaConf.create({
-        "exchanges":   {"bybit": _exchange_block()},
-        "pipeline":    _pipeline_block(),
-        "environment": {"name": "test"},
-        "safety":      {"dry_run": True},
-    })
+    return OmegaConf.create(
+        {
+            "exchanges": {"bybit": _exchange_block()},
+            "pipeline": _pipeline_block(),
+            "environment": {"name": "test"},
+            "safety": {"dry_run": True},
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Contrato fail-fast: write_snapshot=True sin run_id → ValueError inmediato
 # ---------------------------------------------------------------------------
+
 
 def test_write_snapshot_without_run_id_raises(minimal_cfg):
     """write_snapshot=True sin run_id debe fallar de forma explícita.
@@ -78,6 +83,7 @@ def test_write_snapshot_without_run_id_raises(minimal_cfg):
 # Contrato correcto: write_snapshot=False sin run_id → ok (deliberado)
 # ---------------------------------------------------------------------------
 
+
 def test_write_snapshot_false_without_run_id_ok(minimal_cfg):
     """write_snapshot=False + run_id=None es intencional — no debe lanzar."""
     config = load_appconfig_from_hydra(minimal_cfg, env="test", write_snapshot=False)
@@ -87,6 +93,7 @@ def test_write_snapshot_false_without_run_id_ok(minimal_cfg):
 # ---------------------------------------------------------------------------
 # Contrato correcto: write_snapshot=True con run_id → snapshot escrito
 # ---------------------------------------------------------------------------
+
 
 def test_write_snapshot_with_run_id_calls_writer(minimal_cfg):
     """write_snapshot=True + run_id válido debe llamar write_config_snapshot."""
@@ -107,6 +114,7 @@ def test_write_snapshot_with_run_id_calls_writer(minimal_cfg):
 # Contrato standalone: run_id propagado → mismo comportamiento que hydra path
 # ---------------------------------------------------------------------------
 
+
 def test_standalone_propagates_run_id_to_snapshot(tmp_path, monkeypatch):
     """load_appconfig_standalone con run_id debe propagar al snapshot writer.
 
@@ -126,16 +134,22 @@ def test_standalone_propagates_run_id_to_snapshot(tmp_path, monkeypatch):
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "base.yaml").write_text(yaml.dump({
-        "exchanges":   {"bybit": _exchange_block()},
-        "pipeline":    _pipeline_block(),
-        "environment": {"name": "test"},
-        "safety":      {"dry_run": True},
-    }))
+    (config_dir / "base.yaml").write_text(
+        yaml.dump(
+            {
+                "exchanges": {"bybit": _exchange_block()},
+                "pipeline": _pipeline_block(),
+                "environment": {"name": "test"},
+                "safety": {"dry_run": True},
+            }
+        )
+    )
     (config_dir / "env").mkdir()
 
-    with patch("ocm.config.loader.env_resolver.load_dotenv_for_env"), \
-         patch("ocm.config.hydra_loader.write_config_snapshot") as mock_write:
+    with (
+        patch("ocm.config.loader.env_resolver.load_dotenv_for_env"),
+        patch("ocm.config.hydra_loader.write_config_snapshot") as mock_write,
+    ):
         load_appconfig_standalone(
             env="test",
             config_dir=config_dir,

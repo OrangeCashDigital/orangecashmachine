@@ -22,7 +22,12 @@ def ohlcv_partition_spec() -> PartitionSpec:
     """Spec compartido para bronze.ohlcv, silver.ohlcv y gold.features."""
     return PartitionSpec(
         PartitionField(source_id=7, field_id=1001, transform=IdentityTransform(), name="exchange"),
-        PartitionField(source_id=8, field_id=1002, transform=IdentityTransform(), name="market_type"),
+        PartitionField(
+            source_id=8,
+            field_id=1002,
+            transform=IdentityTransform(),
+            name="market_type",
+        ),
         PartitionField(source_id=9, field_id=1003, transform=IdentityTransform(), name="symbol"),
         PartitionField(source_id=10, field_id=1004, transform=IdentityTransform(), name="timeframe"),
         PartitionField(source_id=1, field_id=1005, transform=MonthTransform(), name="ts_month"),
@@ -33,7 +38,12 @@ def trades_partition_spec() -> PartitionSpec:
     """Spec para silver.trades — sin timeframe (trades no tienen resolución fija)."""
     return PartitionSpec(
         PartitionField(source_id=104, field_id=2001, transform=IdentityTransform(), name="exchange"),
-        PartitionField(source_id=105, field_id=2002, transform=IdentityTransform(), name="market_type"),
+        PartitionField(
+            source_id=105,
+            field_id=2002,
+            transform=IdentityTransform(),
+            name="market_type",
+        ),
         PartitionField(source_id=103, field_id=2003, transform=IdentityTransform(), name="symbol"),
         PartitionField(source_id=101, field_id=2004, transform=MonthTransform(), name="ts_month"),
     )

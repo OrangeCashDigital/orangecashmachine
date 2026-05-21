@@ -14,6 +14,7 @@ DIP: PortfolioService depende de este Protocol, no de Redis/dict.
 
 Principios: DIP · OCP · SafeOps
 """
+
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable

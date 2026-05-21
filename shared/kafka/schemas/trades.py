@@ -33,30 +33,30 @@ Schema version history
 
 Principios: SSOT · DDD · Kappa · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Literal, Optional
 
 from shared.kafka.schemas._base import BasePayload
-
 
 # ---------------------------------------------------------------------------
 # Constantes de schema
 # ---------------------------------------------------------------------------
 
-TRADE_SCHEMA_VERSION:      int = 1
+TRADE_SCHEMA_VERSION: int = 1
 TRADE_SERIES_SCHEMA_VERSION: int = 1
 
 TradeSideWire = Literal["buy", "sell", "unknown"]
-DataSource     = Literal["live", "backfill", "replay"]
+DataSource = Literal["live", "backfill", "replay"]
 
-DATASOURCE_LIVE:     DataSource = "live"
+DATASOURCE_LIVE: DataSource = "live"
 DATASOURCE_BACKFILL: DataSource = "backfill"
-DATASOURCE_REPLAY:   DataSource = "replay"
+DATASOURCE_REPLAY: DataSource = "replay"
 
-_VALID_SOURCES   = frozenset({"live", "backfill", "replay"})
-_VALID_SIDES     = frozenset({"buy", "sell", "unknown"})
+_VALID_SOURCES = frozenset({"live", "backfill", "replay"})
+_VALID_SIDES = frozenset({"buy", "sell", "unknown"})
 
 
 class TradeSchemaVersionError(ValueError):
@@ -66,6 +66,7 @@ class TradeSchemaVersionError(ValueError):
 # ---------------------------------------------------------------------------
 # TradePayload — tick individual → trades.raw
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class TradePayload(BasePayload):
@@ -96,17 +97,18 @@ class TradePayload(BasePayload):
     Transportamos como str para preservar precisión exacta del exchange
     sin pérdida de float. El consumer convierte str → Decimal en ACL.
     """
-    exchange:     str          = ""
-    market_type:  str          = ""
-    symbol:       str          = ""
-    trade_id:     str          = ""
-    timestamp_ms: int          = 0
-    price:        str          = "0"      # Decimal serializado como str
-    amount:       str          = "0"      # Decimal serializado como str
-    side:         TradeSideWire = "unknown"
-    source:       DataSource   = DATASOURCE_LIVE
-    run_id:       str          = ""
-    meta:         Optional[Dict[str, Any]] = None
+
+    exchange: str = ""
+    market_type: str = ""
+    symbol: str = ""
+    trade_id: str = ""
+    timestamp_ms: int = 0
+    price: str = "0"  # Decimal serializado como str
+    amount: str = "0"  # Decimal serializado como str
+    side: TradeSideWire = "unknown"
+    source: DataSource = DATASOURCE_LIVE
+    run_id: str = ""
+    meta: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
     # Kappa helpers
@@ -130,20 +132,22 @@ class TradePayload(BasePayload):
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version": TRADE_SCHEMA_VERSION,
-            "exchange":      self.exchange,
-            "market_type":   self.market_type,
-            "symbol":        self.symbol,
-            "trade_id":      self.trade_id,
-            "timestamp_ms":  self.timestamp_ms,
-            "price":         self.price,
-            "amount":        self.amount,
-            "side":          self.side,
-            "source":        self.source,
-            "run_id":        self.run_id,
-            "meta":          self.meta,
-        })
+        base.update(
+            {
+                "event_version": TRADE_SCHEMA_VERSION,
+                "exchange": self.exchange,
+                "market_type": self.market_type,
+                "symbol": self.symbol,
+                "trade_id": self.trade_id,
+                "timestamp_ms": self.timestamp_ms,
+                "price": self.price,
+                "amount": self.amount,
+                "side": self.side,
+                "source": self.source,
+                "run_id": self.run_id,
+                "meta": self.meta,
+            }
+        )
         return base
 
     @classmethod
@@ -151,39 +155,38 @@ class TradePayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != TRADE_SCHEMA_VERSION:
             raise TradeSchemaVersionError(
-                f"TradePayload schema v{version} incompatible "
-                f"con v{TRADE_SCHEMA_VERSION} esperada."
+                f"TradePayload schema v{version} incompatible con v{TRADE_SCHEMA_VERSION} esperada."
             )
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
             raise TradeSchemaVersionError(
-                f"TradePayload.source desconocido: {source!r}. "
-                f"Válidos: {sorted(_VALID_SOURCES)}."
+                f"TradePayload.source desconocido: {source!r}. Válidos: {sorted(_VALID_SOURCES)}."
             )
         side = data.get("side", "unknown")
         if side not in _VALID_SIDES:
-            side = "unknown"   # fail-soft: lado desconocido no es error fatal
+            side = "unknown"  # fail-soft: lado desconocido no es error fatal
         return cls(
-            event_id      = str(data["event_id"]),
-            event_version = version,
-            occurred_at   = str(data.get("occurred_at", "")),
-            exchange      = str(data["exchange"]),
-            market_type   = str(data["market_type"]),
-            symbol        = str(data["symbol"]),
-            trade_id      = str(data["trade_id"]),
-            timestamp_ms  = int(data["timestamp_ms"]),
-            price         = str(data["price"]),
-            amount        = str(data["amount"]),
-            side          = side,
-            source        = source,
-            run_id        = str(data.get("run_id", "")),
-            meta          = data.get("meta"),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            exchange=str(data["exchange"]),
+            market_type=str(data["market_type"]),
+            symbol=str(data["symbol"]),
+            trade_id=str(data["trade_id"]),
+            timestamp_ms=int(data["timestamp_ms"]),
+            price=str(data["price"]),
+            amount=str(data["amount"]),
+            side=side,
+            source=source,
+            run_id=str(data.get("run_id", "")),
+            meta=data.get("meta"),
         )
 
 
 # ---------------------------------------------------------------------------
 # TradeSeriesPayload — ventana agregada → trades.agg
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class TradeSeriesPayload(BasePayload):
@@ -211,50 +214,53 @@ class TradeSeriesPayload(BasePayload):
     window_start_ms : timestamp inicio de ventana (ms UTC)
     window_end_ms   : timestamp fin de ventana (ms UTC)
     """
-    exchange:           str        = ""
-    market_type:        str        = ""
-    symbol:             str        = ""
-    window_start_ms:    int        = 0
-    window_end_ms:      int        = 0
-    trade_count:        int        = 0
-    vwap:               str        = "0"
-    total_volume:       str        = "0"
-    total_cost:         str        = "0"
-    buy_volume:         str        = "0"
-    sell_volume:        str        = "0"
-    buy_sell_imbalance: float      = 0.0
-    open_price:         str        = "0"
-    close_price:        str        = "0"
-    high_price:         str        = "0"
-    low_price:          str        = "0"
-    source:             DataSource = DATASOURCE_LIVE
-    run_id:             str        = ""
-    meta:               Optional[Dict[str, Any]] = None
+
+    exchange: str = ""
+    market_type: str = ""
+    symbol: str = ""
+    window_start_ms: int = 0
+    window_end_ms: int = 0
+    trade_count: int = 0
+    vwap: str = "0"
+    total_volume: str = "0"
+    total_cost: str = "0"
+    buy_volume: str = "0"
+    sell_volume: str = "0"
+    buy_sell_imbalance: float = 0.0
+    open_price: str = "0"
+    close_price: str = "0"
+    high_price: str = "0"
+    low_price: str = "0"
+    source: DataSource = DATASOURCE_LIVE
+    run_id: str = ""
+    meta: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version":      TRADE_SERIES_SCHEMA_VERSION,
-            "exchange":           self.exchange,
-            "market_type":        self.market_type,
-            "symbol":             self.symbol,
-            "window_start_ms":    self.window_start_ms,
-            "window_end_ms":      self.window_end_ms,
-            "trade_count":        self.trade_count,
-            "vwap":               self.vwap,
-            "total_volume":       self.total_volume,
-            "total_cost":         self.total_cost,
-            "buy_volume":         self.buy_volume,
-            "sell_volume":        self.sell_volume,
-            "buy_sell_imbalance": self.buy_sell_imbalance,
-            "open_price":         self.open_price,
-            "close_price":        self.close_price,
-            "high_price":         self.high_price,
-            "low_price":          self.low_price,
-            "source":             self.source,
-            "run_id":             self.run_id,
-            "meta":               self.meta,
-        })
+        base.update(
+            {
+                "event_version": TRADE_SERIES_SCHEMA_VERSION,
+                "exchange": self.exchange,
+                "market_type": self.market_type,
+                "symbol": self.symbol,
+                "window_start_ms": self.window_start_ms,
+                "window_end_ms": self.window_end_ms,
+                "trade_count": self.trade_count,
+                "vwap": self.vwap,
+                "total_volume": self.total_volume,
+                "total_cost": self.total_cost,
+                "buy_volume": self.buy_volume,
+                "sell_volume": self.sell_volume,
+                "buy_sell_imbalance": self.buy_sell_imbalance,
+                "open_price": self.open_price,
+                "close_price": self.close_price,
+                "high_price": self.high_price,
+                "low_price": self.low_price,
+                "source": self.source,
+                "run_id": self.run_id,
+                "meta": self.meta,
+            }
+        )
         return base
 
     @classmethod
@@ -262,37 +268,34 @@ class TradeSeriesPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != TRADE_SERIES_SCHEMA_VERSION:
             raise TradeSchemaVersionError(
-                f"TradeSeriesPayload schema v{version} incompatible "
-                f"con v{TRADE_SERIES_SCHEMA_VERSION} esperada."
+                f"TradeSeriesPayload schema v{version} incompatible con v{TRADE_SERIES_SCHEMA_VERSION} esperada."
             )
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
-            raise TradeSchemaVersionError(
-                f"TradeSeriesPayload.source desconocido: {source!r}."
-            )
+            raise TradeSchemaVersionError(f"TradeSeriesPayload.source desconocido: {source!r}.")
         return cls(
-            event_id           = str(data["event_id"]),
-            event_version      = version,
-            occurred_at        = str(data.get("occurred_at", "")),
-            exchange           = str(data["exchange"]),
-            market_type        = str(data["market_type"]),
-            symbol             = str(data["symbol"]),
-            window_start_ms    = int(data["window_start_ms"]),
-            window_end_ms      = int(data["window_end_ms"]),
-            trade_count        = int(data["trade_count"]),
-            vwap               = str(data["vwap"]),
-            total_volume       = str(data["total_volume"]),
-            total_cost         = str(data["total_cost"]),
-            buy_volume         = str(data["buy_volume"]),
-            sell_volume        = str(data["sell_volume"]),
-            buy_sell_imbalance = float(data["buy_sell_imbalance"]),
-            open_price         = str(data["open_price"]),
-            close_price        = str(data["close_price"]),
-            high_price         = str(data["high_price"]),
-            low_price          = str(data["low_price"]),
-            source             = source,
-            run_id             = str(data.get("run_id", "")),
-            meta               = data.get("meta"),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            exchange=str(data["exchange"]),
+            market_type=str(data["market_type"]),
+            symbol=str(data["symbol"]),
+            window_start_ms=int(data["window_start_ms"]),
+            window_end_ms=int(data["window_end_ms"]),
+            trade_count=int(data["trade_count"]),
+            vwap=str(data["vwap"]),
+            total_volume=str(data["total_volume"]),
+            total_cost=str(data["total_cost"]),
+            buy_volume=str(data["buy_volume"]),
+            sell_volume=str(data["sell_volume"]),
+            buy_sell_imbalance=float(data["buy_sell_imbalance"]),
+            open_price=str(data["open_price"]),
+            close_price=str(data["close_price"]),
+            high_price=str(data["high_price"]),
+            low_price=str(data["low_price"]),
+            source=source,
+            run_id=str(data.get("run_id", "")),
+            meta=data.get("meta"),
         )
 
 

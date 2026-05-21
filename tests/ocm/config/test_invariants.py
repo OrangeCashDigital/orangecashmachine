@@ -38,18 +38,17 @@ from ocm.config.paths import (
     gold_features_root,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_SRC_DIRS  = [
+_SRC_DIRS = [
     _REPO_ROOT / "core",
     _REPO_ROOT / "market_data",
     _REPO_ROOT / "data_platform",  # facade de acceso al lake
-    _REPO_ROOT / "infra",           # cursor_store y estado operacional
-    _REPO_ROOT / "research",        # scripts de investigación
+    _REPO_ROOT / "infra",  # cursor_store y estado operacional
+    _REPO_ROOT / "research",  # scripts de investigación
 ]
 
 
@@ -111,7 +110,7 @@ def _getenv_literals_in_codebase() -> set[str]:
     en runtime. Son riesgos documentados y aceptados conscientemente.
     """
     found: set[str] = set()
-    pattern = re.compile(r'^[A-Z][A-Z0-9_]+$')
+    pattern = re.compile(r"^[A-Z][A-Z0-9_]+$")
 
     for fpath in _all_py_files():
         try:
@@ -185,8 +184,7 @@ def test_removed_env_vars_not_in_env_vars_module():
     declared = _declared_env_var_names()
     regressions = _REMOVED_VARS & declared
     assert not regressions, (
-        f"Vars eliminadas reaparecieron en env_vars.py: {sorted(regressions)}\n"
-        f"Commit de referencia: 648c37d"
+        f"Vars eliminadas reaparecieron en env_vars.py: {sorted(regressions)}\nCommit de referencia: 648c37d"
     )
 
 
@@ -219,7 +217,7 @@ def _oc_env_literals_in_yamls() -> set[str]:
     y ``${oc.env:VAR,default}`` en archivos YAML del proyecto.
     """
     found: set[str] = set()
-    pattern = re.compile(r'\$\{oc\.env:([A-Z][A-Z0-9_]+)(?:,[^}]*)?\}')
+    pattern = re.compile(r"\$\{oc\.env:([A-Z][A-Z0-9_]+)(?:,[^}]*)?\}")
     for fpath in _yaml_files():
         try:
             text = fpath.read_text(encoding="utf-8")
@@ -249,17 +247,32 @@ def _oc_env_literals_in_yamls() -> set[str]:
 # ---------------------------------------------------------------------------
 
 _INFRA_REGISTRY: dict[str, frozenset[str]] = {
-    "os": frozenset({
-        "HOME", "PATH", "USER", "SHELL", "PWD",
-        "PYTHONPATH", "VIRTUAL_ENV",
-    }),
-    "redis": frozenset({
-        "REDIS_URL", "REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PASSWORD",
-        "CURSOR_TTL_DAYS",
-    }),
-    "db": frozenset({
-        "DATABASE_URL",
-    }),
+    "os": frozenset(
+        {
+            "HOME",
+            "PATH",
+            "USER",
+            "SHELL",
+            "PWD",
+            "PYTHONPATH",
+            "VIRTUAL_ENV",
+        }
+    ),
+    "redis": frozenset(
+        {
+            "REDIS_URL",
+            "REDIS_HOST",
+            "REDIS_PORT",
+            "REDIS_DB",
+            "REDIS_PASSWORD",
+            "CURSOR_TTL_DAYS",
+        }
+    ),
+    "db": frozenset(
+        {
+            "DATABASE_URL",
+        }
+    ),
 }
 
 _SYSTEM_VARS_ALLOWLIST: frozenset[str] = frozenset().union(*_INFRA_REGISTRY.values())
@@ -272,7 +285,7 @@ def test_all_getenv_literals_declared_in_env_vars():
     debe estar declarado como constante en env_vars.py (SSoT).
     """
     declared_values = _declared_env_var_values()
-    used_literals   = _getenv_literals_in_codebase()
+    used_literals = _getenv_literals_in_codebase()
 
     undeclared = used_literals - declared_values - _SYSTEM_VARS_ALLOWLIST
     assert not undeclared, (
@@ -289,7 +302,7 @@ def test_all_oc_env_literals_declared_in_env_vars():
     de AST no alcanza.
     """
     declared_values = _declared_env_var_values()
-    yaml_literals   = _oc_env_literals_in_yamls()
+    yaml_literals = _oc_env_literals_in_yamls()
 
     undeclared = yaml_literals - declared_values - _SYSTEM_VARS_ALLOWLIST
     assert not undeclared, (
@@ -302,6 +315,7 @@ def test_all_oc_env_literals_declared_in_env_vars():
 # ---------------------------------------------------------------------------
 # Invariante 3: data_lake_root() es idempotente
 # ---------------------------------------------------------------------------
+
 
 def test_data_lake_root_idempotent(monkeypatch, tmp_path):
     """Llamadas sucesivas con el mismo entorno retornan el mismo path."""
@@ -320,14 +334,14 @@ def test_data_lake_root_is_absolute(monkeypatch, tmp_path):
 # Invariante 4: paths derivados son subdirectorios de data_lake_root()
 # ---------------------------------------------------------------------------
 
+
 def test_bronze_root_is_subdir_of_lake(monkeypatch, tmp_path):
     monkeypatch.setenv(OCM_DATA_LAKE_PATH, str(tmp_path))
     monkeypatch.delenv(OCM_GOLD_PATH, raising=False)
-    lake   = data_lake_root()
+    lake = data_lake_root()
     bronze = bronze_ohlcv_root()
     assert str(bronze).startswith(str(lake)), (
-        f"bronze_ohlcv_root() no es subdir de data_lake_root()\n"
-        f"  lake:   {lake}\n  bronze: {bronze}"
+        f"bronze_ohlcv_root() no es subdir de data_lake_root()\n  lake:   {lake}\n  bronze: {bronze}"
     )
 
 
@@ -337,8 +351,7 @@ def test_gold_root_is_subdir_of_lake_when_no_override(monkeypatch, tmp_path):
     lake = data_lake_root()
     gold = gold_features_root()
     assert str(gold).startswith(str(lake)), (
-        f"gold_features_root() no es subdir de data_lake_root() sin override\n"
-        f"  lake: {lake}\n  gold: {gold}"
+        f"gold_features_root() no es subdir de data_lake_root() sin override\n  lake: {lake}\n  gold: {gold}"
     )
 
 
@@ -346,14 +359,12 @@ def test_gold_root_is_subdir_of_lake_when_no_override(monkeypatch, tmp_path):
 # Invariante 5: __all__ de env_vars exporta solo strings
 # ---------------------------------------------------------------------------
 
+
 def test_env_vars_module_constants_are_strings():
     """Toda constante UPPER_CASE en env_vars.py debe ser un str."""
     bad = {
         k: type(v).__name__
         for k, v in vars(env_vars_module).items()
-        if k == k.upper() and not k.startswith("_")
-        and not isinstance(v, (str, frozenset, dict, bool))
+        if k == k.upper() and not k.startswith("_") and not isinstance(v, (str, frozenset, dict, bool))
     }
-    assert not bad, (
-        f"Constantes en env_vars.py con tipo inesperado: {bad}"
-    )
+    assert not bad, f"Constantes en env_vars.py con tipo inesperado: {bad}"

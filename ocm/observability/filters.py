@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # SSOT de prefijos que constituyen el pipeline de ingesta y orquestación.
 # Prefijos exactos — startswith() es O(len(prefix)), no O(len(name)).
 #
@@ -74,11 +73,7 @@ def strict_pipeline_filter(record: dict[str, Any]) -> bool:
     Returns:
         True si pasa ``pipeline_filter`` y tiene ``exchange`` y ``dataset`` no vacíos.
     """
-    return (
-        pipeline_filter(record)
-        and bool(record["extra"].get("exchange"))
-        and bool(record["extra"].get("dataset"))
-    )
+    return pipeline_filter(record) and bool(record["extra"].get("exchange")) and bool(record["extra"].get("dataset"))
 
 
 __all__ = ["pipeline_filter", "strict_pipeline_filter"]

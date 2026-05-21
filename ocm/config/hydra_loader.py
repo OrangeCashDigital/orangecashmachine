@@ -64,9 +64,7 @@ from ocm.config.schema import AppConfig
 from ocm.config.loader.snapshot import write_config_snapshot
 from ocm.config.loader.exceptions import ConfigValidationError
 
-_HYDRA_INTERNAL: frozenset[str] = frozenset(
-    {"_target_", "_recursive_", "_convert_", "hydra"}
-)
+_HYDRA_INTERNAL: frozenset[str] = frozenset({"_target_", "_recursive_", "_convert_", "hydra"})
 # Coerción nullable delegada a layers/coercion.py (SSOT):
 #   _NULLABLE_PATHS: frozenset[tuple] — matching exacto por path completo.
 #   _NULLABLE_KEYS:  frozenset[str]   — matching por nombre de clave (nodos dinámicos).
@@ -86,7 +84,7 @@ _HYDRA_INTERNAL: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 _MODULE_PACKAGES: dict[str, str] = {
     "pipeline/historical.yaml": "pipeline.historical",
-    "pipeline/resample.yaml":   "pipeline.resample",
+    "pipeline/resample.yaml": "pipeline.resample",
 }
 
 # ---------------------------------------------------------------------------
@@ -210,12 +208,11 @@ def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
     """
     from pydantic import ValidationError as _PydanticValidationError
     from ocm.config.pipeline import ConfigPipeline
+
     try:
         return ConfigPipeline(cfg).run()
     except _PydanticValidationError as exc:
-        raise ConfigValidationError(
-            f"AppConfig validation failed: {exc}"
-        ) from exc
+        raise ConfigValidationError(f"AppConfig validation failed: {exc}") from exc
 
 
 def load_appconfig_from_hydra(
@@ -314,6 +311,7 @@ def load_appconfig_standalone(
         # SSOT: _find_config_dir() ancla en repo_root() via .git — mismo mecanismo
         # que paths.py usa para data_lake_root(). Evita CWD-relativo frágil.
         from ocm.config.paths import _find_config_dir
+
         _dir = _find_config_dir() or Path("config").resolve()
 
     if not _dir.exists():
@@ -343,7 +341,9 @@ def load_appconfig_standalone(
     _snapshot = write_snapshot if write_snapshot is not None else (_env == "production")
     logger.debug(
         "load_appconfig_standalone | env={} config_dir={} snapshot={}",
-        _env, _dir, _snapshot,
+        _env,
+        _dir,
+        _snapshot,
     )
     # Invariante de dominio: todos los YAMLs de OCM son mapas, nunca listas.
     # OmegaConf.merge() tiene firma -> DictConfig | ListConfig en sus stubs,

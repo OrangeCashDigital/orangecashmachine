@@ -18,6 +18,7 @@ compartida por todos los subsistemas de OCM sin duplicación.
 
 Principios: SOLID · SSOT · Fail-Fast · SafeOps · KISS · DRY
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -39,11 +40,11 @@ class ApiSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="OCM_API_",        # OCM_API_JWT_SECRET, OCM_API_ENV, etc.
+        env_prefix="OCM_API_",  # OCM_API_JWT_SECRET, OCM_API_ENV, etc.
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore",               # ignora vars desconocidas — OCP
+        extra="ignore",  # ignora vars desconocidas — OCP
     )
 
     # ── Auth ──────────────────────────────────────────────────────────
@@ -66,13 +67,15 @@ class ApiSettings(BaseSettings):
     # Lee: REDIS_PORT
     redis_port: int = Field(
         default=6379,
-        ge=1, le=65535,
+        ge=1,
+        le=65535,
         validation_alias="REDIS_PORT",
     )
     # Lee: REDIS_DB
     redis_db: int = Field(
         default=0,
-        ge=0, le=15,
+        ge=0,
+        le=15,
         validation_alias="REDIS_DB",
     )
     # Lee: REDIS_PASSWORD
@@ -91,7 +94,7 @@ class ApiSettings(BaseSettings):
     # Lee: OCM_API_HOST / OCM_API_PORT / OCM_API_ENV
     host: str = Field(default="0.0.0.0")
     port: int = Field(default=8000, ge=1, le=65535)
-    env:  str = Field(default="development")
+    env: str = Field(default="development")
 
     # ── Rate limiting ─────────────────────────────────────────────────
     # Lee: OCM_API_RATE_LIMIT_RPM
@@ -111,7 +114,7 @@ class ApiSettings(BaseSettings):
         if not v or len(v) < 32:
             raise ValueError(
                 "OCM_API_JWT_SECRET debe tener al menos 32 caracteres. "
-                "Generar con: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+                'Generar con: python3 -c "import secrets; print(secrets.token_hex(32))"'
             )
         return v
 
@@ -124,14 +127,9 @@ class ApiSettings(BaseSettings):
         """
         if self.redis_password:
             # Convención Redis: redis://:password@host:port/db (usuario vacío)
-            self.redis_url = (
-                f"redis://:{self.redis_password}"
-                f"@{self.redis_host}:{self.redis_port}/{self.redis_db}"
-            )
+            self.redis_url = f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
         else:
-            self.redis_url = (
-                f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
-            )
+            self.redis_url = f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
         return self
 
     @property

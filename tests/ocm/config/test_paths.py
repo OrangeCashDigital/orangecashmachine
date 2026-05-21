@@ -14,10 +14,10 @@ from ocm.config.paths import (
 )
 from ocm.config.env_vars import OCM_DATA_LAKE_PATH, OCM_GOLD_PATH
 
-
 # ---------------------------------------------------------------------------
 # _expand_env
 # ---------------------------------------------------------------------------
+
 
 def test_expand_env_with_default(monkeypatch):
     monkeypatch.delenv("MY_VAR", raising=False)
@@ -45,6 +45,7 @@ def test_expand_env_no_placeholders():
 # data_lake_root — prioridad 1: env var
 # ---------------------------------------------------------------------------
 
+
 def test_data_lake_root_env_override(monkeypatch, tmp_path):
     # Limpiar SSOT var para aislar el test de env real del proceso
     monkeypatch.delenv("OCM_STORAGE__DATA_LAKE__PATH", raising=False)
@@ -64,11 +65,11 @@ def test_data_lake_root_fallback(monkeypatch):
 # Paths derivados
 # ---------------------------------------------------------------------------
 
+
 def test_bronze_ohlcv_root_suffix(monkeypatch, tmp_path):
     monkeypatch.delenv("OCM_STORAGE__DATA_LAKE__PATH", raising=False)
     monkeypatch.setenv(OCM_DATA_LAKE_PATH, str(tmp_path))
     assert bronze_ohlcv_root() == tmp_path.resolve() / "bronze" / "ohlcv"
-
 
 
 def test_gold_features_root_env_override(monkeypatch, tmp_path):
@@ -87,6 +88,7 @@ def test_gold_features_root_derived(monkeypatch, tmp_path):
 # _read_yaml_lake_path — falla silenciosa con log
 # ---------------------------------------------------------------------------
 
+
 def test_read_yaml_lake_path_returns_none_on_error(monkeypatch):
     """Si el YAML loader lanza, devuelve None sin propagar."""
     with patch("ocm.config.paths._find_config_dir", side_effect=RuntimeError("boom")):
@@ -100,6 +102,7 @@ def test_read_yaml_lake_path_returns_none_on_error(monkeypatch):
 # cuando usaban Path("config").resolve() relativo al CWD.
 # ---------------------------------------------------------------------------
 
+
 def test_find_config_dir_independent_of_cwd(tmp_path, monkeypatch):
     """_find_config_dir resuelve via repo_root() — nunca via CWD."""
     monkeypatch.chdir(tmp_path)  # CWD = directorio vacío sin config/
@@ -107,6 +110,7 @@ def test_find_config_dir_independent_of_cwd(tmp_path, monkeypatch):
     monkeypatch.delenv("OCM_CONFIG_DIR", raising=False)
 
     from ocm.config.paths import _find_config_dir
+
     result = _find_config_dir()
 
     # Debe encontrar config/ del repo — nunca None ni tmp_path/config
@@ -122,6 +126,7 @@ def test_find_config_dir_env_override_takes_priority(tmp_path, monkeypatch):
     monkeypatch.setenv("OCM_CONFIG_PATH", str(config_via_env))
 
     from ocm.config.paths import _find_config_dir
+
     result = _find_config_dir()
     assert result == config_via_env
 
@@ -132,6 +137,7 @@ def test_find_config_dir_env_override_invalid_dir_falls_back(tmp_path, monkeypat
     monkeypatch.delenv("OCM_CONFIG_DIR", raising=False)
 
     from ocm.config.paths import _find_config_dir
+
     result = _find_config_dir()
     assert result is None
 
@@ -143,6 +149,7 @@ def test_repo_root_resolves_to_git_root():
     ocm.config.paths re-exporta por backward compat pero no es la fuente.
     """
     from shared.utils.repo import repo_root
+
     root = repo_root()
     assert (root / ".git").exists(), f"repo_root() no contiene .git: {root}"
     assert (root / "pyproject.toml").exists(), f"repo_root() no contiene pyproject.toml: {root}"
@@ -152,5 +159,6 @@ def test_repo_root_reexported_from_paths_for_compat():
     """paths.py re-exporta repo_root desde shared para backward compat."""
     from ocm.config.paths import repo_root as paths_repo_root
     from shared.utils.repo import repo_root as shared_repo_root
+
     # Misma función — no una copia
     assert paths_repo_root is shared_repo_root

@@ -30,7 +30,6 @@ from typing import Callable, Protocol, Type, runtime_checkable
 
 from market_data.domain.events.ingestion import DomainEvent
 
-
 # ---------------------------------------------------------------------------
 # Type alias — callable que acepta un DomainEvent
 # ---------------------------------------------------------------------------

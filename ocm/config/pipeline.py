@@ -51,30 +51,31 @@ from ocm.config.loader.exceptions import ConfigurationError
 from ocm.config.hydra_loader import strip_hydra_internals
 from ocm.config.layers.coercion import coerce_scalar_values
 
-
 __all__ = [
     "ConfigPipelineError",  # excepción pública del bounded context
-    "ConfigPipeline",       # punto de entrada del pipeline
-    "ConfigStage",          # diagnóstico — etapas del pipeline
-    "ConfigTransition",     # diagnóstico — historial de transiciones
+    "ConfigPipeline",  # punto de entrada del pipeline
+    "ConfigStage",  # diagnóstico — etapas del pipeline
+    "ConfigTransition",  # diagnóstico — historial de transiciones
 ]
 
 
 class ConfigStage(Enum):
     """Etapas formales del pipeline. Cada una mapea a una responsabilidad."""
-    RAW         = auto()   # Output de Hydra compose
-    ENV_MUTATED = auto()   # Post OCM_* env overrides
-    COERCED     = auto()   # Plain dict (post OmegaConf.to_container)
-    VALIDATED   = auto()   # AppConfig Pydantic (tipos verificados)
-    FROZEN      = auto()   # Inmutable — la app lee solo desde aquí
+
+    RAW = auto()  # Output de Hydra compose
+    ENV_MUTATED = auto()  # Post OCM_* env overrides
+    COERCED = auto()  # Plain dict (post OmegaConf.to_container)
+    VALIDATED = auto()  # AppConfig Pydantic (tipos verificados)
+    FROZEN = auto()  # Inmutable — la app lee solo desde aquí
 
 
 @dataclass(frozen=True)
 class ConfigTransition:
     """Registro inmutable de una transición entre etapas."""
+
     from_stage: ConfigStage
     to_stage: ConfigStage
-    mutations: int = 0   # cantidad de overrides/cambios aplicados en esta transición
+    mutations: int = 0  # cantidad de overrides/cambios aplicados en esta transición
 
 
 class ConfigPipelineError(ConfigurationError):
@@ -88,6 +89,7 @@ class ConfigPipelineError(ConfigurationError):
     (``raise ... from exc`` — PEP 3134). No duplicar con
     ``self.__cause__ = cause`` — redundante y fuente de confusión.
     """
+
     def __init__(self, stage: ConfigStage, message: str) -> None:
         self.stage = stage
         super().__init__(f"[ConfigPipeline:{stage.name}] {message}")
@@ -204,6 +206,7 @@ class ConfigPipeline:
         """
         try:
             from ocm.config.layers.env_override import apply_env_overrides
+
             mutated, mutations = apply_env_overrides(cfg)  # os.environ: correcto en prod
             logger.debug("config_pipeline_l2 | ocm_overrides={}", mutations)
             self._record(ConfigStage.ENV_MUTATED, ConfigStage.COERCED, mutations)
@@ -230,9 +233,12 @@ class ConfigPipeline:
           - throw_on_missing=True: fail-fast si algún ${oc.env:VAR} no está seteado
         """
         try:
-            raw_dict: dict[str, Any] = cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True))
-            strip_hydra_internals(raw_dict)   # muta in-place — no reasignar
-            coerce_scalar_values(raw_dict)    # muta in-place — str→bool/None (SSOT: coercion.py); int/float → Pydantic L4
+            raw_dict: dict[str, Any] = cast(
+                dict[str, Any],
+                OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
+            )
+            strip_hydra_internals(raw_dict)  # muta in-place — no reasignar
+            coerce_scalar_values(raw_dict)  # muta in-place — str→bool/None (SSOT: coercion.py); int/float → Pydantic L4
             # normalize_empty_strings eliminada — absorbida por coerce_scalar_values() (DRY/SSOT)
             logger.debug("config_pipeline_l3 | coerce=ok keys={}", list(raw_dict.keys()))
             self._record(ConfigStage.COERCED, ConfigStage.VALIDATED)
@@ -255,6 +261,7 @@ class ConfigPipeline:
         """
         try:
             from ocm.config.layers.validation import validate_config
+
             app_config = validate_config(raw_dict)
             logger.debug("config_pipeline_l4 | pydantic=ok")
             self._record(ConfigStage.VALIDATED, ConfigStage.FROZEN)
@@ -276,6 +283,7 @@ class ConfigPipeline:
         """
         try:
             from ocm.config.layers.rules import apply_business_rules
+
             apply_business_rules(app_config)
             logger.debug("config_pipeline_l5 | rules=ok")
             return app_config

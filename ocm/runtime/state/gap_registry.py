@@ -49,21 +49,21 @@ from typing import List, Optional
 from loguru import logger
 
 from ocm.runtime.state.encoding import encode_redis_key as _encode
-from ocm.runtime.state.retry    import redis_retry      as _retry
-from ocm.runtime.state.gap_store    import GapStorePort
+from ocm.runtime.state.retry import redis_retry as _retry
+from ocm.runtime.state.gap_store import GapStorePort
 
-_GAP_TTL_DAYS   = 90
-_GAP_TTL        = _GAP_TTL_DAYS * 86_400
-_SCAN_COUNT     = 100
+_GAP_TTL_DAYS = 90
+_GAP_TTL = _GAP_TTL_DAYS * 86_400
+_SCAN_COUNT = 100
 
 
 def _gap_key(
-    env:       str,
-    exchange:  str,
-    symbol:    str,
+    env: str,
+    exchange: str,
+    symbol: str,
     timeframe: str,
-    start_ms:  int,
-    prefix:    str = "gap",
+    start_ms: int,
+    prefix: str = "gap",
 ) -> str:
     """
     Genera la clave Redis para un gap.
@@ -71,10 +71,7 @@ def _gap_key(
     prefix='gap'           → clave normal del gap
     prefix='irrecoverable' → centinela para gaps pre-origin (TTL=365d)
     """
-    return (
-        f"{env}:{prefix}:{_encode(exchange)}:{_encode(symbol)}"
-        f":{_encode(timeframe)}:{start_ms}"
-    )
+    return f"{env}:{prefix}:{_encode(exchange)}:{_encode(symbol)}:{_encode(timeframe)}:{start_ms}"
 
 
 def _gap_prefix(env: str, exchange: str = "") -> str:
@@ -106,7 +103,7 @@ class GapRegistry:
 
     def __init__(self, store: GapStorePort, env: str) -> None:
         self._store = store
-        self._env   = env
+        self._env = env
 
     # ----------------------------------------------------------
     # Write
@@ -114,14 +111,14 @@ class GapRegistry:
 
     def register(
         self,
-        exchange:    str,
-        symbol:      str,
-        timeframe:   str,
-        start_ms:    int,
-        end_ms:      int,
-        expected:    int,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        start_ms: int,
+        end_ms: int,
+        expected: int,
         gap_seconds: float,
-        source:      str = "validate",
+        source: str = "validate",
     ) -> bool:
         """
         Registra un gap detectado. Idempotente — si ya existe no sobreescribe
@@ -133,34 +130,35 @@ class GapRegistry:
         try:
             existing = _retry(lambda: self._store.get(key))
             if existing is not None:
-                logger.debug(
-                    "GapRegistry: gap ya registrado | key={}", key
-                )
+                logger.debug("GapRegistry: gap ya registrado | key={}", key)
                 return False
 
-            payload = json.dumps({
-                "exchange":        exchange,
-                "symbol":          symbol,
-                "timeframe":       timeframe,
-                "start_ms":        start_ms,
-                "end_ms":          end_ms,
-                "expected":        expected,
-                "gap_seconds":     gap_seconds,
-                "detected_at":     datetime.now(timezone.utc).isoformat(),
-                "source":          source,
-                "repair_attempts": 0,
-            })
+            payload = json.dumps(
+                {
+                    "exchange": exchange,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                    "start_ms": start_ms,
+                    "end_ms": end_ms,
+                    "expected": expected,
+                    "gap_seconds": gap_seconds,
+                    "detected_at": datetime.now(timezone.utc).isoformat(),
+                    "source": source,
+                    "repair_attempts": 0,
+                }
+            )
             _retry(lambda: self._store.set(key, payload, ex=_GAP_TTL))
             logger.info(
-                "GapRegistry: gap registrado | exchange={} symbol={} "
-                "timeframe={} start_ms={} expected={}",
-                exchange, symbol, timeframe, start_ms, expected,
+                "GapRegistry: gap registrado | exchange={} symbol={} timeframe={} start_ms={} expected={}",
+                exchange,
+                symbol,
+                timeframe,
+                start_ms,
+                expected,
             )
             return True
         except Exception as exc:
-            logger.warning(
-                "GapRegistry.register failed (non-critical) | key={} error={}", key, exc
-            )
+            logger.warning("GapRegistry.register failed (non-critical) | key={} error={}", key, exc)
             return False
 
     # TTL para gaps irrecuperables: 365 días.
@@ -169,10 +167,10 @@ class GapRegistry:
 
     def mark_healed(
         self,
-        exchange:     str,
-        symbol:       str,
-        timeframe:    str,
-        start_ms:     int,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        start_ms: int,
         irreversible: bool = False,
     ) -> bool:
         """
@@ -190,39 +188,54 @@ class GapRegistry:
             deleted = bool(_retry(lambda: self._store.delete(key)))
             if deleted:
                 logger.info(
-                    "GapRegistry: gap sanado — eliminado | exchange={} "
-                    "symbol={} timeframe={} start_ms={}",
-                    exchange, symbol, timeframe, start_ms,
+                    "GapRegistry: gap sanado — eliminado | exchange={} symbol={} timeframe={} start_ms={}",
+                    exchange,
+                    symbol,
+                    timeframe,
+                    start_ms,
                 )
             if irreversible:
                 # Guardar centinela para evitar retries infinitos.
                 # SafeOps: fallo aquí no es crítico — el gap se reintentará
                 # en la próxima ejecución, pero no corrompe datos.
                 irr_key = _gap_key(
-                    self._env, exchange, symbol, timeframe, start_ms,
+                    self._env,
+                    exchange,
+                    symbol,
+                    timeframe,
+                    start_ms,
                     prefix="irrecoverable",
                 )
-                _retry(lambda: self._store.setex(
-                    irr_key, self._IRRECOVERABLE_TTL_S, b"1",
-                ))
+                _retry(
+                    lambda: self._store.setex(
+                        irr_key,
+                        self._IRRECOVERABLE_TTL_S,
+                        b"1",
+                    )
+                )
                 logger.info(
                     "GapRegistry: gap marcado irrecuperable | exchange={} "
                     "symbol={} timeframe={} start_ms={} ttl_days=365",
-                    exchange, symbol, timeframe, start_ms,
+                    exchange,
+                    symbol,
+                    timeframe,
+                    start_ms,
                 )
             return deleted
         except Exception as exc:
             logger.warning(
-                "GapRegistry.mark_healed failed (non-critical) | key={} error={}", key, exc
+                "GapRegistry.mark_healed failed (non-critical) | key={} error={}",
+                key,
+                exc,
             )
             return False
 
     def is_irrecoverable(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        start_ms:  int,
+        start_ms: int,
     ) -> bool:
         """
         Consulta si este gap fue marcado irrecuperable (NoDataAvailableError
@@ -232,7 +245,11 @@ class GapRegistry:
         reintentará, pero nunca se omitirá un gap sano por error de infra.
         """
         irr_key = _gap_key(
-            self._env, exchange, symbol, timeframe, start_ms,
+            self._env,
+            exchange,
+            symbol,
+            timeframe,
+            start_ms,
             prefix="irrecoverable",
         )
         try:
@@ -242,10 +259,10 @@ class GapRegistry:
 
     def increment_attempts(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        start_ms:  int,
+        start_ms: int,
     ) -> int:
         """
         Incrementa repair_attempts en el JSON del gap.
@@ -263,9 +280,7 @@ class GapRegistry:
             _retry(lambda: self._store.set(key, json.dumps(data), ex=ttl))
             return data["repair_attempts"]
         except Exception as exc:
-            logger.warning(
-                "GapRegistry.increment_attempts failed | key={} error={}", key, exc
-            )
+            logger.warning("GapRegistry.increment_attempts failed | key={} error={}", key, exc)
             return -1
 
     # ----------------------------------------------------------
@@ -278,18 +293,16 @@ class GapRegistry:
 
         Returns lista de dicts con el payload JSON de cada gap.
         """
-        prefix  = _gap_prefix(self._env, exchange)
+        prefix = _gap_prefix(self._env, exchange)
         pattern = prefix + "*"
         results = []
         try:
             cursor = 0
             while True:
-                scan_result = self._store.scan(
-                    cursor=cursor, match=pattern, count=_SCAN_COUNT
-                )
+                scan_result = self._store.scan(cursor=cursor, match=pattern, count=_SCAN_COUNT)
                 cursor, keys = scan_result[0], scan_result[1]
                 if keys:
-                    pipe   = self._store.pipeline()
+                    pipe = self._store.pipeline()
                     for k in keys:
                         pipe.get(k)
                     values = pipe.execute()
@@ -303,43 +316,38 @@ class GapRegistry:
                     break
             logger.debug(
                 "GapRegistry.list_pending | exchange={} found={}",
-                exchange or "*", len(results),
+                exchange or "*",
+                len(results),
             )
             return results
         except Exception as exc:
-            logger.warning(
-                "GapRegistry.list_pending failed | exchange={} error={}", exchange, exc
-            )
+            logger.warning("GapRegistry.list_pending failed | exchange={} error={}", exchange, exc)
             return []
 
     def count_pending(self, exchange: str = "") -> int:
         """Conteo rápido de gaps pendientes sin cargar payloads."""
-        prefix  = _gap_prefix(self._env, exchange)
+        prefix = _gap_prefix(self._env, exchange)
         pattern = prefix + "*"
-        count   = 0
+        count = 0
         try:
             cursor = 0
             while True:
-                scan_result = self._store.scan(
-                    cursor=cursor, match=pattern, count=_SCAN_COUNT
-                )
+                scan_result = self._store.scan(cursor=cursor, match=pattern, count=_SCAN_COUNT)
                 cursor, keys = scan_result[0], scan_result[1]
                 count += len(keys)
                 if cursor == 0:
                     break
             return count
         except Exception as exc:
-            logger.warning(
-                "GapRegistry.count_pending failed | exchange={} error={}", exchange, exc
-            )
+            logger.warning("GapRegistry.count_pending failed | exchange={} error={}", exchange, exc)
             return 0
 
     def get(
         self,
-        exchange:  str,
-        symbol:    str,
+        exchange: str,
+        symbol: str,
         timeframe: str,
-        start_ms:  int,
+        start_ms: int,
     ) -> Optional[dict]:
         """Obtiene un gap específico por clave. None si no existe."""
         key = _gap_key(self._env, exchange, symbol, timeframe, start_ms)
@@ -349,9 +357,7 @@ class GapRegistry:
                 return None
             return json.loads(raw)
         except Exception as exc:
-            logger.warning(
-                "GapRegistry.get failed | key={} error={}", key, exc
-            )
+            logger.warning("GapRegistry.get failed | key={} error={}", key, exc)
             return None
 
 
@@ -363,11 +369,12 @@ def build_gap_registry_from_env(env: Optional[str] = None) -> Optional["GapRegis
         limpieza de deuda técnica una vez migrados todos los callers.
     """
     import warnings
+
     warnings.warn(
-        "build_gap_registry_from_env está deprecada — "
-        "usa infra.state.factories.build_gap_registry",
+        "build_gap_registry_from_env está deprecada — usa infra.state.factories.build_gap_registry",
         DeprecationWarning,
         stacklevel=2,
     )
     from ocm.runtime.state.factories import build_gap_registry
+
     return build_gap_registry(env=env)

@@ -35,6 +35,7 @@ falla en setup_for_execution() antes de materializar cualquier asset.
 
 Principios: SSOT · OCP · DIP · KISS · Fail-Fast
 """
+
 from __future__ import annotations
 
 import os
@@ -58,19 +59,16 @@ from infrastructure.dagster.resources import OCMResource
 
 # Job principal: ingesta completa bronze → repair → resample
 ingestion_job = define_asset_job(
-    name        = "ocm_ingestion_job",
-    selection   = AssetSelection.groups("bronze", "silver"),
-    description = (
-        "Job completo de ingesta OCM: "
-        "bronze (exchange) → repair (gaps) → silver (resample)."
-    ),
+    name="ocm_ingestion_job",
+    selection=AssetSelection.groups("bronze", "silver"),
+    description=("Job completo de ingesta OCM: bronze (exchange) → repair (gaps) → silver (resample)."),
 )
 
 # Job solo bronze — útil para smoke-test o diagnóstico rápido
 bronze_only_job = define_asset_job(
-    name        = "ocm_bronze_only_job",
-    selection   = AssetSelection.groups("bronze"),
-    description = "Solo ingesta desde exchanges — sin repair ni resample.",
+    name="ocm_bronze_only_job",
+    selection=AssetSelection.groups("bronze"),
+    description="Solo ingesta desde exchanges — sin repair ni resample.",
 )
 
 # ==============================================================================
@@ -83,17 +81,17 @@ bronze_only_job = define_asset_job(
 # Ajustar cron_schedule según rate-limits reales del exchange.
 
 bronze_schedule = ScheduleDefinition(
-    name          = "ocm_bronze_1min",
-    job           = bronze_only_job,
-    cron_schedule = "* * * * *",
-    description   = "Ingesta incremental OHLCV desde exchanges cada minuto.",
+    name="ocm_bronze_1min",
+    job=bronze_only_job,
+    cron_schedule="* * * * *",
+    description="Ingesta incremental OHLCV desde exchanges cada minuto.",
 )
 
 ingestion_schedule = ScheduleDefinition(
-    name          = "ocm_ingestion_5min",
-    job           = ingestion_job,
-    cron_schedule = "*/5 * * * *",
-    description   = "Pipeline completo OCM cada 5 minutos.",
+    name="ocm_ingestion_5min",
+    job=ingestion_job,
+    cron_schedule="*/5 * * * *",
+    description="Pipeline completo OCM cada 5 minutos.",
 )
 
 # ==============================================================================
@@ -105,18 +103,18 @@ ingestion_schedule = ScheduleDefinition(
 # Fail-Fast: entorno inválido explota en setup_for_execution(), no mid-run.
 
 defs = Definitions(
-    assets = [
+    assets=[
         *BRONZE_OHLCV_ASSETS,
         *REPAIR_OHLCV_ASSETS,
         *RESAMPLE_OHLCV_ASSETS,
     ],
-    resources = {
+    resources={
         # DIP: los assets no construyen AppConfig directamente.
         # OCMResource es el único punto de acceso al RuntimeContext.
         # env="" → lee OCM_ENV del entorno (SSOT, no hardcoding).
         "ocm": OCMResource(env=os.environ.get("OCM_ENV", "")),
     },
-    asset_checks = ALL_ASSET_CHECKS,
-    jobs         = [ingestion_job, bronze_only_job],
-    schedules    = [bronze_schedule, ingestion_schedule],
+    asset_checks=ALL_ASSET_CHECKS,
+    jobs=[ingestion_job, bronze_only_job],
+    schedules=[bronze_schedule, ingestion_schedule],
 )

@@ -24,6 +24,7 @@ La integración completa con CCXT async va en el ticket de websockets.
 
 Principios: SRP · DIP · SafeOps · KISS
 """
+
 from __future__ import annotations
 
 from loguru import logger
@@ -44,21 +45,22 @@ class LiveExecutor:
 
     def __init__(
         self,
-        exchange:    str,
+        exchange: str,
         market_type: str = "spot",
-        timeout_s:   int = 10,
+        timeout_s: int = 10,
     ) -> None:
-        self._exchange    = exchange
+        self._exchange = exchange
         self._market_type = market_type
-        self._timeout_s   = timeout_s
-        self._log         = logger.bind(
-            component   = "LiveExecutor",
-            exchange    = exchange,
-            market_type = market_type,
+        self._timeout_s = timeout_s
+        self._log = logger.bind(
+            component="LiveExecutor",
+            exchange=exchange,
+            market_type=market_type,
         )
         self._log.info(
             "LiveExecutor inicializado | exchange={} market_type={}",
-            exchange, market_type,
+            exchange,
+            market_type,
         )
 
     # ------------------------------------------------------------------
@@ -79,9 +81,7 @@ class LiveExecutor:
         try:
             return self._submit(order)
         except Exception as exc:
-            self._log.error(
-                "execute: error inesperado | order={} {}", order.order_id, exc
-            )
+            self._log.error("execute: error inesperado | order={} {}", order.order_id, exc)
             return False
 
     # ------------------------------------------------------------------
@@ -139,7 +139,4 @@ class LiveExecutor:
         return True
 
     def __repr__(self) -> str:
-        return (
-            f"LiveExecutor(exchange={self._exchange!r}"
-            f" market_type={self._market_type!r})"
-        )
+        return f"LiveExecutor(exchange={self._exchange!r} market_type={self._market_type!r})"

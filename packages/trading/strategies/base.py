@@ -11,6 +11,7 @@ Principios
 - Las estrategias NO ejecutan órdenes — solo generan señales
 - El bot de ejecución decide qué hacer con las señales
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

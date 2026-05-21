@@ -243,7 +243,9 @@ async def _bronze_writer_loop() -> None:
         from market_data.infrastructure.kafka.consumer import KafkaConsumerAdapter
         from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
         from market_data.infrastructure.kafka.bronze_writer import KafkaBronzeWriter
-        from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
+        from market_data.infrastructure.storage.bronze.bronze_storage import (
+            BronzeStorage,
+        )
     except ImportError as exc:
         log.error("bronze_writer_loop_import_error", error=str(exc))
         return
@@ -327,7 +329,9 @@ async def _lifespan(app: FastAPI):
     # ── Wiring de adaptadores outbound (composition root — DIP) ─────────────
     # StorageFactoryPort: una factory cacheada por (exchange, market_type).
     # Ningún handler instancia adaptadores — todos consumen el port (DIP).
-    from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+    from market_data.adapters.outbound.storage.iceberg_factory import (
+        IcebergStorageFactory,
+    )
 
     _state.storage_factory = IcebergStorageFactory()
 

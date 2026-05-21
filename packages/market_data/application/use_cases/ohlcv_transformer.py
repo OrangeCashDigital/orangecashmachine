@@ -37,6 +37,7 @@ from market_data.domain.value_objects.candle_validator import (
     CandleValidator,
     ValidationSummary,
 )
+
 # lineage: import local en transform() — BC-06
 
 

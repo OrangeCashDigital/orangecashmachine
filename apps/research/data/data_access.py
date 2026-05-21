@@ -57,7 +57,11 @@ __all__ = [
 ]
 
 # Exchange por defecto para research
-from ocm.config.env_vars import OCM_EXCHANGE as _OCM_EXCHANGE, OCM_MARKET_TYPE as _OCM_MARKET_TYPE
+from ocm.config.env_vars import (
+    OCM_EXCHANGE as _OCM_EXCHANGE,
+    OCM_MARKET_TYPE as _OCM_MARKET_TYPE,
+)
+
 _DEFAULT_EXCHANGE: str = os.environ.get(_OCM_EXCHANGE, "kucoin")
 _DEFAULT_MARKET_TYPE: str = os.environ.get(_OCM_MARKET_TYPE, "spot")
 
@@ -70,7 +74,7 @@ _storage_factory = IcebergStorageFactory()
 
 
 def _get_storage(
-    exchange:    Optional[str] = None,
+    exchange: Optional[str] = None,
     market_type: Optional[str] = None,
 ) -> "OHLCVStorage":
     """
@@ -104,13 +108,14 @@ def _reset_storage(exchange: Optional[str] = None) -> None:
 # Public API — OHLCV
 # ==========================================================
 
+
 def get_ohlcv(
-    symbol:      str,
-    timeframe:   str,
-    start:       Optional[str] = None,
-    end:         Optional[str] = None,
-    columns:     Optional[List[str]] = None,
-    exchange:    Optional[str] = None,
+    symbol: str,
+    timeframe: str,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    columns: Optional[List[str]] = None,
+    exchange: Optional[str] = None,
     market_type: Optional[str] = None,
 ) -> pd.DataFrame:
     """
@@ -137,7 +142,7 @@ def get_ohlcv(
     storage = _get_storage(exchange, market_type)
 
     start_ts = pd.Timestamp(start, tz="UTC") if start else None
-    end_ts   = pd.Timestamp(end,   tz="UTC") if end   else None
+    end_ts = pd.Timestamp(end, tz="UTC") if end else None
 
     try:
         df = storage.load_ohlcv(
@@ -153,8 +158,7 @@ def get_ohlcv(
 
     if df is None or df.empty:
         raise DataNotFoundError(
-            f"No data | {symbol}/{timeframe} exchange={exchange or _DEFAULT_EXCHANGE} "
-            f"start={start} end={end}"
+            f"No data | {symbol}/{timeframe} exchange={exchange or _DEFAULT_EXCHANGE} start={start} end={end}"
         )
 
     if columns:
@@ -162,20 +166,23 @@ def get_ohlcv(
         df = df[available]
 
     logger.info(
-        "Research OHLCV loaded | symbol={} timeframe={} exchange={} "
-        "start={} end={} rows={}",
-        symbol, timeframe, exchange or _DEFAULT_EXCHANGE,
-        start, end, len(df),
+        "Research OHLCV loaded | symbol={} timeframe={} exchange={} start={} end={} rows={}",
+        symbol,
+        timeframe,
+        exchange or _DEFAULT_EXCHANGE,
+        start,
+        end,
+        len(df),
     )
     return df
 
 
 def get_multiple_ohlcv(
-    symbols:     List[str],
-    timeframe:   str,
-    start:       Optional[str] = None,
-    end:         Optional[str] = None,
-    exchange:    Optional[str] = None,
+    symbols: List[str],
+    timeframe: str,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    exchange: Optional[str] = None,
     market_type: Optional[str] = None,
 ) -> Dict[str, pd.DataFrame]:
     """
@@ -202,22 +209,26 @@ def get_multiple_ohlcv(
         except DataNotFoundError:
             logger.warning(
                 "Research: no data | symbol={} timeframe={} exchange={}",
-                symbol, timeframe, exchange or _DEFAULT_EXCHANGE,
+                symbol,
+                timeframe,
+                exchange or _DEFAULT_EXCHANGE,
             )
         except Exception as exc:
             logger.warning(
                 "Research: load failed | symbol={} timeframe={} error={}",
-                symbol, timeframe, exc,
+                symbol,
+                timeframe,
+                exc,
             )
     return results
 
 
 def get_ohlcv_dict(
-    symbols:     List[str],
-    timeframe:   str,
-    start:       Optional[str] = None,
-    end:         Optional[str] = None,
-    exchange:    Optional[str] = None,
+    symbols: List[str],
+    timeframe: str,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    exchange: Optional[str] = None,
     market_type: Optional[str] = None,
 ) -> Dict[str, pd.DataFrame]:
     """Alias de get_multiple_ohlcv — compatibilidad con código existente."""
@@ -256,13 +267,13 @@ def _reset_gold_loader(exchange: Optional[str] = None) -> None:
 
 
 def get_features(
-    symbol:      str,
-    timeframe:   str,
-    exchange:    Optional[str] = None,
+    symbol: str,
+    timeframe: str,
+    exchange: Optional[str] = None,
     market_type: Optional[str] = None,
-    start:       Optional[str] = None,
-    end:         Optional[str] = None,
-    version:     str = "latest",
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    version: str = "latest",
 ) -> pd.DataFrame:
     """
     Carga features Gold (OHLCV + indicadores técnicos).
@@ -276,8 +287,8 @@ def get_features(
     DataNotFoundError, DataReadError, VersionNotFoundError
     """
     loader = _get_gold_loader(exchange)
-    mkt    = (market_type or _DEFAULT_MARKET_TYPE).lower()
-    exc    = (exchange or _DEFAULT_EXCHANGE).lower()
+    mkt = (market_type or _DEFAULT_MARKET_TYPE).lower()
+    exc = (exchange or _DEFAULT_EXCHANGE).lower()
 
     df = loader.load_features(
         exchange=exc,
@@ -294,17 +305,20 @@ def get_features(
 
     logger.info(
         "Research features loaded | symbol={} timeframe={} exchange={} rows={}",
-        symbol, timeframe, exc, len(df),
+        symbol,
+        timeframe,
+        exc,
+        len(df),
     )
     return df
 
 
 def get_features_dict(
-    symbols:     List[str],
-    timeframe:   str,
-    exchange:    Optional[str] = None,
+    symbols: List[str],
+    timeframe: str,
+    exchange: Optional[str] = None,
     market_type: Optional[str] = None,
-    version:     str = "latest",
+    version: str = "latest",
 ) -> Dict[str, pd.DataFrame]:
     """Carga features para múltiples símbolos. Devuelve solo exitosos."""
     results: Dict[str, pd.DataFrame] = {}
@@ -320,6 +334,8 @@ def get_features_dict(
         except Exception as exc:
             logger.warning(
                 "Research: features failed | symbol={} timeframe={} error={}",
-                symbol, timeframe, exc,
+                symbol,
+                timeframe,
+                exc,
             )
     return results

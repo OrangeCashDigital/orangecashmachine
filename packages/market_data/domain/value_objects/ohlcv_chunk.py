@@ -34,11 +34,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-
 # Import diferido para evitar dependencia circular en import-time
 # Candle se importa aquí como forward reference resuelta en runtime
 from market_data.domain.value_objects.candle import Candle
-
 
 # ===========================================================================
 # OHLCVSource — SSOT de etiquetas de origen de datos

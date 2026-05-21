@@ -29,7 +29,9 @@ from typing import List
 
 from loguru import logger
 
-from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort, KafkaMessage  # noqa
+from market_data.ports.outbound.kafka_consumer import (
+    KafkaMessage,
+)  # noqa
 
 # SSOT de topics y consumer groups — shared.kafka.topics, nunca strings literales.
 # Fix C-NUEVO: los topics NO viven en kafka_producer.py (port); ese módulo solo

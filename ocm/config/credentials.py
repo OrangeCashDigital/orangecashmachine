@@ -53,24 +53,9 @@ def resolve_exchange_credentials(
     """
     creds = credentials_yaml or {}
 
-    api_key: str = (
-        os.getenv(f"{name}_API_KEY")
-        or creds.get("apiKey")
-        or os.getenv(OCM_API_KEY)
-        or ""
-    )
-    api_secret: str = (
-        os.getenv(f"{name}_API_SECRET")
-        or creds.get("secret")
-        or os.getenv(OCM_API_SECRET)
-        or ""
-    )
-    api_password: str = (
-        os.getenv(f"{name}_PASSPHRASE")
-        or os.getenv(f"{name}_PASSWORD")
-        or creds.get("password")
-        or ""
-    )
+    api_key: str = os.getenv(f"{name}_API_KEY") or creds.get("apiKey") or os.getenv(OCM_API_KEY) or ""
+    api_secret: str = os.getenv(f"{name}_API_SECRET") or creds.get("secret") or os.getenv(OCM_API_SECRET) or ""
+    api_password: str = os.getenv(f"{name}_PASSPHRASE") or os.getenv(f"{name}_PASSWORD") or creds.get("password") or ""
 
     return {
         "api_key": api_key,

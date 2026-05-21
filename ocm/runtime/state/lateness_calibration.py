@@ -53,18 +53,18 @@ from typing import Optional
 
 from loguru import logger
 
-from ocm.runtime.state.gap_store    import GapStorePort
+from ocm.runtime.state.gap_store import GapStorePort
 from ocm.runtime.state.encoding import encode_redis_key as _encode
-from ocm.runtime.state.retry    import redis_retry      as _retry
+from ocm.runtime.state.retry import redis_retry as _retry
 
 _CALIBRATION_TTL_DAYS = 7
-_CALIBRATION_TTL      = _CALIBRATION_TTL_DAYS * 86_400
+_CALIBRATION_TTL = _CALIBRATION_TTL_DAYS * 86_400
 
 # Guardrails: evita que un p99 anómalo corrompa el overlap.
 # Si el p99 empírico supera el cap, se usa el cap (con warning).
 # Si el p99 empírico es menor que el floor, se usa el floor.
-_LATENESS_MS_CAP   = 60 * 60_000   # 60 min — cap absoluto
-_LATENESS_MS_FLOOR =  1 * 60_000   #  1 min — floor absoluto
+_LATENESS_MS_CAP = 60 * 60_000  # 60 min — cap absoluto
+_LATENESS_MS_FLOOR = 1 * 60_000  #  1 min — floor absoluto
 
 
 def _cal_key(env: str, exchange: str, timeframe: str) -> str:
@@ -90,17 +90,17 @@ class LatenessCalibrationStore:
 
     def __init__(self, store: GapStorePort, env: str) -> None:
         self._store = store
-        self._env   = env
+        self._env = env
 
     def set(
         self,
-        exchange:     str,
-        timeframe:    str,
-        lateness_ms:  int,
-        p95_ms:       int       = 0,
-        sample_count: int       = 0,
-        window_hours: int       = 24,
-        source:       str       = "prometheus",
+        exchange: str,
+        timeframe: str,
+        lateness_ms: int,
+        p95_ms: int = 0,
+        sample_count: int = 0,
+        window_hours: int = 24,
+        source: str = "prometheus",
     ) -> bool:
         """
         Persiste calibración de lateness. Aplica guardrails antes de escribir.
@@ -114,39 +114,49 @@ class LatenessCalibrationStore:
             lateness_ms = max(_LATENESS_MS_FLOOR, min(_LATENESS_MS_CAP, lateness_ms))
             if lateness_ms != raw_ms:
                 logger.warning(
-                    "LatenessCalibration: p99 fuera de guardrails | "
-                    "exchange={} timeframe={} raw_ms={} clamped_ms={}",
-                    exchange, timeframe, raw_ms, lateness_ms,
+                    "LatenessCalibration: p99 fuera de guardrails | exchange={} timeframe={} raw_ms={} clamped_ms={}",
+                    exchange,
+                    timeframe,
+                    raw_ms,
+                    lateness_ms,
                 )
 
-            payload = json.dumps({
-                "exchange":      exchange,
-                "timeframe":     timeframe,
-                "lateness_ms":   lateness_ms,
-                "p95_ms":        p95_ms,
-                "sample_count":  sample_count,
-                "calibrated_at": datetime.now(timezone.utc).isoformat(),
-                "window_hours":  window_hours,
-                "source":        source,
-            })
+            payload = json.dumps(
+                {
+                    "exchange": exchange,
+                    "timeframe": timeframe,
+                    "lateness_ms": lateness_ms,
+                    "p95_ms": p95_ms,
+                    "sample_count": sample_count,
+                    "calibrated_at": datetime.now(timezone.utc).isoformat(),
+                    "window_hours": window_hours,
+                    "source": source,
+                }
+            )
             _retry(lambda: self._store.set(key, payload, ex=_CALIBRATION_TTL))
             logger.info(
                 "LatenessCalibration: calibración persistida | "
                 "exchange={} timeframe={} lateness_ms={} p95_ms={} samples={} source={}",
-                exchange, timeframe, lateness_ms, p95_ms, sample_count, source,
+                exchange,
+                timeframe,
+                lateness_ms,
+                p95_ms,
+                sample_count,
+                source,
             )
             return True
         except Exception as exc:
             logger.warning(
-                "LatenessCalibration.set failed (non-critical) | "
-                "exchange={} timeframe={} error={}",
-                exchange, timeframe, exc,
+                "LatenessCalibration.set failed (non-critical) | exchange={} timeframe={} error={}",
+                exchange,
+                timeframe,
+                exc,
             )
             return False
 
     def get_lateness_ms(
         self,
-        exchange:  str,
+        exchange: str,
         timeframe: str,
     ) -> Optional[int]:
         """
@@ -164,15 +174,16 @@ class LatenessCalibrationStore:
             return int(data["lateness_ms"])
         except Exception as exc:
             logger.warning(
-                "LatenessCalibration.get_lateness_ms failed (non-critical) | "
-                "exchange={} timeframe={} error={}",
-                exchange, timeframe, exc,
+                "LatenessCalibration.get_lateness_ms failed (non-critical) | exchange={} timeframe={} error={}",
+                exchange,
+                timeframe,
+                exc,
             )
             return None
 
     def get(
         self,
-        exchange:  str,
+        exchange: str,
         timeframe: str,
     ) -> Optional[dict]:
         """Obtiene el payload completo de calibración. None si no existe."""
@@ -185,7 +196,9 @@ class LatenessCalibrationStore:
         except Exception as exc:
             logger.warning(
                 "LatenessCalibration.get failed | exchange={} timeframe={} error={}",
-                exchange, timeframe, exc,
+                exchange,
+                timeframe,
+                exc,
             )
             return None
 
@@ -197,7 +210,9 @@ class LatenessCalibrationStore:
         except Exception as exc:
             logger.warning(
                 "LatenessCalibration.delete failed | exchange={} timeframe={} error={}",
-                exchange, timeframe, exc,
+                exchange,
+                timeframe,
+                exc,
             )
             return False
 
@@ -213,11 +228,12 @@ def build_calibration_store_from_env(
         callers.
     """
     import warnings
+
     warnings.warn(
-        "build_calibration_store_from_env está deprecada — "
-        "usa infra.state.factories.build_lateness_calibration_store",
+        "build_calibration_store_from_env está deprecada — usa infra.state.factories.build_lateness_calibration_store",
         DeprecationWarning,
         stacklevel=2,
     )
     from ocm.runtime.state.factories import build_lateness_calibration_store
+
     return build_lateness_calibration_store(env=env)

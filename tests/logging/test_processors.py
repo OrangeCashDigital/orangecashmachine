@@ -28,8 +28,8 @@ from ocm.observability.processors import (
     process_event,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def chain():
@@ -42,6 +42,7 @@ def base_event() -> dict:
 
 
 # ── _add_timestamp ────────────────────────────────────────────────────────────
+
 
 def test_add_timestamp_adds_key(base_event):
     result = _add_timestamp(None, "info", base_event)
@@ -64,6 +65,7 @@ def test_add_timestamp_iso_format(base_event):
 
 
 # ── _inject_service_context ───────────────────────────────────────────────────
+
 
 def test_inject_service_context_sets_service(base_event):
     """El campo service debe ser el nombre canónico del paquete."""
@@ -107,10 +109,20 @@ def test_inject_service_context_does_not_overwrite_version(base_event):
 
 # ── _sanitize_secrets ─────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("key", [
-    "api_key", "api_secret", "api_password", "password",
-    "secret", "token", "passphrase", "authorization",
-])
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "api_key",
+        "api_secret",
+        "api_password",
+        "password",
+        "secret",
+        "token",
+        "passphrase",
+        "authorization",
+    ],
+)
 def test_sanitize_known_secret_keys(key):
     event = {"event": "test", key: "super_secret_value"}
     result = _sanitize_secrets(None, "info", event)
@@ -141,6 +153,7 @@ def test_sanitize_empty_string_value():
 
 
 # ── build_processor_chain / process_event — integración ──────────────────────
+
 
 def test_process_event_returns_valid_json(chain, base_event):
     result = process_event(chain, "info", base_event)

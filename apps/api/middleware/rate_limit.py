@@ -33,15 +33,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Clave por IP — degraded mode si Redis no responde.
     """
 
-    _WINDOW_S: int = 60   # ventana deslizante en segundos
+    _WINDOW_S: int = 60  # ventana deslizante en segundos
 
     def __init__(self, app, redis_client: aioredis.Redis, rpm: int) -> None:
         super().__init__(app)
         self._redis = redis_client
-        self._rpm   = rpm
+        self._rpm = rpm
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        ip  = request.client.host if request.client else "unknown"
+        ip = request.client.host if request.client else "unknown"
         key = f"rl:{ip}"
         now = time.time()
 
@@ -57,11 +57,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             pipe.expire(key, self._WINDOW_S)
             results = await pipe.execute()
 
-            count: int = results[1]   # zcard antes del zadd actual
+            count: int = results[1]  # zcard antes del zadd actual
 
             if count >= self._rpm:
                 logger.warning(
-                    "rate_limit_exceeded | ip={} count={} limit={}", ip, count, self._rpm
+                    "rate_limit_exceeded | ip={} count={} limit={}",
+                    ip,
+                    count,
+                    self._rpm,
                 )
                 return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,

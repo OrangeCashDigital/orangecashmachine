@@ -51,7 +51,6 @@ from typing import Optional
 
 from market_data.domain.events._base import DomainEvent
 
-
 # ---------------------------------------------------------------------------
 # ReplayRequested
 # ---------------------------------------------------------------------------

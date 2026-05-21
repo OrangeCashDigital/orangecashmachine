@@ -16,6 +16,7 @@ un bug en el caller — debe fallar en el punto de origen.
 
 Principios: DDD · SSOT · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -71,23 +72,24 @@ class OrderFilled:
     size_pct    : % del capital asignado ∈ (0, 1]
     filled_at   : timestamp UTC de ejecución
     """
-    order_id:   str
-    symbol:     str
-    exchange:   str
-    side:       OrderSide
+
+    order_id: str
+    symbol: str
+    exchange: str
+    side: OrderSide
     fill_price: float
-    size_pct:   float
-    filled_at:  datetime
+    size_pct: float
+    filled_at: datetime
 
     @classmethod
     def now(
         cls,
-        order_id:   str,
-        symbol:     str,
-        exchange:   str,
-        side:       str,
+        order_id: str,
+        symbol: str,
+        exchange: str,
+        side: str,
         fill_price: float,
-        size_pct:   float,
+        size_pct: float,
     ) -> "OrderFilled":
         """
         Factory con timestamp UTC automático.
@@ -97,13 +99,13 @@ class OrderFilled:
         que no conocen el Literal; normaliza internamente.
         """
         return cls(
-            order_id   = order_id,
-            symbol     = symbol,
-            exchange   = exchange,
-            side       = _validate_order_side(side, "OrderFilled.now"),
-            fill_price = fill_price,
-            size_pct   = size_pct,
-            filled_at  = datetime.now(timezone.utc),
+            order_id=order_id,
+            symbol=symbol,
+            exchange=exchange,
+            side=_validate_order_side(side, "OrderFilled.now"),
+            fill_price=fill_price,
+            size_pct=size_pct,
+            filled_at=datetime.now(timezone.utc),
         )
 
     def __str__(self) -> str:
@@ -122,30 +124,31 @@ class OrderRejected:
     Publicado por: OMS._reject()
     Consumido por: observability, alerting
     """
-    order_id:    str
-    symbol:      str
-    exchange:    str
-    side:        OrderSide
-    reason:      str
+
+    order_id: str
+    symbol: str
+    exchange: str
+    side: OrderSide
+    reason: str
     rejected_at: datetime
 
     @classmethod
     def now(
         cls,
         order_id: str,
-        symbol:   str,
+        symbol: str,
         exchange: str,
-        side:     str,
-        reason:   str,
+        side: str,
+        reason: str,
     ) -> "OrderRejected":
         """Factory con timestamp UTC automático. Fail-Fast: valida ``side``."""
         return cls(
-            order_id    = order_id,
-            symbol      = symbol,
-            exchange    = exchange,
-            side        = _validate_order_side(side, "OrderRejected.now"),
-            reason      = reason,
-            rejected_at = datetime.now(timezone.utc),
+            order_id=order_id,
+            symbol=symbol,
+            exchange=exchange,
+            side=_validate_order_side(side, "OrderRejected.now"),
+            reason=reason,
+            rejected_at=datetime.now(timezone.utc),
         )
 
 
@@ -156,15 +159,16 @@ class OrderCancelled:
 
     Publicado por: OMS.cancel()
     """
-    order_id:     str
-    symbol:       str
+
+    order_id: str
+    symbol: str
     cancelled_at: datetime
 
     @classmethod
     def now(cls, order_id: str, symbol: str) -> "OrderCancelled":
         """Factory con timestamp UTC automático."""
         return cls(
-            order_id     = order_id,
-            symbol       = symbol,
-            cancelled_at = datetime.now(timezone.utc),
+            order_id=order_id,
+            symbol=symbol,
+            cancelled_at=datetime.now(timezone.utc),
         )

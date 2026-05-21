@@ -51,7 +51,6 @@ from market_data.domain.value_objects.ohlcv_chunk import (  # noqa: F401
     OHLCVSource,
 )
 
-
 # ---------------------------------------------------------------------------
 # QualityLabel — SSOT en quality_label.py
 # ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ Invariantes verificados:
 SSOT: todas las constantes vienen de coercion.py — los tests verifican el
 módulo canónico, no duplican su lógica.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -31,15 +32,18 @@ from ocm.config.layers.coercion import (
     coerce_string,
 )
 
-
 # ── C1: BOOL_TRUE → True ──────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("raw", [
-    *BOOL_TRUE,                          # valores canónicos
-    *[v.upper() for v in BOOL_TRUE],     # mayúsculas
-    *[v.capitalize() for v in BOOL_TRUE],
-    *[f"  {v}  " for v in BOOL_TRUE],   # whitespace alrededor
-])
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        *BOOL_TRUE,  # valores canónicos
+        *[v.upper() for v in BOOL_TRUE],  # mayúsculas
+        *[v.capitalize() for v in BOOL_TRUE],
+        *[f"  {v}  " for v in BOOL_TRUE],  # whitespace alrededor
+    ],
+)
 def test_coerce_string_true_values(raw):
     """Cualquier variante de BOOL_TRUE → True."""
     assert coerce_string(raw) is True
@@ -47,12 +51,16 @@ def test_coerce_string_true_values(raw):
 
 # ── C2: BOOL_FALSE → False ────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("raw", [
-    *BOOL_FALSE,
-    *[v.upper() for v in BOOL_FALSE],
-    *[v.capitalize() for v in BOOL_FALSE],
-    *[f"  {v}  " for v in BOOL_FALSE],
-])
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        *BOOL_FALSE,
+        *[v.upper() for v in BOOL_FALSE],
+        *[v.capitalize() for v in BOOL_FALSE],
+        *[f"  {v}  " for v in BOOL_FALSE],
+    ],
+)
 def test_coerce_string_false_values(raw):
     """Cualquier variante de BOOL_FALSE → False."""
     assert coerce_string(raw) is False
@@ -60,9 +68,20 @@ def test_coerce_string_false_values(raw):
 
 # ── C3: strings numéricos → sin modificar ────────────────────────────────────
 
-@pytest.mark.parametrize("raw", [
-    "0", "1", "6379", "0.5", "3.14", "-1", "101", "9999",
-])
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "0",
+        "1",
+        "6379",
+        "0.5",
+        "3.14",
+        "-1",
+        "101",
+        "9999",
+    ],
+)
 def test_coerce_string_numeric_passthrough(raw):
     """Strings numéricos NO se convierten — Pydantic L4 conoce el tipo destino."""
     result = coerce_string(raw)
@@ -70,15 +89,26 @@ def test_coerce_string_numeric_passthrough(raw):
     assert isinstance(result, str), f"Expected str, got {type(result)} for {raw!r}"
 
 
-@pytest.mark.parametrize("raw", [
-    "maybe", "True-ish", "0x1F", "None", "null", "NaN", "", "hello",
-])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "maybe",
+        "True-ish",
+        "0x1F",
+        "None",
+        "null",
+        "NaN",
+        "",
+        "hello",
+    ],
+)
 def test_coerce_string_ambiguous_passthrough(raw):
     """Strings que no son bool semántico inequívoco se retornan sin modificar."""
     assert coerce_string(raw) == raw
 
 
 # ── C4: nullable path "" → None ──────────────────────────────────────────────
+
 
 def test_nullable_path_postgres_user():
     """integrations.postgres.user="" → None (en _NULLABLE_PATHS)."""
@@ -103,6 +133,7 @@ def test_nullable_path_kafka_password():
 
 # ── C5: nullable key (por nombre) ─────────────────────────────────────────────
 
+
 def test_nullable_key_api_password_any_depth():
     """api_password="" → None a cualquier profundidad (en _NULLABLE_KEYS)."""
     d = {"exchanges": {"bybit": {"api_password": ""}}}
@@ -119,6 +150,7 @@ def test_nullable_key_api_password_non_empty_preserved():
 
 # ── C6: string vacío fuera de nullable → sin modificar ───────────────────────
 
+
 def test_non_nullable_empty_string_preserved():
     """Campo no nullable con "" debe quedar como "" — Pydantic L4 decide."""
     d = {"section": {"arbitrary_field": ""}}
@@ -128,14 +160,18 @@ def test_non_nullable_empty_string_preserved():
 
 # ── C7: tipos nativos sin modificar ───────────────────────────────────────────
 
-@pytest.mark.parametrize("native,key", [
-    (True,  "flag_true"),
-    (False, "flag_false"),
-    (0,     "zero"),
-    (1,     "one"),
-    (6379,  "port"),
-    (3.14,  "pi"),
-])
+
+@pytest.mark.parametrize(
+    "native,key",
+    [
+        (True, "flag_true"),
+        (False, "flag_false"),
+        (0, "zero"),
+        (1, "one"),
+        (6379, "port"),
+        (3.14, "pi"),
+    ],
+)
 def test_native_types_not_modified(native, key):
     """Tipos Python nativos no se tocan — solo se coerciona str."""
     d = {key: native}
@@ -148,6 +184,7 @@ def test_native_types_not_modified(native, key):
 
 
 # ── C8: anidamiento recursivo ─────────────────────────────────────────────────
+
 
 def test_deep_nesting_coerced():
     """La coerción alcanza nodos a cualquier profundidad del árbol."""
@@ -171,6 +208,7 @@ def test_sibling_nodes_all_coerced():
 
 
 # ── C9: listas ────────────────────────────────────────────────────────────────
+
 
 def test_list_bool_strings_coerced():
     """Items string bool en listas se convierten."""
@@ -196,6 +234,7 @@ def test_list_of_dicts_recurses():
 
 # ── C10: BOOL_TRUE ∩ BOOL_FALSE = ∅ ──────────────────────────────────────────
 
+
 def test_bool_sets_are_frozensets():
     """BOOL_TRUE y BOOL_FALSE son frozensets — inmutables por contrato."""
     assert isinstance(BOOL_TRUE, frozenset)
@@ -204,26 +243,25 @@ def test_bool_sets_are_frozensets():
 
 def test_bool_sets_are_disjoint():
     """Ningún string puede ser verdadero y falso simultáneamente."""
-    assert BOOL_TRUE.isdisjoint(BOOL_FALSE), (
-        f"Intersección no vacía: {BOOL_TRUE & BOOL_FALSE}"
-    )
+    assert BOOL_TRUE.isdisjoint(BOOL_FALSE), f"Intersección no vacía: {BOOL_TRUE & BOOL_FALSE}"
 
 
 def test_bool_sets_canonical_coverage():
     """Los valores canónicos de cada sentido están presentes."""
-    assert {"true", "yes", "on"}   <= BOOL_TRUE
-    assert {"false", "no", "off"}  <= BOOL_FALSE
+    assert {"true", "yes", "on"} <= BOOL_TRUE
+    assert {"false", "no", "off"} <= BOOL_FALSE
 
 
 # ── C11: pureza de coerce_string ──────────────────────────────────────────────
 
+
 def test_coerce_string_is_deterministic():
     """Mismo input → mismo output en cualquier invocación."""
     for _ in range(5):
-        assert coerce_string("true")  is True
+        assert coerce_string("true") is True
         assert coerce_string("false") is False
         assert coerce_string("hello") == "hello"
-        assert coerce_string("6379")  == "6379"
+        assert coerce_string("6379") == "6379"
 
 
 def test_coerce_string_does_not_mutate_input():

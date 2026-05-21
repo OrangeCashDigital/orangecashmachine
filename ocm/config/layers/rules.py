@@ -42,13 +42,11 @@ class ConfigRuleViolation(ConfigValidationError):
 
     Siempre fail-fast — el sistema NO debe arrancar con config inválida.
     """
+
     def __init__(self, rule: str, message: str, fix: str) -> None:
         self.rule = rule
         self.fix = fix
-        super().__init__(
-            f"\n[ConfigRule:{rule}] {message}\n"
-            f"  → FIX: {fix}"
-        )
+        super().__init__(f"\n[ConfigRule:{rule}] {message}\n  → FIX: {fix}")
 
 
 def apply_business_rules(cfg: "AppConfig") -> None:
@@ -75,6 +73,7 @@ def apply_business_rules(cfg: "AppConfig") -> None:
 # ------------------------------------------------------------------------------
 # Reglas individuales
 # ------------------------------------------------------------------------------
+
 
 def _rule_production_never_dry_run(cfg: "AppConfig") -> None:
     """
@@ -150,8 +149,7 @@ def _rule_max_backfill_production(cfg: "AppConfig") -> None:
         raise ConfigRuleViolation(
             rule="PRODUCTION_BACKFILL_LIMIT",
             message=(
-                f"safety.max_backfill_days={cfg.safety.max_backfill_days} "
-                "supera el límite de 90 días en producción."
+                f"safety.max_backfill_days={cfg.safety.max_backfill_days} supera el límite de 90 días en producción."
             ),
             fix="Reducir safety.max_backfill_days ≤ 90 en env/production.yaml.",
         )

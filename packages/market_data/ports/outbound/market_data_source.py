@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence, runtime_checkable
 
-
 # (timestamp_ms, open, high, low, close, volume)
 RawOHLCV = Sequence[Sequence]
 

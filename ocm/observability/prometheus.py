@@ -6,6 +6,7 @@ Infraestructura de observabilidad: servidor HTTP de métricas y push al Pushgate
 Responsabilidad única: ciclo de vida del servidor de métricas.
 No contiene contadores de dominio — esos viven en market_data/observability/metrics.py
 """
+
 from __future__ import annotations
 
 import time as _time
@@ -62,4 +63,3 @@ def push_metrics(
         _log.bind(job=job, gateway=gateway).debug("metrics_pushed")
     except Exception as exc:
         _log.bind(job=job, gateway=gateway).warning("metrics_push_failed | error={}", exc)
-

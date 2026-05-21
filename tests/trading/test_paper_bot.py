@@ -14,6 +14,7 @@ Cambios respecto a versión anterior
   en RiskManager/OMS. Los tests prueban comportamiento observable via run_once(),
   no implementación interna. (SRP — PaperBot es facade, no evaluador de riesgo)
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -28,63 +29,69 @@ from trading.risk.models import PositionConfig, RiskConfig, SignalFilterConfig
 from trading.strategies.base import Signal
 from trading.strategies.ema_crossover import EMACrossoverStrategy
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_ohlcv(n: int = 50, seed: int = 0) -> pd.DataFrame:
-    rng   = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed)
     close = rng.uniform(40_000, 50_000, n)
-    return pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close,
-        "high":   close + 100,
-        "low":    close - 100,
-        "close":  close,
-        "volume": rng.uniform(100, 1_000, n),
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close,
+            "high": close + 100,
+            "low": close - 100,
+            "close": close,
+            "volume": rng.uniform(100, 1_000, n),
+        }
+    )
 
 
 def _make_crossover_df() -> pd.DataFrame:
     """DataFrame con golden cross garantizado en la última vela."""
-    n     = 50
+    n = 50
     close = np.full(n, 40_000.0)
     close[-1] = 60_000.0
-    return pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close,
-        "high":   close + 100,
-        "low":    close - 100,
-        "close":  close,
-        "volume": np.ones(n) * 500,
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close,
+            "high": close + 100,
+            "low": close - 100,
+            "close": close,
+            "volume": np.ones(n) * 500,
+        }
+    )
 
 
 def _make_signal(signal_type: str = "buy", confidence: float = 1.0) -> Signal:
     return Signal(
-        symbol     = "BTC/USDT",
-        timeframe  = "1h",
-        direction  = signal_type,
-        price      = 50_000.0,
-        timestamp  = datetime(2024, 1, 1, tzinfo=timezone.utc),
-        confidence = confidence,
+        symbol="BTC/USDT",
+        timeframe="1h",
+        direction=signal_type,
+        price=50_000.0,
+        timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        confidence=confidence,
     )
 
 
 def _make_bot(df=None, risk=None) -> PaperBot:
     """Crea un PaperBot con data_source stubbed via FeatureSource."""
-    source   = MagicMock(spec=FeatureSource)
+    source = MagicMock(spec=FeatureSource)
     source.load_features.return_value = df if df is not None else _make_ohlcv()
     strategy = EMACrossoverStrategy(symbol="BTC/USDT", timeframe="1h")
     return PaperBot(
-        strategy    = strategy,
-        data_source = source,
-        risk        = risk or RiskConfig(
-            signal_filter = SignalFilterConfig(min_confidence=0.5),
+        strategy=strategy,
+        data_source=source,
+        risk=risk
+        or RiskConfig(
+            signal_filter=SignalFilterConfig(min_confidence=0.5),
         ),
     )
 
 
 # ── Construcción ──────────────────────────────────────────────────────────────
+
 
 def test_paper_bot_instantiates():
     bot = _make_bot()
@@ -92,13 +99,14 @@ def test_paper_bot_instantiates():
 
 
 def test_paper_bot_uses_default_risk_when_not_provided():
-    source   = MagicMock(spec=FeatureSource)
+    source = MagicMock(spec=FeatureSource)
     strategy = EMACrossoverStrategy()
-    bot      = PaperBot(strategy=strategy, data_source=source)
+    bot = PaperBot(strategy=strategy, data_source=source)
     assert isinstance(bot.risk, RiskConfig)
 
 
 # ── run_once — sin datos ──────────────────────────────────────────────────────
+
 
 def test_run_once_returns_empty_when_no_data():
     bot = _make_bot(df=pd.DataFrame())
@@ -113,8 +121,9 @@ def test_run_once_returns_empty_when_data_source_returns_none():
 
 # ── run_once — con señal ──────────────────────────────────────────────────────
 
+
 def test_run_once_generates_order_on_crossover():
-    bot    = _make_bot(df=_make_crossover_df())
+    bot = _make_bot(df=_make_crossover_df())
     orders = bot.run_once()
     assert len(orders) == 1
     assert orders[0].side == "buy"
@@ -134,16 +143,17 @@ def test_run_once_registers_open_trade():
 
 def test_run_once_no_signal_no_order():
     """DataFrame plano → sin cruce → sin orden."""
-    df          = _make_ohlcv(n=50)
+    df = _make_ohlcv(n=50)
     df["close"] = 45_000.0
-    df["open"]  = 45_000.0
-    bot         = _make_bot(df=df)
+    df["open"] = 45_000.0
+    bot = _make_bot(df=df)
     assert bot.run_once() == []
 
 
 # ── Risk checks — comportamiento observable vía run_once() ───────────────────
 # Principio: los tests prueban QUÉ hace el sistema (comportamiento), no CÓMO
 # (implementación interna). La evaluación de riesgo vive en RiskManager/OMS.
+
 
 def test_run_once_rejects_signal_below_min_confidence():
     """
@@ -155,27 +165,31 @@ def test_run_once_rejects_signal_below_min_confidence():
     No se accede a ningún método privado del bot.
     """
     bot = _make_bot(
-        df   = _make_crossover_df(),
-        risk = RiskConfig(
-            signal_filter = SignalFilterConfig(min_confidence=0.9),
+        df=_make_crossover_df(),
+        risk=RiskConfig(
+            signal_filter=SignalFilterConfig(min_confidence=0.9),
         ),
     )
 
     # Instance-level patch: sustituye generate_signals solo en esta instancia.
     # bot._engine._strategy es la estrategia real construida por TradingEngine.
     def _low_confidence(df):
-        return [Signal(
-            symbol     = "BTC/USDT",
-            timeframe  = "1h",
-            direction  = "buy",
-            price      = float(df.iloc[-1]["close"]),
-            timestamp  = datetime(2024, 1, 1, tzinfo=timezone.utc),
-            confidence = 0.5,
-        )]
+        return [
+            Signal(
+                symbol="BTC/USDT",
+                timeframe="1h",
+                direction="buy",
+                price=float(df.iloc[-1]["close"]),
+                timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+                confidence=0.5,
+            )
+        ]
 
     bot._engine._strategy.generate_signals = _low_confidence
 
     assert bot.run_once() == []
+
+
 def test_run_once_accepts_signal_at_default_min_confidence():
     """Señal con confianza suficiente → orden generada."""
     bot = _make_bot(df=_make_crossover_df())
@@ -188,7 +202,7 @@ def test_run_once_rejects_when_max_open_positions_reached():
     de posiciones abiertas simultáneas.
     """
     risk = RiskConfig(
-        position = PositionConfig(max_open_positions=1),
+        position=PositionConfig(max_open_positions=1),
     )
     bot = _make_bot(df=_make_crossover_df(), risk=risk)
 
@@ -201,8 +215,9 @@ def test_run_once_rejects_when_max_open_positions_reached():
 
 # ── close_trade ───────────────────────────────────────────────────────────────
 
+
 def test_close_trade_removes_from_open_trades():
-    bot    = _make_bot(df=_make_crossover_df())
+    bot = _make_bot(df=_make_crossover_df())
     orders = bot.run_once()
     assert len(bot.open_trades) == 1
     bot.close_trade(orders[0])
@@ -210,32 +225,33 @@ def test_close_trade_removes_from_open_trades():
 
 
 def test_close_trade_preserves_order_history():
-    bot    = _make_bot(df=_make_crossover_df())
+    bot = _make_bot(df=_make_crossover_df())
     orders = bot.run_once()
     bot.close_trade(orders[0])
-    assert len(bot.order_history) == 1   # log no se borra al cerrar
+    assert len(bot.order_history) == 1  # log no se borra al cerrar
 
 
 def test_close_trade_noop_on_unknown_order():
-    bot    = _make_bot()
+    bot = _make_bot()
     signal = _make_signal()
-    order  = PaperOrder(
-        symbol    = "BTC/USDT",
-        side      = "buy",
-        price     = 50_000.0,
-        size_pct  = 0.01,
-        timestamp = datetime(2024, 1, 1, tzinfo=timezone.utc),
-        signal    = signal,
+    order = PaperOrder(
+        symbol="BTC/USDT",
+        side="buy",
+        price=50_000.0,
+        size_pct=0.01,
+        timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        signal=signal,
     )
-    bot.close_trade(order)   # no debe lanzar excepción
+    bot.close_trade(order)  # no debe lanzar excepción
     assert len(bot.open_trades) == 0
 
 
 # ── summary ───────────────────────────────────────────────────────────────────
 
+
 def test_summary_initial_state():
     bot = _make_bot()
-    s   = bot.summary()
+    s = bot.summary()
     assert s["total_signals_acted"] == 0
     assert s["open_trades"] == 0
     assert s["last_order"] is None

@@ -19,4 +19,5 @@ Importar desde los submódulos directamente:
 
 El entrypoint CLI vive en app/run_paper.py (composition root).
 """
+
 __version__ = "0.2.0"

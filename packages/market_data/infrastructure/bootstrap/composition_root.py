@@ -38,7 +38,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig
     from market_data.application.feed_orchestrator import FeedOrchestrator
-    from market_data.infrastructure.bootstrap.pipeline_factory import ConcretePipelineFactory
+    from market_data.infrastructure.bootstrap.pipeline_factory import (
+        ConcretePipelineFactory,
+    )
 
 __all__ = ["CompositionRoot", "assemble"]
 

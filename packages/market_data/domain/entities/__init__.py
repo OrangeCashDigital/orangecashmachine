@@ -36,7 +36,6 @@ from __future__ import annotations
 
 from enum import Enum
 
-
 # ---------------------------------------------------------------------------
 # DataTier — clasificación de tier de calidad de un dataset Silver
 # ---------------------------------------------------------------------------

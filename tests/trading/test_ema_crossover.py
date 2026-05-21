@@ -22,6 +22,7 @@ death cross — patrón verificado numéricamente:
   No funciona con precio alto plano desde el inicio porque las EMAs
   convergen al mismo valor — no hay "arriba" establecido antes del drop.
 """
+
 from __future__ import annotations
 
 
@@ -31,21 +32,23 @@ import pytest
 
 from trading.strategies.ema_crossover import EMACrossoverStrategy
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _make_df(n: int = 40, seed: int = 0) -> pd.DataFrame:
     """DataFrame OHLCV aleatorio — sin cruce garantizado."""
-    rng   = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed)
     close = rng.uniform(40_000, 50_000, n)
-    return pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close,
-        "high":   close + 100,
-        "low":    close - 100,
-        "close":  close,
-        "volume": rng.uniform(100, 1_000, n),
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close,
+            "high": close + 100,
+            "low": close - 100,
+            "close": close,
+            "volume": rng.uniform(100, 1_000, n),
+        }
+    )
 
 
 def _make_golden_cross_df(n: int = 60) -> pd.DataFrame:
@@ -53,16 +56,18 @@ def _make_golden_cross_df(n: int = 60) -> pd.DataFrame:
     N-1 velas a 40k, última vela a 80k.
     Cruce verificado: EMA(9) > EMA(21) en iloc[-1].
     """
-    close     = np.full(n, 40_000.0)
+    close = np.full(n, 40_000.0)
     close[-1] = 80_000.0
-    return pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close,
-        "high":   close + 100,
-        "low":    close - 100,
-        "close":  close,
-        "volume": np.ones(n) * 500,
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close,
+            "high": close + 100,
+            "low": close - 100,
+            "close": close,
+            "volume": np.ones(n) * 500,
+        }
+    )
 
 
 def _make_death_cross_df(n: int = 60) -> pd.DataFrame:
@@ -77,26 +82,28 @@ def _make_death_cross_df(n: int = 60) -> pd.DataFrame:
     Un precio alto constante desde el inicio no funciona: las EMAs
     convergen al mismo valor y no hay "arriba" establecido antes del drop.
     """
-    close        = np.full(n, 40_000.0)
-    close[10:59] = 80_000.0   # fast sube sobre slow en idx 10
-    close[59]    = 40_000.0   # fast cae bajo slow en idx 59 (última)
-    return pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close,
-        "high":   close + 100,
-        "low":    close - 100,
-        "close":  close,
-        "volume": np.ones(n) * 500,
-    })
+    close = np.full(n, 40_000.0)
+    close[10:59] = 80_000.0  # fast sube sobre slow en idx 10
+    close[59] = 40_000.0  # fast cae bajo slow en idx 59 (última)
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close,
+            "high": close + 100,
+            "low": close - 100,
+            "close": close,
+            "volume": np.ones(n) * 500,
+        }
+    )
 
 
 @pytest.fixture
 def strategy() -> EMACrossoverStrategy:
-    return EMACrossoverStrategy(fast_period=9, slow_period=21,
-                                symbol="BTC/USDT", timeframe="1h")
+    return EMACrossoverStrategy(fast_period=9, slow_period=21, symbol="BTC/USDT", timeframe="1h")
 
 
 # ── Construcción ──────────────────────────────────────────────────────────────
+
 
 def test_strategy_name():
     assert EMACrossoverStrategy.name == "ema_crossover"
@@ -114,8 +121,9 @@ def test_equal_periods_raises():
 
 # ── generate_signals — datos insuficientes ────────────────────────────────────
 
+
 def test_returns_empty_when_too_few_rows(strategy):
-    df = _make_df(n=10)   # < slow_period + 1 = 22
+    df = _make_df(n=10)  # < slow_period + 1 = 22
     assert strategy.generate_signals(df) == []
 
 
@@ -133,6 +141,7 @@ def test_returns_empty_when_df_is_empty(strategy):
 
 # ── generate_signals — lógica de cruce ───────────────────────────────────────
 
+
 def test_golden_cross_generates_buy(strategy):
     signals = strategy.generate_signals(_make_golden_cross_df())
     assert len(signals) == 1
@@ -147,15 +156,16 @@ def test_death_cross_generates_sell(strategy):
 
 def test_flat_price_no_crossover_returns_empty(strategy):
     """Sin cruce en la última vela no hay señal."""
-    df          = _make_df(n=40)
+    df = _make_df(n=40)
     df["close"] = 45_000.0
-    df["open"]  = 45_000.0
-    df["high"]  = 45_100.0
-    df["low"]   = 44_900.0
+    df["open"] = 45_000.0
+    df["high"] = 45_100.0
+    df["low"] = 44_900.0
     assert strategy.generate_signals(df) == []
 
 
 # ── generate_signals — propiedades de la señal ───────────────────────────────
+
 
 def test_signal_symbol_matches_strategy(strategy):
     signals = strategy.generate_signals(_make_golden_cross_df())
@@ -174,7 +184,7 @@ def test_signal_timestamp_is_utc_aware(strategy):
 
 def test_signal_metadata_contains_ema_values(strategy):
     signals = strategy.generate_signals(_make_golden_cross_df())
-    meta    = signals[0].metadata
+    meta = signals[0].metadata
     assert "ema_fast" in meta
     assert "ema_slow" in meta
     assert meta["fast_period"] == 9
@@ -182,14 +192,14 @@ def test_signal_metadata_contains_ema_values(strategy):
 
 
 def test_signal_price_equals_last_close(strategy):
-    df      = _make_golden_cross_df()
+    df = _make_golden_cross_df()
     signals = strategy.generate_signals(df)
     assert signals[0].price == float(df.iloc[-1]["close"])
 
 
 def test_input_df_is_not_mutated(strategy):
     """generate_signals no debe modificar el DataFrame original."""
-    df          = _make_golden_cross_df()
+    df = _make_golden_cross_df()
     cols_before = set(df.columns)
     strategy.generate_signals(df)
     assert set(df.columns) == cols_before

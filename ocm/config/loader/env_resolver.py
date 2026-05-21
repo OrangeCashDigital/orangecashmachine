@@ -12,7 +12,9 @@ from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
 from ..env_vars import OCM_ENV as _OCM_ENV_VAR
-from ..env_vars import ALLOWED_ENVS as _ALLOWED_ENVS  # SSOT — no duplicar; importado como frozenset inmutable
+from ..env_vars import (
+    ALLOWED_ENVS as _ALLOWED_ENVS,
+)  # SSOT — no duplicar; importado como frozenset inmutable
 from ocm.observability.bootstrap import pre_log
 
 from loguru import logger

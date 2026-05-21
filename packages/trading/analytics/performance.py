@@ -24,6 +24,7 @@ Métricas implementadas
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 import math
@@ -32,10 +33,10 @@ from typing import Optional
 
 from trading.analytics.trade_record import TradeRecord
 
-
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class PerformanceSummary:
@@ -45,38 +46,36 @@ class PerformanceSummary:
     Todos los campos son Optional para soportar historial vacío
     (0 trades cerrados) sin lanzar excepciones.
     """
-    total_trades:   int
+
+    total_trades: int
     winning_trades: int
-    losing_trades:  int
+    losing_trades: int
 
-    total_pnl_pct:  float          # suma acumulada
-    pnl_usd:        Optional[float]  # None si capital_usd no se provee
+    total_pnl_pct: float  # suma acumulada
+    pnl_usd: Optional[float]  # None si capital_usd no se provee
 
-    win_rate:       Optional[float]  # None si total_trades == 0
-    avg_win_pct:    Optional[float]
-    avg_loss_pct:   Optional[float]
-    profit_factor:  Optional[float]  # None si no hay pérdidas
+    win_rate: Optional[float]  # None si total_trades == 0
+    avg_win_pct: Optional[float]
+    avg_loss_pct: Optional[float]
+    profit_factor: Optional[float]  # None si no hay pérdidas
 
-    sharpe_ratio:   Optional[float]  # None si < 2 trades
-    max_drawdown:   float            # siempre >= 0
+    sharpe_ratio: Optional[float]  # None si < 2 trades
+    max_drawdown: float  # siempre >= 0
 
     avg_duration_s: Optional[float]
 
     def __str__(self) -> str:
-        wr  = f"{self.win_rate:.1%}"   if self.win_rate   is not None else "N/A"
-        sr  = f"{self.sharpe_ratio:.2f}" if self.sharpe_ratio is not None else "N/A"
+        wr = f"{self.win_rate:.1%}" if self.win_rate is not None else "N/A"
+        sr = f"{self.sharpe_ratio:.2f}" if self.sharpe_ratio is not None else "N/A"
         mdd = f"{self.max_drawdown:.2%}"
         pnl = f"{self.total_pnl_pct:+.2%}"
-        return (
-            f"Performance(trades={self.total_trades}"
-            f" pnl={pnl} win_rate={wr}"
-            f" sharpe={sr} max_dd={mdd})"
-        )
+        return f"Performance(trades={self.total_trades} pnl={pnl} win_rate={wr} sharpe={sr} max_dd={mdd})"
 
 
 # ---------------------------------------------------------------------------
 # PerformanceEngine
 # ---------------------------------------------------------------------------
+
 
 class PerformanceEngine:
     """
@@ -95,9 +94,9 @@ class PerformanceEngine:
 
     @staticmethod
     def summarize(
-        trades:      list[TradeRecord],
+        trades: list[TradeRecord],
         capital_usd: Optional[float] = None,
-        periods_per_year: int = 252,    # días de trading por año
+        periods_per_year: int = 252,  # días de trading por año
     ) -> PerformanceSummary:
         """
         Calcula todas las métricas de una vez.
@@ -106,52 +105,46 @@ class PerformanceEngine:
         """
         if not trades:
             return PerformanceSummary(
-                total_trades   = 0,
-                winning_trades = 0,
-                losing_trades  = 0,
-                total_pnl_pct  = 0.0,
-                pnl_usd        = 0.0 if capital_usd is not None else None,
-                win_rate       = None,
-                avg_win_pct    = None,
-                avg_loss_pct   = None,
-                profit_factor  = None,
-                sharpe_ratio   = None,
-                max_drawdown   = 0.0,
-                avg_duration_s = None,
+                total_trades=0,
+                winning_trades=0,
+                losing_trades=0,
+                total_pnl_pct=0.0,
+                pnl_usd=0.0 if capital_usd is not None else None,
+                win_rate=None,
+                avg_win_pct=None,
+                avg_loss_pct=None,
+                profit_factor=None,
+                sharpe_ratio=None,
+                max_drawdown=0.0,
+                avg_duration_s=None,
             )
 
         winners = [t for t in trades if t.is_winner]
-        losers  = [t for t in trades if not t.is_winner]
+        losers = [t for t in trades if not t.is_winner]
         returns = [t.pnl_pct for t in trades]
 
-        total_pnl  = sum(returns)
-        win_rate   = len(winners) / len(trades)
-        avg_win    = sum(t.pnl_pct for t in winners) / len(winners) if winners else None
-        avg_loss   = sum(t.pnl_pct for t in losers)  / len(losers)  if losers  else None
+        total_pnl = sum(returns)
+        win_rate = len(winners) / len(trades)
+        avg_win = sum(t.pnl_pct for t in winners) / len(winners) if winners else None
+        avg_loss = sum(t.pnl_pct for t in losers) / len(losers) if losers else None
 
         gross_profit = sum(t.pnl_pct for t in winners) if winners else 0.0
-        gross_loss   = abs(sum(t.pnl_pct for t in losers)) if losers else 0.0
-        profit_factor = (
-            gross_profit / gross_loss if gross_loss > 0 else None
-        )
+        gross_loss = abs(sum(t.pnl_pct for t in losers)) if losers else 0.0
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
 
         return PerformanceSummary(
-            total_trades   = len(trades),
-            winning_trades = len(winners),
-            losing_trades  = len(losers),
-            total_pnl_pct  = total_pnl,
-            pnl_usd        = total_pnl * capital_usd if capital_usd is not None else None,
-            win_rate       = win_rate,
-            avg_win_pct    = avg_win,
-            avg_loss_pct   = avg_loss,
-            profit_factor  = profit_factor,
-            sharpe_ratio   = PerformanceEngine.sharpe_ratio(
-                trades, periods_per_year=periods_per_year
-            ),
-            max_drawdown   = PerformanceEngine.max_drawdown(trades),
-            avg_duration_s = (
-                sum(t.duration_s for t in trades) / len(trades)
-            ),
+            total_trades=len(trades),
+            winning_trades=len(winners),
+            losing_trades=len(losers),
+            total_pnl_pct=total_pnl,
+            pnl_usd=total_pnl * capital_usd if capital_usd is not None else None,
+            win_rate=win_rate,
+            avg_win_pct=avg_win,
+            avg_loss_pct=avg_loss,
+            profit_factor=profit_factor,
+            sharpe_ratio=PerformanceEngine.sharpe_ratio(trades, periods_per_year=periods_per_year),
+            max_drawdown=PerformanceEngine.max_drawdown(trades),
+            avg_duration_s=(sum(t.duration_s for t in trades) / len(trades)),
         )
 
     # ------------------------------------------------------------------
@@ -160,9 +153,9 @@ class PerformanceEngine:
 
     @staticmethod
     def sharpe_ratio(
-        trades:           list[TradeRecord],
-        risk_free:        float = 0.0,
-        periods_per_year: int   = 252,
+        trades: list[TradeRecord],
+        risk_free: float = 0.0,
+        periods_per_year: int = 252,
     ) -> Optional[float]:
         """
         Sharpe Ratio anualizado.
@@ -175,12 +168,12 @@ class PerformanceEngine:
             return None
 
         returns = [t.pnl_pct for t in trades]
-        n       = len(returns)
-        mean_r  = sum(returns) / n
-        excess  = mean_r - risk_free
+        n = len(returns)
+        mean_r = sum(returns) / n
+        excess = mean_r - risk_free
 
         variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
-        std_r    = math.sqrt(variance)
+        std_r = math.sqrt(variance)
 
         if std_r == 0.0:
             return None
@@ -201,12 +194,12 @@ class PerformanceEngine:
             return 0.0
 
         # Equity curve: capital normalizado a 1.0
-        equity  = 1.0
-        peak    = 1.0
-        max_dd  = 0.0
+        equity = 1.0
+        peak = 1.0
+        max_dd = 0.0
 
         for trade in trades:
-            equity *= (1.0 + trade.pnl_pct)
+            equity *= 1.0 + trade.pnl_pct
             if equity > peak:
                 peak = equity
             drawdown = (peak - equity) / peak
@@ -240,9 +233,9 @@ class PerformanceEngine:
         Útil para visualización o cálculos posteriores.
         Retorna [1.0] si no hay trades.
         """
-        curve   = [1.0]
-        equity  = 1.0
+        curve = [1.0]
+        equity = 1.0
         for trade in trades:
-            equity *= (1.0 + trade.pnl_pct)
+            equity *= 1.0 + trade.pnl_pct
             curve.append(round(equity, 6))
         return curve

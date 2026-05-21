@@ -54,9 +54,9 @@ __all__ = ["pre_log", "drain"]
 # Final[X] documenta la intención: la referencia al objeto no debe reasignarse.
 # El estado interno de cada objeto sí muta (append, clear, bool assignment).
 # ---------------------------------------------------------------------------
-_lock:   Final[threading.Lock]      = threading.Lock()
+_lock: Final[threading.Lock] = threading.Lock()
 _buffer: Final[list[dict[str, Any]]] = []
-_active: list[bool]                  = [True]   # mutable container para evitar 'global'
+_active: list[bool] = [True]  # mutable container para evitar 'global'
 
 
 def pre_log(event: str, **kwargs: str | int | float | bool | None) -> None:
@@ -83,14 +83,16 @@ def pre_log(event: str, **kwargs: str | int | float | bool | None) -> None:
             file=sys.stderr,
             flush=True,
         )
-        kwargs = {k: (str(v) if not isinstance(v, _PRIMITIVE) else v) for k, v in kwargs.items()}  # narrowed: all values are _PRIMITIVE after coercion
+        kwargs = {
+            k: (str(v) if not isinstance(v, _PRIMITIVE) else v) for k, v in kwargs.items()
+        }  # narrowed: all values are _PRIMITIVE after coercion
 
     with _lock:
         if not _active[0]:
             return
-        ts    = datetime.now(timezone.utc).isoformat(sep=" ", timespec="milliseconds")
+        ts = datetime.now(timezone.utc).isoformat(sep=" ", timespec="milliseconds")
         parts = " | ".join(f"{k}={v}" for k, v in kwargs.items())
-        line  = f"{ts} | PRE-INIT | {event}" + (f" | {parts}" if parts else "")
+        line = f"{ts} | PRE-INIT | {event}" + (f" | {parts}" if parts else "")
         print(line, file=sys.stderr, flush=True)
         _buffer.append({"ts": ts, "event": event, **kwargs})
 

@@ -58,7 +58,6 @@ from shared.kafka.topics import (
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
-
 # ---------------------------------------------------------------------------
 # ACL: domain source → wire DataSource
 # ---------------------------------------------------------------------------

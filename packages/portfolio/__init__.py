@@ -27,4 +27,5 @@ Submódulos
 
 Principios: SOLID · DDD · KISS · DRY · SafeOps
 """
+
 __version__ = "0.1.0"

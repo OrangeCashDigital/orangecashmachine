@@ -31,7 +31,6 @@ from market_data.infrastructure.storage.iceberg.partitions import (
     derivatives_partition_spec,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------

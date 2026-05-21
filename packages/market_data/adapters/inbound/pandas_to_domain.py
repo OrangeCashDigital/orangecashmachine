@@ -27,7 +27,6 @@ import pandas as pd
 from market_data.domain.value_objects.candle import Candle
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 
-
 # ── Validación SSOT ──────────────────────────────────────────────────────────
 
 _REQUIRED_COLUMNS: frozenset[str] = frozenset({"timestamp", "open", "high", "low", "close", "volume"})

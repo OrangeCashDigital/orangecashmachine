@@ -36,6 +36,7 @@ Política de compatibilidad:
 
 Principios: SSOT · DDD · KISS · Fail-Fast
 """
+
 from __future__ import annotations
 
 import uuid
@@ -67,16 +68,17 @@ class BasePayload:
         class MyPayload(BasePayload):
             SCHEMA_VERSION: ClassVar[int] = 1
     """
-    event_id:      str = field(default_factory=_new_uuid)
+
+    event_id: str = field(default_factory=_new_uuid)
     event_version: int = 1
-    occurred_at:   str = field(default_factory=_utc_now)
+    occurred_at: str = field(default_factory=_utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         """Base dict con campos de envelope. Subclases extienden."""
         return {
-            "event_id":      self.event_id,
+            "event_id": self.event_id,
             "event_version": self.event_version,
-            "occurred_at":   self.occurred_at,
+            "occurred_at": self.occurred_at,
         }
 
 

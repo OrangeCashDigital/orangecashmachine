@@ -18,6 +18,7 @@ SafeOps
 
 Principios: SOLID · KISS · SafeOps
 """
+
 from __future__ import annotations
 
 import uuid
@@ -26,32 +27,38 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from shared.types.signal import Signal  # DIP — order depende de domain, no de strategies
-
+from shared.types.signal import (
+    Signal,
+)  # DIP — order depende de domain, no de strategies
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class OrderSide(str, Enum):
-    BUY  = "buy"
+    BUY = "buy"
     SELL = "sell"
 
 
 class OrderStatus(str, Enum):
-    PENDING   = "pending"
+    PENDING = "pending"
     SUBMITTED = "submitted"
-    FILLED    = "filled"
-    REJECTED  = "rejected"
+    FILLED = "filled"
+    REJECTED = "rejected"
     CANCELLED = "cancelled"
 
 
 # Grafo de transiciones válidas — fail-fast ante cualquier violación
 _VALID_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
-    OrderStatus.PENDING:   {OrderStatus.SUBMITTED, OrderStatus.CANCELLED},
-    OrderStatus.SUBMITTED: {OrderStatus.FILLED, OrderStatus.REJECTED, OrderStatus.CANCELLED},
-    OrderStatus.FILLED:    set(),
-    OrderStatus.REJECTED:  set(),
+    OrderStatus.PENDING: {OrderStatus.SUBMITTED, OrderStatus.CANCELLED},
+    OrderStatus.SUBMITTED: {
+        OrderStatus.FILLED,
+        OrderStatus.REJECTED,
+        OrderStatus.CANCELLED,
+    },
+    OrderStatus.FILLED: set(),
+    OrderStatus.REJECTED: set(),
     OrderStatus.CANCELLED: set(),
 }
 
@@ -59,6 +66,7 @@ _VALID_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
 # ---------------------------------------------------------------------------
 # Order
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Order:
@@ -79,27 +87,23 @@ class Order:
     """
 
     # Identidad
-    symbol:     str
-    side:       OrderSide
-    size_pct:   float           # % del capital, rango (0.0, 1.0]
-    signal:     Signal
-    order_id:   str             = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    created_at: datetime        = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    symbol: str
+    side: OrderSide
+    size_pct: float  # % del capital, rango (0.0, 1.0]
+    signal: Signal
+    order_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Estado — mutable via transition()
-    status:         OrderStatus       = OrderStatus.PENDING
-    fill_price:     Optional[float]   = None
+    status: OrderStatus = OrderStatus.PENDING
+    fill_price: Optional[float] = None
     fill_timestamp: Optional[datetime] = None
-    reject_reason:  Optional[str]     = None
+    reject_reason: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validación de invariantes en construcción."""
         if not (0.0 < self.size_pct <= 1.0):
-            raise ValueError(
-                f"Order.size_pct debe estar en (0, 1], recibido: {self.size_pct}"
-            )
+            raise ValueError(f"Order.size_pct debe estar en (0, 1], recibido: {self.size_pct}")
 
     # ------------------------------------------------------------------
     # State machine
@@ -126,10 +130,8 @@ class Order:
         self.status = new_status
 
         if new_status == OrderStatus.FILLED:
-            self.fill_price     = kwargs.get("fill_price", self.signal.price)
-            self.fill_timestamp = kwargs.get(
-                "fill_timestamp", datetime.now(timezone.utc)
-            )
+            self.fill_price = kwargs.get("fill_price", self.signal.price)
+            self.fill_timestamp = kwargs.get("fill_timestamp", datetime.now(timezone.utc))
         elif new_status == OrderStatus.REJECTED:
             self.reject_reason = kwargs.get("reject_reason", "unknown")
 
@@ -144,7 +146,9 @@ class Order:
     @property
     def is_terminal(self) -> bool:
         return self.status in (
-            OrderStatus.FILLED, OrderStatus.REJECTED, OrderStatus.CANCELLED
+            OrderStatus.FILLED,
+            OrderStatus.REJECTED,
+            OrderStatus.CANCELLED,
         )
 
     @property

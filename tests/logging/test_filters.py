@@ -16,8 +16,8 @@ Cobertura:
 import pytest
 from ocm.observability.filters import pipeline_filter, strict_pipeline_filter
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _record(name: str, extra: dict | None = None) -> dict:
     """Construye un record mínimo de Loguru para tests."""
@@ -26,15 +26,19 @@ def _record(name: str, extra: dict | None = None) -> dict:
 
 # ── pipeline_filter — aceptados ───────────────────────────────────────────────
 
-@pytest.mark.parametrize("module", [
-    # Un representante real por cada prefijo de _PIPELINE_MODULES
-    "market_data.ingestion.rest.ohlcv_fetcher",
-    "market_data.application.pipelines.ohlcv_pipeline",
-    "market_data.infrastructure.storage.silver.trades_storage",
-    "market_data.quality.validators.ohlcv_validator",
-    "market_data.adapters.outbound.exchange.ccxt_adapter",
-    "ocm.control_plane.orchestration.entrypoint",
-])
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        # Un representante real por cada prefijo de _PIPELINE_MODULES
+        "market_data.ingestion.rest.ohlcv_fetcher",
+        "market_data.application.pipelines.ohlcv_pipeline",
+        "market_data.infrastructure.storage.silver.trades_storage",
+        "market_data.quality.validators.ohlcv_validator",
+        "market_data.adapters.outbound.exchange.ccxt_adapter",
+        "ocm.control_plane.orchestration.entrypoint",
+    ],
+)
 def test_pipeline_filter_accepts_pipeline_modules(module):
     """pipeline_filter acepta exactamente los módulos del pipeline OCM."""
     assert pipeline_filter(_record(module)) is True
@@ -42,28 +46,33 @@ def test_pipeline_filter_accepts_pipeline_modules(module):
 
 # ── pipeline_filter — rechazados ─────────────────────────────────────────────
 
-@pytest.mark.parametrize("module", [
-    # Módulos legítimos fuera del pipeline
-    "ocm.config.loader",
-    "ocm.observability.logger",
-    "infra.observability.runtime",
-    "main",
-    # Módulos eliminados del pipeline (prefijos pre-refactor)
-    "services.exchange.bybit",
-    "services.state.manager",
-    "pipeline.runner",
-    "core.pipeline.orchestrator",
-    # Falsos positivos por substring — NO deben pasar
-    "market_data_extra.ingestion.fetcher",   # guión bajo extra
-    "xmarket_data.ingestion.fetcher",        # prefijo diferente
-    "notmarket_data.processing.foo",         # cadena que contiene el prefijo
-])
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        # Módulos legítimos fuera del pipeline
+        "ocm.config.loader",
+        "ocm.observability.logger",
+        "infra.observability.runtime",
+        "main",
+        # Módulos eliminados del pipeline (prefijos pre-refactor)
+        "services.exchange.bybit",
+        "services.state.manager",
+        "pipeline.runner",
+        "core.pipeline.orchestrator",
+        # Falsos positivos por substring — NO deben pasar
+        "market_data_extra.ingestion.fetcher",  # guión bajo extra
+        "xmarket_data.ingestion.fetcher",  # prefijo diferente
+        "notmarket_data.processing.foo",  # cadena que contiene el prefijo
+    ],
+)
 def test_pipeline_filter_rejects_non_pipeline_modules(module):
     """pipeline_filter rechaza módulos fuera del pipeline y falsos positivos."""
     assert pipeline_filter(_record(module)) is False
 
 
 # ── pipeline_filter — invariantes de diseño ───────────────────────────────────
+
 
 def test_pipeline_filter_does_not_require_extra_context():
     """
@@ -77,7 +86,7 @@ def test_pipeline_filter_does_not_require_extra_context():
 # ── strict_pipeline_filter ────────────────────────────────────────────────────
 
 _PIPELINE_MODULE = "market_data.application.pipelines.ohlcv_pipeline"
-_NON_PIPELINE    = "ocm.config.loader"
+_NON_PIPELINE = "ocm.config.loader"
 
 
 def test_strict_filter_accepts_full_context():

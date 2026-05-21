@@ -28,8 +28,8 @@ from ocm.observability.logger import (
     _stable,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def reset_global_state():
@@ -40,18 +40,19 @@ def reset_global_state():
         _setup_mod._ACTIVE_SINK_IDS[:],
         _setup_mod._ACTIVE_LOKI,
     )
-    _setup_mod._BOOTSTRAP_DONE  = False
-    _setup_mod._CONFIG_HASH     = None
+    _setup_mod._BOOTSTRAP_DONE = False
+    _setup_mod._CONFIG_HASH = None
     _setup_mod._ACTIVE_SINK_IDS = []
-    _setup_mod._ACTIVE_LOKI     = None
+    _setup_mod._ACTIVE_LOKI = None
     yield
-    _setup_mod._BOOTSTRAP_DONE  = original[0]
-    _setup_mod._CONFIG_HASH     = original[1]
+    _setup_mod._BOOTSTRAP_DONE = original[0]
+    _setup_mod._CONFIG_HASH = original[1]
     _setup_mod._ACTIVE_SINK_IDS = original[2]
-    _setup_mod._ACTIVE_LOKI     = original[3]
+    _setup_mod._ACTIVE_LOKI = original[3]
 
 
 # ── _resolve_config ───────────────────────────────────────────────────────────
+
 
 def test_resolve_config_defaults():
     """
@@ -61,9 +62,9 @@ def test_resolve_config_defaults():
     El dict resultante NO contiene esa clave — si reaparece, es una regresión.
     """
     resolved = _resolve_config(None, False, None)
-    assert resolved["level"]   == "INFO"
+    assert resolved["level"] == "INFO"
     assert resolved["console"] is True
-    assert resolved["file"]    is True
+    assert resolved["file"] is True
     assert resolved["loki_url"] is None
     # Invariante de eliminación: 'pipeline' no debe estar en el dict
     assert "pipeline" not in resolved, (
@@ -80,8 +81,8 @@ def test_resolve_config_debug_forces_debug_level():
 def test_resolve_config_from_logging_config():
     cfg = LoggingConfig(level="WARNING", console=False, loki_url="http://loki:3100")
     resolved = _resolve_config(cfg, False, None)
-    assert resolved["level"]    == "WARNING"
-    assert resolved["console"]  is False
+    assert resolved["level"] == "WARNING"
+    assert resolved["console"] is False
     assert resolved["loki_url"] == "http://loki:3100"
 
 
@@ -94,6 +95,7 @@ def test_resolve_config_debug_overrides_cfg_level():
 
 # ── _stable ───────────────────────────────────────────────────────────────────
 
+
 def test_stable_sorts_dict_keys():
     result = _stable({"b": 1, "a": 2})
     assert list(result.keys()) == ["a", "b"]
@@ -101,11 +103,13 @@ def test_stable_sorts_dict_keys():
 
 def test_stable_converts_path():
     from pathlib import Path
+
     result = _stable(Path("/tmp/logs"))
     assert result == "/tmp/logs"
 
 
 # ── bootstrap_logging ─────────────────────────────────────────────────────────
+
 
 def test_bootstrap_logging_is_idempotent():
     with patch("ocm.observability.logger._install_sinks", return_value=([], None)) as mock:
@@ -126,6 +130,7 @@ def test_bootstrap_logging_sets_done_flag():
 
 # ── configure_logging ─────────────────────────────────────────────────────────
 
+
 def test_configure_logging_skips_if_hash_unchanged():
     """Misma config → mismo hash → _install_sinks llamado solo una vez."""
     cfg = LoggingConfig()
@@ -140,12 +145,13 @@ def test_configure_logging_reconfigures_on_change():
     """Config diferente → hash diferente → reinstalación de sinks."""
     with patch("ocm.observability.logger._install_sinks", return_value=([], None)) as mock:
         with patch("ocm.observability.logger._install_stdlib_bridge"):
-            configure_logging(LoggingConfig(level="INFO"),  env="development")
+            configure_logging(LoggingConfig(level="INFO"), env="development")
             configure_logging(LoggingConfig(level="DEBUG"), env="development")
             assert mock.call_count == 2
 
 
 # ── is_logging_configured ─────────────────────────────────────────────────────
+
 
 def test_is_logging_configured_false_initially():
     assert is_logging_configured() is False
@@ -162,6 +168,7 @@ def test_is_logging_configured_true_after_both():
 
 # ── bind_pipeline ─────────────────────────────────────────────────────────────
 
+
 def test_bind_pipeline_returns_logger():
     log = bind_pipeline("ohlcv_fetcher")
     assert log is not None
@@ -174,12 +181,14 @@ def test_bind_pipeline_with_full_context():
 
 # ── setup_logging deprecated ──────────────────────────────────────────────────
 
+
 def test_setup_logging_raises():
     with pytest.raises(RuntimeError, match="v0.2.0"):
         setup_logging()
 
 
 # ── LoggingConfig validator ───────────────────────────────────────────────────
+
 
 def test_logging_config_rejects_invalid_level():
     with pytest.raises(Exception):

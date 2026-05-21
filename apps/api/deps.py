@@ -27,13 +27,13 @@ _bearer = HTTPBearer(auto_error=True)
 # ---------------------------------------------------------------------------
 
 
-
 SettingsDep = Annotated[ApiSettings, Depends(get_settings)]
 
 
 # ---------------------------------------------------------------------------
 # Redis — pool async compartido
 # ---------------------------------------------------------------------------
+
 
 @lru_cache(maxsize=1)
 def _redis_pool(redis_url: str) -> aioredis.Redis:
@@ -46,7 +46,7 @@ def _redis_pool(redis_url: str) -> aioredis.Redis:
         decode_responses=True,
         socket_connect_timeout=2,
         socket_timeout=2,
-        retry_on_timeout=False,   # Fail-Fast: no reintentar silenciosamente
+        retry_on_timeout=False,  # Fail-Fast: no reintentar silenciosamente
     )
 
 
@@ -65,6 +65,7 @@ RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]
 # ---------------------------------------------------------------------------
 # Auth — verificación JWT
 # ---------------------------------------------------------------------------
+
 
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],

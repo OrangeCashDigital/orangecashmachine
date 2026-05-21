@@ -36,6 +36,7 @@ SafeOps
 
 Principios: SOLID · KISS · DRY · SafeOps · OCP
 """
+
 from __future__ import annotations
 
 import threading
@@ -43,25 +44,24 @@ from typing import Callable, Type, Union, overload
 
 from trading.strategies.base import BaseStrategy
 
-
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
 
+
 class StrategyNotFoundError(KeyError):
     """Estrategia no registrada."""
+
     def __init__(self, name: str, available: list[str]) -> None:
-        self.name      = name
+        self.name = name
         self.available = available
-        super().__init__(
-            f"Estrategia {name!r} no registrada. "
-            f"Disponibles: {sorted(available)}"
-        )
+        super().__init__(f"Estrategia {name!r} no registrada. Disponibles: {sorted(available)}")
 
 
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
+
 
 class _StrategyRegistry:
     """
@@ -75,21 +75,18 @@ class _StrategyRegistry:
 
     def register(
         self,
-        name:  str,
-        cls:   Type[BaseStrategy],
+        name: str,
+        cls: Type[BaseStrategy],
     ) -> None:
         """Registra una clase de estrategia con un nombre string."""
         if not issubclass(cls, BaseStrategy):
-            raise TypeError(
-                f"register: {cls.__name__} no es subclase de BaseStrategy"
-            )
+            raise TypeError(f"register: {cls.__name__} no es subclase de BaseStrategy")
         with self._lock:
             if name in self._registry:
                 existing = self._registry[name]
                 if existing is not cls:
                     raise ValueError(
-                        f"Estrategia {name!r} ya registrada como "
-                        f"{existing.__name__}. No se puede sobrescribir."
+                        f"Estrategia {name!r} ya registrada como {existing.__name__}. No se puede sobrescribir."
                     )
             self._registry[name] = cls
 
@@ -122,14 +119,18 @@ StrategyRegistry = _StrategyRegistry()
 # Decorador / función de registro
 # ---------------------------------------------------------------------------
 
+
 @overload
-def register_strategy(name: str) -> Callable[[Type[BaseStrategy]], Type[BaseStrategy]]: ...
+def register_strategy(
+    name: str,
+) -> Callable[[Type[BaseStrategy]], Type[BaseStrategy]]: ...
 @overload
 def register_strategy(name: str, cls: Type[BaseStrategy]) -> Type[BaseStrategy]: ...
 
+
 def register_strategy(
     name: str,
-    cls:  Union[Type[BaseStrategy], None] = None,
+    cls: Union[Type[BaseStrategy], None] = None,
 ) -> Union[Type[BaseStrategy], Callable]:
     """
     Registra una estrategia en el StrategyRegistry global.
@@ -159,6 +160,7 @@ def register_strategy(
 # Nuevas estrategias se añaden en su propio archivo + aquí (OCP).
 # ---------------------------------------------------------------------------
 
+
 def _register_builtins() -> None:
     # Auto-registra built-ins al importar este módulo.
     # try/except por estrategia: fallo parcial, no total (fail partial).
@@ -177,7 +179,9 @@ def _register_builtins() -> None:
         except Exception as exc:  # noqa: BLE001
             logging.getLogger(__name__).warning(
                 "registry: builtin %r failed to load (%s: %s) — skipped",
-                name, type(exc).__name__, exc,
+                name,
+                type(exc).__name__,
+                exc,
             )
 
 

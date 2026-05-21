@@ -51,7 +51,7 @@ async def health() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
-            "status":   "ok",
+            "status": "ok",
             "uptime_s": _uptime_seconds(),
         },
     )
@@ -84,6 +84,7 @@ async def ready(redis: RedisDep) -> JSONResponse:
 # ---------------------------------------------------------------------------
 # Helpers privados
 # ---------------------------------------------------------------------------
+
 
 def _uptime_seconds() -> float:
     if _startup_time is None:

@@ -52,6 +52,7 @@ Topología Kappa de OCM
 
 Principios: SSOT · SRP · KISS
 """
+
 from __future__ import annotations
 
 # =============================================================================
@@ -60,18 +61,18 @@ from __future__ import annotations
 
 # ── OHLCV pipeline ───────────────────────────────────────────────────────────
 
-TOPIC_OHLCV_RAW:       str = "ohlcv.raw"
+TOPIC_OHLCV_RAW: str = "ohlcv.raw"
 """Candles crudas. Fuente: OHLCVPipeline. Consumidores: BronzeWriter, QualityGate."""
 
 TOPIC_OHLCV_VALIDATED: str = "ohlcv.validated"
 """Candles validadas por QualityGate. Consumidores: FeatureEngine."""
 
-TOPIC_OHLCV_FEATURES:  str = "ohlcv.features"
+TOPIC_OHLCV_FEATURES: str = "ohlcv.features"
 """Candles + features técnicas. Solo source=live. Consumidores: StrategyConsumer."""
 
 # ── Señales ───────────────────────────────────────────────────────────────────
 
-TOPIC_SIGNALS_RAW:      str = "signals.raw"
+TOPIC_SIGNALS_RAW: str = "signals.raw"
 """Señales crudas de estrategias. Consumidores: RiskGate."""
 
 TOPIC_SIGNALS_APPROVED: str = "signals.approved"
@@ -82,7 +83,7 @@ TOPIC_SIGNALS_REJECTED: str = "signals.rejected"
 
 # ── Órdenes ───────────────────────────────────────────────────────────────────
 
-TOPIC_ORDERS_FILLED:   str = "orders.filled"
+TOPIC_ORDERS_FILLED: str = "orders.filled"
 """Órdenes ejecutadas. Fuente: OMS. Consumidores: PortfolioConsumer."""
 
 TOPIC_ORDERS_REJECTED: str = "orders.rejected"
@@ -104,25 +105,25 @@ TOPIC_DLQ: str = "ocm.dlq"
 
 # ── Trades / microestructura ─────────────────────────────────────────────────
 
-TOPIC_TRADES_RAW:    str = "trades.raw"
+TOPIC_TRADES_RAW: str = "trades.raw"
 """Ticks individuales. Fuente: RESTTradesPoller / WebSocketTradesStream."""
 
-TOPIC_TRADES_AGG:    str = "trades.agg"
+TOPIC_TRADES_AGG: str = "trades.agg"
 """TradeSeries agregadas por ventana. Fuente: TradesAggregatorProcessor."""
 
-TOPIC_OHLCV_STREAM:  str = "ohlcv.stream"
+TOPIC_OHLCV_STREAM: str = "ohlcv.stream"
 """Candles streaming (NO REST). Fuente: TradeToOHLCVAggregator."""
 
 TOPIC_BOOK_SNAPSHOT: str = "book.snapshot"
 """Snapshot L2 del order book."""
 
-TOPIC_BOOK_DELTA:    str = "book.delta"
+TOPIC_BOOK_DELTA: str = "book.delta"
 """Delta incremental L2."""
 
 TOPIC_MICROPRICE_RT: str = "microprice.rt"
 """Microprice en tiempo real. Fuente: MicropriceEngine."""
 
-TOPIC_FEATURES_RT:   str = "features.rt"
+TOPIC_FEATURES_RT: str = "features.rt"
 """Features real-time (VWAP, OFI, spread, momentum)."""
 
 # =============================================================================
@@ -130,32 +131,32 @@ TOPIC_FEATURES_RT:   str = "features.rt"
 # =============================================================================
 
 GROUP_BRONZE_WRITER: str = "ocm-bronze-writer"
-GROUP_QUALITY_GATE:  str = "ocm-quality-gate"
-GROUP_FEATURES:      str = "ocm-feature-engine"
-GROUP_STRATEGY:      str = "ocm-strategy-consumer"
-GROUP_RISK_GATE:     str = "ocm-risk-gate"
-GROUP_EXECUTION:     str = "ocm-execution"
-GROUP_PORTFOLIO:     str = "ocm-portfolio"
+GROUP_QUALITY_GATE: str = "ocm-quality-gate"
+GROUP_FEATURES: str = "ocm-feature-engine"
+GROUP_STRATEGY: str = "ocm-strategy-consumer"
+GROUP_RISK_GATE: str = "ocm-risk-gate"
+GROUP_EXECUTION: str = "ocm-execution"
+GROUP_PORTFOLIO: str = "ocm-portfolio"
 GROUP_TRADES_AGGREGATOR: str = "ocm-trades-aggregator"
-GROUP_OHLCV_STREAM:      str = "ocm-ohlcv-stream"
-GROUP_BOOK_BUILDER:      str = "ocm-book-builder"
-GROUP_MICROPRICE:        str = "ocm-microprice"
-GROUP_FEATURES_RT:       str = "ocm-features-rt"
+GROUP_OHLCV_STREAM: str = "ocm-ohlcv-stream"
+GROUP_BOOK_BUILDER: str = "ocm-book-builder"
+GROUP_MICROPRICE: str = "ocm-microprice"
+GROUP_FEATURES_RT: str = "ocm-features-rt"
 
 # =============================================================================
 # Headers — metadatos del mensaje (x-ocm-*)
 # =============================================================================
 
-HEADER_SOURCE:  str = "x-ocm-source"
+HEADER_SOURCE: str = "x-ocm-source"
 """Origen: 'backfill' | 'live' | 'replay'. Filtrar sin deserializar body."""
 
 HEADER_VERSION: str = "x-ocm-schema-version"
 """Versión del schema payload. Detecta incompatibilidad en consumer."""
 
-HEADER_RUN_ID:  str = "x-ocm-run-id"
+HEADER_RUN_ID: str = "x-ocm-run-id"
 """Correlación con el run que generó el mensaje. Para lineage y auditoría."""
 
-HEADER_DOMAIN:  str = "x-ocm-domain"
+HEADER_DOMAIN: str = "x-ocm-domain"
 """Dominio del payload: 'ohlcv' | 'signal' | 'order' | 'position'.
 Permite routing sin deserializar en consumers multi-topic."""
 
@@ -194,53 +195,90 @@ Permite routing sin deserializar en consumers multi-topic."""
 # =============================================================================
 
 _ALL_TOPICS = [
-    TOPIC_OHLCV_RAW, TOPIC_OHLCV_VALIDATED, TOPIC_OHLCV_FEATURES,
-    TOPIC_SIGNALS_RAW, TOPIC_SIGNALS_APPROVED, TOPIC_SIGNALS_REJECTED,
-    TOPIC_ORDERS_FILLED, TOPIC_ORDERS_REJECTED,
-    TOPIC_POSITIONS_OPENED, TOPIC_POSITIONS_CLOSED,
+    TOPIC_OHLCV_RAW,
+    TOPIC_OHLCV_VALIDATED,
+    TOPIC_OHLCV_FEATURES,
+    TOPIC_SIGNALS_RAW,
+    TOPIC_SIGNALS_APPROVED,
+    TOPIC_SIGNALS_REJECTED,
+    TOPIC_ORDERS_FILLED,
+    TOPIC_ORDERS_REJECTED,
+    TOPIC_POSITIONS_OPENED,
+    TOPIC_POSITIONS_CLOSED,
     TOPIC_DLQ,
-    TOPIC_TRADES_RAW, TOPIC_TRADES_AGG, TOPIC_OHLCV_STREAM,
-    TOPIC_BOOK_SNAPSHOT, TOPIC_BOOK_DELTA,
-    TOPIC_MICROPRICE_RT, TOPIC_FEATURES_RT,
+    TOPIC_TRADES_RAW,
+    TOPIC_TRADES_AGG,
+    TOPIC_OHLCV_STREAM,
+    TOPIC_BOOK_SNAPSHOT,
+    TOPIC_BOOK_DELTA,
+    TOPIC_MICROPRICE_RT,
+    TOPIC_FEATURES_RT,
 ]
 assert len(_ALL_TOPICS) == len(set(_ALL_TOPICS)), (
     "shared/kafka/topics.py: topics con string duplicado — colisión de nombres"
 )
 
 _ALL_GROUPS = [
-    GROUP_BRONZE_WRITER, GROUP_QUALITY_GATE, GROUP_FEATURES,
-    GROUP_STRATEGY, GROUP_RISK_GATE, GROUP_EXECUTION, GROUP_PORTFOLIO,
-    GROUP_TRADES_AGGREGATOR, GROUP_OHLCV_STREAM, GROUP_BOOK_BUILDER,
-    GROUP_MICROPRICE, GROUP_FEATURES_RT,
+    GROUP_BRONZE_WRITER,
+    GROUP_QUALITY_GATE,
+    GROUP_FEATURES,
+    GROUP_STRATEGY,
+    GROUP_RISK_GATE,
+    GROUP_EXECUTION,
+    GROUP_PORTFOLIO,
+    GROUP_TRADES_AGGREGATOR,
+    GROUP_OHLCV_STREAM,
+    GROUP_BOOK_BUILDER,
+    GROUP_MICROPRICE,
+    GROUP_FEATURES_RT,
 ]
-assert len(_ALL_GROUPS) == len(set(_ALL_GROUPS)), (
-    "shared/kafka/topics.py: consumer groups con string duplicado"
-)
+assert len(_ALL_GROUPS) == len(set(_ALL_GROUPS)), "shared/kafka/topics.py: consumer groups con string duplicado"
 
 del _ALL_TOPICS, _ALL_GROUPS
 
 
 __all__ = [
     # Topics OHLCV
-    "TOPIC_OHLCV_RAW", "TOPIC_OHLCV_VALIDATED", "TOPIC_OHLCV_FEATURES",
+    "TOPIC_OHLCV_RAW",
+    "TOPIC_OHLCV_VALIDATED",
+    "TOPIC_OHLCV_FEATURES",
     # Topics señales
-    "TOPIC_SIGNALS_RAW", "TOPIC_SIGNALS_APPROVED", "TOPIC_SIGNALS_REJECTED",
+    "TOPIC_SIGNALS_RAW",
+    "TOPIC_SIGNALS_APPROVED",
+    "TOPIC_SIGNALS_REJECTED",
     # Topics órdenes
-    "TOPIC_ORDERS_FILLED", "TOPIC_ORDERS_REJECTED",
+    "TOPIC_ORDERS_FILLED",
+    "TOPIC_ORDERS_REJECTED",
     # Topics posiciones
-    "TOPIC_POSITIONS_OPENED", "TOPIC_POSITIONS_CLOSED",
+    "TOPIC_POSITIONS_OPENED",
+    "TOPIC_POSITIONS_CLOSED",
     # DLQ
     "TOPIC_DLQ",
     # Consumer groups
-    "GROUP_BRONZE_WRITER", "GROUP_QUALITY_GATE", "GROUP_FEATURES",
-    "GROUP_STRATEGY", "GROUP_RISK_GATE", "GROUP_EXECUTION", "GROUP_PORTFOLIO",
+    "GROUP_BRONZE_WRITER",
+    "GROUP_QUALITY_GATE",
+    "GROUP_FEATURES",
+    "GROUP_STRATEGY",
+    "GROUP_RISK_GATE",
+    "GROUP_EXECUTION",
+    "GROUP_PORTFOLIO",
     # Topics trades / microestructura
-    "TOPIC_TRADES_RAW", "TOPIC_TRADES_AGG", "TOPIC_OHLCV_STREAM",
-    "TOPIC_BOOK_SNAPSHOT", "TOPIC_BOOK_DELTA",
-    "TOPIC_MICROPRICE_RT", "TOPIC_FEATURES_RT",
+    "TOPIC_TRADES_RAW",
+    "TOPIC_TRADES_AGG",
+    "TOPIC_OHLCV_STREAM",
+    "TOPIC_BOOK_SNAPSHOT",
+    "TOPIC_BOOK_DELTA",
+    "TOPIC_MICROPRICE_RT",
+    "TOPIC_FEATURES_RT",
     # Consumer groups (streaming)
-    "GROUP_TRADES_AGGREGATOR", "GROUP_OHLCV_STREAM", "GROUP_BOOK_BUILDER",
-    "GROUP_MICROPRICE", "GROUP_FEATURES_RT",
+    "GROUP_TRADES_AGGREGATOR",
+    "GROUP_OHLCV_STREAM",
+    "GROUP_BOOK_BUILDER",
+    "GROUP_MICROPRICE",
+    "GROUP_FEATURES_RT",
     # Headers
-    "HEADER_SOURCE", "HEADER_VERSION", "HEADER_RUN_ID", "HEADER_DOMAIN",
+    "HEADER_SOURCE",
+    "HEADER_VERSION",
+    "HEADER_RUN_ID",
+    "HEADER_DOMAIN",
 ]

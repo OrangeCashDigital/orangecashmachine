@@ -38,7 +38,6 @@ from typing import Any
 import structlog
 from structlog.types import EventDict, Processor
 
-
 # ── Constantes ────────────────────────────────────────────────────────────────
 
 _SERVICE = "orangecashmachine"
@@ -51,11 +50,20 @@ except PackageNotFoundError:
     _VERSION = "unknown"
 
 # Campos cuyo valor se redacta si contienen datos sensibles.
-_SECRET_KEYS: frozenset[str] = frozenset({
-    "api_key", "api_secret", "api_password", "password",
-    "secret", "token", "passphrase", "authorization",
-    "credential", "private_key",
-})
+_SECRET_KEYS: frozenset[str] = frozenset(
+    {
+        "api_key",
+        "api_secret",
+        "api_password",
+        "password",
+        "secret",
+        "token",
+        "passphrase",
+        "authorization",
+        "credential",
+        "private_key",
+    }
+)
 
 # Patrón para detectar valores que parecen secrets aunque la clave no esté listada.
 _SECRET_PATTERN = re.compile(
@@ -67,8 +75,11 @@ _REDACTED = "**REDACTED**"
 
 # ── Processors individuales ───────────────────────────────────────────────────
 
+
 def _add_timestamp(
-    logger: Any, method: str, event_dict: EventDict,
+    logger: Any,
+    method: str,
+    event_dict: EventDict,
 ) -> EventDict:
     """Añade timestamp ISO 8601 UTC con milliseconds si no existe."""
     event_dict.setdefault(
@@ -79,7 +90,9 @@ def _add_timestamp(
 
 
 def _inject_service_context(
-    logger: Any, method: str, event_dict: EventDict,
+    logger: Any,
+    method: str,
+    event_dict: EventDict,
 ) -> EventDict:
     """Inyecta service y version como campos fijos (SSOT: importlib.metadata)."""
     event_dict.setdefault("service", _SERVICE)
@@ -88,7 +101,9 @@ def _inject_service_context(
 
 
 def _sanitize_secrets(
-    logger: Any, method: str, event_dict: EventDict,
+    logger: Any,
+    method: str,
+    event_dict: EventDict,
 ) -> EventDict:
     """Redacta valores de campos que puedan contener secretos.
 
@@ -103,6 +118,7 @@ def _sanitize_secrets(
 
 
 # ── Chain factory ─────────────────────────────────────────────────────────────
+
 
 def build_processor_chain() -> list[Processor]:
     """Construye y retorna la chain estándar de processors.

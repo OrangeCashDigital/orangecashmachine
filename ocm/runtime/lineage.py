@@ -37,7 +37,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Constantes públicas — SSOT para validación en toda la plataforma
 # ---------------------------------------------------------------------------
@@ -48,6 +47,7 @@ VALID_LAYERS: frozenset[str] = frozenset({"bronze", "silver", "gold"})
 # ---------------------------------------------------------------------------
 # Git hash — stdlib pura, nunca lanza
 # ---------------------------------------------------------------------------
+
 
 def get_git_hash() -> str:
     """Hash corto del commit actual para trazabilidad de lineage.
@@ -74,6 +74,7 @@ def get_git_hash() -> str:
 # LineageRecord — dataclass inmutable de trazabilidad
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class LineageRecord:
     """Registro de trazabilidad para una operación de escritura en el lake.
@@ -89,15 +90,13 @@ class LineageRecord:
     layer       : Capa del lake — debe pertenecer a :data:`VALID_LAYERS`.
     """
 
-    run_id:     str
+    run_id: str
     version_id: str
-    git_hash:   str        = field(default_factory=get_git_hash)
-    written_at: str        = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    as_of:      str | None = None
-    exchange:   str | None = None
-    layer:      str        = "silver"
+    git_hash: str = field(default_factory=get_git_hash)
+    written_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    as_of: str | None = None
+    exchange: str | None = None
+    layer: str = "silver"
 
     # ------------------------------------------------------------------
     # Fail-Fast — validación en construcción, no en uso
@@ -105,10 +104,7 @@ class LineageRecord:
 
     def __post_init__(self) -> None:
         if self.layer not in VALID_LAYERS:
-            raise ValueError(
-                f"layer={self.layer!r} no es válido. "
-                f"Valores permitidos: {sorted(VALID_LAYERS)}"
-            )
+            raise ValueError(f"layer={self.layer!r} no es válido. Valores permitidos: {sorted(VALID_LAYERS)}")
         if not self.run_id:
             raise ValueError("run_id no puede ser vacío.")
         if not self.version_id:
@@ -121,11 +117,11 @@ class LineageRecord:
         los manifests mínimos y deterministas.
         """
         d: dict[str, Any] = {
-            "run_id":     self.run_id,
+            "run_id": self.run_id,
             "version_id": self.version_id,
-            "git_hash":   self.git_hash,
+            "git_hash": self.git_hash,
             "written_at": self.written_at,
-            "layer":      self.layer,
+            "layer": self.layer,
         }
         if self.as_of is not None:
             d["as_of"] = self.as_of
@@ -138,13 +134,14 @@ class LineageRecord:
 # Constructor conveniente
 # ---------------------------------------------------------------------------
 
+
 def build_lineage(
-    run_id:     str,
+    run_id: str,
     version_id: str,
     *,
-    as_of:    str | None = None,
+    as_of: str | None = None,
     exchange: str | None = None,
-    layer:    str        = "silver",
+    layer: str = "silver",
 ) -> LineageRecord:
     """Constructor conveniente para :class:`LineageRecord`.
 

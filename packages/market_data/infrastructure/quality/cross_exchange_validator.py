@@ -70,7 +70,13 @@ class CrossExchangeReport:
 
 class CrossExchangeValidator:
     def validate(
-        self, df_a: pd.DataFrame, df_b: pd.DataFrame, symbol: str, timeframe: str, exchange_a: str, exchange_b: str
+        self,
+        df_a: pd.DataFrame,
+        df_b: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        exchange_a: str,
+        exchange_b: str,
     ) -> CrossExchangeReport:
         report = CrossExchangeReport(
             symbol=symbol,

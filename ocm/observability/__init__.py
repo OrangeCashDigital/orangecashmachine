@@ -8,6 +8,7 @@ Regla: único punto de importación autorizado para callers externos.
 Nunca importar desde submódulos directamente fuera de este paquete.
 SSOT · OCP · Fail-Fast en import time.
 """
+
 from __future__ import annotations
 
 from ocm.observability.logger import (

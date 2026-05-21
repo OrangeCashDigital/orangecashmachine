@@ -49,7 +49,6 @@ Clean Architecture — excepciones de dominio no dependen de frameworks externos
 
 from __future__ import annotations
 
-
 # ===========================================================================
 # Raíz del bounded context
 # ===========================================================================

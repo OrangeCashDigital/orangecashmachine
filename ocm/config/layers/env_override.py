@@ -46,14 +46,16 @@ from omegaconf import DictConfig, OmegaConf
 # L2 y L3 usan el mismo conjunto de strings reconocidos; sin duplicación ni riesgo
 # de divergencia silenciosa entre capas.
 # Ref: ocm/config/layers/coercion.py — BOOL_TRUE / BOOL_FALSE (encapsulados en coerce_string).
-from ocm.config.layers.coercion import coerce_string as _coerce_string_canonical  # SSOT: BOOL_TRUE/BOOL_FALSE encapsulados en coerce_string
+from ocm.config.layers.coercion import (
+    coerce_string as _coerce_string_canonical,
+)  # SSOT: BOOL_TRUE/BOOL_FALSE encapsulados en coerce_string
 
 # SSOT de este módulo para el prefijo y separador de env vars estructuradas.
 # Nota: OCM_PREFIX en env_vars.py es el prefijo genérico del proceso; este
 # _OCM_PREFIX es específico del protocolo OCM_SECTION__KEY de L2.
 # Si se renombra el prefijo, cambiar aquí y en env_vars.py.
 _OCM_PREFIX: Final[str] = "OCM_"
-_SEPARATOR:  Final[str] = "__"
+_SEPARATOR: Final[str] = "__"
 
 
 __all__ = ["apply_env_overrides"]
@@ -81,14 +83,14 @@ def apply_env_overrides(
     """
     _env = env if env is not None else os.environ
     overrides: dict = {}
-    skipped:   list[str] = []
+    skipped: list[str] = []
 
     for key, raw_value in _env.items():
         if not key.startswith(_OCM_PREFIX):
             continue
 
-        remainder = key[len(_OCM_PREFIX):]
-        parts     = remainder.lower().split(_SEPARATOR)
+        remainder = key[len(_OCM_PREFIX) :]
+        parts = remainder.lower().split(_SEPARATOR)
 
         # Requiere al menos SECCIÓN + CLAVE (2 partes).
         # OCM_FOO (sin __) no tiene path estructurado válido — skip con warning.
@@ -111,20 +113,23 @@ def apply_env_overrides(
 
         logger.debug(
             "config_l2_env_override | applied key={} path={} value={!r}",
-            key, ".".join(parts), value,
+            key,
+            ".".join(parts),
+            value,
         )
 
     if skipped:
         logger.warning(
             "config_l2_env_override | malformed_keys_count={} keys={}",
-            len(skipped), skipped,
+            len(skipped),
+            skipped,
         )
 
     if not overrides:
         return cfg, 0
 
-    override_cfg   = OmegaConf.create(overrides)
-    merged         = OmegaConf.merge(cfg, override_cfg)
+    override_cfg = OmegaConf.create(overrides)
+    merged = OmegaConf.merge(cfg, override_cfg)
     mutation_count = _count_leaves(overrides)
 
     logger.info("config_l2_env_override | ocm_overrides_applied={}", mutation_count)

@@ -34,7 +34,7 @@ from .yaml_loader import (
     load,
     merge,
     compute_hash,
-    YamlLoader,          # shim de compatibilidad — ver yaml_loader.py
+    YamlLoader,  # shim de compatibilidad — ver yaml_loader.py
 )
 
 # -- env_resolver ---------------------------------------------------------

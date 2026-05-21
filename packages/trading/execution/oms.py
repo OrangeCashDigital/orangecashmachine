@@ -28,6 +28,7 @@ SafeOps
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 import threading
@@ -35,15 +36,17 @@ from typing import Callable, Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
-from shared.contracts.boundaries import SignalProtocol  # DIP — execution depende de abstraccion
+from shared.contracts.boundaries import (
+    SignalProtocol,
+)  # DIP — execution depende de abstraccion
 from ocm.runtime.guard import ExecutionGuard
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.risk.manager import RiskManager
 
-
 # ---------------------------------------------------------------------------
 # Executor protocol
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class OrderExecutor(Protocol):
@@ -68,6 +71,7 @@ class OrderExecutor(Protocol):
 # OMS
 # ---------------------------------------------------------------------------
 
+
 class OMS:
     """
     Order Management System.
@@ -84,26 +88,26 @@ class OMS:
     def __init__(
         self,
         risk_manager: RiskManager,
-        executor:     OrderExecutor,
-        guard:        Optional[ExecutionGuard] = None,
-        on_fill:      Optional[Callable[[Order], None]] = None,
-        on_reject:    Optional[Callable[[Order], None]] = None,
+        executor: OrderExecutor,
+        guard: Optional[ExecutionGuard] = None,
+        on_fill: Optional[Callable[[Order], None]] = None,
+        on_reject: Optional[Callable[[Order], None]] = None,
     ) -> None:
         if risk_manager is None:
             raise ValueError("OMS: risk_manager es obligatorio")
         if executor is None:
             raise ValueError("OMS: executor es obligatorio")
 
-        self._risk     = risk_manager
+        self._risk = risk_manager
         self._executor = executor
-        self._guard    = guard
-        self._on_fill  = on_fill
+        self._guard = guard
+        self._on_fill = on_fill
         self._on_reject = on_reject
 
         self._orders: dict[str, Order] = {}
-        self._open:   dict[str, Order] = {}
-        self._lock    = threading.RLock()
-        self._log     = logger.bind(component="OMS")
+        self._open: dict[str, Order] = {}
+        self._lock = threading.RLock()
+        self._log = logger.bind(component="OMS")
 
     # ------------------------------------------------------------------
     # Public API
@@ -131,7 +135,8 @@ class OMS:
         if decision.rejected:
             self._log.debug(
                 "Señal rechazada por riesgo | symbol={} reason={}",
-                signal.symbol, decision.reason,
+                signal.symbol,
+                decision.reason,
             )
             return None
 
@@ -140,23 +145,27 @@ class OMS:
         if raw_side not in ("buy", "sell"):
             self._log.error(
                 "submit: side inválido | symbol={} side={}",
-                signal.symbol, raw_side,
+                signal.symbol,
+                raw_side,
             )
             return None
         order = Order(
-            symbol   = signal.symbol,
-            side     = OrderSide(raw_side),
-            size_pct = decision.size_pct,
-            signal   = signal,
+            symbol=signal.symbol,
+            side=OrderSide(raw_side),
+            size_pct=decision.size_pct,
+            signal=signal,
         )
 
         with self._lock:
             self._orders[order.order_id] = order
-            self._open[order.order_id]   = order
+            self._open[order.order_id] = order
 
         self._log.info(
             "Order created | {} {} {} size={:.1%}",
-            order.order_id, order.side.value, order.symbol, order.size_pct,
+            order.order_id,
+            order.side.value,
+            order.symbol,
+            order.size_pct,
         )
 
         # record_open aquí — la posición se considera abierta al aceptarla
@@ -168,7 +177,8 @@ class OMS:
         except ValueError as exc:
             self._log.error(
                 "transition(SUBMITTED) falló | order={} error={}",
-                order.order_id, exc,
+                order.order_id,
+                exc,
             )
             self._reject(order, reason=f"state_error:{exc}", revert_open=True)
             return order
@@ -179,7 +189,8 @@ class OMS:
         except Exception as exc:
             self._log.error(
                 "executor.execute falló | order={} error={}",
-                order.order_id, exc,
+                order.order_id,
+                exc,
             )
             accepted = False
 
@@ -240,22 +251,16 @@ class OMS:
 
     def summary(self) -> dict:
         with self._lock:
-            total    = len(self._orders)
-            open_    = len(self._open)
-            filled   = sum(
-                1 for o in self._orders.values()
-                if o.status == OrderStatus.FILLED
-            )
-            rejected = sum(
-                1 for o in self._orders.values()
-                if o.status == OrderStatus.REJECTED
-            )
+            total = len(self._orders)
+            open_ = len(self._open)
+            filled = sum(1 for o in self._orders.values() if o.status == OrderStatus.FILLED)
+            rejected = sum(1 for o in self._orders.values() if o.status == OrderStatus.REJECTED)
         return {
-            "total":    total,
-            "open":     open_,
-            "filled":   filled,
+            "total": total,
+            "open": open_,
+            "filled": filled,
             "rejected": rejected,
-            "risk":     self._risk.state(),
+            "risk": self._risk.state(),
         }
 
     # ------------------------------------------------------------------
@@ -273,7 +278,9 @@ class OMS:
 
         self._log.info(
             "Order FILLED | {} {} @ {:.2f}",
-            order.order_id, order.symbol, order.fill_price,
+            order.order_id,
+            order.symbol,
+            order.fill_price,
         )
         if self._on_fill:
             try:
@@ -283,9 +290,9 @@ class OMS:
 
     def _reject(
         self,
-        order:        Order,
-        reason:       str,
-        revert_open:  bool = False,
+        order: Order,
+        reason: str,
+        revert_open: bool = False,
     ) -> None:
         """
         Transiciona a REJECTED.
@@ -302,7 +309,8 @@ class OMS:
 
         self._log.warning(
             "Order REJECTED | {} reason={}",
-            order.order_id, reason,
+            order.order_id,
+            reason,
         )
         if self._on_reject:
             try:
@@ -312,7 +320,4 @@ class OMS:
 
     def __repr__(self) -> str:
         s = self.summary()
-        return (
-            f"OMS(open={s['open']} filled={s['filled']} "
-            f"rejected={s['rejected']} halted={self._risk.is_halted})"
-        )
+        return f"OMS(open={s['open']} filled={s['filled']} rejected={s['rejected']} halted={self._risk.is_halted})"

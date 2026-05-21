@@ -46,12 +46,15 @@ from __future__ import annotations
 
 from typing import Any, Final
 
+
 # loguru importado de forma lazy para evitar circular:
 #   coercion → loguru → stdlib logging → core/logging/ → loguru
 # ocm/observability/ sombrea el stdlib logging — el import lazy rompe el ciclo.
 def _get_logger():  # noqa: ANN201
     from loguru import logger as _logger  # lazy — solo al primer log
+
     return _logger
+
 
 # ---------------------------------------------------------------------------
 # Constantes de coerción — SSOT para todo el sistema.
@@ -66,8 +69,8 @@ def _get_logger():  # noqa: ANN201
 # L3 solo coerciona lo que es inequívoco semánticamente sin conocer el tipo destino.
 # "true"/"false"/"yes"/"no"/"on"/"off" son inequívocamente booleanos en cualquier
 # contexto. "1"/"0" no lo son — delegar coerción al schema (L4, Pydantic, SSOT).
-BOOL_TRUE:  Final[frozenset[str]] = frozenset({"true",  "yes", "on"})
-BOOL_FALSE: Final[frozenset[str]] = frozenset({"false", "no",  "off"})
+BOOL_TRUE: Final[frozenset[str]] = frozenset({"true", "yes", "on"})
+BOOL_FALSE: Final[frozenset[str]] = frozenset({"false", "no", "off"})
 
 # ---------------------------------------------------------------------------
 # Nullable paths — path-based (robusto ante campos nuevos).
@@ -84,24 +87,28 @@ BOOL_FALSE: Final[frozenset[str]] = frozenset({"false", "no",  "off"})
 
 # Paths completos desde la raíz del config — matching exacto por path completo.
 # OCP: añadir aquí campos Optional[X] estáticos cuyo path se conoce en compile-time.
-_NULLABLE_PATHS: Final[frozenset[tuple[str, ...]]] = frozenset({
-    # integrations.postgres
-    ("integrations", "postgres", "user"),
-    ("integrations", "postgres", "password"),
-    ("integrations", "postgres", "database"),
-    # integrations.redis
-    ("integrations", "redis", "password"),
-    # integrations.kafka
-    ("integrations", "kafka", "password"),
-})
+_NULLABLE_PATHS: Final[frozenset[tuple[str, ...]]] = frozenset(
+    {
+        # integrations.postgres
+        ("integrations", "postgres", "user"),
+        ("integrations", "postgres", "password"),
+        ("integrations", "postgres", "database"),
+        # integrations.redis
+        ("integrations", "redis", "password"),
+        # integrations.kafka
+        ("integrations", "kafka", "password"),
+    }
+)
 
 # Nombres de clave — matching por nombre a cualquier profundidad del árbol.
 # Para campos Optional[X] en nodos dinámicos (ej: lista de exchanges)
 # donde el path completo no puede enumerarse estáticamente en compile-time.
 # OCP: añadir aquí campos opcionales de nodos instanciados N veces.
-_NULLABLE_KEYS: Final[frozenset[str]] = frozenset({
-    "api_password",   # ExchangeConfig — credencial opcional por exchange
-})
+_NULLABLE_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "api_password",  # ExchangeConfig — credencial opcional por exchange
+    }
+)
 
 
 __all__ = [
@@ -115,6 +122,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Motor canónico
 # ---------------------------------------------------------------------------
+
 
 def coerce_scalar_values(
     d: dict[str, Any],
@@ -166,7 +174,7 @@ def coerce_scalar_values(
 
         # ── bool inequívoco ───────────────────────────────────────────────
         coerced = coerce_string(value)
-        if coerced is not value:   # identidad: cambió
+        if coerced is not value:  # identidad: cambió
             d[key] = coerced
             _get_logger().debug(
                 "coerce_scalar | path={} {!r} → {!r} ({})",
@@ -200,7 +208,7 @@ def coerce_string(value: str) -> Any:
         L3 no tiene esa información — no debe adivinar.
     """
     stripped = value.strip()
-    lower    = stripped.lower()
+    lower = stripped.lower()
 
     # ── bool inequívoco ───────────────────────────────────────────────────
     if lower in BOOL_TRUE:

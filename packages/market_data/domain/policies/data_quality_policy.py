@@ -54,7 +54,6 @@ from loguru import logger
 
 from market_data.domain.quality.types import DataQualityReport
 
-
 # ===========================================================================
 # Tipos públicos
 # ===========================================================================

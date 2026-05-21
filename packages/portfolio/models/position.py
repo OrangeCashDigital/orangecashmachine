@@ -11,6 +11,7 @@ Representan hechos — no se modifican, se reemplazan.
 
 Principios: DDD · SSOT · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -34,13 +35,14 @@ class PositionSnapshot:
     order_id     : correlación con Order.order_id
     current_price: precio actual (para PnL no realizado); None si no disponible
     """
-    symbol:        str
-    exchange:      str
-    side:          str             # "long" | "short"
-    entry_price:   float
-    size_pct:      float           # ∈ (0.0, 1.0]
-    entry_at:      datetime
-    order_id:      str
+
+    symbol: str
+    exchange: str
+    side: str  # "long" | "short"
+    entry_price: float
+    size_pct: float  # ∈ (0.0, 1.0]
+    entry_at: datetime
+    order_id: str
     current_price: Optional[float] = None
 
     def __post_init__(self) -> None:
@@ -89,11 +91,10 @@ class PortfolioState:
     as_of         : timestamp del snapshot
     total_exposure: suma de size_pct de todas las posiciones abiertas
     """
-    positions:      tuple[PositionSnapshot, ...]  # tuple para garantizar inmutabilidad
-    capital_usd:    float
-    as_of:          datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+
+    positions: tuple[PositionSnapshot, ...]  # tuple para garantizar inmutabilidad
+    capital_usd: float
+    as_of: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         if self.capital_usd <= 0:

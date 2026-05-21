@@ -21,6 +21,7 @@ Propiedades verificadas:
   E6  Raise/catch round-trip: ConfigRuleViolation catcheable como ConfigurationError.
   E7  El módulo _contract.py importa sin errores (freeze de interfaz pública).
 """
+
 from __future__ import annotations
 
 import importlib
@@ -36,16 +37,19 @@ from ocm.config.loader.exceptions import (
 from ocm.config.pipeline import ConfigPipelineError, ConfigStage
 from ocm.config.layers.rules import ConfigRuleViolation
 
-
 # ── E1: toda excepción del bounded context hereda de ConfigurationError ────────
 
-@pytest.mark.parametrize("exc_cls", [
-    ConfigFileNotFoundError,
-    ConfigParseError,
-    ConfigValidationError,
-    ConfigRuleViolation,
-    ConfigPipelineError,
-])
+
+@pytest.mark.parametrize(
+    "exc_cls",
+    [
+        ConfigFileNotFoundError,
+        ConfigParseError,
+        ConfigValidationError,
+        ConfigRuleViolation,
+        ConfigPipelineError,
+    ],
+)
 def test_all_bounded_context_exceptions_inherit_configuration_error(exc_cls):
     """Todo `except ConfigurationError` en main.py cubre el bounded context completo."""
     assert issubclass(exc_cls, ConfigurationError), (
@@ -55,6 +59,7 @@ def test_all_bounded_context_exceptions_inherit_configuration_error(exc_cls):
 
 
 # ── E2: ConfigRuleViolation ⊂ ConfigValidationError ──────────────────────────
+
 
 def test_config_rule_violation_is_subclass_of_config_validation_error():
     """ConfigRuleViolation es un subtipo de ConfigValidationError.
@@ -66,6 +71,7 @@ def test_config_rule_violation_is_subclass_of_config_validation_error():
 
 
 # ── E3: ConfigPipelineError ⊄ ConfigValidationError ──────────────────────────
+
 
 def test_config_pipeline_error_is_not_subclass_of_config_validation_error():
     """ConfigPipelineError y ConfigValidationError son ramas distintas.
@@ -81,6 +87,7 @@ def test_config_pipeline_error_is_not_subclass_of_config_validation_error():
 
 
 # ── E4: atributos de instancia de ConfigRuleViolation ────────────────────────
+
 
 def test_config_rule_violation_stores_rule_attribute():
     exc = ConfigRuleViolation(
@@ -102,6 +109,7 @@ def test_config_rule_violation_stores_fix_attribute():
 
 # ── E5: formato del mensaje ───────────────────────────────────────────────────
 
+
 def test_config_rule_violation_message_contains_rule_name():
     exc = ConfigRuleViolation(rule="MY_RULE", message="msg", fix="fix")
     assert "[ConfigRule:MY_RULE]" in str(exc)
@@ -119,6 +127,7 @@ def test_config_rule_violation_message_contains_fix():
 
 
 # ── E6: catcheable como ConfigurationError ────────────────────────────────────
+
 
 def test_config_rule_violation_caught_as_configuration_error():
     """Raise/catch round-trip — el caller genérico no necesita conocer la subclase."""
@@ -142,6 +151,7 @@ def test_config_validation_error_caught_as_configuration_error():
 
 # ── E7: contrato de interfaz pública (_contract.py) ───────────────────────────
 
+
 def test_public_contract_module_importable():
     """Todos los símbolos declarados en __all__ de cada módulo son importables.
 
@@ -154,25 +164,22 @@ def test_public_contract_module_importable():
 def test_contract_exception_symbols_present():
     """Los símbolos de excepción declarados en exceptions.__all__ están presentes."""
     from ocm.config.loader import exceptions
+
     for name in exceptions.__all__:
-        assert hasattr(exceptions, name), (
-            f"exceptions.__all__ declara '{name}' pero el atributo no existe"
-        )
+        assert hasattr(exceptions, name), f"exceptions.__all__ declara '{name}' pero el atributo no existe"
 
 
 def test_contract_coercion_symbols_present():
     """Los símbolos de coerción declarados en coercion.__all__ están presentes."""
     from ocm.config.layers import coercion
+
     for name in coercion.__all__:
-        assert hasattr(coercion, name), (
-            f"coercion.__all__ declara '{name}' pero el atributo no existe"
-        )
+        assert hasattr(coercion, name), f"coercion.__all__ declara '{name}' pero el atributo no existe"
 
 
 def test_contract_rules_symbols_present():
     """Los símbolos de reglas declarados en rules.__all__ están presentes."""
     from ocm.config.layers import rules
+
     for name in rules.__all__:
-        assert hasattr(rules, name), (
-            f"rules.__all__ declara '{name}' pero el atributo no existe"
-        )
+        assert hasattr(rules, name), f"rules.__all__ declara '{name}' pero el atributo no existe"

@@ -46,9 +46,14 @@ from pyiceberg.expressions import (
     LessThanOrEqual,
 )
 
-from market_data.infrastructure.storage.iceberg.catalog import get_catalog, ensure_silver_table
+from market_data.infrastructure.storage.iceberg.catalog import (
+    get_catalog,
+    ensure_silver_table,
+)
 from market_data.ports.outbound.state import CursorStorePort as CursorStore
-from market_data.infrastructure.storage.iceberg.timestamp_cache import TimestampCacheService
+from market_data.infrastructure.storage.iceberg.timestamp_cache import (
+    TimestampCacheService,
+)
 
 # =============================================================================
 # Timeouts — SSOT de límites de I/O (segundos)

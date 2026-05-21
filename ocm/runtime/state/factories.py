@@ -48,6 +48,7 @@ SafeOps
 build_gap_registry y build_lateness_calibration_store retornan None
 si Redis no está disponible. El caller decide si degradar o fallar.
 """
+
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
@@ -56,39 +57,50 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 from typing import Protocol, runtime_checkable
 
+
 @runtime_checkable
 class _PublisherBackend(Protocol):
     """Mínimo contrato que RedisStreamPublisher satisface."""
+
     def publish(self, event: dict) -> Optional[str]: ...
+
 
 @runtime_checkable
 class _ConsumerBackend(Protocol):
     """Mínimo contrato que RedisStreamConsumer satisface."""
+
     def ensure_group(self) -> bool: ...
     def consume(self) -> list: ...
     def ack(self, entry_id: str) -> bool: ...
 
+
 class _StreamPublisherAdapter:
     """Wrapper mínimo — satisface el contrato sin importar market_data."""
+
     def __init__(self, publisher: _PublisherBackend) -> None:
         self._publisher = publisher
+
     def publish(self, event: dict) -> Optional[str]:
         return self._publisher.publish(event)
 
+
 class _StreamSourceAdapter:
     """Wrapper mínimo — satisface el contrato sin importar market_data."""
+
     def __init__(self, consumer: _ConsumerBackend, router: object) -> None:
         self._consumer = consumer
         self._router = router
+
     def start(self) -> None:
         pass  # ciclo de vida gestionado por el caller
+
 
 from typing import Optional, TYPE_CHECKING
 
 from loguru import logger
 
 from ocm.runtime.state.cursor_store import RedisCursorStore, build_cursor_store_from_env
-from ocm.runtime.state.gap_store    import RedisGapStore
+from ocm.runtime.state.gap_store import RedisGapStore
 
 if TYPE_CHECKING:
     from ocm.runtime.state.gap_registry import GapRegistry
@@ -131,9 +143,7 @@ def build_gap_registry(
     try:
         store = build_cursor_store_from_env(env=env)
         if not store.is_healthy():
-            logger.warning(
-                "build_gap_registry: Redis no disponible — registry deshabilitado"
-            )
+            logger.warning("build_gap_registry: Redis no disponible — registry deshabilitado")
             return None
         env = store._env_raw  # str sin codificar — GapRegistry lo recibe directamente
         return GapRegistry(RedisGapStore(store._client), env=env)
@@ -160,23 +170,18 @@ def build_lateness_calibration_store(
     try:
         store = build_cursor_store_from_env(env=env)
         if not store.is_healthy():
-            logger.warning(
-                "build_lateness_calibration_store: "
-                "Redis no disponible — calibración deshabilitada"
-            )
+            logger.warning("build_lateness_calibration_store: Redis no disponible — calibración deshabilitada")
             return None
         env = store._env_raw  # str sin codificar — LatenessCalibrationStore lo recibe directamente
         return LatenessCalibrationStore(RedisGapStore(store._client), env=env)
     except Exception as exc:
-        logger.warning(
-            "build_lateness_calibration_store: no se pudo inicializar | error={}", exc
-        )
+        logger.warning("build_lateness_calibration_store: no se pudo inicializar | error={}", exc)
         return None
 
 
 def build_stream_publisher(
     stream_name: str = "ohlcv",
-    env:         Optional[str] = None,
+    env: Optional[str] = None,
 ) -> Optional["_StreamPublisherAdapter"]:
     """
     Construye un StreamPublisher desde variables de entorno.
@@ -195,13 +200,11 @@ def build_stream_publisher(
     try:
         store = build_cursor_store_from_env(env=env)
         if not store.is_healthy():
-            logger.warning(
-                "build_stream_publisher: Redis no disponible — publisher deshabilitado"
-            )
+            logger.warning("build_stream_publisher: Redis no disponible — publisher deshabilitado")
             return None
         infra = RedisStreamPublisher(
-            client      = _get_redis_client(store),
-            stream_name = stream_name,
+            client=_get_redis_client(store),
+            stream_name=stream_name,
         )
         return _StreamPublisherAdapter(publisher=infra)
     except Exception as exc:
@@ -210,10 +213,10 @@ def build_stream_publisher(
 
 
 def build_stream_source(
-    router:        "EventRouter",  # noqa: F821
-    stream_name:   str = "ohlcv",
+    router: "EventRouter",  # noqa: F821
+    stream_name: str = "ohlcv",
     consumer_name: str = "worker-1",
-    env:           Optional[str] = None,
+    env: Optional[str] = None,
 ) -> Optional["_StreamSourceAdapter"]:
     """
     Construye un StreamSource desde variables de entorno.
@@ -235,14 +238,12 @@ def build_stream_source(
     try:
         store = build_cursor_store_from_env(env=env)
         if not store.is_healthy():
-            logger.warning(
-                "build_stream_source: Redis no disponible — source deshabilitado"
-            )
+            logger.warning("build_stream_source: Redis no disponible — source deshabilitado")
             return None
         consumer = RedisStreamConsumer(
-            client        = _get_redis_client(store),
-            stream_name   = stream_name,
-            consumer_name = consumer_name,
+            client=_get_redis_client(store),
+            stream_name=stream_name,
+            consumer_name=consumer_name,
         )
         consumer.ensure_group()
         return _StreamSourceAdapter(consumer=consumer, router=router)

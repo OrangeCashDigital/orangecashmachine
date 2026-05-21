@@ -20,12 +20,13 @@ RedisCursorStore. Cambiar backend → solo cambiar la implementación.
 
 OCP: InMemoryGapStore para tests sin Redis real.
 """
+
 from __future__ import annotations
 
 from typing import Any, List, Optional, Protocol, cast, runtime_checkable
 
-
 # ── Protocolo de pipeline ────────────────────────────────────────────────────
+
 
 @runtime_checkable
 class PipelinePort(Protocol):
@@ -47,6 +48,7 @@ class PipelinePort(Protocol):
 
 # ── Protocolo de store ───────────────────────────────────────────────────────
 
+
 @runtime_checkable
 class GapStorePort(Protocol):
     """Contrato mínimo de almacenamiento raw para GapRegistry."""
@@ -62,6 +64,7 @@ class GapStorePort(Protocol):
 
 
 # ── Implementación Redis ─────────────────────────────────────────────────────
+
 
 class RedisGapStore:
     """
@@ -104,6 +107,7 @@ class RedisGapStore:
 
 # ── Implementación en memoria (tests sin Redis) ──────────────────────────────
 
+
 class InMemoryGapStore:
     """
     Implementación in-memory de GapStorePort para tests.
@@ -144,6 +148,7 @@ class InMemoryGapStore:
 
     def scan(self, cursor: int, match: str, count: int) -> tuple:
         import fnmatch
+
         keys = [k for k in self._data if fnmatch.fnmatch(k, match.replace("*", "?*"))]
         return (0, keys)
 

@@ -40,6 +40,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.adapters.outbound.exchange import CCXTAdapter
+
 # TradesStorage y build_cursor_store se importan localmente en __init__
 # para romper la dependencia adapter → infrastructure en nivel módulo (BC-06).
 
@@ -121,7 +122,9 @@ class TradesFetcher:
 
         # Import local — rompe dependencia adapter → infrastructure en nivel módulo (BC-06).
         # Cursor factory centralizada: DRY, OCP — un único punto de cambio.
-        from market_data.adapters.inbound.rest._cursor_factory import build_cursor_store as _build_cursor_store
+        from market_data.adapters.inbound.rest._cursor_factory import (
+            build_cursor_store as _build_cursor_store,
+        )
 
         self._client = exchange_client
         self._storage = storage

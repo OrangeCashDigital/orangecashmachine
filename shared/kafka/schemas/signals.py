@@ -34,6 +34,7 @@ Schema version history
 
 Principios: SSOT · DDD · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -41,8 +42,7 @@ from typing import Any, Dict, Literal, Optional
 
 from shared.kafka.schemas._base import BasePayload
 
-
-SIGNAL_SCHEMA_VERSION:   int = 1
+SIGNAL_SCHEMA_VERSION: int = 1
 APPROVED_SCHEMA_VERSION: int = 1
 REJECTED_SCHEMA_VERSION: int = 1
 
@@ -53,11 +53,10 @@ class SignalSchemaVersionError(ValueError):
     """Schema version incompatible en SignalPayload.from_dict()."""
 
 
-
-
 # ---------------------------------------------------------------------------
 # SignalPayload — señal cruda de estrategia → signals.raw
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class SignalPayload(BasePayload):
@@ -79,15 +78,16 @@ class SignalPayload(BasePayload):
     run_id     : correlación con el run
     meta       : datos adicionales de la estrategia
     """
-    exchange:   str                      = ""
-    symbol:     str                      = ""
-    timeframe:  str                      = ""
-    direction:  SignalDirection          = "hold"
-    price:      float                    = 0.0
-    confidence: float                    = 1.0
-    strategy:   str                      = ""
-    run_id:     str                      = ""
-    meta:       Optional[Dict[str, Any]] = None
+
+    exchange: str = ""
+    symbol: str = ""
+    timeframe: str = ""
+    direction: SignalDirection = "hold"
+    price: float = 0.0
+    confidence: float = 1.0
+    strategy: str = ""
+    run_id: str = ""
+    meta: Optional[Dict[str, Any]] = None
 
     @property
     def is_actionable(self) -> bool:
@@ -96,18 +96,20 @@ class SignalPayload(BasePayload):
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version": SIGNAL_SCHEMA_VERSION,
-            "exchange":      self.exchange,
-            "symbol":        self.symbol,
-            "timeframe":     self.timeframe,
-            "direction":     self.direction,
-            "price":         self.price,
-            "confidence":    self.confidence,
-            "strategy":      self.strategy,
-            "run_id":        self.run_id,
-            "meta":          self.meta,
-        })
+        base.update(
+            {
+                "event_version": SIGNAL_SCHEMA_VERSION,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "timeframe": self.timeframe,
+                "direction": self.direction,
+                "price": self.price,
+                "confidence": self.confidence,
+                "strategy": self.strategy,
+                "run_id": self.run_id,
+                "meta": self.meta,
+            }
+        )
         return base
 
     @classmethod
@@ -115,28 +117,28 @@ class SignalPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != SIGNAL_SCHEMA_VERSION:
             raise SignalSchemaVersionError(
-                f"SignalPayload schema v{version} incompatible "
-                f"con v{SIGNAL_SCHEMA_VERSION} esperada."
+                f"SignalPayload schema v{version} incompatible con v{SIGNAL_SCHEMA_VERSION} esperada."
             )
         return cls(
-            event_id      = str(data["event_id"]),
-            event_version = version,
-            occurred_at   = str(data.get("occurred_at", "")),
-            exchange      = str(data["exchange"]),
-            symbol        = str(data["symbol"]),
-            timeframe     = str(data["timeframe"]),
-            direction     = data["direction"],
-            price         = float(data["price"]),
-            confidence    = float(data.get("confidence", 1.0)),
-            strategy      = str(data.get("strategy", "")),
-            run_id        = str(data.get("run_id", "")),
-            meta          = data.get("meta"),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            timeframe=str(data["timeframe"]),
+            direction=data["direction"],
+            price=float(data["price"]),
+            confidence=float(data.get("confidence", 1.0)),
+            strategy=str(data.get("strategy", "")),
+            run_id=str(data.get("run_id", "")),
+            meta=data.get("meta"),
         )
 
 
 # ---------------------------------------------------------------------------
 # ApprovedSignalPayload — señal aprobada por RiskGate → signals.approved
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ApprovedSignalPayload(BasePayload):
@@ -152,36 +154,39 @@ class ApprovedSignalPayload(BasePayload):
     risk_score        : puntuación de riesgo asignada ∈ [0.0, 1.0]
     original_event_id : event_id del SignalPayload que originó esta aprobación
     """
-    exchange:          str                      = ""
-    symbol:            str                      = ""
-    timeframe:         str                      = ""
-    direction:         SignalDirection          = "hold"
-    price:             float                    = 0.0
-    confidence:        float                    = 1.0
-    strategy:          str                      = ""
-    approved_size_pct: float                    = 0.0
-    risk_score:        float                    = 0.0
-    original_event_id: str                      = ""
-    run_id:            str                      = ""
-    meta:              Optional[Dict[str, Any]] = None
+
+    exchange: str = ""
+    symbol: str = ""
+    timeframe: str = ""
+    direction: SignalDirection = "hold"
+    price: float = 0.0
+    confidence: float = 1.0
+    strategy: str = ""
+    approved_size_pct: float = 0.0
+    risk_score: float = 0.0
+    original_event_id: str = ""
+    run_id: str = ""
+    meta: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version":     APPROVED_SCHEMA_VERSION,
-            "exchange":          self.exchange,
-            "symbol":            self.symbol,
-            "timeframe":         self.timeframe,
-            "direction":         self.direction,
-            "price":             self.price,
-            "confidence":        self.confidence,
-            "strategy":          self.strategy,
-            "approved_size_pct": self.approved_size_pct,
-            "risk_score":        self.risk_score,
-            "original_event_id": self.original_event_id,
-            "run_id":            self.run_id,
-            "meta":              self.meta,
-        })
+        base.update(
+            {
+                "event_version": APPROVED_SCHEMA_VERSION,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "timeframe": self.timeframe,
+                "direction": self.direction,
+                "price": self.price,
+                "confidence": self.confidence,
+                "strategy": self.strategy,
+                "approved_size_pct": self.approved_size_pct,
+                "risk_score": self.risk_score,
+                "original_event_id": self.original_event_id,
+                "run_id": self.run_id,
+                "meta": self.meta,
+            }
+        )
         return base
 
     @classmethod
@@ -189,31 +194,31 @@ class ApprovedSignalPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != APPROVED_SCHEMA_VERSION:
             raise SignalSchemaVersionError(
-                f"ApprovedSignalPayload schema v{version} incompatible "
-                f"con v{APPROVED_SCHEMA_VERSION} esperada."
+                f"ApprovedSignalPayload schema v{version} incompatible con v{APPROVED_SCHEMA_VERSION} esperada."
             )
         return cls(
-            event_id          = str(data["event_id"]),
-            event_version     = version,
-            occurred_at       = str(data.get("occurred_at", "")),
-            exchange          = str(data["exchange"]),
-            symbol            = str(data["symbol"]),
-            timeframe         = str(data["timeframe"]),
-            direction         = data["direction"],
-            price             = float(data["price"]),
-            confidence        = float(data.get("confidence", 1.0)),
-            strategy          = str(data.get("strategy", "")),
-            approved_size_pct = float(data.get("approved_size_pct", 0.0)),
-            risk_score        = float(data.get("risk_score", 0.0)),
-            original_event_id = str(data.get("original_event_id", "")),
-            run_id            = str(data.get("run_id", "")),
-            meta              = data.get("meta"),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            timeframe=str(data["timeframe"]),
+            direction=data["direction"],
+            price=float(data["price"]),
+            confidence=float(data.get("confidence", 1.0)),
+            strategy=str(data.get("strategy", "")),
+            approved_size_pct=float(data.get("approved_size_pct", 0.0)),
+            risk_score=float(data.get("risk_score", 0.0)),
+            original_event_id=str(data.get("original_event_id", "")),
+            run_id=str(data.get("run_id", "")),
+            meta=data.get("meta"),
         )
 
 
 # ---------------------------------------------------------------------------
 # RejectedSignalPayload — señal rechazada → signals.rejected
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class RejectedSignalPayload(BasePayload):
@@ -223,38 +228,41 @@ class RejectedSignalPayload(BasePayload):
     Publicado a: signals.rejected
     Consumido por: observability, alerting
     """
-    exchange:          str = ""
-    symbol:            str = ""
-    direction:         SignalDirection = "hold"
-    reason:            str = ""
+
+    exchange: str = ""
+    symbol: str = ""
+    direction: SignalDirection = "hold"
+    reason: str = ""
     original_event_id: str = ""
-    run_id:            str = ""
+    run_id: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version":     REJECTED_SCHEMA_VERSION,
-            "exchange":          self.exchange,
-            "symbol":            self.symbol,
-            "direction":         self.direction,
-            "reason":            self.reason,
-            "original_event_id": self.original_event_id,
-            "run_id":            self.run_id,
-        })
+        base.update(
+            {
+                "event_version": REJECTED_SCHEMA_VERSION,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "direction": self.direction,
+                "reason": self.reason,
+                "original_event_id": self.original_event_id,
+                "run_id": self.run_id,
+            }
+        )
         return base
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "RejectedSignalPayload":
         return cls(
-            event_id          = str(data["event_id"]),
-            event_version     = int(data.get("event_version", 1)),
-            occurred_at       = str(data.get("occurred_at", "")),
-            exchange          = str(data["exchange"]),
-            symbol            = str(data["symbol"]),
-            direction         = data.get("direction", "hold"),
-            reason            = str(data.get("reason", "")),
-            original_event_id = str(data.get("original_event_id", "")),
-            run_id            = str(data.get("run_id", "")),
+            event_id=str(data["event_id"]),
+            event_version=int(data.get("event_version", 1)),
+            occurred_at=str(data.get("occurred_at", "")),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            direction=data.get("direction", "hold"),
+            reason=str(data.get("reason", "")),
+            original_event_id=str(data.get("original_event_id", "")),
+            run_id=str(data.get("run_id", "")),
         )
 
 

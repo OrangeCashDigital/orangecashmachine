@@ -8,6 +8,7 @@ Tests de kafka/payloads.py — OHLCVBar, EventPayload, versionado.
 Sin dependencias externas. Verifica: immutability, round-trip,
 Fail-Fast en versión incompatible, normalización de wire format.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,25 +21,30 @@ from shared.kafka.schemas.ohlcv import (
     OHLCVSchemaVersionError as SchemaVersionError,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _bar(ts: int = 1_700_000_000_000) -> OHLCVBar:
     return OHLCVBar(
-        ts=ts, open=30_000.0, high=30_500.0,
-        low=29_800.0, close=30_200.0, volume=12.5,
+        ts=ts,
+        open=30_000.0,
+        high=30_500.0,
+        low=29_800.0,
+        close=30_200.0,
+        volume=12.5,
     )
+
 
 def _event(event_id: str = "evt-001") -> EventPayload:
     return EventPayload(
-        event_id       = event_id,
-        exchange       = "bybit",
-        symbol         = "BTC/USDT",
-        timeframe      = "1h",
-        batch_start_ts = 1_700_000_000_000,
-        bars           = [_bar()],
+        event_id=event_id,
+        exchange="bybit",
+        symbol="BTC/USDT",
+        timeframe="1h",
+        batch_start_ts=1_700_000_000_000,
+        bars=[_bar()],
     )
 
 
@@ -46,8 +52,8 @@ def _event(event_id: str = "evt-001") -> EventPayload:
 # OHLCVBar
 # ---------------------------------------------------------------------------
 
-class TestOHLCVBar:
 
+class TestOHLCVBar:
     def test_immutable(self):
         bar = _bar()
         with pytest.raises((AttributeError, TypeError)):
@@ -59,25 +65,28 @@ class TestOHLCVBar:
 
     def test_to_dict_types(self):
         d = _bar().to_dict()
-        assert isinstance(d["ts"],     int)
-        assert isinstance(d["open"],   float)
+        assert isinstance(d["ts"], int)
+        assert isinstance(d["open"], float)
         assert isinstance(d["volume"], float)
 
     def test_from_dict_round_trip(self):
-        bar       = _bar(ts=1_700_001_000_000)
+        bar = _bar(ts=1_700_001_000_000)
         recovered = OHLCVBar.from_dict(bar.to_dict())
         assert recovered == bar
 
     def test_from_dict_coerces_string_values(self):
         """Wire format puede traer valores como strings — from_dict normaliza."""
         d = {
-            "ts": "1700000000000", "open": "30000.0",
-            "high": "30500.0", "low": "29800.0",
-            "close": "30200.0", "volume": "12.5",
+            "ts": "1700000000000",
+            "open": "30000.0",
+            "high": "30500.0",
+            "low": "29800.0",
+            "close": "30200.0",
+            "volume": "12.5",
         }
         bar = OHLCVBar.from_dict(d)
-        assert bar.ts     == 1_700_000_000_000
-        assert bar.close  == 30_200.0
+        assert bar.ts == 1_700_000_000_000
+        assert bar.close == 30_200.0
         assert bar.volume == 12.5
 
 
@@ -85,8 +94,8 @@ class TestOHLCVBar:
 # EventPayload
 # ---------------------------------------------------------------------------
 
-class TestEventPayload:
 
+class TestEventPayload:
     def test_immutable(self):
         event = _event()
         with pytest.raises((AttributeError, TypeError)):
@@ -101,9 +110,17 @@ class TestEventPayload:
     def test_to_dict_contains_required_fields(self):
         d = _event().to_dict()
         required = {
-            "event_id", "exchange", "symbol", "timeframe",
-            "batch_start_ts", "bars", "event_version", "meta",
-            "source", "run_id", "occurred_at",
+            "event_id",
+            "exchange",
+            "symbol",
+            "timeframe",
+            "batch_start_ts",
+            "bars",
+            "event_version",
+            "meta",
+            "source",
+            "run_id",
+            "occurred_at",
         }
         assert required == set(d.keys())
 
@@ -113,7 +130,7 @@ class TestEventPayload:
         assert isinstance(d["bars"][0], dict)
 
     def test_from_dict_round_trip(self):
-        original  = _event("evt-rt")
+        original = _event("evt-rt")
         recovered = EventPayload.from_dict(original.to_dict())
         assert recovered == original
 
@@ -153,15 +170,23 @@ class TestEventPayload:
 
     def test_multiple_bars_preserved(self):
         bars = [
-            OHLCVBar(ts=1_700_000_000_000 + i * 3_600_000,
-                     open=float(i), high=float(i+1),
-                     low=float(i-1), close=float(i),
-                     volume=float(i * 10))
+            OHLCVBar(
+                ts=1_700_000_000_000 + i * 3_600_000,
+                open=float(i),
+                high=float(i + 1),
+                low=float(i - 1),
+                close=float(i),
+                volume=float(i * 10),
+            )
             for i in range(1, 6)
         ]
-        event     = EventPayload(
-            event_id="evt-multi", exchange="kucoin", symbol="ETH/USDT",
-            timeframe="4h", batch_start_ts=1_700_000_000_000, bars=bars,
+        event = EventPayload(
+            event_id="evt-multi",
+            exchange="kucoin",
+            symbol="ETH/USDT",
+            timeframe="4h",
+            batch_start_ts=1_700_000_000_000,
+            bars=bars,
         )
         recovered = EventPayload.from_dict(event.to_dict())
         assert len(recovered.bars) == 5

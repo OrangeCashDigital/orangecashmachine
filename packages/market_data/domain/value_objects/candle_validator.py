@@ -58,7 +58,6 @@ from typing import List, Optional, Tuple
 from market_data.domain.value_objects import QualityLabel, RawCandle
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
-
 # ===========================================================================
 # Resultado de validación
 # ===========================================================================
@@ -242,12 +241,25 @@ class CandleValidator:
         if len(candle) < 6:
             return ("C0", f"Malformed candle: expected 6 fields, got {len(candle)}")
 
-        ts, o, h, lo, c, v = candle[0], candle[1], candle[2], candle[3], candle[4], candle[5]
+        ts, o, h, lo, c, v = (
+            candle[0],
+            candle[1],
+            candle[2],
+            candle[3],
+            candle[4],
+            candle[5],
+        )
 
         if not isinstance(ts, (int, float)) or ts <= 0:
             return ("C1", f"Invalid timestamp: {ts!r}")
 
-        for name, val in (("open", o), ("high", h), ("low", lo), ("close", c), ("volume", v)):
+        for name, val in (
+            ("open", o),
+            ("high", h),
+            ("low", lo),
+            ("close", c),
+            ("volume", v),
+        ):
             if val is None or (isinstance(val, float) and math.isnan(val)):
                 return ("C2", f"NaN/None in '{name}': {val!r}")
 
@@ -278,7 +290,14 @@ class CandleValidator:
         Retorna lista de códigos violados (vacía si ninguno).
         """
         violations: List[str] = []
-        ts, _o, h, lo, _c, v = candle[0], candle[1], candle[2], candle[3], candle[4], candle[5]
+        ts, _o, h, lo, _c, v = (
+            candle[0],
+            candle[1],
+            candle[2],
+            candle[3],
+            candle[4],
+            candle[5],
+        )
 
         if v == 0:
             violations.append("S1")

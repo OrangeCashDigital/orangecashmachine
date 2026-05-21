@@ -19,6 +19,8 @@ Principios: SOLID · KISS · DRY · SafeOps
 """
 
 from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
-from market_data.infrastructure.storage.silver.derivatives_storage import DerivativesStorage
+from market_data.infrastructure.storage.silver.derivatives_storage import (
+    DerivativesStorage,
+)
 
 __all__ = ["TradesStorage", "DerivativesStorage"]

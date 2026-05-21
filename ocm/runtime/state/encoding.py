@@ -32,6 +32,7 @@ SRP  — única responsabilidad: codificación de segmentos de clave
 SSOT — una implementación, cero duplicaciones
 KISS — función pura, sin estado, sin efectos secundarios
 """
+
 from __future__ import annotations
 
 import base64

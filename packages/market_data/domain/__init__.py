@@ -42,4 +42,5 @@ DDD               — value objects, entities, domain events
 SSOT              — una ubicación canónica para cada tipo
 DIP               — las capas superiores dependen del dominio, nunca al revés
 """
+
 # Intencionalmente vacío — los imports deben ser explícitos hacia los submódulos.

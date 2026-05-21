@@ -15,6 +15,7 @@ un bug en el caller — debe fallar en el punto de origen, no en runtime.
 
 Principios: DDD · SSOT · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -60,23 +61,24 @@ class PositionOpened:
     Publicado por: PortfolioService.open_position()
     Consumido por: risk/, observability, alerting
     """
-    order_id:    str
-    symbol:      str
-    exchange:    str
-    side:        PositionSide
+
+    order_id: str
+    symbol: str
+    exchange: str
+    side: PositionSide
     entry_price: float
-    size_pct:    float
-    opened_at:   datetime
+    size_pct: float
+    opened_at: datetime
 
     @classmethod
     def now(
         cls,
-        order_id:    str,
-        symbol:      str,
-        exchange:    str,
-        side:        str,
+        order_id: str,
+        symbol: str,
+        exchange: str,
+        side: str,
         entry_price: float,
-        size_pct:    float,
+        size_pct: float,
     ) -> "PositionOpened":
         """
         Factory con timestamp UTC automático.
@@ -86,20 +88,17 @@ class PositionOpened:
         que no conocen el Literal; normaliza internamente.
         """
         return cls(
-            order_id    = order_id,
-            symbol      = symbol,
-            exchange    = exchange,
-            side        = _validate_position_side(side, "PositionOpened.now"),
-            entry_price = entry_price,
-            size_pct    = size_pct,
-            opened_at   = datetime.now(timezone.utc),
+            order_id=order_id,
+            symbol=symbol,
+            exchange=exchange,
+            side=_validate_position_side(side, "PositionOpened.now"),
+            entry_price=entry_price,
+            size_pct=size_pct,
+            opened_at=datetime.now(timezone.utc),
         )
 
     def __str__(self) -> str:
-        return (
-            f"PositionOpened({self.side.upper()} {self.symbol}"
-            f" @ {self.entry_price:.4f} size={self.size_pct:.1%})"
-        )
+        return f"PositionOpened({self.side.upper()} {self.symbol} @ {self.entry_price:.4f} size={self.size_pct:.1%})"
 
 
 @dataclass(frozen=True)
@@ -110,29 +109,30 @@ class PositionClosed:
     Publicado por: PortfolioService.close_position()
     Consumido por: analytics, TradeTracker, observability
     """
-    order_id:    str
-    symbol:      str
-    exchange:    str
-    side:        PositionSide
+
+    order_id: str
+    symbol: str
+    exchange: str
+    side: PositionSide
     entry_price: float
-    exit_price:  float
-    size_pct:    float
-    pnl_pct:     float
-    opened_at:   datetime
-    closed_at:   datetime
+    exit_price: float
+    size_pct: float
+    pnl_pct: float
+    opened_at: datetime
+    closed_at: datetime
 
     @classmethod
     def from_positions(
         cls,
-        order_id:    str,
-        symbol:      str,
-        exchange:    str,
-        side:        PositionSide,
+        order_id: str,
+        symbol: str,
+        exchange: str,
+        side: PositionSide,
         entry_price: float,
-        exit_price:  float,
-        size_pct:    float,
-        opened_at:   datetime,
-        closed_at:   Optional[datetime] = None,
+        exit_price: float,
+        size_pct: float,
+        opened_at: datetime,
+        closed_at: Optional[datetime] = None,
     ) -> "PositionClosed":
         """
         Factory desde una posición abierta existente.
@@ -145,19 +145,19 @@ class PositionClosed:
                 "PositionClosed.from_positions: entry_price debe ser > 0, "
                 f"recibido: {entry_price!r} — posible corrupción de datos."
             )
-        ts      = closed_at or datetime.now(timezone.utc)
+        ts = closed_at or datetime.now(timezone.utc)
         pnl_pct = (exit_price - entry_price) / entry_price
         return cls(
-            order_id    = order_id,
-            symbol      = symbol,
-            exchange    = exchange,
-            side        = side,
-            entry_price = entry_price,
-            exit_price  = exit_price,
-            size_pct    = size_pct,
-            pnl_pct     = pnl_pct,
-            opened_at   = opened_at,
-            closed_at   = ts,
+            order_id=order_id,
+            symbol=symbol,
+            exchange=exchange,
+            side=side,
+            entry_price=entry_price,
+            exit_price=exit_price,
+            size_pct=size_pct,
+            pnl_pct=pnl_pct,
+            opened_at=opened_at,
+            closed_at=ts,
         )
 
     @property

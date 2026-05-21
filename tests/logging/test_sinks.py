@@ -26,8 +26,8 @@ from datetime import datetime, timezone
 
 from ocm.observability.sinks import LokiSink, PrometheusLogSink, _LOG_COUNTER
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_loguru_message(
     text: str = "test event",
@@ -35,15 +35,15 @@ def _make_loguru_message(
     extra: dict | None = None,
 ) -> MagicMock:
     """Construye un mensaje de Loguru simulado para tests."""
-    msg   = MagicMock()
+    msg = MagicMock()
     level = MagicMock()
     level.name = level_name
     msg.record = {
         "message": text,
-        "level":   level,
-        "time":    datetime.now(timezone.utc),
-        "extra":   extra or {"run_id": "abc123", "env": "test", "service": "ocm"},
-        "name":    "market_data.ingestion.rest.ohlcv_fetcher",
+        "level": level,
+        "time": datetime.now(timezone.utc),
+        "extra": extra or {"run_id": "abc123", "env": "test", "service": "ocm"},
+        "name": "market_data.ingestion.rest.ohlcv_fetcher",
     }
     return msg
 
@@ -53,8 +53,8 @@ _PAYLOAD = {"streams": [{"stream": {"level": "info"}, "values": [["1234567890000
 
 # ── LokiSink — payload y etiquetas ───────────────────────────────────────────
 
-class TestLokiSink:
 
+class TestLokiSink:
     def test_push_sends_correct_content_type(self):
         sink = LokiSink(url="http://loki:3100/loki/api/v1/push")
         mock_resp = MagicMock()
@@ -105,8 +105,8 @@ class TestLokiSink:
 
         labels = captured["streams"][0]["stream"]
         assert labels["cluster"] == "prod-01"
-        assert labels["env"]     == "production"
-        assert labels["run_id"]  == "xyz"
+        assert labels["env"] == "production"
+        assert labels["run_id"] == "xyz"
 
     # ── _attempt — firma real: _attempt(self, payload) ────────────────────────
 
@@ -145,6 +145,7 @@ class TestLokiSink:
         Usamos threading.Event para sincronizar el Timer daemon.
         """
         import threading
+
         sink = LokiSink(url="http://loki:3100/loki/api/v1/push", max_retries=3)
         mock_resp = MagicMock()
         mock_resp.status_code = 204  # éxito en el reintento
@@ -175,6 +176,7 @@ class TestLokiSink:
             sink._schedule_retry(_PAYLOAD, attempt=3)  # == max_retries → stop
             # El Timer tiene delay — dar tiempo suficiente para que se ejecute si hubiera bug
             import time
+
             time.sleep(0.05)
             mock_attempt.assert_not_called()
 
@@ -186,6 +188,7 @@ class TestLokiSink:
         with patch.object(sink, "_attempt") as mock_attempt:
             sink._schedule_retry(_PAYLOAD, attempt=1)
             import time
+
             time.sleep(0.05)
             mock_attempt.assert_not_called()
 
@@ -265,19 +268,19 @@ class TestLokiSink:
 
 # ── PrometheusLogSink ─────────────────────────────────────────────────────────
 
-class TestPrometheusLogSink:
 
+class TestPrometheusLogSink:
     def test_increments_counter_on_call(self):
-        sink   = PrometheusLogSink(service="test_service")
-        msg    = _make_loguru_message(level_name="ERROR")
+        sink = PrometheusLogSink(service="test_service")
+        msg = _make_loguru_message(level_name="ERROR")
         before = _LOG_COUNTER.labels(level="error", service="test_service")._value.get()
         sink(msg)
-        after  = _LOG_COUNTER.labels(level="error", service="test_service")._value.get()
+        after = _LOG_COUNTER.labels(level="error", service="test_service")._value.get()
         assert after == before + 1
 
     def test_does_not_raise_on_broken_message(self):
         """Fail-soft: record malformado no propaga excepción."""
-        sink   = PrometheusLogSink()
+        sink = PrometheusLogSink()
         broken = MagicMock()
         broken.record = {}  # sin "level"
         sink(broken)  # no debe lanzar
@@ -285,7 +288,7 @@ class TestPrometheusLogSink:
     @pytest.mark.parametrize("level", ["debug", "info", "warning", "error", "critical"])
     def test_increments_for_all_standard_levels(self, level):
         sink = PrometheusLogSink(service=f"test_{level}")
-        msg  = _make_loguru_message(level_name=level.upper())
+        msg = _make_loguru_message(level_name=level.upper())
         sink(msg)
-        val  = _LOG_COUNTER.labels(level=level, service=f"test_{level}")._value.get()
+        val = _LOG_COUNTER.labels(level=level, service=f"test_{level}")._value.get()
         assert val >= 1

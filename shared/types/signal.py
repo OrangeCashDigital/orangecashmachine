@@ -19,6 +19,7 @@ Ubicación: domain/ (sin imports externos a stdlib)
 
 Principios: SOLID · DDD · SSOT · Fail-Fast
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -52,24 +53,21 @@ class Signal:
     No usar frozen=True porque datetime es mutable en Python < 3.11.
     Por convención, ningún campo se modifica tras construcción.
     """
-    symbol:     str
-    timeframe:  str
-    direction:  SignalType
-    price:      float
-    timestamp:  datetime
+
+    symbol: str
+    timeframe: str
+    direction: SignalType
+    price: float
+    timestamp: datetime
     confidence: float = 1.0
-    metadata:   dict  = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Fail-fast: invariantes de dominio validadas en construcción."""
         if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(
-                f"Signal.confidence debe estar en [0, 1], recibido: {self.confidence}"
-            )
+            raise ValueError(f"Signal.confidence debe estar en [0, 1], recibido: {self.confidence}")
         if self.price <= 0.0:
-            raise ValueError(
-                f"Signal.price debe ser positivo, recibido: {self.price}"
-            )
+            raise ValueError(f"Signal.price debe ser positivo, recibido: {self.price}")
         if not self.symbol:
             raise ValueError("Signal.symbol no puede estar vacío")
         if not self.timeframe:
@@ -83,6 +81,7 @@ class Signal:
         Eliminable cuando todos los consumidores usen .direction.
         """
         import warnings
+
         warnings.warn(
             "Signal.signal está deprecado — usar Signal.direction",
             DeprecationWarning,

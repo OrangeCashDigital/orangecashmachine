@@ -33,7 +33,6 @@ from typing import Sequence
 
 from market_data.domain.value_objects.raw_trade import RawTrade
 
-
 # ---------------------------------------------------------------------------
 # TradeReceived
 # ---------------------------------------------------------------------------

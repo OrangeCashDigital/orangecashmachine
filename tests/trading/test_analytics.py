@@ -6,6 +6,7 @@ tests/trading/test_analytics.py
 Tests unitarios de TradeRecord, TradeTracker y PerformanceEngine.
 Sin I/O — lógica pura.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
@@ -18,52 +19,52 @@ from trading.analytics.performance import PerformanceEngine
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.strategies.base import Signal
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 _NOW = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
+
 def _make_trade(
-    pnl_pct:  float,
-    symbol:   str   = "BTC/USDT",
-    trade_id: str   = "t001",
-    dur_s:    float = 3600.0,
+    pnl_pct: float,
+    symbol: str = "BTC/USDT",
+    trade_id: str = "t001",
+    dur_s: float = 3600.0,
 ) -> TradeRecord:
     entry = 50_000.0
     exit_ = entry * (1 + pnl_pct)
     return TradeRecord.close(
-        trade_id    = trade_id,
-        symbol      = symbol,
-        exchange    = "bybit",
-        timeframe   = "1h",
-        entry_price = entry,
-        exit_price  = exit_,
-        size_pct    = 0.05,
-        entry_at    = _NOW,
-        exit_at     = _NOW + timedelta(seconds=dur_s),
+        trade_id=trade_id,
+        symbol=symbol,
+        exchange="bybit",
+        timeframe="1h",
+        entry_price=entry,
+        exit_price=exit_,
+        size_pct=0.05,
+        entry_at=_NOW,
+        exit_at=_NOW + timedelta(seconds=dur_s),
     )
 
 
 def _make_filled_order(
-    side:   OrderSide,
-    symbol: str   = "BTC/USDT",
-    price:  float = 50_000.0,
-    oid:    str   = "o001",
+    side: OrderSide,
+    symbol: str = "BTC/USDT",
+    price: float = 50_000.0,
+    oid: str = "o001",
 ) -> Order:
     signal = Signal(
-        symbol    = symbol,
-        timeframe = "1h",
-        direction = side.value,
-        price     = price,
-        timestamp = _NOW,
-        confidence = 1.0,
+        symbol=symbol,
+        timeframe="1h",
+        direction=side.value,
+        price=price,
+        timestamp=_NOW,
+        confidence=1.0,
     )
     order = Order(
-        symbol   = symbol,
-        side     = side,
-        size_pct = 0.05,
-        signal   = signal,
-        order_id = oid,
+        symbol=symbol,
+        side=side,
+        size_pct=0.05,
+        signal=signal,
+        order_id=oid,
     )
     order.transition(OrderStatus.SUBMITTED)
     order.transition(OrderStatus.FILLED, fill_price=price, fill_timestamp=_NOW)
@@ -71,6 +72,7 @@ def _make_filled_order(
 
 
 # ── TradeRecord ────────────────────────────────────────────────────────────────
+
 
 class TestTradeRecord:
     def test_close_factory_calculates_pnl(self):
@@ -95,7 +97,7 @@ class TestTradeRecord:
         assert _make_trade(0.05).pnl_usd is None
 
     def test_str_contains_win_loss(self):
-        assert "WIN"  in str(_make_trade(0.05))
+        assert "WIN" in str(_make_trade(0.05))
         assert "LOSS" in str(_make_trade(-0.05))
 
     def test_frozen_immutable(self):
@@ -107,6 +109,7 @@ class TestTradeRecord:
 
 # ── TradeTracker ───────────────────────────────────────────────────────────────
 
+
 class TestTradeTracker:
     def test_buy_fill_opens_position(self):
         tracker = TradeTracker(exchange="bybit")
@@ -116,7 +119,7 @@ class TestTradeTracker:
 
     def test_sell_closes_position(self):
         tracker = TradeTracker(exchange="bybit")
-        buy  = _make_filled_order(OrderSide.BUY,  oid="b1", price=50_000.0)
+        buy = _make_filled_order(OrderSide.BUY, oid="b1", price=50_000.0)
         sell = _make_filled_order(OrderSide.SELL, oid="s1", price=52_000.0)
         tracker.on_fill(buy)
         tracker.on_fill(sell)
@@ -125,7 +128,7 @@ class TestTradeTracker:
 
     def test_pnl_correct_on_close(self):
         tracker = TradeTracker(exchange="bybit")
-        buy  = _make_filled_order(OrderSide.BUY,  oid="b1", price=50_000.0)
+        buy = _make_filled_order(OrderSide.BUY, oid="b1", price=50_000.0)
         sell = _make_filled_order(OrderSide.SELL, oid="s1", price=55_000.0)
         tracker.on_fill(buy)
         tracker.on_fill(sell)
@@ -159,11 +162,12 @@ class TestTradeTracker:
     def test_summary_observable(self):
         tracker = TradeTracker()
         s = tracker.summary()
-        assert "closed_trades"  in s
+        assert "closed_trades" in s
         assert "open_positions" in s
 
 
 # ── PerformanceEngine ──────────────────────────────────────────────────────────
+
 
 class TestPerformanceEngine:
     def _trades(self, pnls: list[float]) -> list[TradeRecord]:
@@ -171,10 +175,10 @@ class TestPerformanceEngine:
 
     def test_summarize_empty(self):
         s = PerformanceEngine.summarize([])
-        assert s.total_trades   == 0
-        assert s.win_rate       is None
-        assert s.sharpe_ratio   is None
-        assert s.max_drawdown   == 0.0
+        assert s.total_trades == 0
+        assert s.win_rate is None
+        assert s.sharpe_ratio is None
+        assert s.max_drawdown == 0.0
 
     def test_win_rate_all_winners(self):
         trades = self._trades([0.01, 0.02, 0.03])
@@ -236,10 +240,10 @@ class TestPerformanceEngine:
     def test_summarize_full(self):
         trades = self._trades([0.05, -0.02, 0.03, -0.01, 0.04])
         s = PerformanceEngine.summarize(trades, capital_usd=10_000.0)
-        assert s.total_trades   == 5
+        assert s.total_trades == 5
         assert s.winning_trades == 3
-        assert s.losing_trades  == 2
-        assert s.win_rate       == pytest.approx(0.6)
-        assert s.pnl_usd        is not None
-        assert s.max_drawdown   >= 0.0
-        assert "Performance("   in str(s)
+        assert s.losing_trades == 2
+        assert s.win_rate == pytest.approx(0.6)
+        assert s.pnl_usd is not None
+        assert s.max_drawdown >= 0.0
+        assert "Performance(" in str(s)

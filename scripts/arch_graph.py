@@ -15,13 +15,14 @@ Salida
     docs/arch/import_graph_market_data.svg
     docs/arch/import_graph_application.svg
 """
+
 from __future__ import annotations
 
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT    = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "docs" / "arch"
 
 
@@ -32,13 +33,16 @@ def _pydeps_svg(package_path: Path, out_file: Path, max_bacon: int = 4) -> bool:
     """
     result = subprocess.run(
         [
-            sys.executable, "-m", "pydeps",
+            sys.executable,
+            "-m",
+            "pydeps",
             str(package_path),
             "--cluster",
             f"--max-bacon={max_bacon}",
             "--rankdir=TB",
             "--noshow",
-            "-o", str(out_file),
+            "-o",
+            str(out_file),
         ],
         capture_output=True,
         text=True,
@@ -69,21 +73,21 @@ def text_report() -> None:
 
     modules = sorted(str(m) for m in graph.modules)
     layers = {
-        "domain":          [m for m in modules if ".domain."         in m],
-        "ports":           [m for m in modules if ".ports."          in m],
-        "application":     [m for m in modules if ".application."    in m],
-        "adapters":        [m for m in modules if ".adapters."       in m],
-        "infrastructure":  [m for m in modules if ".infrastructure." in m],
-        "shared":          [m for m in modules if m.startswith("shared.")],
+        "domain": [m for m in modules if ".domain." in m],
+        "ports": [m for m in modules if ".ports." in m],
+        "application": [m for m in modules if ".application." in m],
+        "adapters": [m for m in modules if ".adapters." in m],
+        "infrastructure": [m for m in modules if ".infrastructure." in m],
+        "shared": [m for m in modules if m.startswith("shared.")],
     }
 
-    print(f"\nTotales por capa:")
+    print("\nTotales por capa:")
     for layer, mods in layers.items():
         bar = "█" * min(len(mods), 40)
         print(f"  {layer:<16} {len(mods):>3}  {bar}")
 
     # Top 5 módulos más importados (fan-in)
-    print(f"\nTop 10 módulos más importados (fan-in alto = candidatos a abstraer):")
+    print("\nTop 10 módulos más importados (fan-in alto = candidatos a abstraer):")
     fan_in: dict[str, int] = {}
     for m in graph.modules:
         try:
@@ -107,8 +111,12 @@ def main() -> None:
     if gen_svg:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         targets = [
-            (ROOT / "packages" / "market_data",                "import_graph_market_data.svg",    4),
-            (ROOT / "packages" / "market_data" / "application", "import_graph_application.svg", 3),
+            (ROOT / "packages" / "market_data", "import_graph_market_data.svg", 4),
+            (
+                ROOT / "packages" / "market_data" / "application",
+                "import_graph_application.svg",
+                3,
+            ),
         ]
         for pkg_path, fname, bacon in targets:
             out = OUT_DIR / fname

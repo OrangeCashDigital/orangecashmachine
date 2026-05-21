@@ -40,10 +40,7 @@ def repo_root() -> Path:
     for parent in here.parents:
         if (parent / ".git").exists():
             return parent
-    raise RuntimeError(
-        f"No se encontró .git subiendo desde {here}. "
-        "¿Estás ejecutando desde fuera del repositorio?"
-    )
+    raise RuntimeError(f"No se encontró .git subiendo desde {here}. ¿Estás ejecutando desde fuera del repositorio?")
 
 
 __all__ = ["repo_root"]

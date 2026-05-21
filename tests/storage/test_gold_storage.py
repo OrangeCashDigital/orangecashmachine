@@ -18,6 +18,7 @@ DIP  — GoldStorage ya no expone _engineer; se testea comportamiento observable
 SRP  — cada test verifica una sola propiedad.
 SSOT — engineer_version es el string canónico de GoldTransformer.VERSION.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -26,8 +27,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_data.infrastructure.storage.gold.transformer import VERSION as TRANSFORMER_VERSION
-from market_data.infrastructure.storage.gold.gold_storage import GoldStorage, _prepare_gold_df
+from market_data.infrastructure.storage.gold.transformer import (
+    VERSION as TRANSFORMER_VERSION,
+)
+from market_data.infrastructure.storage.gold.gold_storage import (
+    GoldStorage,
+    _prepare_gold_df,
+)
 from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
 from market_data.domain.exceptions import (
     DataNotFoundError,
@@ -36,21 +42,23 @@ from market_data.domain.exceptions import (
     VersionNotFoundError as GoldVersionNotFound,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _make_silver_df(n: int = 30, seed: int = 0) -> pd.DataFrame:
     """DataFrame OHLCV sintético que simula salida de IcebergStorage."""
     rng = np.random.default_rng(seed)
     close = rng.uniform(40_000, 50_000, n)
-    return pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close + rng.uniform(-200, 200, n),
-        "high":   close + rng.uniform(100, 500, n),
-        "low":    close - rng.uniform(100, 500, n),
-        "close":  close,
-        "volume": rng.uniform(100, 1_000, n),
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close + rng.uniform(-200, 200, n),
+            "high": close + rng.uniform(100, 500, n),
+            "low": close - rng.uniform(100, 500, n),
+            "close": close,
+            "volume": rng.uniform(100, 1_000, n),
+        }
+    )
 
 
 @pytest.fixture
@@ -59,6 +67,7 @@ def gold() -> GoldStorage:
 
 
 # ── GoldStorage — construcción ────────────────────────────────────────────────
+
 
 def test_gold_storage_instantiates(gold):
     assert gold._dry_run is True
@@ -75,6 +84,7 @@ def test_gold_storage_engineer_version_is_semver(gold):
 
 
 # ── GoldStorage.build() — dry_run ────────────────────────────────────────────
+
 
 def test_build_dry_run_returns_dataframe_with_features(gold):
     """dry_run debe retornar el DataFrame con features calculados, sin escribir."""
@@ -147,14 +157,19 @@ def test_build_dry_run_returns_none_when_silver_raises(gold):
 
 # ── _prepare_gold_df — helper interno ────────────────────────────────────────
 
+
 def test_prepare_gold_df_adds_identity_columns():
     df = _make_silver_df(10)
     result = _prepare_gold_df(
         df,
-        exchange="bybit", symbol="BTC/USDT",
-        market_type="spot", timeframe="1h",
-        run_id="test-run", engineer_version="2.0.0",
-        silver_snapshot_id=999, silver_snapshot_ms=1_700_000_000_000,
+        exchange="bybit",
+        symbol="BTC/USDT",
+        market_type="spot",
+        timeframe="1h",
+        run_id="test-run",
+        engineer_version="2.0.0",
+        silver_snapshot_id=999,
+        silver_snapshot_ms=1_700_000_000_000,
     )
     assert (result["exchange"] == "bybit").all()
     assert (result["symbol"] == "BTC/USDT").all()
@@ -168,10 +183,14 @@ def test_prepare_gold_df_timestamp_is_microseconds_utc():
     df = _make_silver_df(5)
     result = _prepare_gold_df(
         df,
-        exchange="bybit", symbol="BTC/USDT",
-        market_type="spot", timeframe="1h",
-        run_id=None, engineer_version="2.0.0",
-        silver_snapshot_id=0, silver_snapshot_ms=0,
+        exchange="bybit",
+        symbol="BTC/USDT",
+        market_type="spot",
+        timeframe="1h",
+        run_id=None,
+        engineer_version="2.0.0",
+        silver_snapshot_id=0,
+        silver_snapshot_ms=0,
     )
     assert str(result["timestamp"].dtype) == "datetime64[us, UTC]"
 
@@ -180,10 +199,14 @@ def test_prepare_gold_df_run_id_empty_string_when_none():
     df = _make_silver_df(5)
     result = _prepare_gold_df(
         df,
-        exchange="bybit", symbol="BTC/USDT",
-        market_type="spot", timeframe="1h",
-        run_id=None, engineer_version="2.0.0",
-        silver_snapshot_id=0, silver_snapshot_ms=0,
+        exchange="bybit",
+        symbol="BTC/USDT",
+        market_type="spot",
+        timeframe="1h",
+        run_id=None,
+        engineer_version="2.0.0",
+        silver_snapshot_id=0,
+        silver_snapshot_ms=0,
     )
     assert (result["run_id"] == "").all()
 
@@ -192,15 +215,20 @@ def test_prepare_gold_df_preserves_row_count():
     df = _make_silver_df(20)
     result = _prepare_gold_df(
         df,
-        exchange="kucoin", symbol="ETH/USDT",
-        market_type="spot", timeframe="4h",
-        run_id="r1", engineer_version="2.0.0",
-        silver_snapshot_id=1, silver_snapshot_ms=1,
+        exchange="kucoin",
+        symbol="ETH/USDT",
+        market_type="spot",
+        timeframe="4h",
+        run_id="r1",
+        engineer_version="2.0.0",
+        silver_snapshot_id=1,
+        silver_snapshot_ms=1,
     )
     assert len(result) == 20
 
 
 # ── GoldLoader — construcción e interfaz ─────────────────────────────────────
+
 
 def test_gold_loader_instantiates():
     loader = GoldLoader(exchange="bybit")
@@ -229,6 +257,7 @@ def test_gold_loader_list_versions_returns_list():
 
 
 # ── GoldLoader._resolve_snapshot — lógica de versionado ─────────────────────
+
 
 def test_resolve_snapshot_latest_returns_none():
     loader = GoldLoader(exchange="bybit")

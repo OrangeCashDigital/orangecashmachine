@@ -19,12 +19,14 @@ El linaje 1m → 5m/15m/1h/4h/1d es ahora visible en el asset graph.
 
 Principios: SRP (adapter puro) · DIP · OCP · SSOT
 """
+
 from __future__ import annotations
 
 from dagster import AssetIn, Output, asset
 
 from infrastructure.dagster.resources import OCMResource
 from market_data.application import ResampleUseCase, ResampleRequest
+
 # _resample_use_case se construye lazy en el asset (DIP · Composition Root).
 # IcebergStorageFactory no se carga en import-time — solo al primer run.
 _resample_use_case = None
@@ -35,31 +37,31 @@ def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
     asset_name = f"silver_ohlcv_resampled_{exchange_name}_{market_type}"
 
     @asset(
-        name        = asset_name,
-        group_name  = "silver",
-        ins         = {"upstream_repair": AssetIn(key=repair_key)},
-        description = (
+        name=asset_name,
+        group_name="silver",
+        ins={"upstream_repair": AssetIn(key=repair_key)},
+        description=(
             f"Resample 1m→[5m,15m,1h,4h,1d] para {exchange_name}/{market_type}. "
             f"Construye timeframes derivados localmente desde Silver 1m "
             f"sin llamadas extra al exchange."
         ),
-        metadata    = {
-            "exchange":    exchange_name,
+        metadata={
+            "exchange": exchange_name,
             "market_type": market_type,
-            "layer":       "silver",
-            "source_tf":   "1m",
+            "layer": "silver",
+            "source_tf": "1m",
         },
-        tags        = {
+        tags={
             # SSOT: key debe coincidir con pools.silver_resample en dagster.yaml.
             # CPU-bound local — run_limit=4 permite más paralelismo que bronze.
             "dagster/concurrency_key": "silver_resample",
-            "exchange":               exchange_name,
-            "market_type":            market_type,
+            "exchange": exchange_name,
+            "market_type": market_type,
         },
     )
     def _resample_asset(
         context,
-        ocm:            OCMResource,
+        ocm: OCMResource,
         upstream_repair: dict,
     ):
         """
@@ -69,40 +71,38 @@ def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
         Toda la lógica de orquestación vive en el use case (SRP).
         """
         runtime_ctx = ocm.runtime_context
-        app_cfg     = runtime_ctx.app_config
+        app_cfg = runtime_ctx.app_config
 
         request = ResampleRequest(
-            exchange    = exchange_name,
-            market_type = market_type,
-            app_config  = app_cfg,
-            dry_run     = app_cfg.safety.dry_run,
-            run_id      = runtime_ctx.run_id,
+            exchange=exchange_name,
+            market_type=market_type,
+            app_config=app_cfg,
+            dry_run=app_cfg.safety.dry_run,
+            run_id=runtime_ctx.run_id,
         )
 
         global _resample_use_case
         if _resample_use_case is None:
-            from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+            from market_data.adapters.outbound.storage.iceberg_factory import (
+                IcebergStorageFactory,
+            )
+
             _resample_use_case = ResampleUseCase(
-                storage_factory = IcebergStorageFactory(),
+                storage_factory=IcebergStorageFactory(),
             )
         result = _resample_use_case.execute(request)
 
         if result.status == "skipped":
-            context.log.warning(
-                f"Resample skipped — sin símbolos | "
-                f"exchange={exchange_name} market={market_type}"
-            )
+            context.log.warning(f"Resample skipped — sin símbolos | exchange={exchange_name} market={market_type}")
             yield Output(
-                value    = {"rows": 0, "status": "SKIPPED"},
-                metadata = {"status": "SKIPPED"},
+                value={"rows": 0, "status": "SKIPPED"},
+                metadata={"status": "SKIPPED"},
             )
             return
 
         if not result.succeeded:
             raise RuntimeError(
-                f"ResampleUseCase failed | "
-                f"exchange={exchange_name} market={market_type} "
-                f"error={result.error}"
+                f"ResampleUseCase failed | exchange={exchange_name} market={market_type} error={result.error}"
             )
 
         context.log.info(
@@ -112,23 +112,23 @@ def make_resample_ohlcv_asset(exchange_name: str, market_type: str = "spot"):
 
         metadata = {
             "rows_resampled": result.rows,
-            "source_tf":      result.source_tf,
-            "targets":        str(result.targets),
-            "exchange":       exchange_name,
-            "market_type":    market_type,
-            "status":         result.status,
-            "run_id":         str(result.run_id),
+            "source_tf": result.source_tf,
+            "targets": str(result.targets),
+            "exchange": exchange_name,
+            "market_type": market_type,
+            "status": result.status,
+            "run_id": str(result.run_id),
         }
         yield Output(
-            value    = metadata,
-            metadata = {k: str(v) for k, v in metadata.items()},
+            value=metadata,
+            metadata={k: str(v) for k, v in metadata.items()},
         )
 
     return _resample_asset
 
 
-silver_ohlcv_resampled_kucoin_spot        = make_resample_ohlcv_asset("kucoin",        "spot")
-silver_ohlcv_resampled_bybit_spot         = make_resample_ohlcv_asset("bybit",         "spot")
+silver_ohlcv_resampled_kucoin_spot = make_resample_ohlcv_asset("kucoin", "spot")
+silver_ohlcv_resampled_bybit_spot = make_resample_ohlcv_asset("bybit", "spot")
 silver_ohlcv_resampled_kucoinfutures_swap = make_resample_ohlcv_asset("kucoinfutures", "futures")
 
 RESAMPLE_OHLCV_ASSETS = [

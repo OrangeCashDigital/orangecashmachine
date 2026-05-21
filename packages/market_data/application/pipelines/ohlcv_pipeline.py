@@ -63,7 +63,6 @@ from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
 
 from ocm.runtime.state import build_gap_registry
 
-
 # ==============================================================================
 # Constantes
 # ==============================================================================

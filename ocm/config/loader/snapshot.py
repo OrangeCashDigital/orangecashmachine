@@ -84,18 +84,19 @@ def write_config_snapshot(
         if out_path.exists():
             logger.debug(
                 "config_snapshot_exists | run_id={} path={}",
-                run_id, out_path,
+                run_id,
+                out_path,
             )
             return out_path
 
         config_dict: dict[str, Any] = config.model_dump(mode="json")
 
         snapshot: dict[str, Any] = {
-            "run_id":      run_id,
+            "run_id": run_id,
             "config_hash": config_hash,
-            "env":         env,
+            "env": env,
             "snapshot_at": datetime.now(timezone.utc).isoformat(),
-            "config":      config_dict,
+            "config": config_dict,
         }
 
         tmp = out_dir / f".{run_id}_{hash_prefix}.tmp"
@@ -107,13 +108,18 @@ def write_config_snapshot(
 
         logger.info(
             "config_snapshot_written | run_id={} env={} hash={} path={}",
-            run_id, env, hash_prefix, out_path,
+            run_id,
+            env,
+            hash_prefix,
+            out_path,
         )
         return out_path
 
     except Exception as exc:  # noqa: BLE001 — fail-soft intencional
         logger.warning(
             "config_snapshot_failed | run_id={} type={} error={}",
-            run_id, type(exc).__name__, exc,
+            run_id,
+            type(exc).__name__,
+            exc,
         )
         return None

@@ -18,6 +18,7 @@ ni de estrategia (BaseStrategy). Solo los conecta. (SRP)
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,30 +26,33 @@ from typing import Callable, Optional
 
 from loguru import logger
 
-from shared.contracts.boundaries import FeatureSource  # SSOT — unica definicion del contrato
+from shared.contracts.boundaries import (
+    FeatureSource,
+)  # SSOT — unica definicion del contrato
 from ocm.runtime.guard import ExecutionGuard
 from trading.execution.order import Order, OrderStatus
 from trading.risk.models import RiskConfig
 from trading.strategies.base import BaseStrategy
 from trading.strategies.registry import StrategyRegistry
 
-
 # ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class EngineResult:
     """Resultado de un ciclo run_once()."""
-    symbol:            str
-    timeframe:         str
-    signals_generated: int  = 0
-    orders_submitted:  int  = 0
-    orders_filled:     int  = 0
-    orders_rejected:   int  = 0
-    skipped:           bool = False
-    skip_reason:       str  = ""
-    orders:            list[Order] = field(default_factory=list)
+
+    symbol: str
+    timeframe: str
+    signals_generated: int = 0
+    orders_submitted: int = 0
+    orders_filled: int = 0
+    orders_rejected: int = 0
+    skipped: bool = False
+    skip_reason: str = ""
+    orders: list[Order] = field(default_factory=list)
 
     @property
     def status(self) -> str:
@@ -64,6 +68,7 @@ class EngineResult:
 # ---------------------------------------------------------------------------
 # TradingEngine
 # ---------------------------------------------------------------------------
+
 
 class TradingEngine:
     """
@@ -81,20 +86,20 @@ class TradingEngine:
 
     def __init__(
         self,
-        strategy:    BaseStrategy,
-        oms,                                  # OMS — importado lazy en build_paper
+        strategy: BaseStrategy,
+        oms,  # OMS — importado lazy en build_paper
         data_source: FeatureSource,
-        guard:       Optional[ExecutionGuard] = None,
-        exchange:    str = "bybit",
-        market_type: str = "spot",            # default consistente con PaperBot
+        guard: Optional[ExecutionGuard] = None,
+        exchange: str = "bybit",
+        market_type: str = "spot",  # default consistente con PaperBot
     ) -> None:
-        self._strategy    = strategy
-        self._oms         = oms
+        self._strategy = strategy
+        self._oms = oms
         self._data_source = data_source
-        self._guard       = guard
-        self._exchange    = exchange
+        self._guard = guard
+        self._exchange = exchange
         self._market_type = market_type
-        self._log         = logger.bind(
+        self._log = logger.bind(
             engine="TradingEngine",
             strategy=strategy.name,
             exchange=exchange,
@@ -110,12 +115,12 @@ class TradingEngine:
 
         Thread-safe. Sincrónico — para uso en Dagster assets o loops.
         """
-        s      = self._strategy
+        s = self._strategy
         result = EngineResult(symbol=s.symbol, timeframe=s.timeframe)
 
         # Kill switch — propiedad pública stop_reason
         if self._guard and self._guard.should_stop():
-            result.skipped     = True
+            result.skipped = True
             result.skip_reason = f"guard:{self._guard.stop_reason}"
             self._log.warning("run_once bloqueado | reason={}", result.skip_reason)
             return result
@@ -123,11 +128,13 @@ class TradingEngine:
         # Cargar datos
         df = self._load_data()
         if df is None or (hasattr(df, "empty") and df.empty):
-            result.skipped     = True
+            result.skipped = True
             result.skip_reason = "no_data"
             self._log.warning(
                 "Sin datos | exchange={} symbol={} tf={}",
-                self._exchange, s.symbol, s.timeframe,
+                self._exchange,
+                s.symbol,
+                s.timeframe,
             )
             return result
 
@@ -135,7 +142,7 @@ class TradingEngine:
         try:
             signals = s.generate_signals(df)
         except Exception as exc:
-            result.skipped     = True
+            result.skipped = True
             result.skip_reason = f"strategy_error:{exc}"
             self._log.error("generate_signals error | {}", exc)
             if self._guard:
@@ -145,7 +152,8 @@ class TradingEngine:
         result.signals_generated = len(signals)
         self._log.debug(
             "Señales generadas | symbol={} count={}",
-            s.symbol, len(signals),
+            s.symbol,
+            len(signals),
         )
 
         # Enviar al OMS
@@ -198,15 +206,15 @@ class TradingEngine:
     def build_live(
         cls,
         strategy_name: str,
-        strategy_cfg:  dict,
-        data_source:   FeatureSource,
-        risk_config:   Optional[RiskConfig] = None,
-        capital_usd:   float = 10_000.0,
-        exchange:      str   = "bybit",
-        market_type:   str   = "spot",
-        guard:         Optional[ExecutionGuard] = None,
-        on_fill:       Optional[Callable[[Order], None]] = None,
-        on_reject:     Optional[Callable[[Order], None]] = None,
+        strategy_cfg: dict,
+        data_source: FeatureSource,
+        risk_config: Optional[RiskConfig] = None,
+        capital_usd: float = 10_000.0,
+        exchange: str = "bybit",
+        market_type: str = "spot",
+        guard: Optional[ExecutionGuard] = None,
+        on_fill: Optional[Callable[[Order], None]] = None,
+        on_reject: Optional[Callable[[Order], None]] = None,
     ) -> "TradingEngine":
         """
         Factory para live trading.
@@ -243,41 +251,41 @@ class TradingEngine:
                 "Los defaults de RiskConfig no son apropiados para capital real."
             )
 
-        strategy     = StrategyRegistry.get(strategy_name)(**strategy_cfg)
+        strategy = StrategyRegistry.get(strategy_name)(**strategy_cfg)
         risk_manager = RiskManager(
-            config      = risk_config,
-            capital_usd = capital_usd,
+            config=risk_config,
+            capital_usd=capital_usd,
         )
         executor = LiveExecutor(exchange=exchange, market_type=market_type)
-        oms      = OMS(
-            risk_manager = risk_manager,
-            executor     = executor,
-            guard        = guard,
-            on_fill      = on_fill,
-            on_reject    = on_reject,
+        oms = OMS(
+            risk_manager=risk_manager,
+            executor=executor,
+            guard=guard,
+            on_fill=on_fill,
+            on_reject=on_reject,
         )
         return cls(
-            strategy    = strategy,
-            oms         = oms,
-            data_source = data_source,
-            guard       = guard,
-            exchange    = exchange,
-            market_type = market_type,
+            strategy=strategy,
+            oms=oms,
+            data_source=data_source,
+            guard=guard,
+            exchange=exchange,
+            market_type=market_type,
         )
 
     @classmethod
     def build_paper(
         cls,
         strategy_name: str,
-        strategy_cfg:  dict,
-        data_source:   FeatureSource,
-        risk_config:   Optional[RiskConfig] = None,
-        capital_usd:   float = 10_000.0,
-        exchange:      str   = "bybit",
-        market_type:   str   = "spot",
-        guard:         Optional[ExecutionGuard] = None,
-        on_fill:       Optional[Callable[[Order], None]] = None,
-        on_reject:     Optional[Callable[[Order], None]] = None,
+        strategy_cfg: dict,
+        data_source: FeatureSource,
+        risk_config: Optional[RiskConfig] = None,
+        capital_usd: float = 10_000.0,
+        exchange: str = "bybit",
+        market_type: str = "spot",
+        guard: Optional[ExecutionGuard] = None,
+        on_fill: Optional[Callable[[Order], None]] = None,
+        on_reject: Optional[Callable[[Order], None]] = None,
     ) -> "TradingEngine":
         """
         Factory para paper trading.
@@ -296,26 +304,26 @@ class TradingEngine:
         from trading.execution.paper_executor import PaperExecutor
         from trading.risk.manager import RiskManager
 
-        strategy     = StrategyRegistry.get(strategy_name)(**strategy_cfg)
+        strategy = StrategyRegistry.get(strategy_name)(**strategy_cfg)
         risk_manager = RiskManager(
-            config      = risk_config or RiskConfig(),
-            capital_usd = capital_usd,
+            config=risk_config or RiskConfig(),
+            capital_usd=capital_usd,
         )
         executor = PaperExecutor()
-        oms      = OMS(
-            risk_manager = risk_manager,
-            executor     = executor,
-            guard        = guard,
-            on_fill      = on_fill,    # conecta OMS → TradeTracker (o cualquier observer)
-            on_reject    = on_reject,
+        oms = OMS(
+            risk_manager=risk_manager,
+            executor=executor,
+            guard=guard,
+            on_fill=on_fill,  # conecta OMS → TradeTracker (o cualquier observer)
+            on_reject=on_reject,
         )
         return cls(
-            strategy    = strategy,
-            oms         = oms,
-            data_source = data_source,
-            guard       = guard,
-            exchange    = exchange,
-            market_type = market_type,
+            strategy=strategy,
+            oms=oms,
+            data_source=data_source,
+            guard=guard,
+            exchange=exchange,
+            market_type=market_type,
         )
 
     # ------------------------------------------------------------------
@@ -325,10 +333,10 @@ class TradingEngine:
     def _load_data(self):
         try:
             return self._data_source.load_features(
-                exchange    = self._exchange,
-                symbol      = self._strategy.symbol,
-                timeframe   = self._strategy.timeframe,
-                market_type = self._market_type,
+                exchange=self._exchange,
+                symbol=self._strategy.symbol,
+                timeframe=self._strategy.timeframe,
+                market_type=self._market_type,
             )
         except Exception as exc:
             self._log.error("load_features error | {}", exc)

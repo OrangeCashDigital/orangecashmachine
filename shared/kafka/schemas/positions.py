@@ -30,13 +30,13 @@ Schema version history
 
 Principios: SSOT · DDD · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Literal
 
 from shared.kafka.schemas._base import BasePayload
-
 
 POSITION_OPENED_SCHEMA_VERSION: int = 1
 POSITION_CLOSED_SCHEMA_VERSION: int = 1
@@ -51,6 +51,7 @@ class PositionSchemaVersionError(ValueError):
 # ---------------------------------------------------------------------------
 # PositionOpenedPayload → positions.opened
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class PositionOpenedPayload(BasePayload):
@@ -71,28 +72,31 @@ class PositionOpenedPayload(BasePayload):
     opened_at   : ISO-8601 UTC de apertura
     run_id      : correlación con el run
     """
-    order_id:    str          = ""
-    exchange:    str          = ""
-    symbol:      str          = ""
-    side:        PositionSide = "long"
-    entry_price: float        = 0.0
-    size_pct:    float        = 0.0
-    opened_at:   str          = ""   # ISO-8601 UTC
-    run_id:      str          = ""
+
+    order_id: str = ""
+    exchange: str = ""
+    symbol: str = ""
+    side: PositionSide = "long"
+    entry_price: float = 0.0
+    size_pct: float = 0.0
+    opened_at: str = ""  # ISO-8601 UTC
+    run_id: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version": POSITION_OPENED_SCHEMA_VERSION,
-            "order_id":      self.order_id,
-            "exchange":      self.exchange,
-            "symbol":        self.symbol,
-            "side":          self.side,
-            "entry_price":   self.entry_price,
-            "size_pct":      self.size_pct,
-            "opened_at":     self.opened_at,
-            "run_id":        self.run_id,
-        })
+        base.update(
+            {
+                "event_version": POSITION_OPENED_SCHEMA_VERSION,
+                "order_id": self.order_id,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "side": self.side,
+                "entry_price": self.entry_price,
+                "size_pct": self.size_pct,
+                "opened_at": self.opened_at,
+                "run_id": self.run_id,
+            }
+        )
         return base
 
     @classmethod
@@ -100,27 +104,27 @@ class PositionOpenedPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != POSITION_OPENED_SCHEMA_VERSION:
             raise PositionSchemaVersionError(
-                f"PositionOpenedPayload schema v{version} incompatible "
-                f"con v{POSITION_OPENED_SCHEMA_VERSION} esperada."
+                f"PositionOpenedPayload schema v{version} incompatible con v{POSITION_OPENED_SCHEMA_VERSION} esperada."
             )
         return cls(
-            event_id      = str(data["event_id"]),
-            event_version = version,
-            occurred_at   = str(data.get("occurred_at", "")),
-            order_id      = str(data["order_id"]),
-            exchange      = str(data["exchange"]),
-            symbol        = str(data["symbol"]),
-            side          = data.get("side", "long"),
-            entry_price   = float(data["entry_price"]),
-            size_pct      = float(data["size_pct"]),
-            opened_at     = str(data.get("opened_at", "")),
-            run_id        = str(data.get("run_id", "")),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            order_id=str(data["order_id"]),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            side=data.get("side", "long"),
+            entry_price=float(data["entry_price"]),
+            size_pct=float(data["size_pct"]),
+            opened_at=str(data.get("opened_at", "")),
+            run_id=str(data.get("run_id", "")),
         )
 
 
 # ---------------------------------------------------------------------------
 # PositionClosedPayload → positions.closed
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class PositionClosedPayload(BasePayload):
@@ -136,17 +140,18 @@ class PositionClosedPayload(BasePayload):
     opened_at   : ISO-8601 UTC de apertura (para calcular hold time)
     closed_at   : ISO-8601 UTC de cierre
     """
-    order_id:    str          = ""
-    exchange:    str          = ""
-    symbol:      str          = ""
-    side:        PositionSide = "long"
-    entry_price: float        = 0.0
-    exit_price:  float        = 0.0
-    size_pct:    float        = 0.0
-    pnl_pct:     float        = 0.0
-    opened_at:   str          = ""   # ISO-8601 UTC
-    closed_at:   str          = ""   # ISO-8601 UTC
-    run_id:      str          = ""
+
+    order_id: str = ""
+    exchange: str = ""
+    symbol: str = ""
+    side: PositionSide = "long"
+    entry_price: float = 0.0
+    exit_price: float = 0.0
+    size_pct: float = 0.0
+    pnl_pct: float = 0.0
+    opened_at: str = ""  # ISO-8601 UTC
+    closed_at: str = ""  # ISO-8601 UTC
+    run_id: str = ""
 
     @property
     def is_winner(self) -> bool:
@@ -154,20 +159,22 @@ class PositionClosedPayload(BasePayload):
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version": POSITION_CLOSED_SCHEMA_VERSION,
-            "order_id":      self.order_id,
-            "exchange":      self.exchange,
-            "symbol":        self.symbol,
-            "side":          self.side,
-            "entry_price":   self.entry_price,
-            "exit_price":    self.exit_price,
-            "size_pct":      self.size_pct,
-            "pnl_pct":       self.pnl_pct,
-            "opened_at":     self.opened_at,
-            "closed_at":     self.closed_at,
-            "run_id":        self.run_id,
-        })
+        base.update(
+            {
+                "event_version": POSITION_CLOSED_SCHEMA_VERSION,
+                "order_id": self.order_id,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "side": self.side,
+                "entry_price": self.entry_price,
+                "exit_price": self.exit_price,
+                "size_pct": self.size_pct,
+                "pnl_pct": self.pnl_pct,
+                "opened_at": self.opened_at,
+                "closed_at": self.closed_at,
+                "run_id": self.run_id,
+            }
+        )
         return base
 
     @classmethod
@@ -175,24 +182,23 @@ class PositionClosedPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != POSITION_CLOSED_SCHEMA_VERSION:
             raise PositionSchemaVersionError(
-                f"PositionClosedPayload schema v{version} incompatible "
-                f"con v{POSITION_CLOSED_SCHEMA_VERSION} esperada."
+                f"PositionClosedPayload schema v{version} incompatible con v{POSITION_CLOSED_SCHEMA_VERSION} esperada."
             )
         return cls(
-            event_id      = str(data["event_id"]),
-            event_version = version,
-            occurred_at   = str(data.get("occurred_at", "")),
-            order_id      = str(data["order_id"]),
-            exchange      = str(data["exchange"]),
-            symbol        = str(data["symbol"]),
-            side          = data.get("side", "long"),
-            entry_price   = float(data["entry_price"]),
-            exit_price    = float(data["exit_price"]),
-            size_pct      = float(data["size_pct"]),
-            pnl_pct       = float(data.get("pnl_pct", 0.0)),
-            opened_at     = str(data.get("opened_at", "")),
-            closed_at     = str(data.get("closed_at", "")),
-            run_id        = str(data.get("run_id", "")),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            order_id=str(data["order_id"]),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            side=data.get("side", "long"),
+            entry_price=float(data["entry_price"]),
+            exit_price=float(data["exit_price"]),
+            size_pct=float(data["size_pct"]),
+            pnl_pct=float(data.get("pnl_pct", 0.0)),
+            opened_at=str(data.get("opened_at", "")),
+            closed_at=str(data.get("closed_at", "")),
+            run_id=str(data.get("run_id", "")),
         )
 
 

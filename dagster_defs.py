@@ -11,6 +11,7 @@ La implementación real está en:
 
 Este módulo re-exporta Definitions desde allí.
 """
+
 from infrastructure.dagster.defs import defs  # noqa: F401
 
 __all__ = ["defs"]  # re-export explícito — contrato del framework

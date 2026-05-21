@@ -72,7 +72,6 @@ from loguru import logger
 from market_data.domain.value_objects.raw_trade import RawTrade, TradeSide, TradeSource
 from market_data.ports.outbound.exchange import ExchangeAdapter
 
-
 # ---------------------------------------------------------------------------
 # Constantes operacionales
 # ---------------------------------------------------------------------------

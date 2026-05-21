@@ -36,7 +36,6 @@ from typing import Any, Optional
 import httpx
 from prometheus_client import Counter
 
-
 # ── Prometheus counter ────────────────────────────────────────────────────────
 
 _LOG_COUNTER: Counter = Counter(
@@ -47,6 +46,7 @@ _LOG_COUNTER: Counter = Counter(
 
 
 # ── LokiSink ─────────────────────────────────────────────────────────────────
+
 
 class LokiSink:
     """Sink Loguru → Loki via HTTP push (Protobuf-free, JSON snappy-free).
@@ -80,34 +80,36 @@ class LokiSink:
         timeout: float = 5.0,
         max_retries: int = 3,
     ) -> None:
-        self._url         = url
-        self._labels      = labels or {}
-        self._timeout     = timeout
+        self._url = url
+        self._labels = labels or {}
+        self._timeout = timeout
         self._max_retries = max(1, max_retries)
-        self._client      = httpx.Client(timeout=timeout)
+        self._client = httpx.Client(timeout=timeout)
         # Evento de shutdown: permite interrumpir waits pendientes en close()
-        self._shutdown    = threading.Event()
+        self._shutdown = threading.Event()
 
     def __call__(self, message: Any) -> None:
         """Recibe un mensaje de Loguru y lo envía a Loki (no-bloqueante)."""
         record: dict[str, Any] = message.record
-        extra:  dict[str, Any] = record.get("extra", {})
+        extra: dict[str, Any] = record.get("extra", {})
 
-        level  = record["level"].name.lower()
-        ts_ns  = str(int(record["time"].timestamp() * 1e9))
+        level = record["level"].name.lower()
+        ts_ns = str(int(record["time"].timestamp() * 1e9))
 
         labels = {
-            "level":   level,
+            "level": level,
             "service": extra.get("service", "orangecashmachine"),
-            "env":     extra.get("env", "unknown"),
-            "run_id":  extra.get("run_id", "-"),
+            "env": extra.get("env", "unknown"),
+            "run_id": extra.get("run_id", "-"),
             **self._labels,
         }
         payload = {
-            "streams": [{
-                "stream": labels,
-                "values": [[ts_ns, record["message"]]],
-            }]
+            "streams": [
+                {
+                    "stream": labels,
+                    "values": [[ts_ns, record["message"]]],
+                }
+            ]
         }
         # Primer intento síncrono — ruta feliz sin overhead de hilos
         success = self._attempt(payload)
@@ -159,6 +161,7 @@ class LokiSink:
 
 
 # ── PrometheusLogSink ─────────────────────────────────────────────────────────
+
 
 class PrometheusLogSink:
     """Sink Loguru → Prometheus counter por nivel de log.

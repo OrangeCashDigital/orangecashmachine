@@ -20,21 +20,23 @@ from ocm.config.layers.env_override import apply_env_overrides
 
 @pytest.fixture
 def base_cfg():
-    return OmegaConf.create({
-        "pipeline": {
-            "historical": {
-                "fetch_all_history": False,
-                "start_date": "2024-01-01T00:00:00Z",
-                "max_concurrent_tasks": 2,
+    return OmegaConf.create(
+        {
+            "pipeline": {
+                "historical": {
+                    "fetch_all_history": False,
+                    "start_date": "2024-01-01T00:00:00Z",
+                    "max_concurrent_tasks": 2,
+                },
+                "realtime": {
+                    "snapshot_interval_seconds": 60,
+                },
             },
-            "realtime": {
-                "snapshot_interval_seconds": 60,
+            "observability": {
+                "logging": {"level": "INFO"},
             },
-        },
-        "observability": {
-            "logging": {"level": "INFO"},
-        },
-    })
+        }
+    )
 
 
 def test_fetch_all_history_override(base_cfg):

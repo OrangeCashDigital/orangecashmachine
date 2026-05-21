@@ -43,8 +43,10 @@ from typing import NamedTuple
 
 from loguru import logger
 
-from market_data.infrastructure.storage.iceberg.catalog import get_catalog, ensure_bronze_table
-
+from market_data.infrastructure.storage.iceberg.catalog import (
+    get_catalog,
+    ensure_bronze_table,
+)
 
 # =============================================================================
 # Constantes

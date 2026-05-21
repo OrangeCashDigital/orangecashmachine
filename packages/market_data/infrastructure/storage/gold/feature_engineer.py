@@ -36,7 +36,9 @@ import warnings
 
 # Columnas que el caller podría referenciar — re-exportadas para no romper
 # código que hace `from feature_engineer import FEATURE_COLUMNS`.
-from market_data.infrastructure.storage.gold.transformer import FEATURE_COLUMNS, VERSION as _GT_VERSION  # noqa: F401
+from market_data.infrastructure.storage.gold.transformer import (
+    VERSION as _GT_VERSION,
+)  # noqa: F401
 
 _DEPRECATED_MSG = (
     "FeatureEngineer está DEPRECATED desde v2.0.0. "

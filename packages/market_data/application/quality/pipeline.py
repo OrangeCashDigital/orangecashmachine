@@ -73,7 +73,6 @@ from market_data.domain.policies.data_quality_policy import (
 # DataQualityChecker: NO importar aquí — pipeline usa self._checker_factory (DIP)
 from market_data.application.quality.data_quality import DataQualityReport
 
-
 # ===========================================================================
 # Resultado del pipeline
 # ===========================================================================
@@ -383,6 +382,7 @@ class _NullAnomalyRegistry:
     def wipe(self) -> None:
         """Null: no-op."""
         pass
+
 
 def _null_registry() -> _NullAnomalyRegistry:
     """Factoría del null object — evita singleton mutable compartido."""

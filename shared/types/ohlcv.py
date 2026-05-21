@@ -34,6 +34,7 @@ Diseño
 
 Principios: DDD · SSOT · Fail-Fast · SOLID · KISS
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -71,15 +72,15 @@ class OHLCVBar:
     Útil para dedup en ingesta y reconciliación Silver.
     """
 
-    exchange:     str
-    symbol:       str
-    timeframe:    Timeframe
-    timestamp:    datetime
-    open:         float
-    high:         float
-    low:          float
-    close:        float
-    volume:       float
+    exchange: str
+    symbol: str
+    timeframe: Timeframe
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
     quality_flag: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -91,27 +92,21 @@ class OHLCVBar:
         if not self.symbol:
             raise ValueError("OHLCVBar.symbol no puede estar vacío")
         if not isinstance(self.timeframe, Timeframe):
-            raise TypeError(
-                f"OHLCVBar.timeframe debe ser Timeframe, recibido: {type(self.timeframe)}"
-            )
+            raise TypeError(f"OHLCVBar.timeframe debe ser Timeframe, recibido: {type(self.timeframe)}")
 
         # ── Timestamp tz-aware ────────────────────────────────────────────────
         if self.timestamp.tzinfo is None:
-            raise ValueError(
-                f"OHLCVBar.timestamp debe ser tz-aware (UTC), recibido naive: {self.timestamp}"
-            )
+            raise ValueError(f"OHLCVBar.timestamp debe ser tz-aware (UTC), recibido naive: {self.timestamp}")
 
         # ── Precios positivos ─────────────────────────────────────────────────
         for field_name, value in (
-            ("open",  self.open),
-            ("high",  self.high),
-            ("low",   self.low),
+            ("open", self.open),
+            ("high", self.high),
+            ("low", self.low),
             ("close", self.close),
         ):
             if value <= 0:
-                raise ValueError(
-                    f"OHLCVBar.{field_name} debe ser > 0, recibido: {value}"
-                )
+                raise ValueError(f"OHLCVBar.{field_name} debe ser > 0, recibido: {value}")
 
         # ── Coherencia OHLC — invariante matemática de mercado ────────────────
         if not (self.low <= self.open <= self.high):
@@ -127,17 +122,15 @@ class OHLCVBar:
 
         # ── Volumen no negativo ───────────────────────────────────────────────
         if self.volume < 0:
-            raise ValueError(
-                f"OHLCVBar.volume debe ser >= 0, recibido: {self.volume}"
-            )
+            raise ValueError(f"OHLCVBar.volume debe ser >= 0, recibido: {self.volume}")
 
         # ── quality_flag — valores aceptados ──────────────────────────────────
         if self.quality_flag is not None and self.quality_flag not in (
-            "clean", "suspect"
+            "clean",
+            "suspect",
         ):
             raise ValueError(
-                f"OHLCVBar.quality_flag debe ser 'clean', 'suspect' o None, "
-                f"recibido: {self.quality_flag!r}"
+                f"OHLCVBar.quality_flag debe ser 'clean', 'suspect' o None, recibido: {self.quality_flag!r}"
             )
 
     # ------------------------------------------------------------------

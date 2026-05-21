@@ -44,8 +44,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-
-_DB_PATH    = Path("logs/run_registry.db")
+_DB_PATH = Path("logs/run_registry.db")
 _JSONL_PATH = Path("logs/run_registry.jsonl")
 
 _DDL = """
@@ -76,21 +75,21 @@ def _ensure_db() -> sqlite3.Connection:
 
 
 def _make_run_id() -> str:
-    ts  = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
     uid = uuid.uuid4().hex[:8]
     return f"{ts}-{uid}"
 
 
 def record_run(
     *,
-    env:         str,
-    git_hash:    str,
+    env: str,
+    git_hash: str,
     config_hash: str,
-    exchanges:   List[str],
-    result:      str,
-    duration_s:  float,
-    run_id:      Optional[str] = None,
-    extra:       Optional[dict] = None,
+    exchanges: List[str],
+    result: str,
+    duration_s: float,
+    run_id: Optional[str] = None,
+    extra: Optional[dict] = None,
 ) -> str:
     """Persiste metadata de un run.
 
@@ -100,9 +99,9 @@ def record_run(
     if run_id is None:
         run_id = _make_run_id()
 
-    timestamp  = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     duration_r = round(duration_s, 3)
-    exc_json   = json.dumps(exchanges)
+    exc_json = json.dumps(exchanges)
     extra_json = json.dumps(extra) if extra else None
 
     # ── SQLite (primario) ────────────────────────────────────────────────
@@ -115,7 +114,17 @@ def record_run(
               (run_id, timestamp, env, git_hash, config_hash, exchanges, result, duration_s, extra)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (run_id, timestamp, env, git_hash, config_hash, exc_json, result, duration_r, extra_json),
+            (
+                run_id,
+                timestamp,
+                env,
+                git_hash,
+                config_hash,
+                exc_json,
+                result,
+                duration_r,
+                extra_json,
+            ),
         )
         conn.commit()
         conn.close()
@@ -123,19 +132,21 @@ def record_run(
     except Exception as exc:
         logger.warning(
             "run_registry.record_run | sqlite_failed run_id={} exc_type={} exc={}",
-            run_id, type(exc).__name__, exc,
+            run_id,
+            type(exc).__name__,
+            exc,
         )
 
     # ── JSONL (fallback + grep-ability) ─────────────────────────────────
     record: Dict[str, Any] = {
-        "run_id":      run_id,
-        "timestamp":   timestamp,
-        "env":         env,
-        "git_hash":    git_hash,
+        "run_id": run_id,
+        "timestamp": timestamp,
+        "env": env,
+        "git_hash": git_hash,
         "config_hash": config_hash,
-        "exchanges":   exchanges,
-        "result":      result,
-        "duration_s":  duration_r,
+        "exchanges": exchanges,
+        "result": result,
+        "duration_s": duration_r,
     }
     if extra:
         record["extra"] = extra
@@ -149,7 +160,9 @@ def record_run(
     except Exception as exc:
         logger.error(
             "run_registry.record_run | jsonl_failed run_id={} exc_type={} exc={} audit_loss=True",
-            run_id, type(exc).__name__, exc,
+            run_id,
+            type(exc).__name__,
+            exc,
         )
 
     return run_id
@@ -157,9 +170,9 @@ def record_run(
 
 def query_runs(
     *,
-    env:    Optional[str] = None,
+    env: Optional[str] = None,
     result: Optional[str] = None,
-    limit:  int           = 20,
+    limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """Consulta runs recientes desde SQLite.
 
@@ -202,7 +215,8 @@ def query_runs(
     except Exception as exc:
         logger.warning(
             "run_registry.query_runs | failed exc_type={} exc={}",
-            type(exc).__name__, exc,
+            type(exc).__name__,
+            exc,
         )
         return []
 

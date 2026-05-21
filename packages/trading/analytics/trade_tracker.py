@@ -29,6 +29,7 @@ SafeOps
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 import threading
@@ -51,7 +52,7 @@ class TradeTracker:
 
     def __init__(self, exchange: str = "bybit") -> None:
         self._exchange = exchange
-        self._lock     = threading.Lock()
+        self._lock = threading.Lock()
 
         # symbol → Order de apertura (BUY fill pendiente de cierre)
         self._open_positions: dict[str, Order] = {}
@@ -112,9 +113,9 @@ class TradeTracker:
         try:
             with self._lock:
                 return {
-                    "closed_trades":   len(self._closed),
-                    "open_positions":  len(self._open_positions),
-                    "open_symbols":    list(self._open_positions.keys()),
+                    "closed_trades": len(self._closed),
+                    "open_positions": len(self._open_positions),
+                    "open_symbols": list(self._open_positions.keys()),
                 }
         except Exception:
             return {"closed_trades": 0, "open_positions": 0, "open_symbols": []}
@@ -144,8 +145,10 @@ class TradeTracker:
             self._open_positions[order.symbol] = order
             self._log.debug(
                 "Posición abierta | {} {} @ {:.4f} size={:.1%}",
-                order.symbol, order.order_id,
-                order.fill_price, order.size_pct,
+                order.symbol,
+                order.order_id,
+                order.fill_price,
+                order.size_pct,
             )
 
     def _register_close(self, order: Order) -> None:
@@ -156,20 +159,21 @@ class TradeTracker:
         if entry_order is None:
             self._log.warning(
                 "SELL sin BUY correspondiente | {} {} — ignorado",
-                order.symbol, order.order_id,
+                order.symbol,
+                order.order_id,
             )
             return
 
         trade = TradeRecord.close(
-            trade_id    = entry_order.order_id,
-            symbol      = order.symbol,
-            exchange    = self._exchange,
-            timeframe   = entry_order.signal.timeframe,
-            entry_price = entry_order.fill_price,
-            exit_price  = order.fill_price,
-            size_pct    = entry_order.size_pct,
-            entry_at    = entry_order.fill_timestamp,
-            exit_at     = order.fill_timestamp,
+            trade_id=entry_order.order_id,
+            symbol=order.symbol,
+            exchange=self._exchange,
+            timeframe=entry_order.signal.timeframe,
+            entry_price=entry_order.fill_price,
+            exit_price=order.fill_price,
+            size_pct=entry_order.size_pct,
+            entry_at=entry_order.fill_timestamp,
+            exit_at=order.fill_timestamp,
         )
 
         with self._lock:
@@ -177,6 +181,9 @@ class TradeTracker:
 
         self._log.info(
             "Trade cerrado | {} pnl={:+.2%} entry={:.4f} exit={:.4f} dur={:.0f}s",
-            trade.trade_id, trade.pnl_pct,
-            trade.entry_price, trade.exit_price, trade.duration_s,
+            trade.trade_id,
+            trade.pnl_pct,
+            trade.entry_price,
+            trade.exit_price,
+            trade.duration_s,
         )

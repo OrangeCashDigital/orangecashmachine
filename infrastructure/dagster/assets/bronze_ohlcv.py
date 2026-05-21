@@ -35,6 +35,7 @@ SafeOps
 
 Principios: SRP · OCP · DIP · SafeOps · SSOT
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -47,12 +48,10 @@ from dagster import Output, asset
 from infrastructure.dagster.resources import OCMResource
 from market_data.application import PipelineOrchestrator, PipelineRequest
 
-
-
-
 # ==============================================================================
 # Helper: ejecución async segura desde threads Dagster
 # ==============================================================================
+
 
 def _run_async(coro: Coroutine[Any, Any, Any]) -> Any:
     """
@@ -73,9 +72,11 @@ def _run_async(coro: Coroutine[Any, Any, Any]) -> Any:
         # No hay loop activo — camino estándar para Dagster threaded
         return asyncio.run(coro)
 
+
 # ==============================================================================
 # Factory: genera un asset por (exchange_name, market_type)
 # ==============================================================================
+
 
 def make_bronze_ohlcv_asset(exchange_name: str, market_type: str):
     """
@@ -86,21 +87,21 @@ def make_bronze_ohlcv_asset(exchange_name: str, market_type: str):
     asset_name = f"bronze_ohlcv_{exchange_name}_{market_type}"
 
     @asset(
-        name        = asset_name,
-        group_name  = "bronze",
-        description = (
+        name=asset_name,
+        group_name="bronze",
+        description=(
             f"OHLCV ingesta {market_type} desde {exchange_name}. "
             f"PipelineOrchestrator → OHLCVPipeline → Bronze → Silver."
         ),
-        tags        = {
+        tags={
             "dagster/concurrency_key": "bronze_ingestion",
-            "exchange":               exchange_name,
-            "market_type":            market_type,
-        },
-        metadata    = {
-            "exchange":    exchange_name,
+            "exchange": exchange_name,
             "market_type": market_type,
-            "layer":       "bronze",
+        },
+        metadata={
+            "exchange": exchange_name,
+            "market_type": market_type,
+            "layer": "bronze",
         },
     )
     def _bronze_ohlcv_asset(
@@ -118,83 +119,70 @@ def make_bronze_ohlcv_asset(exchange_name: str, market_type: str):
         4. Retornar Output con metadata de linaje.
         """
         runtime_ctx = ocm.runtime_context
-        app_cfg     = runtime_ctx.app_config
-        exc_cfg     = app_cfg.get_exchange(exchange_name)
+        app_cfg = runtime_ctx.app_config
+        exc_cfg = app_cfg.get_exchange(exchange_name)
 
         # Fail-Fast: exchange no configurado → falla antes de conectar
         if exc_cfg is None:
             raise ValueError(
-                f"Exchange '{exchange_name}' no encontrado en AppConfig. "
-                f"Exchanges activos: {app_cfg.exchange_names}"
+                f"Exchange '{exchange_name}' no encontrado en AppConfig. Exchanges activos: {app_cfg.exchange_names}"
             )
 
-        symbols = (
-            exc_cfg.markets.spot_symbols
-            if market_type == "spot"
-            else exc_cfg.markets.futures_symbols
-        )
+        symbols = exc_cfg.markets.spot_symbols if market_type == "spot" else exc_cfg.markets.futures_symbols
 
         if not symbols:
-            context.log.warning(
-                f"No hay símbolos para {exchange_name}/{market_type} — skip"
-            )
+            context.log.warning(f"No hay símbolos para {exchange_name}/{market_type} — skip")
             yield Output(
-                value    = {"rows": 0, "pairs": 0, "status": "SKIPPED"},
-                metadata = {"rows_written": 0, "pairs_ok": 0, "status": "SKIPPED"},
+                value={"rows": 0, "pairs": 0, "status": "SKIPPED"},
+                metadata={"rows_written": 0, "pairs_ok": 0, "status": "SKIPPED"},
             )
             return
 
-        context.log.info(
-            f"Iniciando ingesta | exchange={exchange_name} "
-            f"market={market_type} symbols={symbols}"
-        )
+        context.log.info(f"Iniciando ingesta | exchange={exchange_name} market={market_type} symbols={symbols}")
 
         request = PipelineRequest(
-            exchange           = exchange_name,
-            market_type        = market_type,
-            pipeline           = "ohlcv",
-            mode               = "incremental",
-            credentials        = exc_cfg.ccxt_credentials(),
-            resilience         = exc_cfg.resilience,
-            symbols            = symbols,
-            timeframes         = app_cfg.pipeline.historical.timeframes,
-            start_date         = app_cfg.pipeline.historical.start_date,
-            auto_lookback_days = app_cfg.pipeline.historical.auto_lookback_days,
-            run_id             = runtime_ctx.run_id,
-            dry_run            = app_cfg.safety.dry_run,
+            exchange=exchange_name,
+            market_type=market_type,
+            pipeline="ohlcv",
+            mode="incremental",
+            credentials=exc_cfg.ccxt_credentials(),
+            resilience=exc_cfg.resilience,
+            symbols=symbols,
+            timeframes=app_cfg.pipeline.historical.timeframes,
+            start_date=app_cfg.pipeline.historical.start_date,
+            auto_lookback_days=app_cfg.pipeline.historical.auto_lookback_days,
+            run_id=runtime_ctx.run_id,
+            dry_run=app_cfg.safety.dry_run,
         )
 
         orchestrator = PipelineOrchestrator()
-        summary      = _run_async(orchestrator.run(request))
+        summary = _run_async(orchestrator.run(request))
 
         if summary is None:
             raise RuntimeError(
-                f"PipelineOrchestrator retornó None — ver logs | "
-                f"exchange={exchange_name} market={market_type}"
+                f"PipelineOrchestrator retornó None — ver logs | exchange={exchange_name} market={market_type}"
             )
 
         metadata = {
             "rows_written": summary.total_rows,
-            "pairs_ok":     summary.succeeded,
+            "pairs_ok": summary.succeeded,
             "pairs_failed": summary.failed,
-            "duration_ms":  summary.duration_ms,
-            "status":       summary.status,
-            "exchange":     exchange_name,
-            "market_type":  market_type,
-            "run_id":       runtime_ctx.run_id,
+            "duration_ms": summary.duration_ms,
+            "status": summary.status,
+            "exchange": exchange_name,
+            "market_type": market_type,
+            "run_id": runtime_ctx.run_id,
         }
         context.log.info(f"Ingesta completada | {metadata}")
 
         if summary.status == "failed":
             raise RuntimeError(
-                f"Pipeline falló completamente | "
-                f"exchange={exchange_name} market={market_type} "
-                f"failed={summary.failed}"
+                f"Pipeline falló completamente | exchange={exchange_name} market={market_type} failed={summary.failed}"
             )
 
         yield Output(
-            value    = metadata,
-            metadata = {k: str(v) for k, v in metadata.items()},
+            value=metadata,
+            metadata={k: str(v) for k, v in metadata.items()},
         )
 
     return _bronze_ohlcv_asset
@@ -205,8 +193,8 @@ def make_bronze_ohlcv_asset(exchange_name: str, market_type: str):
 # Añadir exchange: una línea aquí + una en dagster_defs.py.
 # ==============================================================================
 
-bronze_ohlcv_kucoin_spot        = make_bronze_ohlcv_asset("kucoin",        "spot")
-bronze_ohlcv_bybit_spot         = make_bronze_ohlcv_asset("bybit",         "spot")
+bronze_ohlcv_kucoin_spot = make_bronze_ohlcv_asset("kucoin", "spot")
+bronze_ohlcv_bybit_spot = make_bronze_ohlcv_asset("bybit", "spot")
 bronze_ohlcv_kucoinfutures_swap = make_bronze_ohlcv_asset("kucoinfutures", "futures")
 
 BRONZE_OHLCV_ASSETS = [

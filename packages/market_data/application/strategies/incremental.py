@@ -37,7 +37,6 @@ class IncrementalStrategy(StrategyMixin):
         ctx: PipelineContext,
         result: PairResult,
     ) -> None:
-
         logger.debug(
             "Incremental [{}/{}] | exchange={} symbol={} timeframe={}",
             idx,

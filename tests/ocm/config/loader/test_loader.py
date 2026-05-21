@@ -6,8 +6,8 @@ Suite de tests para ocm/config/loader/*.
 Estado: stub — tests pendientes de implementar contra el modulo real.
 Los tests de env_overrides ya estan en test_env_overrides.py.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 
 # Placeholder — expandir cuando se confirmen las APIs publicas de loader

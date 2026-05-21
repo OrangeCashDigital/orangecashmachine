@@ -23,6 +23,7 @@ SafeOps
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 import threading
@@ -31,13 +32,15 @@ from typing import Optional
 
 from loguru import logger
 
-from shared.contracts.boundaries import SignalProtocol  # DIP — risk depende de abstraccion
+from shared.contracts.boundaries import (
+    SignalProtocol,
+)  # DIP — risk depende de abstraccion
 from trading.risk.models import RiskConfig
-
 
 # ---------------------------------------------------------------------------
 # Domain types
 # ---------------------------------------------------------------------------
+
 
 class RiskViolation(Exception):
     """Señal rechazada por riesgo — alternativa de excepción al patrón RiskDecision."""
@@ -50,9 +53,10 @@ class RiskDecision:
 
     Creado por RiskManager, consumido por OMS.
     """
-    approved:  bool
-    reason:    str   = ""
-    size_pct:  float = 0.0    # % del capital a asignar (0.0 si rechazado)
+
+    approved: bool
+    reason: str = ""
+    size_pct: float = 0.0  # % del capital a asignar (0.0 si rechazado)
 
     @property
     def rejected(self) -> bool:
@@ -67,6 +71,7 @@ class RiskDecision:
 # RiskManager
 # ---------------------------------------------------------------------------
 
+
 class RiskManager:
     """
     Valida señales contra límites de riesgo y estado de posiciones.
@@ -79,19 +84,19 @@ class RiskManager:
 
     def __init__(
         self,
-        config:      Optional[RiskConfig] = None,
+        config: Optional[RiskConfig] = None,
         capital_usd: float = 10_000.0,
     ) -> None:
-        self._config      = config or RiskConfig()
+        self._config = config or RiskConfig()
         self._capital_usd = capital_usd
-        self._lock        = threading.Lock()
+        self._lock = threading.Lock()
 
         # Estado mutable — SIEMPRE mutado bajo _lock
-        self._open_positions:   int   = 0
-        self._daily_pnl_pct:    float = 0.0
-        self._total_pnl_pct:    float = 0.0
-        self._halted:           bool  = False
-        self._halt_reason:      str   = ""
+        self._open_positions: int = 0
+        self._daily_pnl_pct: float = 0.0
+        self._total_pnl_pct: float = 0.0
+        self._halted: bool = False
+        self._halt_reason: str = ""
 
         self._log = logger.bind(component="RiskManager")
 
@@ -156,8 +161,8 @@ class RiskManager:
         with self._lock:
             self._daily_pnl_pct = 0.0
             self._total_pnl_pct = 0.0
-            self._halted        = False
-            self._halt_reason   = ""
+            self._halted = False
+            self._halt_reason = ""
             self._log.info("RiskManager: contadores reseteados")
 
     @property
@@ -173,12 +178,12 @@ class RiskManager:
         try:
             with self._lock:
                 return {
-                    "halted":           self._halted,
-                    "halt_reason":      self._halt_reason,
-                    "open_positions":   self._open_positions,
-                    "daily_pnl_pct":    round(self._daily_pnl_pct, 4),
-                    "total_pnl_pct":    round(self._total_pnl_pct, 4),
-                    "capital_usd":      self._capital_usd,
+                    "halted": self._halted,
+                    "halt_reason": self._halt_reason,
+                    "open_positions": self._open_positions,
+                    "daily_pnl_pct": round(self._daily_pnl_pct, 4),
+                    "total_pnl_pct": round(self._total_pnl_pct, 4),
+                    "capital_usd": self._capital_usd,
                 }
         except Exception:
             return {"halted": False, "halt_reason": "", "open_positions": 0}
@@ -194,7 +199,7 @@ class RiskManager:
         with self._lock:
             halted = self._halted
             halt_r = self._halt_reason
-            opens  = self._open_positions
+            opens = self._open_positions
 
         # Checks de solo-lectura — fuera del lock (no mutan estado)
         # ----------------------------------------------------------------
@@ -235,7 +240,7 @@ class RiskManager:
                     return RiskDecision(False, reason)
 
         # 7 — sizing
-        size_pct  = cfg.position.max_position_pct
+        size_pct = cfg.position.max_position_pct
         order_usd = self._capital_usd * size_pct
         if order_usd < cfg.order.min_order_usd:
             return RiskDecision(
@@ -255,7 +260,7 @@ class RiskManager:
         DRY: único punto de mutación de _halted/_halt_reason.
         """
         if not self._halted:
-            self._halted      = True
+            self._halted = True
             self._halt_reason = reason
             self._log.warning("HALT activado | reason={}", reason)
 

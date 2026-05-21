@@ -11,6 +11,7 @@ Regla: este __init__.py es el único punto de importación autorizado
 para callers externos. Nunca importar desde los submódulos directamente.
 SSOT · OCP · Fail-Fast en import time.
 """
+
 from __future__ import annotations
 
 from ocm.config.structured.pipeline import (

@@ -20,17 +20,17 @@ import pytest
 import ocm.runtime.registry as rr
 import ocm.runtime.registry as _rr_impl  # SSOT: constantes viven en el módulo canónico
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def registry_paths(tmp_path, monkeypatch):
     """Redirige _DB_PATH y _JSONL_PATH a tmp_path para aislar tests."""
-    db   = tmp_path / "run_registry.db"
+    db = tmp_path / "run_registry.db"
     jsonl = tmp_path / "run_registry.jsonl"
-    monkeypatch.setattr(_rr_impl, "_DB_PATH",    db)
+    monkeypatch.setattr(_rr_impl, "_DB_PATH", db)
     monkeypatch.setattr(_rr_impl, "_JSONL_PATH", jsonl)
     return db, jsonl
 
@@ -54,6 +54,7 @@ def _run(**overrides):
 # ---------------------------------------------------------------------------
 # record_run — happy path
 # ---------------------------------------------------------------------------
+
 
 def test_record_run_returns_run_id(registry_paths):
     run_id = _run()
@@ -98,6 +99,7 @@ def test_record_run_extra_field(registry_paths):
 # record_run — SQLite falla, JSONL recibe _sqlite_failed
 # ---------------------------------------------------------------------------
 
+
 def test_record_run_sqlite_fail_falls_back_to_jsonl(registry_paths, caplog):
     _, jsonl = registry_paths
     with patch.object(_rr_impl, "_ensure_db", side_effect=PermissionError("no write")):
@@ -110,6 +112,7 @@ def test_record_run_sqlite_fail_falls_back_to_jsonl(registry_paths, caplog):
 
 def test_record_run_sqlite_fail_logs_warning(registry_paths, caplog):
     import logging
+
     with patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")):
         with caplog.at_level(logging.WARNING):
             _run()
@@ -122,6 +125,7 @@ def test_record_run_sqlite_fail_logs_warning(registry_paths, caplog):
 # record_run — ambos stores fallan: SafeOps, no lanza
 # ---------------------------------------------------------------------------
 
+
 def test_record_run_both_stores_fail_does_not_raise(registry_paths):
     with patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")):
         with patch("builtins.open", side_effect=OSError("no space left")):
@@ -132,6 +136,7 @@ def test_record_run_both_stores_fail_does_not_raise(registry_paths):
 # ---------------------------------------------------------------------------
 # query_runs — happy path
 # ---------------------------------------------------------------------------
+
 
 def test_query_runs_empty_when_no_db(registry_paths):
     db, _ = registry_paths
@@ -179,6 +184,7 @@ def test_query_runs_exchanges_deserialized(registry_paths):
 # ---------------------------------------------------------------------------
 # query_runs — falla SQLite en tiempo de query: SafeOps
 # ---------------------------------------------------------------------------
+
 
 def test_query_runs_sqlite_error_returns_empty(registry_paths):
     _run()

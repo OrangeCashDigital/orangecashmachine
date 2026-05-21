@@ -27,7 +27,6 @@ from typing import Optional, Protocol, runtime_checkable
 
 import pandas as pd
 
-
 # =========================================================================== #
 # OHLCV — Silver layer                                                        #
 # =========================================================================== #

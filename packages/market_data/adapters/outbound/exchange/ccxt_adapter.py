@@ -119,7 +119,6 @@ class CCXTAdapter(ExchangeAdapter):
         config: Optional["ExchangeConfig"] = None,
         default_type: Optional[str] = None,
     ) -> None:
-
         self._exchange_id = self._resolve_exchange_id(exchange_id, config)
         self._default_type = default_type or self._resolve_default_type(config)
 
@@ -166,7 +165,9 @@ class CCXTAdapter(ExchangeAdapter):
         )
         # Registrar en registry de proceso para que get_breaker_state() funcione.
         # Idempotente: sobreescribe si ya existe (misma instancia en reconnect).
-        from market_data.adapters.outbound.exchange.resilience import register_resilience_layer
+        from market_data.adapters.outbound.exchange.resilience import (
+            register_resilience_layer,
+        )
 
         register_resilience_layer(self._exchange_id, self._resilience)
 

@@ -24,6 +24,7 @@ Cuando usar PaperBot vs TradingEngine directamente
 
 Principios: SOLID (SRP, DIP, OCP) · KISS · DRY · SafeOps
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -37,10 +38,10 @@ from trading.execution.order import Order
 from trading.risk.models import RiskConfig
 from trading.strategies.base import BaseStrategy
 
-
 # =============================================================================
 # Value object — orden simulada observable
 # =============================================================================
+
 
 class PaperOrder:
     """
@@ -57,26 +58,25 @@ class PaperOrder:
 
     def __init__(
         self,
-        symbol:    str,
-        side:      str,
-        price:     float,
-        size_pct:  float,
+        symbol: str,
+        side: str,
+        price: float,
+        size_pct: float,
         timestamp: datetime,
-        signal:    SignalProtocol,
-        reason:    str = "",
+        signal: SignalProtocol,
+        reason: str = "",
     ) -> None:
-        self.symbol    = symbol
-        self.side      = side
-        self.price     = price
-        self.size_pct  = size_pct
+        self.symbol = symbol
+        self.side = side
+        self.price = price
+        self.size_pct = size_pct
         self.timestamp = timestamp
-        self.signal    = signal
-        self.reason    = reason
+        self.signal = signal
+        self.reason = reason
 
     def log(self) -> None:
         logger.info(
-            "[PAPER] {} {} {} @ {:.2f} | size={:.1%} capital"
-            " | confidence={:.0%} | {}",
+            "[PAPER] {} {} {} @ {:.2f} | size={:.1%} capital | confidence={:.0%} | {}",
             self.side.upper(),
             self.symbol,
             self.signal.timeframe,
@@ -93,12 +93,12 @@ class PaperOrder:
         Punto único de conversión OMS → API observable de PaperBot.
         """
         return cls(
-            symbol    = order.symbol,
-            side      = order.side.value,
-            price     = order.fill_price,
-            size_pct  = order.size_pct,
-            timestamp = order.fill_timestamp,
-            signal    = order.signal,
+            symbol=order.symbol,
+            side=order.side.value,
+            price=order.fill_price,
+            size_pct=order.size_pct,
+            timestamp=order.fill_timestamp,
+            signal=order.signal,
         )
 
     def __repr__(self) -> str:
@@ -111,6 +111,7 @@ class PaperOrder:
 # =============================================================================
 # PaperBot — facade sobre TradingEngine
 # =============================================================================
+
 
 class PaperBot:
     """
@@ -133,34 +134,34 @@ class PaperBot:
 
     def __init__(
         self,
-        strategy:    BaseStrategy,
+        strategy: BaseStrategy,
         data_source: FeatureSource,
-        risk:        Optional[RiskConfig] = None,
-        exchange:    str   = "bybit",
-        market_type: str   = "spot",
+        risk: Optional[RiskConfig] = None,
+        exchange: str = "bybit",
+        market_type: str = "spot",
         capital_usd: float = 10_000.0,
     ) -> None:
-        self.strategy    = strategy
+        self.strategy = strategy
         self.data_source = data_source
-        self.risk        = risk or RiskConfig()
-        self.exchange    = exchange
+        self.risk = risk or RiskConfig()
+        self.exchange = exchange
         self.market_type = market_type
 
         # Estado observable — append-only, nunca muta elementos existentes
         self._open_trades: list[PaperOrder] = []
-        self._order_log:   list[PaperOrder] = []
+        self._order_log: list[PaperOrder] = []
 
         # Engine interno — toda la lógica de negocio vive aquí.
         # on_fill callback conecta OMS → estado observable de PaperBot.
         self._engine = TradingEngine.build_paper(
-            strategy_name = strategy.name,
-            strategy_cfg  = self._strategy_cfg(strategy),
-            data_source   = data_source,
-            risk_config   = self.risk,
-            capital_usd   = capital_usd,
-            exchange      = exchange,
-            market_type   = market_type,
-            on_fill       = self._on_fill,
+            strategy_name=strategy.name,
+            strategy_cfg=self._strategy_cfg(strategy),
+            data_source=data_source,
+            risk_config=self.risk,
+            capital_usd=capital_usd,
+            exchange=exchange,
+            market_type=market_type,
+            on_fill=self._on_fill,
         )
         self._log = logger.bind(component="PaperBot", exchange=exchange)
 
@@ -192,7 +193,9 @@ class PaperBot:
             self._open_trades.remove(order)
             self._log.info(
                 "CLOSE {} {} @ {:.4f} | trades_open={}",
-                order.symbol, order.side, order.price,
+                order.symbol,
+                order.side,
+                order.price,
                 len(self._open_trades),
             )
 
@@ -210,9 +213,8 @@ class PaperBot:
         """Estado observable. SafeOps: nunca lanza."""
         return {
             "total_signals_acted": len(self._order_log),
-            "open_trades":         len(self._open_trades),
-            "last_order":          self._order_log[-1].timestamp.isoformat()
-                                   if self._order_log else None,
+            "open_trades": len(self._open_trades),
+            "last_order": (self._order_log[-1].timestamp.isoformat() if self._order_log else None),
         }
 
     # =========================================================================
@@ -237,19 +239,16 @@ class PaperBot:
             # Ya no accedemos a self._engine._oms._risk (3 niveles privados).
             decision = self._engine.validate_signal(signal)
             if decision.rejected:
-                self._log.debug(
-                    "_evaluate_signal rechazada | reason={}", decision.reason
-                )
+                self._log.debug("_evaluate_signal rechazada | reason={}", decision.reason)
                 return None
             return PaperOrder(
-                symbol    = signal.symbol,
-                side      = signal.direction,
-                price     = signal.price,
-                size_pct  = decision.size_pct,
-                timestamp = getattr(signal, "timestamp", None)
-                            or datetime.now(tz=timezone.utc),
-                signal    = signal,
-                reason    = decision.reason,
+                symbol=signal.symbol,
+                side=signal.direction,
+                price=signal.price,
+                size_pct=decision.size_pct,
+                timestamp=getattr(signal, "timestamp", None) or datetime.now(tz=timezone.utc),
+                signal=signal,
+                reason=decision.reason,
             )
         except Exception as exc:
             self._log.error("_evaluate_signal error | {}", exc)

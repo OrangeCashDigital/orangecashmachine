@@ -31,6 +31,7 @@ SafeOps
 
 Principios: SRP · DIP · OCP · SafeOps · KISS · DRY
 """
+
 from __future__ import annotations
 
 import json
@@ -42,23 +43,25 @@ from loguru import logger
 
 from portfolio.models.position import PositionSnapshot
 
-
 # ---------------------------------------------------------------------------
 # Serialización — SSOT: JSON bidireccional para PositionSnapshot
 # ---------------------------------------------------------------------------
 
+
 def _serialize(pos: PositionSnapshot) -> str:
     """PositionSnapshot → JSON string. Fail-fast ante campos inesperados."""
-    return json.dumps({
-        "order_id":      pos.order_id,
-        "symbol":        pos.symbol,
-        "exchange":      pos.exchange,
-        "side":          pos.side,
-        "entry_price":   pos.entry_price,
-        "size_pct":      pos.size_pct,
-        "entry_at":      pos.entry_at.isoformat(),
-        "current_price": pos.current_price,
-    })
+    return json.dumps(
+        {
+            "order_id": pos.order_id,
+            "symbol": pos.symbol,
+            "exchange": pos.exchange,
+            "side": pos.side,
+            "entry_price": pos.entry_price,
+            "size_pct": pos.size_pct,
+            "entry_at": pos.entry_at.isoformat(),
+            "current_price": pos.current_price,
+        }
+    )
 
 
 def _deserialize(raw: str) -> Optional[PositionSnapshot]:
@@ -70,14 +73,14 @@ def _deserialize(raw: str) -> Optional[PositionSnapshot]:
     try:
         data = json.loads(raw)
         return PositionSnapshot(
-            order_id      = data["order_id"],
-            symbol        = data["symbol"],
-            exchange      = data["exchange"],
-            side          = data["side"],
-            entry_price   = float(data["entry_price"]),
-            size_pct      = float(data["size_pct"]),
-            entry_at      = datetime.fromisoformat(data["entry_at"]),
-            current_price = data.get("current_price"),
+            order_id=data["order_id"],
+            symbol=data["symbol"],
+            exchange=data["exchange"],
+            side=data["side"],
+            entry_price=float(data["entry_price"]),
+            size_pct=float(data["size_pct"]),
+            entry_at=datetime.fromisoformat(data["entry_at"]),
+            current_price=data.get("current_price"),
         )
     except Exception as exc:
         logger.warning("RedisPositionStore: deserialización fallida | {}", exc)
@@ -87,6 +90,7 @@ def _deserialize(raw: str) -> Optional[PositionSnapshot]:
 # ---------------------------------------------------------------------------
 # RedisPositionStore
 # ---------------------------------------------------------------------------
+
 
 class RedisPositionStore:
     """
@@ -102,21 +106,21 @@ class RedisPositionStore:
     ttl_seconds  : int         — TTL por posición (default: 7 días)
     """
 
-    _TTL_DEFAULT = 7 * 24 * 3600   # 7 días en segundos
+    _TTL_DEFAULT = 7 * 24 * 3600  # 7 días en segundos
 
     def __init__(
         self,
-        redis_client,               # redis.Redis — tipado débil para no forzar import
-        exchange:    str,
+        redis_client,  # redis.Redis — tipado débil para no forzar import
+        exchange: str,
         ttl_seconds: int = _TTL_DEFAULT,
     ) -> None:
-        self._redis      = redis_client
-        self._exchange   = exchange
-        self._ttl        = ttl_seconds
-        self._lock       = threading.Lock()   # serializa operaciones multi-key
-        self._log        = logger.bind(
-            component = "RedisPositionStore",
-            exchange  = exchange,
+        self._redis = redis_client
+        self._exchange = exchange
+        self._ttl = ttl_seconds
+        self._lock = threading.Lock()  # serializa operaciones multi-key
+        self._log = logger.bind(
+            component="RedisPositionStore",
+            exchange=exchange,
         )
 
     # ------------------------------------------------------------------
@@ -246,5 +250,3 @@ class RedisPositionStore:
         except Exception:
             count = "?"
         return f"RedisPositionStore(exchange={self._exchange!r} positions={count})"
-
-

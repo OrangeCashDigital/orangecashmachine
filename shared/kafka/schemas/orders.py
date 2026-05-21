@@ -46,6 +46,7 @@ Schema version history
 
 Principios: SSOT · DDD · Fail-Fast · KISS · exactly-once awareness
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -53,8 +54,7 @@ from typing import Any, Dict, Literal
 
 from shared.kafka.schemas._base import BasePayload
 
-
-ORDER_FILLED_SCHEMA_VERSION:   int = 1
+ORDER_FILLED_SCHEMA_VERSION: int = 1
 ORDER_REJECTED_SCHEMA_VERSION: int = 1
 
 OrderSide = Literal["buy", "sell"]
@@ -67,6 +67,7 @@ class OrderSchemaVersionError(ValueError):
 # ---------------------------------------------------------------------------
 # OrderFilledPayload — orden ejecutada → orders.filled
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class OrderFilledPayload(BasePayload):
@@ -93,30 +94,33 @@ class OrderFilledPayload(BasePayload):
     signal_event_id : event_id del ApprovedSignalPayload que originó la orden
     run_id     : correlación con el run
     """
-    order_id:        str       = ""
-    exchange:        str       = ""
-    symbol:          str       = ""
-    side:            OrderSide = "buy"
-    fill_price:      float     = 0.0
-    size_pct:        float     = 0.0
-    filled_at:       str       = ""   # ISO-8601 UTC
-    signal_event_id: str       = ""
-    run_id:          str       = ""
+
+    order_id: str = ""
+    exchange: str = ""
+    symbol: str = ""
+    side: OrderSide = "buy"
+    fill_price: float = 0.0
+    size_pct: float = 0.0
+    filled_at: str = ""  # ISO-8601 UTC
+    signal_event_id: str = ""
+    run_id: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version":   ORDER_FILLED_SCHEMA_VERSION,
-            "order_id":        self.order_id,
-            "exchange":        self.exchange,
-            "symbol":          self.symbol,
-            "side":            self.side,
-            "fill_price":      self.fill_price,
-            "size_pct":        self.size_pct,
-            "filled_at":       self.filled_at,
-            "signal_event_id": self.signal_event_id,
-            "run_id":          self.run_id,
-        })
+        base.update(
+            {
+                "event_version": ORDER_FILLED_SCHEMA_VERSION,
+                "order_id": self.order_id,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "side": self.side,
+                "fill_price": self.fill_price,
+                "size_pct": self.size_pct,
+                "filled_at": self.filled_at,
+                "signal_event_id": self.signal_event_id,
+                "run_id": self.run_id,
+            }
+        )
         return base
 
     @classmethod
@@ -124,28 +128,28 @@ class OrderFilledPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != ORDER_FILLED_SCHEMA_VERSION:
             raise OrderSchemaVersionError(
-                f"OrderFilledPayload schema v{version} incompatible "
-                f"con v{ORDER_FILLED_SCHEMA_VERSION} esperada."
+                f"OrderFilledPayload schema v{version} incompatible con v{ORDER_FILLED_SCHEMA_VERSION} esperada."
             )
         return cls(
-            event_id        = str(data["event_id"]),
-            event_version   = version,
-            occurred_at     = str(data.get("occurred_at", "")),
-            order_id        = str(data["order_id"]),
-            exchange        = str(data["exchange"]),
-            symbol          = str(data["symbol"]),
-            side            = data["side"],
-            fill_price      = float(data["fill_price"]),
-            size_pct        = float(data["size_pct"]),
-            filled_at       = str(data.get("filled_at", "")),
-            signal_event_id = str(data.get("signal_event_id", "")),
-            run_id          = str(data.get("run_id", "")),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            order_id=str(data["order_id"]),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            side=data["side"],
+            fill_price=float(data["fill_price"]),
+            size_pct=float(data["size_pct"]),
+            filled_at=str(data.get("filled_at", "")),
+            signal_event_id=str(data.get("signal_event_id", "")),
+            run_id=str(data.get("run_id", "")),
         )
 
 
 # ---------------------------------------------------------------------------
 # OrderRejectedPayload — orden rechazada → orders.rejected
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class OrderRejectedPayload(BasePayload):
@@ -155,26 +159,29 @@ class OrderRejectedPayload(BasePayload):
     Publicado a: orders.rejected
     Consumido por: observability, alerting, analytics
     """
-    order_id:        str       = ""
-    exchange:        str       = ""
-    symbol:          str       = ""
-    side:            OrderSide = "buy"
-    reason:          str       = ""
-    signal_event_id: str       = ""
-    run_id:          str       = ""
+
+    order_id: str = ""
+    exchange: str = ""
+    symbol: str = ""
+    side: OrderSide = "buy"
+    reason: str = ""
+    signal_event_id: str = ""
+    run_id: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version":   ORDER_REJECTED_SCHEMA_VERSION,
-            "order_id":        self.order_id,
-            "exchange":        self.exchange,
-            "symbol":          self.symbol,
-            "side":            self.side,
-            "reason":          self.reason,
-            "signal_event_id": self.signal_event_id,
-            "run_id":          self.run_id,
-        })
+        base.update(
+            {
+                "event_version": ORDER_REJECTED_SCHEMA_VERSION,
+                "order_id": self.order_id,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "side": self.side,
+                "reason": self.reason,
+                "signal_event_id": self.signal_event_id,
+                "run_id": self.run_id,
+            }
+        )
         return base
 
     @classmethod
@@ -182,20 +189,19 @@ class OrderRejectedPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != ORDER_REJECTED_SCHEMA_VERSION:
             raise OrderSchemaVersionError(
-                f"OrderRejectedPayload schema v{version} incompatible "
-                f"con v{ORDER_REJECTED_SCHEMA_VERSION} esperada."
+                f"OrderRejectedPayload schema v{version} incompatible con v{ORDER_REJECTED_SCHEMA_VERSION} esperada."
             )
         return cls(
-            event_id        = str(data["event_id"]),
-            event_version   = version,
-            occurred_at     = str(data.get("occurred_at", "")),
-            order_id        = str(data["order_id"]),
-            exchange        = str(data["exchange"]),
-            symbol          = str(data["symbol"]),
-            side            = data["side"],
-            reason          = str(data.get("reason", "")),
-            signal_event_id = str(data.get("signal_event_id", "")),
-            run_id          = str(data.get("run_id", "")),
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            order_id=str(data["order_id"]),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            side=data["side"],
+            reason=str(data.get("reason", "")),
+            signal_event_id=str(data.get("signal_event_id", "")),
+            run_id=str(data.get("run_id", "")),
         )
 
 

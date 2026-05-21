@@ -52,7 +52,6 @@ from prometheus_client import (
     Histogram,
 )
 
-
 # ==========================================================
 # Métricas de pipeline
 # ==========================================================
@@ -318,4 +317,8 @@ def record_exchange_probe_metrics(probe) -> None:
         if probe.rate_limit_ms is not None:
             EXCHANGE_RATE_LIMIT.labels(exchange=probe.exchange).set(probe.rate_limit_ms)
     except Exception as exc:
-        _log.warning("record_exchange_probe_metrics failed | exchange={} error={}", probe.exchange, exc)
+        _log.warning(
+            "record_exchange_probe_metrics failed | exchange={} error={}",
+            probe.exchange,
+            exc,
+        )

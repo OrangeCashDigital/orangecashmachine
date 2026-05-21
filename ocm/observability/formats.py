@@ -30,7 +30,4 @@ CONSOLE: str = (
     "{message}"
 )
 
-FILE: str = (
-    "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{line} | "
-    "{extra[run_id]} | {message}"
-)
+FILE: str = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{line} | {extra[run_id]} | {message}"

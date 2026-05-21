@@ -18,39 +18,46 @@ Principios
 • Cada test verifica UNA propiedad.
 • Nombres describen el comportamiento esperado, no la implementación.
 """
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from market_data.infrastructure.storage.gold.transformer import FEATURE_COLUMNS, GoldTransformer, VERSION
-
+from market_data.infrastructure.storage.gold.transformer import (
+    FEATURE_COLUMNS,
+    GoldTransformer,
+    VERSION,
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     """DataFrame OHLCV sintético y determinista."""
     rng = np.random.default_rng(seed)
-    close  = rng.uniform(40_000, 50_000, n)
+    close = rng.uniform(40_000, 50_000, n)
     spread = rng.uniform(500, 2_000, n)
-    return pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close + rng.uniform(-200, 200, n),
-        "high":   close + spread,
-        "low":    close - spread,
-        "close":  close,
-        "volume": rng.uniform(100, 1_000, n),
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close + rng.uniform(-200, 200, n),
+            "high": close + spread,
+            "low": close - spread,
+            "close": close,
+            "volume": rng.uniform(100, 1_000, n),
+        }
+    )
 
 
 def _transform(df: pd.DataFrame, **kwargs) -> pd.DataFrame:
     """Wrapper conveniente con defaults de test."""
     return GoldTransformer.transform(
         df,
-        symbol    = kwargs.get("symbol", "BTC/USDT"),
-        timeframe = kwargs.get("timeframe", "1h"),
-        exchange  = kwargs.get("exchange", "test"),
+        symbol=kwargs.get("symbol", "BTC/USDT"),
+        timeframe=kwargs.get("timeframe", "1h"),
+        exchange=kwargs.get("exchange", "test"),
     )
 
 
@@ -60,6 +67,7 @@ def df30() -> pd.DataFrame:
 
 
 # ── Contrato de versión ───────────────────────────────────────────────────────
+
 
 def test_version_is_semver():
     parts = VERSION.split(".")
@@ -74,6 +82,7 @@ def test_feature_columns_constant_matches_computed(df30):
 
 # ── Contratos de salida ───────────────────────────────────────────────────────
 
+
 def test_transform_preserves_row_count(df30):
     result = _transform(df30)
     assert len(result) == len(df30)
@@ -87,11 +96,12 @@ def test_transform_does_not_mutate_input(df30):
 
 def test_transform_output_sorted_by_timestamp(df30):
     shuffled = df30.sample(frac=1, random_state=0).reset_index(drop=True)
-    result   = _transform(shuffled)
+    result = _transform(shuffled)
     assert result["timestamp"].is_monotonic_increasing
 
 
 # ── return_1 ─────────────────────────────────────────────────────────────────
+
 
 def test_return_1_first_row_is_nan(df30):
     result = _transform(df30)
@@ -99,7 +109,7 @@ def test_return_1_first_row_is_nan(df30):
 
 
 def test_return_1_is_pct_change_of_close(df30):
-    result   = _transform(df30)
+    result = _transform(df30)
     expected = df30.sort_values("timestamp")["close"].pct_change()
     pd.testing.assert_series_equal(
         result["return_1"].reset_index(drop=True),
@@ -110,6 +120,7 @@ def test_return_1_is_pct_change_of_close(df30):
 
 # ── log_return ────────────────────────────────────────────────────────────────
 
+
 def test_log_return_first_row_is_nan(df30):
     result = _transform(df30)
     assert pd.isna(result["log_return"].iloc[0])
@@ -117,7 +128,7 @@ def test_log_return_first_row_is_nan(df30):
 
 def test_log_return_is_log_of_close_ratio(df30):
     result = _transform(df30)
-    close  = df30.sort_values("timestamp")["close"].values
+    close = df30.sort_values("timestamp")["close"].values
     expected = np.log(close[1:] / close[:-1])
     np.testing.assert_allclose(
         result["log_return"].iloc[1:].values,
@@ -128,8 +139,9 @@ def test_log_return_is_log_of_close_ratio(df30):
 
 # ── volatility_20 ─────────────────────────────────────────────────────────────
 
+
 def test_volatility_20_nan_count_respects_min_periods(df30):
-    result    = _transform(df30)
+    result = _transform(df30)
     nan_count = result["volatility_20"].isna().sum()
     assert nan_count <= 5
 
@@ -141,6 +153,7 @@ def test_volatility_20_is_non_negative(df30):
 
 # ── high_low_spread ───────────────────────────────────────────────────────────
 
+
 def test_high_low_spread_is_non_negative(df30):
     result = _transform(df30)
     assert (result["high_low_spread"].dropna() >= 0).all()
@@ -148,7 +161,7 @@ def test_high_low_spread_is_non_negative(df30):
 
 def test_high_low_spread_formula(df30):
     result = _transform(df30)
-    s      = df30.sort_values("timestamp").reset_index(drop=True)
+    s = df30.sort_values("timestamp").reset_index(drop=True)
     expected = (s["high"] - s["low"]) / s["close"].replace(0, np.nan)
     pd.testing.assert_series_equal(
         result["high_low_spread"].reset_index(drop=True),
@@ -159,8 +172,9 @@ def test_high_low_spread_formula(df30):
 
 # ── vwap ─────────────────────────────────────────────────────────────────────
 
+
 def test_vwap_nan_count_respects_min_periods(df30):
-    result    = _transform(df30)
+    result = _transform(df30)
     nan_count = result["vwap"].isna().sum()
     assert nan_count <= 5
 
@@ -176,34 +190,35 @@ def test_vwap_is_price_weighted_not_cumulative():
     Un VWAP acumulado permanece sesgado hacia los primeros valores;
     el rolling debe reflejar el precio reciente de la ventana.
     """
-    n   = 60
+    n = 60
     rng = np.random.default_rng(7)
-    close = np.concatenate([
-        rng.uniform(900, 1_100, n // 2),
-        rng.uniform(49_000, 51_000, n // 2),
-    ])
+    close = np.concatenate(
+        [
+            rng.uniform(900, 1_100, n // 2),
+            rng.uniform(49_000, 51_000, n // 2),
+        ]
+    )
     spread = rng.uniform(10, 50, n)
-    df = pd.DataFrame({
-        "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
-        "open":   close,
-        "high":   close + spread,
-        "low":    close - spread,
-        "close":  close,
-        "volume": rng.uniform(100, 1_000, n),
-    })
+    df = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close,
+            "high": close + spread,
+            "low": close - spread,
+            "close": close,
+            "volume": rng.uniform(100, 1_000, n),
+        }
+    )
     result = GoldTransformer.transform(df, symbol="TEST", timeframe="1h", exchange="test")
     vwap_second_half = result["vwap"].iloc[40:].dropna()
-    assert (vwap_second_half > 10_000).all(), (
-        "VWAP rolling debe reflejar precio reciente, no estar anclado al inicio"
-    )
+    assert (vwap_second_half > 10_000).all(), "VWAP rolling debe reflejar precio reciente, no estar anclado al inicio"
 
 
 # ── Edge cases ────────────────────────────────────────────────────────────────
 
+
 def test_transform_returns_empty_df_when_empty():
-    result = GoldTransformer.transform(
-        pd.DataFrame(), symbol="X", timeframe="1h", exchange="test"
-    )
+    result = GoldTransformer.transform(pd.DataFrame(), symbol="X", timeframe="1h", exchange="test")
     assert result.empty
 
 
@@ -228,6 +243,6 @@ def test_transform_handles_zero_close():
 
 
 def test_no_infinities_in_output(df30):
-    result  = _transform(df30)
+    result = _transform(df30)
     numeric = result.select_dtypes(include="number")
     assert not np.isinf(numeric.values).any()

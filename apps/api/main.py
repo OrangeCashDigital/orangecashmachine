@@ -32,10 +32,10 @@ from api.middleware.rate_limit import RateLimitMiddleware
 from api.routers import health
 from api.routers.health import set_startup_time
 
-
 # ---------------------------------------------------------------------------
 # Lifespan — startup / shutdown ordenados
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,7 +55,10 @@ async def lifespan(app: FastAPI):
     # ── Startup ───────────────────────────────────────────────────────
     logger.info(
         "api_startup | env={} host={}:{} rate_limit_rpm={}",
-        settings.env, settings.host, settings.port, settings.rate_limit_rpm,
+        settings.env,
+        settings.host,
+        settings.port,
+        settings.rate_limit_rpm,
     )
 
     # Fail-Fast: verificar Redis antes de aceptar tráfico
@@ -83,6 +86,7 @@ async def lifespan(app: FastAPI):
 # Application factory
 # ---------------------------------------------------------------------------
 
+
 def create_app() -> FastAPI:
     """
     Factory de la aplicación FastAPI.
@@ -96,8 +100,8 @@ def create_app() -> FastAPI:
         title="OrangeCashMachine API",
         description="Gateway de la plataforma de trading algorítmico OCM",
         version="0.1.0",
-        docs_url="/docs"     if not settings.is_production else None,
-        redoc_url="/redoc"   if not settings.is_production else None,
+        docs_url="/docs" if not settings.is_production else None,
+        redoc_url="/redoc" if not settings.is_production else None,
         openapi_url="/openapi.json" if not settings.is_production else None,
         lifespan=lifespan,
     )
@@ -122,6 +126,7 @@ def create_app() -> FastAPI:
 # Entrypoint programático (ocm-api script en pyproject.toml)
 # ---------------------------------------------------------------------------
 
+
 def serve() -> None:
     """
     Entrypoint CLI — registrado como 'ocm-api' en pyproject.toml.
@@ -134,7 +139,7 @@ def serve() -> None:
         host=settings.host,
         port=settings.port,
         reload=not settings.is_production,
-        log_config=None,    # loguru es el logging SSOT — deshabilitar el de uvicorn
+        log_config=None,  # loguru es el logging SSOT — deshabilitar el de uvicorn
     )
 
 

@@ -24,6 +24,7 @@ exactamente las mismas constantes UPPER_CASE declaradas en el módulo.
 Añadir una variable sin actualizar _ENV_VAR_NAMES falla en import.
 Principio: Fail-Fast en el punto más temprano posible.
 """
+
 from __future__ import annotations
 
 # ALLOWED_ENVS: re-export desde ocm.observability.config (SSOT)
@@ -53,11 +54,11 @@ OCM_API_SECRET: str = "OCM_API_SECRET"
 # =============================================================================
 
 OCM_STORAGE__DATA_LAKE__PATH: str = "OCM_STORAGE__DATA_LAKE__PATH"
-OCM_DATA_LAKE_PATH: str = "OCM_DATA_LAKE_PATH"   # DEPRECATED — legacy
+OCM_DATA_LAKE_PATH: str = "OCM_DATA_LAKE_PATH"  # DEPRECATED — legacy
 OCM_GOLD_PATH: str = "OCM_GOLD_PATH"
 OCM_GOLD_FEATURES_PATH: str = "OCM_GOLD_FEATURES_PATH"
 OCM_EXCHANGE: str = "OCM_EXCHANGE"
-OCM_MARKET_TYPE: str    = "OCM_MARKET_TYPE"
+OCM_MARKET_TYPE: str = "OCM_MARKET_TYPE"
 OCM_OHLCV_START_DATE: str = "OCM_OHLCV_START_DATE"
 """Fecha ISO de inicio del backfill histórico. Default: 2024-01-01"""
 
@@ -113,48 +114,60 @@ Override en producción: KAFKA_ENABLED=true en .env o env del sistema."""
 
 _DEBUG_DEFAULTS: dict[str, bool] = {
     "development": True,
-    "test":        True,
-    "staging":     False,
-    "production":  False,
+    "test": True,
+    "staging": False,
+    "production": False,
 }
 
 # =============================================================================
 # Registro canónico — SSOT sin heurística
 # =============================================================================
 
-_ENV_VAR_NAMES: frozenset[str] = frozenset({
-    # Proceso
-    OCM_DEBUG, OCM_ENV, OCM_CONFIG_PATH, OCM_CONFIG_DIR,
-    OCM_VALIDATE_ONLY, PUSHGATEWAY_URL,
-    # Credenciales
-    OCM_API_KEY, OCM_API_SECRET,
-    # Storage / runtime
-    OCM_STORAGE__DATA_LAKE__PATH,
-    OCM_DATA_LAKE_PATH,
-    OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH,
-    MARKET_DATA_HOST, MARKET_DATA_PORT, INGESTION_INTERVAL_S,
-    OCM_EXCHANGE, OCM_MARKET_TYPE, OCM_OHLCV_START_DATE,
-    # Kafka
-    KAFKA_ENABLED,
-    KAFKA_BOOTSTRAP_SERVERS,
-    KAFKA_CLIENT_ID_PRODUCER,
-    KAFKA_COMPRESSION_TYPE,
-    KAFKA_ACKS,
-    KAFKA_LINGER_MS,
-    KAFKA_MAX_BATCH_SIZE,
-    KAFKA_CONSUMER_SESSION_TIMEOUT_MS,
-    KAFKA_CONSUMER_HEARTBEAT_MS,
-    KAFKA_AUTO_OFFSET_RESET,
-})
+_ENV_VAR_NAMES: frozenset[str] = frozenset(
+    {
+        # Proceso
+        OCM_DEBUG,
+        OCM_ENV,
+        OCM_CONFIG_PATH,
+        OCM_CONFIG_DIR,
+        OCM_VALIDATE_ONLY,
+        PUSHGATEWAY_URL,
+        # Credenciales
+        OCM_API_KEY,
+        OCM_API_SECRET,
+        # Storage / runtime
+        OCM_STORAGE__DATA_LAKE__PATH,
+        OCM_DATA_LAKE_PATH,
+        OCM_GOLD_PATH,
+        OCM_GOLD_FEATURES_PATH,
+        MARKET_DATA_HOST,
+        MARKET_DATA_PORT,
+        INGESTION_INTERVAL_S,
+        OCM_EXCHANGE,
+        OCM_MARKET_TYPE,
+        OCM_OHLCV_START_DATE,
+        # Kafka
+        KAFKA_ENABLED,
+        KAFKA_BOOTSTRAP_SERVERS,
+        KAFKA_CLIENT_ID_PRODUCER,
+        KAFKA_COMPRESSION_TYPE,
+        KAFKA_ACKS,
+        KAFKA_LINGER_MS,
+        KAFKA_MAX_BATCH_SIZE,
+        KAFKA_CONSUMER_SESSION_TIMEOUT_MS,
+        KAFKA_CONSUMER_HEARTBEAT_MS,
+        KAFKA_AUTO_OFFSET_RESET,
+    }
+)
 
 # Guard de sincronía — falla en import si _ENV_VAR_NAMES diverge
 _module_constants: frozenset[str] = frozenset(
-    v for k, v in globals().items()
-    if k == k.upper() and not k.startswith("_")
-    and isinstance(v, str) and k not in ("ALLOWED_ENVS",)
+    v
+    for k, v in globals().items()
+    if k == k.upper() and not k.startswith("_") and isinstance(v, str) and k not in ("ALLOWED_ENVS",)
 )
 _missing_from_registry = _module_constants - _ENV_VAR_NAMES
-_missing_from_module   = _ENV_VAR_NAMES - _module_constants
+_missing_from_module = _ENV_VAR_NAMES - _module_constants
 assert not _missing_from_registry, (
     "Constantes declaradas en env_vars.py pero ausentes de _ENV_VAR_NAMES:\n"
     + "\n".join(f"  + {v}" for v in sorted(_missing_from_registry))

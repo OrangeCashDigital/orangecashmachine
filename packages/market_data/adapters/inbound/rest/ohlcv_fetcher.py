@@ -48,7 +48,6 @@ from market_data.adapters.outbound.exchange import (
 )
 import time
 
-
 # ==========================================================
 # Constants
 # ==========================================================
@@ -56,7 +55,9 @@ import time
 # DEFAULT_CHUNK_LIMIT: SSOT en domain/constants.py.
 # Re-exportado aquí para compat con callers legacy que importan desde el fetcher.
 from market_data.domain.constants import DEFAULT_CHUNK_LIMIT  # noqa: F401
-from market_data.domain.value_objects.timeframe import timeframe_to_ms  # noqa: E402 — after constants block, before runtime code
+from market_data.domain.value_objects.timeframe import (
+    timeframe_to_ms,
+)  # noqa: E402 — after constants block, before runtime code
 
 
 def _fetcher_metrics():
@@ -181,8 +182,6 @@ def overlap_for_timeframe(timeframe: str, exchange: str | None = None) -> int:
     return _OVERLAP_BY_TIMEFRAME.get(timeframe, DEFAULT_OVERLAP_BARS)
 
 
-
-
 class _LazyCalibrationStore:
     """
     Singleton lazy del store de calibración de lateness.
@@ -243,6 +242,7 @@ from market_data.domain.exceptions import (  # noqa: E402
     ChunkFetchError,
     InvalidMarketTypeError,
 )
+
 # ==========================================================
 
 
@@ -329,7 +329,6 @@ class HistoricalFetcherAsync:
         start_date: Optional[str] = None,
         limit: int = DEFAULT_CHUNK_LIMIT,
     ) -> pd.DataFrame:
-
         self._validate_inputs(symbol, timeframe, limit)
         self._validate_market(symbol, self._market_type)
 
@@ -339,9 +338,12 @@ class HistoricalFetcherAsync:
             self._log.bind(symbol=symbol, timeframe=timeframe).info("No new data")
             return pd.DataFrame(columns=list(OHLCV_COLUMNS))
 
-        self._log.bind(symbol=symbol, timeframe=timeframe, chunks=result.chunks, rows=result.total_rows).info(
-            "Download complete"
-        )
+        self._log.bind(
+            symbol=symbol,
+            timeframe=timeframe,
+            chunks=result.chunks,
+            rows=result.total_rows,
+        ).info("Download complete")
         return result.df
 
     async def fetch_chunk(
@@ -369,7 +371,6 @@ class HistoricalFetcherAsync:
         start_date: Optional[str],
         limit: int,
     ) -> DownloadResult:
-
         since_ts = await self._resolve_start_timestamp(symbol, timeframe, start_date)
         if since_ts is None:
             # _resolve_start_timestamp no encontró cursor, storage ni config_start_date.
@@ -472,7 +473,11 @@ class HistoricalFetcherAsync:
             if last_ts <= since_ts:
                 _stale_severity = "regression" if last_ts < since_ts else "stale"
                 self._log.bind(
-                    symbol=symbol, timeframe=timeframe, severity=_stale_severity, last_ts=last_ts, since_ts=since_ts
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    severity=_stale_severity,
+                    last_ts=last_ts,
+                    since_ts=since_ts,
                 ).warning("Stale window — aborting")
                 _fetcher_metrics()["FETCH_CHUNKS_TOTAL"].labels(
                     exchange=exchange_name,

@@ -27,6 +27,7 @@ Fail-Fast: formato inválido explota en import time, no mid-run.
 
 Principios: SSOT · DRY · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 import os
@@ -59,8 +60,8 @@ except ValueError as exc:
 # end_offset=1: incluye el día actual (incompleto durante la sesión).
 # Útil para ingesta incremental que corre varias veces al día.
 DAILY_PARTITIONS = DailyPartitionsDefinition(
-    start_date = _START_DATE_RAW,
-    end_offset = 1,
+    start_date=_START_DATE_RAW,
+    end_offset=1,
 )
 
 # ---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ DAILY_PARTITIONS = DailyPartitionsDefinition(
 # ---------------------------------------------------------------------------
 # No usada en bronze/silver. Disponible para assets de calidad y resúmenes.
 WEEKLY_PARTITIONS = WeeklyPartitionsDefinition(
-    start_date = _START_DATE_RAW,
+    start_date=_START_DATE_RAW,
 )
 
 __all__ = ["DAILY_PARTITIONS", "WEEKLY_PARTITIONS"]

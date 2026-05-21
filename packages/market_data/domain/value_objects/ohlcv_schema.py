@@ -30,8 +30,10 @@ import pandera.pandas as pa
 from pandera.pandas import Column, Check, DataFrameSchema
 from loguru import logger
 
-from market_data.domain.value_objects.timeframe import timeframe_to_ms, InvalidTimeframeError
-
+from market_data.domain.value_objects.timeframe import (
+    timeframe_to_ms,
+    InvalidTimeframeError,
+)
 
 # ==========================================================
 # Constants

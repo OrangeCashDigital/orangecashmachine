@@ -10,19 +10,19 @@ y el comportamiento del context manager timer.
 
 Principios verificados: SRP · optional dependency · zero overhead
 """
+
 from __future__ import annotations
 
 import time
 
 from market_data.infrastructure.kafka.metrics import KafkaMetrics, timer
 
-
 # ---------------------------------------------------------------------------
 # KafkaMetrics — interfaz de alto nivel
 # ---------------------------------------------------------------------------
 
-class TestKafkaMetrics:
 
+class TestKafkaMetrics:
     def test_instantiates_with_default_topic(self):
         m = KafkaMetrics()
         assert m._topic == "ohlcv.raw"
@@ -33,11 +33,11 @@ class TestKafkaMetrics:
 
     def test_event_published_does_not_raise(self):
         m = KafkaMetrics(topic="ohlcv.raw")
-        m.event_published(exchange="bybit")       # no debe lanzar
+        m.event_published(exchange="bybit")  # no debe lanzar
 
     def test_event_published_default_exchange(self):
         m = KafkaMetrics()
-        m.event_published()                       # exchange="unknown" por defecto
+        m.event_published()  # exchange="unknown" por defecto
 
     def test_event_processed_does_not_raise(self):
         m = KafkaMetrics()
@@ -53,7 +53,7 @@ class TestKafkaMetrics:
 
     def test_event_failed_all_reason_categories(self):
         """Las cuatro categorías de reason documentadas no lanzan."""
-        m       = KafkaMetrics()
+        m = KafkaMetrics()
         reasons = [
             "deserialize_error",
             "schema_mismatch",
@@ -65,7 +65,7 @@ class TestKafkaMetrics:
 
     def test_event_failed_default_args(self):
         m = KafkaMetrics()
-        m.event_failed()                          # exchange="unknown", reason="unknown"
+        m.event_failed()  # exchange="unknown", reason="unknown"
 
     def test_multiple_topics_independent(self):
         """Instancias con distinto topic no comparten estado visible."""
@@ -81,8 +81,8 @@ class TestKafkaMetrics:
 # timer — context manager para latencia
 # ---------------------------------------------------------------------------
 
-class TestTimer:
 
+class TestTimer:
     def test_elapsed_ms_available_after_exit(self):
         with timer() as t:
             pass
@@ -102,7 +102,7 @@ class TestTimer:
     def test_elapsed_ms_zero_before_exit(self):
         """Antes de salir del context manager, elapsed_ms es 0.0."""
         t = timer()
-        assert t.elapsed_ms == 0.0   # propiedad default antes de __exit__
+        assert t.elapsed_ms == 0.0  # propiedad default antes de __exit__
 
     def test_usable_multiple_times(self):
         """Cada uso del context manager produce una medición independiente."""

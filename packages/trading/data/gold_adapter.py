@@ -20,6 +20,7 @@ Este adapter resuelve ambos gaps sin tocar GoldLoader (OCP).
 
 Principios: SOLID (OCP, DIP) · KISS · SafeOps
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -47,16 +48,19 @@ class GoldLoaderAdapter:
 
     def __init__(self, exchange: str = "bybit") -> None:
         # Import lazy — evita import circular y permite mockear en tests
-        from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
-        self._loader   = GoldLoader(exchange=exchange)
+        from market_data.adapters.outbound.storage.gold_reader import (
+            GoldReader as GoldLoader,
+        )
+
+        self._loader = GoldLoader(exchange=exchange)
         self._exchange = exchange
-        self._log      = logger.bind(component="GoldLoaderAdapter", exchange=exchange)
+        self._log = logger.bind(component="GoldLoaderAdapter", exchange=exchange)
 
     def load_features(
         self,
-        exchange:    str,
-        symbol:      str,
-        timeframe:   str,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
         market_type: str = "spot",
         **kwargs,
     ) -> Optional[pd.DataFrame]:
@@ -72,10 +76,10 @@ class GoldLoaderAdapter:
         """
         try:
             return self._loader.load_features(
-                symbol      = symbol,
-                market_type = market_type,
-                timeframe   = timeframe,
-                exchange    = exchange or self._exchange,
+                symbol=symbol,
+                market_type=market_type,
+                timeframe=timeframe,
+                exchange=exchange or self._exchange,
             )
         except Exception as exc:
             # Distinguir "sin datos" (esperado) de errores reales (inesperado)
@@ -83,13 +87,20 @@ class GoldLoaderAdapter:
             if exc_name in ("DataNotFoundError", "GoldLoaderError"):
                 self._log.warning(
                     "Sin datos Gold | {}/{}/{}/{} — skipping",
-                    exchange, symbol, market_type, timeframe,
+                    exchange,
+                    symbol,
+                    market_type,
+                    timeframe,
                 )
             else:
                 self._log.error(
                     "Error leyendo Gold | {}/{}/{}/{} | {} — {}",
-                    exchange, symbol, market_type, timeframe,
-                    exc_name, exc,
+                    exchange,
+                    symbol,
+                    market_type,
+                    timeframe,
+                    exc_name,
+                    exc,
                 )
             return None
 

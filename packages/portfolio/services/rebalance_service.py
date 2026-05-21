@@ -35,6 +35,7 @@ SafeOps
 
 Principios: SOLID · DDD · SafeOps · KISS · DRY
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,10 +45,10 @@ from loguru import logger
 
 from portfolio.models.position import PortfolioState
 
-
 # ---------------------------------------------------------------------------
 # RebalanceSignal — value object de salida
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class RebalanceSignal:
@@ -66,11 +67,12 @@ class RebalanceSignal:
     target_pct   : exposición objetivo
     generated_at : timestamp UTC
     """
-    symbol:       str
-    action:       str        # "buy" | "sell"
-    delta_pct:    float      # magnitud del ajuste ∈ (0, 1]
-    current_pct:  float
-    target_pct:   float
+
+    symbol: str
+    action: str  # "buy" | "sell"
+    delta_pct: float  # magnitud del ajuste ∈ (0, 1]
+    current_pct: float
+    target_pct: float
     generated_at: datetime
 
     @property
@@ -89,6 +91,7 @@ class RebalanceSignal:
 # RebalanceService
 # ---------------------------------------------------------------------------
 
+
 class RebalanceService:
     """
     Calcula ajustes de portfolio para alcanzar target weights.
@@ -101,31 +104,25 @@ class RebalanceService:
                               Evita órdenes demasiado pequeñas para ser ejecutadas.
     """
 
-    _DEFAULT_DRIFT     = 0.05   # 5% de desviación mínima para actuar
-    _DEFAULT_MIN_DELTA = 0.01   # 1% mínimo de ajuste
+    _DEFAULT_DRIFT = 0.05  # 5% de desviación mínima para actuar
+    _DEFAULT_MIN_DELTA = 0.01  # 1% mínimo de ajuste
 
     def __init__(
         self,
         drift_threshold: float = _DEFAULT_DRIFT,
-        min_delta_pct:   float = _DEFAULT_MIN_DELTA,
+        min_delta_pct: float = _DEFAULT_MIN_DELTA,
     ) -> None:
         # Fail-Fast: validar en construcción, no en cada llamada
         if not (0.0 < drift_threshold < 1.0):
-            raise ValueError(
-                f"drift_threshold debe estar en (0, 1), recibido: {drift_threshold}"
-            )
+            raise ValueError(f"drift_threshold debe estar en (0, 1), recibido: {drift_threshold}")
         if not (0.0 < min_delta_pct < 1.0):
-            raise ValueError(
-                f"min_delta_pct debe estar en (0, 1), recibido: {min_delta_pct}"
-            )
+            raise ValueError(f"min_delta_pct debe estar en (0, 1), recibido: {min_delta_pct}")
         if min_delta_pct >= drift_threshold:
-            raise ValueError(
-                f"min_delta_pct ({min_delta_pct}) debe ser < drift_threshold ({drift_threshold})"
-            )
+            raise ValueError(f"min_delta_pct ({min_delta_pct}) debe ser < drift_threshold ({drift_threshold})")
 
-        self._drift     = drift_threshold
+        self._drift = drift_threshold
         self._min_delta = min_delta_pct
-        self._log       = logger.bind(component="RebalanceService")
+        self._log = logger.bind(component="RebalanceService")
 
     # ------------------------------------------------------------------
     # Public API
@@ -133,7 +130,7 @@ class RebalanceService:
 
     def rebalance(
         self,
-        state:   PortfolioState,
+        state: PortfolioState,
         targets: dict[str, float],
         trigger: str = "manual",
     ) -> list[RebalanceSignal]:
@@ -176,7 +173,7 @@ class RebalanceService:
                 return False, f"target para {symbol} fuera de rango [0, 1]: {pct}"
 
         total = sum(targets.values())
-        if total > 1.0 + 1e-9:   # tolerancia float
+        if total > 1.0 + 1e-9:  # tolerancia float
             return False, f"targets suman {total:.2%} — deben sumar ≤ 100%"
 
         return True, ""
@@ -187,7 +184,7 @@ class RebalanceService:
 
     def _compute(
         self,
-        state:   PortfolioState,
+        state: PortfolioState,
         targets: dict[str, float],
         trigger: str,
     ) -> list[RebalanceSignal]:
@@ -197,42 +194,53 @@ class RebalanceService:
         for pos in state.positions:
             current[pos.symbol] = current.get(pos.symbol, 0.0) + pos.size_pct
 
-        now     = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
         signals = []
 
         # Calcular delta para cada símbolo en targets
         all_symbols = set(targets.keys()) | set(current.keys())
         for symbol in all_symbols:
-            target_pct  = targets.get(symbol, 0.0)
+            target_pct = targets.get(symbol, 0.0)
             current_pct = current.get(symbol, 0.0)
-            delta       = target_pct - current_pct   # positivo → comprar, negativo → vender
+            delta = target_pct - current_pct  # positivo → comprar, negativo → vender
 
             if abs(delta) < self._drift:
                 self._log.debug(
                     "skip {} | delta={:.2%} < drift={:.2%}",
-                    symbol, abs(delta), self._drift,
+                    symbol,
+                    abs(delta),
+                    self._drift,
                 )
                 continue
 
             if abs(delta) < self._min_delta:
                 self._log.debug(
                     "skip {} | delta={:.2%} < min_delta={:.2%}",
-                    symbol, abs(delta), self._min_delta,
+                    symbol,
+                    abs(delta),
+                    self._min_delta,
                 )
                 continue
 
             action = "buy" if delta > 0 else "sell"
-            signals.append(RebalanceSignal(
-                symbol       = symbol,
-                action       = action,
-                delta_pct    = abs(delta),
-                current_pct  = current_pct,
-                target_pct   = target_pct,
-                generated_at = now,
-            ))
+            signals.append(
+                RebalanceSignal(
+                    symbol=symbol,
+                    action=action,
+                    delta_pct=abs(delta),
+                    current_pct=current_pct,
+                    target_pct=target_pct,
+                    generated_at=now,
+                )
+            )
             self._log.info(
                 "Señal rebalanceo | {} {} delta={:+.2%} ({:.2%} → {:.2%}) trigger={}",
-                action.upper(), symbol, delta, current_pct, target_pct, trigger,
+                action.upper(),
+                symbol,
+                delta,
+                current_pct,
+                target_pct,
+                trigger,
             )
 
         # Ordenar por magnitud descendente — ajustar primero los más desviados
@@ -240,6 +248,8 @@ class RebalanceService:
 
         self._log.info(
             "Rebalanceo calculado | trigger={} señales={} símbolos_evaluados={}",
-            trigger, len(signals), len(all_symbols),
+            trigger,
+            len(signals),
+            len(all_symbols),
         )
         return signals

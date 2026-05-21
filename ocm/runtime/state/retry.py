@@ -43,6 +43,7 @@ Fail-Fast — lanza inmediatamente ante errores no recuperables
 SafeOps  — los callers envuelven en try/except y degradan si necesario
 KISS     — sin clases, sin decoradores, sin estado
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -55,16 +56,16 @@ from loguru import logger
 # ---------------------------------------------------------------------------
 # Constantes de resiliencia
 # ---------------------------------------------------------------------------
-_RETRY_ATTEMPTS: int   = 3
-_RETRY_BASE_MS:  float = 50.0  # ms — backoff: 50 → 100 → 200 ms
+_RETRY_ATTEMPTS: int = 3
+_RETRY_BASE_MS: float = 50.0  # ms — backoff: 50 → 100 → 200 ms
 
 _T = TypeVar("_T")
 
 
 def redis_retry(
-    fn:       Callable[[], _T],
-    attempts: int   = _RETRY_ATTEMPTS,
-    base_ms:  float = _RETRY_BASE_MS,
+    fn: Callable[[], _T],
+    attempts: int = _RETRY_ATTEMPTS,
+    base_ms: float = _RETRY_BASE_MS,
 ) -> _T:
     """
     Ejecuta ``fn`` con reintentos exponenciales ante fallos transitorios Redis.
@@ -100,19 +101,22 @@ def redis_retry(
         except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
             last_exc = exc
             if attempt < attempts - 1:
-                wait_s = (base_ms * (2 ** attempt)) / 1000.0
+                wait_s = (base_ms * (2**attempt)) / 1000.0
                 logger.warning(
                     "Redis retry {}/{} in {:.0f}ms | error={}",
-                    attempt + 1, attempts, base_ms * (2 ** attempt), exc,
+                    attempt + 1,
+                    attempts,
+                    base_ms * (2**attempt),
+                    exc,
                 )
                 time.sleep(wait_s)
     raise last_exc
 
 
 async def redis_retry_async(
-    fn:       "Callable[[], _T]",
-    attempts: int   = _RETRY_ATTEMPTS,
-    base_ms:  float = _RETRY_BASE_MS,
+    fn: "Callable[[], _T]",
+    attempts: int = _RETRY_ATTEMPTS,
+    base_ms: float = _RETRY_BASE_MS,
 ) -> "_T":
     """
     Ejecuta ``fn`` con reintentos exponenciales ante fallos transitorios Redis.
@@ -145,11 +149,13 @@ async def redis_retry_async(
         except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
             last_exc = exc
             if attempt < attempts - 1:
-                wait_s = (base_ms * (2 ** attempt)) / 1000.0
+                wait_s = (base_ms * (2**attempt)) / 1000.0
                 logger.warning(
                     "Redis async retry {}/{} in {:.0f}ms | error={}",
-                    attempt + 1, attempts, base_ms * (2 ** attempt), exc,
+                    attempt + 1,
+                    attempts,
+                    base_ms * (2**attempt),
+                    exc,
                 )
                 await asyncio.sleep(wait_s)
     raise last_exc
-

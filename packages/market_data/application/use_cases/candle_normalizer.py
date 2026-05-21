@@ -45,7 +45,6 @@ from market_data.domain.value_objects.candle_validator import (
     ValidationResult,
 )
 
-
 # ── Schema SSOT ──────────────────────────────────────────────────────────────
 
 SILVER_DTYPE_MAP: dict = {

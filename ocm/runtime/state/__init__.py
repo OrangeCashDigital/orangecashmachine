@@ -46,6 +46,7 @@ Contratos BC: BC-22, BC-23, BC-27 (ver pyproject.toml).
 
 Principios: Clean Architecture (facade) · DIP · SRP · Fail-Fast en import time.
 """
+
 from __future__ import annotations
 
 # ── Protocols / Ports ─────────────────────────────────────────────────────────

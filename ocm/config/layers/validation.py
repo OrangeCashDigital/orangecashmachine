@@ -48,4 +48,3 @@ def validate_config(raw_dict: dict[str, Any]) -> "AppConfig":
     app_config = AppConfig.model_validate(raw_dict)
     logger.debug("config_pipeline_l4 | pydantic=ok env={}", app_config.environment.name)
     return app_config
-

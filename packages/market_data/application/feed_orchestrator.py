@@ -31,7 +31,6 @@ from loguru import logger
 
 from market_data.ports.inbound.market_data_source import MarketDataSource, TradeCallback
 
-
 # ── config dataclass ──────────────────────────────────────────────────────────
 
 

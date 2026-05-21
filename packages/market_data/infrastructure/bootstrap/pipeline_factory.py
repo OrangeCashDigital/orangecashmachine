@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-
 # --------------------------------------------------------------------------- #
 # Catalog builder — DRY, único punto de construcción del catalog Iceberg       #
 # --------------------------------------------------------------------------- #
@@ -111,7 +110,9 @@ class ConcretePipelineFactory:
             return None
         try:
             from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
-            from market_data.infrastructure.kafka.ohlcv_publisher import KafkaOHLCVPublisher
+            from market_data.infrastructure.kafka.ohlcv_publisher import (
+                KafkaOHLCVPublisher,
+            )
             from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
             producer = KafkaProducerAdapter.from_env()
@@ -152,7 +153,9 @@ class ConcretePipelineFactory:
           desde ABC sin anotación explícita en la clase concreta — cast es correcto.
         """
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
-        from market_data.adapters.inbound.rest.ohlcv_fetcher import HistoricalFetcherAsync
+        from market_data.adapters.inbound.rest.ohlcv_fetcher import (
+            HistoricalFetcherAsync,
+        )
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
         from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
         from market_data.infrastructure.observability.metrics_adapter import (
@@ -161,7 +164,10 @@ class ConcretePipelineFactory:
         from market_data.application.quality.pipeline import QualityPipeline
         from market_data.infrastructure.quality.anomaly_registry import default_registry
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
-        from market_data.ports.outbound.state import CursorStorePort, AsyncCursorStorePort
+        from market_data.ports.outbound.state import (
+            CursorStorePort,
+            AsyncCursorStorePort,
+        )
         from ocm.runtime.state import build_cursor_store, InMemoryCursorStore
 
         raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
@@ -221,7 +227,9 @@ class ConcretePipelineFactory:
         """
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.adapters.inbound.rest.trades_fetcher import TradesFetcher
-        from market_data.infrastructure.storage.silver.trades_storage import TradesStorage
+        from market_data.infrastructure.storage.silver.trades_storage import (
+            TradesStorage,
+        )
         from market_data.application.pipelines.trades_pipeline import TradesPipeline
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
@@ -264,9 +272,15 @@ class ConcretePipelineFactory:
             raise ValueError("PipelineRequest.exchange es obligatorio para pipeline='trades_stream'.")
 
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
-        from market_data.adapters.inbound.websocket.ws_trades_source import WSTradesSource
-        from market_data.adapters.inbound.websocket.gap_aware_stream import GapAwareStream
-        from market_data.adapters.inbound.rest.gap_recovery_fetcher import GapRecoveryFetcher
+        from market_data.adapters.inbound.websocket.ws_trades_source import (
+            WSTradesSource,
+        )
+        from market_data.adapters.inbound.websocket.gap_aware_stream import (
+            GapAwareStream,
+        )
+        from market_data.adapters.inbound.rest.gap_recovery_fetcher import (
+            GapRecoveryFetcher,
+        )
         from market_data.adapters.inbound.rest.trades_backfill_fetcher import (
             TradesBackfillFetcher,
         )

@@ -6,6 +6,7 @@ tests/trading/test_base_strategy.py
 Tests unitarios de Signal y BaseStrategy.
 Sin I/O — lógica pura.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -14,21 +15,22 @@ import pytest
 
 from trading.strategies.base import Signal, SignalType
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _make_signal(signal: SignalType = "buy", confidence: float = 1.0) -> Signal:
     return Signal(
-        symbol     = "BTC/USDT",
-        timeframe  = "1h",
-        direction  = signal,
-        price      = 50_000.0,
-        timestamp  = datetime(2024, 1, 1, tzinfo=timezone.utc),
-        confidence = confidence,
+        symbol="BTC/USDT",
+        timeframe="1h",
+        direction=signal,
+        price=50_000.0,
+        timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        confidence=confidence,
     )
 
 
 # ── Signal — construcción e invariantes ───────────────────────────────────────
+
 
 def test_signal_buy_is_actionable():
     assert _make_signal("buy").is_actionable is True

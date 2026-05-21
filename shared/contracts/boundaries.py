@@ -14,6 +14,7 @@ Regla: si necesitas pasar datos entre dos BCs, el tipo va aqui.
 
 Principios: DIP · OCP · SSOT
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -29,6 +30,7 @@ SignalDirection = Literal["buy", "sell", "hold"]
 # market_data -> signals
 # =============================================================================
 
+
 @runtime_checkable
 class FeatureSource(Protocol):
     """
@@ -41,9 +43,9 @@ class FeatureSource(Protocol):
 
     def load_features(
         self,
-        exchange:    str,
-        symbol:      str,
-        timeframe:   str,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
         market_type: str = "spot",
         **kwargs: Any,
     ) -> Any:
@@ -58,6 +60,7 @@ class FeatureSource(Protocol):
 # signals -> execution  (via TradingEngine)
 # =============================================================================
 
+
 @runtime_checkable
 class SignalProtocol(Protocol):
     """
@@ -67,12 +70,12 @@ class SignalProtocol(Protocol):
     (se movera a signals/ en la migracion del monolito).
     """
 
-    symbol:     str
-    timeframe:  str
-    direction:  SignalDirection
-    price:      float
+    symbol: str
+    timeframe: str
+    direction: SignalDirection
+    price: float
     confidence: float
-    timestamp:  datetime
+    timestamp: datetime
 
     @property
     def is_actionable(self) -> bool: ...
@@ -81,6 +84,7 @@ class SignalProtocol(Protocol):
 # =============================================================================
 # execution -> portfolio  (on_fill callback)
 # =============================================================================
+
 
 @runtime_checkable
 class FillHandler(Protocol):
@@ -98,6 +102,7 @@ class FillHandler(Protocol):
 # =============================================================================
 # portfolio -> backtesting
 # =============================================================================
+
 
 @runtime_checkable
 class TradeHistory(Protocol):
@@ -117,6 +122,7 @@ class TradeHistory(Protocol):
 # =============================================================================
 # execution -> risk
 # =============================================================================
+
 
 @runtime_checkable
 class RiskGate(Protocol):
@@ -140,5 +146,3 @@ class RiskGate(Protocol):
         reason es '' si approved=True.
         """
         ...
-
-

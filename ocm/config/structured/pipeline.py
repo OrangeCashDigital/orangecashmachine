@@ -41,6 +41,7 @@ class HistoricalConfig:
                                  (cpu_count // 2). Hydra valida que
                                  si se pasa un valor sea int >= 1.
     """
+
     start_date: str = "auto"
     auto_lookback_days: int = 3650
     backfill_mode: bool = False
@@ -56,9 +57,8 @@ class ResampleConfig:
     SSOT de los timeframes producidos localmente por ResamplePipeline.
     Nunca se piden al exchange — se construyen a partir de source_tf.
     """
-    targets: List[str] = field(
-        default_factory=lambda: ["5m", "15m", "1h", "4h", "1d"]
-    )
+
+    targets: List[str] = field(default_factory=lambda: ["5m", "15m", "1h", "4h", "1d"])
     source_tf: str = "1m"
 
 
@@ -74,6 +74,7 @@ class RealtimeConfig:
 @dataclass
 class PipelineConfig:
     """Structured config raíz para el bloque ``pipeline``."""
+
     historical: HistoricalConfig = field(default_factory=HistoricalConfig)
-    resample:   ResampleConfig   = field(default_factory=ResampleConfig)
-    realtime:   RealtimeConfig   = field(default_factory=RealtimeConfig)
+    resample: ResampleConfig = field(default_factory=ResampleConfig)
+    realtime: RealtimeConfig = field(default_factory=RealtimeConfig)

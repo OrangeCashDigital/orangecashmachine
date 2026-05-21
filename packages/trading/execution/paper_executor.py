@@ -8,6 +8,7 @@ PaperExecutor — executor de paper trading.
 Responsabilidad: simular ejecución de órdenes sin dinero real.
 Siempre acepta la orden y loguea el fill al precio de señal.
 """
+
 from __future__ import annotations
 
 from loguru import logger
@@ -31,7 +32,7 @@ class PaperExecutor:
             order.signal.price,
             order.size_pct,
         )
-        return True   # siempre acepta
+        return True  # siempre acepta
 
     def __repr__(self) -> str:
         return "PaperExecutor()"

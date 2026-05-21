@@ -29,20 +29,24 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if request.url.path in _SILENT_PATHS:
             return await call_next(request)
 
-        start   = time.perf_counter()
-        ip      = request.client.host if request.client else "unknown"
-        method  = request.method
-        path    = request.url.path
+        start = time.perf_counter()
+        ip = request.client.host if request.client else "unknown"
+        method = request.method
+        path = request.url.path
 
         response = await call_next(request)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-        status     = response.status_code
+        status = response.status_code
 
         level = "WARNING" if status >= 400 else "INFO"
         logger.log(
             level,
             "http_request | method={} path={} status={} duration_ms={:.1f} ip={}",
-            method, path, status, elapsed_ms, ip,
+            method,
+            path,
+            status,
+            elapsed_ms,
+            ip,
         )
         return response

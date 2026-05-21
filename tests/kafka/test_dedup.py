@@ -13,14 +13,14 @@ from market_data.infrastructure.kafka.dedup import (
     SeenFilter,
 )
 
-
 # --------------------------------------------------
 # Store mock — simula RedisCursorStore.get_raw/set_raw
 # --------------------------------------------------
 
+
 class _MockStore:
     def __init__(self, healthy: bool = True) -> None:
-        self._data:    dict = {}
+        self._data: dict = {}
         self._healthy = healthy
 
     def get_raw(self, key: str):
@@ -39,8 +39,10 @@ class _MockStore:
 
 class _FailingStore:
     """Store que siempre lanza — prueba SafeOps."""
+
     def get_raw(self, key: str):
         raise RuntimeError("Redis exploded")
+
     def set_raw(self, key: str, value: str, ttl_seconds: int) -> None:
         raise RuntimeError("Redis exploded")
 
@@ -49,8 +51,8 @@ class _FailingStore:
 # Tests: SeenFilter (L1)
 # --------------------------------------------------
 
-class TestSeenFilter:
 
+class TestSeenFilter:
     def test_new_event_not_duplicate(self):
         f = SeenFilter()
         assert not f.is_duplicate("evt-001")
@@ -109,23 +111,23 @@ class TestSeenFilter:
 # Tests: PersistentSeenFilter (L2)
 # --------------------------------------------------
 
-class TestPersistentSeenFilter:
 
+class TestPersistentSeenFilter:
     def test_new_event_not_duplicate(self):
         f = PersistentSeenFilter(store=_MockStore())
         assert not f.is_duplicate("evt-001")
 
     def test_seen_event_is_duplicate(self):
         store = _MockStore()
-        f     = PersistentSeenFilter(store=store)
+        f = PersistentSeenFilter(store=store)
         f.mark_seen("evt-001")
         assert f.is_duplicate("evt-001")
 
     def test_persists_across_instances(self):
         """Dos instancias con el mismo store comparten estado."""
         store = _MockStore()
-        f1    = PersistentSeenFilter(store=store)
-        f2    = PersistentSeenFilter(store=store)
+        f1 = PersistentSeenFilter(store=store)
+        f2 = PersistentSeenFilter(store=store)
 
         f1.mark_seen("evt-shared")
         assert f2.is_duplicate("evt-shared")
@@ -142,7 +144,7 @@ class TestPersistentSeenFilter:
 
     def test_contains_operator(self):
         store = _MockStore()
-        f     = PersistentSeenFilter(store=store)
+        f = PersistentSeenFilter(store=store)
         f.mark_seen("z")
         assert "z" in f
         assert "w" not in f
@@ -150,7 +152,7 @@ class TestPersistentSeenFilter:
     def test_key_prefix_isolation(self):
         """Distintos event_ids usan claves distintas en Redis."""
         store = _MockStore()
-        f     = PersistentSeenFilter(store=store)
+        f = PersistentSeenFilter(store=store)
         f.mark_seen("evt-A")
         assert not f.is_duplicate("evt-B")
 

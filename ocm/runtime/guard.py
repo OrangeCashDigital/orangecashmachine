@@ -30,6 +30,7 @@ Triggers de stop (en orden de prioridad)
 
 Principios: SRP · SafeOps · SSOT
 """
+
 from __future__ import annotations
 
 import threading
@@ -57,21 +58,17 @@ class ExecutionGuard:
                                    (None = sin límite)
     """
 
-    max_errors:    int            = 10
+    max_errors: int = 10
     max_runtime_s: Optional[float] = None
 
     # Estado interno — no expuesto en constructor
-    _stop_event:         threading.Event = field(
-        default_factory=threading.Event, init=False, repr=False
-    )
-    _start_time:         Optional[float] = field(default=None,  init=False, repr=False)
-    _stop_reason:        Optional[str]   = field(default=None,  init=False, repr=False)
-    _consecutive_errors: int             = field(default=0,     init=False, repr=False)
-    _total_errors:       int             = field(default=0,     init=False, repr=False)
-    _total_successes:    int             = field(default=0,     init=False, repr=False)
-    _lock:               threading.Lock  = field(
-        default_factory=threading.Lock, init=False, repr=False
-    )
+    _stop_event: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
+    _start_time: Optional[float] = field(default=None, init=False, repr=False)
+    _stop_reason: Optional[str] = field(default=None, init=False, repr=False)
+    _consecutive_errors: int = field(default=0, init=False, repr=False)
+    _total_errors: int = field(default=0, init=False, repr=False)
+    _total_successes: int = field(default=0, init=False, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
     # ------------------------------------------------------------------ #
     # Lifecycle
@@ -80,12 +77,12 @@ class ExecutionGuard:
     def start(self) -> None:
         """Marca el inicio de la sesión de ejecución."""
         with self._lock:
-            self._start_time         = time.monotonic()
+            self._start_time = time.monotonic()
             self._stop_event.clear()
-            self._stop_reason        = None
+            self._stop_reason = None
             self._consecutive_errors = 0
-            self._total_errors       = 0
-            self._total_successes    = 0
+            self._total_errors = 0
+            self._total_successes = 0
 
     def stop(self) -> None:
         """Detención limpia al finalizar la sesión (llamar en finally)."""
@@ -141,9 +138,7 @@ class ExecutionGuard:
             guard.check()   # al inicio de cada iteración
         """
         if self.should_stop():
-            raise ExecutionStoppedError(
-                f"Execution stopped: {self._stop_reason or 'kill_switch'}"
-            )
+            raise ExecutionStoppedError(f"Execution stopped: {self._stop_reason or 'kill_switch'}")
 
     # ------------------------------------------------------------------ #
     # Error tracking
@@ -157,13 +152,10 @@ class ExecutionGuard:
         """
         with self._lock:
             self._consecutive_errors += 1
-            self._total_errors       += 1
+            self._total_errors += 1
 
             if self.max_errors > 0 and self._consecutive_errors >= self.max_errors:
-                trigger_reason = (
-                    f"consecutive_errors:{self._consecutive_errors}"
-                    + (f":{reason}" if reason else "")
-                )
+                trigger_reason = f"consecutive_errors:{self._consecutive_errors}" + (f":{reason}" if reason else "")
                 if not self._stop_event.is_set():
                     self._stop_event.set()
                     self._stop_reason = trigger_reason
@@ -172,7 +164,7 @@ class ExecutionGuard:
         """Registra éxito y resetea contador de errores consecutivos."""
         with self._lock:
             self._consecutive_errors = 0
-            self._total_successes   += 1
+            self._total_successes += 1
 
     # ------------------------------------------------------------------ #
     # Observability
@@ -185,17 +177,13 @@ class ExecutionGuard:
         SafeOps: nunca lanza excepción.
         """
         try:
-            elapsed = (
-                time.monotonic() - self._start_time
-                if self._start_time is not None
-                else 0.0
-            )
+            elapsed = time.monotonic() - self._start_time if self._start_time is not None else 0.0
             return {
-                "triggered":          self._stop_event.is_set(),
-                "stop_reason":        self._stop_reason,
-                "runtime_s":          round(elapsed, 2),
-                "total_errors":       self._total_errors,
-                "total_successes":    self._total_successes,
+                "triggered": self._stop_event.is_set(),
+                "stop_reason": self._stop_reason,
+                "runtime_s": round(elapsed, 2),
+                "total_errors": self._total_errors,
+                "total_successes": self._total_successes,
                 "consecutive_errors": self._consecutive_errors,
             }
         except Exception:

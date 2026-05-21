@@ -29,6 +29,7 @@ Dagster muestra el error en el asset catalog antes de materializar.
 
 Principios: DIP · SRP · Fail-Fast · SafeOps · SSOT · Composition Root
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -38,9 +39,9 @@ from dagster import ConfigurableResource
 from pydantic import PrivateAttr
 
 from ocm.config.hydra_loader import load_appconfig_standalone
-from ocm.runtime.run_config  import RunConfig
-from ocm.runtime.context     import RuntimeContext
-from market_data.ports.outbound.storage         import OHLCVStorage
+from ocm.runtime.run_config import RunConfig
+from ocm.runtime.context import RuntimeContext
+from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.ports.outbound.storage_factory import StorageFactoryPort
 
 
@@ -83,13 +84,13 @@ class OCMResource(ConfigurableResource):
         Fail-Fast: lanza si AppConfig es inválido.
         """
         explicit_env = self.env or None
-        run_cfg      = RunConfig.from_env(explicit_env=explicit_env)
-        app_cfg      = load_appconfig_standalone(env=run_cfg.env)
+        run_cfg = RunConfig.from_env(explicit_env=explicit_env)
+        app_cfg = load_appconfig_standalone(env=run_cfg.env)
 
         return RuntimeContext(
-            app_config = app_cfg,
-            run_config = run_cfg,
-            started_at = datetime.now(timezone.utc),
+            app_config=app_cfg,
+            run_config=run_cfg,
+            started_at=datetime.now(timezone.utc),
         )
 
     @property
@@ -108,9 +109,9 @@ class OCMResource(ConfigurableResource):
 
     def get_storage(
         self,
-        exchange:    str,
-        market_type: str  = "spot",
-        dry_run:     bool = False,
+        exchange: str,
+        market_type: str = "spot",
+        dry_run: bool = False,
     ) -> OHLCVStorage:
         """
         Retorna OHLCVStorage para (exchange, market_type) via StorageFactoryPort.
@@ -120,9 +121,9 @@ class OCMResource(ConfigurableResource):
         """
         factory: StorageFactoryPort = self._get_storage_factory()
         return factory.get_storage(
-            exchange    = exchange,
-            market_type = market_type,
-            dry_run     = dry_run,
+            exchange=exchange,
+            market_type=market_type,
+            dry_run=dry_run,
         )
 
     def _get_storage_factory(self) -> StorageFactoryPort:
@@ -136,5 +137,6 @@ class OCMResource(ConfigurableResource):
             from market_data.adapters.outbound.storage.iceberg_factory import (
                 IcebergStorageFactory,
             )
+
             self._storage_factory = IcebergStorageFactory()
         return self._storage_factory

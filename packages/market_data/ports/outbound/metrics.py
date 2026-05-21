@@ -175,7 +175,12 @@ class NullMetrics:
         pass
 
     def quality_decisions_inc(
-        self, exchange: str, market_type: str, symbol: str, timeframe: str, decision: str
+        self,
+        exchange: str,
+        market_type: str,
+        symbol: str,
+        timeframe: str,
+        decision: str,
     ) -> None:
         pass
 

@@ -27,19 +27,19 @@ class LoggingConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     # ── Nivel y archivos locales ──────────────────────────────────────
-    level:     str  = "INFO"
-    log_dir:   str  = "logs"
-    rotation:  str  = "1 day"
-    retention: str  = "14 days"
-    console:   bool = True
-    file:      bool = True
-    pipeline:  bool = True
+    level: str = "INFO"
+    log_dir: str = "logs"
+    rotation: str = "1 day"
+    retention: str = "14 days"
+    console: bool = True
+    file: bool = True
+    pipeline: bool = True
 
     # ── Formato de salida ─────────────────────────────────────────────
-    format:    str  = "text"   # "text" | "json"
+    format: str = "text"  # "text" | "json"
 
     # ── Loki (sink remoto) ────────────────────────────────────────────
-    loki_url:    Optional[str]  = None
+    loki_url: Optional[str] = None
     loki_labels: dict[str, str] = {}
 
     @field_validator("level")
@@ -50,6 +50,7 @@ class LoggingConfig(BaseModel):
         if upper not in allowed:
             raise ValueError(f"level must be one of {allowed}, got {v!r}")
         return upper
+
 
 # ---------------------------------------------------------------------------
 # Entornos de ejecución válidos para observability

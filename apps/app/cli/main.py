@@ -27,6 +27,7 @@ Uso CLI::
 
 Principios: SOLID · KISS · DRY · SSOT · SafeOps
 """
+
 from __future__ import annotations
 
 import sys
@@ -45,10 +46,10 @@ from ocm.config.structured import (
     ResampleConfig,
 )
 
-
 # ---------------------------------------------------------------------------
 # Hydra Structured Config registration — debe ocurrir antes de @hydra.main
 # ---------------------------------------------------------------------------
+
 
 def _register_structured_configs() -> None:
     """Registra Structured Configs en Hydra ConfigStore.
@@ -62,10 +63,10 @@ def _register_structured_configs() -> None:
         Pydantic                 → valida reglas de negocio (ge, le, regex…)
     """
     cs = ConfigStore.instance()
-    cs.store(group="pipeline",            name="schema", node=PipelineConfig)
+    cs.store(group="pipeline", name="schema", node=PipelineConfig)
     cs.store(group="pipeline/historical", name="schema", node=HistoricalConfig)
-    cs.store(group="pipeline/resample",   name="schema", node=ResampleConfig)
-    cs.store(group="observability",       name="schema", node=ObservabilityConfig)
+    cs.store(group="pipeline/resample", name="schema", node=ResampleConfig)
+    cs.store(group="observability", name="schema", node=ObservabilityConfig)
 
 
 _register_structured_configs()
@@ -82,7 +83,9 @@ from ocm.runtime.context import RuntimeContext
 from ocm.observability import bootstrap_logging, configure_logging
 from ocm.observability.metrics_runtime import init_metrics_runtime
 from ocm.observability.pushers import PrometheusPusher, NoopPusher
-from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline as _default_pipeline_runner
+from market_data.application.pipelines.ohlcv_pipeline import (
+    OHLCVPipeline as _default_pipeline_runner,
+)
 from market_data.ports.outbound.observability import MetricsPusherPort
 from ocm.runtime.environment_validator import (
     EnvironmentValidator,
@@ -96,6 +99,7 @@ PipelineRunner = Callable[[RuntimeContext, MetricsPusherPort | None], int]
 # ---------------------------------------------------------------------------
 # Observabilidad — fail-soft: nunca bloquea el pipeline
 # ---------------------------------------------------------------------------
+
 
 def setup_observability(config: AppConfig, *, validate_only: bool = False) -> None:
     """Inicializa MetricsRuntime de forma idempotente y fail-soft.
@@ -114,8 +118,9 @@ def setup_observability(config: AppConfig, *, validate_only: bool = False) -> No
 # Ciclo de vida de la aplicación
 # ---------------------------------------------------------------------------
 
+
 def run_application(
-    config:  AppConfig,
+    config: AppConfig,
     run_cfg: RunConfig,
     *,
     pipeline_runner: PipelineRunner = _default_pipeline_runner,
@@ -177,9 +182,7 @@ def run_application(
         run_config=run_cfg,
         started_at=datetime.now(timezone.utc),
     )
-    pusher: MetricsPusherPort = (
-        PrometheusPusher() if config.observability.metrics.enabled else NoopPusher()
-    )
+    pusher: MetricsPusherPort = PrometheusPusher() if config.observability.metrics.enabled else NoopPusher()
 
     result = pipeline_runner(ctx, pusher)
 
@@ -204,7 +207,9 @@ def run_application(
 # Ahora: shared/utils/repo.py busca .git — más robusto (pyproject.toml puede
 # existir en subdirectorios de monorepos; .git es inequívoco).
 from shared.utils.repo import repo_root as _repo_root
+
 _CONFIG_DIR = str(_repo_root() / "config")
+
 
 @hydra.main(config_path=_CONFIG_DIR, config_name="config", version_base="1.3")
 def hydra_main(cfg: DictConfig) -> None:
@@ -224,9 +229,9 @@ def hydra_main(cfg: DictConfig) -> None:
     """
     bootstrap_logging()
 
-    env_block    = cfg.get("environment", {})
-    explicit_env = env_block.get("name") or None   # None → RunConfig resuelve OCM_ENV
-    run_cfg      = RunConfig.from_env(explicit_env=explicit_env)
+    env_block = cfg.get("environment", {})
+    explicit_env = env_block.get("name") or None  # None → RunConfig resuelve OCM_ENV
+    run_cfg = RunConfig.from_env(explicit_env=explicit_env)
 
     try:
         config = load_appconfig_from_hydra(
@@ -248,6 +253,7 @@ def hydra_main(cfg: DictConfig) -> None:
 # ---------------------------------------------------------------------------
 # CLI entry point (pyproject.toml scripts → ``ocm``)
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """Punto de entrada del script ``ocm`` definido en pyproject.toml.

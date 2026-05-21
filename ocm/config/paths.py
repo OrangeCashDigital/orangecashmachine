@@ -37,15 +37,17 @@ from ocm.config.env_vars import (
     OCM_CONFIG_DIR,
     OCM_CONFIG_PATH,
     OCM_STORAGE__DATA_LAKE__PATH,
-    OCM_DATA_LAKE_PATH,          # DEPRECATED — legacy, transicion controlada
+    OCM_DATA_LAKE_PATH,  # DEPRECATED — legacy, transicion controlada
     OCM_GOLD_PATH,
 )
-from shared.utils.repo import repo_root  # SSOT: definición canónica en shared/utils/repo.py
-
+from shared.utils.repo import (
+    repo_root,
+)  # SSOT: definición canónica en shared/utils/repo.py
 
 # ==========================================================
 # API pública
 # ==========================================================
+
 
 def data_lake_root() -> Path:
     """Raíz del Data Lake. Configurable por entorno, sin hardcode.
@@ -65,7 +67,7 @@ def data_lake_root() -> Path:
     import warnings
 
     canonical = os.getenv(OCM_STORAGE__DATA_LAKE__PATH)
-    legacy    = os.getenv(OCM_DATA_LAKE_PATH)
+    legacy = os.getenv(OCM_DATA_LAKE_PATH)
 
     if canonical and legacy and canonical != legacy:
         warnings.warn(
@@ -125,14 +127,10 @@ def gold_features_root() -> Path:
     return data_lake_root() / "gold" / "features" / "ohlcv"
 
 
-
-
-
-
-
 # ==========================================================
 # Helpers internos
 # ==========================================================
+
 
 def _expand_env(value: str) -> str:
     """Resuelve variables de entorno con sintaxis bash y OmegaConf.
@@ -142,19 +140,20 @@ def _expand_env(value: str) -> str:
         ${oc.env:VAR,default}     — OmegaConf / Hydra
         ${oc.env:VAR}             — OmegaConf sin default
     """
+
     def _sub_omegaconf(m: re.Match) -> str:
-        var     = m.group(1)
+        var = m.group(1)
         default = m.group(2) if m.group(2) is not None else ""
         return os.environ.get(var, default)
 
-    value = re.sub(r'\$\{oc\.env:([^},]+)(?:,([^}]*))?\}', _sub_omegaconf, value)
+    value = re.sub(r"\$\{oc\.env:([^},]+)(?:,([^}]*))?\}", _sub_omegaconf, value)
 
     def _sub_bash(m: re.Match) -> str:
-        var     = m.group(1)
+        var = m.group(1)
         default = m.group(2) or ""
         return os.environ.get(var, default)
 
-    return re.sub(r'\$\{([^}:]+)(?::-([^}]*))?\}', _sub_bash, value)
+    return re.sub(r"\$\{([^}:]+)(?::-([^}]*))?\}", _sub_bash, value)
 
 
 def _find_config_dir() -> Optional[Path]:
@@ -207,18 +206,16 @@ def _read_yaml_lake_path() -> Optional[str]:
             if chunk:
                 data = YamlLoader.merge(data, chunk)
 
-        raw = (
-            data.get("storage", {})
-                .get("data_lake", {})
-                .get("path")
-        )
+        raw = data.get("storage", {}).get("data_lake", {}).get("path")
         return _expand_env(raw) if raw else None
 
     except Exception as exc:
         from loguru import logger
+
         logger.debug(
             "paths._read_yaml_lake_path | fallback_to_structural exc_type={} exc={}",
-            type(exc).__name__, exc,
+            type(exc).__name__,
+            exc,
         )
         return None
 

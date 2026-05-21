@@ -44,15 +44,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import redis as redis_lib
 from loguru import logger
 
-
 # --------------------------------------------------
 # Constants
 # --------------------------------------------------
 
-_STREAM_PREFIX:  str = "ocm:events:"
-_GROUP_PREFIX:   str = "ocm-group-"
-_BLOCK_MS:       int = 2_000   # tiempo máximo bloqueando en XREADGROUP
-_MAX_ENTRIES:    int = 10_000  # MAXLEN del stream (trimming aproximado)
+_STREAM_PREFIX: str = "ocm:events:"
+_GROUP_PREFIX: str = "ocm-group-"
+_BLOCK_MS: int = 2_000  # tiempo máximo bloqueando en XREADGROUP
+_MAX_ENTRIES: int = 10_000  # MAXLEN del stream (trimming aproximado)
 _DEFAULT_STREAM: str = "ohlcv"
 
 
@@ -67,6 +66,7 @@ def _group_name(stream_name: str) -> str:
 # --------------------------------------------------
 # Publisher
 # --------------------------------------------------
+
 
 class RedisStreamPublisher:
     """
@@ -86,17 +86,17 @@ class RedisStreamPublisher:
 
     def __init__(
         self,
-        client:      redis_lib.Redis,
+        client: redis_lib.Redis,
         stream_name: str = _DEFAULT_STREAM,
-        maxlen:      int = _MAX_ENTRIES,
+        maxlen: int = _MAX_ENTRIES,
     ) -> None:
-        self._client  = client
-        self._key     = _stream_key(stream_name)
-        self._maxlen  = maxlen
-        self._log     = logger.bind(
-            component   = "RedisStreamPublisher",
-            stream      = stream_name,
-            stream_key  = self._key,
+        self._client = client
+        self._key = _stream_key(stream_name)
+        self._maxlen = maxlen
+        self._log = logger.bind(
+            component="RedisStreamPublisher",
+            stream=stream_name,
+            stream_key=self._key,
         )
 
     def publish(self, fields: Dict[str, Any]) -> Optional[str]:
@@ -141,6 +141,7 @@ class RedisStreamPublisher:
 # Consumer
 # --------------------------------------------------
 
+
 class RedisStreamConsumer:
     """
     Consume eventos de un Redis Stream via XREADGROUP.
@@ -168,22 +169,22 @@ class RedisStreamConsumer:
 
     def __init__(
         self,
-        client:        redis_lib.Redis,
-        stream_name:   str = _DEFAULT_STREAM,
+        client: redis_lib.Redis,
+        stream_name: str = _DEFAULT_STREAM,
         consumer_name: str = "worker-1",
-        batch_size:    int = 10,
+        batch_size: int = 10,
     ) -> None:
-        self._client        = client
-        self._key           = _stream_key(stream_name)
-        self._group         = _group_name(stream_name)
-        self._consumer      = consumer_name
-        self._batch_size    = batch_size
-        self._log           = logger.bind(
-            component     = "RedisStreamConsumer",
-            stream        = stream_name,
-            stream_key    = self._key,
-            group         = self._group,
-            consumer      = consumer_name,
+        self._client = client
+        self._key = _stream_key(stream_name)
+        self._group = _group_name(stream_name)
+        self._consumer = consumer_name
+        self._batch_size = batch_size
+        self._log = logger.bind(
+            component="RedisStreamConsumer",
+            stream=stream_name,
+            stream_key=self._key,
+            group=self._group,
+            consumer=consumer_name,
         )
 
     def ensure_group(self) -> bool:
@@ -196,9 +197,7 @@ class RedisStreamConsumer:
         Retorna True si el grupo ya existe o fue creado. False si falla.
         """
         try:
-            self._client.xgroup_create(
-                self._key, self._group, id="$", mkstream=True
-            )
+            self._client.xgroup_create(self._key, self._group, id="$", mkstream=True)
             self._log.info("consumer_group_created")
             return True
         except redis_lib.exceptions.ResponseError as exc:
@@ -223,11 +222,11 @@ class RedisStreamConsumer:
         """
         try:
             results = self._client.xreadgroup(
-                groupname   = self._group,
-                consumername= self._consumer,
-                streams     = {self._key: ">"},
-                count       = self._batch_size,
-                block       = _BLOCK_MS,
+                groupname=self._group,
+                consumername=self._consumer,
+                streams={self._key: ">"},
+                count=self._batch_size,
+                block=_BLOCK_MS,
             )
             if not results:
                 return []
@@ -273,8 +272,8 @@ class RedisStreamConsumer:
 
     def claim_pending(
         self,
-        min_idle_ms:   int = 60_000,
-        batch_size:    int = 10,
+        min_idle_ms: int = 60_000,
+        batch_size: int = 10,
     ) -> List[Tuple[str, Dict[str, str]]]:
         """
         Reclama mensajes pendientes (PEL) idle más de min_idle_ms.
@@ -295,12 +294,12 @@ class RedisStreamConsumer:
         """
         try:
             result = self._client.xautoclaim(
-                name         = self._key,
-                groupname    = self._group,
-                consumername = self._consumer,
-                min_idle_time= min_idle_ms,
-                start_id     = "0-0",
-                count        = batch_size,
+                name=self._key,
+                groupname=self._group,
+                consumername=self._consumer,
+                min_idle_time=min_idle_ms,
+                start_id="0-0",
+                count=batch_size,
             )
             # xautoclaim retorna (next_start_id, entries, deleted_ids)
             # entries es lista de (entry_id, fields)
@@ -314,9 +313,9 @@ class RedisStreamConsumer:
 
     def send_to_dlq(
         self,
-        fields:             Dict[str, Any],
-        reason:             str = "unknown",
-        original_entry_id:  str = "",
+        fields: Dict[str, Any],
+        reason: str = "unknown",
+        original_entry_id: str = "",
     ) -> Optional[str]:
         """
         Publica un mensaje fallado al Dead Letter Stream.
@@ -327,27 +326,29 @@ class RedisStreamConsumer:
 
         SafeOps: retorna None si falla, nunca lanza.
         """
-        _DLQ_KEY    = "ocm:events:dead-letter"
+        _DLQ_KEY = "ocm:events:dead-letter"
         _DLQ_MAXLEN = 5_000
 
         try:
             wire = {str(k): str(v) for k, v in fields.items()}
-            wire.update({
-                "dlq_reason":           reason,
-                "dlq_source_stream":    self._key,
-                "dlq_original_entry_id": original_entry_id,
-                "dlq_consumer":         self._consumer,
-            })
+            wire.update(
+                {
+                    "dlq_reason": reason,
+                    "dlq_source_stream": self._key,
+                    "dlq_original_entry_id": original_entry_id,
+                    "dlq_consumer": self._consumer,
+                }
+            )
             entry_id = self._client.xadd(
                 _DLQ_KEY,
                 wire,
-                maxlen      = _DLQ_MAXLEN,
-                approximate = True,
+                maxlen=_DLQ_MAXLEN,
+                approximate=True,
             )
             self._log.bind(
-                dlq_entry_id       = entry_id,
-                original_entry_id  = original_entry_id,
-                reason             = reason,
+                dlq_entry_id=entry_id,
+                original_entry_id=original_entry_id,
+                reason=reason,
             ).error("message_sent_to_dlq")
             return entry_id
         except Exception as exc:

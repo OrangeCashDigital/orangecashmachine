@@ -38,7 +38,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Protocol, runtime_checkable
 
-
 # ---------------------------------------------------------------------------
 # KafkaMessage — value object inmutable del mensaje recibido
 # ---------------------------------------------------------------------------

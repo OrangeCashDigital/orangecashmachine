@@ -40,6 +40,7 @@ Schema version history
 
 Principios: SSOT · DDD · Kappa · Fail-Fast · KISS
 """
+
 from __future__ import annotations
 
 import json
@@ -47,7 +48,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional
 
 from shared.kafka.schemas._base import BasePayload
-
 
 # ---------------------------------------------------------------------------
 # Constantes de schema
@@ -57,9 +57,9 @@ OHLCV_SCHEMA_VERSION: int = 1
 
 DataSource = Literal["live", "backfill", "replay"]
 
-DATASOURCE_LIVE:     DataSource = "live"
+DATASOURCE_LIVE: DataSource = "live"
 DATASOURCE_BACKFILL: DataSource = "backfill"
-DATASOURCE_REPLAY:   DataSource = "replay"
+DATASOURCE_REPLAY: DataSource = "replay"
 
 _VALID_SOURCES = frozenset({DATASOURCE_LIVE, DATASOURCE_BACKFILL, DATASOURCE_REPLAY})
 
@@ -68,6 +68,7 @@ _VALID_SOURCES = frozenset({DATASOURCE_LIVE, DATASOURCE_BACKFILL, DATASOURCE_REP
 # SchemaVersionError — Fail-Fast en deserialización
 # ---------------------------------------------------------------------------
 
+
 class OHLCVSchemaVersionError(ValueError):
     """Schema version incompatible en EventPayload.from_dict()."""
 
@@ -75,6 +76,7 @@ class OHLCVSchemaVersionError(ValueError):
 # ---------------------------------------------------------------------------
 # KafkaOHLCVBar — vela OHLCV inmutable en formato wire
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class KafkaOHLCVBar:
@@ -85,38 +87,40 @@ class KafkaOHLCVBar:
     Inmutable: frozen=True garantiza que no se modifica en tránsito.
     ts en milisegundos UTC epoch.
     """
-    ts:     int
-    open:   float
-    high:   float
-    low:    float
-    close:  float
+
+    ts: int
+    open: float
+    high: float
+    low: float
+    close: float
     volume: float
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "ts":     self.ts,
-            "open":   self.open,
-            "high":   self.high,
-            "low":    self.low,
-            "close":  self.close,
+            "ts": self.ts,
+            "open": self.open,
+            "high": self.high,
+            "low": self.low,
+            "close": self.close,
             "volume": self.volume,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "KafkaOHLCVBar":
         return cls(
-            ts     = int(data["ts"]),
-            open   = float(data["open"]),
-            high   = float(data["high"]),
-            low    = float(data["low"]),
-            close  = float(data["close"]),
-            volume = float(data["volume"]),
+            ts=int(data["ts"]),
+            open=float(data["open"]),
+            high=float(data["high"]),
+            low=float(data["low"]),
+            close=float(data["close"]),
+            volume=float(data["volume"]),
         )
 
 
 # ---------------------------------------------------------------------------
 # EventPayload — lote de velas con contexto de pipeline
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class EventPayload(BasePayload):
@@ -140,14 +144,15 @@ class EventPayload(BasePayload):
     is_live, is_backfill, is_replay, should_generate_signal
     SSOT de la regla de filtrado — consumers usan estas propiedades.
     """
-    exchange:       str                      = ""
-    symbol:         str                      = ""
-    timeframe:      str                      = ""
-    batch_start_ts: int                      = 0
-    bars:           List[KafkaOHLCVBar]      = field(default_factory=list)
-    source:         DataSource               = DATASOURCE_LIVE
-    run_id:         str                      = ""
-    meta:           Optional[Dict[str, Any]] = None
+
+    exchange: str = ""
+    symbol: str = ""
+    timeframe: str = ""
+    batch_start_ts: int = 0
+    bars: List[KafkaOHLCVBar] = field(default_factory=list)
+    source: DataSource = DATASOURCE_LIVE
+    run_id: str = ""
+    meta: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
     # Kappa helpers — SSOT de reglas de filtrado
@@ -179,17 +184,19 @@ class EventPayload(BasePayload):
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
-        base.update({
-            "event_version":  OHLCV_SCHEMA_VERSION,
-            "exchange":       self.exchange,
-            "symbol":         self.symbol,
-            "timeframe":      self.timeframe,
-            "batch_start_ts": self.batch_start_ts,
-            "source":         self.source,
-            "run_id":         self.run_id,
-            "bars":           [b.to_dict() for b in self.bars],
-            "meta":           self.meta,
-        })
+        base.update(
+            {
+                "event_version": OHLCV_SCHEMA_VERSION,
+                "exchange": self.exchange,
+                "symbol": self.symbol,
+                "timeframe": self.timeframe,
+                "batch_start_ts": self.batch_start_ts,
+                "source": self.source,
+                "run_id": self.run_id,
+                "bars": [b.to_dict() for b in self.bars],
+                "meta": self.meta,
+            }
+        )
         return base
 
     @classmethod
@@ -197,8 +204,7 @@ class EventPayload(BasePayload):
         version = int(data.get("event_version", 1))
         if version != OHLCV_SCHEMA_VERSION:
             raise OHLCVSchemaVersionError(
-                f"EventPayload schema v{version} incompatible "
-                f"con v{OHLCV_SCHEMA_VERSION} esperada."
+                f"EventPayload schema v{version} incompatible con v{OHLCV_SCHEMA_VERSION} esperada."
             )
 
         bars_raw = data["bars"]
@@ -219,17 +225,17 @@ class EventPayload(BasePayload):
             )
 
         return cls(
-            event_id       = str(data["event_id"]),
-            event_version  = version,
-            occurred_at    = str(data.get("occurred_at", "")),
-            exchange       = str(data["exchange"]),
-            symbol         = str(data["symbol"]),
-            timeframe      = str(data["timeframe"]),
-            batch_start_ts = int(data["batch_start_ts"]),
-            bars           = bars,
-            source         = source,
-            run_id         = str(data.get("run_id", "")),
-            meta           = meta_raw,
+            event_id=str(data["event_id"]),
+            event_version=version,
+            occurred_at=str(data.get("occurred_at", "")),
+            exchange=str(data["exchange"]),
+            symbol=str(data["symbol"]),
+            timeframe=str(data["timeframe"]),
+            batch_start_ts=int(data["batch_start_ts"]),
+            bars=bars,
+            source=source,
+            run_id=str(data.get("run_id", "")),
+            meta=meta_raw,
         )
 
 

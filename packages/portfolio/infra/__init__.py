@@ -14,6 +14,7 @@ OCP: PortfolioService acepta cualquier PositionStore.
 Importar desde aquí (SSOT):
     from portfolio.infra import InMemoryPositionStore, RedisPositionStore
 """
+
 from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.infra.redis_store import RedisPositionStore
 

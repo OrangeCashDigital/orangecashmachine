@@ -37,7 +37,6 @@ from market_data.domain.exceptions import DataQualityError  # noqa: F401
 from market_data.domain.quality.types import DataQualityReport, QualityIssue
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
-
 # ===========================================================================
 # Helpers
 # ===========================================================================
@@ -138,7 +137,13 @@ class DataQualityChecker:
 
     def _log_result(self, report: DataQualityReport, symbol: str, rows: int) -> None:
         if report.is_clean:
-            logger.debug("Data quality OK | {}/{} exchange={} rows={}", symbol, self._timeframe, self._exchange, rows)
+            logger.debug(
+                "Data quality OK | {}/{} exchange={} rows={}",
+                symbol,
+                self._timeframe,
+                self._exchange,
+                rows,
+            )
         else:
             level = "error" if report.has_critical_issues else "warning"
             getattr(logger, level)(
@@ -269,7 +274,7 @@ class DataQualityChecker:
                         "method": "rolling_zscore",
                         "window": _ZSCORE_WINDOW,
                         "threshold": _ZSCORE_THRESHOLD,
-                        "max_zscore": round(float(z.max()), 2) if not z.isna().all() else None,
+                        "max_zscore": (round(float(z.max()), 2) if not z.isna().all() else None),
                     },
                 )
             )
@@ -315,7 +320,6 @@ def native_checker_factory(
     SSOT: la implementación concreta (DataQualityChecker) y su factory
     viven juntos en application/quality/ — no en ports/.
     """
-    from market_data.ports.outbound.data_quality_checker import DataQualityCheckerPort  # noqa: F401
 
     return DataQualityChecker(
         timeframe=timeframe,

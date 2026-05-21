@@ -18,6 +18,7 @@ Exit codes
     2 — ciclos de importación detectados
     3 — error de entorno (grimp/lint-imports no disponible)
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _run(cmd: list[str]) -> tuple[str, int]:
     """
@@ -53,13 +55,10 @@ def _run(cmd: list[str]) -> tuple[str, int]:
 def count_contracts() -> int:
     """Cuenta contratos declarados en pyproject.toml."""
     import tomllib
+
     with open(ROOT / "pyproject.toml", "rb") as fh:
         data = tomllib.load(fh)
-    return len(
-        data.get("tool", {})
-            .get("importlinter", {})
-            .get("contracts", [])
-    )
+    return len(data.get("tool", {}).get("importlinter", {}).get("contracts", []))
 
 
 def run_lint_imports() -> tuple[int, int, list[str]]:
@@ -75,6 +74,7 @@ def run_lint_imports() -> tuple[int, int, list[str]]:
     import re
 
     import shutil
+
     lint_bin = shutil.which("lint-imports") or str(ROOT / ".venv/bin/lint-imports")
     out, _ = _run([lint_bin])
 
@@ -94,7 +94,7 @@ def run_lint_imports() -> tuple[int, int, list[str]]:
 
         m = SUMMARY_RE.search(stripped)
         if m:
-            kept   = int(m.group(1))
+            kept = int(m.group(1))
             broken = int(m.group(2))
             continue
 
@@ -136,7 +136,8 @@ def detect_cycles() -> list[str]:
     for line in out.splitlines():
         if line.startswith("CYCLES:"):
             import json as _json
-            return _json.loads(line[len("CYCLES:"):])
+
+            return _json.loads(line[len("CYCLES:") :])
     return []
 
 
@@ -144,9 +145,10 @@ def count_tests() -> dict[str, int]:
     """Cuenta archivos de test por categoría."""
     test_root = ROOT / "tests"
     return {
-        "total":        len(list(test_root.rglob("test_*.py"))),
-        "architecture": len(list((test_root / "architecture").rglob("test_*.py")))
-                        if (test_root / "architecture").exists() else 0,
+        "total": len(list(test_root.rglob("test_*.py"))),
+        "architecture": (
+            len(list((test_root / "architecture").rglob("test_*.py"))) if (test_root / "architecture").exists() else 0
+        ),
     }
 
 
@@ -160,29 +162,30 @@ def count_adr() -> int:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     as_json = "--json" in sys.argv
-    strict  = "--strict" in sys.argv
+    strict = "--strict" in sys.argv
 
     kept, broken, broken_names = run_lint_imports()
     contracts_total = count_contracts()
-    cycles          = detect_cycles()
-    tests           = count_tests()
-    adrs            = count_adr()
+    cycles = detect_cycles()
+    tests = count_tests()
+    adrs = count_adr()
 
     health = "OK" if broken == 0 and len(cycles) == 0 else "FAIL"
 
     metrics: dict = {
-        "contracts_total":  contracts_total,
-        "contracts_kept":   kept,
+        "contracts_total": contracts_total,
+        "contracts_kept": kept,
         "contracts_broken": broken,
         "broken_contracts": broken_names,
-        "import_cycles":    len(cycles),
-        "cycle_details":    cycles,
-        "tests_total":      tests["total"],
+        "import_cycles": len(cycles),
+        "cycle_details": cycles,
+        "tests_total": tests["total"],
         "tests_architecture": tests["architecture"],
-        "adrs":             adrs,
-        "health":           health,
+        "adrs": adrs,
+        "health": health,
     }
 
     if as_json:

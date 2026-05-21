@@ -22,7 +22,6 @@ from typing import Protocol, runtime_checkable
 
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk, OHLCVSource
 
-
 # ── Constantes de source — re-exports desde OHLCVSource (SSOT en dominio) ────
 # No redefinir aquí — OHLCVSource es la única fuente de verdad.
 # Estos aliases se mantienen por compatibilidad con callers existentes.

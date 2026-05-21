@@ -69,7 +69,6 @@ from loguru import logger
 from market_data.domain.value_objects.raw_trade import RawTrade, TradeSource
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
 
-
 # ---------------------------------------------------------------------------
 # Tipos
 # ---------------------------------------------------------------------------
@@ -357,7 +356,11 @@ class GapAwareStream:
                 return False
             try:
                 self._source.__aiter__()  # reset del iterador
-                self._log.info("WS source reiniciado | intento={}/{}", attempt, _MAX_RESTART_ATTEMPTS)
+                self._log.info(
+                    "WS source reiniciado | intento={}/{}",
+                    attempt,
+                    _MAX_RESTART_ATTEMPTS,
+                )
                 return True
             except Exception as exc:
                 backoff = _RESTART_BACKOFF_S * attempt

@@ -73,7 +73,7 @@ from ocm.config.hydra_loader import (  # noqa: F401
 
 # ── Facade del bounded context (SSOT: __init__.py) ───────────────────────────
 from ocm.config import (  # noqa: F401
-    ConfigurationError      as _ce,    # re-export verificado
-    ConfigValidationError   as _cve,   # re-export verificado
-    ConfigPipelineError     as _cpe,   # re-export verificado
+    ConfigurationError as _ce,  # re-export verificado
+    ConfigValidationError as _cve,  # re-export verificado
+    ConfigPipelineError as _cpe,  # re-export verificado
 )

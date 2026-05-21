@@ -8,6 +8,7 @@ Eventos de dominio relacionados con rebalanceo de portfolio.
 Frozen dataclasses — inmutables, sin dependencias externas.
 Principios: DDD · SSOT · KISS · Fail-Fast
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,16 +36,17 @@ class RebalanceTriggered:
     Para inmutabilidad completa usar types.MappingProxyType si se
     requiere enforcement estricto en el futuro.
     """
-    trigger:      str
-    targets:      dict[str, float]
+
+    trigger: str
+    targets: dict[str, float]
     triggered_at: datetime
 
     @classmethod
     def now(cls, trigger: str, targets: dict[str, float]) -> "RebalanceTriggered":
         return cls(
-            trigger      = trigger,
-            targets      = targets,
-            triggered_at = datetime.now(timezone.utc),
+            trigger=trigger,
+            targets=targets,
+            triggered_at=datetime.now(timezone.utc),
         )
 
 
@@ -61,9 +63,10 @@ class RebalanceCompleted:
     symbols_adjusted : símbolos que recibieron ajuste (tuple para inmutabilidad)
     completed_at     : timestamp UTC
     """
+
     orders_generated: int
     symbols_adjusted: tuple[str, ...]
-    completed_at:     datetime
+    completed_at: datetime
 
     @classmethod
     def now(
@@ -72,7 +75,7 @@ class RebalanceCompleted:
         symbols_adjusted: list[str],
     ) -> "RebalanceCompleted":
         return cls(
-            orders_generated = orders_generated,
-            symbols_adjusted = tuple(symbols_adjusted),
-            completed_at     = datetime.now(timezone.utc),
+            orders_generated=orders_generated,
+            symbols_adjusted=tuple(symbols_adjusted),
+            completed_at=datetime.now(timezone.utc),
         )

@@ -12,10 +12,10 @@ from unittest.mock import MagicMock, patch
 
 from infrastructure.dagster.resources import OCMResource
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_run_mock(env: str = "test", run_id: str = "test-run-001") -> MagicMock:
     return MagicMock(
@@ -32,18 +32,19 @@ def _make_run_mock(env: str = "test", run_id: str = "test-run-001") -> MagicMock
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestOCMResource:
 
+class TestOCMResource:
     def test_explicit_env_passed_to_run_config(self):
         """env='test' se reenvía como explicit_env a RunConfig.from_env()."""
         resource = OCMResource(env="test")
 
-        with patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run, \
-             patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg, \
-             patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls:
-
-            mock_run.return_value   = _make_run_mock(env="test")
-            mock_cfg.return_value   = MagicMock()
+        with (
+            patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run,
+            patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg,
+            patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls,
+        ):
+            mock_run.return_value = _make_run_mock(env="test")
+            mock_cfg.return_value = MagicMock()
             mock_ctx_cls.return_value = MagicMock()
 
             ctx = resource.build_runtime_context()
@@ -56,12 +57,13 @@ class TestOCMResource:
         """env='' delega la resolución a RunConfig.from_env() (lee OCM_ENV)."""
         resource = OCMResource(env="")
 
-        with patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run, \
-             patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg, \
-             patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls:
-
-            mock_run.return_value     = _make_run_mock(env="development", run_id="xyz")
-            mock_cfg.return_value     = MagicMock()
+        with (
+            patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run,
+            patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg,
+            patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls,
+        ):
+            mock_run.return_value = _make_run_mock(env="development", run_id="xyz")
+            mock_cfg.return_value = MagicMock()
             mock_ctx_cls.return_value = MagicMock()
 
             resource.build_runtime_context()
@@ -73,15 +75,16 @@ class TestOCMResource:
         """build_runtime_context() genera contexto fresco por llamada (no cacheado)."""
         resource = OCMResource(env="test")
 
-        with patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run, \
-             patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg, \
-             patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls:
-
+        with (
+            patch("infrastructure.dagster.resources.RunConfig.from_env") as mock_run,
+            patch("infrastructure.dagster.resources.load_appconfig_standalone") as mock_cfg,
+            patch("infrastructure.dagster.resources.RuntimeContext") as mock_ctx_cls,
+        ):
             mock_run.side_effect = [
                 _make_run_mock(run_id="id1"),
                 _make_run_mock(run_id="id2"),
             ]
-            mock_cfg.return_value     = MagicMock()
+            mock_cfg.return_value = MagicMock()
             mock_ctx_cls.return_value = MagicMock()
 
             resource.build_runtime_context()

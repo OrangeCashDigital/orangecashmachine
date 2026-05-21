@@ -153,10 +153,14 @@ class OCMContainer:
             PrometheusResampleMetrics,
             PrometheusRepairMetrics,
         )
-        from market_data.infrastructure.bootstrap.pipeline_factory import ConcretePipelineFactory
+        from market_data.infrastructure.bootstrap.pipeline_factory import (
+            ConcretePipelineFactory,
+        )
 
         self.orchestrator = PipelineOrchestrator(factory=ConcretePipelineFactory())
-        from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
+        from market_data.adapters.outbound.storage.iceberg_factory import (
+            IcebergStorageFactory,
+        )
 
         self.resample_uc = ResampleUseCase(
             storage_factory=IcebergStorageFactory(),

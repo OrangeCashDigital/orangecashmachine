@@ -7,16 +7,17 @@ Verifican que:
   - El publisher port está correctamente definido como abstracción.
   - No hay duplicación de schemas entre shared y market_data.
 """
+
 from __future__ import annotations
 
 import ast
 from pathlib import Path
 
-ROOT        = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 SHARED_KAFKA = ROOT / "packages" / "shared" / "kafka"
-MARKET_DATA  = ROOT / "packages" / "market_data"
-APPLICATION  = MARKET_DATA / "application"
-INFRA_KAFKA  = MARKET_DATA / "infrastructure" / "kafka"
+MARKET_DATA = ROOT / "packages" / "market_data"
+APPLICATION = MARKET_DATA / "application"
+INFRA_KAFKA = MARKET_DATA / "infrastructure" / "kafka"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ def _all_imports_in(path: Path) -> list[tuple[Path, str]]:
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+
 class TestKafkaSchemaSSO:
     """BC-29, BC-33: Wire schemas Kafka son SSOT en shared.kafka."""
 
@@ -75,13 +77,9 @@ class TestKafkaSchemaSSO:
             return  # No hay infra Kafka aún — OK
 
         infra_classes = _class_names_in(INFRA_KAFKA)
-        schema_classes = {
-            c for c in infra_classes
-            if any(c.endswith(sfx) for sfx in SCHEMA_SUFFIXES)
-        }
+        schema_classes = {c for c in infra_classes if any(c.endswith(sfx) for sfx in SCHEMA_SUFFIXES)}
 
-        shared_classes = _class_names_in(SHARED_KAFKA / "schemas") \
-            if (SHARED_KAFKA / "schemas").exists() else set()
+        shared_classes = _class_names_in(SHARED_KAFKA / "schemas") if (SHARED_KAFKA / "schemas").exists() else set()
 
         duplicated_outside_shared = schema_classes - shared_classes
         assert not duplicated_outside_shared, (
@@ -97,13 +95,8 @@ class TestApplicationKafkaIsolation:
     def test_no_kafka_imports_in_application(self):
         violations: list[str] = []
         for filepath, module in _all_imports_in(APPLICATION):
-            if (
-                "kafka" in module.lower()
-                and "market_data.infrastructure" in module
-            ):
-                violations.append(
-                    f"{filepath.relative_to(ROOT)}: imports {module}"
-                )
+            if "kafka" in module.lower() and "market_data.infrastructure" in module:
+                violations.append(f"{filepath.relative_to(ROOT)}: imports {module}")
         assert not violations, (
             "Imports directos de Kafka en application/ (BC-05):\n"
             + "\n".join(f"  {v}" for v in violations)
@@ -119,9 +112,8 @@ class TestApplicationKafkaIsolation:
             src = f.read_text()
             if "KafkaProducerAdapter" in src or "KafkaOHLCVPublisher" in src:
                 violations.append(str(f.relative_to(ROOT)))
-        assert not violations, (
-            "Clases concretas de Kafka en application/ (BC-05):\n"
-            + "\n".join(f"  {v}" for v in violations)
+        assert not violations, "Clases concretas de Kafka en application/ (BC-05):\n" + "\n".join(
+            f"  {v}" for v in violations
         )
 
 
@@ -135,8 +127,7 @@ class TestPublisherPortContract:
     def test_publisher_port_file_exists(self):
         src = self._get_port_src()
         assert src is not None, (
-            "ports/outbound/publisher_port.py no existe. "
-            "Ejecuta la FASE 2 del plan de deuda técnica."
+            "ports/outbound/publisher_port.py no existe. Ejecuta la FASE 2 del plan de deuda técnica."
         )
 
     def test_publisher_port_defines_protocol(self):
@@ -173,6 +164,4 @@ class TestPublisherPortContract:
                     f"publisher_port.py importa infrastructure: {node.module}\n"
                     "Los puertos solo dependen del dominio (BC-04)."
                 )
-                assert "adapters" not in node.module, (
-                    f"publisher_port.py importa adapters: {node.module}"
-                )
+                assert "adapters" not in node.module, f"publisher_port.py importa adapters: {node.module}"

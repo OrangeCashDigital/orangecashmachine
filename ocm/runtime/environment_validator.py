@@ -66,7 +66,7 @@ class EnvironmentValidator:
     """
 
     _GENERIC_TEST_SYMBOLS = frozenset({"BTC/USDT", "ETH/USDT"})
-    _PRODUCTION_ENVS      = frozenset({"production", "prod"})
+    _PRODUCTION_ENVS = frozenset({"production", "prod"})
 
     def check(self, config: "AppConfig", run_cfg: "RunConfig") -> None:
         """
@@ -109,20 +109,13 @@ class EnvironmentValidator:
                 check="exchanges_enabled",
                 reason="No exchanges configured",
             )
-            raise EnvironmentMismatchError(
-                f"No exchanges configured for env='{run_cfg.env}'. "
-                "Check your config file."
-            )
+            raise EnvironmentMismatchError(f"No exchanges configured for env='{run_cfg.env}'. Check your config file.")
 
     @staticmethod
     def _check_production_credentials(config: "AppConfig", log) -> None:
         """En producción, todos los exchanges habilitados deben tener credenciales."""
         exchanges = getattr(config, "exchanges", [])
-        missing = [
-            exc.name.value
-            for exc in exchanges
-            if not getattr(exc, "has_credentials", False)
-        ]
+        missing = [exc.name.value for exc in exchanges if not getattr(exc, "has_credentials", False)]
         if missing:
             log.critical(
                 "environment_check_failed",
@@ -130,8 +123,7 @@ class EnvironmentValidator:
                 exchanges_missing_credentials=missing,
             )
             raise EnvironmentMismatchError(
-                f"Production environment requires credentials for all exchanges. "
-                f"Missing: {missing}"
+                f"Production environment requires credentials for all exchanges. Missing: {missing}"
             )
 
     def _check_production_test_symbols(self, config: "AppConfig", log) -> None:

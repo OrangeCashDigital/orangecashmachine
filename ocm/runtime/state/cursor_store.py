@@ -14,23 +14,25 @@ from loguru import logger
 
 try:
     from prometheus_client import Counter, Gauge, Histogram
+
     _PROMETHEUS_AVAILABLE = True
 except ImportError:
     _PROMETHEUS_AVAILABLE = False
 
-_DEFAULT_HOST:      str   = "localhost"
-_DEFAULT_PORT:      int   = 6379
-_DEFAULT_DB:        int   = 1  # db=1 — canónico para dev. db=0 = legacy (cursores expirados).
-                               # Ref: .env REDIS_DB=1
-_DEFAULT_ENV:       str   = "development"
-_DEFAULT_TTL_DAYS:  int   = 30
-_SOCKET_TIMEOUT:    int   = 3
-_CONNECT_TIMEOUT:   int   = 3
-_POOL_MAX_CONN:     int   = 10
-_SCAN_COUNT:        int   = 100
-_DELETE_BATCH_SIZE: int   = 500
-_RETRY_ATTEMPTS:    int   = 3
-_RETRY_BASE_MS:     float = 50.0
+_DEFAULT_HOST: str = "localhost"
+_DEFAULT_PORT: int = 6379
+_DEFAULT_DB: int = 1  # db=1 — canónico para dev. db=0 = legacy (cursores expirados).
+# Ref: .env REDIS_DB=1
+_DEFAULT_ENV: str = "development"
+_DEFAULT_TTL_DAYS: int = 30
+_SOCKET_TIMEOUT: int = 3
+_CONNECT_TIMEOUT: int = 3
+_POOL_MAX_CONN: int = 10
+_SCAN_COUNT: int = 100
+_DELETE_BATCH_SIZE: int = 500
+_RETRY_ATTEMPTS: int = 3
+_RETRY_BASE_MS: float = 50.0
+
 
 @runtime_checkable
 class CursorStore(Protocol):
@@ -48,6 +50,7 @@ class CursorStore(Protocol):
     def get_raw(self, key: str) -> Optional[str]: ...
     def set_raw(self, key: str, value: str, ttl_seconds: int) -> None: ...
 
+
 _CAS_SCRIPT = """
 local current = redis.call("GET", KEYS[1])
 if not current then
@@ -63,6 +66,7 @@ end
 return 0
 """
 
+
 def _make_metrics():
     if not _PROMETHEUS_AVAILABLE:
         return None, None, None, None, None, None
@@ -73,10 +77,15 @@ def _make_metrics():
             Counter("cursor_miss_total", "Total de cursor misses", ["exchange"]),
             Counter("cursor_error_total", "Total de errores", ["operation"]),
             Gauge("cursor_active_total", "Cursores activos por exchange", ["exchange"]),
-            Gauge("cursor_lag_seconds", "Retraso medio del cursor por exchange", ["exchange"]),
+            Gauge(
+                "cursor_lag_seconds",
+                "Retraso medio del cursor por exchange",
+                ["exchange"],
+            ),
         )
     except Exception:
         return None, None, None, None, None, None
+
 
 _get_latency, _update_total, _miss_total, _error_total, _active_cursors, _cursor_lag = _make_metrics()
 
@@ -89,6 +98,7 @@ async def _retry_async(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RE
     Delegado a retry.redis_retry_async — SSOT.
     """
     from ocm.runtime.state.retry import redis_retry_async
+
     return await redis_retry_async(fn, attempts=attempts, base_ms=base_ms)
 
 
@@ -100,6 +110,7 @@ def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS)
     Delegado a utils.redis_retry — SSOT.
     """
     from ocm.runtime.state.retry import redis_retry
+
     return redis_retry(fn, attempts=attempts, base_ms=base_ms)
 
 
@@ -120,18 +131,21 @@ class RedisCursorStore:
 
     def __init__(
         self,
-        host:     str = _DEFAULT_HOST,
-        port:     int = _DEFAULT_PORT,
-        db:       int = _DEFAULT_DB,
-        env:      str = _DEFAULT_ENV,
+        host: str = _DEFAULT_HOST,
+        port: int = _DEFAULT_PORT,
+        db: int = _DEFAULT_DB,
+        env: str = _DEFAULT_ENV,
         ttl_days: int = _DEFAULT_TTL_DAYS,
         password: str | None = None,
     ) -> None:
         self._env_raw = env.lower()
-        self._env     = _encode(self._env_raw)
-        self._ttl     = ttl_days * 86_400
+        self._env = _encode(self._env_raw)
+        self._ttl = ttl_days * 86_400
         pool = ConnectionPool(
-            host=host, port=port, db=db, password=password or None,
+            host=host,
+            port=port,
+            db=db,
+            password=password or None,
             max_connections=_POOL_MAX_CONN,
             socket_timeout=_SOCKET_TIMEOUT,
             socket_connect_timeout=_CONNECT_TIMEOUT,
@@ -142,7 +156,11 @@ class RedisCursorStore:
         self._cas_script = self._client.register_script(_CAS_SCRIPT)
         logger.debug(
             "CursorStore v5 ready | host={}:{} db={} env={} ttl_days={}",
-            host, port, db, env, ttl_days,
+            host,
+            port,
+            db,
+            env,
+            ttl_days,
         )
 
     def _key(self, exchange: str, symbol: str, timeframe: str) -> str:
@@ -168,7 +186,7 @@ class RedisCursorStore:
 
     async def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
         key = self._key(exchange, symbol, timeframe)
-        t0  = time.monotonic()
+        t0 = time.monotonic()
         try:
             raw = await _retry_async(lambda: self._client.get(key))
             if _get_latency:
@@ -186,22 +204,23 @@ class RedisCursorStore:
             if _error_total:
                 _error_total.labels(operation="get").inc()
             logger.warning(
-                "CursorStore.get failed (fallback to parquet) | key={} error={}", key, exc
+                "CursorStore.get failed (fallback to parquet) | key={} error={}",
+                key,
+                exc,
             )
             return None
 
     async def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool:
         key = self._key(exchange, symbol, timeframe)
         try:
-            result = await _retry_async(
-                lambda: self._cas_script(keys=[key], args=[str(timestamp_ms), str(self._ttl)])
-            )
+            result = await _retry_async(lambda: self._cas_script(keys=[key], args=[str(timestamp_ms), str(self._ttl)]))
             if result == 0:
                 # CAS skip es señal de salud: el cursor ya está adelante o igual.
                 # INFO (no DEBUG) para que sea visible en producción sin grep extra.
                 logger.info(
                     "Cursor already current — CAS skip | key={} attempted={} (no update needed)",
-                    key, timestamp_ms,
+                    key,
+                    timestamp_ms,
                 )
                 return False
             if _update_total:
@@ -212,9 +231,7 @@ class RedisCursorStore:
         except Exception as exc:
             if _error_total:
                 _error_total.labels(operation="update").inc()
-            logger.warning(
-                "CursorStore.update failed (non-critical) | key={} error={}", key, exc
-            )
+            logger.warning("CursorStore.update failed (non-critical) | key={} error={}", key, exc)
             return False
 
     def delete(self, exchange: str, symbol: str, timeframe: str) -> bool:
@@ -236,7 +253,7 @@ class RedisCursorStore:
             for batch in _batched(self._scan_iter(pattern), _DELETE_BATCH_SIZE):
                 if batch:
                     n = self._client.delete(*batch)
-                    deleted += int(n) if not hasattr(n, '__await__') else 0  # type: ignore[arg-type]  # redis-py stubs: delete() -> int en cliente sync
+                    deleted += int(n) if not hasattr(n, "__await__") else 0  # type: ignore[arg-type]  # redis-py stubs: delete() -> int en cliente sync
             if _active_cursors:
                 _active_cursors.labels(exchange=exchange).set(0)
             logger.info("All cursors deleted | exchange={} count={}", exchange, deleted)
@@ -245,7 +262,9 @@ class RedisCursorStore:
             if _error_total:
                 _error_total.labels(operation="delete_exchange").inc()
             logger.warning(
-                "CursorStore.delete_exchange failed | exchange={} error={}", exchange, exc
+                "CursorStore.delete_exchange failed | exchange={} error={}",
+                exchange,
+                exc,
             )
             return 0
 
@@ -256,7 +275,7 @@ class RedisCursorStore:
             keys = list(self._scan_iter(pattern))
             if not keys:
                 return result
-            pipe   = self._client.pipeline()
+            pipe = self._client.pipeline()
             for key in keys:
                 pipe.get(key)
             values = _retry(lambda: pipe.execute())
@@ -270,18 +289,16 @@ class RedisCursorStore:
         except Exception as exc:
             if _error_total:
                 _error_total.labels(operation="list").inc()
-            logger.warning(
-                "CursorStore.list_cursors failed | exchange={} error={}", exchange, exc
-            )
+            logger.warning("CursorStore.list_cursors failed | exchange={} error={}", exchange, exc)
             return {}
 
     def scan_exchanges(self) -> list[str]:
-        prefix    = f"{self._env}:cursor:"
+        prefix = f"{self._env}:cursor:"
         exchanges: set[str] = set()
         try:
             for key in self._scan_iter(f"{prefix}*"):
                 if key.startswith(prefix):
-                    rest         = key[len(prefix):]
+                    rest = key[len(prefix) :]
                     exchange_enc = rest.split(":")[0]
                     try:
                         exchanges.add(_decode(exchange_enc))
@@ -334,7 +351,7 @@ class InMemoryCursorStore:
         return self._store.get(f"{exchange}:{symbol}:{timeframe}")
 
     async def update(self, exchange: str, symbol: str, timeframe: str, timestamp_ms: int) -> bool:
-        key     = f"{exchange}:{symbol}:{timeframe}"
+        key = f"{exchange}:{symbol}:{timeframe}"
         current = self._store.get(key)
         if current is not None and current > timestamp_ms:
             return False
@@ -357,16 +374,19 @@ def encode_cursor_key(value: str) -> str:
     Delegado a utils.encode_redis_key — SSOT.
     """
     from ocm.runtime.state.encoding import encode_redis_key
+
     return encode_redis_key(value)
 
 
 _encode = encode_cursor_key  # alias interno — no eliminar: usado por RedisCursorStore
+
 
 def _decode(value: str) -> str:
     padding = 4 - len(value) % 4
     if padding != 4:
         value += "=" * padding
     return base64.urlsafe_b64decode(value).decode()
+
 
 def _batched(iterable: Iterator, size: int) -> Iterator[list]:
     it = iter(iterable)
@@ -394,7 +414,7 @@ def build_cursor_store_from_config(config=None) -> RedisCursorStore:
         port=redis_cfg.port,
         db=redis_cfg.db,
         password=getattr(redis_cfg, "password", None) or None,
-        env=config.environment.name if hasattr(config, "environment") else "development",
+        env=(config.environment.name if hasattr(config, "environment") else "development"),
         ttl_days=getattr(redis_cfg, "ttl_days", _DEFAULT_TTL_DAYS),
     )
 
@@ -420,6 +440,7 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
     try:
         from dotenv import load_dotenv as _load_dotenv
         import pathlib as _pathlib
+
         # Buscar .env desde la raíz del proyecto (2 niveles arriba de este módulo)
         _env_path = _pathlib.Path(__file__).parent.parent.parent.parent / ".env"
         if _env_path.exists():
@@ -434,6 +455,7 @@ def build_cursor_store_from_env(env: Optional[str] = None) -> RedisCursorStore:
         )
 
     from ocm.config.loader.env_resolver import resolve_env
+
     return RedisCursorStore(
         host=os.getenv("REDIS_HOST", _DEFAULT_HOST),
         port=int(os.getenv("REDIS_PORT", str(_DEFAULT_PORT))),

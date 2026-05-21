@@ -12,6 +12,7 @@ Extraído de portfolio_service.py (SRP — un archivo, una responsabilidad).
 
 Principios: SRP · OCP · DIP · KISS
 """
+
 from __future__ import annotations
 
 import threading

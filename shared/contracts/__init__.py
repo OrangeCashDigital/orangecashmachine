@@ -11,6 +11,7 @@ Uso correcto (DIP):
 Los bounded contexts dependen de estas abstracciones, nunca entre sí.
 Regla: ZERO imports de módulos internos del proyecto.
 """
+
 from shared.contracts.boundaries import (
     FeatureSource,
     SignalProtocol,
