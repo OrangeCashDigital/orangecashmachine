@@ -7,7 +7,8 @@ Contrato central del sistema de pipeline unificado.
 
 Responsabilidad
 ---------------
-Definir los tipos de datos compartidos por todas las estrategias: "PipelineContext", PipelineMode, PairResult, PipelineSummary,
+Definir los tipos de datos compartidos por todas las estrategias:
+"PipelineContext", PipelineMode, PairResult, PipelineSummary,
 StrategyMixin y el Protocol PipelineStrategy.
 
 Principios aplicados

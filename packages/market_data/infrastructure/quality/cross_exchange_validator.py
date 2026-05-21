@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 import pandas as pd
 from loguru import logger
 
@@ -38,7 +40,11 @@ class CrossExchangeReport:
 
     def summary(self) -> str:
         lines = [
-            f"CrossExchangeReport | {self.symbol}/{self.timeframe} {self.exchange_a} vs {self.exchange_b} overlap={self.overlap_rows} issues={len(self.issues)}"
+            (
+                f"CrossExchangeReport | {self.symbol}/{self.timeframe}"
+                f" {self.exchange_a} vs {self.exchange_b}"
+                f" overlap={self.overlap_rows} issues={len(self.issues)}"
+            )
         ]
         for i in self.issues:
             lines.append(f"  [{i.severity.upper()}] {i.check}: {i.description} (rows={i.affected_rows})")
