@@ -39,17 +39,24 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
-# ── Domain value types — solo contratos puros, sin comportamiento ─────────────
+# ── Domain value types — contratos puros, sin comportamiento ─────────────────
 from market_data.domain.policies.base import (
     PairResult,
     PipelineMode,
     PipelineSummary,  # noqa: F401 — re-exportado para que importadores usen runtime
 )
 
-# ── Ports — importación directa (application/ puede importar ports/) ──────────
-from market_data.ports.outbound.metrics import NullMetrics
+# ── Ports — application/ puede importar ports/ directamente (Clean Architecture)
+from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
+from market_data.ports.outbound.gap_registry import GapRegistryPort
+from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
+from market_data.ports.outbound.metrics import MetricsPort, NullMetrics
+from market_data.ports.outbound.publisher import OHLCVPublisherPort
+from market_data.ports.outbound.quality_pipeline import QualityPipelinePort
+from market_data.ports.outbound.state import CursorStorePort
+from market_data.ports.outbound.storage import OHLCVStorage
+from market_data.ports.outbound.throttle import ThrottlePort
 
 _log = logging.getLogger(__name__)
 
@@ -224,65 +231,73 @@ class PipelineContext:
 
     Invariantes post-construcción
     -----------------------------
-    · metrics  NUNCA es None — __post_init__ inyecta NullMetrics si omitido
+    · metrics       NUNCA es None — __post_init__ inyecta NullMetrics si omitido
     · _chunk_converter puede ser None; get_chunk_converter() falla rápido (fail-fast)
 
-    Campos obligatorios
-    -------------------
-    Sin default → fail-fast en construcción. RepairStrategy requiere storage;
-    backfill/incremental no lo usan.
+    Campos obligatorios (sin default)
+    ----------------------------------
+    fail-fast en construcción si se omiten.
+    RepairStrategy requiere storage; backfill/incremental no lo usan.
 
-    Principios: DIP · SRP · Kappa · Fail-Fast · Fail-Soft
+    Tipado fuerte
+    -------------
+    Todos los campos usan el Port formal como tipo — DIP completo.
+    Los mocks de tests deben implementar el Protocol correspondiente
+    (duck typing via runtime_checkable — sin herencia explícita).
+
+    Principios: DIP · SRP · Kappa · Fail-Fast · Fail-Soft · ISP
     """
 
-    # ── Productores ───────────────────────────────────────────────────────────
-    fetcher: Any  # HistoricalFetcherPort — REST poller (backfill + incremental)
-    cursor: Any  # CursorStorePort       — Redis, SSOT del offset del productor
-    quality: Any  # QualityPipeline       — gate de calidad antes de publicar
+    # ── Productores — obligatorios (sin default) ──────────────────────────────
+    fetcher: HistoricalFetcherPort  # REST poller (backfill + incremental)
+    cursor: CursorStorePort  # Redis — SSOT del offset del productor
+    quality: QualityPipelinePort  # quality gate antes de publicar
     exchange_id: str
     market_type: str
     start_date: str
 
     # ── Publisher Kappa ───────────────────────────────────────────────────────
     # Obligatorio en producción — backfill/incremental fallan si es None.
-    # None permitido solo en tests que mockean el publisher explícitamente.
-    publisher: Any = field(default=None)  # OHLCVPublisherPort → Kafka ohlcv.raw
+    # None permitido solo en tests que inyectan NullPublisher explícitamente.
+    publisher: OHLCVPublisherPort | None = field(default=None)
 
     # ── Mantenimiento (RepairStrategy) ────────────────────────────────────────
     # storage=None es válido para backfill/incremental — solo Repair lo usa.
     # Inyectado por RepairPipelineFactory, no por ConcretePipelineFactory.
-    storage: Any = field(default=None)  # OHLCVStoragePort → Iceberg Silver (repair only)
+    storage: OHLCVStorage | None = field(default=None)
 
     # ── Observabilidad ────────────────────────────────────────────────────────
-    # None es válido en construcción — __post_init__ garantiza NullMetrics.
-    # Tipo Any para compatibilidad con mocks; en producción: MetricsPort.
-    metrics: Any = field(default=None)  # MetricsPort — nunca None post-construcción
+    # None válido en construcción — __post_init__ garantiza NullMetrics.
+    # Post-construcción: NUNCA None (invariante garantizado).
+    metrics: MetricsPort | None = field(default=None)
 
     # ── Gap registry ──────────────────────────────────────────────────────────
-    gap_registry: Any = field(default=None)  # GapRegistryPort — None = sin estado
+    # None = modo degradado sin Redis (SafeOps — RepairStrategy degrada).
+    gap_registry: GapRegistryPort | None = field(default=None)
 
     # ── Rate limiting ─────────────────────────────────────────────────────────
-    throttle: Any = field(default=None)  # ThrottlePort — None = sin rate limiting
+    # None = sin throttle (modo Kappa sin Bronze directo).
+    throttle: ThrottlePort | None = field(default=None)
 
-    # ── Kappa chunk converter (opcional) ──────────────────────────────────────
+    # ── Kappa chunk converter ─────────────────────────────────────────────────
     # Inyectado por pipeline_factory antes de pasar el contexto a las strategies.
-    # None hasta que el pipeline Kappa esté activo — get_chunk_converter() hace fail-fast.
-    _chunk_converter: Any = field(default=None)  # OHLCVChunkConverterPort
+    # None hasta que el pipeline Kappa esté activo — get_chunk_converter() fail-fast.
+    _chunk_converter: OHLCVChunkConverterPort | None = field(default=None)
 
-    # ── Invariantes ───────────────────────────────────────────────────────────
+    # ── Invariantes post-construcción ─────────────────────────────────────────
 
     def __post_init__(self) -> None:
         """
         Garantiza invariantes post-construcción.
 
         · metrics: inyecta NullMetrics si no fue proporcionado (fail-soft).
-          NullMetrics implementa MetricsPort — no-op en todos sus métodos.
-          Evita guards 'if ctx.metrics is not None' en todas las estrategias.
+          NullMetrics satisface MetricsPort — no-op en todos sus métodos.
+          Elimina guards 'if ctx.metrics is not None' en todas las estrategias.
         """
         if self.metrics is None:
             object.__setattr__(self, "metrics", NullMetrics())
 
-    def get_chunk_converter(self) -> Any:
+    def get_chunk_converter(self) -> OHLCVChunkConverterPort:
         """
         Retorna el chunk converter inyectado.
 
