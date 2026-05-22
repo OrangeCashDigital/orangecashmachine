@@ -58,9 +58,9 @@ from market_data.domain.policies.base import (
     PipelineSummary,
 )
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
+from market_data.ports.outbound.gap_registry import GapRegistryPort
 from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
 from market_data.ports.outbound.state import CursorStorePort
-from ocm.runtime.state import build_gap_registry
 
 # ==============================================================================
 # Constantes
@@ -177,6 +177,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         quality: object = None,  # QualityPipeline — DIP: inyectar desde factory
         max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
         cursor_store: Optional[CursorStorePort] = None,
+        gap_registry: Optional[GapRegistryPort] = None,
         backfill_mode: bool = True,
         market_type: str = "spot",
         dry_run: bool = False,
@@ -240,7 +241,7 @@ class OHLCVPipeline(PipelineTriggerPort):
             start_date=start_date,
             publisher=_publisher,
             metrics=metrics,
-            gap_registry=build_gap_registry(),  # type: ignore[arg-type]
+            gap_registry=gap_registry,  # None = degradado (sin Redis — inyectar desde composition root)
         )
 
         self._strategies: dict[PipelineMode, PipelineStrategy] = {

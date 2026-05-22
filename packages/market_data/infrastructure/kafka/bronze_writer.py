@@ -60,6 +60,7 @@ import pandas as pd
 from loguru import logger
 
 from market_data.infrastructure.kafka.dedup import SeenFilter
+from market_data.infrastructure.kafka.metrics import KafkaMetrics
 from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from shared.kafka.schemas.ohlcv import EventPayload
@@ -87,12 +88,14 @@ class KafkaBronzeWriter:
         consumer: KafkaConsumerPort,
         bronze_storage: object,
         dlq_producer: Optional[KafkaProducerPort] = None,
+        metrics: Optional[KafkaMetrics] = None,
         poll_timeout_ms: int = 1_000,
         max_poll_records: int = 500,
     ) -> None:
         self._consumer = consumer
         self._bronze = bronze_storage
         self._dlq = dlq_producer
+        self._metrics: KafkaMetrics = metrics or KafkaMetrics()
         self._poll_timeout_ms = poll_timeout_ms
         self._max_poll_records = max_poll_records
         self._dedup = SeenFilter(max_size=10_000)
@@ -272,18 +275,50 @@ class KafkaBronzeWriter:
             return "write_error"
 
     async def _send_to_dlq(self, msg, reason: str) -> None:
-        """Envía mensaje no procesable al DLQ. SafeOps."""
+        """
+        Envía mensaje no procesable al DLQ. SafeOps — nunca lanza.
+
+        Garantías
+        ---------
+        - dlq=None : log WARNING observable + métrica dlq_unavailable.
+          El mensaje se descarta — decisión explícita de operador.
+        - produce() falla : log ERROR (pérdida de datos) + métrica
+          dlq_send_error. El mensaje se pierde sin recuperación.
+        """
+        _offset = getattr(msg, "offset", "unknown")
+        _topic = getattr(msg, "topic", "unknown")
+
         if self._dlq is None:
+            # Sin DLQ configurado — pérdida aceptada, pero debe ser visible.
+            self._log.warning(
+                "dlq_unavailable — mensaje descartado sin DLQ configurado",
+                reason=reason,
+                offset=_offset,
+                original_topic=_topic,
+            )
+            self._metrics.event_failed(reason="dlq_unavailable")
             return
+
         try:
-            # produce() — método canónico del port (FIX B-NEW-02)
             await self._dlq.produce(
                 topic=TOPIC_DLQ,
                 value=msg.value,
-                headers={"reason": reason, "original_topic": msg.topic},
+                headers={"reason": reason, "original_topic": _topic},
             )
+            # Contabilizar como dlq_sent — permite alertar sobre volumen DLQ.
+            self._metrics.event_failed(reason="dlq_sent")
         except Exception as exc:
-            self._log.warning("dlq_send_error", error=str(exc))
+            # ERROR — no WARNING: este mensaje se pierde sin recuperación.
+            # Alertar inmediatamente. Si el DLQ falla consistentemente,
+            # considerar detener el consumer para evitar pérdida masiva.
+            self._log.error(
+                "dlq_send_error — mensaje perdido sin recuperación posible",
+                reason=reason,
+                offset=_offset,
+                original_topic=_topic,
+                error=str(exc),
+            )
+            self._metrics.event_failed(reason="dlq_send_error")
 
 
 __all__ = ["KafkaBronzeWriter"]
