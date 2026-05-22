@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/domain/value_objects/gap_scanner.py
+market_data/application/processing/gap_scanner.py
 ================================================
 
 Utilidad de detección de huecos temporales en DataFrames OHLCV.

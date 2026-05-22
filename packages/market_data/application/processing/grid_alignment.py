@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-market_data/domain/value_objects/grid_alignment.py
+market_data/application/processing/grid_alignment.py
 ===================================================
 
 Servicio de alineación temporal de datos OHLCV al grid canónico.

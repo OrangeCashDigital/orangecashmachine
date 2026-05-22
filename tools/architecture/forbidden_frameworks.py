@@ -24,7 +24,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Raíz del bounded context a inspeccionar
 DOMAIN_ROOT = ROOT / "packages" / "market_data" / "domain"
@@ -53,20 +53,9 @@ FORBIDDEN_PREFIXES: tuple[str, ...] = (
 # Cada excepción documenta deuda técnica pendiente de una fase concreta.
 ALLOWED_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
     [
-        # Fase 2: polars estructural — scan_gaps() opera sobre pl.DataFrame
         # Migrar cuando se abstraiga el protocolo de timestamps a un VO propio.
-        ("value_objects/gap_scanner.py", "polars"),
-        # Fase 2: polars estructural — align_to_grid() opera sobre pl.DataFrame
         # Migrado de pandas en esta fase; pendiente abstracción del protocolo.
-        ("value_objects/grid_alignment.py", "polars"),
-        # Fase 2: polars+pandera.polars estructural — validate_ohlcv() usa DataFrameSchema
-        # Migrado de pandera.pandas; pendiente extracción a puerto de validación.
-        ("value_objects/ohlcv_schema.py", "polars"),
-        ("value_objects/ohlcv_schema.py", "pandera"),
-        # Fase 2: loguru estructural — logging en value objects y policies
         # Pendiente: extraer logging a puerto de observabilidad en domain.
-        ("value_objects/ohlcv_schema.py", "loguru"),
-        ("policies/data_quality_policy.py", "loguru"),
     ]
 )
 

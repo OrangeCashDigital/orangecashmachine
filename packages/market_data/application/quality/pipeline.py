@@ -49,6 +49,8 @@ from typing import Optional
 import pandas as pd
 from loguru import logger
 
+from market_data.application.processing.gap_scanner import scan_gaps
+
 # DataQualityReport: type usado en QualityPipelineResult y _resolve_tier
 # DataQualityChecker: NO importar aquí — pipeline usa self._checker_factory (DIP)
 from market_data.application.quality.data_quality import DataQualityReport, native_checker_factory
@@ -64,7 +66,6 @@ from market_data.domain.policies.data_quality_policy import (
     QualityDecision,
     default_policy,
 )
-from market_data.domain.value_objects.gap_scanner import scan_gaps
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 
 # ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta

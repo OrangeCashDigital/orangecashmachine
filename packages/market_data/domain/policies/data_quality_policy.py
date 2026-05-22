@@ -46,13 +46,14 @@ KISS   — flujo lineal: compute_score → collect_reasons → decide
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List
 
-from loguru import logger
-
 from market_data.domain.quality.types import DataQualityReport
+
+logger = logging.getLogger(__name__)
 
 # ===========================================================================
 # Tipos públicos
@@ -184,7 +185,7 @@ class DataQualityPolicy:
             penalty_breakdown=breakdown,
         )
         logger.debug(
-            "Policy | {}/{} exchange={} {}",
+            "Policy | %s/%s exchange=%s %s",
             report.symbol,
             report.timeframe,
             report.exchange,
