@@ -13,8 +13,7 @@ Principios: DDD · SSOT · KISS · frozen VO
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-import pandas as pd
+from datetime import datetime, timedelta, timezone
 
 
 @dataclass(frozen=True)
@@ -43,8 +42,9 @@ class GapRange:
     run_id: str = ""
 
     def __str__(self) -> str:
-        start = pd.Timestamp(self.start_ms, unit="ms", tz="UTC").isoformat()
-        end = pd.Timestamp(self.end_ms, unit="ms", tz="UTC").isoformat()
+        _epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        start = (_epoch + timedelta(milliseconds=self.start_ms)).isoformat()
+        end = (_epoch + timedelta(milliseconds=self.end_ms)).isoformat()
         return f"Gap[{start} → {end} expected={self.expected}]"
 
     @property
