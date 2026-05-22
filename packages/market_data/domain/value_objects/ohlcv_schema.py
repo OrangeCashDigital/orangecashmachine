@@ -25,6 +25,8 @@ Principios aplicados
 
 from __future__ import annotations
 
+from datetime import datetime, timezone  # stdlib — MIN_TIMESTAMP sin pandas
+
 import pandas as pd
 import pandera.pandas as pa
 from loguru import logger
@@ -40,7 +42,7 @@ from market_data.domain.value_objects.timeframe import (
 # ==========================================================
 
 # Bitcoin genesis block: primer timestamp válido del mercado crypto
-MIN_TIMESTAMP: pd.Timestamp = pd.Timestamp("2009-01-03", tz="UTC")
+MIN_TIMESTAMP: datetime = datetime(2009, 1, 3, tzinfo=timezone.utc)  # Bitcoin genesis block
 
 # Columnas numéricas de precio (deben ser > 0, no solo >= 0)
 PRICE_COLUMNS: tuple[str, ...] = ("open", "high", "low", "close")
