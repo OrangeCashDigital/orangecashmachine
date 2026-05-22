@@ -79,12 +79,13 @@ def get_origin_fallback_ms(exchange_id: str, market_type: str = "spot") -> int:
     Lookup compuesto: exchange_id para spot, exchange_id_futures para non-spot.
     Fallback conservador a 2017-01-01 para exchanges no registrados.
     """
-    import pandas as _pd  # pandas es herramienta de datos, no infraestructura
+    from datetime import datetime, timezone  # stdlib pura — sin dependencia de terceros en dominio
 
     _is_futures = market_type.lower() not in ("spot", "")
     lookup_key = f"{exchange_id}_futures" if _is_futures else exchange_id
     quirks = EXCHANGE_QUIRKS.get(lookup_key) or get_quirks(exchange_id)
-    return int(_pd.Timestamp(quirks.origin_fallback_date, tz="UTC").value // 1_000_000)
+    dt = datetime.fromisoformat(quirks.origin_fallback_date).replace(tzinfo=timezone.utc)
+    return int(dt.timestamp() * 1000)
 
 
 __all__ = [
