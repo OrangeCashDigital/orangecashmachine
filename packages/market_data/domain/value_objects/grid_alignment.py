@@ -16,6 +16,13 @@ align_to_grid fue separada de timeframe.py porque necesita pandas.
 timeframe.py es un value object puro: solo define qué es un timeframe
 y su duración en ms. No debe conocer pandas.
 
+Nota de deuda técnica (Phase 2)
+--------------------------------
+pd.DataFrame es dependencia estructural de la interfaz — no accidental.
+La migración completa a polars se realiza en Fase 2 junto con los ports
+outbound. El callback pattern (on_drift, on_collision) ya cumple DIP;
+solo cambia el tipo del DataFrame en firmas.
+
 Por qué floor y no round
 ------------------------
 Round puede avanzar un timestamp al bucket siguiente, creando
