@@ -2,14 +2,13 @@
 """
 tests/market_data/test_layer_contracts.py — pytest wrapper for the AST linter.
 
-Delegates technology governance checks to scripts/forbidden_frameworks.py.
+Delegates technology governance checks to tools/architecture/forbidden_frameworks.py.
 Keeps the test interface (pytest) for discoverability and CI integration.
 """
 
 from __future__ import annotations
 
 import pytest
-
 from scripts.forbidden_frameworks import (
     DOMAIN_ROOT,
     collect_violations,

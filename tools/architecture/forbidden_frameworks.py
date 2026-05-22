@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-scripts/forbidden_frameworks.py — AST linter for technology governance.
+tools/architecture/forbidden_frameworks.py — AST linter for technology governance.
 
 Checks that domain/ never imports heavy data or infrastructure frameworks.
 Invariants are checked at the AST level (static imports only).
 
 Uso
 ---
-    uv run python scripts/forbidden_frameworks.py         # human-readable
-    uv run python scripts/forbidden_frameworks.py --json   # JSON output
-    uv run python scripts/forbidden_frameworks.py --strict # exit 1 on violations
+    uv run python tools/architecture/forbidden_frameworks.py         # human-readable
+    uv run python tools/architecture/forbidden_frameworks.py --json   # JSON output
+    uv run python tools/architecture/forbidden_frameworks.py --strict # exit 1 on violations
 
 Exit codes
 ----------
