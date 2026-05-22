@@ -3,73 +3,97 @@
 market_data/ports/outbound/quality_pipeline.py
 ===============================================
 
-Puerto OUTBOUND: contrato del pipeline de calidad de datos OHLCV.
+Puerto OUTBOUND: contrato del quality gate OHLCV.
 
 Responsabilidad
 ---------------
-Declarar el contrato mínimo que cualquier implementación del quality gate
-debe cumplir para ser inyectada en PipelineContext.quality via composition root.
+Definir QualityPipelinePort — el contrato mínimo que OHLCVPipeline
+y las strategies necesitan del quality gate.
+
+QualityPipelineResult vive aquí (SSOT) porque es un tipo de contrato
+compartido entre ports/ y application/ — no lógica de aplicación.
+application/quality/pipeline.py lo re-exporta desde aquí.
+
+Dependencias permitidas
+-----------------------
+Solo domain/ — BC-04 garantizado.
+Cero imports de application/, adapters/, infrastructure/.
 
 Implementación canónica
 -----------------------
 market_data.application.quality.pipeline.QualityPipeline
 
-Por qué existe este puerto
---------------------------
-PipelineContext.quality era Any — acoplado implícitamente a QualityPipeline
-(clase concreta de application/). Con este puerto, runtime.py depende de
-una abstracción y QualityPipeline satisface estructuralmente el contrato
-sin herencia explícita (duck typing via runtime_checkable).
+No-op (tests)
+-------------
+NullQualityPipeline — acepta todos los DataFrames incondicionalmente.
 
-Contrato semántico
-------------------
-check() evalúa un DataFrame Silver y retorna la decisión de calidad.
-Es la única operación que BackfillStrategy e IncrementalStrategy necesitan
-del quality gate — ISP: no exponemos métodos de configuración interna.
-
-Decisión de diseño — sync vs async
------------------------------------
-QualityPipeline.check() es síncrono (CPU-bound: estadísticas, scoring).
-El port refleja la implementación real — no añadir async sin necesidad.
-
-Principios
-----------
-DIP   — runtime.py depende de este port, no de QualityPipeline directamente
-ISP   — solo el método que las strategies usan (check)
-SRP   — el port declara el contrato; QualityPipeline implementa la lógica
-OCP   — nuevas implementaciones (mock, A/B testing) no modifican este port
-SSOT  — única fuente de verdad del contrato del quality gate
+Principios: DIP · ISP · SSOT · runtime_checkable · SafeOps
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
-if TYPE_CHECKING:
-    # Solo para type hints — evita importar application/ desde ports/
-    # QualityPipelineResult vive en application/quality/pipeline.py
-    from market_data.application.quality.pipeline import QualityPipelineResult
+from market_data.domain.entities import DataTier
+
+# =========================================================================== #
+# Result — SSOT del tipo de retorno del quality gate                          #
+# =========================================================================== #
+
+
+@dataclass(frozen=True)
+class QualityPipelineResult:
+    """
+    Resultado del quality gate sobre un DataFrame Silver.
+
+    Tipo de contrato compartido entre ports/ y application/.
+    SSOT: definido aquí; application/quality/pipeline.py lo re-exporta.
+
+    Attributes
+    ----------
+    accepted  : True si el DataFrame supera el quality gate (decision != "reject").
+    decision  : "accept" | "flag" | "reject" — decisión de política.
+    score     : Score de calidad [0.0, 1.0]. 1.0 = perfecto.
+    tier      : DataTier resultante. None en modo degradado (sin policy).
+    """
+
+    accepted: bool
+    decision: str
+    score: float
+    tier: DataTier | None = field(default=None)
+
+
+# =========================================================================== #
+# Port                                                                        #
+# =========================================================================== #
 
 
 @runtime_checkable
 class QualityPipelinePort(Protocol):
     """
-    Contrato del quality gate de datos OHLCV.
+    Contrato mínimo del quality gate OHLCV.
 
     Implementación canónica
     -----------------------
     market_data.application.quality.pipeline.QualityPipeline
 
-    Implementación nula (tests)
-    ---------------------------
-    Cualquier objeto con check() — duck typing. Ver NullQualityPipeline abajo.
+    Contrato semántico
+    ------------------
+    check() evalúa un DataFrame Silver y retorna QualityPipelineResult.
+    Nunca lanza — SafeOps: errores internos se loguean y retornan
+    QualityPipelineResult con accepted=False en modo degradado.
 
-    SafeOps
-    -------
-    check() nunca lanza — retorna QualityPipelineResult con decision="reject"
-    ante errores internos. El caller (BackfillStrategy) solo lee .accepted.
+    DIP
+    ---
+    OHLCVPipeline y las strategies dependen de este port,
+    nunca de QualityPipeline concreto.
+
+    ISP
+    ---
+    Un solo método — solo lo que las strategies necesitan.
     """
 
     def check(
@@ -80,46 +104,46 @@ class QualityPipelinePort(Protocol):
         timeframe: str,
         market_type: str = "spot",
         rows_removed: int = 0,
-    ) -> "QualityPipelineResult":
+    ) -> QualityPipelineResult:
         """
         Evalúa la calidad de un DataFrame Silver.
 
         Parameters
         ----------
-        df          : DataFrame OHLCV post-transformación (Silver layer).
-        exchange    : Identificador del exchange.
-        symbol      : Par canónico ("BTC/USDT").
-        timeframe   : Resolución canónica ("1m", "1h", …).
-        market_type : "spot" | "futures".
-        rows_removed: Velas eliminadas upstream por el transformer.
-                      Descuenta gaps pipeline-induced (no son dato faltante).
+        df            : DataFrame Silver con columnas OHLCV canónicas.
+        exchange      : Identificador del exchange ("bybit", "kucoin", …).
+        symbol        : Par canónico ("BTC/USDT").
+        timeframe     : Resolución canónica ("1m", "1h", …).
+        market_type   : "spot" | "futures" | "perp".
+        rows_removed  : Velas CORRUPT eliminadas upstream por el transformer.
+                        Se descuentan del gap scan para evitar falsos positivos.
 
         Returns
         -------
-        QualityPipelineResult con campos:
-          .accepted  : bool — True si el DataFrame pasa el quality gate.
-          .decision  : str  — "accept" | "reject" | "warn".
-          .score     : float — 0.0–1.0 (1.0 = calidad perfecta).
-          .report    : DataQualityReport con métricas detalladas.
-
-        SafeOps: nunca lanza — decision="reject" ante error interno.
+        QualityPipelineResult con accepted, decision, score y tier.
         """
         ...
 
 
+# =========================================================================== #
+# Null Object                                                                  #
+# =========================================================================== #
+
+
 class NullQualityPipeline:
     """
-        Implementación nula de QualityPipelinePort.
+    Implementación nula de QualityPipelinePort.
 
-        Uso: tests unitarios que no quieren testear el quality gate.
-        Acepta todos los DataFrames incondicionalmente.
+    Uso: tests unitarios que no necesitan testear el quality gate.
+    Acepta todos los DataFrames incondicionalmente.
 
-        Por qué accepted=True y no False
-        ----------------------------------
-        False rechazaría todos los chunks en tests de happy path,
-        activando el código de skip en las strategies bajo test.
-        Para testear rechazos de calidad, usar un
-    mock explícito.
+    Por qué accepted=True y no False
+    ---------------------------------
+    False rechazaría todos los chunks en tests de happy path,
+    activando el código de skip en las strategies bajo test.
+    Para testear rechazos de calidad, usar un mock explícito.
+
+    SafeOps: nunca lanza. Siempre retorna resultado válido.
     """
 
     def check(
@@ -130,11 +154,13 @@ class NullQualityPipeline:
         timeframe: str,
         market_type: str = "spot",
         rows_removed: int = 0,
-    ) -> "QualityPipelineResult":
-        # Import local — evita ciclo ports/→application/ en module-level
-        from market_data.application.quality.pipeline import QualityPipelineResult  # noqa: PLC0415
+    ) -> QualityPipelineResult:
+        return QualityPipelineResult(
+            accepted=True,
+            decision="accept",
+            score=1.0,
+            tier=DataTier.CLEAN,
+        )
 
-        return QualityPipelineResult(accepted=True, decision="accept", score=1.0)
 
-
-__all__ = ["QualityPipelinePort", "NullQualityPipeline"]
+__all__ = ["QualityPipelineResult", "QualityPipelinePort", "NullQualityPipeline"]
