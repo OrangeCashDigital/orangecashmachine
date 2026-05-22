@@ -28,9 +28,8 @@ Uso
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone  # stdlib — pd.Timestamp eliminado del dominio
 from typing import Dict, List
-
-import pandas as pd
 
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
@@ -96,8 +95,8 @@ def _check_required_fields(manifest: Dict) -> tuple[bool, str]:
 def _check_partition_timestamps(partition: Dict, idx: int) -> tuple[bool, str]:
     """min_ts debe ser anterior a max_ts en cada partición."""
     try:
-        min_ts = pd.Timestamp(partition["min_ts"])
-        max_ts = pd.Timestamp(partition["max_ts"])
+        min_ts = datetime.fromisoformat(partition["min_ts"])
+        max_ts = datetime.fromisoformat(partition["max_ts"])
         if min_ts >= max_ts:
             return False, f"Partición {idx}: min_ts >= max_ts ({min_ts} >= {max_ts})"
         return True, ""
@@ -116,7 +115,10 @@ def _check_partition_rows(partition: Dict, idx: int) -> tuple[bool, str]:
 def _check_no_partition_overlap(partitions: List[Dict]) -> tuple[bool, str]:
     """Las particiones no deben solaparse temporalmente."""
     try:
-        ranges = [(pd.Timestamp(p["min_ts"]), pd.Timestamp(p["max_ts"]), i) for i, p in enumerate(partitions)]
+        ranges = [
+            (datetime.fromisoformat(p["min_ts"]), datetime.fromisoformat(p["max_ts"]), i)
+            for i, p in enumerate(partitions)
+        ]
         ranges.sort(key=lambda x: x[0])
         for i in range(len(ranges) - 1):
             _, end_i, idx_i = ranges[i]
@@ -142,8 +144,8 @@ def _check_dataset_lag(manifest: Dict) -> tuple[bool, str]:
         if not partitions:
             return True, ""  # ya validado por _check_manifest_not_empty
 
-        max_ts = max(pd.Timestamp(p["max_ts"]) for p in partitions)
-        now = pd.Timestamp.now(tz="UTC")
+        max_ts = max(datetime.fromisoformat(p["max_ts"]) for p in partitions)
+        now = datetime.now(tz=timezone.utc)
         lag_ms = (now - max_ts).total_seconds() * 1000
         lag_candles = int(lag_ms / tf_ms)
 
