@@ -46,13 +46,15 @@ from ocm.observability import bind_pipeline
 _log = bind_pipeline("pipeline")
 
 
+from market_data.application.pipeline.runtime import (
+    PipelineContext,
+)
 from market_data.application.pipelines._worker_pool import run_worker_pool
 from market_data.application.strategies.backfill import BackfillStrategy
 from market_data.application.strategies.incremental import IncrementalStrategy
 from market_data.application.strategies.repair import RepairStrategy
 from market_data.domain.policies.base import (
     PairResult,
-    PipelineContext,
     PipelineMode,
     PipelineStrategy,
     PipelineSummary,

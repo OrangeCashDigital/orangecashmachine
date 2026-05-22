@@ -19,6 +19,11 @@ from typing import Optional
 
 import pandas as pd
 
+from market_data.application.pipeline.runtime import (
+    PipelineContext,
+    StrategyMixin,
+    classify_error,
+)
 from market_data.application.processing.gap_scanner import GapRange, scan_gaps
 from market_data.domain.exceptions import (
     ChunkFetchError,
@@ -26,10 +31,7 @@ from market_data.domain.exceptions import (
 )
 from market_data.domain.policies.base import (
     PairResult,
-    PipelineContext,
     PipelineMode,
-    StrategyMixin,
-    classify_error,
 )
 from market_data.domain.value_objects.exchange_quirks import (
     get_quirks,

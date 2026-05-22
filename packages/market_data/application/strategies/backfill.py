@@ -29,13 +29,16 @@ from typing import Optional
 
 import pandas as pd
 
+from market_data.application.pipeline.runtime import (
+    PipelineContext,
+    StrategyMixin,
+)
+
 # ── Domain ───────────────────────────────────────────────────────────────────
 from market_data.domain.constants import DEFAULT_CHUNK_LIMIT, MAX_BACKFILL_CHUNKS
 from market_data.domain.policies.base import (
     PairResult,
-    PipelineContext,
     PipelineMode,
-    StrategyMixin,
 )
 from market_data.domain.value_objects.exchange_quirks import (
     get_origin_fallback_ms,

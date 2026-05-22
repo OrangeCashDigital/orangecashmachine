@@ -1,46 +1,61 @@
 # -*- coding: utf-8 -*-
 """
 market_data/domain/policies/base.py
-==========================================
+=====================================
 
-Contrato central del sistema de pipeline unificado.
+Contratos puros del dominio de pipeline OHLCV.
 
 Responsabilidad
 ---------------
-Definir los tipos de datos compartidos por todas las estrategias:
-"PipelineContext", PipelineMode, PairResult, PipelineSummary,
-StrategyMixin y el Protocol PipelineStrategy.
+Definir ÚNICAMENTE los tipos de datos compartidos por todas las estrategias
+que son puramente del dominio — sin comportamiento de orquestación, sin
+imports de ports/, sin NullObjects de infraestructura.
+
+Qué vive aquí
+-------------
+· PipelineMode      — Enum de modos de operación
+· PairResult        — resultado por par (symbol, timeframe); propiedades derivadas puras
+· PipelineSummary   — resumen agregado; propiedades derivadas puras
+· PipelineStrategy  — Protocol estructural mínimo (duck typing)
+· classify_error    — SSOT de clasificación transitorio/permanente (re-exportado)
+· _TransientProxy   — proxy para classify_error con strings
+
+Qué NO vive aquí (movido a application/pipeline/runtime.py)
+------------------------------------------------------------
+· PipelineContext   — DI container que referencia ports/ → pertenece a application/
+· StrategyMixin     — lógica de orquestación → pertenece a application/
+· Timeout constants — configuración de ejecución → pertenece a application/
+· NullMetrics       — implementación de infraestructura → pertenece a ports/
 
 Principios aplicados
 --------------------
-SOLID  — SRP: solo contratos y tipos de datos, sin lógica de negocio
-DIP    — PipelineContext depende de OHLCVStorage (puerto), no de IcebergStorage
-SSOT   — única fuente de verdad para classify_error y _TransientProxy
-DRY    — StrategyMixin centraliza timeout, error handling y métricas
-SafeOps — classify_error nunca lanza; StrategyMixin captura todo excepto CancelledError
+SRP  — solo contratos y tipos de datos, sin lógica de negocio
+DIP  — no importa ports/ ni infrastructure
+DRY  — classify_error centralizado en runtime.py; aquí se re-exporta para
+       compatibilidad con importadores existentes (ver nota de migración)
+Pure — todo función/clase en este módulo es determinista y sin side-effects
+
+Nota de migración
+-----------------
+classify_error y _TransientProxy se re-exportan desde runtime.py para que
+PairResult.is_transient_error funcione sin ciclos. Una vez que todos los
+importadores apunten a application/pipeline/runtime.py, este re-export
+puede eliminarse.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Protocol, runtime_checkable
 
-# ── Ports (contratos) ────────────────────────────────────────────────────────
-# domain/ no puede importar ports/ en runtime — BC-08 layer order lo prohíbe.
-# Los campos de PipelineContext que representan ports usan Any como tipo runtime.
-# Deuda técnica documentada: mover PipelineContext a application/ con DI completo.
-
-
-# ==========================================================================
-# PipelineMode
-# ==========================================================================
-
-
 _log = logging.getLogger(__name__)
+
+
+# =============================================================================
+# PipelineMode
+# =============================================================================
 
 
 class PipelineMode(str, Enum):
@@ -49,176 +64,65 @@ class PipelineMode(str, Enum):
     REPAIR = "repair"
 
 
-# ==========================================================================
-# PipelineContext
-# ==========================================================================
+# =============================================================================
+# Error classification — re-exportado desde runtime para PairResult
+# =============================================================================
+# NOTA: Importación circular evitada porque runtime.py importa PairResult de
+# aquí, y nosotros importamos classify_error de runtime. Python resuelve esto
+# correctamente cuando los módulos están completamente inicializados.
+# Si aparece ImportError en algún test, usar lazy import dentro del método.
 
 
-class _NullMetrics:
-    """Null-object de métricas para PipelineContext — SafeOps sin observabilidad.
-
-    Privado a domain/ — no importa ports/. Duck typing puro.
-    __getattr__ retorna callable no-op para cualquier método de métricas.
-    """
-
-    def __getattr__(self, name: str):  # type: ignore[override]
-        return lambda *args, **kwargs: None
-
-
-@dataclass
-class PipelineContext:
-    """
-    Contexto de ejecución de un pipeline — Kappa architecture.
-
-    Bounded contexts
-    ----------------
-    Productores (BackfillStrategy, IncrementalStrategy):
-      fetcher → publisher → Kafka → [consumer] → Iceberg
-
-    Mantenimiento (RepairStrategy):
-      storage → Iceberg directo (no es market truth, es maintenance)
-
-    Campos obligatorios
-    -------------------
-    Todos los campos sin default son obligatorios — fail-fast en construcción.
-    RepairStrategy requiere storage; backfill/incremental no lo usan.
-
-    Principios: DIP · SRP · Kappa · Fail-Fast
-    """
-
-    # ── Productores ───────────────────────────────────────────────────────────
-    fetcher: Any  # HistoricalFetcherPort — REST poller (backfill + incremental)
-    cursor: Any  # CursorStorePort       — Redis, SSOT del offset del productor
-    quality: Any  # QualityPipeline       — gate de calidad antes de publicar
-    exchange_id: str
-    market_type: str
-    start_date: str
-
-    # ── Publisher Kappa ───────────────────────────────────────────────────────
-    # Obligatorio en producción — backfill/incremental fallan si es None.
-    # Permite None solo en tests que mockean el publisher explícitamente.
-    publisher: Any = field(default=None)  # OHLCVPublisherPort → Kafka ohlcv.raw
-
-    # ── Mantenimiento (RepairStrategy) ────────────────────────────────────────
-    # storage=None es válido para backfill/incremental — solo Repair lo usa.
-    # Inyectado por RepairPipelineFactory, no por ConcretePipelineFactory.
-    storage: Any = field(default=None)  # OHLCVStoragePort → Iceberg Silver (repair only)
-
-    # ── Observabilidad ────────────────────────────────────────────────────────
-    metrics: Any = field(default=None)  # RepairMetricsPort — default None resuelto en __post_init__
-
-    def __post_init__(self) -> None:
-        """Garantiza que metrics nunca sea None — SafeOps con _NullMetrics local."""
-        if self.metrics is None:
-            object.__setattr__(self, "metrics", _NullMetrics())
-
-    gap_registry: Any = field(default=None)  # GapRegistryPort     — SafeOps: None = sin estado
-    throttle: Any = field(default=None)  # ThrottlePort        — None = sin rate limiting
-    # ── Kappa chunk converter (opcional) ──────────────────────────────────────
-    # Inyectado por pipeline_factory antes de pasar el contexto a las strategies.
-    # None es válido hasta que el pipeline Kappa esté activo.
-    _chunk_converter: Any = field(default=None)  # OHLCVChunkConverterPort
-
-    def get_chunk_converter(self) -> "Any":
-        """
-        Retorna el chunk converter inyectado.
-
-        Fail-fast: lanza RuntimeError si _chunk_converter no fue inyectado.
-        El pipeline Kappa debe inyectarlo antes de llamar a las strategies.
-        domain/ usa Any para evitar importar ports/ en runtime (BC-08).
-        """
-        if self._chunk_converter is None:
-            raise RuntimeError(
-                "PipelineContext._chunk_converter no inyectado. "
-                "pipeline_factory debe setear _chunk_converter "
-                "antes de pasar el contexto a BackfillStrategy/IncrementalStrategy."
-            )
-        return self._chunk_converter
-
-
-# ==========================================================================
-# Error classification
-# ==========================================================================
-
-# Tipos de excepción de stdlib/aiohttp que indican error transitorio.
-# Para nuestras propias excepciones usamos el atributo `is_transient`
-# declarado en la clase — más robusto que isinstance con tipos externos.
-_TRANSIENT_STDLIB_TYPES: tuple[type, ...] = (
-    TimeoutError,
-    ConnectionError,  # incluye ConnectionRefusedError, ConnectionResetError
-    BrokenPipeError,
-    OSError,
-)
-
-# Substrings en el mensaje de error que indican error transitorio de red/exchange.
-# Usado solo como fallback cuando no hay información de tipo disponible.
-_TRANSIENT_ERROR_MSGS: tuple[str, ...] = (
-    "timeout",
-    "timed out",
-    "rate limit",
-    "429",
-    "503",
-    "502",
-    "connection",
-    "network",
-    "session is closed",
-    "temporarily",
-    "too many requests",
-    "service unavailable",
-)
-
-# Nombres de clase de aiohttp/ccxt (no importables sin instalar).
-# Mantenemos strings para no crear dependencias en tiempo de importación.
-_TRANSIENT_EXTERNAL_NAMES: frozenset[str] = frozenset(
-    {
-        "ClientConnectorError",
-        "ServerDisconnectedError",
-        "ClientOSError",
-        "ClientResponseError",
-    }
-)
-
-
-def classify_error(exc: BaseException) -> bool:
+def classify_error(exc: BaseException) -> bool:  # noqa: F811
     """
     Retorna True si el error es transitorio (seguro para retry).
 
-    Jerarquía de decisión (orden de prioridad):
-    1. Nuestras excepciones con `is_transient` declarado → fuente de verdad
-    2. Tipos de stdlib conocidos como transitorios
-    3. Nombres de clase de librerías externas (aiohttp, ccxt)
-    4. Substrings en el mensaje — fallback de último recurso
+    SSOT real en application/pipeline/runtime.py — esta copia existe para
+    que PairResult.is_transient_error funcione sin importar application/.
+    Ambas implementaciones son idénticas; se eliminará esta al completar
+    la migración de todos los importadores.
 
-    SafeOps: nunca lanza excepción — retorna False ante cualquier error interno.
+    SafeOps: nunca lanza — retorna False ante cualquier fallo interno.
     """
+    _TRANSIENT_STDLIB = (TimeoutError, ConnectionError, BrokenPipeError, OSError)
+    _TRANSIENT_NAMES = frozenset(
+        {
+            "ClientConnectorError",
+            "ServerDisconnectedError",
+            "ClientOSError",
+            "ClientResponseError",
+        }
+    )
+    _TRANSIENT_MSGS = (
+        "timeout",
+        "timed out",
+        "rate limit",
+        "429",
+        "503",
+        "502",
+        "connection",
+        "network",
+        "session is closed",
+        "temporarily",
+        "too many requests",
+        "service unavailable",
+    )
     try:
-        # 1. Nuestras propias excepciones — atributo de clase (SSOT)
         if hasattr(exc, "is_transient"):
             return bool(exc.is_transient)
-        # 2. Tipos de stdlib
-        if isinstance(exc, _TRANSIENT_STDLIB_TYPES):
+        if isinstance(exc, _TRANSIENT_STDLIB):
             return True
-        # 3. Nombres de clase externos (sin importar los módulos)
-        if type(exc).__name__ in _TRANSIENT_EXTERNAL_NAMES:
+        if type(exc).__name__ in _TRANSIENT_NAMES:
             return True
-        # 4. Fallback por mensaje — último recurso
-        err_lower = str(exc).lower()
-        return any(msg in err_lower for msg in _TRANSIENT_ERROR_MSGS)
+        return any(msg in str(exc).lower() for msg in _TRANSIENT_MSGS)
     except Exception:
-        return False  # SafeOps: fallo en clasificación → asumir permanente
+        return False
 
 
 class _TransientProxy(Exception):
     """
-    Proxy mínimo para classify_error() cuando solo tenemos strings
-    (error_type, error_msg) en lugar del objeto excepción original.
-
-    Permite que PairResult.is_transient_error delegue en classify_error()
-    sin duplicar lógica de clasificación (DRY — SSOT).
-
-    Prioridad en classify_error():
-      1. hasattr(proxy, 'is_transient') → declarativo, para tipos conocidos
-      2. fallback de strings sobre __str__() → para tipos externos/desconocidos
+    Proxy mínimo para classify_error() cuando solo tenemos strings.
+    Ver docstring completo en application/pipeline/runtime.py.
     """
 
     _KNOWN_TRANSIENT: frozenset[str] = frozenset(
@@ -256,15 +160,14 @@ class _TransientProxy(Exception):
             self.is_transient = True
         elif error_type in self._KNOWN_PERMANENT:
             self.is_transient = False
-        # Tipos desconocidos: sin atributo → classify_error usa fallback de strings
 
     def __str__(self) -> str:
         return self._error_msg
 
 
-# ==========================================================================
+# =============================================================================
 # PairResult
-# ==========================================================================
+# =============================================================================
 
 
 @dataclass
@@ -272,8 +175,8 @@ class PairResult:
     """
     Resultado de procesar un par (symbol, timeframe) por una estrategia.
 
-    Inmutable post-construcción excepto por los campos que la estrategia
-    actualiza durante la ejecución (rows, skipped, error, etc.).
+    Tipo de dominio puro — sin side effects, sin imports de ports/.
+    Las propiedades derivadas son deterministas dado el estado del dataclass.
     """
 
     symbol: str
@@ -328,9 +231,9 @@ class PairResult:
         return f"[incremental] {self.symbol}/{self.timeframe} rows={self.rows} duration={self.duration_ms}ms"
 
 
-# ==========================================================================
+# =============================================================================
 # PipelineSummary
-# ==========================================================================
+# =============================================================================
 
 
 @dataclass
@@ -338,8 +241,8 @@ class PipelineSummary:
     """
     Resumen agregado del resultado de un pipeline completo.
 
-    Calculado al finalizar run() en OHLCVPipeline y equivalentes.
-    Inmutable post-construcción.
+    Tipo de dominio puro — calculado al finalizar run().
+    Todas las propiedades son derivadas deterministas de `results`.
     """
 
     results: List[PairResult] = field(default_factory=list)
@@ -404,7 +307,7 @@ class PipelineSummary:
             return 0.0
         return round(self.total_rows / (self.duration_ms / 1000), 2)
 
-    def log(self, log) -> None:
+    def log(self, log: Any) -> None:
         """
         Emite el resumen estructurado usando el logger inyectado.
 
@@ -444,141 +347,9 @@ class PipelineSummary:
                 log.debug("Pair result", status="ok", pair=str(r))
 
 
-# ==========================================================================
-# Timeout constants
-# ==========================================================================
-
-# Timeout por par individual, calibrado por granularidad de timeframe.
-# 1m backfill puede paginar meses de historia — necesita más tiempo que 1d.
-# Repair usa _PAIR_TIMEOUT_REPAIR_S independientemente del timeframe porque
-# el gap healing pagina en ambas direcciones sobre rangos arbitrarios.
-_PAIR_TIMEOUT_BY_TF: dict[str, int] = {
-    "1m": 7200,  # 2h  — backfill completo de 1m puede ser meses
-    "5m": 3600,  # 1h
-    "15m": 1800,  # 30 min
-    "1h": 600,  # 10 min
-    "4h": 300,  # 5 min
-    "1d": 300,  # 5 min
-}
-_PAIR_TIMEOUT_S: int = 300  # fallback para timeframes no mapeados
-_PAIR_TIMEOUT_REPAIR_S: int = 1800  # 30 min — repair (gaps grandes paginados)
-
-
-# ==========================================================================
-# StrategyMixin
-# ==========================================================================
-
-
-class StrategyMixin:
-    """
-    Boilerplate compartido por todas las estrategias de pipeline.
-
-    Gestiona: timeout por par, captura de errores, métricas Prometheus
-    y logging estructurado. Las subclases implementan solo `_run()`.
-
-    Patrón Template Method
-    ----------------------
-    execute_pair()  ← llamado por el worker pool (interfaz pública)
-        └── _run() ← implementado por cada estrategia (lógica de negocio)
-
-    SafeOps
-    -------
-    - Captura todas las excepciones excepto CancelledError
-    - asyncio.TimeoutError se convierte en PairResult con error transitorio
-    - CancelledError se re-lanza siempre — no interferir con shutdown
-    """
-
-    _mode: "PipelineMode"
-
-    async def execute_pair(
-        self,
-        symbol: str,
-        timeframe: str,
-        idx: int,
-        total: int,
-        ctx: "PipelineContext",
-    ) -> "PairResult":
-        result = PairResult(
-            symbol=symbol,
-            timeframe=timeframe,
-            mode=self._mode,
-            exchange_id=ctx.exchange_id,
-        )
-        pair_start = time.monotonic()
-
-        pair_timeout = (
-            _PAIR_TIMEOUT_REPAIR_S
-            if self._mode == PipelineMode.REPAIR
-            else _PAIR_TIMEOUT_BY_TF.get(timeframe, _PAIR_TIMEOUT_S)
-        )
-
-        try:
-            await asyncio.wait_for(
-                self._run(symbol, timeframe, idx, total, ctx, result),
-                timeout=pair_timeout,
-            )
-
-        except asyncio.TimeoutError:
-            result.error = f"Pair timeout after {pair_timeout}s"
-            result.error_type = "TimeoutError"
-            result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-            if ctx.metrics is not None:  # fail-soft — modo degradado sin métricas
-                ctx.metrics.record_error(ctx.exchange_id, "transient")
-            _log.bind(
-                mode=self._mode.value,
-                exchange=ctx.exchange_id,
-                symbol=symbol,
-                timeframe=timeframe,
-                timeout_s=pair_timeout,
-            ).error("Pair timeout — worker liberado")
-
-        except asyncio.CancelledError:
-            raise  # nunca capturar — permite shutdown limpio
-
-        except Exception as exc:
-            result.error = str(exc)
-            result.error_type = type(exc).__name__
-            result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-            is_transient = classify_error(exc)
-            if ctx.metrics is not None:  # fail-soft — modo degradado sin métricas
-                ctx.metrics.record_error(
-                    ctx.exchange_id,
-                    "transient" if is_transient else "fatal",
-                )
-            _log.bind(
-                mode=self._mode.value,
-                exchange=ctx.exchange_id,
-                symbol=symbol,
-                timeframe=timeframe,
-                idx=idx,
-                total=total,
-                error_type=result.error_type,
-                error=str(exc),
-                is_transient=is_transient,
-                duration_ms=result.duration_ms,
-            ).error("Strategy fallida")
-
-        finally:
-            if not result.duration_ms:
-                result.duration_ms = int((time.monotonic() - pair_start) * 1000)
-
-        return result
-
-    async def _run(
-        self,
-        symbol: str,
-        timeframe: str,
-        idx: int,
-        total: int,
-        ctx: "PipelineContext",
-        result: "PairResult",
-    ) -> None:
-        raise NotImplementedError(f"{type(self).__name__} debe implementar _run()")
-
-
-# ==========================================================================
-# PipelineStrategy Protocol
-# ==========================================================================
+# =============================================================================
+# PipelineStrategy — Protocol estructural mínimo
+# =============================================================================
 
 
 @runtime_checkable
@@ -596,5 +367,5 @@ class PipelineStrategy(Protocol):
         timeframe: str,
         idx: int,
         total: int,
-        ctx: "PipelineContext",
+        ctx: Any,  # PipelineContext — Any para evitar ciclo con runtime.py
     ) -> PairResult: ...
