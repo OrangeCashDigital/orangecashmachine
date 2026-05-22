@@ -33,7 +33,7 @@ from market_data.domain.policies.base import (
 from market_data.domain.value_objects.exchange_quirks import (
     get_quirks,
 )  # domain VO — BC-05
-from market_data.domain.value_objects.gap_utils import GapRange, scan_gaps
+from market_data.domain.value_objects.gap_scanner import GapRange, scan_gaps
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
 # ── Domain (tipos y contratos) ────────────────────────────────────────────────

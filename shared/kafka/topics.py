@@ -126,6 +126,37 @@ TOPIC_MICROPRICE_RT: str = "microprice.rt"
 TOPIC_FEATURES_RT: str = "features.rt"
 """Features real-time (VWAP, OFI, spread, momentum)."""
 
+
+# ── Microestructura WebSocket — raw ingestion layer ─────────────────────────
+# Estos topics son el punto de entrada del pipeline Kappa para datos
+# que llegan exclusivamente por WebSocket (no REST backfill posible).
+# Naming: <domain>.raw — sin validar, sin procesar, at-least-once.
+
+TOPIC_ORDERBOOK_RAW: str = "orderbook.raw"
+"""Order book L2 crudo. Fuente: WsOrderBookStream (cryptofeed).
+Consumidores: BookBuilder → book.snapshot / book.delta."""
+
+TOPIC_LIQUIDATIONS_RAW: str = "liquidations.raw"
+"""Liquidaciones forzadas. Fuente: WsLiquidationsStream.
+Consumidores: LiquidationsProcessor → silver.liquidations."""
+
+TOPIC_FUNDING_RAW: str = "funding.raw"
+"""Funding rates en tiempo real. Fuente: FundingRateProducer (WS o polling).
+Consumidores: DerivativesProcessor → silver.funding_rate."""
+
+TOPIC_OI_RAW: str = "oi.raw"
+"""Open interest snapshots. Fuente: OIProducer (WS o polling).
+Consumidores: DerivativesProcessor → silver.open_interest."""
+
+TOPIC_ONCHAIN_RAW: str = "onchain.raw"
+"""Eventos on-chain (flows, whale alerts, block metrics). Fuente: BlockchainEventProducer.
+Consumidores: OnchainProcessor → silver.onchain."""
+
+TOPIC_INFRA_METRICS: str = "infra.metrics"
+"""Métricas de infraestructura interna (latencia, errores, circuit breakers).
+Fuente: todos los producers/consumers vía MetricsEmitter.
+Consumidores: ObservabilityConsumer → Prometheus Pushgateway."""
+
 # =============================================================================
 # Consumer Groups — SSOT de group_id por rol
 # =============================================================================
@@ -142,6 +173,13 @@ GROUP_OHLCV_STREAM: str = "ocm-ohlcv-stream"
 GROUP_BOOK_BUILDER: str = "ocm-book-builder"
 GROUP_MICROPRICE: str = "ocm-microprice"
 GROUP_FEATURES_RT: str = "ocm-features-rt"
+GROUP_WS_ORDERBOOK_PRODUCER: str = "ocm-ws-orderbook-producer"
+GROUP_WS_LIQUIDATIONS_PRODUCER: str = "ocm-ws-liquidations-producer"
+GROUP_WS_FUNDING_PRODUCER: str = "ocm-ws-funding-producer"
+GROUP_WS_OI_PRODUCER: str = "ocm-ws-oi-producer"
+GROUP_WS_ONCHAIN_PRODUCER: str = "ocm-ws-onchain-producer"
+GROUP_INFRA_METRICS_EMITTER: str = "ocm-infra-metrics-emitter"
+
 
 # =============================================================================
 # Headers — metadatos del mensaje (x-ocm-*)
@@ -178,6 +216,12 @@ Permite routing sin deserializar en consumers multi-topic."""
 #   positions.opened   delete   30d
 #   positions.closed   delete   90d    — base analytics PnL
 #   ocm.dlq            delete   30d
+#   orderbook.raw      delete   1h     — alta frecuencia, no replay
+#   liquidations.raw   delete   7d     — auditoría de riesgo
+#   funding.raw        delete   3d
+#   oi.raw             delete   3d
+#   onchain.raw        delete   7d
+#   infra.metrics      delete   1d
 #
 # NO usar compaction en ningún topic — todos los mensajes son relevantes.
 
@@ -213,6 +257,12 @@ _ALL_TOPICS = [
     TOPIC_BOOK_DELTA,
     TOPIC_MICROPRICE_RT,
     TOPIC_FEATURES_RT,
+    TOPIC_ORDERBOOK_RAW,
+    TOPIC_LIQUIDATIONS_RAW,
+    TOPIC_FUNDING_RAW,
+    TOPIC_OI_RAW,
+    TOPIC_ONCHAIN_RAW,
+    TOPIC_INFRA_METRICS,
 ]
 assert len(_ALL_TOPICS) == len(set(_ALL_TOPICS)), (
     "shared/kafka/topics.py: topics con string duplicado — colisión de nombres"
@@ -231,6 +281,12 @@ _ALL_GROUPS = [
     GROUP_BOOK_BUILDER,
     GROUP_MICROPRICE,
     GROUP_FEATURES_RT,
+    GROUP_WS_ORDERBOOK_PRODUCER,
+    GROUP_WS_LIQUIDATIONS_PRODUCER,
+    GROUP_WS_FUNDING_PRODUCER,
+    GROUP_WS_OI_PRODUCER,
+    GROUP_WS_ONCHAIN_PRODUCER,
+    GROUP_INFRA_METRICS_EMITTER,
 ]
 assert len(_ALL_GROUPS) == len(set(_ALL_GROUPS)), "shared/kafka/topics.py: consumer groups con string duplicado"
 
@@ -281,4 +337,18 @@ __all__ = [
     "HEADER_VERSION",
     "HEADER_RUN_ID",
     "HEADER_DOMAIN",
+    # Topics microestructura WebSocket
+    "TOPIC_ORDERBOOK_RAW",
+    "TOPIC_LIQUIDATIONS_RAW",
+    "TOPIC_FUNDING_RAW",
+    "TOPIC_OI_RAW",
+    "TOPIC_ONCHAIN_RAW",
+    "TOPIC_INFRA_METRICS",
+    # Consumer groups WS producers
+    "GROUP_WS_ORDERBOOK_PRODUCER",
+    "GROUP_WS_LIQUIDATIONS_PRODUCER",
+    "GROUP_WS_FUNDING_PRODUCER",
+    "GROUP_WS_OI_PRODUCER",
+    "GROUP_WS_ONCHAIN_PRODUCER",
+    "GROUP_INFRA_METRICS_EMITTER",
 ]

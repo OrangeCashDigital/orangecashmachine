@@ -14,6 +14,8 @@ Hydra. Clean/Hexagonal with bounded contexts and ~40 import-linter contracts (BC
     uv run ruff format . --check      # format check
     uv run mypy .                     # type check (excludes tests/, .venv/)
     uv run bandit .                   # security audit
+    uv run pyright                    # optional type check (TS-style)
+    uv run python scripts/forbidden_frameworks.py  # AST linter — domain no infra frameworks
     uv run ocm --cfg job              # validate/print Hydra config (no main.py at root)
     ./run.sh ocm                      # market data pipeline (same as uv run ocm)
     ./run.sh dagster                  # Dagster UI (port 3001)
@@ -61,7 +63,7 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - CD workflow is a placeholder (`workflow_dispatch` only, no automation).
 - `uv run ocm --cfg job` exposes secrets in stdout (Hydra DictConfig pre-Pydantic). Never pipe to logs in production.
 - Config validation: `OCM_VALIDATE_ONLY=1 uv run python -m app.cli.main` — validates Hydra+Pydantic bootstrap and exits.
-- `tests/architecture/` contains additional structural invariants beyond import-linter (test_import_contracts.py, test_kafka_contracts.py). Run both.
+- Structural invariants beyond import-linter: `tests/architecture/` (import contracts, kafka contracts) and `tests/market_data/test_layer_contracts.py` (pytest wrapper for the AST linter). Run standalone: `uv run python scripts/forbidden_frameworks.py`. These supplement, not replace, the import-linter contracts in pyproject.toml.
 
 ## Package remapping (hatchling)
 
@@ -87,11 +89,9 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - `config/` = Hydra YAML (layered: base→env→exchange→pipeline→CLI→env vars).
 - `scripts/` = arch_metrics.py, arch_graph.py (dev tooling, not entrypoints).
 
-## Active development / WIP
+## Current refactor plan
 
-- `packages/trading/` — engine in active development
-- `apps/api/` — FastAPI gateway, experimental
-- `.opencode/plans/REFACTOR_PUBLISHER_DOMAIN.md` — current refactor plan
+- `.opencode/plans/REFACTOR_PUBLISHER_DOMAIN.md`
 
 ## Git workflow
 

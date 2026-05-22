@@ -64,7 +64,7 @@ from market_data.domain.policies.data_quality_policy import (
     QualityDecision,
     default_policy,
 )
-from market_data.domain.value_objects.gap_utils import scan_gaps
+from market_data.domain.value_objects.gap_scanner import scan_gaps
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 
 # ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta
