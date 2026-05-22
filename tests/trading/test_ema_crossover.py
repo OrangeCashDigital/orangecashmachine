@@ -143,13 +143,13 @@ def test_returns_empty_when_df_is_empty(strategy):
 def test_golden_cross_generates_buy(strategy):
     signals = strategy.generate_signals(_make_golden_cross_df())
     assert len(signals) == 1
-    assert signals[0].signal == "buy"
+    assert signals[0].direction == "buy"
 
 
 def test_death_cross_generates_sell(strategy):
     signals = strategy.generate_signals(_make_death_cross_df())
     assert len(signals) == 1
-    assert signals[0].signal == "sell"
+    assert signals[0].direction == "sell"
 
 
 def test_flat_price_no_crossover_returns_empty(strategy):

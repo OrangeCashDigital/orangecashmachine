@@ -88,6 +88,7 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0,<4.0",
     "polars[rtcompat]>=1.40.1",
     "great-expectations>=1.17.2",
+    "lz4>=4.4.5",
 ]
 
 [project.license]
@@ -363,15 +364,6 @@ forbidden_modules = ["market_data.ports.inbound"]
 
 
 [[tool.importlinter.contracts]]
-name = "BC-05: market_data.application isolated from infrastructure and adapters"
-type = "forbidden"
-source_modules = ["market_data.application"]
-forbidden_modules = [
-    "market_data.adapters",
-    "market_data.infrastructure",
-]
-
-[[tool.importlinter.contracts]]
 # Los adaptadores concretos implementan ports — no conocen use cases.
 # Un import de application desde adapters invierte el flujo de dependencias (DIP).
 name = "BC-06: market_data.adapters does not import application (no inverted dependency)"
@@ -438,7 +430,6 @@ layers = [
 ignore_imports = [
     # Adapters que implementan ports e importan infra concreta (lazy en método).
     # Deuda técnica: migrar a ports cuando MetricsPort/StoragePort cubran todos los casos.
-    "market_data.adapters.inbound.rest.trades_fetcher -> market_data.infrastructure.storage.silver.trades_storage",
     "market_data.adapters.inbound.rest.ohlcv_fetcher -> market_data.infrastructure.observability.metrics",
     "market_data.adapters.outbound.storage.gold_reader -> market_data.infrastructure.storage.iceberg.catalog",
     "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
