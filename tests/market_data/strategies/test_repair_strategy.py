@@ -9,7 +9,7 @@ Principios de test
 Aislamiento total   : stubs inline, sin Redis, sin exchange real, sin Iceberg.
 Fail-Fast           : cada test verifica una sola responsabilidad.
 DRY                 : _make_ctx() y _make_df() centralizan construcción.
-SSOT                : GapRange importado desde gap_utils (misma fuente que prod).
+SSOT                : GapRange importado desde gap_scanner (misma fuente que prod).
 Nomenclatura        : test_<método>_<condición>_<resultado_esperado>
 
 Cobertura objetivo
@@ -73,36 +73,13 @@ def _make_metrics() -> MagicMock:
     return m
 
 
-def _make_metrics() -> MagicMock:
-    """
-    Stub de RepairMetricsPort para tests.
-
-    Cada counter/gauge es un MagicMock con .labels().inc() encadenado
-    para que RepairStrategy pueda llamarlo sin Prometheus real.
-    DIP: el test nunca toca PrometheusRepairMetrics.
-    """
-    m = MagicMock(spec=RepairMetricsPort)
-    for attr in (
-        "pipeline_errors",
-        "repair_gaps_found",
-        "repair_gaps_healed",
-        "repair_gaps_skipped",
-        "rows_ingested",
-    ):
-        counter = MagicMock()
-        counter.labels.return_value = MagicMock()
-        counter.labels.return_value.inc = MagicMock()
-        setattr(m, attr, counter)
-    return m
-
-
 from market_data.domain.exceptions import (
     ChunkFetchError,
 )
 from market_data.domain.policies.base import (
     PipelineContext,
 )
-from market_data.domain.value_objects.gap_utils import GapRange
+from market_data.domain.value_objects.gap_scanner import GapRange
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Stubs — sin dependencias externas
