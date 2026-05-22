@@ -7,7 +7,7 @@ Hydra. Clean/Hexagonal with bounded contexts and ~40 import-linter contracts (BC
 
     uv sync                           # prod deps
     uv sync --group dev               # dev deps (import-linter, mypy, ruff, pyright, bandit)
-    uv run python -m importlinter     # ARCH CONTRACTS — GATE: broken = blocked merge
+    uv run lint-imports               # ARCH CONTRACTS — GATE: broken = blocked merge
     uv run pytest tests/ -x -q        # tests, fail-fast
     uv run pytest tests/ -x -q -m integration  # integration tests (need infra)
     uv run ruff check .               # lint
