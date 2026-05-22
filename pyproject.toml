@@ -445,6 +445,7 @@ source_modules = ["market_data.domain"]
 forbidden_modules = [
     "pyiceberg", "redis", "ccxt", "dagster", "sqlalchemy", "boto3",
     "cryptofeed", "websockets",
+    "polars", "pandera", "loguru",  # enforced also by tools/architecture/forbidden_frameworks.py
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────

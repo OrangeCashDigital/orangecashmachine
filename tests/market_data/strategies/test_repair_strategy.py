@@ -73,13 +73,13 @@ def _make_metrics() -> MagicMock:
     return m
 
 
+from market_data.application.processing.gap_scanner import GapRange
 from market_data.domain.exceptions import (
     ChunkFetchError,
 )
 from market_data.domain.policies.base import (
     PipelineContext,
 )
-from market_data.domain.value_objects.gap_scanner import GapRange
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Stubs — sin dependencias externas

@@ -23,24 +23,24 @@ SafeOps — classify_error nunca lanza; StrategyMixin captura todo excepto Cance
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Protocol, runtime_checkable
-
-from ocm.observability import bind_pipeline
 
 # ── Ports (contratos) ────────────────────────────────────────────────────────
 # domain/ no puede importar ports/ en runtime — BC-08 layer order lo prohíbe.
 # Los campos de PipelineContext que representan ports usan Any como tipo runtime.
 # Deuda técnica documentada: mover PipelineContext a application/ con DI completo.
 
-_log = bind_pipeline("base")
-
 
 # ==========================================================================
 # PipelineMode
 # ==========================================================================
+
+
+_log = logging.getLogger(__name__)
 
 
 class PipelineMode(str, Enum):

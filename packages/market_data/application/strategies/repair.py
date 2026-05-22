@@ -124,7 +124,11 @@ class RepairStrategy(StrategyMixin):
                 log.debug("Repair skip — sin datos en Silver")
                 return result
 
-            gaps = scan_gaps(df_existing, timeframe, tolerance=self._tolerance)
+            # scan_gaps opera en Polars — convertir pandas→polars en el boundary
+            import polars as pl
+
+            df_for_gaps = pl.from_pandas(df_existing)
+            gaps = scan_gaps(df_for_gaps, timeframe, tolerance=self._tolerance)
             result.gaps_found = len(gaps)
             if gaps:
                 _m.repair_gaps_found_inc(
@@ -259,10 +263,11 @@ class RepairStrategy(StrategyMixin):
             result.error = str(exc) or type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             error_type = "transient" if result.is_transient_error else "fatal"
-            ctx.metrics.pipeline_errors_inc(
-                exchange=ctx.exchange_id,
-                error_type=error_type,
-            )
+            if ctx.metrics is not None:  # SafeOps: metrics opcional
+                ctx.metrics.pipeline_errors_inc(
+                    exchange=ctx.exchange_id,
+                    error_type=error_type,
+                )
             log.error(
                 "Repair fallido",
                 idx=idx,
