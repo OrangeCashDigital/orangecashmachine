@@ -48,8 +48,7 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 
 ## Gotchas
 
-- `import-linter 2.x`: use `uv run python -m importlinter` (does work despite
-  a stale comment in pyproject.toml claiming otherwise — CI proves it).
+- `import-linter 2.x`: use `uv run lint-imports` (NOT python -m importlinter — no __main__.py in 2.6).
 - E402 allowed only in files explicitly listed in pyproject.toml per-file-ignores
   (composition roots, entrypoints, tests). Not a global ignore.
 - `type: ignore` requires an explanatory comment (non-default).
@@ -104,4 +103,4 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
   real dep change.
 - Never `git push --force` on main.
 - Run before push (domain logic changes):
-  `uv run ruff check . && uv run python -m importlinter && uv run pytest tests/ -q`
+  `uv run ruff check . && uv run lint-imports && uv run pytest tests/ -q`
