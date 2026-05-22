@@ -94,7 +94,16 @@ class PipelineContext:
     storage: Any = field(default=None)  # OHLCVStoragePort → Iceberg Silver (repair only)
 
     # ── Observabilidad ────────────────────────────────────────────────────────
-    metrics: Any = field(default=None)  # PipelineMetricsPort — SafeOps: None = sin métricas
+    metrics: Any = field(default=None)  # RepairMetricsPort — default None resuelto en __post_init__
+
+    def __post_init__(self) -> None:
+        """Garantiza que metrics nunca sea None — SafeOps con NullMetrics."""
+        if self.metrics is None:
+            # Import lazy — evita ciclo domain→ports en module-level
+            from market_data.ports.outbound.metrics import NullMetrics  # noqa: PLC0415
+
+            object.__setattr__(self, "metrics", NullMetrics())
+
     gap_registry: Any = field(default=None)  # GapRegistryPort     — SafeOps: None = sin estado
     throttle: Any = field(default=None)  # ThrottlePort        — None = sin rate limiting
     # ── Kappa chunk converter (opcional) ──────────────────────────────────────

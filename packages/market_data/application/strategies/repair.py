@@ -212,7 +212,7 @@ class RepairStrategy(StrategyMixin):
                         error_type=type(_res).__name__,
                         error=str(_res),
                     )
-                    ctx.metrics.pipeline_errors_inc(
+                    self._metrics.pipeline_errors_inc(
                         exchange=ctx.exchange_id,
                         error_type="fatal",
                     )
@@ -263,11 +263,10 @@ class RepairStrategy(StrategyMixin):
             result.error = str(exc) or type(exc).__name__
             result.duration_ms = int((time.monotonic() - pair_start) * 1000)
             error_type = "transient" if result.is_transient_error else "fatal"
-            if ctx.metrics is not None:  # SafeOps: metrics opcional
-                ctx.metrics.pipeline_errors_inc(
-                    exchange=ctx.exchange_id,
-                    error_type=error_type,
-                )
+            self._metrics.pipeline_errors_inc(
+                exchange=ctx.exchange_id,
+                error_type=error_type,
+            )
             log.error(
                 "Repair fallido",
                 idx=idx,

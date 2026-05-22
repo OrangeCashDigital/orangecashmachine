@@ -211,11 +211,13 @@ def _make_ctx(
     quality_accept: bool = True,
     irrecoverable: set[int] | None = None,
     gap_registry: object | None = _SENTINEL,
+    metrics: object | None = None,
 ) -> PipelineContext:
     """
     Construye un PipelineContext completamente falso — sin infra real.
     gap_registry=_SENTINEL → usa _GapRegistryStub() por defecto.
     gap_registry=None       → simula modo degradado (SafeOps).
+    metrics=None            → PipelineContext.__post_init__ inyecta NullMetrics.
     """
     if gap_registry is _SENTINEL:
         gap_registry = _GapRegistryStub(irrecoverable_starts=irrecoverable)
@@ -229,6 +231,7 @@ def _make_ctx(
         market_type="spot",
         start_date="2021-01-01",
         gap_registry=gap_registry,
+        metrics=metrics,  # None → __post_init__ inyecta NullMetrics
     )
 
 
