@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-market_data/processing/utils/gap_utils.py
-==========================================
+market_data/domain/value_objects/gap_utils.py
+================================================
 
 Utilidad de detección de huecos temporales en DataFrames OHLCV.
+
+Nota de deuda técnica (Phase 2)
+--------------------------------
+Este módulo opera sobre pd.DataFrame — pandas es dependencia estructural
+de la interfaz (no accidental). La migración completa a polars se realiza
+en Fase 2 junto con los ports outbound que usan pd.DataFrame.
 
 Responsabilidad
 ---------------
