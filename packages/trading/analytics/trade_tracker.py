@@ -164,6 +164,9 @@ class TradeTracker:
             )
             return
 
+        assert entry_order.fill_price is not None, "TradeRecord.close: entry_order sin fill_price"
+        assert order.fill_price is not None, "TradeRecord.close: exit order sin fill_price"
+        assert entry_order.fill_timestamp is not None, "TradeRecord.close: entry_order sin fill_timestamp"
         trade = TradeRecord.close(
             trade_id=entry_order.order_id,
             symbol=order.symbol,

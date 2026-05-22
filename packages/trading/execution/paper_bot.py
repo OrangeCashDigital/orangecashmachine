@@ -92,6 +92,8 @@ class PaperOrder:
 
         Punto único de conversión OMS → API observable de PaperBot.
         """
+        assert order.fill_price is not None, f"from_order: {order.order_id} sin fill_price"
+        assert order.fill_timestamp is not None, f"from_order: {order.order_id} sin fill_timestamp"
         return cls(
             symbol=order.symbol,
             side=order.side.value,

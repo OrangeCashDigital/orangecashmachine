@@ -17,6 +17,7 @@ Parámetros por defecto: EMA(9) / EMA(21) — conservadores para crypto 1h.
 from __future__ import annotations
 
 from datetime import timezone
+from typing import Literal
 
 import pandas as pd
 
@@ -74,7 +75,7 @@ class EMACrossoverStrategy(BaseStrategy):
         if not last["cross"]:
             return []
 
-        signal_type = "buy" if last["above"] else "sell"
+        signal_type: Literal["buy", "sell"] = "buy" if last["above"] else "sell"
         ts = last["timestamp"]
         if hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()

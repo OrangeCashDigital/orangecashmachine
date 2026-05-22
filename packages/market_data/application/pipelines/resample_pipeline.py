@@ -60,7 +60,7 @@ from market_data.domain.value_objects.timeframe import (
     align_to_grid,
     timeframe_to_ms,
 )
-from market_data.ports.outbound.metrics import ResampleMetricsPort
+from market_data.ports.outbound.metrics import NullResampleMetrics, ResampleMetricsPort
 from market_data.ports.outbound.storage import OHLCVStorage
 from ocm.observability import bind_pipeline
 
@@ -327,15 +327,10 @@ class ResamplePipeline:
         # Misma instancia para lectura (source 1m) y escritura (targets).
         self._storage = storage
 
-        # Fail-fast: metrics es obligatorio — inyectar desde composition root.
-        # ResamplePipeline no puede importar infrastructure/ (DIP — BC-05).
-        if metrics is None:
-            raise TypeError(
-                "ResamplePipeline: 'metrics' es obligatorio. "
-                "Inyectar PrometheusResampleMetrics desde el composition root "
-                "(market_data.factories.pipeline_factory o OCMContainer)."
-            )
-        self._metrics: ResampleMetricsPort = metrics
+        # Fail-soft: NullResampleMetrics si no se inyecta implementación concreta.
+        # En producción el composition root inyecta PrometheusResampleMetrics.
+        # En tests y dry_run se acepta None → NullResampleMetrics (SafeOps).
+        self._metrics: ResampleMetricsPort = metrics if metrics is not None else NullResampleMetrics()
         self._log = bind_pipeline(
             "resample_pipeline",
             exchange=self._exchange,
@@ -495,19 +490,21 @@ class ResamplePipeline:
 
             result.rows = len(resampled)
 
-            # Métricas Prometheus (SafeOps: nunca lanza)
+            # Métricas via port (SafeOps: NullResampleMetrics si no hay Prometheus)
             try:
-                self._metrics.resample_rows_total.labels(
+                self._metrics.resample_rows_inc(
                     exchange=self._exchange,
                     symbol=symbol,
                     timeframe=target_tf,
                     market_type=self._market_type,
-                ).inc(result.rows)
-                self._metrics.resample_duration_ms.labels(
+                    count=result.rows,
+                )
+                self._metrics.resample_duration_observe(
                     exchange=self._exchange,
                     timeframe=target_tf,
                     market_type=self._market_type,
-                ).observe(int((time.monotonic() - pair_start) * 1000))
+                    duration_ms=int((time.monotonic() - pair_start) * 1000),
+                )
             except Exception:
                 pass
 

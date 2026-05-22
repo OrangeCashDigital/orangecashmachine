@@ -55,6 +55,7 @@ from typing import TYPE_CHECKING, Any, List, Optional
 
 from loguru import logger
 
+from market_data.ports.outbound.metrics import NullResampleMetrics, ResampleMetricsPort
 from market_data.ports.outbound.storage_factory import StorageFactoryPort
 
 if TYPE_CHECKING:
@@ -167,12 +168,19 @@ class ResampleUseCase:
     Fail-Soft en ejecución (retorna ResampleUseCaseResult con error).
     """
 
-    def __init__(self, storage_factory: StorageFactoryPort) -> None:
+    def __init__(
+        self,
+        storage_factory: StorageFactoryPort,
+        metrics: "ResampleMetricsPort | None" = None,
+    ) -> None:
         if storage_factory is None:
             raise ValueError(
                 "ResampleUseCase: storage_factory no puede ser None — inyéctalo desde el composition root."
             )
         self._storage_factory = storage_factory
+        # Fail-soft: NullResampleMetrics si no se inyecta — SafeOps en tests y dry_run.
+        # En producción el composition root inyecta PrometheusResampleMetrics.
+        self._metrics: ResampleMetricsPort = metrics if metrics is not None else NullResampleMetrics()
 
     # =========================================================================
     # Public API
@@ -351,6 +359,7 @@ class ResampleUseCase:
             market_type=request.market_type,
             storage=storage,
             dry_run=request.dry_run,
+            metrics=self._metrics,
         )
 
         logger.info(

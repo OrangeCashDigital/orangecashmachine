@@ -200,7 +200,15 @@ class NullMetrics:
         pass
 
 
-__all__ = ["MetricsPort", "NullMetrics"]
+__all__ = [
+    "MetricsPort",
+    "NullMetrics",
+    "RepairMetricsPort",
+    "QualityMetricsPort",
+    "NullQualityMetrics",
+    "ResampleMetricsPort",
+    "NullResampleMetrics",
+]
 
 
 class RepairMetricsPort(Protocol):
@@ -302,6 +310,85 @@ class NullQualityMetrics:
     """
 
     def quality_gaps_inc(self, exchange: str, symbol: str, timeframe: str, severity: str, count: int = 1) -> None:
+        pass
+
+    def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:
+        pass
+
+
+class ResampleMetricsPort(Protocol):
+    """
+    Contrato de métricas del pipeline de resampling OHLCV.
+
+    Implementación: PrometheusResampleMetrics
+    (market_data.infrastructure.observability.metrics_adapter).
+
+    DIP: ResamplePipeline depende de este port — nunca de Prometheus directamente.
+    ISP: solo los métodos que ResamplePipeline necesita.
+    SafeOps: implementaciones nunca propagan excepciones al caller.
+
+    Nota de diseño
+    --------------
+    Los métodos usan la API de métodos (no .labels().inc()) para que
+    el port sea agnóstico al backend (Prometheus, StatsD, noop).
+    PrometheusResampleMetrics adapta internamente la llamada a Prometheus.
+    """
+
+    def resample_rows_inc(
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        market_type: str,
+        count: int = 1,
+    ) -> None:
+        """Incrementa contador de filas resampled escritas."""
+        ...
+
+    def resample_duration_observe(
+        self,
+        exchange: str,
+        timeframe: str,
+        market_type: str,
+        duration_ms: int,
+    ) -> None:
+        """Observa duración de resampling de un par en ms."""
+        ...
+
+    def pipeline_errors_inc(
+        self,
+        exchange: str,
+        error_type: str,
+    ) -> None:
+        """Incrementa contador de errores de pipeline."""
+        ...
+
+
+class NullResampleMetrics:
+    """
+    Implementación vacía de ResampleMetricsPort.
+
+    Uso: tests, entornos sin Prometheus, composición en dry_run.
+    Todos los métodos son no-op — SafeOps garantizado por diseño.
+    """
+
+    def resample_rows_inc(
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        market_type: str,
+        count: int = 1,
+    ) -> None:
+        pass
+
+    def resample_duration_observe(
+        self,
+        exchange: str,
+        timeframe: str,
+        market_type: str,
+        duration_ms: int,
+    ) -> None:
         pass
 
     def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:

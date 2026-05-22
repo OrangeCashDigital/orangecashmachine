@@ -390,8 +390,8 @@ def _dataset_filter(
 ):
     """Filtro Iceberg que identifica un dataset específico."""
     return And(
-        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),
-        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),
+        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),  # type: ignore[call-arg,arg-type,misc]
+        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),  # type: ignore[call-arg,arg-type,misc]
     )
 
 

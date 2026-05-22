@@ -265,7 +265,7 @@ async def _bronze_writer_loop() -> None:
     writer = KafkaBronzeWriter(
         consumer=consumer,
         bronze_storage=bronze,
-        dlq_producer=dlq_producer,
+        dlq_producer=dlq_producer,  # type: ignore[arg-type]  # KafkaProducerAdapter implementa KafkaProducerPort
     )
 
     try:

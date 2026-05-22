@@ -162,7 +162,7 @@ def _add_index_expectations(suite: "ExpectationSuite") -> None:
     """
     import great_expectations.expectations as gxe
 
-    suite.add_expectation(gxe.ExpectTableRowCountToBeGreaterThan(value=0))
+    suite.add_expectation(gxe.ExpectTableRowCountToBeGreaterThan(value=0))  # type: ignore[attr-defined]  # GE v1.x API
 
     # GE valida el índice como columna reset; el checker lo resetea antes
     suite.add_expectation(gxe.ExpectColumnValuesToBeUnique(column="_ts_index"))
@@ -179,7 +179,7 @@ def _add_index_expectations(suite: "ExpectationSuite") -> None:
 # ---------------------------------------------------------------------------
 
 
-def build_ohlcv_suite(context: "gx.DataContext") -> "ExpectationSuite":
+def build_ohlcv_suite(context: "gx.DataContext") -> "ExpectationSuite":  # type: ignore[name-defined]  # gx importado localmente
     """
     Construye y registra la suite completa de expectativas OHLCV.
 

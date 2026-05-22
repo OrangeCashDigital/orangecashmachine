@@ -21,6 +21,11 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from trading.risk.manager import RiskDecision
+
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -184,7 +189,7 @@ class TradingEngine:
     def oms_summary(self) -> dict:
         return self._oms.summary()
 
-    def validate_signal(self, signal) -> object:
+    def validate_signal(self, signal) -> "RiskDecision":
         """
         Expone la validación de riesgo sin violar Law of Demeter.
 

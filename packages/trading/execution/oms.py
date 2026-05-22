@@ -153,7 +153,7 @@ class OMS:
             symbol=signal.symbol,
             side=OrderSide(raw_side),
             size_pct=decision.size_pct,
-            signal=signal,
+            signal=signal,  # type: ignore[arg-type]  # SignalProtocol satisface Signal estructuralmente
         )
 
         with self._lock:

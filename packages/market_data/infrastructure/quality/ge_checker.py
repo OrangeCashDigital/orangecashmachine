@@ -263,20 +263,30 @@ class GEChecker:
 
         domain_issues = [
             QualityIssue(
-                type=issue.expectation_type,
-                column=issue.column,
-                count=issue.unexpected_count,
-                rate=issue.unexpected_rate,
+                check=issue.expectation_type,
                 severity=issue.severity,
-                message=issue.message,
-                source="great_expectations",
+                description=issue.message,
+                affected_rows=issue.unexpected_count,
+                details={
+                    "column": issue.column,
+                    "unexpected_rate": issue.unexpected_rate,
+                    "source": "great_expectations",
+                },
             )
             for issue in issues
         ]
 
+        import datetime as _dt
+
+        from market_data.domain.quality.types import _get_git_hash
+
         return DataQualityReport(
             symbol=symbol,
+            timeframe=self._timeframe,
+            exchange=self._exchange,
             rows=len(df),
+            checked_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+            git_hash=_get_git_hash(),
             issues=domain_issues,
         )
 
@@ -287,20 +297,24 @@ class GEChecker:
         error: Exception,
     ) -> "DataQualityReport":
         """Reporte mínimo de fallback cuando GE falla internamente."""
-        from market_data.domain.quality.types import DataQualityReport, QualityIssue
+        import datetime as _dt
+
+        from market_data.domain.quality.types import DataQualityReport, QualityIssue, _get_git_hash
 
         return DataQualityReport(
             symbol=symbol,
+            timeframe=self._timeframe,
+            exchange=self._exchange,
             rows=len(df),
+            checked_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+            git_hash=_get_git_hash(),
             issues=[
                 QualityIssue(
-                    type="ge_internal_error",
-                    column=None,
-                    count=0,
-                    rate=0.0,
+                    check="ge_internal_error",
                     severity="warning",
-                    message=f"GE checker error: {type(error).__name__}: {error}",
-                    source="great_expectations",
+                    description=f"GE checker error: {type(error).__name__}: {error}",
+                    affected_rows=0,
+                    details={"source": "great_expectations"},
                 )
             ],
         )

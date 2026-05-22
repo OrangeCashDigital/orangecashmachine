@@ -33,6 +33,8 @@ class BaseStrategy(ABC):
     """
 
     name: str = "base"
+    symbol: str  # debe asignarse en __init__ de la subclase
+    timeframe: str  # debe asignarse en __init__ de la subclase
 
     @abstractmethod
     def generate_signals(self, df: pd.DataFrame) -> list[Signal]:
