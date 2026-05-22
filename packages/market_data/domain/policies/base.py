@@ -54,6 +54,17 @@ class PipelineMode(str, Enum):
 # ==========================================================================
 
 
+class _NullMetrics:
+    """Null-object de métricas para PipelineContext — SafeOps sin observabilidad.
+
+    Privado a domain/ — no importa ports/. Duck typing puro.
+    __getattr__ retorna callable no-op para cualquier método de métricas.
+    """
+
+    def __getattr__(self, name: str):  # type: ignore[override]
+        return lambda *args, **kwargs: None
+
+
 @dataclass
 class PipelineContext:
     """
@@ -97,12 +108,9 @@ class PipelineContext:
     metrics: Any = field(default=None)  # RepairMetricsPort — default None resuelto en __post_init__
 
     def __post_init__(self) -> None:
-        """Garantiza que metrics nunca sea None — SafeOps con NullMetrics."""
+        """Garantiza que metrics nunca sea None — SafeOps con _NullMetrics local."""
         if self.metrics is None:
-            # Import lazy — evita ciclo domain→ports en module-level
-            from market_data.ports.outbound.metrics import NullMetrics  # noqa: PLC0415
-
-            object.__setattr__(self, "metrics", NullMetrics())
+            object.__setattr__(self, "metrics", _NullMetrics())
 
     gap_registry: Any = field(default=None)  # GapRegistryPort     — SafeOps: None = sin estado
     throttle: Any = field(default=None)  # ThrottlePort        — None = sin rate limiting
