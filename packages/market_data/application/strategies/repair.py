@@ -18,6 +18,7 @@ import time
 from typing import Optional
 
 import pandas as pd
+import polars as pl
 
 from market_data.application.pipeline.runtime import (
     PipelineContext,
@@ -127,7 +128,6 @@ class RepairStrategy(StrategyMixin):
                 return result
 
             # scan_gaps opera en Polars — convertir pandas→polars en el boundary
-            import polars as pl
 
             df_for_gaps = pl.from_pandas(df_existing)
             gaps = scan_gaps(df_for_gaps, timeframe, tolerance=self._tolerance)
@@ -377,13 +377,39 @@ class RepairStrategy(StrategyMixin):
                     f"Exchange returned no data for gap {gap} (symbol={symbol}, timeframe={timeframe})"
                 )
 
-            df = pd.DataFrame(
-                collected_raw,
-                columns=["timestamp", "open", "high", "low", "close", "volume"],
+            # Construir pl.DataFrame desde raw exchange (lista de listas)
+            _ts = [int(r[0]) for r in collected_raw]
+            _open = [float(r[1]) for r in collected_raw]
+            _high = [float(r[2]) for r in collected_raw]
+            _low = [float(r[3]) for r in collected_raw]
+            _cls = [float(r[4]) for r in collected_raw]
+            _vol = [float(r[5]) for r in collected_raw]
+            df_pl = pl.DataFrame(
+                {
+                    "timestamp": pl.Series(_ts, dtype=pl.Int64)
+                    .cast(pl.Datetime("ms"))
+                    .dt.replace_time_zone("UTC")
+                    .dt.cast_time_unit("us"),
+                    "open": pl.Series(_open, dtype=pl.Float64),
+                    "high": pl.Series(_high, dtype=pl.Float64),
+                    "low": pl.Series(_low, dtype=pl.Float64),
+                    "close": pl.Series(_cls, dtype=pl.Float64),
+                    "volume": pl.Series(_vol, dtype=pl.Float64),
+                }
             )
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-            df = df[(df["timestamp"] >= gap_start) & (df["timestamp"] <= gap_end)]
-            df = df.drop_duplicates(subset="timestamp", keep="last").sort_values("timestamp")
+            # Filtrar al rango del gap y deduplicar
+            gap_start_us = gap.start_ms * 1_000
+            gap_end_us = gap.end_ms * 1_000
+            df_pl = (
+                df_pl.filter(
+                    (pl.col("timestamp").dt.timestamp("us") >= gap_start_us)
+                    & (pl.col("timestamp").dt.timestamp("us") <= gap_end_us)
+                )
+                .unique(subset=["timestamp"], keep="last", maintain_order=False)
+                .sort("timestamp")
+            )
+            # ACL out: QualityPipeline y ctx.storage reciben pd.DataFrame (contrato actual)
+            df = df_pl.to_pandas()
 
             if df.empty:
                 _log.bind(symbol=symbol, timeframe=timeframe).warning(

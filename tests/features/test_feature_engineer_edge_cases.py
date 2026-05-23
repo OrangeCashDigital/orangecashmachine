@@ -67,12 +67,14 @@ def _make_df(n: int = 30, *, base_close: float = 100.0) -> pd.DataFrame:
 
 def _transform(df: pd.DataFrame) -> pd.DataFrame:
     """Invoca GoldTransformer.transform con parámetros de prueba fijos."""
-    return GoldTransformer.transform(
+    result = GoldTransformer.transform(
         df,
         symbol=_SYMBOL,
         timeframe=_TIMEFRAME,
         exchange=_EXCHANGE,
     )
+    # ACL out: GoldTransformer retorna pl.DataFrame; edge_cases usa pandas API
+    return result.to_pandas() if hasattr(result, "to_pandas") else result
 
 
 def _has_inf(df: pd.DataFrame) -> bool:
