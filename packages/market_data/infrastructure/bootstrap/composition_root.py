@@ -114,7 +114,7 @@ class CompositionRoot:
         """
         from pathlib import Path
 
-        import yaml  # type: ignore[import-untyped]
+        import yaml
         from loguru import logger
 
         from market_data.adapters.outbound.kafka_trade_publisher import (

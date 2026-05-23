@@ -293,10 +293,11 @@ class IcebergStorage:
 
         # L3 — scan Iceberg (fuente de verdad persistente).
         # Solo se ejecuta si L1 y L2 son miss.
-        if self._table is None:
+        table = self._table
+        if table is None:
             return None
         try:
-            result = self._table.scan(  # type: ignore[union-attr]
+            result = table.scan(
                 row_filter=self._base_filter(symbol, timeframe),
                 selected_fields=("timestamp",),
             ).to_arrow()
@@ -326,10 +327,11 @@ class IcebergStorage:
 
         Scan Iceberg con pc.min() — simétrico a get_last_timestamp.
         """
-        if self._table is None:
+        table = self._table
+        if table is None:
             return None
         try:
-            result = self._table.scan(  # type: ignore[union-attr]
+            result = table.scan(
                 row_filter=self._base_filter(symbol, timeframe),
                 selected_fields=("timestamp",),
             ).to_arrow()
@@ -376,7 +378,8 @@ class IcebergStorage:
         Combina filtro de identidad (exchange/symbol/timeframe/market_type)
         con rango temporal opcional. Partition pruning activo en ambos ejes.
         """
-        if self._table is None:
+        table = self._table
+        if table is None:
             return None
         try:
             row_filter = self._base_filter(symbol, timeframe)
@@ -398,13 +401,7 @@ class IcebergStorage:
             import concurrent.futures as _cf
 
             with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
-                _future = _pool.submit(
-                    lambda: (
-                        self._table.scan(row_filter=row_filter)  # type: ignore[union-attr]
-                        .to_arrow()
-                        .to_pandas()
-                    )
-                )
+                _future = _pool.submit(lambda: table.scan(row_filter=row_filter).to_arrow().to_pandas())
                 try:
                     df = _future.result(timeout=_ICEBERG_LOAD_TIMEOUT_S)
                 except _cf.TimeoutError:

@@ -79,11 +79,11 @@ class RiskConfig(BaseModel):
         RiskConfig(position=PositionConfig(max_open_positions=2))
     """
 
-    position: PositionConfig = Field(default_factory=PositionConfig)  # type: ignore[arg-type]
-    stop_loss: StopLossConfig = Field(default_factory=StopLossConfig)  # type: ignore[arg-type]
-    drawdown: DrawdownConfig = Field(default_factory=DrawdownConfig)  # type: ignore[arg-type]
-    order: OrderLimits = Field(default_factory=OrderLimits)  # type: ignore[arg-type]
-    signal_filter: SignalFilterConfig = Field(default_factory=SignalFilterConfig)  # type: ignore[arg-type]
+    position: PositionConfig = Field(default_factory=lambda: PositionConfig())
+    stop_loss: StopLossConfig = Field(default_factory=lambda: StopLossConfig())
+    drawdown: DrawdownConfig = Field(default_factory=lambda: DrawdownConfig())
+    order: OrderLimits = Field(default_factory=lambda: OrderLimits())
+    signal_filter: SignalFilterConfig = Field(default_factory=lambda: SignalFilterConfig())
 
     model_config = {"populate_by_name": True}
 
