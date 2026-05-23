@@ -14,9 +14,11 @@ Hydra. Clean/Hexagonal with bounded contexts and ~40 import-linter contracts (BC
     uv run ruff format . --check      # format check
     uv run mypy .                     # type check (excludes tests/, .venv/)
     uv run bandit .                   # security audit
-    uv run pyright                    # optional type check (TS-style)
     uv run python tools/architecture/forbidden_frameworks.py  # AST linter — domain no infra frameworks
     uv run ocm --cfg job              # validate/print Hydra config (no main.py at root)
+    uv run ocm-api                    # FastAPI gateway (experimental)
+    uv run live                       # live trading — ⚠️ capital real
+    uv run paper                      # paper trading
     ./run.sh ocm                      # market data pipeline (same as uv run ocm)
     ./run.sh dagster                  # Dagster UI (port 3001)
     docker compose up -d              # infra: Redis, Kafka, Dagster, Prometheus
@@ -90,10 +92,6 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - `tools/architecture/` = forbidden_frameworks.py (AST governance)
 - Import graph: `uv run pydeps <package> --max-bacon 4` (pydeps en grupo dev)
 
-## Current refactor plan
-
-- `.opencode/plans/REFACTOR_PUBLISHER_DOMAIN.md`
-
 ## Git workflow
 
 - Branch: solo main.
@@ -108,6 +106,6 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 
 - `import-linter` → package boundaries and layer direction
 - `Ruff` → style and hygiene
-- `pyright` / `mypy` → typing contracts
+- `mypy` → typing contracts
 - `pytest` → runtime and integration behavior
 - `tools/architecture/forbidden_frameworks.py` → technology governance

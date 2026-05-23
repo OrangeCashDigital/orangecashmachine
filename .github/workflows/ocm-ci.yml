@@ -15,7 +15,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 1: Lint de arquitectura
   # REGLA: un contrato BROKEN = merge bloqueado. Fail-fast sin excepciones.
-  # Comando correcto: python -m importlinter (NO: python -m lint_imports)
+  # Comando correcto: uv run lint-imports (import-linter 2.x no tiene __main__.py)
   # Documentación: https://import-linter.readthedocs.io
   # ──────────────────────────────────────────────────────────────────────────
   architecture:
@@ -34,7 +34,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Check architecture contracts
-        run: uv run python -m importlinter
+        run: uv run lint-imports
 
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 2: Tests
