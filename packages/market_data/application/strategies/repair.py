@@ -287,6 +287,10 @@ class RepairStrategy(StrategyMixin):
         columns_only: list | None = None,
     ) -> Optional[pd.DataFrame]:
         """Lee datos Silver delegando al Protocol OHLCVStorage."""
+        # fail-fast: storage es obligatorio para RepairStrategy
+        assert ctx.storage is not None, (
+            "RepairStrategy._read_silver: ctx.storage es None. Inyectar desde RepairPipelineFactory."
+        )
         try:
             df = ctx.storage.load_ohlcv(symbol=symbol, timeframe=timeframe)
             if df is None or df.empty:
@@ -414,6 +418,11 @@ class RepairStrategy(StrategyMixin):
                 )
                 return False, 0, 0.0
 
+            # fail-fast: invariantes post-qres.accepted
+            assert ctx.storage is not None, (
+                "RepairStrategy: ctx.storage es None — inyectar desde RepairPipelineFactory."
+            )
+            assert qres.df is not None, "qres.df no puede ser None cuando accepted=True"
             ctx.storage.save_ohlcv(
                 df=qres.df,
                 symbol=symbol,

@@ -96,7 +96,18 @@ class NullOHLCVPublisher:
         self,
         chunk: OHLCVChunk,
     ) -> bool:
-        return True  # éxito simulado — solo válido en tests unitarios
+        # Detectable en Loki/Grafana si llega a producción — indica misconfiguration.
+        # En tests este warning es esperado y puede suprimirse con log level ERROR.
+        from loguru import logger as _logger
+
+        _logger.warning(
+            "NullOHLCVPublisher.publish_chunk called — publisher not configured. "
+            "Check KAFKA_ENABLED and broker. exchange={} symbol={} timeframe={}",
+            chunk.exchange,
+            chunk.symbol,
+            chunk.timeframe,
+        )
+        return True  # fail-soft — no crashea, pero es observable
 
 
 # Alias de compatibilidad — SSOT: NullOHLCVPublisher es la clase canónica
