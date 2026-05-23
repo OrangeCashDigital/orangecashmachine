@@ -198,7 +198,14 @@ async def test_B_no_commit_on_bronze_failure_event_reappears():
     group_id = _unique_group("bronze-fail")
     event = _make_event(event_id=f"bfail-{uuid.uuid4().hex[:6]}")
 
-    # ── 1. Producir ──────────────────────────────────────────────────────
+    # ── 1. Consumer-1 arranca ANTES del producer con offset_reset=latest ──
+    # Crítico: latest se evalúa en c1.start() — si el producer ya terminó,
+    # latest queda DESPUÉS del mensaje y el consumer no lo ve nunca.
+    # Arrancando el consumer primero, latest = posición actual del topic,
+    # y el mensaje producido después llega correctamente al consumer.
+    c1 = await _raw_consumer(group_id, TOPIC_OHLCV_RAW, offset_reset="latest")
+
+    # ── 2. Producir ───────────────────────────────────────────────────────
     p = await _raw_producer()
     try:
         await p.send_and_wait(TOPIC_OHLCV_RAW, value=serialize(event))
@@ -206,11 +213,7 @@ async def test_B_no_commit_on_bronze_failure_event_reappears():
     finally:
         await p.stop()
 
-    # ── 2. Consumer-1: recibe pero NO commitea (simula fallo Bronze) ──────
-    # offset_reset='latest': el producer ya publicó antes de crear el consumer.
-    # 'latest' posiciona en el mensaje recién producido, evitando leer
-    # mensajes históricos de test_A (replay-0000..0099) que persisten en el topic.
-    c1 = await _raw_consumer(group_id, TOPIC_OHLCV_RAW, offset_reset="latest")
+    # ── 3. Consumer-1: recibe pero NO commitea (simula fallo Bronze) ──────
     try:
         received = await _drain(c1, expected=1)
         assert len(received) >= 1, "Consumer-1 no recibió el evento"
@@ -218,7 +221,7 @@ async def test_B_no_commit_on_bronze_failure_event_reappears():
     finally:
         await c1.stop()
 
-    # ── 3. Consumer-2: mismo group → evento reaparece ────────────────────
+    # ── 4. Consumer-2: mismo group → evento reaparece ────────────────────
     # Mismo group_id → Kafka redelivera desde el offset no commitado.
     # offset_reset='latest' no aplica porque el group ya tiene offset registrado
     # (consumer-1 hizo poll sin commit → offset pendiente de ese mensaje).
