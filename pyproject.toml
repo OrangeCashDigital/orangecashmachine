@@ -259,6 +259,7 @@ root_packages = [
     "infrastructure",
     "research",
     "api",
+    "tests",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -407,6 +408,11 @@ ignore_imports = [
     "market_data.infrastructure.bootstrap.composition_root -> market_data.application.feed_orchestrator",
     # Composition Root: pipeline_factory inyecta source_manager para gap recovery.
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.source_manager",
+    # Composition Root: asset_checks invoca scan_gaps para verificar completitud
+    # de particiones Bronze/Silver. El asset check es un observador de calidad
+    # (read-only) — no modifica estado de dominio. DIP-safe: el check conoce
+    # el use case pero no la implementación de storage.
+    "infrastructure.dagster.assets.asset_checks -> market_data.application.processing.gap_scanner",
 
 ]
 
@@ -886,6 +892,34 @@ forbidden_modules = [
     "shared.kafka.schemas._base",
 ]
 allow_indirect_imports = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 7 — tests: contratos del harness Kafka
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# tests/kafka/test_*.py deben importar los helpers desde conftest, nunca
+# duplicar BROKER, _unique_group, _raw_consumer, etc. inline.
+# SSOT del harness: tests/kafka/conftest.py — cualquier helper nuevo va ahí.
+# Violación típica: definir BROKER = "localhost:9093" dentro de un test.
+# Este contrato previene que los tests divergan del harness documentado.
+name = "BC-40: tests/kafka — tests unitarios no importan aiokafka directamente"
+type = "forbidden"
+source_modules = [
+    "tests.kafka.test_bronze_writer",
+    "tests.kafka.test_dedup",
+    "tests.kafka.test_metrics",
+    "tests.kafka.test_payloads",
+    "tests.kafka.test_serializer",
+]
+forbidden_modules = [
+    # Los tests unitarios (sin Kafka real) no deben importar aiokafka.
+    # Si un test unitario necesita aiokafka, está mal clasificado:
+    # moverlo a test_integration_kafka.py o crear helper en conftest.py.
+    # NOTA: import-linter analiza grafo ESTÁTICO — imports lazy dentro de
+    # funciones no generan arista y no son detectables por este mecanismo.
+    "aiokafka",
+]
 
 # ---------------------------------------------------------------------------
 # mypy overrides — librerías sin py.typed

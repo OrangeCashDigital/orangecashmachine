@@ -196,7 +196,7 @@ class TestBronzeWriterHappyPath:
         bronze = _FakeBronze()
         writer = _build_writer(consumer, bronze)
 
-        processed, errors = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        processed, errors = asyncio.run(writer.run_once())
 
         assert processed == 1
         assert errors == 0
@@ -212,7 +212,7 @@ class TestBronzeWriterHappyPath:
         consumer = _FakeConsumer([_make_msg(_make_event())])
         writer = _build_writer(consumer, _FakeBronze())
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert consumer.committed is True
 
@@ -221,7 +221,7 @@ class TestBronzeWriterHappyPath:
         consumer = _FakeConsumer([])
         writer = _build_writer(consumer, _FakeBronze())
 
-        processed, errors = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        processed, errors = asyncio.run(writer.run_once())
 
         assert processed == 0
         assert errors == 0
@@ -234,7 +234,7 @@ class TestBronzeWriterHappyPath:
         bronze = _FakeBronze()
         writer = _build_writer(consumer, bronze)
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert bronze.appended[0]["exchange"] == "kucoin"
 
@@ -253,7 +253,7 @@ class TestBronzeWriterDedup:
         bronze = _FakeBronze()
         writer = _build_writer(consumer, bronze)
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert len(bronze.appended) == 1
 
@@ -264,7 +264,7 @@ class TestBronzeWriterDedup:
         consumer = _FakeConsumer([msg, msg])
         writer = _build_writer(consumer, _FakeBronze())
 
-        processed, errors = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        processed, errors = asyncio.run(writer.run_once())
 
         assert consumer.committed is True
         assert errors == 0
@@ -280,7 +280,7 @@ class TestBronzeWriterDedup:
         bronze = _FakeBronze()
         writer = _build_writer(consumer, bronze)
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert len(bronze.appended) == 2
 
@@ -297,7 +297,7 @@ class TestBronzeWriterDLQ:
         dlq = _FakeProducer()
         writer = _build_writer(consumer, _FakeBronze(), dlq)
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert len(dlq.produced) == 1
         assert dlq.produced[0]["topic"] == TOPIC_DLQ
@@ -308,7 +308,7 @@ class TestBronzeWriterDLQ:
         consumer = _FakeConsumer([_make_corrupt_msg()])
         writer = _build_writer(consumer, _FakeBronze(), _FakeProducer())
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert consumer.committed is True
 
@@ -319,7 +319,7 @@ class TestBronzeWriterDLQ:
         dlq = _FakeProducer()
         writer = _build_writer(consumer, _FakeBronze(), dlq)
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert len(dlq.produced) == 1
         assert dlq.produced[0]["headers"]["reason"] == "empty_bars"
@@ -329,7 +329,7 @@ class TestBronzeWriterDLQ:
         consumer = _FakeConsumer([_make_msg(_make_event(bars=[]))])
         writer = _build_writer(consumer, _FakeBronze(), _FakeProducer())
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert consumer.committed is True
 
@@ -346,7 +346,7 @@ class TestBronzeWriterAtLeastOnce:
         bronze = _FakeBronze(fail=True)
         writer = _build_writer(consumer, bronze)
 
-        processed, errors = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        processed, errors = asyncio.run(writer.run_once())
 
         assert consumer.committed is False
         assert errors == 1
@@ -357,7 +357,7 @@ class TestBronzeWriterAtLeastOnce:
         consumer = _FakeConsumer([_make_msg(e) for e in events])
         writer = _build_writer(consumer, _FakeBronze(fail=True))
 
-        processed, errors = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        processed, errors = asyncio.run(writer.run_once())
 
         assert errors == 3
         assert consumer.committed is False
@@ -383,7 +383,7 @@ class TestBronzeWriterAtLeastOnce:
         consumer = _FakeConsumer([_make_msg(good_event), _make_msg(bad_event)])
         writer = _build_writer(consumer, _PartialBronze())  # type: ignore[arg-type]
 
-        _, errors = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        _, errors = asyncio.run(writer.run_once())
 
         assert errors >= 1
         assert consumer.committed is False
@@ -400,7 +400,7 @@ class TestBronzeWriterDLQUnavailable:
         consumer = _FakeConsumer([_make_corrupt_msg()])
         writer = _build_writer(consumer, _FakeBronze(), dlq=None)
 
-        processed, errors = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        processed, errors = asyncio.run(writer.run_once())
 
         assert consumer.committed is True
         assert errors == 0
@@ -411,7 +411,7 @@ class TestBronzeWriterDLQUnavailable:
         bronze = _FakeBronze()
         writer = _build_writer(consumer, bronze, dlq=None)
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert len(bronze.appended) == 0
 
@@ -429,7 +429,7 @@ class TestBronzeWriterDLQProducerFailure:
         writer = _build_writer(consumer, _FakeBronze(), dlq)
 
         # No debe lanzar
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
     def test_dlq_failure_still_commits_offset(self):
         """DLQ falla → mensaje manejado igualmente, offset commitado."""
@@ -437,7 +437,7 @@ class TestBronzeWriterDLQProducerFailure:
         dlq = _FakeProducer(fail=True)
         writer = _build_writer(consumer, _FakeBronze(), dlq)
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert consumer.committed is True
 
@@ -447,7 +447,7 @@ class TestBronzeWriterDLQProducerFailure:
         bronze = _FakeBronze()
         writer = _build_writer(consumer, bronze, _FakeProducer(fail=True))
 
-        asyncio.get_event_loop().run_until_complete(writer.run_once())
+        asyncio.run(writer.run_once())
 
         assert len(bronze.appended) == 0
 
@@ -463,14 +463,14 @@ class TestBronzeWriterLifecycle:
         consumer = _FakeConsumer()
         writer = _build_writer(consumer, _FakeBronze())
 
-        asyncio.get_event_loop().run_until_complete(writer.start())
-        asyncio.get_event_loop().run_until_complete(writer.stop())
+        asyncio.run(writer.start())
+        asyncio.run(writer.stop())
 
     def test_run_once_returns_tuple(self):
         """run_once retorna (int, int)."""
         writer = _build_writer(_FakeConsumer(), _FakeBronze())
 
-        result = asyncio.get_event_loop().run_until_complete(writer.run_once())
+        result = asyncio.run(writer.run_once())
 
         assert isinstance(result, tuple)
         assert len(result) == 2
