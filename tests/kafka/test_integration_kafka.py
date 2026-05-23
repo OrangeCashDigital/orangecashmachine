@@ -221,35 +221,35 @@ async def test_B_no_commit_on_bronze_failure_event_reappears():
     finally:
         await c1.stop()
 
-    # ── 4. Consumer-2: mismo group → evento reaparece ────────────────────
-    # Mismo group_id → Kafka redelivera desde el offset no commitado.
-    # offset_reset='latest' no aplica porque el group ya tiene offset registrado
-    # (consumer-1 hizo poll sin commit → offset pendiente de ese mensaje).
-    c2 = await _raw_consumer(group_id, TOPIC_OHLCV_RAW, offset_reset="latest")
+    # ── 4. Consumer-2: mismo group, earliest → buscar por event_id ─────────
+    # aiokafka con enable_auto_commit=False + stop() sin commit() NO persiste
+    # el offset en el coordinator. Consumer-2 arranca como grupo sin offset
+    # → auto_offset_reset='earliest' lee desde el inicio del topic.
+    # Filtramos por event_id para ignorar mensajes de otros tests.
+    # Esto verifica at-least-once: el mensaje debe aparecer en algún offset.
+    c2 = await _raw_consumer(group_id, TOPIC_OHLCV_RAW, offset_reset="earliest")
+    found = False
+    deadline = time.monotonic() + 15.0
     try:
-        redelivered = await _drain(c2, expected=1, timeout_s=10.0)
+        while not found and time.monotonic() < deadline:
+            batch = await c2.getmany(timeout_ms=3_000, max_records=50)
+            for _tp, records in batch.items():
+                for msg in records:
+                    try:
+                        parsed = deserialize(msg.value, EventPayload)
+                        if parsed.event_id == event.event_id:
+                            found = True
+                            break
+                    except Exception:
+                        pass  # basura de otros tests — ignorar
+                if found:
+                    break
     finally:
         await c2.stop()
 
-    assert len(redelivered) >= 1, (
-        "❌ PÉRDIDA DE DATOS: el evento NO reapareció tras fallo Bronze sin commit.\n"
-        "Verificar enable_auto_commit=False en KafkaConsumerAdapter."
-    )
-
-    # Buscar el event_id esperado ENTRE todos los mensajes recibidos.
-    # El consumer puede recibir mensajes residuales de otros tests;
-    # lo que importa es que el nuestro está presente (at-least-once).
-    received_ids = set()
-    for msg in redelivered:
-        try:
-            received_ids.add(deserialize(msg.value, EventPayload).event_id)
-        except Exception:
-            pass  # mensaje de otro test — ignorar
-
-    assert event.event_id in received_ids, (
-        f"❌ Event ID no encontrado en redelivery.\n"
-        f"Esperado: {event.event_id}\n"
-        f"Recibidos: {received_ids}\n"
+    assert found, (
+        f"❌ PÉRDIDA DE DATOS: event_id={event.event_id} no reapareció\n"
+        f"tras fallo Bronze sin commit (consumer-2, earliest).\n"
         f"Verificar enable_auto_commit=False en KafkaConsumerAdapter."
     )
 
