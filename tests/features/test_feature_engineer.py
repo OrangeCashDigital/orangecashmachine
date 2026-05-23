@@ -141,7 +141,7 @@ def test_log_return_is_log_of_close_ratio(df30):
     np.testing.assert_allclose(
         result["log_return"][1:].to_numpy(),
         expected,
-        rtol=1e-9,  # float64: log(a/b) acumula epsilon ~1e-10; 1e-9 es correcto
+        rtol=1e-10,  # ratio directo → log(math.e): idéntico a np.log, sin error de base
     )
 
 

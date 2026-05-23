@@ -37,6 +37,8 @@ Principios
 
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 import polars as pl
 from loguru import logger
@@ -172,13 +174,14 @@ class GoldTransformer:
 
     @staticmethod
     def _compute_log_return(df: pl.DataFrame) -> pl.DataFrame:
-        """log(close_t / close_{t-1}). close=0 → null."""
-        return df.with_columns(
-            (
-                pl.col("close").replace(0, None).log(base=2.718281828)
-                - pl.col("close").replace(0, None).shift(1).log(base=2.718281828)
-            ).alias("log_return")
-        )
+        """log(close_t / close_{t-1}). close=0 → null.
+
+        Implementación: ratio directo → log natural.
+        Matemáticamente idéntico a np.log(close[t] / close[t-1]).
+        Evita error de redondeo de aproximar e como literal float.
+        """
+        close_safe = pl.col("close").replace(0, None)
+        return df.with_columns((close_safe / close_safe.shift(1)).log(base=math.e).alias("log_return"))
 
     @staticmethod
     def _compute_return_1(df: pl.DataFrame) -> pl.DataFrame:
