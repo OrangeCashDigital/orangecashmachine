@@ -61,6 +61,7 @@ from loguru import logger
 
 from market_data.infrastructure.kafka.dedup import SeenFilter
 from market_data.infrastructure.kafka.metrics import KafkaMetrics
+from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
 from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from shared.kafka.schemas.ohlcv import EventPayload
@@ -86,7 +87,7 @@ class KafkaBronzeWriter:
     def __init__(
         self,
         consumer: KafkaConsumerPort,
-        bronze_storage: object,
+        bronze_storage: BronzeStorage,
         dlq_producer: Optional[KafkaProducerPort] = None,
         metrics: Optional[KafkaMetrics] = None,
         poll_timeout_ms: int = 1_000,
@@ -108,14 +109,14 @@ class KafkaBronzeWriter:
 
     async def start(self) -> None:
         """Arranca el consumer. Llamar antes de run()."""
-        await self._consumer.start()  # type: ignore[attr-defined]
+        await self._consumer.start()
         self._running = True
         self._log.info("bronze_writer_started")
 
     async def stop(self) -> None:
         """Detiene el loop y cierra el consumer. SafeOps."""
         self._running = False
-        await self._consumer.close()  # type: ignore[union-attr]
+        await self._consumer.close()
         self._log.info("bronze_writer_stopped")
 
     # ------------------------------------------------------------------
@@ -151,7 +152,7 @@ class KafkaBronzeWriter:
     # ------------------------------------------------------------------
 
     async def _run_once(self) -> tuple[int, int]:
-        messages = await self._consumer.poll(  # type: ignore[union-attr]
+        messages = await self._consumer.poll(
             timeout_ms=self._poll_timeout_ms,
             max_records=self._max_poll_records,
         )
@@ -175,7 +176,7 @@ class KafkaBronzeWriter:
         # Los mensajes exitosos dentro del batch son idempotentes
         # (SeenFilter L1 + Iceberg dedup).
         if write_errors == 0 and (processed + handled) > 0:
-            await self._consumer.commit()  # type: ignore[union-attr]
+            await self._consumer.commit()
         elif write_errors > 0:
             self._log.bind(
                 write_errors=write_errors,
@@ -247,7 +248,7 @@ class KafkaBronzeWriter:
         # Pasarlo explícito aquí garantiza la partición correcta en Iceberg.
         try:
             await asyncio.to_thread(
-                self._bronze.append,  # type: ignore[attr-defined]
+                self._bronze.append,
                 df=df,
                 symbol=event.symbol,
                 timeframe=event.timeframe,
