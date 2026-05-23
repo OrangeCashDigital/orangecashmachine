@@ -94,38 +94,21 @@ class IncrementalStrategy(StrategyMixin):
             result.skipped = True
             return
 
-        # ── Kappa router — dominio preservado hasta el publisher ─────────────
-        if ctx.publisher is not None:
-            converter = ctx.get_chunk_converter()  # fail-fast si no inyectado
-            assert qres.df is not None, "qres.df no puede ser None cuando accepted=True"
-            chunk = converter.to_chunk(
-                df=qres.df,
-                exchange=ctx.exchange_id,
-                symbol=symbol,
-                timeframe=timeframe,
-                source=SOURCE_LIVE,
-                run_id=getattr(ctx, "run_id", ""),
-            )
-            ok = await ctx.publisher.publish_chunk(chunk)
-            if not ok:
-                logger.warning(
-                    "Incremental kafka publish failed — cursor NO actualizado [{}/{}] | symbol={} timeframe={}",
-                    idx,
-                    total,
-                    symbol,
-                    timeframe,
-                )
-                ctx.metrics.pipeline_errors_inc(
-                    exchange=ctx.exchange_id,
-                    error_type="transient",
-                )
-                result.skipped = True
-                return
-        else:
-            logger.error(
-                "publisher=None — Kappa requiere publisher. "
-                "Verificar KAFKA_ENABLED y broker. Abortando par. "
-                "[{}/{}] | symbol={} timeframe={}",
+        # ── Kappa router — publisher siempre != None (Null Object Pattern) ───
+        converter = ctx.get_chunk_converter()  # fail-fast si no inyectado
+        assert qres.df is not None, "qres.df no puede ser None cuando accepted=True"
+        chunk = converter.to_chunk(
+            df=qres.df,
+            exchange=ctx.exchange_id,
+            symbol=symbol,
+            timeframe=timeframe,
+            source=SOURCE_LIVE,
+            run_id=getattr(ctx, "run_id", ""),
+        )
+        ok = await ctx.publisher.publish_chunk(chunk)
+        if not ok:
+            logger.warning(
+                "Incremental kafka publish failed — cursor NO actualizado [{}/{}] | symbol={} timeframe={}",
                 idx,
                 total,
                 symbol,
@@ -133,7 +116,7 @@ class IncrementalStrategy(StrategyMixin):
             )
             ctx.metrics.pipeline_errors_inc(
                 exchange=ctx.exchange_id,
-                error_type="fatal",
+                error_type="transient",
             )
             result.skipped = True
             return

@@ -403,43 +403,29 @@ class BackfillStrategy(StrategyMixin):
 
             if qres.accepted:
                 try:
-                    if ctx.publisher is not None:
-                        converter = ctx.get_chunk_converter()  # fail-fast si no inyectado
-                        chunk = converter.to_chunk(
-                            df=qres.df,
-                            exchange=ctx.exchange_id,
-                            symbol=symbol,
-                            timeframe=timeframe,
-                            source=SOURCE_BACKFILL,
-                            run_id=getattr(ctx, "run_id", ""),
-                        )
-                        ok = await ctx.publisher.publish_chunk(chunk)
-                        if not ok:
-                            log.warning(
-                                "Backfill chunk kafka publish failed — cursor NO avanzado",
-                                chunk=chunks + 1,
-                            )
-                            ctx.metrics.pipeline_errors_inc(
-                                exchange=ctx.exchange_id,
-                                error_type="transient",
-                            )
-                            current_end = oldest_in_chunk
-                            continue
-                    else:
-                        # Kappa: publisher es obligatorio. Sin publisher → error fatal.
-                        # No hay fallback a Iceberg — el productor no escribe al lago.
-                        log.error(
-                            "publisher=None — Kappa requiere publisher. "
-                            "Verificar KAFKA_ENABLED y broker. Abortando chunk.",
+                    # publisher siempre != None — NullOHLCVPublisher es el default (Null Object).
+                    converter = ctx.get_chunk_converter()  # fail-fast si no inyectado
+                    assert qres.df is not None, "qres.df no puede ser None cuando accepted=True"
+                    chunk = converter.to_chunk(
+                        df=qres.df,
+                        exchange=ctx.exchange_id,
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        source=SOURCE_BACKFILL,
+                        run_id=getattr(ctx, "run_id", ""),
+                    )
+                    ok = await ctx.publisher.publish_chunk(chunk)
+                    if not ok:
+                        log.warning(
+                            "Backfill chunk kafka publish failed — cursor NO avanzado",
                             chunk=chunks + 1,
                         )
                         ctx.metrics.pipeline_errors_inc(
                             exchange=ctx.exchange_id,
-                            error_type="fatal",
+                            error_type="transient",
                         )
-                        raise RuntimeError(
-                            "BackfillStrategy: ctx.publisher es None. En modo Kappa el publisher es obligatorio."
-                        )
+                        current_end = oldest_in_chunk
+                        continue
                     total_rows += chunk.count
                     self._update_backfill_cursor(
                         symbol,

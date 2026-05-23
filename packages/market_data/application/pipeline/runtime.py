@@ -52,7 +52,7 @@ from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
 from market_data.ports.outbound.gap_registry import GapRegistryPort
 from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
 from market_data.ports.outbound.metrics import MetricsPort, NullMetrics
-from market_data.ports.outbound.publisher import OHLCVPublisherPort
+from market_data.ports.outbound.publisher import NullOHLCVPublisher, OHLCVPublisherPort
 from market_data.ports.outbound.quality_pipeline import QualityPipelinePort
 from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.outbound.storage import OHLCVStorage
@@ -257,9 +257,10 @@ class PipelineContext:
     start_date: str
 
     # ── Publisher Kappa ───────────────────────────────────────────────────────
-    # Obligatorio en producción — backfill/incremental fallan si es None.
-    # None permitido solo en tests que inyectan NullPublisher explícitamente.
-    publisher: OHLCVPublisherPort | None = field(default=None)
+    # Nunca None en producción — Null Object Pattern (NullOHLCVPublisher).
+    # Tests inyectan NullOHLCVPublisher() explícitamente o usan el default.
+    # Kappa: publisher=None es error de configuración, no modo degradado.
+    publisher: OHLCVPublisherPort = field(default_factory=NullOHLCVPublisher)
 
     # ── Mantenimiento (RepairStrategy) ────────────────────────────────────────
     # storage=None es válido para backfill/incremental — solo Repair lo usa.
