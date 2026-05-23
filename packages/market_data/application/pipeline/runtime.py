@@ -39,6 +39,9 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import cast
+
+from loguru import Logger as _LoguruLogger
 
 # ── Domain value types — contratos puros, sin comportamiento ─────────────────
 from market_data.domain.policies.base import (
@@ -58,7 +61,8 @@ from market_data.ports.outbound.state import CursorStorePort
 from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.ports.outbound.throttle import ThrottlePort
 
-_log = logging.getLogger(__name__)
+# _log usa loguru en runtime (bind_pipeline) — stdlib Logger solo como fallback
+_log: _LoguruLogger = cast(_LoguruLogger, logging.getLogger(__name__))
 
 
 # =============================================================================

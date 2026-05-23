@@ -260,12 +260,17 @@ def _resample_df(
     if df_1m is None or df_1m.empty:
         return pd.DataFrame()
 
-    resampled = align_to_grid(  # type: ignore[call-arg]
+    _raw = align_to_grid(  # type: ignore[call-arg]
         df=df_1m,
         timeframe=target_tf,
         exchange=exchange,
         symbol=symbol,
     )
+    # align_to_grid puede retornar Timestamp en algunos overloads de pandas —
+    # narrowing explícito garantiza DataFrame para mypy y para el caller.
+    if not isinstance(_raw, pd.DataFrame):
+        return pd.DataFrame()
+    resampled: pd.DataFrame = _raw
 
     if resampled.empty:
         return resampled
