@@ -143,6 +143,19 @@ class MetricsPort(Protocol):
         """Incrementa contador de colisiones post-floor (align_to_grid)."""
         ...
 
+    def record_error(
+        self,
+        exchange: str,
+        error_type: str = "transient",
+    ) -> None:
+        """
+        Registra un error de pipeline.
+
+        error_type: "transient" | "circuit_open" | "rate_limit" | "timeout"
+        SafeOps: nunca lanza.
+        """
+        ...
+
 
 class NullMetrics:
     """
@@ -197,6 +210,9 @@ class NullMetrics:
         pass
 
     def timestamp_collisions_inc(self, exchange: str, symbol: str, timeframe: str, count: int = 1) -> None:
+        pass
+
+    def record_error(self, exchange: str, error_type: str = "transient") -> None:
         pass
 
 

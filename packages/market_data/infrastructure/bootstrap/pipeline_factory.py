@@ -165,6 +165,9 @@ class ConcretePipelineFactory:
         )
         from market_data.infrastructure.quality.anomaly_registry import default_registry
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
+        from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
+        from market_data.ports.outbound.metrics import MetricsPort
+        from market_data.ports.outbound.quality_pipeline import QualityPipelinePort
         from market_data.ports.outbound.state import (
             AsyncCursorStorePort,
             CursorStorePort,
@@ -209,9 +212,9 @@ class ConcretePipelineFactory:
             timeframes=request.timeframes,
             start_date=request.start_date,
             exchange_client=cast(ExchangeClientPort, exchange_client),
-            fetcher=fetcher,
-            metrics=PrometheusPipelineMetrics(),
-            quality=quality,
+            fetcher=cast(HistoricalFetcherPort, fetcher),
+            metrics=cast(MetricsPort, PrometheusPipelineMetrics()),
+            quality=cast(QualityPipelinePort, quality),
             cursor_store=cast(CursorStorePort, cursor),
             market_type=request.market_type,
             dry_run=request.dry_run,

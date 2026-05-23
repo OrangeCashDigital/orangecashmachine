@@ -40,7 +40,7 @@ SSOT  — única fuente de verdad del contrato de fetching histórico
 
 from __future__ import annotations
 
-from typing import AsyncIterator, Optional, Protocol, runtime_checkable
+from typing import AsyncIterator, List, Optional, Protocol, runtime_checkable
 
 import pandas as pd
 
@@ -103,6 +103,48 @@ class HistoricalFetcherPort(Protocol):
         NoDataAvailableError     : el par no tiene datos desde since_ms.
         """
         ...  # type: ignore[misc]  # AsyncIterator en Protocol requiere esta supresión
+
+    async def download_data(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: Optional[str] = None,
+        limit: int = 500,
+    ) -> pd.DataFrame:
+        """
+        Descarga todos los datos OHLCV disponibles desde start_date.
+
+        Returns
+        -------
+        pd.DataFrame con columnas OHLCV canónicas. DataFrame vacío si no hay datos.
+        """
+        ...
+
+    async def fetch_chunk(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: Optional[int],
+        limit: int = 500,
+        end_ms: Optional[int] = None,
+    ) -> List[list]:
+        """
+        Fetcha un chunk crudo de candles del exchange.
+
+        Parameters
+        ----------
+        symbol    : Par canónico ("BTC/USDT").
+        timeframe : Resolución canónica ("1m", "1h", …).
+        since     : Timestamp epoch ms de inicio. None = desde el principio.
+        limit     : Máximo de candles por chunk.
+        end_ms    : Timestamp epoch ms de fin (backward pagination).
+
+        Returns
+        -------
+        List[list] — filas crudas [[ts, open, high, low, close, vol], …].
+        Lista vacía si no hay datos en el rango.
+        """
+        ...
 
 
 __all__ = ["HistoricalFetcherPort"]

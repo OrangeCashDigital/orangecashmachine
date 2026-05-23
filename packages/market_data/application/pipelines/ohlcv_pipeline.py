@@ -61,6 +61,9 @@ from market_data.domain.policies.base import (
 )
 from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 from market_data.ports.outbound.gap_registry import GapRegistryPort
+from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
+from market_data.ports.outbound.metrics import MetricsPort
+from market_data.ports.outbound.quality_pipeline import QualityPipelinePort
 from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
 from market_data.ports.outbound.state import CursorStorePort
 
@@ -174,9 +177,9 @@ class OHLCVPipeline(PipelineTriggerPort):
         timeframes: List[str],
         start_date: str,
         exchange_client: "ExchangeClientPort",
-        fetcher: object,  # HistoricalFetcherPort — inyectar desde factory
-        metrics: object,  # PipelineMetricsPort  — inyectar desde factory
-        quality: object = None,  # QualityPipeline — DIP: inyectar desde factory
+        fetcher: HistoricalFetcherPort,
+        metrics: MetricsPort,
+        quality: QualityPipelinePort,
         max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
         cursor_store: Optional[CursorStorePort] = None,
         gap_registry: Optional[GapRegistryPort] = None,

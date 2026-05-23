@@ -33,7 +33,7 @@ Principios: DIP · ISP · SSOT · runtime_checkable · SafeOps
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 import pandas as pd
 
@@ -64,6 +64,7 @@ class QualityPipelineResult:
     decision: str
     score: float
     tier: DataTier | None = field(default=None)
+    df: "pd.DataFrame | None" = field(default=None)
 
 
 # =========================================================================== #
@@ -124,6 +125,22 @@ class QualityPipelinePort(Protocol):
         """
         ...
 
+    def run(
+        self,
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        exchange: str,
+        run_id: Optional[str] = None,
+        rows_removed: int = 0,
+    ) -> QualityPipelineResult:
+        """
+        Alias de check() con firma compatible con QualityPipeline.check().
+
+        Las strategies llaman .run() — este método satisface ese contrato.
+        """
+        ...
+
 
 # =========================================================================== #
 # Null Object                                                                  #
@@ -160,6 +177,24 @@ class NullQualityPipeline:
             decision="accept",
             score=1.0,
             tier=DataTier.CLEAN,
+            df=df,
+        )
+
+    def run(
+        self,
+        df: pd.DataFrame,
+        symbol: str,
+        timeframe: str,
+        exchange: str,
+        run_id: Optional[str] = None,
+        rows_removed: int = 0,
+    ) -> QualityPipelineResult:
+        return QualityPipelineResult(
+            accepted=True,
+            decision="accept",
+            score=1.0,
+            tier=DataTier.CLEAN,
+            df=df,
         )
 
 

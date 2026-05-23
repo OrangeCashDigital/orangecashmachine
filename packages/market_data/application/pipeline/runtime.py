@@ -267,9 +267,9 @@ class PipelineContext:
     storage: OHLCVStorage | None = field(default=None)
 
     # ── Observabilidad ────────────────────────────────────────────────────────
-    # None válido en construcción — __post_init__ garantiza NullMetrics.
-    # Post-construcción: NUNCA None (invariante garantizado).
-    metrics: MetricsPort | None = field(default=None)
+    # default_factory=NullMetrics garantiza NUNCA None — sin Optional.
+    # mypy ve MetricsPort directamente — sin union-attr errors.
+    metrics: MetricsPort = field(default_factory=NullMetrics)
 
     # ── Gap registry ──────────────────────────────────────────────────────────
     # None = modo degradado sin Redis (SafeOps — RepairStrategy degrada).
@@ -290,12 +290,10 @@ class PipelineContext:
         """
         Garantiza invariantes post-construcción.
 
-        · metrics: inyecta NullMetrics si no fue proporcionado (fail-soft).
-          NullMetrics satisface MetricsPort — no-op en todos sus métodos.
-          Elimina guards 'if ctx.metrics is not None' en todas las estrategias.
+        · metrics: default_factory=NullMetrics garantiza MetricsPort siempre.
+          Sin Optional — mypy no requiere guards en las strategies.
         """
-        if self.metrics is None:
-            object.__setattr__(self, "metrics", NullMetrics())
+        pass  # invariante garantizado por default_factory=NullMetrics
 
     def get_chunk_converter(self) -> OHLCVChunkConverterPort:
         """

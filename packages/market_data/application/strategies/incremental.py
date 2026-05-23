@@ -78,7 +78,7 @@ class IncrementalStrategy(StrategyMixin):
             market_type=ctx.market_type,
             symbol=symbol,
             timeframe=timeframe,
-            decision=qres.tier.value,
+            decision=qres.tier.value if qres.tier is not None else "unknown",
         )
 
         if not qres.accepted:
@@ -97,6 +97,7 @@ class IncrementalStrategy(StrategyMixin):
         # ── Kappa router — dominio preservado hasta el publisher ─────────────
         if ctx.publisher is not None:
             converter = ctx.get_chunk_converter()  # fail-fast si no inyectado
+            assert qres.df is not None, "qres.df no puede ser None cuando accepted=True"
             chunk = converter.to_chunk(
                 df=qres.df,
                 exchange=ctx.exchange_id,
