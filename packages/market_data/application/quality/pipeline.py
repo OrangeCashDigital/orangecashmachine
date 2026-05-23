@@ -47,6 +47,7 @@ from typing import Optional
 
 # terceros
 import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.application.processing.gap_scanner import scan_gaps
@@ -203,7 +204,7 @@ class QualityPipeline:
         Descuenta rows_removed para no contar gaps pipeline-induced
         como gaps reales de fuente.
         """
-        gaps_raw = scan_gaps(df, timeframe)
+        gaps_raw = scan_gaps(pl.from_pandas(df), timeframe)
         gaps = gaps_raw[rows_removed:] if rows_removed > 0 else gaps_raw
         if not gaps:
             return

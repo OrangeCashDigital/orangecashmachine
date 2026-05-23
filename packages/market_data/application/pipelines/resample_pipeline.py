@@ -52,7 +52,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-import pandas as pd
+import polars as pl
 
 from market_data.domain.value_objects.timeframe import (
     VALID_TIMEFRAMES,
@@ -237,49 +237,40 @@ def _lookback_candles(target_tf: str) -> int:
 
 
 def _resample_df(
-    df_1m: pd.DataFrame,
+    df_1m: pl.DataFrame,
     target_tf: str,
     symbol: str,
     exchange: str,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """
-    Resamplea un DataFrame OHLCV de 1m al target_tf.
+    Resamplea un pl.DataFrame OHLCV de 1m al target_tf.
 
     Delega en align_to_grid — SSOT de agregación OHLCV del sistema.
-    align_to_grid aplica floor + groupby con semántica OHLCV correcta
-    (open=first, high=max, low=min, close=last, volume=sum).
+    align_to_grid opera sobre pl.DataFrame nativo (ya migrado Fase 2).
 
-    Excluye la vela parcial (en curso) del output:
+    Excluye la vela parcial (en curso):
     La última vela del TF target puede estar incompleta si now_ms
     no coincide exactamente con el cierre del período. Se elimina
     la última fila del resultado para garantizar que solo se escriben
     velas cerradas.
 
-    Invariante: retorna DataFrame con columnas [timestamp, open, high, low, close, volume]
+    Principios: KISS · SSOT · SafeOps
     """
-    if df_1m is None or df_1m.empty:
-        return pd.DataFrame()
+    if df_1m is None or df_1m.is_empty():
+        return pl.DataFrame()
 
-    _raw = align_to_grid(  # type: ignore[call-arg]
+    resampled = align_to_grid(
         df=df_1m,
         timeframe=target_tf,
         exchange=exchange,
         symbol=symbol,
     )
-    # align_to_grid puede retornar Timestamp en algunos overloads de pandas —
-    # narrowing explícito garantiza DataFrame para mypy y para el caller.
-    if not isinstance(_raw, pd.DataFrame):
-        return pd.DataFrame()
-    resampled: pd.DataFrame = _raw
 
-    if resampled.empty:
-        return resampled
+    if not isinstance(resampled, pl.DataFrame) or resampled.is_empty():
+        return pl.DataFrame()
 
-    # Eliminar la última fila — puede ser vela parcial (en curso).
-    # Solo escribimos velas cuyo período ha cerrado completamente.
-    # El caller (resample_flow) ya filtra por timeframes_due() antes de llamar,
-    # pero este guard es una segunda línea de defensa (SafeOps).
-    return resampled.iloc[:-1].reset_index(drop=True)
+    # Eliminar última fila — puede ser vela parcial (en curso).
+    return resampled.slice(0, len(resampled) - 1)
 
 
 # ==============================================================================
@@ -436,7 +427,7 @@ class ResamplePipeline:
             lookback = _lookback_candles(target_tf)
             period_1m_ms = timeframe_to_ms("1m")
             window_start_ms = now_ms - (lookback * period_1m_ms)
-            window_start = pd.Timestamp(window_start_ms, unit="ms", tz="UTC")
+            window_start = pl.Series([window_start_ms], dtype=pl.Datetime("ms")).dt.replace_time_zone("UTC")[0]
 
             self._log.debug(
                 "Resampling pair %s/%s | idx=%s/%s lookback=%s",

@@ -32,6 +32,12 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from loguru import logger
 
+from market_data.ports.outbound.normalization import (
+    add_partition_columns,
+    assert_columns_exist,
+    normalize_timestamps,
+)
+
 if TYPE_CHECKING:
     import pyiceberg
     import pyiceberg.catalog
@@ -227,33 +233,16 @@ class DerivativesStorage:
     # ------------------------------------------------------------------
 
     def _normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Añade columnas de partición, normaliza timestamp."""
-        df = df.copy()
+        """Añade columnas de partición, normaliza timestamp, valida esquema."""
+        df = add_partition_columns(df, self._exchange, self._market_type)
+        df = normalize_timestamps(df)
 
-        if "exchange" not in df.columns:
-            df["exchange"] = self._exchange
-        if "market_type" not in df.columns:
-            df["market_type"] = self._market_type
-
-        if "timestamp" in df.columns:
-            col = df["timestamp"]
-            if pd.api.types.is_integer_dtype(col):
-                df["timestamp"] = pd.to_datetime(col, unit="ms", utc=True)
-            elif not getattr(col.dtype, "tz", None):
-                df["timestamp"] = col.dt.tz_localize("UTC")
-
-        # Renombrar value_float → columna semántica del dataset
-        value_col = self._dataset  # "funding_rate" | "open_interest"
+        value_col = self._dataset
         if "value_float" in df.columns and value_col not in df.columns:
             df = df.rename(columns={"value_float": value_col})
 
         expected = ["timestamp", "exchange", "market_type", "symbol", value_col]
-        for col in expected:
-            if col not in df.columns:
-                raise ValueError(
-                    f"DerivativesStorage._normalize: columna faltante: {col!r} en dataset={self._dataset!r}"
-                )
-
+        assert_columns_exist(df, expected)
         return df[expected]
 
     def _get_or_create_table(self) -> "Table":

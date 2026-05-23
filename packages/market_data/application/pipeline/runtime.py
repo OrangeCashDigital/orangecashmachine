@@ -36,12 +36,10 @@ Fail-soft — _NullMetrics evita NPE cuando métricas no están disponibles
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
-from typing import cast
 
-from loguru import Logger as _LoguruLogger
+from loguru import logger as _log
 
 # ── Domain value types — contratos puros, sin comportamiento ─────────────────
 from market_data.domain.policies.base import (
@@ -62,7 +60,6 @@ from market_data.ports.outbound.storage import OHLCVStorage
 from market_data.ports.outbound.throttle import ThrottlePort
 
 # _log usa loguru en runtime (bind_pipeline) — stdlib Logger solo como fallback
-_log: _LoguruLogger = cast(_LoguruLogger, logging.getLogger(__name__))
 
 
 # =============================================================================

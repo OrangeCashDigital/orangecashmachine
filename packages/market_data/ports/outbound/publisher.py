@@ -1,124 +1,29 @@
+# -*- coding: utf-8 -*-
 """
 market_data/ports/outbound/publisher.py
 ========================================
 
-Puerto OUTBOUND: publicación de chunks OHLCV a un bus de eventos.
+Re-export desde publisher_port.py (SSOT).
 
-Desacopla application/strategies del formato de serialización concreto
-(Kafka + EventPayload + serialize). Las strategies no saben nada de Kafka.
-
-Constantes de source — SSOT de las etiquetas de origen de datos.
-
-Implementaciones:
-  infrastructure.kafka.ohlcv_publisher.KafkaOHLCVPublisher
-  ports.outbound.publisher.NullOHLCVPublisher  (tests / modo degradado)
-
-Principios: DIP · ISP · SafeOps · SSOT · KISS · Clean Architecture
+Este módulo existe solo por compatibilidad de imports existentes.
+En código nuevo importar desde publisher_port directamente.
 """
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
-
-from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk, OHLCVSource
-
-# ── Constantes de source — re-exports desde OHLCVSource (SSOT en dominio) ────
-# No redefinir aquí — OHLCVSource es la única fuente de verdad.
-# Estos aliases se mantienen por compatibilidad con callers existentes.
-
-SOURCE_BACKFILL: str = OHLCVSource.BACKFILL
-SOURCE_LIVE: str = OHLCVSource.LIVE
-SOURCE_REPLAY: str = OHLCVSource.REPLAY
-
-
-# ── Puerto ───────────────────────────────────────────────────────────────────
-
-
-@runtime_checkable
-class OHLCVPublisherPort(Protocol):
-    """
-    Contrato de publicación de chunks OHLCV a un bus de eventos.
-
-    Abstrae el formato de wire (Kafka, NATS, etc.) de la lógica de negocio.
-
-    SafeOps
-    -------
-    publish_chunk() retorna False en lugar de lanzar — nunca propaga
-    excepciones al caller. El caller decide si abortar o reintentar.
-
-    En Kappa Architecture el publisher es obligatorio — publisher=None
-    es un error de configuración, no un modo degradado válido.
-    """
-
-    async def publish_chunk(
-        self,
-        chunk: OHLCVChunk,
-    ) -> bool:
-        """
-        Publica un chunk OHLCV al bus de eventos.
-
-        Parameters
-        ----------
-        chunk : OHLCVChunk con candles y metadatos (exchange, symbol,
-                timeframe, source, run_id).
-
-        Returns
-        -------
-        True  — chunk publicado y confirmado por el broker.
-        False — fallo transitorio (red, broker no disponible).
-               El caller debe loguear y decidir el fallback.
-        """
-
-
-# ── Implementación nula (solo para tests unitarios) ──────────────────────────
-
-
-class NullOHLCVPublisher:
-    """
-    Implementación nula de OHLCVPublisherPort — SOLO para tests unitarios.
-
-    Descarta silenciosamente todos los chunks y retorna True (éxito simulado).
-
-    Por qué True y no False
-    -----------------------
-    False simularía un fallo de Kafka, lo que activaría el código de error
-    en las strategies bajo test. Para testear el happy path el publisher
-    nulo debe comportarse como éxito. Para testear fallos de publicación,
-    usar un mock explícito que retorne False.
-
-    Uso fuera de tests
-    ------------------
-    No usar en producción ni en entornos con Kafka disponible.
-    En Kappa Architecture publisher=None es error de configuración.
-    """
-
-    async def publish_chunk(
-        self,
-        chunk: OHLCVChunk,
-    ) -> bool:
-        # Detectable en Loki/Grafana si llega a producción — indica misconfiguration.
-        # En tests este warning es esperado y puede suprimirse con log level ERROR.
-        from loguru import logger as _logger
-
-        _logger.warning(
-            "NullOHLCVPublisher.publish_chunk called — publisher not configured. "
-            "Check KAFKA_ENABLED and broker. exchange={} symbol={} timeframe={}",
-            chunk.exchange,
-            chunk.symbol,
-            chunk.timeframe,
-        )
-        return True  # fail-soft — no crashea, pero es observable
-
-
-# Alias de compatibilidad — SSOT: NullOHLCVPublisher es la clase canónica
-NullPublisher = NullOHLCVPublisher
+from market_data.ports.outbound.publisher_port import (  # noqa: F401
+    SOURCE_BACKFILL,
+    SOURCE_LIVE,
+    SOURCE_REPLAY,
+    NullOHLCVPublisher,
+    NullPublisher,
+    OHLCVPublisherPort,
+)
 
 __all__ = [
-    "OHLCVPublisherPort",
     "NullOHLCVPublisher",
     "NullPublisher",
-    "OHLCVSource",
-    # Aliases de compatibilidad — preferir OHLCVSource.* en código nuevo
+    "OHLCVPublisherPort",
     "SOURCE_BACKFILL",
     "SOURCE_LIVE",
     "SOURCE_REPLAY",

@@ -32,6 +32,12 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from loguru import logger
 
+from market_data.ports.outbound.normalization import (
+    add_partition_columns,
+    ensure_default_columns,
+    normalize_timestamps,
+)
+
 if TYPE_CHECKING:
     import pyiceberg
     import pyiceberg.catalog
@@ -205,27 +211,9 @@ class TradesStorage:
 
     def _normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         """Añade columnas de partición y normaliza timestamps."""
-        df = df.copy()
-
-        # Columnas de partición (idempotente si ya existen)
-        if "exchange" not in df.columns:
-            df["exchange"] = self._exchange
-        if "market_type" not in df.columns:
-            df["market_type"] = self._market_type
-
-        # Normalizar timestamp → datetime64[us, UTC] para Iceberg
-        if "timestamp" in df.columns:
-            col = df["timestamp"]
-            if pd.api.types.is_integer_dtype(col):
-                df["timestamp"] = pd.to_datetime(col, unit="ms", utc=True)
-            elif not getattr(col.dtype, "tz", None):
-                df["timestamp"] = col.dt.tz_localize("UTC")
-
-        # Columnas requeridas con defaults seguros
-        for col, default in [("side", ""), ("cost", 0.0)]:
-            if col not in df.columns:
-                df[col] = default
-
+        df = add_partition_columns(df, self._exchange, self._market_type)
+        df = normalize_timestamps(df)
+        df = ensure_default_columns(df, [("side", ""), ("cost", 0.0)])
         return df[
             [
                 "trade_id",

@@ -90,18 +90,37 @@ def ohlcv_df_to_chunk(
             total_chunks=total_chunks,
         )
 
-    # ── Mapping con itertuples (10x más rápido que iterrows) ────────────────
+    # ── Normalizar tipos antes del mapping (garantía runtime — sin cast, sin type: ignore) ─
+    df_norm = df.copy()
+    for col in ["open", "high", "low", "close", "volume"]:
+        df_norm[col] = pd.to_numeric(df_norm[col], errors="coerce")
+    df_norm["timestamp"] = pd.to_datetime(df_norm["timestamp"], utc=True)
+
+    # ── Mapping con listas planas (evita unión de tipos de itertuples) ──────
+    timestamps = df_norm["timestamp"].tolist()
+    opens = df_norm["open"].tolist()
+    highs = df_norm["high"].tolist()
+    lows = df_norm["low"].tolist()
+    closes = df_norm["close"].tolist()
+    volumes = df_norm["volume"].tolist()
+
     candles: list[Candle] = []
-    for row in df.itertuples(index=False):
-        ts = row.timestamp
+    for ts, open_val, high_val, low_val, close_val, volume_val in zip(
+        timestamps,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+    ):
         ts_ms: int = int(ts.timestamp() * 1000) if hasattr(ts, "timestamp") else int(ts)
         candle = Candle(
             timestamp_ms=ts_ms,
-            open=float(row.open),
-            high=float(row.high),
-            low=float(row.low),
-            close=float(row.close),
-            volume=float(row.volume),
+            open=open_val,
+            high=high_val,
+            low=low_val,
+            close=close_val,
+            volume=volume_val,
         )
         # Fail-Fast: invariantes de dominio en el ACL
         if not candle.is_valid():

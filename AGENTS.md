@@ -1,7 +1,7 @@
 # AGENTS.md — OrangeCashMachine
 
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Dagster +
-Hydra. Clean/Hexagonal with bounded contexts and ~40 import-linter contracts (BC-NN).
+Hydra. Clean/Hexagonal with bounded contexts and ~35 import-linter contracts (BC-NN).
 
 ## Commands
 
@@ -14,7 +14,9 @@ Hydra. Clean/Hexagonal with bounded contexts and ~40 import-linter contracts (BC
     uv run ruff format . --check      # format check
     uv run mypy .                     # type check (excludes tests/, .venv/)
     uv run bandit .                   # security audit
-    uv run python tools/architecture/forbidden_frameworks.py  # AST linter — domain no infra frameworks
+    uv run python tools/architecture/forbidden_frameworks.py       # AST linter — domain no infra frameworks
+    uv run python tools/architecture/forbidden_frameworks.py --json   # JSON output
+    uv run python tools/architecture/forbidden_frameworks.py --strict # exit 1 on violations
     uv run ocm --cfg job              # validate/print Hydra config (no main.py at root)
     uv run ocm-api                    # FastAPI gateway (experimental)
     uv run live                       # live trading — ⚠️ capital real
@@ -49,17 +51,31 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - Composition Root = infrastructure/dagster/assets/ only.
 - shared/ may only import stdlib and approved 3rd-party libs.
 
+## Active migration: pandas → polars
+
+Domain is 100% framework-agnostic (zero pandas/polars imports). Application and
+infrastructure are hybrid during migration. Key facts:
+
+- `ports/outbound/normalization.py` = SSOT of DataFrame transforms for persistence.
+  Application and infrastructure both import this.
+- `application/processing/polars_interop.py` = transient bridge (`to_polars`/`to_pandas`),
+  will be eliminated when migration completes.
+- Already polars-native: `grid_alignment`, `ohlcv_schema`, `gap_scanner` (no pandas).
+- Migration phases documented in `PLAN_MIGRACION_POLARS.md` (repo root).
+- Phase order: transformer → pandas_to_domain → storages → delete bridge.
+
 ## Gotchas
 
-- `import-linter 2.x`: use `uv run lint-imports` or `uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports())"`. NEVER `python -m importlinter` (no `__main__.py` in 2.6). ⚠️ CI has this bug — `.github/workflows/ocm-ci.yml` runs `python -m importlinter` which will fail.
+- `import-linter 2.x`: use `uv run lint-imports` or `uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports())"`. NEVER `python -m importlinter` (no `__main__.py` in 2.6).
+- CI bug — `.github/workflows/ocm-ci.yml` config-validation job runs `OCM_VALIDATE_ONLY=1 uv run python main.py` (no main.py at repo root). Should be `OCM_VALIDATE_ONLY=1 uv run python -m app.cli.main`.
 - E402 allowed only in files explicitly listed in pyproject.toml per-file-ignores (composition roots, entrypoints, tests). Not a global ignore.
 - `type: ignore` requires an explanatory comment (non-default).
 - `dry_run: true` = global default in `config/base.yaml`. Production overrides. Never reached production by omission.
 - BC-35: all Kafka wire schemas live in `shared/kafka/schemas/` only.
 - `ocm/config/env_vars.py` = SSOT for all `OCM_*` env var names. Do not define env var name strings anywhere else.
-- `pytest.ini` adds `.` and `apps` to pythonpath, `asyncio_mode=auto`. Integration tests marked `@pytest.mark.integration`.
+- `pytest.ini` adds `.` and `apps` to pythonpath. `asyncio_mode=auto` in pyproject.toml `[tool.pytest.ini_options]`. Integration tests marked `@pytest.mark.integration`.
 - `mypy` excludes `tests/` and `.venv/` by default (pyproject.toml config).
-- Pinned deps with known reasons (always read comment before bumping):
+- Pinned deps with known reasons in pyproject.toml (read comments before bumping):
   `pydantic==2.8.2`, `ccxt==4.3.58`, `loguru==0.7.2`, `pyyaml==6.0.2`,
   `aioresilience==0.2.1`, `pybreaker==1.4.1`.
 - CD workflow is a placeholder (`workflow_dispatch` only, no automation).
@@ -108,4 +124,4 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - `Ruff` → style and hygiene
 - `mypy` → typing contracts
 - `pytest` → runtime and integration behavior
-- `tools/architecture/forbidden_frameworks.py` → technology governance
+- `tools/architecture/forbidden_frameworks.py` → technology governance (flags: `--json`, `--strict`)

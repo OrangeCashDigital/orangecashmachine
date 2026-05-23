@@ -1,36 +1,35 @@
 """
 market_data/gold/transformer.py
 ================================
-Silver DataFrame → features Gold.
+Silver pl.DataFrame → features Gold pl.DataFrame.
 
-Bugs corregidos en esta versión
----------------------------------
-BUG-1  VWAP acumulado (desde t=0) → VWAP rolling-20 sobre typical price × volume.
-       El acumulado produce señal falsa en series multi-sesión: confunde precio
-       medio histórico con nivel de referencia intra-sesión.
-       Fix: idéntico a FeatureEngineer v1.1 (que ya tenía la versión correcta).
+Migración Fase 3 — pandas → polars
+------------------------------------
+Todo el procesamiento interno opera sobre pl.DataFrame nativo.
+GoldTransformer.transform() acepta y retorna pl.DataFrame.
 
-BUG-2  close=0 en log_return producía -inf que se propagaba a volatility_20.
-       Fix: replace(0, nan) antes del log.
+Los callers (GoldStorage.build, ResamplePipeline post-Gold) deben
+pasar pl.DataFrame. Si algún caller upstream sigue en pandas, el
+ACL de conversión es responsabilidad del caller, no de este transformer.
 
-BUG-3  rolling sin min_periods — primeras filas con <20 datos producían NaN
-       inconsistente vs min_periods explícito.
-       Fix: min_periods=5 (arranque suave, consistente con FeatureEngineer).
+Invariantes del input (Silver)
+------------------------------
+- timestamp : Datetime("us", "UTC"), monotónico creciente
+- open, high, low, close : Float64 > 0
+- volume : Float64 >= 0
+- quality_flag : Utf8 ("clean" | "suspect")
 
-Añadido vs versión anterior
-----------------------------
-+ return_1         — retorno simple, complementa log_return
-+ high_low_spread  — (high-low)/close, normalizado por close (no por open)
-+ _sanitize()      — ±inf → NaN en todas las columnas numéricas al final
-
-Nota: annualization NO fue tocada — el cálculo original era correcto.
-_ANNUALIZATION_MAP almacena enteros (periodos/año), np.sqrt() se aplica
-correctamente en _compute_volatility.
+Invariantes del output (Gold)
+------------------------------
+- Todas las columnas Silver preservadas (no destructivo).
+- Nuevas columnas: ver FEATURE_COLUMNS.
+- null en primeras _ROLLING_WINDOW-1 filas de features rolling (diseño).
+- ±inf → null al final (_sanitize).
+- is_suspect : Bool derivado de quality_flag.
 
 Principios
 ----------
-- SSOT: esta es la única implementación de features Gold activa.
-  storage/gold/feature_engineer.py está DEPRECATED y redirige aquí.
+- SSOT: única implementación activa de features Gold.
 - SRP: cada _compute_* hace exactamente una feature.
 - Fail-Soft: vacío in → vacío out, sin excepción.
 - No destructivo: nunca muta el DataFrame de entrada.
@@ -38,8 +37,8 @@ Principios
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.infrastructure.lineage.tracker import (
@@ -54,10 +53,9 @@ from market_data.infrastructure.lineage.tracker import (
 # ------------------------------------------------------------------
 
 _ROLLING_WINDOW: int = 20
-_MIN_PERIODS: int = 5  # features disponibles desde barra 5
+_MIN_PERIODS: int = 5
 
-# Factores de anualización: periodos completos por año calendario (crypto 24/7).
-# Se pasa a np.sqrt() en _compute_volatility — no almacenar la raíz aquí.
+# Factores de anualización: periodos completos por año (crypto 24/7).
 _ANNUALIZATION_MAP: dict[str, int] = {
     "1m": 525_600,
     "5m": 105_120,
@@ -69,9 +67,8 @@ _ANNUALIZATION_MAP: dict[str, int] = {
     "1d": 365,
     "1w": 52,
 }
-_DEFAULT_ANNUALIZATION: int = 365  # fallback conservador
+_DEFAULT_ANNUALIZATION: int = 365
 
-# Columnas que este transformer añade — SSOT para validación downstream.
 FEATURE_COLUMNS: list[str] = [
     "log_return",
     "return_1",
@@ -84,58 +81,44 @@ FEATURE_COLUMNS: list[str] = [
     "is_suspect",
 ]
 
-VERSION: str = "2.0.0"
-# 2.0.0 — VWAP rolling-20 tp×vol (elimina VWAP acumulado — bug semántico)
-#          return_1, high_low_spread, _sanitize añadidos
-#          min_periods=5 en todos los rolling
-#          close=0 → NaN en log_return (era -inf)
+VERSION: str = "3.0.0"
+# 3.0.0 — migración completa a polars nativo
+#          semántica idéntica a 2.0.0 (VWAP rolling-20, min_periods=5)
 
 
 class GoldTransformer:
     """
-    Transforma un DataFrame Silver en features Gold.
-
-    Invariantes del input (Silver)
-    ------------------------------
-    - timestamp : datetime64[ns, UTC], monotónico creciente
-    - open, high, low, close : float > 0
-    - volume : float >= 0
-    - quality_flag : str ("clean" | "suspect")
-
-    Invariantes del output (Gold)
-    ------------------------------
-    - Todas las columnas Silver preservadas (no destructivo).
-    - Nuevas columnas: ver FEATURE_COLUMNS.
-    - NaN en primeras _ROLLING_WINDOW-1 filas de features rolling (diseño).
-    - ±inf → NaN al final (_sanitize).
-    - is_suspect : bool derivado de quality_flag.
+    Transforma un pl.DataFrame Silver en features Gold.
     """
 
     @classmethod
     def transform(
         cls,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange: str,
         run_id: str | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """
         Pipeline principal Silver → Gold.
 
         Fail-Soft: vacío in → vacío out, nunca lanza excepción.
         """
-        if df is None or df.empty:
+        # ACL: aceptar pd.DataFrame de callers legacy — convertir una vez
+        if isinstance(df, pd.DataFrame):
+            df = pl.from_pandas(df)
+        if df is None or df.is_empty():
             logger.warning(
                 "GoldTransformer: empty input | {}/{} exchange={}",
                 symbol,
                 timeframe,
                 exchange,
             )
-            return pd.DataFrame()
+            return pl.DataFrame()
 
         rows_in = len(df)
-        gold = df.copy().sort_values("timestamp").reset_index(drop=True)
+        gold = df.sort("timestamp")
 
         gold = cls._compute_log_return(gold)
         gold = cls._compute_return_1(gold)
@@ -184,160 +167,116 @@ class GoldTransformer:
         return gold
 
     # ------------------------------------------------------------------
-    # Feature computers
-    # SRP: un método = una feature. No mutan el input (df.copy()).
+    # Feature computers — SRP: un método = una feature
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _compute_log_return(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        log(close_t / close_{t-1}).
-
-        close=0 → NaN (evita -inf que se propagaría a volatility_20).
-        Primera fila: NaN por diseño (no hay t-1).
-        Preferido sobre retorno simple: aditivo en tiempo, sin sesgo compounding.
-        """
-        df = df.copy()
-        safe_close = df["close"].replace(0, float("nan"))
-        df["log_return"] = np.log(safe_close / safe_close.shift(1))
-        return df
-
-    @staticmethod
-    def _compute_return_1(df: pd.DataFrame) -> pd.DataFrame:
-        """Retorno simple período a período. Complementa log_return."""
-        df = df.copy()
-        df["return_1"] = df["close"].pct_change()
-        return df
-
-    @staticmethod
-    def _compute_volatility(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
-        """
-        Volatilidad realizada rolling, anualizada.
-
-        std(log_returns, window=20) × sqrt(periodos_por_año).
-        _ANNUALIZATION_MAP almacena enteros — np.sqrt() se aplica aquí.
-        """
-        df = df.copy()
-        ann = _ANNUALIZATION_MAP.get(timeframe, _DEFAULT_ANNUALIZATION)
-        df["volatility_20"] = df["log_return"].rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS).std() * np.sqrt(ann)
-        return df
-
-    @staticmethod
-    def _compute_vwap(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        VWAP rolling 20 periodos sobre typical price × volume.
-
-        vwap = Σ(tp × vol, 20) / Σ(vol, 20)
-        donde tp = (high + low + close) / 3
-
-        Por qué NO acumulado
-        --------------------
-        VWAP acumulado desde t=0 produce señal falsa en series multi-sesión:
-        el precio medio histórico total no es el nivel de referencia de la sesión.
-        En backtesting diario/semanal genera look-ahead bias implícito.
-        Typical-price rolling es la convención estándar (Bloomberg, QuantLib).
-        """
-        df = df.copy()
-        tp = (df["high"] + df["low"] + df["close"]) / 3
-        vol = df["volume"].replace(0, float("nan"))
-        tpv = tp * vol
-
-        roll_tpv = tpv.rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS).sum()
-        roll_vol = vol.rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS).sum()
-
-        df["vwap"] = np.where(
-            roll_vol > 0,
-            roll_tpv / roll_vol,
-            float("nan"),
+    def _compute_log_return(df: pl.DataFrame) -> pl.DataFrame:
+        """log(close_t / close_{t-1}). close=0 → null."""
+        return df.with_columns(
+            (
+                pl.col("close").replace(0, None).log(base=2.718281828)
+                - pl.col("close").replace(0, None).shift(1).log(base=2.718281828)
+            ).alias("log_return")
         )
-        return df
 
     @staticmethod
-    def _compute_high_low_spread(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        (high - low) / close — rango normalizado por precio de cierre.
-
-        Normalizar por close (no por open) es la convención estándar
-        porque close es el precio de referencia de la sesión.
-        """
-        df = df.copy()
-        safe_close = df["close"].replace(0, float("nan"))
-        df["high_low_spread"] = (df["high"] - df["low"]) / safe_close
-        return df
+    def _compute_return_1(df: pl.DataFrame) -> pl.DataFrame:
+        """Retorno simple período a período."""
+        return df.with_columns((pl.col("close") / pl.col("close").shift(1) - 1.0).alias("return_1"))
 
     @staticmethod
-    def _compute_volume_zscore(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Z-score de volumen rolling.
-
-        volume_z > 2  → spike de actividad.
-        volume_z < -2 → vacío de liquidez.
-        std=0 → NaN (no división por cero).
-        """
-        df = df.copy()
-        roll = df["volume"].rolling(_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
-        df["volume_z"] = (df["volume"] - roll.mean()) / roll.std().replace(0, float("nan"))
-        return df
+    def _compute_volatility(df: pl.DataFrame, timeframe: str) -> pl.DataFrame:
+        """Volatilidad realizada rolling anualizada."""
+        ann = _ANNUALIZATION_MAP.get(timeframe, _DEFAULT_ANNUALIZATION)
+        return df.with_columns(
+            (
+                pl.col("log_return").rolling_std(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS) * (ann**0.5)
+            ).alias("volatility_20")
+        )
 
     @staticmethod
-    def _compute_price_range(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        (high - low) / open — volatilidad intra-bar.
-
-        Siempre >= 0 por invariante OHLC (high >= low).
-        open=0 → NaN (no división por cero).
-        """
-        df = df.copy()
-        safe_open = df["open"].replace(0, float("nan"))
-        df["price_range_pct"] = (df["high"] - df["low"]) / safe_open
-        return df
-
-    @staticmethod
-    def _compute_body_pct(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        abs(close - open) / open — tamaño del cuerpo de la vela.
-
-        Alto → decisión direccional clara.
-        Bajo → doji / indecisión.
-        """
-        df = df.copy()
-        safe_open = df["open"].replace(0, float("nan"))
-        df["body_pct"] = (df["close"] - df["open"]).abs() / safe_open
-        return df
-
-    @staticmethod
-    def _compute_is_suspect(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        bool derivado de quality_flag Silver.
-
-        Filtrado en estrategias: gold_df[~gold_df["is_suspect"]].
-        False si quality_flag no existe — degradación segura.
-        """
-        df = df.copy()
-        df["is_suspect"] = df["quality_flag"] == "suspect" if "quality_flag" in df.columns else False
-        return df
+    def _compute_vwap(df: pl.DataFrame) -> pl.DataFrame:
+        """VWAP rolling 20 periodos sobre typical price × volume."""
+        return (
+            df.with_columns(
+                [
+                    ((pl.col("high") + pl.col("low") + pl.col("close")) / 3.0).alias("_tp"),
+                    pl.col("volume").replace(0, None).alias("_vol_safe"),
+                ]
+            )
+            .with_columns(
+                [
+                    (pl.col("_tp") * pl.col("_vol_safe")).alias("_tpv"),
+                ]
+            )
+            .with_columns(
+                [
+                    (
+                        pl.col("_tpv").rolling_sum(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
+                        / pl.col("_vol_safe").rolling_sum(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
+                    ).alias("vwap"),
+                ]
+            )
+            .drop(["_tp", "_vol_safe", "_tpv"])
+        )
 
     @staticmethod
-    def _sanitize(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        ±inf → NaN en todas las columnas numéricas.
+    def _compute_high_low_spread(df: pl.DataFrame) -> pl.DataFrame:
+        """(high - low) / close — rango normalizado."""
+        return df.with_columns(
+            ((pl.col("high") - pl.col("low")) / pl.col("close").replace(0, None)).alias("high_low_spread")
+        )
 
-        Semántica NaN de GoldTransformer:
-          - close=0 o prev_close=0  → NaN  (log indefinido)
-          - ventana rolling corta   → NaN  (min_periods no alcanzado)
-          - ±inf por división       → NaN  (sanitizados aquí)
+    @staticmethod
+    def _compute_volume_zscore(df: pl.DataFrame) -> pl.DataFrame:
+        """Z-score de volumen rolling. std=0 → null."""
+        return df.with_columns(
+            (
+                (
+                    pl.col("volume")
+                    - pl.col("volume").rolling_mean(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
+                )
+                / pl.col("volume").rolling_std(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS).replace(0, None)
+            ).alias("volume_z")
+        )
 
-        Política NaN: los NaN se PROPAGAN. El caller (QualityPipeline,
-        estrategia) decide si imputa o dropa. SSOT de política: caller.
+    @staticmethod
+    def _compute_price_range(df: pl.DataFrame) -> pl.DataFrame:
+        """(high - low) / open — volatilidad intra-bar."""
+        return df.with_columns(
+            ((pl.col("high") - pl.col("low")) / pl.col("open").replace(0, None)).alias("price_range_pct")
+        )
 
-        Fail-soft: nunca lanza excepción.
-        """
-        numeric = df.select_dtypes(include="number")
-        inf_mask = np.isinf(numeric)
-        n_inf = int(inf_mask.values.sum())
+    @staticmethod
+    def _compute_body_pct(df: pl.DataFrame) -> pl.DataFrame:
+        """abs(close - open) / open — tamaño del cuerpo."""
+        return df.with_columns(
+            ((pl.col("close") - pl.col("open")).abs() / pl.col("open").replace(0, None)).alias("body_pct")
+        )
 
-        if n_inf:
-            logger.warning("GoldTransformer._sanitize: ±inf→NaN | count={}", n_inf)
-            df = df.copy()
-            df[numeric.columns] = numeric.replace([np.inf, -np.inf], float("nan"))
+    @staticmethod
+    def _compute_is_suspect(df: pl.DataFrame) -> pl.DataFrame:
+        """Bool derivado de quality_flag Silver."""
+        if "quality_flag" in df.columns:
+            return df.with_columns((pl.col("quality_flag") == "suspect").alias("is_suspect"))
+        return df.with_columns(pl.lit(False).alias("is_suspect"))
+
+    @staticmethod
+    def _sanitize(df: pl.DataFrame) -> pl.DataFrame:
+        """±inf → null en todas las columnas numéricas Float64."""
+        float_cols = [c for c, t in zip(df.columns, df.dtypes) if t == pl.Float64]
+        if not float_cols:
+            return df
+        inf_counts = {c: int(df[c].is_infinite().sum()) for c in float_cols}
+        total_inf = sum(inf_counts.values())
+        if total_inf:
+            logger.warning("GoldTransformer._sanitize: ±inf→null | count={}", total_inf)
+            return df.with_columns(
+                [
+                    pl.when(pl.col(c).is_infinite()).then(None).otherwise(pl.col(c)).alias(c)
+                    for c in float_cols
+                    if inf_counts[c] > 0
+                ]
+            )
         return df

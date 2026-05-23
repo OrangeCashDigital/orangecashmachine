@@ -31,7 +31,7 @@ from dagster import (
     AssetKey,
     asset_check,
 )
-from market_data.domain.value_objects.gap_utils import scan_gaps
+from market_data.application.processing.gap_scanner import scan_gaps
 
 from infrastructure.dagster.resources import OCMResource
 

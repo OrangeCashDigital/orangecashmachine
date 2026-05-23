@@ -28,6 +28,7 @@ import time
 from typing import Optional
 
 import pandas as pd
+import polars as pl
 
 from market_data.application.pipeline.runtime import (
     PipelineContext,
@@ -373,13 +374,32 @@ class BackfillStrategy(StrategyMixin):
                     expected=chunk_limit,
                 )
 
-            df = pd.DataFrame(
-                raw,
-                columns=["timestamp", "open", "high", "low", "close", "volume"],
+            # Construir pl.DataFrame desde raw exchange — ACL out a pd para callers
+            _ts = [int(r[0]) for r in raw]
+            _open = [float(r[1]) for r in raw]
+            _high = [float(r[2]) for r in raw]
+            _low = [float(r[3]) for r in raw]
+            _cls = [float(r[4]) for r in raw]
+            _vol = [float(r[5]) for r in raw]
+            _current_end_us = current_end * 1_000
+            df_pl = (
+                pl.DataFrame(
+                    {
+                        "timestamp": pl.Series(_ts, dtype=pl.Int64)
+                        .cast(pl.Datetime("ms"))
+                        .dt.replace_time_zone("UTC")
+                        .dt.cast_time_unit("us"),
+                        "open": pl.Series(_open, dtype=pl.Float64),
+                        "high": pl.Series(_high, dtype=pl.Float64),
+                        "low": pl.Series(_low, dtype=pl.Float64),
+                        "close": pl.Series(_cls, dtype=pl.Float64),
+                        "volume": pl.Series(_vol, dtype=pl.Float64),
+                    }
+                )
+                .sort("timestamp")
+                .filter(pl.col("timestamp").dt.timestamp("us") < _current_end_us)
             )
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-            df = df.sort_values("timestamp").reset_index(drop=True)
-            df = df[df["timestamp"] < pd.Timestamp(current_end, unit="ms", tz="UTC")]
+            df = df_pl.to_pandas()
 
             if df.empty:
                 break

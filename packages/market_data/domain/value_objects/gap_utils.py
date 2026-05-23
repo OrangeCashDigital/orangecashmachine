@@ -3,20 +3,18 @@
 market_data/domain/value_objects/gap_utils.py
 ================================================
 
-SHIM DE COMPATIBILIDAD — deprecado.
+SHIM de compatibilidad — re-exporta GapRange desde su SSOT en domain/.
 
-Este módulo re-exporta desde gap_scanner.py para no romper callers
-durante la transición. Eliminar en el siguiente commit de limpieza
-una vez actualizados todos los imports.
+GapRange es un value object puro de dominio (domain/value_objects/gap_range.py).
+scan_gaps NO se re-exporta desde aquí — pertenece a application/processing/
+y viola BC-03 si se importa desde domain/.
 
-Acción: grep -rn "gap_utils" y migrar a "gap_scanner".
+Callers que necesiten scan_gaps deben importar directamente:
+    from market_data.application.processing.gap_scanner import scan_gaps
 """
 
 from __future__ import annotations
 
-from market_data.domain.value_objects.gap_scanner import (  # noqa: F401
-    GapRange,
-    scan_gaps,
-)
+from market_data.domain.value_objects.gap_range import GapRange  # noqa: F401
 
-__all__ = ["GapRange", "scan_gaps"]
+__all__ = ["GapRange"]

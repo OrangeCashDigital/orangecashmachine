@@ -32,6 +32,7 @@ Notas de implementación
 
 from __future__ import annotations
 
+import datetime as _dt
 import time
 from typing import Optional
 
@@ -99,8 +100,11 @@ def _to_utc_timestamp(dt: object) -> Optional[pd.Timestamp]:
     if isinstance(dt, int):
         # pc.max() devolvió microsegundos epoch — convertir explícitamente.
         return pd.Timestamp(dt, unit="us", tz="UTC")
-    ts = pd.Timestamp(dt)
-    return ts if ts.tzinfo is not None else ts.tz_localize("UTC")
+    # dt es datetime-like (datetime, pd.Timestamp, numpy.datetime64) — estrechar para mypy
+    if isinstance(dt, (_dt.datetime, pd.Timestamp)):
+        ts = pd.to_datetime(dt)
+        return ts if ts.tzinfo is not None else ts.tz_localize("UTC")
+    return None
 
 
 # =============================================================================
