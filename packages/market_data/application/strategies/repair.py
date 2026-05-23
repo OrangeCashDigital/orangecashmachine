@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import uuid
 from typing import Optional
 
 import pandas as pd
@@ -26,6 +27,13 @@ from market_data.application.pipeline.runtime import (
     classify_error,
 )
 from market_data.application.processing.gap_scanner import GapRange, scan_gaps
+
+# ── Domain (tipos y contratos) ────────────────────────────────────────────────
+from market_data.domain.events.gap_events import (
+    GapDetectedEvent,
+    GapFailedEvent,
+    GapHealedEvent,
+)
 from market_data.domain.exceptions import (
     ChunkFetchError,
     NoDataAvailableError,
@@ -38,8 +46,7 @@ from market_data.domain.value_objects.exchange_quirks import (
     get_quirks,
 )  # domain VO — BC-05
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
-
-# ── Domain (tipos y contratos) ────────────────────────────────────────────────
+from market_data.ports.outbound.gap_event_publisher import GapEventPublisherPort
 from market_data.ports.outbound.metrics import RepairMetricsPort
 from ocm.observability import bind_pipeline
 
@@ -77,6 +84,7 @@ class RepairStrategy(StrategyMixin):
         self,
         gap_tolerance: int = 0,
         metrics: "RepairMetricsPort | None" = None,
+        gap_publisher: "GapEventPublisherPort | None" = None,
     ) -> None:
         # Fail-fast: metrics es obligatorio — inyectar desde composition root.
         # RepairStrategy no puede importar infrastructure/ (DIP — BC-05).
@@ -88,6 +96,9 @@ class RepairStrategy(StrategyMixin):
             )
         self._tolerance = gap_tolerance
         self._metrics: RepairMetricsPort = metrics
+        # gap_publisher es opcional — SafeOps: None → NoopGapPublisher semántico.
+        # Inyectar KafkaGapPublisher desde composition root para activar control plane.
+        self._gap_publisher: GapEventPublisherPort | None = gap_publisher
 
     async def execute_pair(
         self,
@@ -131,6 +142,8 @@ class RepairStrategy(StrategyMixin):
 
             df_for_gaps = pl.from_pandas(df_existing)
             gaps = scan_gaps(df_for_gaps, timeframe, tolerance=self._tolerance)
+            # Mapa gap_id → gap_event_id para correlacionar GapDetected con Healed/Failed.
+            _gap_event_ids: dict[int, str] = {}
             result.gaps_found = len(gaps)
             if gaps:
                 _m.repair_gaps_found_inc(
@@ -139,6 +152,29 @@ class RepairStrategy(StrategyMixin):
                     timeframe=timeframe,
                     count=len(gaps),
                 )
+                # Control plane: emitir GapDetectedEvent por cada hueco.
+                # Fire-and-forget — SafeOps: fallo de publisher no aborta repair.
+                _now_ms = int(time.time() * 1000)
+                if self._gap_publisher is not None:
+                    for _gap in gaps:
+                        _gap_event_id = str(uuid.uuid4())
+                        # Guardar event_id en el gap para correlacionar healed/failed.
+                        # GapRange es frozen — usamos dict auxiliar por gap.
+                        _gap_event_ids[id(_gap)] = _gap_event_id
+                        asyncio.ensure_future(
+                            self._gap_publisher.publish_gap_event(
+                                GapDetectedEvent(
+                                    event_id=_gap_event_id,
+                                    symbol=symbol,
+                                    timeframe=timeframe,
+                                    exchange_id=ctx.exchange_id,
+                                    start_ms=_gap.start_ms,
+                                    end_ms=_gap.end_ms,
+                                    expected=_gap.expected,
+                                    detected_at_ms=_now_ms,
+                                )
+                            )
+                        )
 
             if not gaps:
                 result.skipped = True
@@ -194,6 +230,7 @@ class RepairStrategy(StrategyMixin):
                         symbol=symbol,
                         timeframe=timeframe,
                         ctx=ctx,
+                        gap_event_id=_gap_event_ids.get(id(gap), ""),
                     )
 
             heal_results = await asyncio.gather(
@@ -312,6 +349,7 @@ class RepairStrategy(StrategyMixin):
         symbol: str,
         timeframe: str,
         ctx: PipelineContext,
+        gap_event_id: str = "",
     ) -> tuple[bool, int, float]:
         try:
             log = _log.bind(
@@ -457,6 +495,19 @@ class RepairStrategy(StrategyMixin):
 
             fill_ratio = len(qres.df) / gap.expected if gap.expected > 0 else 1.0
             heal_type = "FULL" if fill_ratio >= _FULL_HEAL_THRESHOLD else "PARTIAL"
+            # Control plane: GapHealedEvent — correlacionado con GapDetectedEvent.
+            if self._gap_publisher is not None and gap_event_id:
+                asyncio.ensure_future(
+                    self._gap_publisher.publish_gap_event(
+                        GapHealedEvent(
+                            event_id=str(uuid.uuid4()),
+                            gap_event_id=gap_event_id,
+                            rows_written=len(qres.df),
+                            fill_ratio=round(fill_ratio, 6),
+                            healed_at_ms=int(time.time() * 1000),
+                        )
+                    )
+                )
             log.info(
                 "Gap healed",
                 rows=len(qres.df),
@@ -524,5 +575,20 @@ class RepairStrategy(StrategyMixin):
                 self._metrics.pipeline_errors_inc(
                     exchange=ctx.exchange_id,
                     error_type="transient" if _is_transient else "fatal",
+                )
+            # Control plane: GapFailedEvent — cubre NoDataAvailableError,
+            # ChunkFetchError y cualquier error inesperado.
+            if self._gap_publisher is not None and gap_event_id:
+                _is_tr = isinstance(exc, (ChunkFetchError,)) or classify_error(exc)
+                asyncio.ensure_future(
+                    self._gap_publisher.publish_gap_event(
+                        GapFailedEvent(
+                            event_id=str(uuid.uuid4()),
+                            gap_event_id=gap_event_id,
+                            reason=type(exc).__name__,
+                            is_transient=_is_tr,
+                            failed_at_ms=int(time.time() * 1000),
+                        )
+                    )
                 )
             return False, 0, 0.0
