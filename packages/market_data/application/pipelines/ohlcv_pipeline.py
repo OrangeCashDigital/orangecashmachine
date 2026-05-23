@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.exchange_client import ExchangeClientPort
     from market_data.ports.outbound.throttle import ThrottlePort
 
-from market_data.ports.outbound.publisher_port import (
+from market_data.ports.outbound.publisher import (
     NullPublisher,
     OHLCVPublisherPort,
 )

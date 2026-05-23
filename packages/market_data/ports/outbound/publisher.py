@@ -99,9 +99,13 @@ class NullOHLCVPublisher:
         return True  # éxito simulado — solo válido en tests unitarios
 
 
+# Alias de compatibilidad — SSOT: NullOHLCVPublisher es la clase canónica
+NullPublisher = NullOHLCVPublisher
+
 __all__ = [
     "OHLCVPublisherPort",
     "NullOHLCVPublisher",
+    "NullPublisher",
     "OHLCVSource",
     # Aliases de compatibilidad — preferir OHLCVSource.* en código nuevo
     "SOURCE_BACKFILL",
