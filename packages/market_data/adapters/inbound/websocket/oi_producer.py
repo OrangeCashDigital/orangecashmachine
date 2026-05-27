@@ -1,38 +1,59 @@
-# oi_producer.py
-# ======================================================
-# Source  : OIProducer
-# Topic   : oi.raw
-# Payload : OpenInterestSnapshot
-# Note    : Open interest WebSocket feed
+# -*- coding: utf-8 -*-
+"""
+market_data/adapters/inbound/websocket/oi_producer.py
+======================================================
+OIKafkaProducer — stub estructural.
+
+Source  : OIProducer (WS o polling REST según exchange)
+Topic   : oi.raw
+Payload : OpenInterestSnapshot (futuro)
+
+Estado actual
+-------------
+NOT IMPLEMENTED — start()/close() son no-ops. SafeOps.
+
+Wire-up futuro
+--------------
+cryptofeed OPEN_INTEREST channel (donde disponible) o REST polling
+periódico (Bybit/KuCoin Futures exponen OI por REST).
+
+Principios: DIP · SafeOps · KISS · SRP
+"""
+
 from __future__ import annotations
 
-from infra.kafka.base_producer import BaseKafkaProducer
-from infra.kafka.groups import GROUP_WS_OI_PRODUCER
-from infra.kafka.topics import TOPIC_OI_RAW
+from loguru import logger
 
-from market_data.domain.ports.kafka_producers import OIKafkaProducerProtocol
+from shared.kafka.topics import GROUP_WS_OI_PRODUCER, TOPIC_OI_RAW
 
 
-class OIKafkaProducer(OIKafkaProducerProtocol, BaseKafkaProducer):
-    """Stub — NOT IMPLEMENTED.
+class OIKafkaProducer:
+    """Stub del productor Kafka para open interest."""
 
-    Wire up in: market_data/adapters/inbound/websocket/oi_producer.py
-    """
+    topic: str = TOPIC_OI_RAW
+    group: str = GROUP_WS_OI_PRODUCER
 
-    topic = TOPIC_OI_RAW
-    group = GROUP_WS_OI_PRODUCER
+    def __init__(self) -> None:
+        self._log = logger.bind(
+            component="OIKafkaProducer",
+            topic=self.topic,
+        )
+        self._log.warning("OIKafkaProducer stub instanciado — NOT IMPLEMENTED. oi.raw no está siendo publicado.")
 
     async def start(self) -> None:
-        pass  # SafeOps: no-op en stub
+        """SafeOps: no-op en stub."""
+        self._log.debug("OIKafkaProducer.start() — stub no-op")
 
     async def close(self) -> None:
-        pass  # SafeOps: no-op en stub
+        """SafeOps: no-op en stub."""
+        self._log.debug("OIKafkaProducer.close() — stub no-op")
+
+    async def produce(self, payload: bytes, key: bytes | None = None) -> None:
+        """SafeOps: no-op en stub."""
+        pass
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(topic={TOPIC_OI_RAW!r}, [NOT IMPLEMENTED])"
+        return f"OIKafkaProducer(topic={self.topic!r}, [NOT IMPLEMENTED])"
 
 
-__all__ = [
-    "OIKafkaProducerProtocol",
-    "OIKafkaProducer",
-]
+__all__ = ["OIKafkaProducer"]

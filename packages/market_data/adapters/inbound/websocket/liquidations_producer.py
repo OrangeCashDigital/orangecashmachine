@@ -1,38 +1,61 @@
-# liquidations_producer.py
-# ================================================================
-# Source  : WsLiquidationsStream
-# Topic   : liquidations.raw
-# Payload : LiquidationEvent
-# Note    : Liquidation WebSocket feed
+# -*- coding: utf-8 -*-
+"""
+market_data/adapters/inbound/websocket/liquidations_producer.py
+===============================================================
+LiquidationsKafkaProducer — stub estructural.
+
+Source  : WsLiquidationsStream (cryptofeed LIQUIDATIONS channel)
+Topic   : liquidations.raw
+Payload : LiquidationEvent (futuro)
+
+Estado actual
+-------------
+NOT IMPLEMENTED — start()/close() son no-ops. SafeOps.
+
+Wire-up futuro
+--------------
+cryptofeed LIQUIDATIONS channel (Bybit perpetuals).
+KuCoin Futures no expone liquidaciones públicas por WS.
+
+Principios: DIP · SafeOps · KISS · SRP
+"""
+
 from __future__ import annotations
 
-from infra.kafka.base_producer import BaseKafkaProducer
-from infra.kafka.groups import GROUP_WS_LIQUIDATIONS_PRODUCER
-from infra.kafka.topics import TOPIC_LIQUIDATIONS_RAW
+from loguru import logger
 
-from market_data.domain.ports.kafka_producers import LiquidationsKafkaProducerProtocol
+from shared.kafka.topics import GROUP_WS_LIQUIDATIONS_PRODUCER, TOPIC_LIQUIDATIONS_RAW
 
 
-class LiquidationsKafkaProducer(LiquidationsKafkaProducerProtocol, BaseKafkaProducer):
-    """Stub — NOT IMPLEMENTED.
+class LiquidationsKafkaProducer:
+    """Stub del productor Kafka para liquidaciones forzadas."""
 
-    Wire up in: market_data/adapters/inbound/websocket/liquidations_producer.py
-    """
+    topic: str = TOPIC_LIQUIDATIONS_RAW
+    group: str = GROUP_WS_LIQUIDATIONS_PRODUCER
 
-    topic = TOPIC_LIQUIDATIONS_RAW
-    group = GROUP_WS_LIQUIDATIONS_PRODUCER
+    def __init__(self) -> None:
+        self._log = logger.bind(
+            component="LiquidationsKafkaProducer",
+            topic=self.topic,
+        )
+        self._log.warning(
+            "LiquidationsKafkaProducer stub instanciado — NOT IMPLEMENTED. liquidations.raw no está siendo publicado."
+        )
 
     async def start(self) -> None:
-        pass  # SafeOps: no-op en stub
+        """SafeOps: no-op en stub."""
+        self._log.debug("LiquidationsKafkaProducer.start() — stub no-op")
 
     async def close(self) -> None:
-        pass  # SafeOps: no-op en stub
+        """SafeOps: no-op en stub."""
+        self._log.debug("LiquidationsKafkaProducer.close() — stub no-op")
+
+    async def produce(self, payload: bytes, key: bytes | None = None) -> None:
+        """SafeOps: no-op en stub."""
+        pass
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(topic={TOPIC_LIQUIDATIONS_RAW!r}, [NOT IMPLEMENTED])"
+        return f"LiquidationsKafkaProducer(topic={self.topic!r}, [NOT IMPLEMENTED])"
 
 
-__all__ = [
-    "LiquidationsKafkaProducerProtocol",
-    "LiquidationsKafkaProducer",
-]
+__all__ = ["LiquidationsKafkaProducer"]

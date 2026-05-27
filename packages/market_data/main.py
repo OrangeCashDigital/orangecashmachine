@@ -353,6 +353,36 @@ async def _lifespan(app: FastAPI):
         name="kafka_bronze_writer",
     )
 
+    # Kappa: FeedOrchestrator — WS feeds → Kafka trades.raw.
+    # Fail-Soft: build_feed_orchestrator retorna None si feeds.yaml tiene
+    # ingestion_mode=rest o no hay feeds habilitados. En ese caso no se lanza
+    # ninguna task y el sistema opera en modo REST polling solamente.
+    feed_orchestrator_task = None
+    try:
+        from market_data.infrastructure.bootstrap.composition_root import (
+            CompositionRoot,
+        )
+
+        _feed_orch = CompositionRoot.build_feed_orchestrator(ctx.app_config)
+        if _feed_orch is not None:
+            feed_orchestrator_task = asyncio.create_task(
+                _feed_orch.run(),
+                name="feed_orchestrator",
+            )
+            _log.info(
+                "feed_orchestrator_started",
+                mode=getattr(_feed_orch._config, "ingestion_mode", "unknown"),
+            )
+        else:
+            _log.info("feed_orchestrator_skipped — ingestion_mode=rest or no feeds enabled")
+    except Exception as _orch_exc:
+        # Fail-Soft: el orquestador WS no es crítico para el pipeline REST.
+        # Si falla al construir, loguear y continuar. El servicio sigue operativo.
+        _log.warning(
+            "feed_orchestrator_build_failed — operating in REST-only mode",
+            error=str(_orch_exc),
+        )
+
     _log.info(
         "service_started",
         service=_SERVICE_NAME,
@@ -372,8 +402,8 @@ async def _lifespan(app: FastAPI):
         guard.trigger("service_shutdown")
         guard_context.set_guard(None)
 
-        for task in (ingestion_task, bronze_writer_task):
-            if not task.done():
+        for task in (ingestion_task, bronze_writer_task, feed_orchestrator_task):
+            if task is not None and not task.done():
                 task.cancel()
                 try:
                     # FIX C-05: shield+wait_for creaba tasks zombie.

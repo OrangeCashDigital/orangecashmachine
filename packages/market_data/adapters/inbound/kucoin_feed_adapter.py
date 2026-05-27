@@ -13,9 +13,6 @@ import asyncio
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from cryptofeed import FeedHandler
-from cryptofeed.defines import TRADES
-from cryptofeed.exchanges import KuCoin
 from loguru import logger
 
 from market_data.domain.value_objects.normalized_trade import NormalizedTrade
@@ -60,6 +57,10 @@ class KuCoinFeedAdapter:
 
         self._stop_event = asyncio.Event()
         self._running = True
+
+        from cryptofeed import FeedHandler
+        from cryptofeed.defines import TRADES
+        from cryptofeed.exchanges import KuCoin
 
         handler = FeedHandler()
         handler.add_feed(
