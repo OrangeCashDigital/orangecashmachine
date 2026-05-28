@@ -894,6 +894,77 @@ forbidden_modules = [
 allow_indirect_imports = true
 
 # ─────────────────────────────────────────────────────────────────────────────
+# TIER 1b — market_data WebSocket: contratos DIP de la capa WS
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# BC-39 (reactivado) — adapters/inbound/websocket no importa vendor SDKs a nivel módulo.
+# cryptofeed y websockets son dependencias opcionales y pesadas — su import en el
+# grafo estático de los adapters WS acoplaría el proceso entero a la disponibilidad
+# del SDK. La convención es: import lazy dentro de start(), nunca a nivel módulo.
+# Violación típica: "from cryptofeed import FeedHandler" en el top-level de un adapter.
+# Condición de activación: ya se aplica a adapters/inbound/websocket/ (existe y activo).
+# EXCEPCIONES: bybit_feed_adapter y kucoin_feed_adapter usan TYPE_CHECKING guard
+# (no generan arista estática) — intencional, no requieren ignore_import.
+name = "BC-39: adapters/inbound/websocket — vendor SDKs forbidden at module level"
+type = "forbidden"
+# source_modules cubre solo los adapters limpios (ACL boundary).
+# Los runners en websocket/ SON la frontera vendor por diseño (DIP):
+#   bybit_cryptofeed_runner, kucoin_cryptofeed_runner importan cryptofeed
+#   de forma intencional — son la implementación concreta de FeedRunnerProtocol.
+# El contrato garantiza que los adapters de nivel superior (bybit_feed_adapter,
+# kucoin_feed_adapter) y el protocolo (feed_runner_protocol) permanecen limpios.
+source_modules = [
+    "market_data.adapters.inbound.bybit_feed_adapter",
+    "market_data.adapters.inbound.kucoin_feed_adapter",
+    "market_data.adapters.inbound.websocket.feed_runner_protocol",
+    "market_data.adapters.inbound.websocket.manager",
+]
+forbidden_modules = [
+    "cryptofeed",
+    "websockets",
+]
+
+[[tool.importlinter.contracts]]
+# BC-41 — adapters/inbound/websocket no instancia KafkaProducerAdapter directamente.
+# Los 4 producers WS (orderbook, funding, oi, liquidations) reciben KafkaProducerPort
+# por constructor (DIP). La instanciación concreta de KafkaProducerAdapter es
+# responsabilidad exclusiva de infrastructure/bootstrap/composition_root.py.
+# Violación típica: "from market_data.infrastructure.kafka.producer import KafkaProducerAdapter"
+# dentro de cualquier módulo de adapters/inbound/websocket/.
+# Ref: mismo patrón que BC-38 para PipelineFactory.
+name = "BC-41: adapters/inbound/websocket — KafkaProducerAdapter forbidden (DIP: recibir KafkaProducerPort)"
+type = "forbidden"
+source_modules = [
+    "market_data.adapters.inbound.websocket",
+    "market_data.adapters.inbound.bybit_feed_adapter",
+    "market_data.adapters.inbound.kucoin_feed_adapter",
+]
+forbidden_modules = [
+    "market_data.infrastructure.kafka.producer",
+]
+
+[[tool.importlinter.contracts]]
+# BC-42 — WSProducerBundle solo instanciable desde infrastructure/bootstrap/composition_root.
+# WSProducerBundle cablea KafkaProducerAdapter concreto en cada producer WS.
+# Instanciarla fuera del Composition Root rompe el punto único de cableado (SRP)
+# y expone KafkaProducerAdapter a capas que solo deben ver KafkaProducerPort.
+# Violación típica: "from market_data.infrastructure.bootstrap.composition_root import WSProducerBundle"
+# en application/, ports/, domain/ o adapters/ para instanciarla directamente.
+# Ref: mismo principio que BC-38 (PipelineFactory) — Seemann, «DI in .NET» §Composition Root.
+name = "BC-42: WSProducerBundle solo instanciable desde infrastructure/bootstrap/composition_root"
+type = "forbidden"
+source_modules = [
+    "market_data.application",
+    "market_data.domain",
+    "market_data.ports",
+    "market_data.adapters",
+]
+forbidden_modules = [
+    "market_data.infrastructure.bootstrap.composition_root",
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TIER 7 — tests: contratos del harness Kafka
 # ─────────────────────────────────────────────────────────────────────────────
 

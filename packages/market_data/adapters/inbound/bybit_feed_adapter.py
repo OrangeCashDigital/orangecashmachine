@@ -1,18 +1,27 @@
+# -*- coding: utf-8 -*-
 """
 market_data/adapters/inbound/bybit_feed_adapter.py
 ───────────────────────────────────────────────────
-Anti-Corruption Layer: cryptofeed Bybit WebSocket → NormalizedTrade.
+BybitFeedAdapter — implementa MarketDataSource (structural subtyping).
 
-Implements MarketDataSource (ports/inbound/market_data_source.py)
-via structural subtyping.  cryptofeed internals NEVER leak past
-this boundary.
+Responsabilidad única (SRP)
+---------------------------
+Gestionar suscripciones, ciclo de vida (start/stop) y fan-out de callbacks.
+La traducción vendor → NormalizedTrade es responsabilidad del runner (DIP).
+
+Frontera de dependencias (BC-39)
+---------------------------------
+Este módulo no importa cryptofeed ni ningún vendor SDK.
+Depende de FeedRunnerProtocol (abstracción) inyectado desde el Composition Root.
+El runner concreto (BybitCryptofeedRunner) vive en websocket/ y es desconocido aquí.
 
 Lifecycle
 ─────────
-    adapter = BybitFeedAdapter()
-    adapter.subscribe_trades(symbols=["BTC-USDT-PERP"], callback=publisher)
+    runner  = BybitCryptofeedRunner()          # Composition Root
+    adapter = BybitFeedAdapter(runner=runner)
+    adapter.subscribe_trades(symbols=[…], callback=publisher)
     task = asyncio.create_task(adapter.start())   # long-running
-    ...
+    …
     await adapter.stop()
     await task
 """
@@ -20,7 +29,6 @@ Lifecycle
 from __future__ import annotations
 
 import asyncio
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -29,15 +37,20 @@ from market_data.domain.value_objects.normalized_trade import NormalizedTrade
 from market_data.ports.inbound.market_data_source import TradeCallback
 
 if TYPE_CHECKING:
-    from cryptofeed.types import Trade as CryptoTrade
+    from market_data.adapters.inbound.websocket.feed_runner_protocol import FeedRunnerProtocol
 
 
 class BybitFeedAdapter:
-    """Adapts cryptofeed Bybit stream to canonical NormalizedTrade callbacks."""
+    """
+    Adapter limpio para el feed WebSocket de Bybit.
+
+    No conoce cryptofeed — delega el streaming al runner inyectado.
+    """
 
     exchange: str = "bybit"
 
-    def __init__(self) -> None:
+    def __init__(self, runner: "FeedRunnerProtocol") -> None:
+        self._runner = runner
         self._callbacks: list[TradeCallback] = []
         self._symbols: list[str] = []
         self._stop_event: asyncio.Event | None = None
@@ -50,13 +63,13 @@ class BybitFeedAdapter:
         symbols: list[str],
         callback: TradeCallback,
     ) -> None:
-        """Register symbols and callback.  Fail-fast if already started."""
+        """Registra símbolos y callback. Fail-fast si ya está corriendo."""
         if self._running:
             raise RuntimeError(
-                "BybitFeedAdapter: subscribe_trades() called after start(). Subscribe before starting the feed."
+                "BybitFeedAdapter: subscribe_trades() llamado después de start(). Suscribir antes de iniciar el feed."
             )
         if not symbols:
-            raise ValueError("BybitFeedAdapter: symbols list must not be empty.")
+            raise ValueError("BybitFeedAdapter: symbols no puede estar vacío.")
 
         new = [s for s in symbols if s not in self._symbols]
         self._symbols.extend(new)
@@ -64,71 +77,38 @@ class BybitFeedAdapter:
         logger.debug("[bybit] subscribed {} symbol(s): {}", len(new), new)
 
     async def start(self) -> None:
-        """Start WebSocket feed.  Blocks until stop() is called."""
+        """Inicia el feed WebSocket. Bloquea hasta que stop() sea llamado."""
         if not self._symbols:
-            raise RuntimeError("BybitFeedAdapter: no symbols registered. Call subscribe_trades() before start().")
+            raise RuntimeError(
+                "BybitFeedAdapter: no hay símbolos registrados. Llamar subscribe_trades() antes de start()."
+            )
         if self._running:
-            logger.warning("[bybit] start() called while already running — ignored.")
+            logger.warning("[bybit] start() llamado mientras ya corre — ignorado.")
             return
 
         self._stop_event = asyncio.Event()
         self._running = True
 
-        from cryptofeed import FeedHandler
-        from cryptofeed.defines import TRADES
-        from cryptofeed.exchanges import Bybit
+        logger.info("[bybit] feed starting | mode=websocket symbols={}", self._symbols)
 
-        handler = FeedHandler()
-        handler.add_feed(
-            Bybit(
-                symbols=self._symbols,
-                channels=[TRADES],
-                callbacks={TRADES: self._on_trade},
-            )
+        await self._runner.run_until_stopped(
+            symbols=self._symbols,
+            on_trade=self._dispatch,
+            stop_event=self._stop_event,
         )
-
-        logger.info(
-            "[bybit] feed starting | mode=websocket symbols={}",
-            self._symbols,
-        )
-        handler.run(start_loop=False, install_signal_handlers=False)
-
-        await self._stop_event.wait()
-        logger.info("[bybit] feed stopped cleanly.")
 
     async def stop(self) -> None:
-        """Signal graceful shutdown.  Idempotent."""
+        """Señaliza parada limpia. Idempotente."""
         if self._stop_event and not self._stop_event.is_set():
             self._stop_event.set()
         self._running = False
 
-    # ── internal cryptofeed callback ──────────────────────────────────────────
+    # ── fan-out interno ───────────────────────────────────────────────────────
 
-    async def _on_trade(
-        self,
-        trade: "CryptoTrade",
-        receipt_timestamp: float,
-    ) -> None:
-        """Translate cryptofeed Trade → NormalizedTrade, fan-out to callbacks."""
-        normalized = NormalizedTrade(
-            exchange=self.exchange,
-            symbol=trade.symbol,
-            price=Decimal(str(trade.price)),
-            amount=Decimal(str(trade.amount)),
-            side=trade.side,
-            trade_id=str(trade.id),
-            timestamp=trade.timestamp,
-            received_at=receipt_timestamp,
-        )
-        logger.debug(
-            "[bybit] {} | {} {} @ {}",
-            normalized.symbol,
-            normalized.side,
-            normalized.amount,
-            normalized.price,
-        )
+    async def _dispatch(self, trade: NormalizedTrade) -> None:
+        """Distribuye NormalizedTrade a todos los callbacks registrados."""
         results = await asyncio.gather(
-            *(cb(normalized) for cb in self._callbacks),
+            *(cb(trade) for cb in self._callbacks),
             return_exceptions=True,
         )
         for exc in results:
