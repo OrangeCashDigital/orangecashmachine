@@ -42,7 +42,50 @@ if TYPE_CHECKING:
     )
     from ocm.config.schema import AppConfig
 
-__all__ = ["CompositionRoot", "assemble"]
+from dataclasses import dataclass as _dc
+from typing import TYPE_CHECKING as _TC
+
+if _TC:
+    from market_data.adapters.inbound.websocket.funding_producer import FundingKafkaProducer
+    from market_data.adapters.inbound.websocket.liquidations_producer import LiquidationsKafkaProducer
+    from market_data.adapters.inbound.websocket.oi_producer import OIKafkaProducer
+    from market_data.adapters.inbound.websocket.orderbook_producer import OrderBookKafkaProducer
+
+
+@_dc(frozen=True, slots=True)
+class WSProducerBundle:
+    """
+    Bundle inmutable de los 4 producers WS reales.
+
+    Creado por CompositionRoot.build_ws_producers().
+    Usado por main.py para gestionar el lifecycle (start/close) de todos
+    los producers en un único punto.
+
+    Campos
+    ------
+    orderbook    : OrderBookKafkaProducer  → orderbook.raw
+    funding      : FundingKafkaProducer    → funding.raw
+    oi           : OIKafkaProducer         → oi.raw
+    liquidations : LiquidationsKafkaProducer → liquidations.raw
+    """
+
+    orderbook: "OrderBookKafkaProducer"
+    funding: "FundingKafkaProducer"
+    oi: "OIKafkaProducer"
+    liquidations: "LiquidationsKafkaProducer"
+
+    async def start_all(self) -> None:
+        """Inicia los 4 producers. SafeOps por producer."""
+        for producer in (self.orderbook, self.funding, self.oi, self.liquidations):
+            await producer.start()
+
+    async def close_all(self) -> None:
+        """Cierra los 4 producers. SafeOps por producer."""
+        for producer in (self.orderbook, self.funding, self.oi, self.liquidations):
+            await producer.close()
+
+
+__all__ = ["CompositionRoot", "WSProducerBundle", "assemble"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +224,65 @@ class CompositionRoot:
             config=orch_cfg,
             publisher=publisher,
             get_adapter=get_adapter_class,
+        )
+
+    @classmethod
+    def build_ws_producers(
+        cls,
+        bootstrap_servers: str = "kafka:9092",
+    ) -> "WSProducerBundle":
+        """
+        Instancia y cablea los 4 producers WS reales con KafkaProducerPort.
+
+        Cada producer recibe su propia instancia de KafkaProducerAdapter
+        con un client_id único — evita colisiones de group_id en el broker.
+
+        Fail-Fast: si bootstrap_servers está vacío lanza ValueError.
+        SafeOps: los producers no conectan al broker aquí — lo hacen en start().
+
+        Returns:
+            WSProducerBundle con los 4 producers listos para start().
+        """
+        if not bootstrap_servers:
+            raise ValueError("build_ws_producers: bootstrap_servers no puede ser vacío")
+
+        from market_data.adapters.inbound.websocket.funding_producer import (
+            FundingKafkaProducer,
+        )
+        from market_data.adapters.inbound.websocket.liquidations_producer import (
+            LiquidationsKafkaProducer,
+        )
+        from market_data.adapters.inbound.websocket.oi_producer import OIKafkaProducer
+        from market_data.adapters.inbound.websocket.orderbook_producer import (
+            OrderBookKafkaProducer,
+        )
+        from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+
+        return WSProducerBundle(
+            orderbook=OrderBookKafkaProducer(
+                KafkaProducerAdapter(
+                    bootstrap_servers=bootstrap_servers,
+                    client_id="ocm-ws-orderbook",
+                )
+            ),
+            funding=FundingKafkaProducer(
+                KafkaProducerAdapter(
+                    bootstrap_servers=bootstrap_servers,
+                    client_id="ocm-ws-funding",
+                )
+            ),
+            oi=OIKafkaProducer(
+                KafkaProducerAdapter(
+                    bootstrap_servers=bootstrap_servers,
+                    client_id="ocm-ws-oi",
+                )
+            ),
+            liquidations=LiquidationsKafkaProducer(
+                KafkaProducerAdapter(
+                    bootstrap_servers=bootstrap_servers,
+                    client_id="ocm-ws-liquidations",
+                )
+            ),
         )
 
     def __repr__(self) -> str:
