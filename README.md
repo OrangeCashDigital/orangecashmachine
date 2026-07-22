@@ -479,7 +479,7 @@ almacenan en Silver junto a cada partición. El linaje persiste en `data/lineage
 uv run pytest tests/          # 553 tests
 uv run ruff check .           # linting
 uv run mypy .                 # 0 errores genuinos
-uv run python -m importlinter # contratos BC-01..BC-37
+uv run lint-imports --config architecture/importlinter.toml # contratos BC-01..BC-42
 uv run bandit .               # seguridad
 ```
 
@@ -495,7 +495,7 @@ justificación es deuda técnica explícita visible en el diff. Nunca silenciar
 
 |Job                   |Comando                                    |Propósito                          |
 |----------------------|-------------------------------------------|-----------------------------------|
-|Architecture contracts|`uv run python -m importlinter`            |BC-01..BC-37 — gate, bloquea todo  |
+|Architecture contracts|`uv run lint-imports --config architecture/importlinter.toml`|BC-01..BC-42 — gate, bloquea todo  |
 |Tests                 |`uv run pytest tests/ -x -q`               |553 tests — fail-fast en primer error|
 |Config validation     |`OCM_VALIDATE_ONLY=1 uv run python main.py`|Hydra bootstrap + validación schema|
 
@@ -508,7 +508,7 @@ Tooling local de pre-commit:
 ```bash
 uv run ruff check .           # linting
 uv run mypy .                 # 0 errores genuinos
-uv run python -m importlinter # contratos BC-01..BC-37
+uv run lint-imports --config architecture/importlinter.toml # contratos BC-01..BC-42
 uv run bandit .               # seguridad
 ```
 
@@ -524,6 +524,6 @@ uv run bandit .               # seguridad
 1. Verificar antes del PR:
 
    ```bash
-   uv run ruff check . && uv run python -m importlinter && uv run pytest tests/ -q
+   uv run ruff check . && uv run lint-imports --config architecture/importlinter.toml && uv run pytest tests/ -q
    ```
 1. `mypy` debe reportar 0 errores genuinos

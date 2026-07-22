@@ -34,7 +34,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Check architecture contracts
-        run: uv run lint-imports
+        run: uv run lint-imports --config architecture/importlinter.toml
 
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 2: Tests

@@ -66,7 +66,7 @@ infrastructure are hybrid during migration. Key facts:
 
 ## Gotchas
 
-- `import-linter 2.x`: use `uv run lint-imports` or `uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports())"`. NEVER `python -m importlinter` (no `__main__.py` in 2.6).
+- `import-linter 2.x`: config moved to `architecture/importlinter.toml` (was `pyproject.toml`). Use `uv run lint-imports --config architecture/importlinter.toml`. NEVER `python -m importlinter` (no `__main__.py` in 2.6) and never bare `uv run lint-imports` without `--config` (pyproject.toml no longer has `[tool.importlinter]`, fails with "Could not read any configuration").
 - CI bug — `.github/workflows/ocm-ci.yml` config-validation job runs `OCM_VALIDATE_ONLY=1 uv run python main.py` (no main.py at repo root). Should be `OCM_VALIDATE_ONLY=1 uv run python -m app.cli.main`.
 - E402 allowed only in files explicitly listed in pyproject.toml per-file-ignores (composition roots, entrypoints, tests). Not a global ignore.
 - `type: ignore` requires an explanatory comment (non-default).
