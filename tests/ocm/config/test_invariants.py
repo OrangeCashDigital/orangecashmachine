@@ -201,9 +201,9 @@ def test_removed_env_vars_not_used_via_getenv_literal():
 
 
 def _yaml_files() -> list[Path]:
-    """Todos los .yaml/.yml bajo conf/, core/ y market_data/."""
+    """Todos los .yaml/.yml bajo config/market_data/ y core/."""
     yamls: list[Path] = []
-    for d in _SRC_DIRS + [_REPO_ROOT / "conf"]:
+    for d in _SRC_DIRS + [_REPO_ROOT / "config" / "market_data"]:
         if d.exists():
             yamls.extend(d.rglob("*.yaml"))
             yamls.extend(d.rglob("*.yml"))

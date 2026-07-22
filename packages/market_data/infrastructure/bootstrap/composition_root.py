@@ -140,7 +140,7 @@ class CompositionRoot:
         cls,
         config: "AppConfig",
     ) -> "FeedOrchestrator | None":
-        """Build a fully-wired FeedOrchestrator from conf/market_data/feeds.yaml.
+        """Build a fully-wired FeedOrchestrator from config/market_data/feeds.yaml.
 
         Fail-Soft: retorna None si feeds.yaml no existe, ingestion_mode='rest',
         o no hay feeds habilitados. Nunca lanza — el caller decide si es error.
@@ -175,10 +175,10 @@ class CompositionRoot:
         # ── Localizar feeds.yaml (SSOT de configuración WS) ──────────────
         # Usamos __file__ para resolver repo_root sin depender de shared.utils.repo
         _repo_root = Path(__file__).resolve().parents[5]
-        feeds_path = _repo_root / "conf" / "market_data" / "feeds.yaml"
+        feeds_path = _repo_root / "config" / "market_data" / "feeds.yaml"
 
         if not feeds_path.exists():
-            logger.warning("[composition-root] conf/market_data/feeds.yaml not found — WS feeds disabled")
+            logger.warning("[composition-root] config/market_data/feeds.yaml not found — WS feeds disabled")
             return None
 
         with feeds_path.open() as f:
