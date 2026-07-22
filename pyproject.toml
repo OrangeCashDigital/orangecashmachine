@@ -268,21 +268,6 @@ root_packages = [
 
 
 [[tool.importlinter.contracts]]
-# PipelineFactory es un detalle de infraestructura — solo el Composition Root
-# puede instanciarla. application/, domain/, ports/ y adapters/ dependen de
-# abstracciones (OHLCVPublisherPort, etc.), no de la factory concreta.
-# Ref: Seemann, «DI in .NET» §Composition Root.
-name = "BC-38: PipelineFactory solo instanciable desde infrastructure/bootstrap/composition_root"
-type = "forbidden"
-source_modules = [
-    "market_data.application",
-    "market_data.domain",
-    "market_data.ports",
-    "market_data.adapters",
-]
-forbidden_modules = ["market_data.infrastructure.bootstrap.pipeline_factory"]
-
-[[tool.importlinter.contracts]]
 # shared es el kernel compartido entre todos los bounded contexts.
 # Solo puede depender de stdlib y third-party.
 # Un import de cualquier package interno rompe la independencia del kernel.
@@ -313,6 +298,22 @@ forbidden_modules = [
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 1 — market_data: capas internas (DIP + Clean Architecture)
 # ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# PipelineFactory es un detalle de infraestructura — solo el Composition Root
+# puede instanciarla. application/, domain/, ports/ y adapters/ dependen de
+# abstracciones (OHLCVPublisherPort, etc.), no de la factory concreta.
+# Ref: Seemann, «DI in .NET» §Composition Root.
+name = "BC-38: PipelineFactory solo instanciable desde infrastructure/bootstrap/composition_root"
+type = "forbidden"
+source_modules = [
+    "market_data.application",
+    "market_data.domain",
+    "market_data.ports",
+    "market_data.adapters",
+]
+forbidden_modules = ["market_data.infrastructure.bootstrap.pipeline_factory"]
+
 
 [[tool.importlinter.contracts]]
 # domain es el núcleo puro: cero dependencias hacia capas externas.
@@ -486,6 +487,109 @@ forbidden_modules = [
 # ]
 
 # ─────────────────────────────────────────────────────────────────────────────
+# TIER 1 (detalle medallion) — flujo unidireccional de storage
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# Flujo medallion: bronze → silver → gold (unidireccional, append-only).
+# bronze escribe datos crudos — no conoce transformaciones silver ni gold.
+# silver normaliza — no conoce la capa analítica gold.
+# Cada capa es independientemente testeable y deployable.
+# Fail-fast: un import invertido rompe la inmutabilidad de la cadena de custodia.
+name = "BC-30: medallion storage — unidirectional bronze → silver → gold"
+type = "layers"
+containers = ["market_data.infrastructure.storage"]
+layers = [
+    "gold",
+    "silver",
+    "bronze",
+    "iceberg",
+]
+[[tool.importlinter.contracts]]
+# shared.kafka son los wire schemas SSOT de eventos Kafka entre BCs.
+# No puede importar market_data.infrastructure.kafka (implementación concreta)
+# porque eso invertiría la dependencia: el contrato dependería de la implementación.
+# SSOT: shared.kafka define el contrato; market_data.infrastructure.kafka lo implementa.
+name = "BC-32: shared.kafka does not import market_data infrastructure (SSOT direction)"
+type = "forbidden"
+source_modules = ["shared.kafka"]
+forbidden_modules = [
+    "market_data.infrastructure.kafka",
+    "market_data.infrastructure.storage",
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 1b — market_data WebSocket: contratos DIP de la capa WS
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# BC-39 (reactivado) — adapters/inbound/websocket no importa vendor SDKs a nivel módulo.
+# cryptofeed y websockets son dependencias opcionales y pesadas — su import en el
+# grafo estático de los adapters WS acoplaría el proceso entero a la disponibilidad
+# del SDK. La convención es: import lazy dentro de start(), nunca a nivel módulo.
+# Violación típica: "from cryptofeed import FeedHandler" en el top-level de un adapter.
+# Condición de activación: ya se aplica a adapters/inbound/websocket/ (existe y activo).
+# EXCEPCIONES: bybit_feed_adapter y kucoin_feed_adapter usan TYPE_CHECKING guard
+# (no generan arista estática) — intencional, no requieren ignore_import.
+name = "BC-39: adapters/inbound/websocket — vendor SDKs forbidden at module level"
+type = "forbidden"
+# source_modules cubre solo los adapters limpios (ACL boundary).
+# Los runners en websocket/ SON la frontera vendor por diseño (DIP):
+#   bybit_cryptofeed_runner, kucoin_cryptofeed_runner importan cryptofeed
+#   de forma intencional — son la implementación concreta de FeedRunnerProtocol.
+# El contrato garantiza que los adapters de nivel superior (bybit_feed_adapter,
+# kucoin_feed_adapter) y el protocolo (feed_runner_protocol) permanecen limpios.
+source_modules = [
+    "market_data.adapters.inbound.bybit_feed_adapter",
+    "market_data.adapters.inbound.kucoin_feed_adapter",
+    "market_data.adapters.inbound.websocket.feed_runner_protocol",
+    "market_data.adapters.inbound.websocket.manager",
+]
+forbidden_modules = [
+    "cryptofeed",
+    "websockets",
+]
+
+[[tool.importlinter.contracts]]
+# BC-41 — adapters/inbound/websocket no instancia KafkaProducerAdapter directamente.
+# Los 4 producers WS (orderbook, funding, oi, liquidations) reciben KafkaProducerPort
+# por constructor (DIP). La instanciación concreta de KafkaProducerAdapter es
+# responsabilidad exclusiva de infrastructure/bootstrap/composition_root.py.
+# Violación típica: "from market_data.infrastructure.kafka.producer import KafkaProducerAdapter"
+# dentro de cualquier módulo de adapters/inbound/websocket/.
+# Ref: mismo patrón que BC-38 para PipelineFactory.
+name = "BC-41: adapters/inbound/websocket — KafkaProducerAdapter forbidden (DIP: recibir KafkaProducerPort)"
+type = "forbidden"
+source_modules = [
+    "market_data.adapters.inbound.websocket",
+    "market_data.adapters.inbound.bybit_feed_adapter",
+    "market_data.adapters.inbound.kucoin_feed_adapter",
+]
+forbidden_modules = [
+    "market_data.infrastructure.kafka.producer",
+]
+
+[[tool.importlinter.contracts]]
+# BC-42 — WSProducerBundle solo instanciable desde infrastructure/bootstrap/composition_root.
+# WSProducerBundle cablea KafkaProducerAdapter concreto en cada producer WS.
+# Instanciarla fuera del Composition Root rompe el punto único de cableado (SRP)
+# y expone KafkaProducerAdapter a capas que solo deben ver KafkaProducerPort.
+# Violación típica: "from market_data.infrastructure.bootstrap.composition_root import WSProducerBundle"
+# en application/, ports/, domain/ o adapters/ para instanciarla directamente.
+# Ref: mismo principio que BC-38 (PipelineFactory) — Seemann, «DI in .NET» §Composition Root.
+name = "BC-42: WSProducerBundle solo instanciable desde infrastructure/bootstrap/composition_root"
+type = "forbidden"
+source_modules = [
+    "market_data.application",
+    "market_data.domain",
+    "market_data.ports",
+    "market_data.adapters",
+]
+forbidden_modules = [
+    "market_data.infrastructure.bootstrap.composition_root",
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TIER 2 — bounded contexts: independencia entre packages
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -546,6 +650,103 @@ source_modules = ["portfolio"]
 forbidden_modules = ["trading.execution", "trading.strategies"]
 
 # ─────────────────────────────────────────────────────────────────────────────
+# TIER 2 (detalle shared) — contratos de neutralidad del bus Kafka
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# shared.kafka.schemas son wire contracts del bus — el ACL explícito entre BCs.
+# No son objetos de dominio de ningún BC concreto.
+#
+# Regla de oro: shared.kafka.schemas solo puede importar desde:
+#   · shared.kafka.schemas._base  (BasePayload — mecanismo)
+#   · stdlib (dataclasses, typing, json, uuid, datetime)
+#
+# NO puede importar desde shared.types (value objects de dominio),
+# ni desde ningún BC (market_data, trading, portfolio, app).
+# Si un schema necesita un tipo de dominio, ese tipo debe definirse
+# localmente en el schema o en shared.kafka.schemas._base.
+#
+# Violación típica: from shared.types.signal import SignalType en signals.py
+# Fix: definir SignalDirection directamente en el schema (ya es el caso actual).
+name = "BC-33: shared.kafka.schemas isolated from domain types and bounded contexts"
+type = "forbidden"
+source_modules = ["shared.kafka.schemas"]
+forbidden_modules = [
+    "shared.types",
+    "market_data",
+    "trading",
+    "portfolio",
+    "app",
+    "infrastructure",
+    "ocm",
+]
+
+[[tool.importlinter.contracts]]
+# shared/ es tooling neutro — no puede importar lógica de negocio de ningún BC.
+# shared.types contiene value objects compartidos (Signal, Timeframe, Order*).
+# Estos value objects son contratos de datos, no implementaciones de dominio.
+# Si shared.types necesita importar de un BC, el value object pertenece al BC.
+#
+# shared.kafka.schemas queda cubierto por BC-33 (más específico).
+# Este contrato cubre el resto de shared: types, utils, contracts, exceptions.
+#
+# EXCEPCIÓN PREVISTA (no existe aún): si shared/types/ crece y necesita
+# tipos de market_data, esos tipos deben migrar a domain/value_objects/ de
+# market_data y eliminarse de shared/. Añadir ignore_import con issue de tracking.
+name = "BC-34: shared is neutral tooling — does not import bounded context implementations"
+type = "forbidden"
+source_modules = ["shared"]
+forbidden_modules = [
+    "market_data.application",
+    "market_data.infrastructure",
+    "market_data.adapters",
+    "trading.execution",
+    "trading.strategies",
+    "trading.risk",
+    "trading.analytics",
+    "portfolio.services",
+    "portfolio.infra",
+    "infrastructure",
+    "ocm.runtime",
+]
+
+[[tool.importlinter.contracts]]
+# Los BCs no definen sus propios wire payloads Kafka — los importan de shared.kafka.
+# Esto previene duplicación del wire format (dos definiciones de EventPayload
+# divergen silenciosamente y producen deserialización incorrecta en producción).
+#
+# Regla: si trading/ necesita publicar o consumir un evento Kafka, el payload
+# debe vivir en shared.kafka.schemas.* — nunca en trading/infrastructure/kafka/.
+#
+# Condición de eliminación: cuando cada BC tenga su propio deploy independiente
+# con schema registry dedicado. Hasta entonces, shared.kafka.schemas es el SSOT.
+#
+# NOTA: market_data.infrastructure.kafka.* son IMPLEMENTACIONES del productor,
+# no definiciones de wire format. No confundir con los schemas de shared.kafka.
+# Los shims de compatibilidad (payloads.py, serializer.py) quedan excluidos
+# porque son re-exports de shared — no duplican, re-exponen.
+name = "BC-35: bounded contexts do not define their own Kafka wire payloads (no duplication)"
+type = "forbidden"
+source_modules = [
+    "trading",
+    "portfolio",
+    "app",
+]
+forbidden_modules = [
+    # Los BCs no pueden importar _base directamente para extender BasePayload
+    # fuera de shared.kafka.schemas. Si aparece, el payload debe moverse a shared.
+    # Importación directa: from shared.kafka.schemas._base import BasePayload
+    # en módulos de trading/ o portfolio/ → violación.
+    #
+    # allow_indirect_imports = true: la cadena transitiva legítima es:
+    #   app → market_data → infrastructure.kafka → shared.kafka.schemas → _base
+    # Esa cadena es uso del bus (correcto), no extensión de BasePayload (incorrecto).
+    # Solo se prohíbe el import DIRECTO de _base desde los BCs.
+    "shared.kafka.schemas._base",
+]
+allow_indirect_imports = true
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TIER 3 — platform (ocm): config / runtime / observability
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -557,84 +758,6 @@ name = "BC-14: ocm platform has no business logic dependencies"
 type = "forbidden"
 source_modules = ["ocm"]
 forbidden_modules = ["market_data", "trading", "portfolio"]
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TIER 4 — infrastructure: orquestación dagster + redis
-# ─────────────────────────────────────────────────────────────────────────────
-
-[[tool.importlinter.contracts]]
-# infrastructure.dagster.assets puede importar market_data ports y application.
-# NO puede instanciar storage ni ccxt_adapter directamente — rompe la separación
-# de capas y hace los assets no-testeables sin infra real.
-# NOTA: resample_ohlcv actúa como composition root (IcebergStorageFactory lazy l.84).
-# Import-linter detecta la cadena transitiva — el ignore_import es intencional.
-name = "BC-15: infrastructure.dagster.assets does not bypass ports layer"
-type = "forbidden"
-source_modules = ["infrastructure.dagster.assets"]
-forbidden_modules = [
-    "market_data.infrastructure.storage",
-    "market_data.adapters.outbound.exchange.ccxt_adapter",
-]
-ignore_imports = [
-    # Composition root: resample_ohlcv instancia IcebergStorageFactory (lazy).
-    # Cadena transitiva: iceberg_factory → iceberg_storage (infra interna).
-    "infrastructure.dagster.assets.resample_ohlcv -> market_data.adapters.outbound.storage.iceberg_factory",
-    # Composition roots transitivos: Dagster resources exponen storage factory.
-    "infrastructure.dagster.assets.bronze_ohlcv -> infrastructure.dagster.resources",
-    "infrastructure.dagster.assets.repair_ohlcv -> infrastructure.dagster.resources",
-    "infrastructure.dagster.assets.resample_ohlcv -> infrastructure.dagster.resources",
-    "infrastructure.dagster.assets.asset_checks -> infrastructure.dagster.resources",
-]
-
-[[tool.importlinter.contracts]]
-# infrastructure (dagster, redis) solo puede depender de ocm (plataforma)
-# y de market_data (datos vía ports). No conoce lógica de negocio ni la API.
-name = "BC-16: infrastructure does not couple to business bounded contexts"
-type = "forbidden"
-source_modules = ["infrastructure"]
-forbidden_modules = ["trading", "portfolio", "app", "api"]
-
-# BC-17: ELIMINADO en sprint-04 — contrato de infrastructure.redis aislado de dagster
-# fue absorbido por BC-16 (cobertura más amplia evita duplicación, DRY).
-# Referencia: PR #47 — "consolidar contratos de infrastructure layer".
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TIER 5 — presentación y API
-# ─────────────────────────────────────────────────────────────────────────────
-
-[[tool.importlinter.contracts]]
-# api es la capa de presentación — el flujo de dependencias termina aquí.
-# Un import de api desde cualquier capa de dominio o infraestructura invierte
-# el flujo de control y acopla el dominio a detalles de HTTP/serialización.
-name = "BC-18: no upward dependency to api layer"
-type = "forbidden"
-source_modules = [
-    "ocm", "market_data", "trading", "app", "portfolio", "infrastructure",
-]
-forbidden_modules = ["api"]
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TIER 6 — research: consumer de solo lectura (analytics post-hoc)
-# ─────────────────────────────────────────────────────────────────────────────
-
-[[tool.importlinter.contracts]]
-# research es analytics post-hoc sobre datos ya procesados (gold layer).
-# Los dominios operacionales no deben saber que research existe —
-# evita que el pipeline operacional se acople a lógica de análisis.
-name = "BC-19: no upward dependency to research layer"
-type = "forbidden"
-source_modules = [
-    "market_data", "trading", "portfolio", "ocm", "infrastructure",
-]
-forbidden_modules = ["research"]
-
-[[tool.importlinter.contracts]]
-# research consume el gold layer en modo lectura. No modifica estado operacional
-# ni conoce ejecución, portfolio ni la API — es un observador puro del sistema.
-name = "BC-20: research is a read-only analytics consumer"
-type = "forbidden"
-source_modules = ["research"]
-forbidden_modules = ["trading", "portfolio", "app", "api", "infrastructure"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 3 (detalle ocm) — contratos internos de la plataforma
@@ -775,204 +898,82 @@ forbidden_modules = [
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TIER 1 (detalle medallion) — flujo unidireccional de storage
+# TIER 4 — infrastructure: orquestación dagster + redis
 # ─────────────────────────────────────────────────────────────────────────────
 
 [[tool.importlinter.contracts]]
-# Flujo medallion: bronze → silver → gold (unidireccional, append-only).
-# bronze escribe datos crudos — no conoce transformaciones silver ni gold.
-# silver normaliza — no conoce la capa analítica gold.
-# Cada capa es independientemente testeable y deployable.
-# Fail-fast: un import invertido rompe la inmutabilidad de la cadena de custodia.
-name = "BC-30: medallion storage — unidirectional bronze → silver → gold"
-type = "layers"
-containers = ["market_data.infrastructure.storage"]
-layers = [
-    "gold",
-    "silver",
-    "bronze",
-    "iceberg",
-]
-[[tool.importlinter.contracts]]
-# shared.kafka son los wire schemas SSOT de eventos Kafka entre BCs.
-# No puede importar market_data.infrastructure.kafka (implementación concreta)
-# porque eso invertiría la dependencia: el contrato dependería de la implementación.
-# SSOT: shared.kafka define el contrato; market_data.infrastructure.kafka lo implementa.
-name = "BC-32: shared.kafka does not import market_data infrastructure (SSOT direction)"
+# infrastructure.dagster.assets puede importar market_data ports y application.
+# NO puede instanciar storage ni ccxt_adapter directamente — rompe la separación
+# de capas y hace los assets no-testeables sin infra real.
+# NOTA: resample_ohlcv actúa como composition root (IcebergStorageFactory lazy l.84).
+# Import-linter detecta la cadena transitiva — el ignore_import es intencional.
+name = "BC-15: infrastructure.dagster.assets does not bypass ports layer"
 type = "forbidden"
-source_modules = ["shared.kafka"]
+source_modules = ["infrastructure.dagster.assets"]
 forbidden_modules = [
-    "market_data.infrastructure.kafka",
     "market_data.infrastructure.storage",
+    "market_data.adapters.outbound.exchange.ccxt_adapter",
 ]
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TIER 2 (detalle shared) — contratos de neutralidad del bus Kafka
-# ─────────────────────────────────────────────────────────────────────────────
-
-[[tool.importlinter.contracts]]
-# shared.kafka.schemas son wire contracts del bus — el ACL explícito entre BCs.
-# No son objetos de dominio de ningún BC concreto.
-#
-# Regla de oro: shared.kafka.schemas solo puede importar desde:
-#   · shared.kafka.schemas._base  (BasePayload — mecanismo)
-#   · stdlib (dataclasses, typing, json, uuid, datetime)
-#
-# NO puede importar desde shared.types (value objects de dominio),
-# ni desde ningún BC (market_data, trading, portfolio, app).
-# Si un schema necesita un tipo de dominio, ese tipo debe definirse
-# localmente en el schema o en shared.kafka.schemas._base.
-#
-# Violación típica: from shared.types.signal import SignalType en signals.py
-# Fix: definir SignalDirection directamente en el schema (ya es el caso actual).
-name = "BC-33: shared.kafka.schemas isolated from domain types and bounded contexts"
-type = "forbidden"
-source_modules = ["shared.kafka.schemas"]
-forbidden_modules = [
-    "shared.types",
-    "market_data",
-    "trading",
-    "portfolio",
-    "app",
-    "infrastructure",
-    "ocm",
+ignore_imports = [
+    # Composition root: resample_ohlcv instancia IcebergStorageFactory (lazy).
+    # Cadena transitiva: iceberg_factory → iceberg_storage (infra interna).
+    "infrastructure.dagster.assets.resample_ohlcv -> market_data.adapters.outbound.storage.iceberg_factory",
+    # Composition roots transitivos: Dagster resources exponen storage factory.
+    "infrastructure.dagster.assets.bronze_ohlcv -> infrastructure.dagster.resources",
+    "infrastructure.dagster.assets.repair_ohlcv -> infrastructure.dagster.resources",
+    "infrastructure.dagster.assets.resample_ohlcv -> infrastructure.dagster.resources",
+    "infrastructure.dagster.assets.asset_checks -> infrastructure.dagster.resources",
 ]
 
 [[tool.importlinter.contracts]]
-# shared/ es tooling neutro — no puede importar lógica de negocio de ningún BC.
-# shared.types contiene value objects compartidos (Signal, Timeframe, Order*).
-# Estos value objects son contratos de datos, no implementaciones de dominio.
-# Si shared.types necesita importar de un BC, el value object pertenece al BC.
-#
-# shared.kafka.schemas queda cubierto por BC-33 (más específico).
-# Este contrato cubre el resto de shared: types, utils, contracts, exceptions.
-#
-# EXCEPCIÓN PREVISTA (no existe aún): si shared/types/ crece y necesita
-# tipos de market_data, esos tipos deben migrar a domain/value_objects/ de
-# market_data y eliminarse de shared/. Añadir ignore_import con issue de tracking.
-name = "BC-34: shared is neutral tooling — does not import bounded context implementations"
+# infrastructure (dagster, redis) solo puede depender de ocm (plataforma)
+# y de market_data (datos vía ports). No conoce lógica de negocio ni la API.
+name = "BC-16: infrastructure does not couple to business bounded contexts"
 type = "forbidden"
-source_modules = ["shared"]
-forbidden_modules = [
-    "market_data.application",
-    "market_data.infrastructure",
-    "market_data.adapters",
-    "trading.execution",
-    "trading.strategies",
-    "trading.risk",
-    "trading.analytics",
-    "portfolio.services",
-    "portfolio.infra",
-    "infrastructure",
-    "ocm.runtime",
-]
+source_modules = ["infrastructure"]
+forbidden_modules = ["trading", "portfolio", "app", "api"]
 
-[[tool.importlinter.contracts]]
-# Los BCs no definen sus propios wire payloads Kafka — los importan de shared.kafka.
-# Esto previene duplicación del wire format (dos definiciones de EventPayload
-# divergen silenciosamente y producen deserialización incorrecta en producción).
-#
-# Regla: si trading/ necesita publicar o consumir un evento Kafka, el payload
-# debe vivir en shared.kafka.schemas.* — nunca en trading/infrastructure/kafka/.
-#
-# Condición de eliminación: cuando cada BC tenga su propio deploy independiente
-# con schema registry dedicado. Hasta entonces, shared.kafka.schemas es el SSOT.
-#
-# NOTA: market_data.infrastructure.kafka.* son IMPLEMENTACIONES del productor,
-# no definiciones de wire format. No confundir con los schemas de shared.kafka.
-# Los shims de compatibilidad (payloads.py, serializer.py) quedan excluidos
-# porque son re-exports de shared — no duplican, re-exponen.
-name = "BC-35: bounded contexts do not define their own Kafka wire payloads (no duplication)"
-type = "forbidden"
-source_modules = [
-    "trading",
-    "portfolio",
-    "app",
-]
-forbidden_modules = [
-    # Los BCs no pueden importar _base directamente para extender BasePayload
-    # fuera de shared.kafka.schemas. Si aparece, el payload debe moverse a shared.
-    # Importación directa: from shared.kafka.schemas._base import BasePayload
-    # en módulos de trading/ o portfolio/ → violación.
-    #
-    # allow_indirect_imports = true: la cadena transitiva legítima es:
-    #   app → market_data → infrastructure.kafka → shared.kafka.schemas → _base
-    # Esa cadena es uso del bus (correcto), no extensión de BasePayload (incorrecto).
-    # Solo se prohíbe el import DIRECTO de _base desde los BCs.
-    "shared.kafka.schemas._base",
-]
-allow_indirect_imports = true
+# BC-17: ELIMINADO en sprint-04 — contrato de infrastructure.redis aislado de dagster
+# fue absorbido por BC-16 (cobertura más amplia evita duplicación, DRY).
+# Referencia: PR #47 — "consolidar contratos de infrastructure layer".
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TIER 1b — market_data WebSocket: contratos DIP de la capa WS
+# TIER 5 — presentación y API
 # ─────────────────────────────────────────────────────────────────────────────
 
 [[tool.importlinter.contracts]]
-# BC-39 (reactivado) — adapters/inbound/websocket no importa vendor SDKs a nivel módulo.
-# cryptofeed y websockets son dependencias opcionales y pesadas — su import en el
-# grafo estático de los adapters WS acoplaría el proceso entero a la disponibilidad
-# del SDK. La convención es: import lazy dentro de start(), nunca a nivel módulo.
-# Violación típica: "from cryptofeed import FeedHandler" en el top-level de un adapter.
-# Condición de activación: ya se aplica a adapters/inbound/websocket/ (existe y activo).
-# EXCEPCIONES: bybit_feed_adapter y kucoin_feed_adapter usan TYPE_CHECKING guard
-# (no generan arista estática) — intencional, no requieren ignore_import.
-name = "BC-39: adapters/inbound/websocket — vendor SDKs forbidden at module level"
+# api es la capa de presentación — el flujo de dependencias termina aquí.
+# Un import de api desde cualquier capa de dominio o infraestructura invierte
+# el flujo de control y acopla el dominio a detalles de HTTP/serialización.
+name = "BC-18: no upward dependency to api layer"
 type = "forbidden"
-# source_modules cubre solo los adapters limpios (ACL boundary).
-# Los runners en websocket/ SON la frontera vendor por diseño (DIP):
-#   bybit_cryptofeed_runner, kucoin_cryptofeed_runner importan cryptofeed
-#   de forma intencional — son la implementación concreta de FeedRunnerProtocol.
-# El contrato garantiza que los adapters de nivel superior (bybit_feed_adapter,
-# kucoin_feed_adapter) y el protocolo (feed_runner_protocol) permanecen limpios.
 source_modules = [
-    "market_data.adapters.inbound.bybit_feed_adapter",
-    "market_data.adapters.inbound.kucoin_feed_adapter",
-    "market_data.adapters.inbound.websocket.feed_runner_protocol",
-    "market_data.adapters.inbound.websocket.manager",
+    "ocm", "market_data", "trading", "app", "portfolio", "infrastructure",
 ]
-forbidden_modules = [
-    "cryptofeed",
-    "websockets",
-]
+forbidden_modules = ["api"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 6 — research: consumer de solo lectura (analytics post-hoc)
+# ─────────────────────────────────────────────────────────────────────────────
 
 [[tool.importlinter.contracts]]
-# BC-41 — adapters/inbound/websocket no instancia KafkaProducerAdapter directamente.
-# Los 4 producers WS (orderbook, funding, oi, liquidations) reciben KafkaProducerPort
-# por constructor (DIP). La instanciación concreta de KafkaProducerAdapter es
-# responsabilidad exclusiva de infrastructure/bootstrap/composition_root.py.
-# Violación típica: "from market_data.infrastructure.kafka.producer import KafkaProducerAdapter"
-# dentro de cualquier módulo de adapters/inbound/websocket/.
-# Ref: mismo patrón que BC-38 para PipelineFactory.
-name = "BC-41: adapters/inbound/websocket — KafkaProducerAdapter forbidden (DIP: recibir KafkaProducerPort)"
+# research es analytics post-hoc sobre datos ya procesados (gold layer).
+# Los dominios operacionales no deben saber que research existe —
+# evita que el pipeline operacional se acople a lógica de análisis.
+name = "BC-19: no upward dependency to research layer"
 type = "forbidden"
 source_modules = [
-    "market_data.adapters.inbound.websocket",
-    "market_data.adapters.inbound.bybit_feed_adapter",
-    "market_data.adapters.inbound.kucoin_feed_adapter",
+    "market_data", "trading", "portfolio", "ocm", "infrastructure",
 ]
-forbidden_modules = [
-    "market_data.infrastructure.kafka.producer",
-]
+forbidden_modules = ["research"]
 
 [[tool.importlinter.contracts]]
-# BC-42 — WSProducerBundle solo instanciable desde infrastructure/bootstrap/composition_root.
-# WSProducerBundle cablea KafkaProducerAdapter concreto en cada producer WS.
-# Instanciarla fuera del Composition Root rompe el punto único de cableado (SRP)
-# y expone KafkaProducerAdapter a capas que solo deben ver KafkaProducerPort.
-# Violación típica: "from market_data.infrastructure.bootstrap.composition_root import WSProducerBundle"
-# en application/, ports/, domain/ o adapters/ para instanciarla directamente.
-# Ref: mismo principio que BC-38 (PipelineFactory) — Seemann, «DI in .NET» §Composition Root.
-name = "BC-42: WSProducerBundle solo instanciable desde infrastructure/bootstrap/composition_root"
+# research consume el gold layer en modo lectura. No modifica estado operacional
+# ni conoce ejecución, portfolio ni la API — es un observador puro del sistema.
+name = "BC-20: research is a read-only analytics consumer"
 type = "forbidden"
-source_modules = [
-    "market_data.application",
-    "market_data.domain",
-    "market_data.ports",
-    "market_data.adapters",
-]
-forbidden_modules = [
-    "market_data.infrastructure.bootstrap.composition_root",
-]
+source_modules = ["research"]
+forbidden_modules = ["trading", "portfolio", "app", "api", "infrastructure"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 7 — tests: contratos del harness Kafka
