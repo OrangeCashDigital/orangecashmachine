@@ -470,11 +470,13 @@ forbidden_modules = [
 # TIER 1 (detalle feeds) — boundary DIP del módulo WebSocket
 # ─────────────────────────────────────────────────────────────────────────────
 
-# BC-39: COMENTADO — market_data.feeds.protocol/types no existen aún.
+# BC-43: COMENTADO — market_data.feeds.protocol/types no existen aún.
 # El módulo feeds/ está en desarrollo (WebSocket gap-aware streaming).
+# Renumerado de BC-39 a BC-43: BC-39 fue reasignado al contrato activo de
+# adapters/inbound/websocket (TIER 1b) y no puede haber dos BC-39.
 # Re-activar cuando feeds/protocol.py y feeds/types.py existan en el árbol.
 # [[tool.importlinter.contracts]]
-# name = "BC-39: market_data.feeds — vendor SDKs forbidden in protocol/types boundary"
+# name = "BC-43: market_data.feeds — vendor SDKs forbidden in protocol/types boundary"
 # type = "forbidden"
 # source_modules = [
 #     "market_data.feeds.protocol",
