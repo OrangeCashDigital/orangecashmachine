@@ -2,7 +2,7 @@
 # pyproject.toml — OrangeCashMachine
 # SSOT único de build, dependencias, herramientas y contratos de arquitectura.
 # Orden de secciones: build-system → project → dependency-groups → tools →
-#   [tool.importlinter] (TIER 0 → TIER 6, orden BC-NN estrictamente secuencial)
+#   [tool.importlinter] (TIER 0 → TIER 7, orden BC-NN estrictamente secuencial)
 # =============================================================================
 
 [build-system]
@@ -241,7 +241,7 @@ packages = [
 # Documentación:        https://import-linter.readthedocs.io
 #
 # Cada contrato tiene número único secuencial BC-NN para trazabilidad en PRs.
-# Orden: TIER 0 → TIER 1 → TIER 2 → TIER 3 → TIER 4 → TIER 5 → TIER 6
+# Orden: TIER 0 → TIER 1 → TIER 1b → TIER 2 → TIER 3 → TIER 4 → TIER 5 → TIER 6 → TIER 7
 # Números ausentes están documentados inline (eliminados, no olvidados).
 # REGLA CI: un contrato BROKEN = merge bloqueado. Fail-fast sin excepciones.
 # =============================================================================
