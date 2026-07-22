@@ -300,6 +300,16 @@ forbidden_modules = [
 # adapters/infrastructure — BC-02 verificaba un subconjunto redundante.
 # El propio contrato documentaba: "La regla de aislamiento ya la cubre BC-03".
 
+# BC-28: ELIMINADO — commit 4c06731 ("lint-imports gate 32/32 KEPT —
+# BC-02..BC-35 clean"). Protegía market_data.factories: el módulo fue
+# eliminado del árbol y reemplazado por el composition root actual en
+# infrastructure/bootstrap/pipeline_factory (ver BC-38, BC-42).
+
+# BC-31: ELIMINADO — commit 4c06731 (mismo commit que BC-28). Protegía
+# market_data.quality: el módulo fue eliminado/reorganizado; la lógica
+# de calidad vive ahora en application.quality.pipeline y
+# domain.quality.types (ver ignore_imports de BC-07 y BC-08).
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 1 — market_data: capas internas (DIP + Clean Architecture)
 # ─────────────────────────────────────────────────────────────────────────────
