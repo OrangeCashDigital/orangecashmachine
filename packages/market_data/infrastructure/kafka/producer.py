@@ -159,14 +159,27 @@ class KafkaProducerAdapter:
             self._log.bind(topic=topic, error=str(exc)).warning("kafka_send_failed")
             return False
 
-    async def flush(self) -> None:
-        """Vacía el buffer interno. SafeOps."""
+    async def flush(self, timeout: float = 10.0) -> None:
+        """
+        Espera confirmación del broker para todos los mensajes en vuelo.
+
+        Cumple KafkaProducerPort.flush(): NO usa el patrón SafeOps de silenciar
+        excepciones — a diferencia de close()/send_async(), un fallo aquí implica
+        pérdida potencial de mensajes y debe propagarse.
+
+        Raises
+        ------
+        TimeoutError : si el broker no confirma dentro de `timeout` segundos.
+        """
         if not self._started or self._producer is None:
             return
+        import asyncio
+
         try:
-            await self._producer.flush()
-        except Exception as exc:
-            self._log.warning("kafka_flush_error", error=str(exc))
+            await asyncio.wait_for(self._producer.flush(), timeout=timeout)
+        except asyncio.TimeoutError:
+            self._log.error("kafka_flush_timeout", timeout=timeout)
+            raise TimeoutError(f"kafka_flush no confirmó en {timeout}s — mensajes en riesgo") from None
 
     async def produce(
         self,
