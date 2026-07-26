@@ -10,12 +10,14 @@ Responsabilidad única (SRP)
 Instanciar el grafo completo de dependencias concretas para cada
 tipo de pipeline y devolverlo como PipelineTriggerPort.
 
-Licencia arquitectónica (BC-28)
---------------------------------
-Este módulo PUEDE importar desde todas las capas de market_data:
-domain, ports, application, adapters, infrastructure.
-Es el único módulo con esa licencia — nadie importa desde aquí
-excepto el entrypoint y los Dagster assets.
+Licencia arquitectónica
+------------------------
+BC-28 (licencia general "puede importar todo") fue RETIRADO — ver
+architecture/importlinter.toml. El régimen actual es BC-07: infrastructure/
+NO puede importar application/ salvo excepciones explícitas y documentadas
+por línea en ignore_imports (ver bloque BC-07 en el .toml). Cada import
+nuevo desde application/ requiere agregar su propia excepción justificada,
+no una licencia blanket. Mantiene el acoplamiento auditable caso por caso.
 
 Principios: DIP · SRP · KISS · SafeOps · Fail-Fast
 """
@@ -95,6 +97,39 @@ class ConcretePipelineFactory:
         if request.resilience is not None:
             kwargs["resilience"] = request.resilience
         return kwargs
+
+    def _build_event_bus_wiring(self) -> Any:
+        """
+        Instancia el observador aditivo de calidad sobre el event bus.
+
+        Reusa los singletons de proceso (event_bus, lineage_tracker) — SSOT:
+        un solo bus y un solo tracker por proceso, nunca instancias paralelas
+        que fragmentarian el estado de lineage o el pub/sub in-process.
+
+        Fail-soft: si algo falla al cablear el consumer, retorna el bus sin
+        consumer registrado — el pipeline sigue operando en modo actual
+        (sin observador), nunca bloquea la ingestion real.
+
+        Returns
+        -------
+        EventBusPort — listo para inyectar en PipelineContext.
+        """
+        from market_data.application.consumers.quality_consumer import (
+            QualityPipelineConsumer,
+        )
+        from market_data.infrastructure.event_bus import event_bus
+        from market_data.infrastructure.lineage.tracker import lineage_tracker
+
+        try:
+            consumer = QualityPipelineConsumer(bus=event_bus, tracker=lineage_tracker)
+            consumer.start()
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "QualityPipelineConsumer no pudo registrarse — bus sin observador: %s", exc
+            )
+        return event_bus
 
     def _build_kafka_publisher(self) -> Any:
         """
@@ -219,6 +254,7 @@ class ConcretePipelineFactory:
             market_type=request.market_type,
             dry_run=request.dry_run,
             auto_lookback_days=request.auto_lookback_days or 3650,
+            event_bus=self._build_event_bus_wiring(),
         )
 
     def _build_trades(self, request: Any) -> Any:

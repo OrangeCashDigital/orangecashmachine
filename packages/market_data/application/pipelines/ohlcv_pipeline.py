@@ -34,6 +34,7 @@ import time
 from typing import TYPE_CHECKING, Any, List, Literal, Optional
 
 if TYPE_CHECKING:
+    from market_data.ports.outbound.event_bus import EventBusPort
     from market_data.ports.outbound.exchange_client import ExchangeClientPort
     from market_data.ports.outbound.throttle import ThrottlePort
 
@@ -188,6 +189,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         dry_run: bool = False,
         auto_lookback_days: int = 3650,
         throttle: "Optional[ThrottlePort]" = None,
+        event_bus: "Optional[EventBusPort]" = None,
     ) -> None:
         # Fail-fast: dependencias de infraestructura obligatorias.
         # OHLCVPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).
@@ -247,6 +249,7 @@ class OHLCVPipeline(PipelineTriggerPort):
             publisher=_publisher,
             metrics=metrics,
             gap_registry=gap_registry,  # None = degradado (sin Redis — inyectar desde composition root)
+            event_bus=event_bus,  # None = sin observador (SafeOps — comportamiento actual sin cambios)
         )
 
         self._strategies: dict[PipelineMode, PipelineStrategy] = {

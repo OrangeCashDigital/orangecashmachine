@@ -20,6 +20,7 @@ from market_data.application.pipeline.runtime import (
     PipelineContext,
     StrategyMixin,
 )
+from market_data.domain.events.ingestion import OHLCVBatchReceived
 from market_data.domain.policies.base import (
     PairResult,
     PipelineMode,
@@ -120,6 +121,11 @@ class IncrementalStrategy(StrategyMixin):
             )
             result.skipped = True
             return
+
+        # ── Event bus (observador aditivo) ────────────────────────────────────
+        # Publica DESPUES del publish_chunk exitoso — nunca sustituye a Kafka
+        # ni al quality gate ya ejecutado arriba. SafeOps: no-op si no hay bus.
+        ctx.publish_domain_event(OHLCVBatchReceived(batch=chunk, source=chunk.source, run_id=chunk.run_id))
 
         # ── Cursor update y métricas desde el dominio ────────────────────────
         last_ts_ms = chunk.candles[-1].timestamp_ms

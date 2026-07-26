@@ -27,14 +27,16 @@ from shared.types.timeframe import (  # noqa: F401
     VALID_TIMEFRAMES,
     InvalidTimeframeError,
     Timeframe,
-    align_to_grid,
     timeframe_to_ms,
 )
 
+# align_to_grid ya no se re-exporta aquí — ELIMINADO 2026-07-25 (ver
+# shared/types/timeframe.py). Los callers reales de agregación OHLCV usan
+# market_data.application.processing.grid_alignment.align_to_grid
+# directamente (pl.DataFrame-native, SSOT).
 __all__ = [
     "Timeframe",
     "timeframe_to_ms",
     "InvalidTimeframeError",
     "VALID_TIMEFRAMES",
-    "align_to_grid",
 ]

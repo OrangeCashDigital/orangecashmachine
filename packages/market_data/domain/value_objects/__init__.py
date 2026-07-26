@@ -75,9 +75,12 @@ from market_data.domain.value_objects.timeframe import (  # noqa: F401
     VALID_TIMEFRAMES,
     InvalidTimeframeError,
     Timeframe,
-    align_to_grid,
     timeframe_to_ms,
 )
+
+# align_to_grid ya no se re-exporta — ELIMINADO 2026-07-25 (código muerto,
+# colisionaba de nombre con application.processing.grid_alignment.align_to_grid,
+# la función real pl.DataFrame-native).
 
 # ---------------------------------------------------------------------------
 # RawCandle — tipo alias para wire format CCXT crudo (ACL boundary)
@@ -93,7 +96,6 @@ __all__ = [
     "timeframe_to_ms",
     "InvalidTimeframeError",
     "VALID_TIMEFRAMES",
-    "align_to_grid",
     "Candle",
     "Symbol",
     "OHLCVChunk",

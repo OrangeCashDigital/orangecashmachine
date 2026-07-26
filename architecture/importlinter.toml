@@ -193,6 +193,9 @@ ignore_imports = [
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.use_cases.ohlcv_transformer",
     # Composition Root: pipeline_factory construye QualityPipeline (DIP-safe — inyección explícita).
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.quality.pipeline",
+    # Wiring del event bus (observador aditivo) — mismo patron que quality.pipeline arriba:
+    # QualityPipelineConsumer se instancia y registra en el composition root (_build_event_bus_wiring).
+    "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.consumers.quality_consumer",
     # Composition Root: composition_root ensambla feed_orchestrator.
     "market_data.infrastructure.bootstrap.composition_root -> market_data.application.feed_orchestrator",
     # Composition Root: pipeline_factory inyecta source_manager para gap recovery.
@@ -325,8 +328,17 @@ source_modules = [
     "market_data.adapters.inbound.bybit_feed_adapter",
     "market_data.adapters.inbound.kucoin_feed_adapter",
     "market_data.adapters.inbound.websocket.feed_runner_protocol",
-    "market_data.adapters.inbound.websocket.manager",
+    "market_data.adapters.inbound.websocket.ws_trades_source",
 ]
+# "market_data.adapters.inbound.websocket.manager" — ELIMINADO 2026-07-25.
+# Auditoría de arquitectura confirmó que ese módulo nunca existe en el árbol
+# actual (import-linter fallaba con "Module ... does not exist"). La
+# orquestación real vive en application/feed_orchestrator.py (FeedOrchestrator),
+# una capa arriba — correcto por Clean Architecture, fuera del alcance de este
+# contrato (BC-05/BC-07 ya protegen esa frontera application/infrastructure).
+# Se añadió ws_trades_source.py en su lugar: su propio docstring declara
+# "DIP: no importa CCXT ni cryptofeed directamente" — este contrato ahora
+# hace esa garantía ejecutable en CI en vez de dejarla como comentario suelto.
 forbidden_modules = [
     "cryptofeed",
     "websockets",

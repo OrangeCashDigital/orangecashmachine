@@ -41,15 +41,17 @@ from dataclasses import dataclass, field
 
 from loguru import logger as _log
 
+# ── Ports — application/ puede importar ports/ directamente (Clean Architecture)
+from market_data.domain.events.ingestion import OHLCVBatchReceived
+
 # ── Domain value types — contratos puros, sin comportamiento ─────────────────
 from market_data.domain.policies.base import (
     PairResult,
     PipelineMode,
     PipelineSummary,  # noqa: F401 — re-exportado para que importadores usen runtime
 )
-
-# ── Ports — application/ puede importar ports/ directamente (Clean Architecture)
 from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
+from market_data.ports.outbound.event_bus import EventBusPort
 from market_data.ports.outbound.gap_registry import GapRegistryPort
 from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
 from market_data.ports.outbound.metrics import MetricsPort, NullMetrics
@@ -281,6 +283,15 @@ class PipelineContext:
     # None = sin throttle (modo Kappa sin Bronze directo).
     throttle: ThrottlePort | None = field(default=None)
 
+    # ── Event bus (observador aditivo, opcional) ──────────────────────────────
+    # None = sin bus, comportamiento actual sin cambios (SafeOps — fail-soft).
+    # Cuando se inyecta, las strategies publican DomainEvents ADEMAS del flujo
+    # sincrono existente (ctx.quality.run + ctx.publisher.publish_chunk).
+    # El bus NUNCA sustituye al quality gate ni al publisher Kafka — es
+    # estrictamente aditivo, para consumers secundarios (QualityPipelineConsumer,
+    # y futuros: indicators, observability). Ver publish_domain_event().
+    event_bus: EventBusPort | None = field(default=None)
+
     # ── Kappa chunk converter ─────────────────────────────────────────────────
     # Inyectado por pipeline_factory antes de pasar el contexto a las strategies.
     # None hasta que el pipeline Kappa esté activo — get_chunk_converter() fail-fast.
@@ -311,6 +322,31 @@ class PipelineContext:
                 "antes de pasar el contexto a BackfillStrategy/IncrementalStrategy."
             )
         return self._chunk_converter
+
+    def publish_domain_event(self, event: "OHLCVBatchReceived") -> None:
+        """
+        Publica un DomainEvent en el event bus, si fue inyectado.
+
+        Observador aditivo — SafeOps: nunca lanza, nunca bloquea el flujo
+        sincrono de produccion. event_bus es None por defecto → no-op.
+
+        Contrato de uso (todas las strategies)
+        ---------------------------------------
+        Llamar DESPUES de ctx.publisher.publish_chunk(chunk) exitoso —
+        nunca antes, y nunca en reemplazo del publisher Kafka real.
+        El bus in-process es para consumers secundarios del mismo proceso
+        (QualityPipelineConsumer hoy; indicators/observability a futuro),
+        no es el SSOT — Kafka lo es.
+        """
+        if self.event_bus is None:
+            return
+        try:
+            self.event_bus.publish(event)
+        except Exception as exc:  # pragma: no cover — SafeOps, nunca debe propagar
+            _log.bind(
+                error=str(exc),
+                event_type=type(event).__name__,
+            ).debug("publish_domain_event failed (non-critical)")
 
 
 # =============================================================================
