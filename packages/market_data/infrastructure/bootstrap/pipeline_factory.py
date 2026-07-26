@@ -262,8 +262,8 @@ class ConcretePipelineFactory:
         Cabla TradesPipeline con CCXTAdapter + TradesFetcher + TradesStorage.
 
         DIP — TradesPipeline recibe abstracciones (TradesFetcherPort,
-        TradesStoragePort, ExchangeClientPort). Las implementaciones concretas
-        se construyen aquí y nunca se importan desde application/.
+        ExchangeClientPort). Las implementaciones concretas se construyen
+        aquí y nunca se importan desde application/.
         """
         from market_data.adapters.inbound.rest.trades_fetcher import TradesFetcher
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
@@ -293,7 +293,6 @@ class ConcretePipelineFactory:
             symbols=request.symbols or [],
             exchange_client=cast(ExchangeClientPort, exchange_client),
             fetcher=fetcher,
-            storage=storage,
             market_type=request.market_type,
             dry_run=request.dry_run,
         )

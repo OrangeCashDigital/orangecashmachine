@@ -35,7 +35,6 @@ from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 # desde market_data.factories.pipeline_factory (composition root).
 from market_data.ports.outbound.exchange_client import ExchangeClientPort
 from market_data.ports.outbound.fetcher import TradesFetcherPort
-from market_data.ports.outbound.storage import TradesStoragePort
 
 # ---------------------------------------------------------------------------
 # Types
@@ -123,7 +122,6 @@ class TradesPipeline(PipelineTriggerPort):
         symbols: List[str],
         exchange_client: "ExchangeClientPort",
         fetcher: "TradesFetcherPort",  # obligatorio — inyectar desde factory (DIP)
-        storage: "TradesStoragePort",  # obligatorio — inyectar desde factory (DIP)
         market_type: str = "spot",
         dry_run: bool = False,
         max_concurrency: int = 4,
@@ -138,10 +136,6 @@ class TradesPipeline(PipelineTriggerPort):
             raise TypeError(
                 "TradesPipeline: 'fetcher' es obligatorio. Inyectar TradesFetcher desde el composition root."
             )
-        if storage is None:
-            raise TypeError(
-                "TradesPipeline: 'storage' es obligatorio. Inyectar TradesStorage desde el composition root."
-            )
         if max_concurrency < 1:
             raise ValueError("TradesPipeline: max_concurrency debe ser >= 1")
 
@@ -155,10 +149,9 @@ class TradesPipeline(PipelineTriggerPort):
             pipeline="trades",
         )
 
-        # DIP: fetcher y storage inyectados desde ConcretePipelineFactory.
+        # DIP: fetcher inyectado desde ConcretePipelineFactory.
         # TradesPipeline no conoce implementaciones concretas (Clean Architecture).
         self._fetcher = fetcher
-        self._storage = storage
 
     async def run(self, mode: TradesPipelineMode = "incremental") -> TradesSummary:
         """
