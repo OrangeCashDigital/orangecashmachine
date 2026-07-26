@@ -15,7 +15,6 @@ Timeframe             — enum canónico (str-compatible, hashable, O(1) lookup)
 timeframe_to_ms       — conversión timeframe → milisegundos (O(1), tabla)
 InvalidTimeframeError — excepción Fail-Fast; lanza si timeframe desconocido
 VALID_TIMEFRAMES      — frozenset[str] para validación O(1)
-align_to_grid         — alinea timestamp al inicio del período del timeframe
 
 Principios
 ----------
@@ -30,11 +29,6 @@ BC-09  — shared no importa ningún BC; este archivo es stdlib puro
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import pandas as pd
-
 
 # ===========================================================================
 # InvalidTimeframeError
@@ -136,24 +130,14 @@ def timeframe_to_ms(timeframe: str) -> int:
         raise InvalidTimeframeError(f"Timeframe desconocido: {timeframe!r}. Válidos: {sorted(VALID_TIMEFRAMES)}")
 
 
-def align_to_grid(ts: "pd.Timestamp", timeframe: str) -> "pd.Timestamp":
-    """
-    Alinea un timestamp al inicio del período del timeframe.
-
-    Import diferido de pandas — shared no depende de pandas en import-time.
-    """
-    import pandas as pd
-
-    ms = timeframe_to_ms(timeframe)
-    epoch_ms = int(ts.timestamp() * 1000)
-    aligned_ms = (epoch_ms // ms) * ms
-    return pd.Timestamp(aligned_ms, unit="ms", tz=ts.tz)
-
-
+# align_to_grid(ts, timeframe) — ELIMINADO 2026-07-25. Sin callers reales
+# (verificado); colisionaba en nombre con application.processing.grid_alignment
+# .align_to_grid (la función real, pl.DataFrame-native, SSOT de agregación
+# OHLCV). Causaba BC-09 BROKEN via import lazy de pandas no detectado por
+# el docstring pero sí por el AST estático de import-linter.
 __all__ = [
     "Timeframe",
     "timeframe_to_ms",
     "InvalidTimeframeError",
     "VALID_TIMEFRAMES",
-    "align_to_grid",
 ]
