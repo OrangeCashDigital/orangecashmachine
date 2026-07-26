@@ -104,9 +104,6 @@ class GoldStorage:
         self,
         dry_run: bool = False,
         silver_storage: Optional[SnapshottableStoragePort] = None,
-        # gold_path: aceptado por compatibilidad con código legacy.
-        # Ya no tiene efecto — Gold usa Iceberg.
-        gold_path: object = None,
     ) -> None:
         """
         Parameters
