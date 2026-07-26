@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Optional, Protocol, runtime_checkable
 
 import pandas as pd
+import polars as pl
 
 # =========================================================================== #
 # OHLCV — Silver layer                                                        #
@@ -143,7 +144,7 @@ class TradesStoragePort(Protocol):
     describe lo que la implementación hace, no lo que querríamos que hiciera.
     """
 
-    def append(self, df: pd.DataFrame) -> int:
+    def append(self, df: pl.DataFrame) -> int:
         """
         Persiste un DataFrame de trades en Silver (append-only).
 
@@ -196,7 +197,7 @@ class DerivativesStoragePort(Protocol):
     los trades son inmutables.
     """
 
-    def upsert(self, df: pd.DataFrame) -> int:
+    def upsert(self, df: pl.DataFrame) -> int:
         """
         Persiste o actualiza un snapshot de derivados.
 

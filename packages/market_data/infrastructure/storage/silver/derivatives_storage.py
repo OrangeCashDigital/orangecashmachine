@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.ports.outbound.normalization import (
@@ -172,7 +172,7 @@ class DerivativesStorage:
     # Public API
     # ------------------------------------------------------------------
 
-    def upsert(self, df: pd.DataFrame) -> int:
+    def upsert(self, df: pl.DataFrame) -> int:
         """
         Escribe ``df`` en ``silver.<dataset>``.
 
@@ -184,7 +184,7 @@ class DerivativesStorage:
         -------
         int : filas escritas (0 si vacío o dry_run).
         """
-        if df is None or df.empty:
+        if df is None or df.is_empty():
             self._log.debug("upsert: DataFrame vacío — skip")
             return 0
 
@@ -199,7 +199,7 @@ class DerivativesStorage:
         # PyIceberg: append + compaction posterior para upsert real.
         # Para snapshots de baja frecuencia (8h / 1h), append es correcto —
         # la dedup se hace al leer con MAX(timestamp) por símbolo.
-        table.append(df)
+        table.append(df.to_arrow())
         self._log.debug("upsert OK | dataset={} rows={}", self._dataset, rows)
         return rows
 
@@ -232,18 +232,18 @@ class DerivativesStorage:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _normalize(self, df: pl.DataFrame) -> pl.DataFrame:
         """Añade columnas de partición, normaliza timestamp, valida esquema."""
         df = add_partition_columns(df, self._exchange, self._market_type)
         df = normalize_timestamps(df)
 
         value_col = self._dataset
         if "value_float" in df.columns and value_col not in df.columns:
-            df = df.rename(columns={"value_float": value_col})
+            df = df.rename({"value_float": value_col})
 
         expected = ["timestamp", "exchange", "market_type", "symbol", value_col]
         assert_columns_exist(df, expected)
-        return df[expected]
+        return df.select(expected)
 
     def _get_or_create_table(self) -> "Table":
         """Lazy init — crea la tabla si no existe (idempotente)."""

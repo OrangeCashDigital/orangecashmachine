@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.ports.outbound.normalization import (
@@ -132,7 +132,7 @@ class TradesStorage:
     # Public API
     # ------------------------------------------------------------------
 
-    def append(self, df: pd.DataFrame) -> int:
+    def append(self, df: pl.DataFrame) -> int:
         """
         Escribe ``df`` en ``silver.trades``.
 
@@ -152,14 +152,14 @@ class TradesStorage:
         -------
         int : filas escritas (0 si vacío o dry_run).
         """
-        if df is None or df.empty:
+        if df is None or df.is_empty():
             self._log.debug("append: DataFrame vacío — skip")
             return 0
 
         df = self._normalize(df)
         df = self._dedup(df)
 
-        if df.empty:
+        if df.is_empty():
             self._log.debug("append: todo duplicado tras dedup — skip")
             return 0
 
@@ -170,7 +170,7 @@ class TradesStorage:
             return rows
 
         table = self._get_or_create_table()
-        table.append(df)
+        table.append(df.to_arrow())
         self._log.debug("append OK | rows={}", rows)
         return rows
 
@@ -209,12 +209,12 @@ class TradesStorage:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _normalize(self, df: pl.DataFrame) -> pl.DataFrame:
         """Añade columnas de partición y normaliza timestamps."""
         df = add_partition_columns(df, self._exchange, self._market_type)
         df = normalize_timestamps(df)
         df = ensure_default_columns(df, [("side", ""), ("cost", 0.0)])
-        return df[
+        return df.select(
             [
                 "trade_id",
                 "timestamp",
@@ -226,14 +226,14 @@ class TradesStorage:
                 "amount",
                 "cost",
             ]
-        ]
+        )
 
     @staticmethod
-    def _dedup(df: pd.DataFrame) -> pd.DataFrame:
+    def _dedup(df: pl.DataFrame) -> pl.DataFrame:
         """Elimina duplicados por trade_id (idempotencia)."""
         if "trade_id" not in df.columns:
             return df
-        return df.drop_duplicates(subset=["trade_id"], keep="last")
+        return df.unique(subset=["trade_id"], keep="last")
 
     def _get_or_create_table(self) -> "Table":
         """Lazy init — crea la tabla si no existe (idempotente)."""
