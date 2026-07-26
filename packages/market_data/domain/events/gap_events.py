@@ -21,7 +21,7 @@ El dominio declara QUÉ ocurrió; el adapter decide CÓMO publicarlo.
 Control plane vs data plane
 ----------------------------
 Estos eventos NO son datos de mercado — son telemetría del sistema:
-  DATA plane  → NormalizedTrade, OHLCV bars (market.trades.raw)
+  DATA plane  → NormalizedTrade, OHLCV bars (trades.raw)
   STATE plane → Iceberg Silver/Gold (persistencia, no streaming)
   CONTROL plane → gap_events (market.gaps) ← ESTO
 

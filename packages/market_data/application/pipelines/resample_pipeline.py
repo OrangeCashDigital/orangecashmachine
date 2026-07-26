@@ -54,10 +54,10 @@ from typing import List, Optional
 
 import polars as pl
 
+from market_data.application.processing.grid_alignment import align_to_grid
 from market_data.domain.value_objects.timeframe import (
     VALID_TIMEFRAMES,
     InvalidTimeframeError,
-    align_to_grid,
     timeframe_to_ms,
 )
 from market_data.ports.outbound.metrics import NullResampleMetrics, ResampleMetricsPort

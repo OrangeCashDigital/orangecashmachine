@@ -22,8 +22,9 @@ from aiokafka import AIOKafkaProducer
 from loguru import logger
 
 from market_data.domain.value_objects.normalized_trade import NormalizedTrade
+from shared.kafka.topics import TOPIC_TRADES_RAW
 
-_DEFAULT_TOPIC = "market.trades.raw"
+_DEFAULT_TOPIC = TOPIC_TRADES_RAW
 
 
 class KafkaTradePublisher:

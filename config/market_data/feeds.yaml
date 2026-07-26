@@ -11,7 +11,7 @@
 ingestion_mode: rest   # ← change to 'dual' when ready for Phase 2
 
 kafka:
-  topic_trades: market.trades.raw
+  topic_trades: trades.raw
 
 feeds:
   bybit:

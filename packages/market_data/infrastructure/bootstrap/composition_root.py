@@ -45,6 +45,8 @@ if TYPE_CHECKING:
 from dataclasses import dataclass as _dc
 from typing import TYPE_CHECKING as _TC
 
+from shared.kafka.topics import TOPIC_TRADES_RAW
+
 if _TC:
     from market_data.adapters.inbound.websocket.funding_producer import FundingKafkaProducer
     from market_data.adapters.inbound.websocket.liquidations_producer import LiquidationsKafkaProducer
@@ -214,7 +216,7 @@ class CompositionRoot:
         # ── Kafka publisher ───────────────────────────────────────────────
         # brokers: AppConfig.integrations.kafka (SSOT de infraestructura)
         # topic:   feeds.yaml (SSOT de configuración de WS feeds)
-        kafka_topic: str = raw.get("kafka", {}).get("topic_trades", "market.trades.raw")
+        kafka_topic: str = raw.get("kafka", {}).get("topic_trades", TOPIC_TRADES_RAW)
         publisher = KafkaTradePublisher(
             bootstrap_servers=config.integrations.kafka.bootstrap_servers,
             topic=kafka_topic,
