@@ -37,6 +37,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 import pandas as pd
+import polars as pl
 import pyarrow as pa
 from loguru import logger
 from pyiceberg.expressions import And, EqualTo
@@ -220,11 +221,11 @@ class GoldStorage:
 
         # ── Feature engineering — GoldTransformer (estático, sin estado) ──────
         df = GoldTransformer.transform(
-            df,
+            pl.from_pandas(df),
             symbol=symbol,
             timeframe=timeframe,
             exchange=exchange,
-        )
+        ).to_pandas()
 
         # ── DRY RUN ───────────────────────────────────────────────────────────
         if self._dry_run:
