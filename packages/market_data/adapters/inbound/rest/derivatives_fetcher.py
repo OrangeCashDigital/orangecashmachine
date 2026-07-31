@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     pass
 
 import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.adapters.inbound.rest._cursor_factory import (
@@ -196,7 +197,7 @@ class _BaseDerivativesFetcher:
         # añade exchange y market_type, pero symbol viene del fetcher)
         df["symbol"] = symbol
 
-        rows = self._storage.upsert(df)
+        rows = self._storage.upsert(pl.from_pandas(df))
         await self._update_cursor(symbol, snapshot_ts_ms)
         return rows
 

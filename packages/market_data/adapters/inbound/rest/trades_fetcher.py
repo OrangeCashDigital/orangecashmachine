@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.storage import TradesStoragePort
 
 import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.adapters.outbound.exchange import CCXTAdapter
@@ -190,7 +191,7 @@ class TradesFetcher:
             # el cursor no avanza → reintentará en el próximo run)
             page_max_ts = int(df["timestamp"].max())
 
-            rows = self._storage.append(df)
+            rows = self._storage.append(pl.from_pandas(df))
             total_rows += rows
             pages_read += 1
 
