@@ -174,7 +174,7 @@ class QualityPipeline:
         # 1. Validación de calidad
         # DIP: checker inyectado por factory
         checker = self._checker_factory(timeframe, exchange, rows_removed)
-        report = checker.check(df, symbol=symbol)
+        report = checker.check(pl.from_pandas(df), symbol=symbol)
         result = self._policy.evaluate(report)
 
         # 2. Gap scan post-ingesta

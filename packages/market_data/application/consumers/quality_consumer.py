@@ -20,6 +20,7 @@ Fail-soft — errores en _process() logueados, nunca propagados al bus
 from __future__ import annotations
 
 import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.application.consumers.base import BaseConsumer
@@ -134,7 +135,7 @@ class QualityPipelineConsumer(BaseConsumer):
             event.batch.exchange,
             0,  # rows_removed: consumer no tiene contexto de remoción upstream
         )
-        report = checker.check(df, symbol=event.batch.symbol)
+        report = checker.check(pl.from_pandas(df), symbol=event.batch.symbol)
 
         # --- Lineage record ---
         run_id = event.batch.run_id or self._tracker.new_run_id()
