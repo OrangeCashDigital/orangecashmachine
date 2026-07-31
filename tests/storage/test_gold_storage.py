@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
 from market_data.domain.exceptions import (
@@ -49,7 +50,12 @@ from market_data.infrastructure.storage.gold.transformer import (
 
 
 def _make_silver_df(n: int = 30, seed: int = 0) -> pd.DataFrame:
-    """DataFrame OHLCV sintético que simula salida de IcebergStorage."""
+    """DataFrame OHLCV sintético que simula salida de IcebergStorage.
+
+    Pandas por defecto: _prepare_gold_df y varios tests la llaman
+    directamente y siguen operando en pandas. La conversión a polars
+    ocurre únicamente donde se simula silver.load_ohlcv() (ver mock
+    más abajo), que es el único boundary real."""
     rng = np.random.default_rng(seed)
     close = rng.uniform(40_000, 50_000, n)
     return pd.DataFrame(
@@ -98,7 +104,7 @@ def test_build_dry_run_returns_dataframe_with_features(gold):
         "snapshot_id": 12345,
         "timestamp_ms": 1_700_000_000_000,
     }
-    mock_silver.load_ohlcv.return_value = silver_df
+    mock_silver.load_ohlcv.return_value = pl.from_pandas(silver_df)
 
     with patch(
         "market_data.infrastructure.storage.gold.gold_storage.IcebergStorage",
@@ -122,7 +128,7 @@ def test_build_dry_run_returns_none_when_silver_empty(gold):
     """build() retorna None si Silver no tiene datos."""
     mock_silver = MagicMock()
     mock_silver.get_current_snapshot.return_value = {}
-    mock_silver.load_ohlcv.return_value = pd.DataFrame()
+    mock_silver.load_ohlcv.return_value = pl.DataFrame()
 
     with patch(
         "market_data.infrastructure.storage.gold.gold_storage.IcebergStorage",

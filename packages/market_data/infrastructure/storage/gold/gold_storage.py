@@ -179,7 +179,7 @@ class GoldStorage:
 
         # ── Cargar Silver ─────────────────────────────────────────────────────
         try:
-            df = silver.load_ohlcv(
+            df_pl = silver.load_ohlcv(
                 symbol=symbol,
                 timeframe=timeframe,
                 start=start,
@@ -196,7 +196,7 @@ class GoldStorage:
             )
             return None
 
-        if df is None or df.empty:
+        if df_pl is None or df_pl.is_empty():
             logger.warning(
                 "Gold build: sin datos en Silver | {}/{}/{}/{}",
                 exchange,
@@ -205,6 +205,11 @@ class GoldStorage:
                 timeframe,
             )
             return None
+
+        # ACL: silver.load_ohlcv() ya es pl.DataFrame nativo (OHLCVStorage port
+        # migrado). Boundary único de conversión — el resto del pipeline Gold
+        # (_prepare_gold_df, pa.Table.from_pandas) sigue en pandas por ahora.
+        df = df_pl.to_pandas()
 
         # ── Limpiar timestamps NaN antes de feature engineering ───────────────
         nan_ts = df["timestamp"].isna().sum()
