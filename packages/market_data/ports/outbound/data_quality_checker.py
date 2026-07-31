@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Protocol, runtime_checkable
 
-import pandas as pd
+import polars as pl
 
 if TYPE_CHECKING:
     # Solo para type checkers — evita import circular en runtime.
@@ -63,7 +63,7 @@ class DataQualityCheckerPort(Protocol):
 
     def check(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":
@@ -122,7 +122,7 @@ class NullChecker:
 
     def check(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":

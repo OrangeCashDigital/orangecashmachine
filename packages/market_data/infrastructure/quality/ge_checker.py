@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+import polars as pl
 
 if TYPE_CHECKING:
     # DataQualityReport: tipo de dominio usado solo en anotaciones de retorno.
@@ -114,7 +115,7 @@ class GEChecker:
 
     def check(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":
@@ -144,7 +145,7 @@ class GEChecker:
 
     def _run_ge(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         *,
         symbol: str,
     ) -> "DataQualityReport":
@@ -155,7 +156,7 @@ class GEChecker:
         ctx = self._context
 
         # ── 1. Preparar DataFrame (resetear índice temporal → columna) ──
-        df_ge = self._prepare_dataframe(df)
+        df_ge = self._prepare_dataframe(df.to_pandas())
 
         # ── 2. Datasource + Asset + BatchDefinition ──────────────────────
         if _GE_DATASOURCE_NAME not in [s.name for s in ctx.data_sources.all()]:
@@ -248,7 +249,7 @@ class GEChecker:
 
     def _build_report(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         issues: list[_GEIssue],
     ) -> "DataQualityReport":
@@ -293,7 +294,7 @@ class GEChecker:
     def _degraded_report(
         self,
         symbol: str,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         error: Exception,
     ) -> "DataQualityReport":
         """Reporte mínimo de fallback cuando GE falla internamente."""
