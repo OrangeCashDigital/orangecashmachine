@@ -41,10 +41,11 @@ _heal_gap:
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
+import polars as pl
 import pytest
 from market_data.application.strategies.repair import RepairStrategy
 from market_data.ports.outbound.metrics import RepairMetricsPort
@@ -91,19 +92,19 @@ class _StorageStub:
 
     def __init__(
         self,
-        df: Optional[pd.DataFrame] = None,
+        df: Optional[pl.DataFrame] = None,
         raise_on_load: bool = False,
     ) -> None:
         self._df = df
         self._raise_on_load = raise_on_load
-        self.saved: list[pd.DataFrame] = []
+        self.saved: list[pl.DataFrame] = []
 
-    def load_ohlcv(self, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
+    def load_ohlcv(self, symbol: str, timeframe: str) -> Optional[pl.DataFrame]:
         if self._raise_on_load:
             raise RuntimeError("storage unavailable")
         return self._df
 
-    def save_ohlcv(self, df: pd.DataFrame, symbol: str, timeframe: str) -> None:
+    def save_ohlcv(self, df: pl.DataFrame, symbol: str, timeframe: str) -> None:
         self.saved.append(df)
 
 
@@ -140,7 +141,7 @@ class _QualityStub:
 
     def run(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange: str,
@@ -182,10 +183,15 @@ _EXCHANGE = "bybit"
 _SYMBOL = "BTC/USDT"
 
 
-def _make_df(n_rows: int = 10, start_ms: int = 0) -> pd.DataFrame:
+def _ts(ms: int) -> datetime:
+    """Equivalente a pd.Timestamp(ms, unit='ms', tz='UTC') sin depender de pandas."""
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+
+
+def _make_df(n_rows: int = 10, start_ms: int = 0) -> pl.DataFrame:
     """DataFrame OHLCV mínimo con timestamps válidos y contiguos."""
-    timestamps = [pd.Timestamp(start_ms + i * _TF_MS, unit="ms", tz="UTC") for i in range(n_rows)]
-    return pd.DataFrame(
+    timestamps = [_ts(start_ms + i * _TF_MS) for i in range(n_rows)]
+    return pl.DataFrame(
         {
             "timestamp": timestamps,
             "open": [100.0] * n_rows,
@@ -205,7 +211,7 @@ _SENTINEL = _SentinelType()
 
 
 def _make_ctx(
-    df: Optional[pd.DataFrame] = None,
+    df: Optional[pl.DataFrame] = None,
     raise_on_load: bool = False,
     chunks: list[list] | None = None,
     quality_accept: bool = True,
@@ -325,10 +331,10 @@ class TestExecutePairHealing:
         gap_end_ms = 5 * _TF_MS
 
         rows_before = [
-            pd.Timestamp(0, unit="ms", tz="UTC"),
-            pd.Timestamp(gap_end_ms, unit="ms", tz="UTC"),
+            _ts(0),
+            _ts(gap_end_ms),
         ]
-        df = pd.DataFrame(
+        df = pl.DataFrame(
             {
                 "timestamp": rows_before,
                 "open": [100.0, 100.0],
@@ -365,10 +371,10 @@ class TestExecutePairHealing:
         gap_end_ms = 20 * _TF_MS  # expected=19
 
         rows_before = [
-            pd.Timestamp(0, unit="ms", tz="UTC"),
-            pd.Timestamp(gap_end_ms, unit="ms", tz="UTC"),
+            _ts(0),
+            _ts(gap_end_ms),
         ]
-        df = pd.DataFrame(
+        df = pl.DataFrame(
             {
                 "timestamp": rows_before,
                 "open": [100.0, 100.0],
@@ -405,10 +411,10 @@ class TestExecutePairHealing:
         # DataFrame con gap enorme
         gap_end_ms = (_MAX_HEALABLE_GAP_CANDLES + 100) * _TF_MS
         rows_before = [
-            pd.Timestamp(0, unit="ms", tz="UTC"),
-            pd.Timestamp(gap_end_ms, unit="ms", tz="UTC"),
+            _ts(0),
+            _ts(gap_end_ms),
         ]
-        df = pd.DataFrame(
+        df = pl.DataFrame(
             {
                 "timestamp": rows_before,
                 "open": [100.0, 100.0],
@@ -443,10 +449,10 @@ class TestExecutePairHealing:
         gap_end_ms = 5 * _TF_MS
 
         rows_before = [
-            pd.Timestamp(0, unit="ms", tz="UTC"),
-            pd.Timestamp(gap_end_ms, unit="ms", tz="UTC"),
+            _ts(0),
+            _ts(gap_end_ms),
         ]
-        df = pd.DataFrame(
+        df = pl.DataFrame(
             {
                 "timestamp": rows_before,
                 "open": [100.0, 100.0],
@@ -478,10 +484,10 @@ class TestExecutePairHealing:
         """Excepción en gather → contada en métricas, result sin crash."""
         gap_end_ms = 5 * _TF_MS
         rows_before = [
-            pd.Timestamp(0, unit="ms", tz="UTC"),
-            pd.Timestamp(gap_end_ms, unit="ms", tz="UTC"),
+            _ts(0),
+            _ts(gap_end_ms),
         ]
-        df = pd.DataFrame(
+        df = pl.DataFrame(
             {
                 "timestamp": rows_before,
                 "open": [100.0, 100.0],
@@ -528,7 +534,16 @@ class TestExecutePairHealing:
         """CancelledError no se traga — debe propagar."""
         df = _make_df(n_rows=2, start_ms=0)
         # df con gap artificial: segunda vela muy lejos
-        df.loc[1, "timestamp"] = pd.Timestamp(10 * _TF_MS, unit="ms", tz="UTC")
+        df = (
+            df.with_row_index("_idx")
+            .with_columns(
+                pl.when(pl.col("_idx") == 1)
+                .then(pl.lit(_ts(10 * _TF_MS)))
+                .otherwise(pl.col("timestamp"))
+                .alias("timestamp")
+            )
+            .drop("_idx")
+        )
 
         bad_fetcher = MagicMock()
         bad_fetcher.fetch_chunk = AsyncMock(side_effect=asyncio.CancelledError())
@@ -574,7 +589,7 @@ class TestReadSilver:
     def test_returns_none_if_df_empty(self):
         """Si storage retorna DataFrame vacío → None."""
         strategy = RepairStrategy(metrics=_make_metrics())
-        ctx = _make_ctx(df=pd.DataFrame())
+        ctx = _make_ctx(df=pl.DataFrame())
 
         result = strategy._read_silver(ctx, _SYMBOL, _TF)
         assert result is None
