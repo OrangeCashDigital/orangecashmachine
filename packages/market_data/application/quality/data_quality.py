@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import subprocess
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, cast
 
 if TYPE_CHECKING:
     from market_data.ports.outbound.data_quality_checker import DataQualityCheckerPort
@@ -104,7 +104,7 @@ class DataQualityChecker:
         self._flatline_threshold = _FLATLINE_THRESHOLD_BY_TF.get(timeframe, _FLATLINE_THRESHOLD_DEFAULT)
         self._rows_removed = max(0, int(rows_removed))
 
-    def check(self, df: pl.DataFrame, symbol: str) -> DataQualityReport:
+    def check(self, df: pl.DataFrame, *, symbol: str) -> DataQualityReport:
         report = DataQualityReport(
             symbol=symbol,
             timeframe=self._timeframe,
@@ -190,7 +190,7 @@ class DataQualityChecker:
         pct = n / len(ts_sorted)
         # Velas faltantes estimadas: suma de (gap / tf) - 1 por gap
         missing = int(((diffs_ms.filter(mask) / self._tf_ms) - 1).sum())
-        largest_gap_s = float(diffs_ms.filter(mask).max() or 0) / 1000
+        largest_gap_s = float(cast(float, diffs_ms.filter(mask).max()) or 0) / 1000
         report.issues.append(
             QualityIssue(
                 check="temporal_gaps",
@@ -293,7 +293,7 @@ class DataQualityChecker:
         z = ((close - rm) / rs_safe).abs().fill_null(0.0)
         n = int((z > _ZSCORE_THRESHOLD).sum())
         if n > 0:
-            max_z = float(z.max() or 0.0)
+            max_z = float(cast(float, z.max()) or 0.0)
             report.issues.append(
                 QualityIssue(
                     check="price_outliers_zscore",
