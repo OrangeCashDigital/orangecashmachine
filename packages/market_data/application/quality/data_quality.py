@@ -283,8 +283,8 @@ class DataQualityChecker:
         if len(close) < _ZSCORE_WINDOW + 1:
             return
         # Rolling mean y std con polars
-        rm = close.rolling_mean(window_size=_ZSCORE_WINDOW, min_periods=10)
-        rs = close.rolling_std(window_size=_ZSCORE_WINDOW, min_periods=10)
+        rm = close.rolling_mean(window_size=_ZSCORE_WINDOW, min_samples=10)
+        rs = close.rolling_std(window_size=_ZSCORE_WINDOW, min_samples=10)
         # std=0 → null para evitar div-by-zero; luego fill_null(0)
         rs_safe = rs.map_elements(
             lambda x: None if (x is None or x == 0) else x,

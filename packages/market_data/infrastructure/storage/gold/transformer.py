@@ -194,7 +194,7 @@ class GoldTransformer:
         ann = _ANNUALIZATION_MAP.get(timeframe, _DEFAULT_ANNUALIZATION)
         return df.with_columns(
             (
-                pl.col("log_return").rolling_std(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS) * (ann**0.5)
+                pl.col("log_return").rolling_std(window_size=_ROLLING_WINDOW, min_samples=_MIN_PERIODS) * (ann**0.5)
             ).alias("volatility_20")
         )
 
@@ -216,8 +216,8 @@ class GoldTransformer:
             .with_columns(
                 [
                     (
-                        pl.col("_tpv").rolling_sum(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
-                        / pl.col("_vol_safe").rolling_sum(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
+                        pl.col("_tpv").rolling_sum(window_size=_ROLLING_WINDOW, min_samples=_MIN_PERIODS)
+                        / pl.col("_vol_safe").rolling_sum(window_size=_ROLLING_WINDOW, min_samples=_MIN_PERIODS)
                     ).alias("vwap"),
                 ]
             )
@@ -238,9 +238,9 @@ class GoldTransformer:
             (
                 (
                     pl.col("volume")
-                    - pl.col("volume").rolling_mean(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS)
+                    - pl.col("volume").rolling_mean(window_size=_ROLLING_WINDOW, min_samples=_MIN_PERIODS)
                 )
-                / pl.col("volume").rolling_std(window_size=_ROLLING_WINDOW, min_periods=_MIN_PERIODS).replace(0, None)
+                / pl.col("volume").rolling_std(window_size=_ROLLING_WINDOW, min_samples=_MIN_PERIODS).replace(0, None)
             ).alias("volume_z")
         )
 
