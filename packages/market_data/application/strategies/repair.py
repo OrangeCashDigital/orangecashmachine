@@ -132,16 +132,14 @@ class RepairStrategy(StrategyMixin):
                 columns_only=["timestamp"],
             )
 
-            if df_existing is None or df_existing.empty:
+            if df_existing is None or df_existing.is_empty():
                 result.skipped = True
                 result.duration_ms = int((time.monotonic() - pair_start) * 1000)
                 log.debug("Repair skip — sin datos en Silver")
                 return result
 
-            # scan_gaps opera en Polars — convertir pandas→polars en el boundary
-
-            df_for_gaps = pl.from_pandas(df_existing)
-            gaps = scan_gaps(df_for_gaps, timeframe, tolerance=self._tolerance)
+            # df_existing ya es pl.DataFrame nativo (_read_silver) — sin conversión
+            gaps = scan_gaps(df_existing, timeframe, tolerance=self._tolerance)
             # Mapa gap_id → gap_event_id para correlacionar GapDetected con Healed/Failed.
             _gap_event_ids: dict[int, str] = {}
             result.gaps_found = len(gaps)
@@ -322,7 +320,7 @@ class RepairStrategy(StrategyMixin):
         symbol: str,
         timeframe: str,
         columns_only: list | None = None,
-    ) -> Optional[pd.DataFrame]:
+    ) -> Optional[pl.DataFrame]:
         """Lee datos Silver delegando al Protocol OHLCVStorage."""
         # fail-fast: storage es obligatorio para RepairStrategy
         assert ctx.storage is not None, (
@@ -330,11 +328,11 @@ class RepairStrategy(StrategyMixin):
         )
         try:
             df = ctx.storage.load_ohlcv(symbol=symbol, timeframe=timeframe)
-            if df is None or df.empty:
+            if df is None or df.is_empty():
                 return None
             if columns_only:
                 cols = [c for c in columns_only if c in df.columns]
-                df = df[cols]
+                df = df.select(cols)
             return df
         except Exception as exc:
             _log.bind(symbol=symbol, timeframe=timeframe).warning(
@@ -446,10 +444,10 @@ class RepairStrategy(StrategyMixin):
                 .unique(subset=["timestamp"], keep="last", maintain_order=False)
                 .sort("timestamp")
             )
-            # ACL out: QualityPipeline y ctx.storage reciben pd.DataFrame (contrato actual)
-            df = df_pl.to_pandas()
+            # df_pl ya es polars nativo — QualityPipeline y ctx.storage lo aceptan directo
+            df = df_pl
 
-            if df.empty:
+            if df.is_empty():
                 _log.bind(symbol=symbol, timeframe=timeframe).warning(
                     "Gap heal: df vacio tras filtro — marcando irrecuperable",
                     gap_start=str(gap_start),

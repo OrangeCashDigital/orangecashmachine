@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
 
-import pandas as pd
+import polars as pl
 
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 
@@ -30,7 +30,7 @@ from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 @runtime_checkable
 class OHLCVChunkConverterPort(Protocol):
     """
-    Contrato de conversión pd.DataFrame → OHLCVChunk.
+    Contrato de conversión pl.DataFrame → OHLCVChunk.
 
     El source debe ser un valor canónico de OHLCVSource (SSOT).
     Las strategies pasan SOURCE_BACKFILL o SOURCE_LIVE — nunca
@@ -45,7 +45,7 @@ class OHLCVChunkConverterPort(Protocol):
 
     def to_chunk(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         exchange: str,
         symbol: str,
         timeframe: str,

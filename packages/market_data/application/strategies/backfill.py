@@ -399,12 +399,12 @@ class BackfillStrategy(StrategyMixin):
                 .sort("timestamp")
                 .filter(pl.col("timestamp").dt.timestamp("us") < _current_end_us)
             )
-            df = df_pl.to_pandas()
+            df = df_pl
 
-            if df.empty:
+            if df.is_empty():
                 break
 
-            oldest_in_chunk = int(df["timestamp"].min().timestamp() * 1000)
+            oldest_in_chunk = int(df["timestamp"].dt.epoch("ms").min())  # type: ignore[arg-type]
 
             if last_end is not None and oldest_in_chunk >= last_end:
                 log.warning(

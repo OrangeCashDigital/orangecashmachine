@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-import pandas as pd
+import polars as pl
 
 
 class PassthroughChunkConverter:
     def to_chunk(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         exchange: str,
         symbol: str,
         timeframe: str,

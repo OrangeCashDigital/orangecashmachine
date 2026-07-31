@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-import pandas as pd
+import polars as pl
 
 from market_data.domain.value_objects.candle import Candle
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
@@ -44,7 +44,7 @@ class DataFrameMappingError(ValueError):
 
 
 def ohlcv_df_to_chunk(
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     exchange: str,
     symbol: str,
     timeframe: str,
@@ -78,7 +78,7 @@ def ohlcv_df_to_chunk(
             f"DataFrame OHLCV faltan columnas: {sorted(missing)}. Requeridas: {sorted(_REQUIRED_COLUMNS)}."
         )
 
-    if df.empty:
+    if df.is_empty():
         return OHLCVChunk(
             exchange=exchange,
             symbol=symbol,
@@ -91,31 +91,34 @@ def ohlcv_df_to_chunk(
         )
 
     # ── Normalizar tipos antes del mapping (garantía runtime — sin cast, sin type: ignore) ─
-    df_norm = df.copy()
-    for col in ["open", "high", "low", "close", "volume"]:
-        df_norm[col] = pd.to_numeric(df_norm[col], errors="coerce")
-    df_norm["timestamp"] = pd.to_datetime(df_norm["timestamp"], utc=True)
+    df_norm = df.with_columns(
+        [pl.col(c).cast(pl.Float64, strict=False) for c in ["open", "high", "low", "close", "volume"]]
+    )
+    ts_dtype = df_norm["timestamp"].dtype
+    if ts_dtype == pl.Int64:
+        df_norm = df_norm.with_columns(pl.col("timestamp").cast(pl.Datetime("ms")).dt.replace_time_zone("UTC"))
+    elif ts_dtype.time_zone is None:  # type: ignore[attr-defined]
+        df_norm = df_norm.with_columns(pl.col("timestamp").dt.replace_time_zone("UTC"))
 
     # ── Mapping con listas planas (evita unión de tipos de itertuples) ──────
-    timestamps = df_norm["timestamp"].tolist()
-    opens = df_norm["open"].tolist()
-    highs = df_norm["high"].tolist()
-    lows = df_norm["low"].tolist()
-    closes = df_norm["close"].tolist()
-    volumes = df_norm["volume"].tolist()
+    timestamps_ms = df_norm["timestamp"].dt.epoch("ms").to_list()
+    opens = df_norm["open"].to_list()
+    highs = df_norm["high"].to_list()
+    lows = df_norm["low"].to_list()
+    closes = df_norm["close"].to_list()
+    volumes = df_norm["volume"].to_list()
 
     candles: list[Candle] = []
-    for ts, open_val, high_val, low_val, close_val, volume_val in zip(
-        timestamps,
+    for ts_ms, open_val, high_val, low_val, close_val, volume_val in zip(
+        timestamps_ms,
         opens,
         highs,
         lows,
         closes,
         volumes,
     ):
-        ts_ms: int = int(ts.timestamp() * 1000) if hasattr(ts, "timestamp") else int(ts)
         candle = Candle(
-            timestamp_ms=ts_ms,
+            timestamp_ms=int(ts_ms),
             open=open_val,
             high=high_val,
             low=low_val,

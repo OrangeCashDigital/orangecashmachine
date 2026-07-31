@@ -14,6 +14,7 @@ Principios: SRP · DIP · SafeOps · KISS · Clean Architecture
 
 from __future__ import annotations
 
+import polars as pl
 from loguru import logger
 
 from market_data.application.pipeline.runtime import (
@@ -66,9 +67,15 @@ class IncrementalStrategy(StrategyMixin):
             )
             return
 
+        # ACL in: ctx.fetcher.download_data() retorna pd.DataFrame (fetcher aún no migrado
+        # a polars — HistoricalFetcherAsync usa pd.concat/sort_values/drop_duplicates
+        # internamente). Boundary único de conversión antes de entrar al quality gate,
+        # que ya es polars nativo.
+        df_pl = pl.from_pandas(df)
+
         # ── Quality gate ──────────────────────────────────────────────────────
         qres = ctx.quality.run(
-            df=df,
+            df=df_pl,
             symbol=symbol,
             timeframe=timeframe,
             exchange=ctx.exchange_id,
