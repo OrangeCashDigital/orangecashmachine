@@ -26,7 +26,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, Protocol, runtime_checkable
 
-import pandas as pd
 import polars as pl
 
 # =========================================================================== #
@@ -118,7 +117,7 @@ class OHLCVStorage(Protocol):
 
         Returns
         -------
-        pd.DataFrame ordenado por timestamp con dedup aplicado, o None.
+        pl.DataFrame ordenado por timestamp con dedup aplicado, o None.
         """
         ...
 
@@ -240,7 +239,7 @@ class BronzeStoragePort(Protocol):
 
     def append(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         run_id: Optional[str] = None,

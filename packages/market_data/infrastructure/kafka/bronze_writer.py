@@ -54,9 +54,10 @@ Principios: SRP · DIP · SafeOps · Kappa · at-least-once · SSOT
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Optional
 
-import pandas as pd
+import polars as pl
 from loguru import logger
 
 from market_data.infrastructure.kafka.dedup import SeenFilter
@@ -228,10 +229,10 @@ class KafkaBronzeWriter:
             return "handled"
 
         # ── Construir DataFrame ───────────────────────────────────────
-        df = pd.DataFrame(
+        df = pl.DataFrame(
             [
                 {
-                    "timestamp": pd.Timestamp(b.ts, unit="ms", tz="UTC"),
+                    "timestamp": datetime.fromtimestamp(b.ts / 1000, tz=timezone.utc),
                     "open": b.open,
                     "high": b.high,
                     "low": b.low,

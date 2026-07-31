@@ -12,8 +12,10 @@ Los tests de validación de entrada no requieren ningún mock.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 from market_data.infrastructure.storage.bronze.bronze_storage import (
     REQUIRED_COLUMNS,
@@ -24,11 +26,13 @@ from market_data.infrastructure.storage.bronze.bronze_storage import (
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
-def _make_ohlcv(n: int = 10, seed: int = 0) -> pd.DataFrame:
+def _make_ohlcv(n: int = 10, seed: int = 0) -> pl.DataFrame:
     rng = np.random.default_rng(seed)
-    return pd.DataFrame(
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    timestamps = [start + timedelta(hours=i) for i in range(n)]
+    return pl.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "timestamp": timestamps,
             "open": rng.uniform(40_000, 50_000, n),
             "high": rng.uniform(50_000, 55_000, n),
             "low": rng.uniform(38_000, 40_000, n),
@@ -77,7 +81,7 @@ def test_required_columns_contains_ohlcv():
 
 def test_append_raises_on_empty_dataframe(bronze):
     with pytest.raises(BronzeStorageError):
-        bronze.append(pd.DataFrame(), symbol="BTC/USDT", timeframe="1h")
+        bronze.append(pl.DataFrame(), symbol="BTC/USDT", timeframe="1h")
 
 
 def test_append_raises_on_none(bronze):
@@ -86,7 +90,8 @@ def test_append_raises_on_none(bronze):
 
 
 def test_append_raises_on_missing_columns(bronze):
-    df = pd.DataFrame({"timestamp": pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")})
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    df = pl.DataFrame({"timestamp": [start + timedelta(hours=i) for i in range(3)]})
     with pytest.raises(BronzeStorageError, match="Missing columns"):
         bronze.append(df, symbol="BTC/USDT", timeframe="1h")
 

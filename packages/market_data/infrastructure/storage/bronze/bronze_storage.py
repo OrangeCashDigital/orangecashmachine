@@ -28,8 +28,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-import pandas as pd
-import pyarrow as pa
+import polars as pl
 from loguru import logger
 
 from market_data.infrastructure.storage.iceberg.catalog import (
@@ -116,7 +115,7 @@ class BronzeStorage:
 
     def append(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         run_id: Optional[str] = None,
@@ -180,13 +179,7 @@ class BronzeStorage:
         # para que el await esté en contexto async — Bronze es síncrono.
         self._table = get_catalog().load_table("bronze.ohlcv")
         try:
-            self._table.append(
-                pa.Table.from_pandas(
-                    prepared,
-                    schema=self._table.schema().as_arrow(),
-                    preserve_index=False,
-                )
-            )
+            self._table.append(prepared.to_arrow().cast(self._table.schema().as_arrow()))
         except Exception as exc:
             raise BronzeWriteError(f"Bronze Iceberg append failed | {symbol}/{timeframe} | {exc}") from exc
 
@@ -208,32 +201,40 @@ class BronzeStorage:
 
 
 def _normalize_df(
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     symbol: str,
     timeframe: str,
     exchange: str,
     market_type: str,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """
     Prepara el DataFrame para escritura en Iceberg:
     - Convierte timestamp a microsegundos UTC (pyiceberg 0.8 no soporta ns).
     - Inyecta columnas de partición e ingestion_ts.
     - Ordena por timestamp (sin dedup — eso es responsabilidad de Silver).
     """
-    df = df.copy()
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[us, UTC]")
-    now_us = pd.Timestamp(datetime.now(timezone.utc)).floor("us")
-    df["ingestion_ts"] = now_us.tz_localize(None)  # se reinterpreta como UTC al escribir
-    df["ingestion_ts"] = pd.to_datetime(df["ingestion_ts"], utc=True).astype("datetime64[us, UTC]")
-    df["exchange"] = exchange
-    df["market_type"] = market_type
-    df["symbol"] = symbol
-    df["timeframe"] = timeframe
-    return df[_BRONZE_COLS].sort_values("timestamp").reset_index(drop=True)
+    ts_dtype = df.schema["timestamp"]
+    ts_expr = pl.col("timestamp")
+    if isinstance(ts_dtype, pl.Datetime) and ts_dtype.time_zone is not None:
+        ts_expr = ts_expr.dt.convert_time_zone("UTC")
+    else:
+        ts_expr = ts_expr.dt.replace_time_zone("UTC")
+
+    now_us = datetime.now(timezone.utc)
+
+    df = df.with_columns(
+        ts_expr.cast(pl.Datetime("us", "UTC")).alias("timestamp"),
+        pl.lit(now_us).cast(pl.Datetime("us", "UTC")).alias("ingestion_ts"),
+        pl.lit(exchange).alias("exchange"),
+        pl.lit(market_type).alias("market_type"),
+        pl.lit(symbol).alias("symbol"),
+        pl.lit(timeframe).alias("timeframe"),
+    )
+    return df.select(_BRONZE_COLS).sort("timestamp")
 
 
-def _validate_dataframe(df: pd.DataFrame) -> None:
-    if df is None or df.empty:
+def _validate_dataframe(df: pl.DataFrame) -> None:
+    if df is None or df.is_empty():
         raise BronzeStorageError("DataFrame vacío")
     missing = REQUIRED_COLUMNS - set(df.columns)
     if missing:
