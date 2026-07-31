@@ -30,9 +30,9 @@ Principios: SRP · SSOT · DIP · KISS
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
-import pandas as pd
 from loguru import logger
 
 from market_data.ports.outbound.state import CursorStorePort as CursorStore
@@ -55,7 +55,7 @@ class TimestampCacheService:
     ) -> None:
         self._cursor = cursor_store
         # L1: keyed por (symbol, timeframe)
-        self._l1: dict[tuple[str, str], Optional[pd.Timestamp]] = {}
+        self._l1: dict[tuple[str, str], Optional[datetime]] = {}
 
     # =========================================================================
     # Public API
@@ -67,7 +67,7 @@ class TimestampCacheService:
         timeframe: str,
         exchange: str = "unknown",
         market_type: str = "unknown",
-    ) -> Optional[pd.Timestamp]:
+    ) -> Optional[datetime]:
         """
         Busca en L1 → L2. Retorna None si miss en ambos.
 
@@ -94,7 +94,7 @@ class TimestampCacheService:
         self,
         symbol: str,
         timeframe: str,
-        ts: Optional[pd.Timestamp],
+        ts: Optional[datetime],
     ) -> None:
         """Actualiza L1 con timestamp conocido (post-scan L3)."""
         self._l1[(symbol, timeframe)] = ts
@@ -117,7 +117,7 @@ class TimestampCacheService:
         timeframe: str,
         exchange: str,
         market_type: str,
-    ) -> Optional[pd.Timestamp]:
+    ) -> Optional[datetime]:
         """
         Lee timestamp desde Redis L2.
         Fail-Soft: retorna None si Redis falla.
@@ -129,7 +129,7 @@ class TimestampCacheService:
             if raw is None:
                 logger.debug("TimestampCache L2 miss | {}/{}", symbol, timeframe)
                 return None
-            ts = pd.Timestamp(int(raw), unit="ms", tz="UTC")
+            ts = datetime.fromtimestamp(int(raw) / 1000, tz=timezone.utc)
             logger.debug("TimestampCache L2 hit | {}/{} ts={}", symbol, timeframe, ts)
             return ts
         except Exception:

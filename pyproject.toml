@@ -102,6 +102,7 @@ dependencies = [
     # cubren validación de datos — ¿casos de uso distintos o solapados?
     "great-expectations>=1.17.2",
     "lz4>=4.4.5",
+    "cryptofeed>=2.4.1",
 ]
 
 [project.license]

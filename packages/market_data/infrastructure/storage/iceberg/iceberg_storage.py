@@ -37,7 +37,7 @@ import time
 from typing import Optional
 
 import pandas as pd
-import pyarrow as pa
+import polars as pl
 import pyarrow.compute as pc
 from loguru import logger
 from pyiceberg.expressions import (
@@ -82,28 +82,25 @@ _OHLCV_COLS = [
 ]
 
 
-def _to_utc_timestamp(dt: object) -> Optional[pd.Timestamp]:
+def _to_utc_timestamp(dt: object) -> Optional[_dt.datetime]:
     """
-    Convierte el resultado de pc.max() a pd.Timestamp UTC.
+    Convierte el resultado de pc.max()/pc.min() a datetime UTC nativo.
 
     pyiceberg 0.8 almacena timestamps como datetime64[us, UTC].
-    pc.max() sobre esa columna devuelve:
+    pc.max()/pc.min() sobre esa columna devuelve:
       - datetime con tzinfo  → columnas tz-aware (caso normal)
       - int en microsegundos → columnas tz-naive almacenadas como us epoch
       - None                 → tabla vacía
-
-    pd.Timestamp(int) interpreta el int como nanosegundos — incorrecto.
-    Hay que detectar int y usar unit="us" explícitamente.
     """
     if dt is None:
         return None
     if isinstance(dt, int):
-        # pc.max() devolvió microsegundos epoch — convertir explícitamente.
-        return pd.Timestamp(dt, unit="us", tz="UTC")
-    # dt es datetime-like (datetime, pd.Timestamp, numpy.datetime64) — estrechar para mypy
-    if isinstance(dt, (_dt.datetime, pd.Timestamp)):
-        ts = pd.to_datetime(dt)
-        return ts if ts.tzinfo is not None else ts.tz_localize("UTC")
+        # pc.max()/pc.min() devolvió microsegundos epoch — convertir explícitamente.
+        return _dt.datetime.fromtimestamp(dt / 1_000_000, tz=_dt.timezone.utc)
+    if isinstance(dt, pd.Timestamp):
+        dt = dt.to_pydatetime()
+    if isinstance(dt, _dt.datetime):
+        return dt.replace(tzinfo=_dt.timezone.utc) if dt.tzinfo is None else dt.astimezone(_dt.timezone.utc)
     return None
 
 
@@ -174,30 +171,52 @@ class IcebergStorage:
 
     @staticmethod
     def _normalize_df(
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange: str,
         market_type: str,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """
         Prepara el DataFrame para escritura en Iceberg:
-        - Convierte timestamp a us (pyiceberg 0.8 no soporta ns)
+        - Normaliza timestamp a Datetime("us", "UTC") — pyiceberg 0.8 no soporta ns
         - Inyecta columnas de partición
         - Deduplica y ordena
+
+        Manejo de dtype defensivo — mismo patrón que ohlcv_transformer.py:
+        acepta timestamp como Int64 epoch-ms, Datetime tz-naive, o ya
+        Datetime("us", "UTC") y normaliza siempre al último caso.
+
+        Dedup semantics — last-write-wins (keep="last"): si la misma vela
+        (timestamp, exchange, symbol, timeframe) aparece más de una vez en
+        el batch, prevalece la última fila. Este es el contrato oficial de
+        Silver — ver OHLCVStorage.save_ohlcv docstring — no un detalle de
+        implementación. Motivo: una escritura posterior (WebSocket con más
+        trades, backfill con corrección del exchange, gap healing) se
+        asume más correcta que la anterior.
         """
-        df = df.copy()
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[us, UTC]")
-        df["exchange"] = exchange
-        df["market_type"] = market_type
-        df["symbol"] = symbol
-        df["timeframe"] = timeframe
+        ts_dtype = df["timestamp"].dtype
+        if ts_dtype == pl.Int64:
+            df = df.with_columns(
+                pl.col("timestamp").cast(pl.Int64, strict=False).cast(pl.Datetime("ms")).dt.replace_time_zone("UTC")
+            )
+        elif ts_dtype.time_zone is None:  # type: ignore[attr-defined]
+            df = df.with_columns(pl.col("timestamp").dt.replace_time_zone("UTC"))
+
+        if df["timestamp"].dtype != pl.Datetime("us", "UTC"):
+            df = df.with_columns(pl.col("timestamp").dt.cast_time_unit("us"))
+
+        df = df.with_columns(
+            pl.lit(exchange).alias("exchange"),
+            pl.lit(market_type).alias("market_type"),
+            pl.lit(symbol).alias("symbol"),
+            pl.lit(timeframe).alias("timeframe"),
+        )
 
         return (
-            df[_OHLCV_COLS]
-            .drop_duplicates(subset=["timestamp", "exchange", "symbol", "timeframe"])
-            .sort_values("timestamp")
-            .reset_index(drop=True)
+            df.select(_OHLCV_COLS)
+            .unique(subset=["timestamp", "exchange", "symbol", "timeframe"], keep="last")
+            .sort("timestamp")
         )
 
     # =========================================================================
@@ -206,7 +225,7 @@ class IcebergStorage:
 
     def save_ohlcv(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         run_id: Optional[str] = None,
@@ -232,7 +251,7 @@ class IcebergStorage:
             )
             return
 
-        if df is None or df.empty:
+        if df is None or df.is_empty():
             return
 
         if self._table is None:
@@ -250,13 +269,11 @@ class IcebergStorage:
             market_type=self._market_type or "unknown",
         )
 
-        self._table.append(
-            pa.Table.from_pandas(
-                prepared,
-                schema=self._table.schema().as_arrow(),
-                preserve_index=False,
-            )
-        )
+        # Polars.to_arrow() marca columnas nullable=True por defecto — el
+        # schema Iceberg exige required=True en todos los campos OHLCV base.
+        # .cast() fuerza el schema exacto (tipos + nullability), igual que
+        # antes hacía pa.Table.from_pandas(..., schema=...) explícitamente.
+        self._table.append(prepared.to_arrow().cast(self._table.schema().as_arrow()))
 
         # Invalidar cache L1/L2 tras escritura exitosa (SSOT: _ts_cache)
         self._ts_cache.invalidate(symbol, timeframe)
@@ -274,7 +291,7 @@ class IcebergStorage:
         self,
         symbol: str,
         timeframe: str,
-    ) -> Optional[pd.Timestamp]:
+    ) -> Optional[_dt.datetime]:
         """Obtiene el último timestamp disponible para symbol/timeframe.
 
         Scan Iceberg con filtros nativos (partition pruning activo).
@@ -325,7 +342,7 @@ class IcebergStorage:
         self,
         symbol: str,
         timeframe: str,
-    ) -> Optional[pd.Timestamp]:
+    ) -> Optional[_dt.datetime]:
         """
         Obtiene el timestamp más antiguo disponible para symbol/timeframe.
 
@@ -373,9 +390,9 @@ class IcebergStorage:
         self,
         symbol: str,
         timeframe: str,
-        start: Optional[pd.Timestamp] = None,
-        end: Optional[pd.Timestamp] = None,
-    ) -> Optional[pd.DataFrame]:
+        start: Optional[_dt.datetime] = None,
+        end: Optional[_dt.datetime] = None,
+    ) -> Optional[pl.DataFrame]:
         """
         Lee datos OHLCV desde Iceberg con pushdown de filtros temporales.
 
@@ -405,9 +422,9 @@ class IcebergStorage:
             import concurrent.futures as _cf
 
             with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
-                _future = _pool.submit(lambda: table.scan(row_filter=row_filter).to_arrow().to_pandas())
+                _future = _pool.submit(lambda: table.scan(row_filter=row_filter).to_arrow())
                 try:
-                    df = _future.result(timeout=_ICEBERG_LOAD_TIMEOUT_S)
+                    arrow_table = _future.result(timeout=_ICEBERG_LOAD_TIMEOUT_S)
                 except _cf.TimeoutError:
                     logger.opt(exception=True).error(
                         "IcebergStorage.load_ohlcv TIMEOUT ({:.0f}s) | {}/{}",
@@ -417,11 +434,12 @@ class IcebergStorage:
                     )
                     return None
 
-            if df.empty:
+            df = pl.DataFrame(arrow_table)
+
+            if df.is_empty():
                 return None
 
-            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-            return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+            return df.sort("timestamp").unique(subset=["timestamp"], keep="last")
 
         except Exception:
             logger.opt(exception=True).warning(

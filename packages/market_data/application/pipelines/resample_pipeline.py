@@ -470,7 +470,7 @@ class ResamplePipeline:
                 exchange=self._exchange,
             )
 
-            if resampled.empty:
+            if resampled.is_empty():
                 result.skipped = True
                 return result
 

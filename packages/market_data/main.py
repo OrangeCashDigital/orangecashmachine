@@ -41,6 +41,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Optional
 
+import polars as pl
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -524,7 +525,7 @@ async def get_ohlcv(
     -------
     JSON con lista de candles: [{timestamp, open, high, low, close, volume}]
     """
-    import pandas as pd
+    import datetime as _dt
 
     # Normalizar symbol (el router puede URL-decodear %2F → /)
     symbol_norm = symbol.replace("%2F", "/").replace("%2f", "/")
@@ -539,8 +540,8 @@ async def get_ohlcv(
             market_type="spot",  # TODO: exponer como query param si se necesita futures
         )
 
-        ts_start = pd.Timestamp(start, tz="UTC") if start else None
-        ts_end = pd.Timestamp(end, tz="UTC") if end else None
+        ts_start = _dt.datetime.fromisoformat(start).replace(tzinfo=_dt.timezone.utc) if start else None
+        ts_end = _dt.datetime.fromisoformat(end).replace(tzinfo=_dt.timezone.utc) if end else None
 
         df = await asyncio.to_thread(
             storage.load_ohlcv,
@@ -550,7 +551,7 @@ async def get_ohlcv(
             end=ts_end,
         )
 
-        if df is None or df.empty:
+        if df is None or df.is_empty():
             return JSONResponse(
                 status_code=404,
                 content={
@@ -564,7 +565,7 @@ async def get_ohlcv(
         # Aplicar limit después de filtros temporales
         df = df.tail(limit)
 
-        records = df.assign(timestamp=df["timestamp"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")).to_dict(orient="records")
+        records = df.with_columns(pl.col("timestamp").dt.strftime("%Y-%m-%dT%H:%M:%SZ")).to_dicts()
 
         return JSONResponse(
             status_code=200,

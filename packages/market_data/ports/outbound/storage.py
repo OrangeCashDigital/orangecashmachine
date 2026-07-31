@@ -23,6 +23,7 @@ Principios: DIP · ISP · OCP · SSOT · runtime_checkable
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional, Protocol, runtime_checkable
 
 import pandas as pd
@@ -46,6 +47,10 @@ class OHLCVStorage(Protocol):
     ------------------
     save_ohlcv    — append idempotente: re-escritura del mismo rango
                     no duplica filas (dedup por timestamp + identidad).
+                    Last-write-wins: si la misma vela (timestamp, exchange,
+                    symbol, timeframe) ya existe, la escritura más reciente
+                    reemplaza a la anterior (ej. WebSocket con más volumen
+                    sobre REST, o gap healing reconstruyendo una vela).
     get_last_timestamp  — None si no hay datos (primer backfill del par).
     get_oldest_timestamp— timestamp más antiguo; backfill boundary.
     load_ohlcv    — scan con pushdown de filtros temporales opcionales.
@@ -53,7 +58,7 @@ class OHLCVStorage(Protocol):
 
     def save_ohlcv(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         run_id: Optional[str] = None,
@@ -75,13 +80,13 @@ class OHLCVStorage(Protocol):
         self,
         symbol: str,
         timeframe: str,
-    ) -> Optional[pd.Timestamp]:
+    ) -> Optional[datetime]:
         """
         Retorna el timestamp más reciente disponible para el par.
 
         Returns
         -------
-        pd.Timestamp (tz=UTC) si hay datos, None si no hay datos.
+        datetime (tz=UTC) si hay datos, None si no hay datos.
         """
         ...
 
@@ -89,7 +94,7 @@ class OHLCVStorage(Protocol):
         self,
         symbol: str,
         timeframe: str,
-    ) -> Optional[pd.Timestamp]:
+    ) -> Optional[datetime]:
         """
         Retorna el timestamp más antiguo disponible para el par.
 
@@ -105,9 +110,9 @@ class OHLCVStorage(Protocol):
         self,
         symbol: str,
         timeframe: str,
-        start: Optional[pd.Timestamp] = None,
-        end: Optional[pd.Timestamp] = None,
-    ) -> Optional[pd.DataFrame]:
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+    ) -> Optional[pl.DataFrame]:
         """
         Lee datos OHLCV con filtros temporales opcionales.
 

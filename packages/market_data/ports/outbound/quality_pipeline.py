@@ -35,7 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Protocol, runtime_checkable
 
-import pandas as pd
+import polars as pl
 
 from market_data.domain.entities import DataTier
 
@@ -64,7 +64,7 @@ class QualityPipelineResult:
     decision: str
     score: float
     tier: DataTier | None = field(default=None)
-    df: "pd.DataFrame | None" = field(default=None)
+    df: "pl.DataFrame | None" = field(default=None)
 
 
 # =========================================================================== #
@@ -99,7 +99,7 @@ class QualityPipelinePort(Protocol):
 
     def check(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         exchange: str,
         symbol: str,
         timeframe: str,
@@ -127,7 +127,7 @@ class QualityPipelinePort(Protocol):
 
     def run(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange: str,
@@ -165,7 +165,7 @@ class NullQualityPipeline:
 
     def check(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         exchange: str,
         symbol: str,
         timeframe: str,
@@ -182,7 +182,7 @@ class NullQualityPipeline:
 
     def run(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange: str,
