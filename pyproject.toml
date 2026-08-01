@@ -28,7 +28,7 @@ authors         = [{ name = "orangemusic" }]
 
 keywords = [
     "trading", "algorithmic-trading", "market-data", "crypto",
-    "data-pipeline", "data-lakehouse", "iceberg", "dagster",
+    "data-pipeline", "data-lakehouse", "iceberg",
     "ccxt", "ohlcv", "quant",
 ]
 
@@ -46,8 +46,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "dagster>=1.7.0,<2.0",
-    "dagster-webserver>=1.7.0,<2.0",
     # pydantic: pinneado en 2.8.2 — 2.9 introdujo breaking changes en
     # model_rebuild() con forward refs en schemas anidados (Hydra + Pydantic).
     # Desbloquear solo tras validar ocm/config/schema.py en staging completo.
@@ -176,7 +174,6 @@ ignore = []
 # ── Composition roots y entrypoints ────────────────────────────────────────
 # Lazy imports son intencionales: evitan circular imports en bootstrap order.
 # Paths relativos al repo root (donde está pyproject.toml).
-"infrastructure/dagster/assets/*.py"                                 = ["E402"]
 "packages/market_data/infrastructure/bootstrap/container.py"        = ["E402"]
 "packages/market_data/application/pipelines/ohlcv_pipeline.py"      = ["E402"]
 "ocm/config/hydra_loader.py"                                         = ["E402"]
@@ -268,7 +265,6 @@ packages = [
     "packages/trading",
     "packages/portfolio",
     "ocm",
-    "infrastructure/dagster",
     "infrastructure/redis",
     "apps/api",
     "apps/app",
@@ -280,7 +276,6 @@ packages = [
 "packages/market_data"   = "market_data"
 "packages/trading"       = "trading"
 "packages/portfolio"     = "portfolio"
-"infrastructure/dagster" = "infrastructure/dagster"
 "infrastructure/redis"   = "infrastructure/redis"
 "apps/api"               = "api"
 "apps/app"               = "app"

@@ -8,12 +8,11 @@
 # ocm_public   : expone puertos al host para acceso local/dev/ops
 #
 # Redis está en AMBAS redes:
-#   • servicios internos (Dagster, market-data) lo alcanzan via ocm_internal
+#   • servicios internos (market-data) lo alcanzan via ocm_internal
 #   • pipeline local (fuera de Docker) lo alcanza via localhost:6379
 #
 # Estado de servicios
 # -------------------
-# ✅ dagster        : orquestador — reemplaza Prefect
 # ✅ redis          : cursor store + cache
 # ✅ prometheus     : métricas
 # ✅ grafana        : visualización
@@ -115,59 +114,6 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-  # ────────────────────────────────────────────────────────────────────────────
-  # DAGSTER — Asset catalog + scheduler + UI
-  #
-  # Imagen propia (Dockerfile.dagster) — multi-stage build.
-  # NO hace pip install en runtime: deps instaladas en build time.
-  # Puerto: 3001
-  # DAGSTER_HOME: volumen persistente — historial de runs sobrevive reinicios.
-  # ────────────────────────────────────────────────────────────────────────────
-  dagster:
-    build:
-      context: .
-      dockerfile: Dockerfile.dagster
-      target: runtime
-    image: ocm_dagster:latest
-    container_name: ocm_dagster
-    init: true
-    restart: unless-stopped
-    ports:
-      - "${DAGSTER_HOST_PORT:-3001}:3001"
-    environment:
-      <<: [*common-env, *redis-env]
-      DAGSTER_HOME: /dagster_home
-      BYBIT_API_KEY: ${BYBIT_API_KEY:-}
-      BYBIT_API_SECRET: ${BYBIT_API_SECRET:-}
-      KUCOIN_API_KEY: ${KUCOIN_API_KEY:-}
-      KUCOIN_API_SECRET: ${KUCOIN_API_SECRET:-}
-      KUCOIN_PASSPHRASE: ${KUCOIN_PASSPHRASE:-}
-      OCM_STORAGE__DATA_LAKE__PATH: ${OCM_STORAGE__DATA_LAKE__PATH:-/app/data_platform/data_lake}
-      PUSHGATEWAY_URL: http://pushgateway:9091
-    volumes:
-      - dagster_home:/dagster_home
-      - ./config:/app/config:ro
-      - ./logs:/app/logs
-      - ./data_platform:/app/data_platform
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:3001/health')\" 2>/dev/null || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-    deploy:
-      resources:
-        limits:
-          cpus: "1.5"
-          memory: 1500M
     logging: *default-logging
     networks:
       - ocm_internal
@@ -396,8 +342,6 @@ services:
     init: true
     restart: on-failure:5
     depends_on:
-      dagster:
-        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
@@ -405,7 +349,6 @@ services:
       MARKET_DATA_HOST: "0.0.0.0"
       MARKET_DATA_PORT: "8001"
       INGESTION_INTERVAL_S: "${INGESTION_INTERVAL_S:-300}"
-      DAGSTER_URL: http://dagster:3001
     ports:
       - "${MARKET_DATA_HOST_PORT:-8001}:8001"
     volumes:
@@ -652,8 +595,6 @@ volumes:
     name: ocm_zookeeper_logs
   kafka_data:
     name: ocm_kafka_data
-  dagster_home:
-    name: ocm_dagster_home
   redis_data:
     name: ocm_redis_data
   grafana_data:

@@ -1,9 +1,8 @@
 # OrangeCashMachine 🟠
 
-Data lakehouse pipeline para ingestión, procesamiento y almacenamiento de datos de mercado de criptoactivos. Arquitectura medallion Bronze → Silver → Gold con Apache Iceberg, orquestación Dagster, configuración Hydra y observabilidad Prometheus / Grafana / Loki.
+Data lakehouse pipeline para ingestión, procesamiento y almacenamiento de datos de mercado de criptoactivos. Arquitectura medallion Bronze → Silver → Gold con Apache Iceberg, orquestación systemd, configuración Hydra y observabilidad Prometheus / Grafana / Loki.
 
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
-[![Dagster](https://img.shields.io/badge/dagster-1.13-blue.svg)](https://dagster.io/)
 [![Hydra](https://img.shields.io/badge/hydra-1.3-lightblue.svg)](https://hydra.cc/)
 [![ccxt](https://img.shields.io/badge/ccxt-4.3-orange.svg)](https://github.com/ccxt/ccxt)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -73,7 +72,6 @@ infrastructure/dagster/assets       ← Composition Root (único punto de ensamb
 |BC-12|`trading.risk` aislado de execution                                                        |
 |BC-13|`portfolio` aislado de trading execution y strategies                                      |
 |BC-14|`ocm` sin dependencias de lógica de negocio                                                |
-|BC-15|`infrastructure.dagster.assets` no bypasea la capa de ports                                |
 |BC-16|`infrastructure` solo depende de plataforma y abstracciones de market_data                 |
 |BC-18|Ningún dominio importa la capa `api`                                                       |
 |BC-19|Ningún dominio importa `research`                                                          |

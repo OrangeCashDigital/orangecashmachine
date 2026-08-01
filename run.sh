@@ -5,10 +5,9 @@
 #       en pyproject.toml. Si cambias uno, cambia el otro.
 #
 # Modos disponibles:
-#   ocm     → market data pipeline (Hydra + Dagster)
+#   ocm     → market data pipeline (Hydra)
 #   live    → live trading ⚠️  capital real
 #   paper   → paper trading
-#   dagster → arrancar Dagster UI (dev)
 #
 # Principios: SSOT · KISS · Fail-Fast · SafeOps
 set -euo pipefail
@@ -19,12 +18,11 @@ MODE="${1:-}"
 
 if [[ -z "$MODE" ]]; then
   echo "[run.sh] ERROR: Se requiere un modo de ejecución." >&2
-  echo "  Uso: ./run.sh <ocm|live|paper|dagster> [args...]" >&2
+  echo "  Uso: ./run.sh <ocm|live|paper> [args...]" >&2
   echo ""                                                    >&2
   echo "  ocm     → market data pipeline (Hydra)"           >&2
   echo "  live    → live trading ⚠️  capital real"          >&2
   echo "  paper   → paper trading"                           >&2
-  echo "  dagster → arrancar Dagster UI (dev)"               >&2
   exit 1
 fi
 
@@ -35,10 +33,9 @@ case "$MODE" in
   ocm)     exec uv run python -m app.cli.main  "$@" ;;
   live)    exec uv run python -m app.cli.live  "$@" ;;
   paper)   exec uv run python -m app.cli.paper "$@" ;;
-  dagster) exec uv run dagster dev -f dagster_defs.py --port "${DAGSTER_PORT:-3001}" "$@" ;;
   *)
     echo "[run.sh] ERROR: Modo desconocido '${MODE}'." >&2
-    echo "  Válidos: ocm | live | paper | dagster"     >&2
+    echo "  Válidos: ocm | live | paper"     >&2
     exit 1
     ;;
 esac

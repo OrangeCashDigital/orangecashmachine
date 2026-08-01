@@ -5,7 +5,6 @@
 # Jobs activos:
 #   prometheus  — self-scrape del servidor Prometheus
 #   pushgateway — métricas push de workers sin servidor HTTP propio
-#   dagster     — métricas del webserver Dagster (puerto 3000)
 #
 # Jobs eliminados:
 #   prefect     — servicio eliminado en v0.3. Ver _legacy/prefect_orchestration/.
@@ -36,8 +35,3 @@ scrape_configs:
     static_configs:
       - targets: ['pushgateway:9091']
 
-  - job_name: 'dagster'
-    static_configs:
-      - targets: ['dagster:3000']
-    metrics_path: /metrics
-    scrape_interval: 30s
