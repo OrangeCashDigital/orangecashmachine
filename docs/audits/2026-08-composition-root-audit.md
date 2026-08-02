@@ -95,7 +95,7 @@ La función interna `on_fill_composite(order)` (~30 líneas: mapeo `symbol → b
 
 Verificado además: `RunConfig.from_env()` **no depende de Hydra** — resuelve desde variables de entorno planas (`OCM_ENV`, `OCM_DEBUG`, vía `ocm.config.env_vars`), por lo que la adopción por `live.py`/`paper.py` no exige migrar a Hydra.
 
-**Propuesta**: Evaluar adopción total vs. subconjunto (dado que Trading/Portfolio corre como ciclo puntual, no proceso continuo). Ver Decisión 2 del ADR-0002.
+**Propuesta**: Evaluar adopción total vs. subconjunto (dado que Trading/Portfolio corre como ciclo puntual, no proceso continuo). Ver Decisión 3 del ADR-0003.
 
 ---
 
