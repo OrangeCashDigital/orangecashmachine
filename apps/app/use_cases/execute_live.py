@@ -31,11 +31,12 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
+    from portfolio.services.portfolio_service import PortfolioService
     from trading.analytics.performance import PerformanceSummary
-    from trading.engine import EngineResult
+    from trading.engine import EngineResult, TradingEngine
 
 from loguru import logger
 
@@ -62,6 +63,57 @@ class LiveRunResult:
     @property
     def exit_code(self) -> int:
         return 0 if self.success else 1
+
+
+# ---------------------------------------------------------------------------
+# Resources -- recursos vivos abiertos por build_live_engine()
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LiveEngineResources:
+    """
+    Recursos construidos por build_live_engine() y su ciclo de vida.
+
+    engine / portfolio son consumidos por execute(). Los demas campos son
+    handles a recursos externos que deben cerrarse ordenadamente ante fin
+    de ciclo, excepcion, o senal SIGINT/SIGTERM.
+
+    exchange_client, kafka_producer y metrics_server son placeholders para
+    cuando esos recursos existan de verdad -- hoy LiveExecutor es un stub
+    sin conexion real al exchange (ver trading/execution/live_executor.py),
+    no hay producer Kafka en el camino de live trading, y no hay
+    metrics_server dedicado. Se declaran ahora para que shutdown() no deba
+    reescribirse cuando aparezcan -- solo hay que poblarlos aqui.
+    """
+
+    engine: TradingEngine
+    portfolio: PortfolioService
+    redis_client: Any
+    exchange_client: Optional[Any] = None
+    kafka_producer: Optional[Any] = None
+    metrics_server: Optional[Any] = None
+
+    def shutdown(self) -> None:
+        """
+        Cierra todos los recursos abiertos.
+
+        SafeOps: cada cierre esta aislado -- el fallo de uno no impide
+        intentar cerrar el resto. Nunca lanza al caller.
+        """
+        for name, resource, method_name in (
+            ("metrics_server", self.metrics_server, "stop"),
+            ("kafka_producer", self.kafka_producer, "close"),
+            ("exchange_client", self.exchange_client, "close"),
+            ("redis_client", self.redis_client, "close"),
+        ):
+            if resource is None:
+                continue
+            try:
+                getattr(resource, method_name)()
+                logger.debug("shutdown: {} cerrado", name)
+            except Exception as exc:
+                logger.warning("shutdown: error cerrando {} | {}", name, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -123,40 +175,57 @@ def build_live_engine(args: argparse.Namespace, tracker):
         db=args.redis_db,
     )
 
-    store = RedisPositionStore(
-        redis_client=redis_client,
-        exchange=args.exchange,
-    )
+    try:
+        store = RedisPositionStore(
+            redis_client=redis_client,
+            exchange=args.exchange,
+        )
 
-    portfolio = PortfolioService(
-        capital_usd=args.capital,
-        store=store,
-        exchange=args.exchange,
-    )
+        portfolio = PortfolioService(
+            capital_usd=args.capital,
+            store=store,
+            exchange=args.exchange,
+        )
 
-    # SSOT: callback compartido con paper trading — ver trading/execution/fill_sync.py
-    on_fill_composite = build_fill_sync(tracker, portfolio)
+        # SSOT: callback compartido con paper trading — ver trading/execution/fill_sync.py
+        on_fill_composite = build_fill_sync(tracker, portfolio)
 
-    data_source = GoldLoaderAdapter(exchange=args.exchange)
+        data_source = GoldLoaderAdapter(exchange=args.exchange)
 
-    engine = TradingEngine.build_live(
-        strategy_name=args.strategy,
-        strategy_cfg={
-            "symbol": args.symbol,
-            "timeframe": args.timeframe,
-            "fast_period": args.fast,
-            "slow_period": args.slow,
-        },
-        data_source=data_source,
-        risk_config=risk_config,
-        capital_usd=args.capital,
-        exchange=args.exchange,
-        market_type=args.market_type,
-        guard=guard,
-        on_fill=on_fill_composite,
-    )
+        engine = TradingEngine.build_live(
+            strategy_name=args.strategy,
+            strategy_cfg={
+                "symbol": args.symbol,
+                "timeframe": args.timeframe,
+                "fast_period": args.fast,
+                "slow_period": args.slow,
+            },
+            data_source=data_source,
+            risk_config=risk_config,
+            capital_usd=args.capital,
+            exchange=args.exchange,
+            market_type=args.market_type,
+            guard=guard,
+            on_fill=on_fill_composite,
+        )
 
-    return engine, portfolio
+        return LiveEngineResources(
+            engine=engine,
+            portfolio=portfolio,
+            redis_client=redis_client,
+        )
+    except Exception:
+        # Fail-Fast parcial: si algo falla despues de abrir Redis, cerrar
+        # la conexion antes de propagar -- evita fuga de conexion en el
+        # camino de error de build_live_engine.
+        try:
+            redis_client.close()
+        except Exception as close_exc:
+            logger.warning(
+                "build_live_engine: error cerrando redis_client tras fallo | {}",
+                close_exc,
+            )
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +249,7 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
     tracker = TradeTracker(exchange=args.exchange)
 
     try:
-        engine, portfolio = build_live_engine(args, tracker)
+        resources = build_live_engine(args, tracker)
     except Exception as exc:
         logger.error(
             "Error construyendo engine live | {} — {}",
@@ -189,11 +258,11 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
         )
         return LiveRunResult(success=False, error=str(exc))
 
-    logger.info("Engine live listo | {}", engine)
-    logger.info("Portfolio (Redis) | {}", portfolio)
+    logger.info("Engine live listo | {}", resources.engine)
+    logger.info("Portfolio (Redis) | {}", resources.portfolio)
 
     try:
-        engine_result = engine.run_once()
+        engine_result = resources.engine.run_once()
     except Exception as exc:
         logger.error(
             "Error en run_once live | {} — {}",
@@ -201,6 +270,8 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
             exc,
         )
         return LiveRunResult(success=False, error=str(exc))
+    finally:
+        resources.shutdown()
 
     trades = tracker.closed_trades
     performance = PerformanceEngine.summarize(trades, capital_usd=args.capital) if trades else None
@@ -210,5 +281,5 @@ def execute(args: argparse.Namespace) -> LiveRunResult:
         engine_result=engine_result,
         performance=performance,
         open_positions=tracker.open_positions,
-        oms_summary=engine.oms_summary,
+        oms_summary=resources.engine.oms_summary,
     )

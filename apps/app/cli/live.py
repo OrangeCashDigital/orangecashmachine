@@ -25,6 +25,7 @@ Principios: SRP · SafeOps · Composition Root
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 
 from loguru import logger
@@ -116,8 +117,18 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
+def _handle_sigterm(signum, frame) -> None:
+    """Traduce SIGTERM a SystemExit -- dispara los finally pendientes."""
+    raise SystemExit(1)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+
+    # SafeOps: SIGTERM por defecto mata el proceso sin correr ningun
+    # finally de Python -- lo traducimos a SystemExit para que el
+    # finally de execute_live.py::execute() cierre Redis ordenadamente.
+    signal.signal(signal.SIGTERM, _handle_sigterm)
 
     # Logging
     logger.remove()
@@ -152,7 +163,11 @@ def main(argv: list[str] | None = None) -> int:
 
     from app.use_cases.execute_live import execute
 
-    run_result = execute(args)
+    try:
+        run_result = execute(args)
+    except (KeyboardInterrupt, SystemExit) as exc:
+        logger.warning("Live trading interrumpido | {}", exc)
+        return 1
 
     if not run_result.success:
         logger.error("Live use case fallido | {}", run_result.error)
