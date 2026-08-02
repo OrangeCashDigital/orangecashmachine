@@ -155,14 +155,12 @@ def execute(
             store = InMemoryPositionStore()
             logger.info("[DRY-RUN] PortfolioService con store in-memory")
         else:
-            import redis as redis_lib
+            from portfolio.infra.redis_factory import build_redis_client
 
-            redis_client = redis_lib.Redis(
+            redis_client = build_redis_client(
                 host=redis_host,
                 port=redis_port,
                 db=redis_db,
-                socket_timeout=3,
-                decode_responses=False,
             )
             store = RedisPositionStore(redis_client=redis_client, exchange=exchange)
 

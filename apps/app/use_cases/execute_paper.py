@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 from loguru import logger
 
 # Import estático — no dentro de closures (DRY · KISS · evita re-evaluación por fill)
-from trading.execution.order import OrderSide
 
 # ---------------------------------------------------------------------------
 # Result
@@ -162,6 +161,7 @@ def build_paper_engine(args: argparse.Namespace, tracker):
     """
     from portfolio.services.portfolio_service import PortfolioService
     from trading.engine import TradingEngine
+    from trading.execution.fill_sync import build_fill_sync
     from trading.risk.models import (
         OrderLimits,
         PositionConfig,
@@ -203,45 +203,8 @@ def build_paper_engine(args: argparse.Namespace, tracker):
         exchange=args.exchange,
     )
 
-    # Mapa BUY order_id → posición abierta, para cerrar correctamente en SELL.
-    # SSOT del tracking buy→sell: este dict es la fuente de verdad del mapeo.
-    # portfolio.close_position requiere el order_id del BUY (key de apertura),
-    # no el del SELL — sin este mapeo las posiciones nunca cierran (bug silencioso).
-    _open_order_ids: dict[str, str] = {}  # symbol → buy_order_id
-
-    def on_fill_composite(order) -> None:
-        """Callback OMS → TradeTracker + PortfolioService.
-
-        Conecta el fill del OMS a ambas capas de analytics y portfolio.
-        Usa _open_order_ids para resolver el buy_order_id en SELL — evita
-        el bug de intentar cerrar una posición con el ID del SELL order.
-        """
-        # 1. TradeTracker — siempre primero (analytics independiente de portfolio)
-        tracker.on_fill(order)
-
-        # 2. Portfolio — sincroniza estado de posición abierta/cerrada
-        if order.side == OrderSide.BUY:
-            _open_order_ids[order.symbol] = order.order_id
-            portfolio.open_position(
-                order_id=order.order_id,
-                symbol=order.symbol,
-                side="long",
-                entry_price=order.fill_price,
-                size_pct=order.size_pct,
-                entry_at=order.fill_timestamp,
-            )
-        elif order.side == OrderSide.SELL:
-            # Usar el order_id del BUY original — las posiciones se indexan
-            # por el ID de apertura, no por el ID de cierre.
-            buy_order_id = _open_order_ids.pop(order.symbol, None)
-            if buy_order_id is not None:
-                portfolio.close_position(buy_order_id)
-            else:
-                logger.warning(
-                    "on_fill_composite | SELL sin BUY previo registrado | symbol={} sell_order_id={}",
-                    order.symbol,
-                    order.order_id,
-                )
+    # SSOT: callback compartido con live trading — ver trading/execution/fill_sync.py
+    on_fill_composite = build_fill_sync(tracker, portfolio)
 
     engine = TradingEngine.build_paper(
         strategy_name="ema_crossover",

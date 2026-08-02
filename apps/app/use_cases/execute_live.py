@@ -37,7 +37,6 @@ if TYPE_CHECKING:
     from trading.analytics.performance import PerformanceSummary
     from trading.engine import EngineResult
 
-import redis as redis_lib
 from loguru import logger
 
 # ---------------------------------------------------------------------------
@@ -82,11 +81,12 @@ def build_live_engine(args: argparse.Namespace, tracker):
     -------
     tuple[TradingEngine, PortfolioService]
     """
+    from portfolio.infra.redis_factory import build_redis_client
     from portfolio.infra.redis_store import RedisPositionStore
     from portfolio.services.portfolio_service import PortfolioService
     from trading.data.gold_adapter import GoldLoaderAdapter
     from trading.engine import TradingEngine
-    from trading.execution.order import OrderSide
+    from trading.execution.fill_sync import build_fill_sync
     from trading.risk.models import (
         OrderLimits,
         PositionConfig,
@@ -117,12 +117,10 @@ def build_live_engine(args: argparse.Namespace, tracker):
     )
 
     # RedisPositionStore — persistencia cross-restart obligatoria en live
-    redis_client = redis_lib.Redis(
+    redis_client = build_redis_client(
         host=args.redis_host,
         port=args.redis_port,
         db=args.redis_db,
-        socket_timeout=3,
-        decode_responses=False,
     )
 
     store = RedisPositionStore(
@@ -136,43 +134,8 @@ def build_live_engine(args: argparse.Namespace, tracker):
         exchange=args.exchange,
     )
 
-    # SSOT del tracking buy→sell: mismo patrón que execute_paper.py.
-    # portfolio.close_position requiere el order_id del BUY (key de apertura),
-    # no el del SELL — sin este mapeo las posiciones nunca cierran (bug silencioso).
-    _open_order_ids: dict[str, str] = {}  # symbol → buy_order_id
-
-    def on_fill_composite(order) -> None:
-        """Callback OMS → TradeTracker + PortfolioService.
-
-        1. TradeTracker — siempre primero (analytics independiente de portfolio).
-        2. Portfolio    — sincroniza estado de posición abierta/cerrada.
-
-        Resuelve buy_order_id en SELL via _open_order_ids — evita cerrar
-        una posición con el ID del SELL order (bug silencioso de posiciones
-        que nunca cierran en Redis).
-        """
-        tracker.on_fill(order)
-
-        if order.side == OrderSide.BUY:
-            _open_order_ids[order.symbol] = order.order_id
-            portfolio.open_position(
-                order_id=order.order_id,
-                symbol=order.symbol,
-                side="long",
-                entry_price=order.fill_price,
-                size_pct=order.size_pct,
-                entry_at=order.fill_timestamp,
-            )
-        elif order.side == OrderSide.SELL:
-            buy_order_id = _open_order_ids.pop(order.symbol, None)
-            if buy_order_id is not None:
-                portfolio.close_position(buy_order_id)
-            else:
-                logger.warning(
-                    "on_fill_composite | SELL sin BUY previo registrado | symbol={} sell_order_id={}",
-                    order.symbol,
-                    order.order_id,
-                )
+    # SSOT: callback compartido con paper trading — ver trading/execution/fill_sync.py
+    on_fill_composite = build_fill_sync(tracker, portfolio)
 
     data_source = GoldLoaderAdapter(exchange=args.exchange)
 
