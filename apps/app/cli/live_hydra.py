@@ -32,9 +32,9 @@ mantienen como flags CLI — igual que en live.py.
 
 Uso
 ---
-    uv run live-hydra --capital 1000
-    uv run live-hydra --capital 5000 --max-risk-pct 0.02
-    uv run live-hydra --capital 1000 --env production
+    uv run live --capital 1000
+    uv run live --capital 5000 --max-risk-pct 0.02
+    uv run live --capital 1000 --env production
 
 Exit codes
 ----------
@@ -172,8 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     # de argparse.
     if cli_args.capital is None or cli_args.capital <= 0:
         logger.critical(
-            "live-hydra requiere --capital explícito y positivo — "
-            "no hay default por diseño (capital real). Recibido: {}",
+            "live requiere --capital explícito y positivo — no hay default por diseño (capital real). Recibido: {}",
             cli_args.capital,
         )
         return 1

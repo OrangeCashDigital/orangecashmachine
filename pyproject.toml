@@ -21,7 +21,7 @@ build-backend = "hatchling.build"
 [project]
 name            = "orangecashmachine"
 version         = "0.3.0"
-description     = "Pipeline profesional de ingestión, procesamiento y almacenamiento de datos de mercado cripto — arquitectura medallion (Bronze/Silver/Gold), orquestación Dagster, data lakehouse Iceberg/DuckDB, observabilidad Prometheus"
+description     = "Pipeline profesional de ingestión, procesamiento y almacenamiento de datos de mercado cripto — arquitectura medallion (Bronze/Silver/Gold), data lakehouse Iceberg/DuckDB, observabilidad Prometheus"
 readme          = "README.md"
 requires-python = ">=3.11,<3.14"
 authors         = [{ name = "orangemusic" }]

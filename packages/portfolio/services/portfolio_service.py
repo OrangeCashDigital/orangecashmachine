@@ -54,9 +54,9 @@ class PortfolioService:
     Parameters
     ----------
     capital_usd : float         — capital total del portfolio
-    store       : PositionStore — backend de persistencia
-                                  default: InMemoryPositionStore (paper/tests)
-                                  producción: RedisPositionStore
+    store       : PositionStore — backend de persistencia (obligatorio,
+                                  sin default — ver BC-43). Paper/tests:
+                                  InMemoryPositionStore. Produccion: RedisPositionStore.
     exchange    : str           — exchange principal (para logging)
     """
 

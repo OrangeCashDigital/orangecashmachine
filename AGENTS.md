@@ -1,7 +1,7 @@
 # AGENTS.md — OrangeCashMachine
 
-Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Dagster +
-Hydra. Clean/Hexagonal with bounded contexts and ~35 import-linter contracts (BC-NN).
+Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
+Clean/Hexagonal with bounded contexts and ~37 import-linter contracts (BC-NN).
 
 ## Commands
 
@@ -22,11 +22,9 @@ Hydra. Clean/Hexagonal with bounded contexts and ~35 import-linter contracts (BC
     uv run live                       # live trading — ⚠️ capital real
     uv run paper                      # paper trading
     ./run.sh ocm                      # market data pipeline (same as uv run ocm)
-    ./run.sh dagster                  # Dagster UI (port 3001)
-    docker compose up -d              # infra: Redis, Kafka, Dagster, Prometheus
+    docker compose up -d              # infra: Redis, Kafka, Prometheus
 
-No main.py at repo root. CLI entrypoint: `uv run ocm` (via `app.cli.main`). Dagster
-entrypoint: `dagster_defs.py` at root — do not move.
+No main.py at repo root. CLI entrypoint: `uv run ocm` (via `app.cli.main`).
 
 ## CI order (fail-fast)
 
@@ -48,7 +46,7 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - Never import infrastructure into domain.
 - Never import bounded contexts directly across domains.
 - Use ports/contracts instead.
-- Composition Root = infrastructure/dagster/assets/ only.
+- Composition Root = por bounded context (ver ADR-0003) — hoy: portfolio.bootstrap.composition_root; market_data/trading aun sin CR propio dedicado.
 - shared/ may only import stdlib and approved 3rd-party libs.
 
 ## Active migration: pandas → polars
@@ -90,7 +88,6 @@ infrastructure are hybrid during migration. Key facts:
     packages/portfolio     → portfolio
     apps/app               → app
     apps/api               → api
-    infrastructure/dagster → infrastructure.dagster
     shared/                → shared (no remap)
 
 ## Architecture
@@ -100,7 +97,6 @@ infrastructure are hybrid during migration. Key facts:
 - `packages/market_data/` = Clean/Hexagonal: domain→ports→application→adapters→infrastructure.
 - `packages/trading/` = engine in active development.
 - `packages/portfolio/` = position management + rebalance.
-- `infrastructure/dagster/assets/` = sole external Composition Root.
 - `apps/api/` = FastAPI gateway, experimental. `apps/app/` = CLI entrypoints.
 - `apps/research/` = read-only gold layer consumer for notebooks. Not importable as package.
 - `pyproject.toml` = SSOT for build, deps, tools, and all BC-NN contracts.
