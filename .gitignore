@@ -46,3 +46,4 @@ data/quality/*.db
 AUDITORIA_IMPORT_LINTER.txt
 docs/arch/import_graph_*.svg
 *.pyc
+*.bak
