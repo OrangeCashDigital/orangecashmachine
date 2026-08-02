@@ -71,6 +71,9 @@ class _RaisingStore:
     def all(self) -> list[PositionSnapshot]:
         raise RuntimeError("store caído: all")
 
+    def clear(self) -> None:
+        raise RuntimeError("store caído: clear")
+
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
