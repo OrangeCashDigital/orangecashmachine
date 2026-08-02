@@ -4,6 +4,8 @@
 **Fecha:** 2026-08-02
 **Contexto del bounded context:** Todo el repositorio
 
+> **Nota de estado (2026-08-02):** Ver ADR-0006. Los siguientes elementos descritos abajo como Decisión están **pendientes de implementación**, no materializados: `control_plane` (bounded context, sin paquete propio), `build_market_data()`/`build_trading()` (no existen), y el Composition Root General único en `apps/` (cada entrypoint es hoy su propio CR — permitido por `ADR-0003`, pero no lo que este mapa describe). `build_portfolio()` sí tiene equivalente real: `PortfolioCompositionRoot.assemble()`.
+
 ## Contexto
 
 `ADR-0003` formalizó el patrón de Composition Root jerárquico en abstracto:
