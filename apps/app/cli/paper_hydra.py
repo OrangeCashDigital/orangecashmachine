@@ -28,10 +28,10 @@ para cerrar esta fase; ver Fase 5 del plan):
 
 Uso
 ---
-    uv run paper-hydra
-    uv run paper-hydra --symbol ETH/USDT --timeframe 4h
-    uv run paper-hydra --env production
-    uv run paper-hydra --dry-run
+    uv run paper
+    uv run paper --symbol ETH/USDT --timeframe 4h
+    uv run paper --env production
+    uv run paper --dry-run
 
 Nota sobre --dry-run
 ---------------------
@@ -39,17 +39,26 @@ config.safety.dry_run es el default SSOT. El flag --dry-run de este
 CLI solo puede FORZAR dry-run a True — nunca lo desactiva
 silenciosamente sobre lo que ya diga la config.
 
+Manejo de señales
+------------------
+SIGTERM se traduce a SystemExit (mismo patrón que app/cli/live_hydra.py)
+para que execute_paper.execute() pueda cerrar recursos vía su bloque
+finally en lugar de terminar el proceso en seco (docker stop, systemd
+stop, kill). SIGINT usa el comportamiento default de Python
+(KeyboardInterrupt) — no requiere handler explícito.
+
 Exit codes
 ----------
     0 → ciclo completado (con o sin señales)
     1 → error fatal (config inválida, datos no disponibles)
 
-Principios: SOLID · KISS · DRY · SSOT · SafeOps · Composition Root
+Principios: SOLID · KISS · DRY · SSOT · SafeOps · Resiliencia · Composition Root
 """
 
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 
 from loguru import logger
@@ -148,6 +157,15 @@ def _merge_config_into_args(config, cli_args: argparse.Namespace) -> argparse.Na
 # ---------------------------------------------------------------------------
 
 
+def _handle_sigterm(signum, frame) -> None:
+    """Traduce SIGTERM a SystemExit -- dispara los finally pendientes.
+
+    Mismo contrato que app/cli/live_hydra.py._handle_sigterm -- SSOT de
+    comportamiento ante señal de terminación entre ambos entrypoints Hydra.
+    """
+    raise SystemExit(1)
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     Punto de entrada principal.
@@ -157,6 +175,11 @@ def main(argv: list[str] | None = None) -> int:
     int — exit code (0 = OK, 1 = error)
     """
     cli_args = _build_parser().parse_args(argv)
+
+    # Resiliencia / SafeOps: registrar el handler apenas se conocen los args,
+    # antes de abrir cualquier recurso (logger, config, engine) -- ver nota
+    # "Manejo de señales" en el docstring del módulo.
+    signal.signal(signal.SIGTERM, _handle_sigterm)
 
     logger.remove()
     level = "DEBUG" if cli_args.debug else "INFO"
@@ -205,7 +228,13 @@ def main(argv: list[str] | None = None) -> int:
 
     from app.use_cases.execute_paper import execute
 
-    run_result = execute(args, portfolio_service=portfolio_root.portfolio_service)
+    try:
+        run_result = execute(args, portfolio_service=portfolio_root.portfolio_service)
+    except (KeyboardInterrupt, SystemExit) as exc:
+        logger.warning("Paper trading interrumpido | {}", exc)
+        return 1
+    finally:
+        portfolio_root.close()
 
     if not run_result.success:
         logger.error("Use case fallido | {}", run_result.error)

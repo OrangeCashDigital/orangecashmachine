@@ -37,7 +37,7 @@ Contratos enforced: <asignar próximo número BC-XX libre en .importlinter>.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig
@@ -68,6 +68,7 @@ class CompositionRoot:
 
     portfolio_service: "PortfolioService"
     rebalance_service: "RebalanceService"
+    redis_client: Any = None
 
     @classmethod
     def assemble(
@@ -103,7 +104,7 @@ class CompositionRoot:
                 "El pipeline de config (L1-L5) debe completar antes de ensamblar."
             )
 
-        store = cls.build_position_store(config)
+        store, redis_client = cls.build_position_store(config)
 
         from portfolio.services.portfolio_service import PortfolioService
 
@@ -124,10 +125,11 @@ class CompositionRoot:
         return cls(
             portfolio_service=portfolio_service,
             rebalance_service=rebalance_service,
+            redis_client=redis_client,
         )
 
     @classmethod
-    def build_position_store(cls, config: "AppConfig") -> "PositionStore":
+    def build_position_store(cls, config: "AppConfig") -> tuple["PositionStore", Any]:
         """
         Decide RedisPositionStore vs InMemoryPositionStore.
 
@@ -152,7 +154,7 @@ class CompositionRoot:
             logger.info("[composition-root:portfolio] redis.enabled=false — usando InMemoryPositionStore")
             from portfolio.infra.memory_store import InMemoryPositionStore
 
-            return InMemoryPositionStore()
+            return InMemoryPositionStore(), None
 
         from portfolio.infra.redis_factory import build_redis_client
         from portfolio.infra.redis_store import RedisPositionStore
@@ -166,11 +168,30 @@ class CompositionRoot:
         )
 
         logger.info("[composition-root:portfolio] redis.enabled=true — usando RedisPositionStore")
-        return RedisPositionStore(
-            redis_client=redis_client,
-            exchange=config.portfolio.exchange,
-            ttl_seconds=config.portfolio.position_ttl_days * 24 * 3600,
+        return (
+            RedisPositionStore(
+                redis_client=redis_client,
+                exchange=config.portfolio.exchange,
+                ttl_seconds=config.portfolio.position_ttl_days * 24 * 3600,
+            ),
+            redis_client,
         )
+
+    def close(self) -> None:
+        """Cierra recursos externos abiertos por assemble() (Resiliencia/SafeOps).
+
+        Fail-soft: nunca lanza -- un fallo cerrando no debe impedir que el
+        caller complete su propio shutdown. No-op si no hubo Redis
+        involucrado (InMemoryPositionStore).
+        """
+        if self.redis_client is None:
+            return
+        try:
+            self.redis_client.close()
+        except Exception as exc:
+            from loguru import logger
+
+            logger.warning("CompositionRoot.close: error cerrando redis_client | {}", exc)
 
     def __repr__(self) -> str:
         return (

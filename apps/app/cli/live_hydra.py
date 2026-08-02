@@ -238,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
     except (KeyboardInterrupt, SystemExit) as exc:
         logger.warning("Live trading interrumpido | {}", exc)
         return 1
+    finally:
+        portfolio_root.close()
 
     if not run_result.success:
         logger.error("Live use case fallido | {}", run_result.error)
