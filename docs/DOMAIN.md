@@ -72,7 +72,7 @@ No tiene carpeta `domain/`, pero su forma ya es hexagonal:
 - `ports/position_store.py` — **`PositionStore`** (Protocol) — puerto de persistencia explícito, correctamente aislado en su propia carpeta (a diferencia de `OrderExecutor` en `trading`).
 - `infra/memory_store.py` y `infra/redis_store.py` — **`InMemoryPositionStore`**, **`RedisPositionStore`** — ambas implementan `PositionStore` sin fugas hacia `services/`. `RedisPositionStore` es Fail-Soft (nunca lanza, retorna vacío si Redis no está disponible).
 - `services/portfolio_service.py` — **`PortfolioService`** — coordina apertura/cierre de posiciones vía callbacks del OMS (`on_fill`). Cumple el rol de `application/` sin llamarse así.
-- `services/rebalance_service.py` — **`RebalanceService`**, **`RebalanceSignal`** — calcula ajustes de portfolio contra targets, sin ejecutar órdenes ni validar riesgo (separación de concerns explícita en el docstring).
+- `services/rebalance_service.py` — **`RebalanceService`**, **`RebalanceSignal`** — calcula ajustes de portfolio contra targets, sin ejecutar órdenes ni validar riesgo (separación de concerns explícita en el docstring). Sin consumidor activo; capacidad adelantada del roadmap de portfolio (ver ADR-0004).
 
 ---
 
