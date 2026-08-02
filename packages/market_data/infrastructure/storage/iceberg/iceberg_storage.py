@@ -26,8 +26,6 @@ Notas de implementación
   pc.field() es PyArrow compute — sistemas de expresiones incompatibles.
 • pc (pyarrow.compute) se usa SOLO post-scan: pc.max(), pc.min().
 • Timestamps normalizados a microsegundos (us) — pyiceberg 0.8 no soporta ns.
-• pd.Timestamp(max_ts, tz=...) falla si el objeto ya tiene tzinfo —
-  usar tz_localize solo si viene sin tz.
 """
 
 from __future__ import annotations
@@ -36,7 +34,6 @@ import datetime as _dt
 import time
 from typing import Optional
 
-import pandas as pd
 import polars as pl
 import pyarrow.compute as pc
 from loguru import logger
@@ -97,8 +94,6 @@ def _to_utc_timestamp(dt: object) -> Optional[_dt.datetime]:
     if isinstance(dt, int):
         # pc.max()/pc.min() devolvió microsegundos epoch — convertir explícitamente.
         return _dt.datetime.fromtimestamp(dt / 1_000_000, tz=_dt.timezone.utc)
-    if isinstance(dt, pd.Timestamp):
-        dt = dt.to_pydatetime()
     if isinstance(dt, _dt.datetime):
         return dt.replace(tzinfo=_dt.timezone.utc) if dt.tzinfo is None else dt.astimezone(_dt.timezone.utc)
     return None
@@ -492,8 +487,8 @@ class IcebergStorage:
         self,
         symbol: str,
         timeframe: str,
-        since: Optional[pd.Timestamp] = None,
-        until: Optional[pd.Timestamp] = None,
+        since: Optional[_dt.datetime] = None,
+        until: Optional[_dt.datetime] = None,
     ) -> list:
         """
         No-op: Iceberg no expone archivos físicos de partición.

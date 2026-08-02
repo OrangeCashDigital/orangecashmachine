@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from typing import AsyncIterator, List, Optional, Protocol, runtime_checkable
 
-import pandas as pd
+import polars as pl
 
 
 @runtime_checkable
@@ -80,7 +80,7 @@ class HistoricalFetcherPort(Protocol):
         timeframe: str,
         since_ms: Optional[int] = None,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[pd.DataFrame]:
+    ) -> AsyncIterator[pl.DataFrame]:
         """
         Descarga candles OHLCV en chunks paginados.
 
@@ -93,7 +93,7 @@ class HistoricalFetcherPort(Protocol):
 
         Yields
         ------
-        pd.DataFrame con columnas [timestamp, open, high, low, close, volume].
+        pl.DataFrame con columnas [timestamp, open, high, low, close, volume].
         Cada yield es un chunk de la paginación — procesable sin buffer total.
 
         Raises
@@ -110,13 +110,13 @@ class HistoricalFetcherPort(Protocol):
         timeframe: str,
         start_date: Optional[str] = None,
         limit: int = 500,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """
         Descarga todos los datos OHLCV disponibles desde start_date.
 
         Returns
         -------
-        pd.DataFrame con columnas OHLCV canónicas. DataFrame vacío si no hay datos.
+        pl.DataFrame con columnas OHLCV canónicas. DataFrame vacío si no hay datos.
         """
         ...
 

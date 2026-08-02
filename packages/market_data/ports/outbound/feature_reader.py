@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Protocol, runtime_checkable
 
-import pandas as pd
+import polars as pl
 
 
 @runtime_checkable
@@ -58,7 +58,7 @@ class FeatureReaderPort(Protocol):
         as_of: Optional[str] = None,
         columns: Optional[List[str]] = None,
         exchange: Optional[str] = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """
         Carga features Gold para un símbolo/timeframe.
 
@@ -74,7 +74,7 @@ class FeatureReaderPort(Protocol):
 
         Returns
         -------
-        pd.DataFrame ordenado por timestamp.
+        pl.DataFrame ordenado por timestamp.
 
         Raises
         ------
