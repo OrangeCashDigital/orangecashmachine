@@ -124,6 +124,16 @@ Búsqueda de referencias (`grep -rn` sobre `packages/`, `apps/`, `shared/`) dist
 
 ---
 
+### 5. `DataQualityReport.git_hash` — el dominio invoca un proceso externo (verificado por código, no por nombre de carpeta)
+
+La Sección 1 de este documento afirma que "el dominio no depende de pandas, Kafka, Redis, Iceberg ni CCXT" — pero `domain/quality/types.py` (`_get_git_hash()`) llama `subprocess.run(["git", "rev-parse", "--short", "HEAD"], ...)` para poblar `DataQualityReport.git_hash`. Es stdlib, no una librería de terceros, así que no viola DIP contra infraestructura de la misma forma que pandas/Kafka lo harían — pero sí es una dependencia real hacia un proceso del sistema operativo y un binario externo (git debe estar instalado y el proceso debe correr dentro de un repo git), lo cual rompe la garantía de pureza que la Sección 1 declara sin excepciones para este VO.
+
+Fail-soft: la función captura cualquier excepción y retorna "unknown", así que no hay riesgo de fallo — es una cuestión de precisión de la documentación, no de robustez del código.
+
+**Acción sugerida**: o bien mover la resolución de git_hash fuera del dominio (inyectarlo desde application/ al construir el DataQualityReport, manteniendo el VO puro), o bien matizar la afirmación de la Sección 1 para excluir explícitamente esta llamada a subprocess como excepción conocida y aceptada.
+
+---
+
 ## 6. Camino de evolución (no ejecutar todavía)
 
 El objetivo de madurez no es tecnología nueva — es que `trading` y `portfolio` alcancen la misma disciplina de capas que ya tiene `market_data`. Orden sugerido, solo después de que este documento sea revisado y aprobado:
