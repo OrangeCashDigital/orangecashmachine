@@ -10,7 +10,7 @@
 
 1. [Resumen Ejecutivo](#1-resumen-ejecutivo)
 2. [Hallazgos Críticos](#2-hallazgos-críticos)
-   - 2.1 `rebalance.py` — huérfano, sin invocador ni script
+   - 2.1 `rebalance.py` — huérfano, sin invocador ni script (RESUELTO)
    - 2.2 `on_fill_composite` duplicado entre `execute_live.py`/`execute_paper.py`
    - 2.3 Sin lifecycle/shutdown en `live.py`/`paper.py` operando con capital real
 3. [Hallazgos Moderados](#3-hallazgos-moderados)
@@ -53,6 +53,12 @@ No existe un modelo único de Composition Root en `apps/` — coexisten tres niv
 - Constituye una superficie de riesgo latente: si en el futuro alguien lo conecta sin re-auditar, hereda el estado actual sin revisión
 
 **Propuesta**: Decisión explícita — conectar a un CLI propio (`cli/rebalance.py` + script `rebalance` en `pyproject.toml`) o eliminar. No corresponde dejarlo en este estado intermedio.
+
+**Resolución** (2026-08-01): `rebalance.py` eliminado (commit `3d5ab3f`) por
+código huérfano sin decisión documentada de destino. `RebalanceService`/
+`RebalanceSignal`, de los que dependía, se conservan como capacidad
+adelantada del bounded context `portfolio` — no se eliminan en cascada.
+Decisión formalizada en `ADR-0004`.
 
 ---
 
