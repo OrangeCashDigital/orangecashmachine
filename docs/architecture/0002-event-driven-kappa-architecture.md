@@ -1,4 +1,4 @@
-# ADR-0001: Arquitectura objetivo event-driven para OCM
+# ADR-0002: Arquitectura objetivo event-driven para OCM
 
 **Estado:** Aceptado (parcial — ver sección "Pendiente de decisión")
 **Fecha:** 2026-07-25
