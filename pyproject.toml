@@ -243,6 +243,7 @@ strict                 = false
 ignore_missing_imports = true
 exclude                 = ["tests/", ".venv/"]
 mypy_path               = "packages"
+plugins                 = ["pydantic.mypy"]
 
 # pyiceberg no incluye py.typed ni stubs oficiales.
 # ignore_missing_imports = true (global) ya suprime ImportMissingStubs,

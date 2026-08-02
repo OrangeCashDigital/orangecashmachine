@@ -16,10 +16,12 @@ Principio: patch where it's used, at the exact point of injection.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 from market_data.domain.exceptions import (
     DataNotFoundError,
@@ -93,7 +95,7 @@ def test_get_ohlcv_returns_dataframe():
     ):
         df = get_ohlcv("BTC/USDT", "1h", exchange="bybit")
 
-    assert isinstance(df, pd.DataFrame)
+    assert isinstance(df, pl.DataFrame)
     assert len(df) == 10
 
 
@@ -158,8 +160,10 @@ def test_get_ohlcv_passes_start_end_as_timestamps():
             end="2024-06-01",
         )
     call_kwargs = mock_storage.load_ohlcv.call_args.kwargs
-    assert isinstance(call_kwargs["start"], pd.Timestamp)
-    assert isinstance(call_kwargs["end"], pd.Timestamp)
+    assert isinstance(call_kwargs["start"], datetime)
+    assert call_kwargs["start"].tzinfo is not None
+    assert isinstance(call_kwargs["end"], datetime)
+    assert call_kwargs["end"].tzinfo is not None
 
 
 # ── get_ohlcv — cache singleton ───────────────────────────────────────────────
@@ -245,7 +249,7 @@ def test_get_features_returns_dataframe():
         return_value=mock_loader,
     ):
         df = get_features("BTC/USDT", "1h", exchange="bybit")
-    assert isinstance(df, pd.DataFrame)
+    assert isinstance(df, pl.DataFrame)
     assert len(df) == 10
 
 
@@ -274,7 +278,8 @@ def test_get_features_filters_by_start_date():
             exchange="bybit",
             start="2024-01-11",
         )
-    assert (df["timestamp"] >= pd.Timestamp("2024-01-11", tz="UTC")).all()
+    cutoff = datetime(2024, 1, 11, tzinfo=timezone.utc)
+    assert (df["timestamp"] >= cutoff).all()
 
 
 # ── get_features_dict ─────────────────────────────────────────────────────────

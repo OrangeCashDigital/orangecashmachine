@@ -7,7 +7,7 @@ API de acceso a datos OHLCV y features para research y backtesting.
 
 Fuente de datos
 ---------------
-• OHLCV  → IcebergStorageFactory → OHLCVStorage (tabla silver.ohlcv)
+• OHLCV    → IcebergStorageFactory → OHLCVStorage (tabla silver.ohlcv)
 • Features → GoldLoader (parquet gold/features/)
 
 Uso
@@ -20,20 +20,22 @@ Uso
 
 Principios
 ----------
-• KISS   — API simple: get_ohlcv(symbol, timeframe)
+• KISS    — API simple: get_ohlcv(symbol, timeframe)
 • SafeOps — errores explícitos, nunca silenciosos
-• Cache  — gestionado por IcebergStorageFactory (DIP · SSOT)
+• Cache   — gestionado por IcebergStorageFactory (DIP · SSOT)
+• SSOT    — polars como único dtype de retorno; sin conversiones implícitas
 """
 
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from market_data.ports.outbound.storage import OHLCVStorage
 
-import pandas as pd
+import polars as pl
 from loguru import logger
 from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
 from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
@@ -43,7 +45,6 @@ from market_data.domain.exceptions import (
     MarketDataLoaderError,
 )
 
-# Re-exportar para compatibilidad con código existente que importa desde aquí
 __all__ = [
     "get_ohlcv",
     "get_multiple_ohlcv",
@@ -55,7 +56,6 @@ __all__ = [
     "MarketDataLoaderError",
 ]
 
-# Exchange por defecto para research
 from ocm.config.env_vars import (
     OCM_EXCHANGE as _OCM_EXCHANGE,
 )
@@ -66,11 +66,6 @@ from ocm.config.env_vars import (
 _DEFAULT_EXCHANGE: str = os.environ.get(_OCM_EXCHANGE, "kucoin")
 _DEFAULT_MARKET_TYPE: str = os.environ.get(_OCM_MARKET_TYPE, "spot")
 
-# ==========================================================
-# Storage factory — singleton por (exchange, market_type)
-# Cache gestionado por IcebergStorageFactory (DIP · SSOT)
-# ==========================================================
-
 _storage_factory = IcebergStorageFactory()
 
 
@@ -78,13 +73,6 @@ def _get_storage(
     exchange: Optional[str] = None,
     market_type: Optional[str] = None,
 ) -> "OHLCVStorage":
-    """
-    Retorna OHLCVStorage para (exchange, market_type) via factory.
-
-    DIP  : depende del port OHLCVStorage, no de IcebergStorage.
-    SSOT : el cache lo gestiona IcebergStorageFactory — no hay cache local.
-    KISS : sin lógica de cache duplicada — la factory ya lo resuelve.
-    """
     exc = (exchange or _DEFAULT_EXCHANGE).lower()
     mkt = (market_type or _DEFAULT_MARKET_TYPE).lower()
     storage = _storage_factory.get_storage(exchange=exc, market_type=mkt)
@@ -93,21 +81,26 @@ def _get_storage(
 
 
 def _reset_storage(exchange: Optional[str] = None) -> None:
-    """
-    Reset del cache de storage — uso exclusivo en tests.
-
-    Delega al cache interno de IcebergStorageFactory (SSOT).
-    """
     _storage_factory._cache.clear()
-    logger.debug(
-        "Storage cache reset | scope={}",
-        exchange or "all",
+    logger.debug("Storage cache reset | scope={}", exchange or "all")
+
+
+def _parse_utc(value: Optional[str]) -> Optional[datetime]:
+    if value is None:
+        return None
+    dt = datetime.fromisoformat(value)
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _ensure_polars(df: object, *, source: str) -> pl.DataFrame:
+    if isinstance(df, pl.DataFrame):
+        return df
+    if hasattr(df, "columns") and hasattr(df, "to_dict"):
+        logger.debug("ACL boundary: pandas -> polars | source={}", source)
+        return pl.from_pandas(df)
+    raise DataReadError(
+        f"Tipo de retorno inesperado desde {source}: {type(df)!r} — se esperaba pl.DataFrame o pd.DataFrame"
     )
-
-
-# ==========================================================
-# Public API — OHLCV
-# ==========================================================
 
 
 def get_ohlcv(
@@ -118,53 +111,39 @@ def get_ohlcv(
     columns: Optional[List[str]] = None,
     exchange: Optional[str] = None,
     market_type: Optional[str] = None,
-) -> pd.DataFrame:
-    """
-    Carga datos OHLCV desde Iceberg (Silver).
-
-    Parameters
-    ----------
-    symbol      : e.g. "BTC/USDT"
-    timeframe   : e.g. "1h", "4h", "1d"
-    start / end : ISO 8601, e.g. "2024-01-01" (opcionales)
-    columns     : subconjunto de columnas para optimizar memoria
-    exchange    : exchange explícito. Si None usa OCM_EXCHANGE o "kucoin"
-    market_type : "spot" | "swap". Si None usa OCM_MARKET_TYPE o "spot"
-
-    Returns
-    -------
-    pd.DataFrame ordenado por timestamp.
-
-    Raises
-    ------
-    DataNotFoundError : no existen datos para este símbolo/timeframe
-    DataReadError     : error al leer desde Iceberg
-    """
+) -> pl.DataFrame:
     storage = _get_storage(exchange, market_type)
 
-    start_ts = pd.Timestamp(start, tz="UTC") if start else None
-    end_ts = pd.Timestamp(end, tz="UTC") if end else None
+    start_dt = _parse_utc(start)
+    end_dt = _parse_utc(end)
 
     try:
         df = storage.load_ohlcv(
             symbol=symbol,
             timeframe=timeframe,
-            start=start_ts,
-            end=end_ts,
+            start=start_dt,
+            end=end_dt,
         )
     except Exception as exc:
         raise DataReadError(
             f"Iceberg read failed | {symbol}/{timeframe} exchange={exchange or _DEFAULT_EXCHANGE} | {exc}"
         ) from exc
 
-    if df is None or df.empty:
+    if df is None:
+        raise DataNotFoundError(
+            f"No data | {symbol}/{timeframe} exchange={exchange or _DEFAULT_EXCHANGE} start={start} end={end}"
+        )
+
+    df = _ensure_polars(df, source="OHLCVStorage.load_ohlcv")
+
+    if df.is_empty():
         raise DataNotFoundError(
             f"No data | {symbol}/{timeframe} exchange={exchange or _DEFAULT_EXCHANGE} start={start} end={end}"
         )
 
     if columns:
         available = [c for c in columns if c in df.columns]
-        df = df[available]
+        df = df.select(available)
 
     logger.info(
         "Research OHLCV loaded | symbol={} timeframe={} exchange={} start={} end={} rows={}",
@@ -185,18 +164,8 @@ def get_multiple_ohlcv(
     end: Optional[str] = None,
     exchange: Optional[str] = None,
     market_type: Optional[str] = None,
-) -> Dict[str, pd.DataFrame]:
-    """
-    Carga múltiples símbolos. Devuelve dict con los exitosos.
-
-    Los fallos se loguean como warning — no interrumpen la carga del resto.
-
-    Returns
-    -------
-    Dict[symbol, DataFrame] — solo símbolos que cargaron correctamente.
-    Dict vacío si todos fallaron.
-    """
-    results: Dict[str, pd.DataFrame] = {}
+) -> Dict[str, pl.DataFrame]:
+    results: Dict[str, pl.DataFrame] = {}
     for symbol in symbols:
         try:
             results[symbol] = get_ohlcv(
@@ -231,7 +200,7 @@ def get_ohlcv_dict(
     end: Optional[str] = None,
     exchange: Optional[str] = None,
     market_type: Optional[str] = None,
-) -> Dict[str, pd.DataFrame]:
+) -> Dict[str, pl.DataFrame]:
     """Alias de get_multiple_ohlcv — compatibilidad con código existente."""
     return get_multiple_ohlcv(
         symbols=symbols,
@@ -243,24 +212,18 @@ def get_ohlcv_dict(
     )
 
 
-# ==========================================================
-# Public API — Gold / Features
-# ==========================================================
-
 _gold_cache: Dict[str, GoldLoader] = {}
 
 
 def _get_gold_loader(exchange: Optional[str] = None) -> GoldLoader:
     key = (exchange or _DEFAULT_EXCHANGE).lower()
     if key not in _gold_cache:
-        # GoldLoader usa Iceberg — gold_path es legacy compat sin efecto.
         _gold_cache[key] = GoldLoader(exchange=key)
         logger.debug("GoldLoader initialized | exchange={}", key)
     return _gold_cache[key]
 
 
 def _reset_gold_loader(exchange: Optional[str] = None) -> None:
-    """Reset cache — uso exclusivo en tests."""
     if exchange is None:
         _gold_cache.clear()
     else:
@@ -275,18 +238,7 @@ def get_features(
     start: Optional[str] = None,
     end: Optional[str] = None,
     version: str = "latest",
-) -> pd.DataFrame:
-    """
-    Carga features Gold (OHLCV + indicadores técnicos).
-
-    Returns
-    -------
-    pd.DataFrame con features ordenado por timestamp.
-
-    Raises
-    ------
-    DataNotFoundError, DataReadError, VersionNotFoundError
-    """
+) -> pl.DataFrame:
     loader = _get_gold_loader(exchange)
     mkt = (market_type or _DEFAULT_MARKET_TYPE).lower()
     exc = (exchange or _DEFAULT_EXCHANGE).lower()
@@ -298,11 +250,14 @@ def get_features(
         timeframe=timeframe,
         version=version,
     )
+    df = _ensure_polars(df, source="GoldLoader.load_features")
 
-    if start:
-        df = df[df["timestamp"] >= pd.Timestamp(start, tz="UTC")]
-    if end:
-        df = df[df["timestamp"] <= pd.Timestamp(end, tz="UTC")]
+    start_dt = _parse_utc(start)
+    end_dt = _parse_utc(end)
+    if start_dt is not None:
+        df = df.filter(pl.col("timestamp") >= start_dt)
+    if end_dt is not None:
+        df = df.filter(pl.col("timestamp") <= end_dt)
 
     logger.info(
         "Research features loaded | symbol={} timeframe={} exchange={} rows={}",
@@ -320,9 +275,8 @@ def get_features_dict(
     exchange: Optional[str] = None,
     market_type: Optional[str] = None,
     version: str = "latest",
-) -> Dict[str, pd.DataFrame]:
-    """Carga features para múltiples símbolos. Devuelve solo exitosos."""
-    results: Dict[str, pd.DataFrame] = {}
+) -> Dict[str, pl.DataFrame]:
+    results: Dict[str, pl.DataFrame] = {}
     for symbol in symbols:
         try:
             results[symbol] = get_features(
