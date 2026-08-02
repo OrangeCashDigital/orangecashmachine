@@ -30,9 +30,9 @@ shift
 
 case "$MODE" in
   # SSOT: idéntico a [project.scripts] en pyproject.toml
-  ocm)     exec uv run python -m app.cli.main  "$@" ;;
-  live)    exec uv run python -m app.cli.live  "$@" ;;
-  paper)   exec uv run python -m app.cli.paper "$@" ;;
+  ocm)     exec uv run python -m app.cli.main        "$@" ;;
+  live)    exec uv run python -m app.cli.live_hydra  "$@" ;;
+  paper)   exec uv run python -m app.cli.paper_hydra "$@" ;;
   *)
     echo "[run.sh] ERROR: Modo desconocido '${MODE}'." >&2
     echo "  Válidos: ocm | live | paper"     >&2

@@ -103,6 +103,7 @@ _MODULE_GLOBS: list[str] = [
     "storage/datalake.yaml",
     "datasets.yaml",
     "risk/risk.yaml",
+    "portfolio/portfolio.yaml",
     "features.yaml",
 ]
 

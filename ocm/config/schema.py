@@ -515,6 +515,22 @@ class RedisConfig(StrictBaseModel):
     retry_on_timeout: bool = True
     ttl_days: int = Field(default=90, ge=1, description="TTL del cursor store en días")
 
+
+class PortfolioConfig(StrictBaseModel):
+    """Configuración del bounded context portfolio.
+
+    SSOT de los parámetros de negocio de PortfolioService y
+    RebalanceService. No introduce una bandera paper/live propia:
+    la elección de backend (Redis vs InMemory) usa la misma señal
+    que ya gobierna integrations.redis — integrations.redis.enabled.
+    """
+
+    capital_usd: float = Field(default=10_000.0, gt=0)
+    exchange: str = "bybit"
+    position_ttl_days: int = Field(default=7, ge=1)
+    rebalance_drift_threshold: float = Field(default=0.05, gt=0.0, lt=1.0)
+    rebalance_min_delta_pct: float = Field(default=0.01, gt=0.0, lt=1.0)
+
     # coerce_env_strings ELIMINADO — L3 (coerce_scalar_values) ya convierte
     # strings a bool/int/float antes de que Pydantic vea el dict.
     # Mantener este validator duplicaba coerción con constantes locales (DRY roto).
@@ -724,6 +740,7 @@ class AppConfig(StrictBaseModel):
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
+    portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     testing: TestingConfig = Field(
         default_factory=TestingConfig,
         description="Configuración exclusiva de CI/test. Ignorada en producción.",

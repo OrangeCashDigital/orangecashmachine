@@ -765,3 +765,24 @@ forbidden_modules = [
 ]
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 1 — portfolio: capas internas (DIP + Clean Architecture)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# InMemoryPositionStore y RedisPositionStore son detalles de infraestructura —
+# solo el Composition Root puede instanciarlos. portfolio.services recibe
+# PositionStore (Protocol) por constructor (DIP) — nunca importa los adapters
+# concretos directamente.
+# Ref: mismo patrón que BC-38 (PipelineFactory) — Seemann, «DI in .NET» §Composition Root.
+name = "BC-43: PositionStore adapters solo instanciables desde portfolio/bootstrap/composition_root"
+type = "forbidden"
+source_modules = [
+    "portfolio.services",
+]
+forbidden_modules = [
+    "portfolio.infra.memory_store",
+    "portfolio.infra.redis_store",
+    "portfolio.infra.redis_factory",
+]

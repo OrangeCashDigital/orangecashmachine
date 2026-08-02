@@ -1,0 +1,19 @@
+# @package _global_
+# ==============================================================================
+# OrangeCashMachine — Portfolio Configuration
+# ==============================================================================
+# SSOT de los parámetros de negocio de PortfolioService y RebalanceService.
+# Espejo exacto de PortfolioConfig (ocm/config/schema.py) — ningún campo
+# aquí debe divergir de nombre/tipo/default respecto al modelo Pydantic,
+# o AppConfig(extra="forbid") falla en el primer compose.
+#
+# No introduce bandera paper/live propia: la elección de backend
+# (Redis vs InMemory) usa la misma señal que integrations.redis.enabled.
+# ==============================================================================
+
+portfolio:
+  capital_usd: 10000.0
+  exchange: bybit
+  position_ttl_days: 7
+  rebalance_drift_threshold: 0.05
+  rebalance_min_delta_pct: 0.01

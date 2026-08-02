@@ -146,8 +146,8 @@ dev = [
 [project.scripts]
 ocm     = "app.cli.main:main"
 ocm-api = "api.main:serve"
-live    = "app.cli.live:main"
-paper   = "app.cli.paper:main"
+live    = "app.cli.live_hydra:main"
+paper   = "app.cli.paper_hydra:main"
 
 # =============================================================================
 # tool.ruff

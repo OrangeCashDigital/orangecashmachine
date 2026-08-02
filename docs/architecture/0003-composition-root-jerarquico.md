@@ -1,6 +1,6 @@
 # ADR-0003: Composition Root jerárquico en OCM
 
-**Estado:** Aceptado
+**Estado:** Aceptado — Decisión 3 reemplazada por `ADR-0005` (ver nota abajo)
 **Fecha:** 2026-08-01
 **Contexto del bounded context:** `apps/` (todos los entrypoints: `cli/main.py`, `cli/live.py`, `cli/paper.py`, `apps/api/main.py`, `apps/research/`), y su relación con `market_data`, `trading`, `portfolio`, `control_plane`
 
@@ -63,7 +63,15 @@ Precedente ya implementado: `LiveEngineResources` en
 generaliza como el estándar para cualquier `build_*()` que abra recursos
 externos, no solo para `trading`/`portfolio`.
 
-### Decisión 3 — Adopción de infraestructura compartida en `live.py`/`paper.py`
+> **Nota de enmienda (2026-08-02):** Esta Decisión 3 fue reemplazada por
+> `ADR-0005`. `live.py`/`paper.py` no adoptan `RunConfig.from_env()` —
+> se retiran en favor de `live_hydra.py`/`paper_hydra.py`, que ya
+> resuelven el mismo objetivo (infraestructura compartida, Composition
+> Root jerárquico) vía Hydra/`AppConfig`. El texto original de esta
+> sección se conserva sin editar como registro histórico de la decisión
+> tal como fue aceptada en su momento.
+>
+### Decisión 3 — Adopción de infraestructura compartida en `live.py`/`paper.py` (SUPERSEDED)
 
 Resuelve el hallazgo 3.1 de `docs/audits/2026-08-composition-root-audit.md`
 (anteriormente referenciado como pendiente en "ADR-0002", corregido a este

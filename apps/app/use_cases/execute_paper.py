@@ -138,7 +138,7 @@ class SyntheticDataSource:
 # ---------------------------------------------------------------------------
 
 
-def build_paper_engine(args: argparse.Namespace, tracker):
+def build_paper_engine(args: argparse.Namespace, tracker, portfolio_service=None):
     """
     Ensambla TradingEngine + PortfolioService para paper trading.
 
@@ -154,6 +154,11 @@ def build_paper_engine(args: argparse.Namespace, tracker):
     ----------
     args    : namespace de argparse con todos los parámetros del ciclo
     tracker : TradeTracker ya instanciado (para conectar on_fill)
+    portfolio_service : PortfolioService ya ensamblado (opcional). Si se
+        provee (típicamente por PortfolioCompositionRoot.assemble() desde
+        app/cli/paper_hydra.py), se usa directamente y se omite la
+        construcción manual de abajo. None preserva el comportamiento
+        actual para paper.py (InMemoryPositionStore construido aquí).
 
     Returns
     -------
@@ -198,10 +203,20 @@ def build_paper_engine(args: argparse.Namespace, tracker):
         data_source = GoldLoaderAdapter(exchange=args.exchange)
         _probe_gold_data(data_source, args)
 
-    portfolio = PortfolioService(
-        capital_usd=args.capital,
-        exchange=args.exchange,
-    )
+    if portfolio_service is not None:
+        # Inyectado por el caller — ver app/cli/paper_hydra.py, que ensambla
+        # PortfolioCompositionRoot.assemble(config) antes de llamar execute().
+        portfolio = portfolio_service
+    else:
+        # Camino por defecto — sin cambios respecto al comportamiento
+        # anterior a Fase 3. Usado por app/cli/paper.py (argparse puro).
+        from portfolio.infra.memory_store import InMemoryPositionStore
+
+        portfolio = PortfolioService(
+            capital_usd=args.capital,
+            store=InMemoryPositionStore(),
+            exchange=args.exchange,
+        )
 
     # SSOT: callback compartido con live trading — ver trading/execution/fill_sync.py
     on_fill_composite = build_fill_sync(tracker, portfolio)
@@ -283,7 +298,7 @@ def _probe_gold_data(data_source, args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 
-def execute(args: argparse.Namespace) -> PaperRunResult:
+def execute(args: argparse.Namespace, portfolio_service=None) -> PaperRunResult:
     """
     Ejecuta un ciclo completo de paper trading.
 
@@ -302,7 +317,7 @@ def execute(args: argparse.Namespace) -> PaperRunResult:
     tracker = TradeTracker(exchange=args.exchange)
 
     try:
-        engine, portfolio = build_paper_engine(args, tracker)
+        engine, portfolio = build_paper_engine(args, tracker, portfolio_service=portfolio_service)
     except Exception as exc:
         logger.error("Error construyendo engine | {} — {}", type(exc).__name__, exc)
         return PaperRunResult(success=False, error=str(exc))

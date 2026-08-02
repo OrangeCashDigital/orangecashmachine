@@ -22,6 +22,7 @@ def build_redis_client(
     host: str = "localhost",
     port: int = 6379,
     db: int = 1,
+    password: str | None = None,
     socket_timeout: float = 3.0,
 ) -> redis_lib.Redis:
     """
@@ -30,11 +31,16 @@ def build_redis_client(
     SSOT: unica funcion que instancia redis.Redis para el bounded
     context de portfolio. decode_responses=False es fijo --
     RedisPositionStore serializa/deserializa binario.
+
+    password se acepta explícitamente porque ocm_redis corre con
+    requirepass — omitirlo rompía la conexión en silencio cuando
+    Redis exige autenticación (hallazgo de la sesión de auditoría).
     """
     return redis_lib.Redis(
         host=host,
         port=port,
         db=db,
+        password=password,
         socket_timeout=socket_timeout,
         decode_responses=False,
     )

@@ -26,6 +26,11 @@ PORTS = MARKET_DATA / "ports"
 ADAPTERS = MARKET_DATA / "adapters"
 INFRA = MARKET_DATA / "infrastructure"
 
+PORTFOLIO = ROOT / "packages" / "portfolio"
+PORTFOLIO_SERVICES = PORTFOLIO / "services"
+PORTFOLIO_INFRA = PORTFOLIO / "infra"
+PORTFOLIO_BOOTSTRAP = PORTFOLIO / "bootstrap"
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -204,4 +209,41 @@ class TestCompositionRoot:
             "PipelineFactory de infra importada fuera de infrastructure/bootstrap/ (BC-38):\n"
             + "\n".join(f"  {v}" for v in violations)
             + "\n\nNota: ports/inbound/pipeline_factory.py es un Port abstracto — legítimo."
+        )
+
+
+class TestPortfolioCompositionRoot:
+    """BC-43: CompositionRoot de portfolio es el único punto de ensamblaje."""
+
+    def test_composition_root_exists(self):
+        cr = PORTFOLIO_BOOTSTRAP / "composition_root.py"
+        assert cr.exists(), "composition_root.py no encontrado — el CompositionRoot formal es obligatorio (BC-43)"
+
+    def test_composition_root_is_frozen_dataclass(self):
+        cr = PORTFOLIO_BOOTSTRAP / "composition_root.py"
+        if not cr.exists():
+            pytest.skip("composition_root.py no existe")
+        src = cr.read_text()
+        assert "frozen=True" in src, "CompositionRoot debe ser un dataclass frozen=True — inmutable tras construcción"
+
+    def test_position_store_adapters_not_imported_outside_bootstrap(self):
+        """
+        RedisPositionStore/InMemoryPositionStore solo se importan desde
+        portfolio/bootstrap/ o desde portfolio/infra/ (co-ubicación legítima
+        del propio adapter). portfolio.services debe recibir PositionStore
+        (Protocol) por constructor — nunca instanciar el adapter concreto.
+        """
+        FORBIDDEN_MODULES = (
+            "portfolio.infra.memory_store",
+            "portfolio.infra.redis_store",
+            "portfolio.infra.redis_factory",
+        )
+        violations: list[str] = []
+        if PORTFOLIO_SERVICES.exists():
+            for f in _python_files(PORTFOLIO_SERVICES):
+                for imp in _imports_in(f):
+                    if imp in FORBIDDEN_MODULES:
+                        violations.append(f"{f.relative_to(ROOT)}: imports {imp}")
+        assert not violations, "PositionStore adapter importado fuera de portfolio/bootstrap/ (BC-43):\n" + "\n".join(
+            f"  {v}" for v in violations
         )

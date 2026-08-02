@@ -43,7 +43,6 @@ from typing import Optional
 
 from loguru import logger
 
-from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.models.position import PortfolioState, PositionSnapshot
 from portfolio.ports.position_store import PositionStore
 
@@ -64,13 +63,22 @@ class PortfolioService:
     def __init__(
         self,
         capital_usd: float,
-        store: Optional[PositionStore] = None,
+        store: PositionStore,
         exchange: str = "unknown",
     ) -> None:
+        """
+        Parameters
+        ----------
+        store : PositionStore — obligatorio (DIP). La elección de backend
+                                 (InMemoryPositionStore vs RedisPositionStore)
+                                 es responsabilidad exclusiva del Composition
+                                 Root (portfolio.bootstrap.composition_root) —
+                                 nunca de PortfolioService. Ver BC-43.
+        """
         if capital_usd <= 0:
             raise ValueError(f"PortfolioService: capital_usd debe ser positivo, recibido: {capital_usd}")
         self._capital_usd = capital_usd
-        self._store = store or InMemoryPositionStore()
+        self._store = store
         self._exchange = exchange
         self._log = logger.bind(component="PortfolioService", exchange=exchange)
 
