@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
-from shared.kafka.schemas._base import SignalDirection
+from shared.enums import SignalDirection
 
 # =============================================================================
 # market_data -> signals

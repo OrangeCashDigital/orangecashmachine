@@ -27,9 +27,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-# SignalType re-exporta SignalDirection desde _base (BC-33: el SSOT de los
-# literales wire vive en shared.kafka.schemas._base; types solo re-expone).
-from shared.kafka.schemas._base import SignalDirection
+# SignalType re-exporta SignalDirection desde shared.enums (BC-45: el SSOT del
+# vocabulario de dominio vive en la raíz del kernel; types solo re-expone).
+from shared.enums import SignalDirection
 
 SignalType = SignalDirection
 

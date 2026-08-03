@@ -34,6 +34,13 @@ Política de compatibilidad:
   - Additive changes (nuevo campo con default) → mismo SCHEMA_VERSION
   - Breaking changes (rename, remove, type change) → bump SCHEMA_VERSION
 
+Literales cross-wire
+--------------------
+Los literales compartidos (SignalDirection, OrderSide, PositionSide,
+DataSource, DATASOURCE_*) viven en shared.enums (raíz del kernel) y se
+re-exportan aquí por compatibilidad. BC-45 exige que shared.types y
+shared.contracts importen desde shared.enums, nunca desde este módulo.
+
 Principios: SSOT · DDD · KISS · Fail-Fast
 """
 
@@ -42,7 +49,25 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, ClassVar, Dict, Literal
+from typing import Any, ClassVar, Dict
+
+# =============================================================================
+# Literales cross-wire — re-exportados desde shared.enums (SSOT real)
+# =============================================================================
+# BC-45 exige que shared.types y shared.contracts importen desde shared.enums,
+# nunca desde este módulo. _base.py re-exporta por compatibilidad con los 9
+# schemas y el serializer, que siguen importando solo de aquí (BC-33).
+from shared.enums import (
+    _VALID_SIGNAL_DIRECTIONS,
+    _VALID_SOURCES,
+    DATASOURCE_BACKFILL,
+    DATASOURCE_LIVE,
+    DATASOURCE_REPLAY,
+    DataSource,
+    OrderSide,
+    PositionSide,
+    SignalDirection,
+)
 
 
 def _utc_now() -> str:
@@ -65,35 +90,6 @@ class SchemaVersionError(ValueError):
     Fail-fast: un consumer no puede procesar un payload de versión
     desconocida sin riesgo de corrupción silenciosa.
     """
-
-
-# =============================================================================
-# Literales cross-wire — SSOT compartido por todos los wire schemas
-# =============================================================================
-# BC-33 permite a shared.kafka.schemas importar SOLO desde _base. Por eso los
-# literales que varios schemas comparten viven aquí, nunca en shared.types.
-# shared.types y shared.contracts re-exportan desde este módulo (dirección
-# permitida: types/contracts → kafka.schemas._base, no al revés).
-
-SignalDirection = Literal["buy", "sell", "hold"]
-"""Dirección de señal de trading: 'buy' | 'sell' | 'hold'."""
-
-OrderSide = Literal["buy", "sell"]
-"""Lado de una orden: 'buy' | 'sell'."""
-
-PositionSide = Literal["long", "short"]
-"""Lado de una posición: 'long' | 'short'."""
-
-DataSource = Literal["live", "backfill", "replay"]
-"""Origen Kappa de un dato de mercado."""
-
-DATASOURCE_LIVE: DataSource = "live"
-DATASOURCE_BACKFILL: DataSource = "backfill"
-DATASOURCE_REPLAY: DataSource = "replay"
-
-_VALID_SOURCES: frozenset[str] = frozenset({"live", "backfill", "replay"})
-
-_VALID_SIGNAL_DIRECTIONS: frozenset[str] = frozenset({"buy", "sell", "hold"})
 
 
 @dataclass(frozen=True)
@@ -165,4 +161,6 @@ __all__ = [
     "DATASOURCE_LIVE",
     "DATASOURCE_BACKFILL",
     "DATASOURCE_REPLAY",
+    "_VALID_SOURCES",
+    "_VALID_SIGNAL_DIRECTIONS",
 ]

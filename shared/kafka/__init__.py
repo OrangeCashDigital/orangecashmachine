@@ -10,7 +10,8 @@ Estructura
   topics.py      — topics, consumer groups, headers (SSOT global)
   serializer.py  — serialize/deserialize + routing keys (genérico)
   schemas/       — wire payloads por dominio (9 schemas)
-    _base.py     — BasePayload, SchemaVersionError, KappaSourceMixin, literales
+    _base.py     — envelope wire (BasePayload, SchemaVersionError,
+                   KappaSourceMixin); literales re-exportados desde shared.enums
     ohlcv.py     — EventPayload, KafkaOHLCVBar
     signals.py   — SignalPayload, ApprovedSignalPayload, RejectedSignalPayload
     orders.py    — OrderFilledPayload, OrderRejectedPayload

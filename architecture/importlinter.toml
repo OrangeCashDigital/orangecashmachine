@@ -450,8 +450,9 @@ forbidden_modules = ["trading.execution", "trading.strategies"]
 # Si un schema necesita un tipo de dominio, ese tipo debe definirse
 # localmente en el schema o en shared.kafka.schemas._base.
 #
+# Literales cross-wire: el SSOT vive en shared.enums (BC-45), y _base.py los
+# re-exporta para que los schemas sigan importando solo desde _base.
 # Violación típica: from shared.types.signal import SignalType en signals.py
-# Fix: definir SignalDirection directamente en el schema (ya es el caso actual).
 name = "BC-33: shared.kafka.schemas isolated from domain types and bounded contexts"
 type = "forbidden"
 source_modules = ["shared.kafka.schemas"]
@@ -529,6 +530,16 @@ forbidden_modules = [
     "shared.kafka.schemas._base",
 ]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+# shared.types y shared.contracts son vocabulario de dominio neutro — el SSOT de
+# literales cross-BC vive en shared.enums (raíz del kernel). No pueden depender
+# del transporte Kafka (shared.kafka). La dirección correcta es: types/contracts
+# → shared.enums → (kafka/schemas re-exporta desde enums).
+name = "BC-45: shared.types/contracts do not import shared.kafka (vocabulary isolated from transport)"
+type = "forbidden"
+source_modules = ["shared.types", "shared.contracts"]
+forbidden_modules = ["shared.kafka"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 3 — platform (ocm): config / runtime / observability
