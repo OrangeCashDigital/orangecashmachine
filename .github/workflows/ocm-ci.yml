@@ -87,6 +87,9 @@ jobs:
           KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
           KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9094"
           CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
         options: >-
           --health-cmd "kafka-broker-api-versions --bootstrap-server localhost:9093"
           --health-interval 5s

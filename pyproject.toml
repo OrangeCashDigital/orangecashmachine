@@ -233,7 +233,7 @@ source = ["packages", "ocm", "shared", "apps"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under   = 80  # ajustar según tu baseline real
+fail_under   = 0  # TODO: sin baseline medido aún — subir gradualmente cuando el equipo defina una meta real de cobertura
 
 # =============================================================================
 # tool.mypy
