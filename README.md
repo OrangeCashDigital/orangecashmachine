@@ -1,387 +1,154 @@
 # OrangeCashMachine 🟠
 
-Data lakehouse pipeline para ingestión, procesamiento y almacenamiento de datos de mercado de criptoactivos. Arquitectura medallion Bronze → Silver → Gold con Apache Iceberg, orquestación systemd, configuración Hydra y observabilidad Prometheus / Grafana / Loki.
+Data lakehouse para datos de mercado de criptoactivos. Ingestiona datos de múltiples
+exchanges, los procesa en una arquitectura **medallion** (Bronze → Silver → Gold) sobre
+**Apache Iceberg** y expone capas de datos limpias y reproducibles con *time-travel*.
+
+Arquitectura Clean/Hexagonal por **bounded contexts**, contratos de frontera verificados
+estáticamente por `import-linter` en cada CI, configuración por **Hydra** y observabilidad
+con **Prometheus / Grafana / Loki**.
 
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![Hydra](https://img.shields.io/badge/hydra-1.3-lightblue.svg)](https://hydra.cc/)
 [![ccxt](https://img.shields.io/badge/ccxt-4.3-orange.svg)](https://github.com/ccxt/ccxt)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](pyproject.toml)
 
------
+---
 
-## Arquitectura lógica
+## ¿Qué es OrangeCashMachine?
 
-El sistema se organiza en bounded contexts con dependencias unidireccionales verificadas
-estáticamente por `import-linter` en cada CI run. Violar un contrato rompe el pipeline
-antes de llegar a review.
+OrangeCashMachine es un **pipeline profesional de datos de mercado cripto** que convierte
+raw feeds de exchanges en un warehouse analítico reproducible:
 
-### Bounded contexts
-
-|Módulo                |Responsabilidad                                                                       |
-|----------------------|--------------------------------------------------------------------------------------|
-|`shared`              |Shared Kernel — tipos canónicos, schemas Kafka (ACL neutral), eventos de dominio y excepciones base sin dependencias internas (BC-01, BC-33/34/35)|
-|`shared/kafka`       |Neutral bus ACL — wire schemas (OHLCV, signals, orders, positions, trades), serializer, topics (BC-29, BC-32, BC-33, BC-35)|
-|`shared/types`       |Eventos de dominio across BCs — OHLCVBar, Signal, OrderEvent, PositionEvent, RebalanceEvent|
-|`shared/exceptions`  |Excepciones base compartidas entre bounded contexts                                   |
-|`shared/contracts`   |Protocolos explícitos entre BCs (FeatureSource, SignalProtocol, FillHandler, TradeHistory, RiskGate)|
-|`ocm`                 |Plataforma transversal: config, runtime, observabilidad. Sin lógica de negocio (BC-14)|
-|`packages/market_data`|Bounded context de datos de mercado — autocontenido (BC-10)                           |
-|`packages/trading`    |Motor de trading paper + live ⚠️ en desarrollo activo                                  |
-|`packages/portfolio`  |Gestión de posiciones y rebalanceo                                                    |
-|`infrastructure`      |Composition Root de Dagster + adaptadores Redis                                       |
-|`apps/app`            |Entrypoints CLI (Hydra)                                                               |
-|`apps/api`            |API Gateway experimental (FastAPI, JWT, rate limiting) ⚠️ WIP                          |
-|`apps/research`       |Acceso a datos para notebooks — read-only, no instalable como paquete                 |
-
-### Flujo de dependencias
-
-Las dependencias fluyen **hacia adentro** — el dominio no conoce a nadie (BC-08):
-
-```
-shared (Shared Kernel)
-  ↑
-ocm (plataforma)
-  ↑
-packages/market_data/domain
-  ↑
-packages/market_data/ports          ← contratos (Protocols runtime_checkable)
-  ↑
-packages/market_data/application    ← use cases, strategies, pipelines
-  ↑
-packages/market_data/adapters       ← CCXTAdapter, fetchers HTTP/WS
-  ↑
-packages/market_data/infrastructure ← storage Iceberg/Parquet, Kafka, lineage
-  ↑
-infrastructure/dagster/assets       ← Composition Root (único punto de ensamblaje)
+```mermaid
+flowchart LR
+    ex[Bybit · KuCoin · KuCoinFutures] --> bronze[Bronze — raw Parquet]
+    bronze --> silver[Silver — limpio + manifiestos de versión]
+    silver --> gold[Gold — features en Iceberg]
 ```
 
-### Contratos de frontera verificados por import-linter (BC-01..BC-37)
+| Capa    | Contenido                                                       |
+|---------|-----------------------------------------------------------------|
+| Bronze  | Datos crudos por exchange, con retención y reingestión           |
+| Silver  | Datos limpios, normalizados, con manifiestos de versión          |
+| Gold    | Features procesadas listas para análisis, con *time-travel*      |
 
-|ID   |Regla                                                                                      |
-|-----|-------------------------------------------------------------------------------------------|
-|BC-01|`shared` solo depende de stdlib y third-party                                              |
-|BC-03|`market_data.domain` aislado de capas externas (DIP)                                       |
-|BC-04|`market_data.ports` solo depende del dominio propio                                        |
-|BC-05|`market_data.application` aislado de infrastructure y adapters                             |
-|BC-06|`market_data.adapters` aislado de infrastructure                                           |
-|BC-07|`market_data.infrastructure` no importa `application` (DIP)                                |
-|BC-08|Dependencias fluyen hacia adentro: domain ← ports ← application ← adapters ← infrastructure|
-|BC-09|`market_data.domain` no importa librerías de infraestructura (pyiceberg, redis, ccxt)      |
-|BC-10|`market_data` no importa bounded contexts hermanos                                         |
-|BC-11|Nivel-0 raw market data no importa tipos OHLCV derivados                                   |
-|BC-12|`trading.risk` aislado de execution                                                        |
-|BC-13|`portfolio` aislado de trading execution y strategies                                      |
-|BC-14|`ocm` sin dependencias de lógica de negocio                                                |
-|BC-16|`infrastructure` solo depende de plataforma y abstracciones de market_data                 |
-|BC-18|Ningún dominio importa la capa `api`                                                       |
-|BC-19|Ningún dominio importa `research`                                                          |
-|BC-20|`research` es consumidor read-only del gold layer                                          |
-|BC-21|`ocm.config.bootstrap` — `paths` es SSOT de root resolution                               |
-|BC-22|`ocm.runtime.state` — solo adapters/factories son API pública                              |
-|BC-24|`ocm.runtime` no importa domain packages ni apps                                           |
-|BC-25|`ocm.config` no importa `ocm.runtime` (bootstrap order)                                    |
-|BC-26|`ocm` — layering: observabilidad < config < runtime                                        |
-|BC-27|`ocm.runtime.state` no importa desde `ocm.runtime` root (init order)                       |
-|BC-29|Kafka wire schemas deben importarse desde `shared.kafka` (no desde `market_data.infrastructure`)|
-|BC-30|Medallion storage — unidireccional bronze → silver → gold                                  |
-|BC-32|`shared.kafka` no importa `market_data` infrastructure (SSOT direction)                    |
-|BC-33|`shared.kafka.schemas` aislado de domain types y bounded contexts                          |
-|BC-34|`shared` es neutral tooling — no importa implementaciones de bounded contexts               |
-|BC-35|Bounded contexts no definen sus propios Kafka wire payloads (sin duplicación)               |
-|BC-36|`trading.strategies` aislado de execution y analytics                                      |
-|BC-37a|`ports/inbound` no importa `ports/outbound`                                                |
-|BC-37b|`ports/outbound` no importa `ports/inbound`                                                |
+Cada escritura registra **lineage** (`git_hash`, `written_at`) para reproducibilidad.
 
-### Composition Root
+## ¿Qué problema resuelve?
 
-`infrastructure/dagster/assets/` es el único punto autorizado para ensamblar use cases
-con infraestructura concreta. Los assets construyen un `PipelineRequest` completo
-(credentials, resilience, symbols, timeframes, start_date, auto_lookback_days) y lo
-delegan a `PipelineOrchestrator` — ningún flow reconstruye configuración por su cuenta.
+Construir datasets históricos de cripto confiables es costoso: cada exchange tiene
+comportamientos distintos, faltan datos, y los snapshots cambian sin aviso. Este proyecto
+centraliza esa complejidad en un solo lugar:
 
-### Modos de pipeline
+- **Ingestión multi-exchange** con adaptadores que encapsulan las particularidades de cada
+  API (paginación, límites, campos).
+- **Backfill incremental + reparación de gaps** — el pipeline detecta y rellena huecos en
+  Bronze/Silver automáticamente.
+- **Data lakehouse sobre Iceberg** — datos versionados con *time-travel*, sin lock-in de un
+  formato propietario.
+- **Calidad y observabilidad** — verificaciones de calidad post-escritura y métricas
+  Prometheus de extremo a extremo.
+- **Contratos de arquitectura verificados** — las fronteras entre módulos se rompen en CI,
+  no en review.
 
-|Modo         |Descripción                                                        |Activación                              |
-|-------------|-------------------------------------------------------------------|----------------------------------------|
-|`incremental`|Descarga desde el último cursor conocido (Redis)                   |Default                                 |
-|`backfill`   |Histórico desde `start_date` con paginación backward               |`pipeline.historical.backfill_mode=true`|
-|`repair`     |Detecta y rellena gaps en Bronze/Silver (`fill_ratio` FULL/PARTIAL)|Automático post-backfill                |
+## Características principales
 
-### Exchange quirks
+| Área              | Detalle                                                                   |
+|-------------------|---------------------------------------------------------------------------|
+| Exchanges         | Bybit, KuCoin, KuCoinFutures (extensible vía adaptadores CCXT)            |
+| Pipeline          | Backfill histórico, incremental en tiempo real, repair de gaps            |
+| Storage           | Bronze/Silver en Parquet, Gold en Iceberg con *time-travel*               |
+| Mensajería        | Kafka como bus neutral (wire schemas en `shared/kafka/schemas/`)          |
+| Estado            | Redis para cursores y estado compartido                                   |
+| Calidad           | Invariants de dominio, cross-exchange validation, Great Expectations      |
+| Observabilidad    | Prometheus, Grafana, Loki, Pushgateway, Alertmanager                      |
+| Trading           | Motor paper y live sobre los mismos datos (⚠️ en desarrollo)              |
+| Portfolio         | Gestión de posiciones y rebalanceo (⚠️ en desarrollo)                     |
 
-Comportamientos específicos por exchange centralizados en
-`packages/market_data/domain/value_objects/exchange_quirks.py`:
+---
 
-|Quirk                |Exchanges afectados|
-|---------------------|-------------------|
-|`backward_pagination`|KuCoin, KuCoinFutures|
-|`requires_end_at`    |KuCoin, KuCoinFutures|
-|`reject_zero_since`  |KuCoin             |
-|`origin_fallback_date`|KuCoin (2018-01-01), KuCoinFutures (2020-01-01)|
+## Arquitectura
 
------
+El sistema se organiza en **bounded contexts** con dependencias unidireccionales y
+verificadas estáticamente. El dominio no conoce a nadie de su alrededor:
 
-## Repository layout
+```mermaid
+flowchart TB
+    shared[shared — Shared Kernel<br/>tipos · schemas Kafka · contratos]
+    ocm[ocm — plataforma<br/>config Hydra · runtime · observabilidad]
+    domain[domain — reglas de negocio]
+    ports[ports — contratos Protocol]
+    application[application — use cases]
+    adapters[adapters — CCXT · HTTP · WS]
+    infrastructure[infrastructure — Iceberg · Kafka · Redis]
 
-```
-orangecashmachine/
-│
-├── shared/                         # Shared Kernel — sin dependencias internas (BC-01)
-│   ├── contracts/boundaries.py     # Protocolos explícitos entre BCs (FeatureSource,
-│   │                               # SignalProtocol, FillHandler, TradeHistory, RiskGate)
-│   ├── kafka/                      # Neutral bus ACL (BC-29, BC-32, BC-33, BC-35)
-│   │   ├── schemas/                # Wire schemas: ohlcv, signals, orders, positions, trades
-│   │   ├── serializer.py
-│   │   └── topics.py
-│   ├── types/                      # Eventos de dominio across BCs
-│   │   ├── ohlcv.py                # OHLCVBar, Timeframe
-│   │   ├── signal.py               # SignalPayload
-│   │   ├── order_events.py         # OrderEvent, OrderFilled, OrderRejected
-│   │   ├── position_events.py      # PositionEvent
-│   │   └── rebalance_events.py     # RebalanceEvent
-│   ├── exceptions/                 # Excepciones base compartidas
-│   └── utils/                      # Utilidades transversales (repo root, paths)
-│
-├── ocm/                            # Plataforma transversal (BC-14)
-│   ├── config/
-│   │   ├── schema.py               # AppConfig — schema Pydantic
-│   │   ├── env_vars.py             # SSOT de todas las variables OCM_*
-│   │   ├── paths.py                # SSOT de resolución de paths
-│   │   ├── credentials.py
-│   │   ├── hydra_loader.py
-│   │   ├── pipeline.py
-│   │   ├── layers/                 # coercion → env_override → validation
-│   │   ├── loader/                 # YamlLoader, env_resolver, snapshot, excepciones
-│   │   └── structured/             # Structured Configs Hydra
-│   ├── observability/              # Loguru: bootstrap, sinks, filtros, métricas, Prometheus
-│   └── runtime/
-│       ├── context.py              # RuntimeContext — inmutable, construido una vez
-│       ├── run_config.py           # RunConfig.from_env()
-│       ├── lineage.py              # git_hash, written_at
-│       ├── environment_validator.py
-│       ├── registry.py
-│       └── state/                  # RedisCursorStore, InMemoryCursorStore, GapRegistry,
-│                                   # lateness calibration, factories, encoding
-│
-├── packages/
-│   ├── market_data/                # Bounded context de datos de mercado (BC-10)
-│   │   ├── domain/
-│   │   │   ├── entities/
-│   │   │   ├── events/             # ingestion, _lineage, trade_events,
-│   │   │   │                       # orderbook_events, replay_events
-│   │   │   ├── exceptions/         # Jerarquía de errores del BC
-│   │   │   ├── quality/            # Invariants y tipos de calidad (dominio puro, BC-09)
-│   │   │   ├── policies/           # base.py, repair.py, data_quality_policy.py
-│   │   │   └── value_objects/      # candle, timeframe, gap_utils, grid_alignment,
-│   │   │                           # exchange_quirks, symbol, order_book, raw_trade,
-│   │   │                           # trade_series, ohlcv_chunk, quality_label
-│   │   ├── ports/
-│   │   │   ├── inbound/            # event_consumer, pipeline_trigger, trades_source
-│   │   │   └── outbound/           # exchange, storage, storage_factory, state,
-│   │   │                           # gap_registry, lineage, metrics, observability,
-│   │   │                           # kafka_producer, kafka_consumer, event_bus,
-│   │   │                           # publisher, data_quality_checker, throttle,
-│   │   │                           # feature_reader
-│   │   ├── application/
-│   │   │   ├── use_cases/          # pipeline_orchestrator, ohlcv_transformer,
-│   │   │   │                       # resample_ohlcv, candle_normalizer
-│   │   │   ├── pipelines/          # ohlcv_pipeline, resample_pipeline,
-│   │   │   │                       # trades_pipeline, derivatives_pipeline, _worker_pool
-│   │   │   ├── strategies/         # backfill, incremental, repair
-│   │   │   ├── quality/            # DataQualityPipeline, report
-│   │   │   └── consumers/          # base, quality_consumer
-│   │   ├── adapters/
-│   │   │   ├── inbound/
-│   │   │   │   ├── rest/           # OHLCVFetcher, TradesFetcher, DerivativesFetcher
-│   │   │   │   ├── websocket/      # WebSocket manager, orderbook_stream,
-│   │   │   │   │                   # trades_stream, ws_trades_source
-│   │   │   │   └── data_providers/ # CoinGlass, CoinMarketCap
-│   │   │   └── outbound/
-│   │   │       ├── exchange/       # CCXTAdapter, resiliencia, throttle adaptativo,
-│   │   │       │                   # circuit breaker
-│   │   │       └── storage/        # gold_reader, chunk_converter
-│   │   ├── infrastructure/
-│   │   │   ├── bootstrap/          # OCMContainer — DI interno, pipeline_factory
-│   │   │   ├── storage/
-│   │   │   │   ├── bronze/         # BronzeStorage — Parquet raw con retención
-│   │   │   │   ├── silver/         # SilverStorage — Parquet limpio + manifiestos,
-│   │   │   │   │                   # trades_storage
-│   │   │   │   ├── gold/           # GoldStorage — features procesados (Iceberg)
-│   │   │   │   └── iceberg/        # SqlCatalog, schemas, particiones, CursorStore
-│   │   │   ├── kafka/              # BronzeWriter, consumer, producer, dedup,
-│   │   │   │                       # ohlcv_publisher, serializer, metrics, topics
-│   │   │   ├── quality/            # anomaly_registry, cross_exchange_validator,
-│   │   │   │                       # ge_checker, ge_suite (Great Expectations)
-│   │   │   ├── lineage/tracker.py
-│   │   │   ├── observability/      # métricas Prometheus del bounded context
-│   │   │   ├── event_bus/          # in_memory.py
-│   │   │   └── timeouts.py         # SSOT de todos los timeouts del sistema
-│   │   └── ports/inbound/          # trades_source (protocolo de fuente de trades)
-│   │
-│   ├── trading/                    # Motor de trading ⚠️ en desarrollo activo
-│   │   ├── strategies/             # BaseStrategy, EMA Crossover, registry
-│   │   ├── execution/              # OMS, LiveExecutor, PaperExecutor, PaperBot, Order
-│   │   ├── risk/                   # RiskManager, modelos de riesgo
-│   │   ├── analytics/              # TradeTracker, TradeRecord, performance
-│   │   ├── data/gold_adapter.py
-│   │   └── engine.py
-│   │
-│   └── portfolio/
-│       ├── services/               # PortfolioService, RebalanceService
-│       ├── models/position.py
-│       ├── ports/position_store.py # Protocol
-│       └── infra/                  # RedisPositionStore, MemoryStore
-│
-├── infrastructure/
-│   ├── dagster/
-│   │   ├── assets/                 # ← Composition Root externo
-│   │   │   ├── bronze_ohlcv.py     # backfill + incremental
-│   │   │   ├── repair_ohlcv.py     # repair de gaps
-│   │   │   ├── resample_ohlcv.py   # 1m → 5m, 15m, 1h, 4h, 1d
-│   │   │   ├── asset_checks.py     # verificaciones de calidad post-escritura
-│   │   │   └── partitions.py
-│   │   ├── defs.py
-│   │   └── resources.py
-│   └── redis/redis_stream.py
-│
-├── apps/
-│   ├── app/
-│   │   ├── cli/                    # main (Hydra), live, paper
-│   │   └── use_cases/              # execute_live, execute_paper, rebalance
-│   ├── api/                        # API Gateway experimental ⚠️ WIP
-│   │   ├── auth/jwt.py
-│   │   ├── middleware/             # logging, rate_limit
-│   │   ├── routers/health.py
-│   │   ├── main.py
-│   │   └── settings.py
-│   └── research/
-│       └── data/data_access.py     # Acceso read-only al gold layer
-│
-├── data_platform/                  # Iceberg catalog + warehouse (lectura)
-│   ├── iceberg_catalog/
-│   └── iceberg_warehouse/
-│
-├── config/                         # YAML Hydra
-│   ├── config.yaml                 # Raíz: defaults list
-│   ├── base.yaml                   # Defaults globales (dry_run=true)
-│   ├── settings.yaml               # default_env (último recurso en cascada)
-│   ├── env/                        # development, production, test
-│   ├── exchanges/                  # bybit, kucoin, kucoinfutures
-│   ├── pipeline/                   # historical, realtime, resample
-│   ├── observability/              # logging, metrics
-│   ├── storage/datalake.yaml       # SSOT del path anchor
-│   ├── risk/risk.yaml
-│   ├── datasets.yaml
-│   └── features.yaml
-│
-├── deploy/
-│   └── monitoring/                 # prometheus.yml, alerts.yml, alertmanager.yml,
-│                                   # loki/loki.yml, promtail/promtail.yml
-│
-├── tests/                          # 553 tests — mirrors estructura de paquetes
-│
-├── dagster_defs.py                 # Contrato de framework (entry point fijo)
-├── dagster.yaml
-├── docker-compose.yml
-├── docker-compose.override.yml
-├── Dockerfile
-└── pyproject.toml                  # Contratos BC-01..BC-37, ruff, mypy, pytest
+    shared --> ocm
+    ocm --> infrastructure
+    domain --> ports
+    ports --> application
+    application --> adapters
+    adapters --> infrastructure
 ```
 
------
+| Bounded context    | Responsabilidad                                                        |
+|--------------------|------------------------------------------------------------------------|
+| `shared`           | Shared Kernel: tipos canónicos, schemas Kafka (ACL), eventos, contratos|
+| `ocm`              | Plataforma transversal: config, runtime, observabilidad. Sin negocio   |
+| `packages/market_data` | Datos de mercado: ingestión, medallion, calidad (el más maduro)     |
+| `packages/trading` | Motor de trading paper + live ⚠️ **en desarrollo**                     |
+| `packages/portfolio` | Posiciones y rebalanceo ⚠️ **en desarrollo**                         |
+| `apps`             | Entrypoints: CLI (`app`), API gateway (`api`, experimental), `research`|
+| `infrastructure`   | Adaptadores compartidos (Redis)                                        |
 
-## Flujo de ejecución
+Las fronteras entre módulos están protegidas por **contratos import-linter** que se
+ejecutan como gate del CI — una violación rompe el pipeline antes de llegar a review.
+La lista completa vive en [`architecture/importlinter.toml`](architecture/importlinter.toml).
 
-```
-dagster_defs.py                           (contrato de framework — posición fija)
-  └── infrastructure/dagster/defs.py
-        ├── infrastructure/dagster/assets/   (Composition Root)
-        │     ├── bronze_ohlcv    → PipelineOrchestrator → BackfillStrategy | IncrementalStrategy
-        │     ├── repair_ohlcv    → PipelineOrchestrator → RepairStrategy
-        │     ├── resample_ohlcv  → ResamplePipeline (1m → 5m, 15m, 1h, 4h, 1d)
-        │     └── asset_checks    → verificaciones post-escritura (calidad, completitud)
-        └── trades (vía asset_checks o pipeline dedicado)
+El ensamblaje de dependencias ocurre en **Composition Roots** (uno por bounded context),
+por ejemplo `packages/market_data/infrastructure/bootstrap/` y
+`packages/portfolio/bootstrap/`.
 
-PipelineOrchestrator
-  └── construye PipelineRequest (credentials, resilience, symbols,
-      timeframes, start_date, auto_lookback_days)
-        └── Strategy → CCXTAdapter → BronzeStorage → SilverStorage → GoldStorage
-```
+> Detalles por bounded context: [`docs/DOMAIN.md`](docs/DOMAIN.md).
 
------
+---
 
-## Configuración
+## Organización del repositorio
 
-La configuración se compone en capas via Hydra. Orden de precedencia de menor a mayor:
+| Directorio             | Rol                                                                 |
+|------------------------|---------------------------------------------------------------------|
+| `packages/market_data/`| Bounded context de datos de mercado (estable)                       |
+| `packages/trading/`    | Motor de trading ⚠️ en desarrollo                                   |
+| `packages/portfolio/`  | Posiciones y rebalanceo ⚠️ en desarrollo                            |
+| `shared/`              | Shared Kernel — sin dependencias internas                           |
+| `ocm/`                 | Plataforma: config, runtime, observabilidad                         |
+| `apps/`                | `app` (CLI), `api` (gateway), `research` (notebooks, read-only)     |
+| `infrastructure/`      | Adaptadores de infraestructura compartida                           |
+| `config/`              | Capas de configuración Hydra (YAML)                                 |
+| `architecture/`        | Contratos de frontera (`importlinter.toml`)                         |
+| `docs/`                | ADRs, guía de dominio, auditorías                                   |
+| `tests/`               | Suites por paquete                                                  |
 
-```
-config/base.yaml
-  → config/exchanges/{exchange}.yaml
-  → config/pipeline/{module}.yaml
-  → config/observability/{module}.yaml
-  → config/storage/datalake.yaml
-  → config/datasets.yaml / features.yaml / risk/risk.yaml
-  → config/env/{env}.yaml
-  → CLI overrides
-  → Variables de entorno OCM_*__ (L2, máxima prioridad)
-```
+Entrypoints (definidos en `pyproject.toml` y `run.sh`, SSOT):
 
-Inspeccionar config efectivo sin ejecutar:
+| Comando        | Descripción                                                              |
+|----------------|--------------------------------------------------------------------------|
+| `ocm`          | Pipeline de datos de mercado (Hydra)                                     |
+| `ocm-api`      | API gateway FastAPI — ⚠️ experimental                                    |
+| `paper`        | Trading en paper (modo seguro)                                           |
+| `live`         | Trading en vivo — ⚠️ **capital real**                                    |
 
-```bash
-./run.sh ocm --cfg job
-./run.sh ocm --cfg job env=production
-```
+> **Entrypoints legacy vs Hydra.** Los módulos `apps/app/cli/live.py` y `paper.py`
+> coexisten temporalmente con las variantes Hydra/Composition Root (`live_hydra`,
+> `paper_hydra`). Los comandos `live` y `paper` ya resuelven a las variantes Hydra;
+> la dirección arquitectónica es Hydra (ADR-0005) y los legacy se eliminarán al
+> completar la migración.
 
-### Variables de entorno
+---
 
-Todas registradas en `ocm/config/env_vars.py` (SSOT). El separador `__` mapea a la
-jerarquía del schema: `OCM_SECTION__KEY=valor`.
+## Inicio rápido
 
-|Variable                      |Descripción                      |Default        |
-|------------------------------|---------------------------------|---------------|
-|`OCM_ENV`                     |Entorno activo                   |`development`  |
-|`OCM_DEBUG`                   |Logging verboso                  |`false` en prod|
-|`OCM_VALIDATE_ONLY`           |Valida config y sale sin ejecutar|`false`        |
-|`OCM_STORAGE__DATA_LAKE__PATH`|Path absoluto al Data Lake (SSOT)|*(lee YAML)*   |
-|`OCM_GOLD_PATH`               |Override del Gold layer          |*(derivado)*   |
-|`REDIS_HOST`                  |Host Redis                       |`localhost`    |
-|`REDIS_PORT`                  |Puerto Redis                     |`6379`         |
-|`REDIS_PASSWORD`              |Password Redis                   |`""`           |
-|`PUSHGATEWAY_URL`             |URL Prometheus Pushgateway       |—              |
-|`LOG_LEVEL`                   |Nivel de log en producción       |`INFO`         |
-
-### Resolución del path del Data Lake
-
-```
-1. OCM_STORAGE__DATA_LAKE__PATH  →  máxima prioridad (L2-aligned)
-2. storage.data_lake.path (YAML) →  configurable por entorno via Hydra
-3. repo_root()/data_platform/data_lake  →  fallback estructural seguro
-```
-
-### Entornos
-
-|Entorno      |`dry_run`|Descripción                              |
-|-------------|---------|-----------------------------------------|
-|`development`|`true`   |Debug activo, escribe solo si se fuerza  |
-|`production` |`false`  |Credenciales requeridas, paths de sistema|
-|`test`       |`true`   |CI, datos aislados, Redis deshabilitado  |
-
-**SafeOps:** `dry_run: true` es el default global en `base.yaml`. Producción lo
-sobrescribe explícitamente. Nunca se llega a producción por omisión.
-
------
-
-## Requisitos
-
-- Python ≥3.11
-- Redis 6+
-- Docker + Docker Compose
-- [uv](https://github.com/astral-sh/uv)
-
------
-
-## Setup
+Requisitos: **Python ≥ 3.11**, **uv**, **Docker** + **Docker Compose**, **Redis 6+**.
 
 ```bash
 # 1. Clonar
@@ -393,135 +160,158 @@ uv sync
 
 # 3. Configurar entorno
 cp .env.example .env
-# Editar .env: API keys, REDIS_HOST, OCM_STORAGE__DATA_LAKE__PATH
+# editar .env: API keys de exchanges, OCM_STORAGE__DATA_LAKE__PATH, etc.
 
-# 4. Levantar servicios
+# 4. Levantar infraestructura local (Redis, Kafka, observabilidad)
 docker compose up -d
 
-# 5. Abrir Dagster UI
-open http://localhost:3001
+# 5. Validar la configuración sin ejecutar nada
+uv run ocm --cfg job
+
+# 6. Ejecutar el pipeline de datos de mercado
+uv run ocm
 ```
 
------
+Para trading:
+
+```bash
+uv run paper   # paper trading — modo seguro
+uv run live    # ⚠️ capital real — leer la configuración de riesgo antes
+```
+
+Todas las variables de entorno están registradas en
+[`ocm/config/env_vars.py`](ocm/config/env_vars.py) (SSOT). El separador `__` mapea a la
+jerarquía del schema: `OCM_SECTION__KEY=valor` (p. ej. `OCM_STORAGE__DATA_LAKE__PATH`).
+
+> **Seguridad:** inspeccionar la configuración con `uv run ocm --cfg job` expone secretos
+> en stdout. Nunca redirigir ese output a logs en producción.
+
+## Configuración
+
+La configuración se compone en capas vía Hydra, con precedencia de menor a mayor:
+
+```mermaid
+flowchart LR
+    base[base.yaml] --> exch[exchanges/]
+    exch --> pipe[pipeline/]
+    pipe --> obs[observability/ y storage/]
+    obs --> env[config/env/ - entorno activo]
+    env --> cli[CLI overrides]
+    cli --> vars[variables OCM_*]
+```
+
+- **Variables de entorno** — `OCM_*__` mapean al schema vía separador `__`
+  (`OCM_SECTION__KEY=valor`). SSOT en `ocm/config/env_vars.py`.
+- **Entornos** — `development` (dry-run, debug), `production` (credenciales requeridas),
+  `test` (CI, datos aislados). `dry_run: true` es el default global en `base.yaml`.
+- **Inspección segura** — `uv run ocm --cfg job` valida y muestra la config efectiva.
+
+---
 
 ## Observabilidad
 
-Con `docker compose up` se levantan automáticamente:
+Con `docker compose up` se levanta el stack completo (puertos configurables vía
+`*_HOST_PORT`):
 
-|Servicio    |URL                  |Descripción                                                                           |
-|------------|---------------------|--------------------------------------------------------------------------------------|
-|Dagster UI  |http://localhost:3001|Orquestación, assets, runs, schedules                                                 |
-|Prometheus  |http://localhost:9090|Métricas de sistema y pipeline                                                        |
-|Grafana     |http://localhost:3000|Dashboards provisionados automáticamente desde deploy/monitoring/                     |
-|Loki        |http://localhost:3100|Agregación de logs estructurados (Promtail)                                           |
-|Pushgateway |http://localhost:9091|Push de métricas desde jobs batch                                                     |
-|Alertmanager|http://localhost:9093|Routing de alertas (deadman switch `PipelineHeartbeatDead`)                           |
+| Servicio    | URL                   | Rol                                          |
+|-------------|-----------------------|----------------------------------------------|
+| Prometheus  | http://localhost:9090 | Métricas de sistema y pipeline               |
+| Grafana     | http://localhost:3000 | Dashboards provisionados desde `deploy/`     |
+| Loki        | http://localhost:3100 | Logs estructurados vía Promtail              |
+| Pushgateway | http://localhost:9091 | Métricas push desde jobs batch               |
+| Alertmanager| http://localhost:9093 | Alertas (deadman switch del pipeline)        |
+| Kafka UI    | http://localhost:8080 | Inspección de tópicos Kafka                  |
+| Redis       | localhost:6379        | Estado compartido, cursores (TCP)            |
 
-El pipeline expone métricas Prometheus vía
-`packages/market_data/infrastructure/observability/metrics.py`.
-Dashboards y alertas provisionados en `deploy/monitoring/` — se cargan automáticamente.
+Dashboards y alertas se provisionan automáticamente desde `deploy/monitoring/`.
 
-**Logging estructurado** vía Loguru con tres sinks:
+---
 
-|Sink                      |Nivel       |Condición                             |
-|--------------------------|------------|--------------------------------------|
-|Consola                   |configurable|siempre                               |
-|`logs/errors_{date}.log`  |WARNING+    |siempre                               |
-|`logs/pipeline_{date}.log`|DEBUG+      |requiere `bind_pipeline()` en contexto|
+## Tecnologías
 
------
+| Tecnología    | Uso                                                             |
+|---------------|-----------------------------------------------------------------|
+| Python 3.11–3.13 | Lenguaje principal                                           |
+| ccxt          | Conexión unificada a exchanges                                  |
+| Apache Iceberg | Capa Gold (features) con *time-travel*                        |
+| Parquet       | Capas Bronze/Silver                                             |
+| Polars        | DataFrames (⚠️ reemplazando a pandas en curso)                  |
+| Redis         | Cursor store, estado compartido                                 |
+| Kafka         | Bus neutral de eventos (wire schemas en `shared/kafka/`)        |
+| Hydra + Pydantic | Configuración en capas con validación de schema              |
+| FastAPI       | API gateway — ⚠️ experimental                                   |
+| Prometheus / Grafana / Loki | Métricas, dashboards y logs                      |
 
-## Acceso al Data Lake
+## Principios arquitectónicos
 
-`data_platform/iceberg_catalog/` y `data_platform/iceberg_warehouse/` son el catalog
-SQLite y el warehouse Iceberg en disco — no son un paquete importable.
+- **Clean/Hexagonal** — dependencias siempre hacia adentro: el dominio no conoce a nadie.
+- **Bounded contexts con contratos** — las fronteras se verifican estáticamente en CI.
+- **Shared Kernel** — `shared/` contiene lo común sin acoplarse a implementaciones.
+- **Composition Root único por BC** — el ensamblaje de dependencias vive en un solo punto.
+- **Fail-Soft** — ante errores no críticos, degradar en vez de fallar el pipeline completo.
+- **SafeOps** — `dry_run: true` es el default global; producción lo sobrescribe
+  explícitamente (ver `config/base.yaml`).
 
-`GoldReader` es el adaptador de lectura Gold sobre Apache Iceberg.
-Implementa `FeatureReaderPort` estructuralmente (duck typing — no hereda explícitamente).
+Estos principios están formalizados en
+[`docs/architecture/0000-principios-arquitectonicos.md`](docs/architecture/0000-principios-arquitectonicos.md).
 
-```python
-from market_data.adapters.outbound.storage.gold_reader import GoldReader
+---
 
-reader = GoldReader(exchange="kucoin")
+## Estado del proyecto
 
-# Snapshot actual (default)
-df = reader.load_features("BTC/USDT", "spot", "1h")
+| Componente      | Estado                                                                  |
+|-----------------|-------------------------------------------------------------------------|
+| `market_data`   | **Estable** — pipeline medallion, Iceberg, Kafka, calidad, observabilidad|
+| `trading`       | **En desarrollo** — motor paper/live activo en evolución                |
+| `portfolio`     | **En desarrollo** — posiciones y rebalanceo en consolidación            |
+| API gateway     | **Experimental** — FastAPI/JWT en fase inicial                          |
+| pandas → polars | **En migración** — transición activa de DataFrames                      |
 
-# Time travel — snapshot reproducible en un instante dado
-df = reader.load_features("BTC/USDT", "spot", "1h",
-                           as_of="2026-03-17T22:40:00Z")
+**Limitaciones conocidas** (se resuelven en el roadmap, no son defectos del README):
 
-# Snapshot exacto por ID de versión
-df = reader.load_features("BTC/USDT", "spot", "1h", version="123456789")
+- Errores de tipado (`mypy`) pendientes de resolución durante la migración a Polars.
+- El job de validación de configuración del CI aún usa una invocación desactualizada.
+- El control plane de orquestación se está consolidando (evolución histórica de Prefect →
+  Dagster → Docker Compose + Hydra CLIs; ver [ADR-0002](docs/architecture/0002-event-driven-kappa-architecture.md)
+  y [ADR-0006](docs/architecture/0006-verificacion-adrs-vs-codigo.md)).
+- Deuda arquitectónica conocida y analizada en [`docs/DOMAIN.md`](docs/DOMAIN.md) (§ 5).
 
-# Datasets disponibles para un exchange/market_type
-datasets = reader.list_datasets("kucoin", "spot")
+---
 
-# Metadata del snapshot resuelto (retorna None ante error: Fail-Soft)
-manifest = reader.get_manifest("kucoin", "BTC/USDT", "spot", "1h")
-```
+## Documentación
 
------
+| Recurso                                   | Qué encontrarás                                                        |
+|-------------------------------------------|------------------------------------------------------------------------|
+| [`docs/DOMAIN.md`](docs/DOMAIN.md)        | Guía por bounded context, deuda técnica, camino de evolución           |
+| [`docs/architecture/`](docs/architecture/) | ADRs 0000–0006: principios, Kappa, Composition Root, Hydra             |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADRs 0003–0008: decisiones puntuales por BC |
+| [`docs/architecture/GOVERNANCE.md`](docs/architecture/GOVERNANCE.md) | Gobernanza de la arquitectura                    |
+| [`AGENTS.md`](AGENTS.md)                  | Comandos, convenciones y *gotchas* para desarrolladores                |
+| [`architecture/importlinter.toml`](architecture/importlinter.toml) | Contratos de frontera verificados              |
 
-## Lineage y trazabilidad
+---
 
-Cada escritura al Data Lake registra trazabilidad reproducible. `git_hash` y `written_at`
-se capturan automáticamente vía `ocm/runtime/lineage.py`. Los manifiestos de versión se
-almacenan en Silver junto a cada partición. El linaje persiste en `data/lineage/lineage.db`.
+## Contribución
 
------
-
-## Tests y tooling
-
-```bash
-uv run pytest tests/          # 553 tests
-uv run ruff check .           # linting
-uv run mypy .                 # 0 errores genuinos
-uv run lint-imports --config architecture/importlinter.toml # contratos BC-01..BC-42
-uv run bandit .               # seguridad
-```
-
-`type: ignore` en el código requiere comentario explicativo — la presencia sin
-justificación es deuda técnica explícita visible en el diff. Nunca silenciar
-`type: ignore` en commits sin PR.
-
------
-
-## CI/CD
-
-`.github/workflows/ocm-ci.yml` ejecuta en cada PR (en orden, con fail-fast):
-
-|Job                   |Comando                                    |Propósito                          |
-|----------------------|-------------------------------------------|-----------------------------------|
-|Architecture contracts|`uv run lint-imports --config architecture/importlinter.toml`|BC-01..BC-42 — gate, bloquea todo  |
-|Tests                 |`uv run pytest tests/ -x -q`               |553 tests — fail-fast en primer error|
-|Config validation     |`OCM_VALIDATE_ONLY=1 uv run python main.py`|Hydra bootstrap + validación schema|
-
-Los jobs de tests y config dependen de architecture: si los contratos están rotos,
-no se ejecuta nada más. CI usa `uv sync --group dev` para architecture,
-`uv sync` (sin dev) para los demás.
-
-Tooling local de pre-commit:
-
-```bash
-uv run ruff check .           # linting
-uv run mypy .                 # 0 errores genuinos
-uv run lint-imports --config architecture/importlinter.toml # contratos BC-01..BC-42
-uv run bandit .               # seguridad
-```
-
-`.github/workflows/ocm-cd.yml` — 🚧 placeholder, pendiente de implementación
-(`workflow_dispatch` manual, no automatizado).
-
------
-
-## Contribuir
-
-1. Crear rama desde `main`
-1. Commits en formato [Conventional Commits](https://www.conventionalcommits.org/)
-1. Verificar antes del PR:
+1. Crea una rama desde `main`.
+2. Commits en formato [Conventional Commits](https://www.conventionalcommits.org/).
+3. Pre-commit aplica `ruff check --fix` y `ruff format` automáticamente.
+4. Verifica antes del PR:
 
    ```bash
-   uv run ruff check . && uv run lint-imports --config architecture/importlinter.toml && uv run pytest tests/ -q
+   uv run ruff check .
+   uv run lint-imports --config architecture/importlinter.toml
+   uv run pytest tests/ -q
+   uv run mypy .
+   uv run bandit .
    ```
-1. `mypy` debe reportar 0 errores genuinos
+
+5. `type: ignore` requiere un comentario explicativo.
+
+El flujo completo de CI, convenciones y *gotchas* está en [`AGENTS.md`](AGENTS.md).
+
+---
+
+## Licencia
+
+MIT — ver la declaración en [`pyproject.toml`](pyproject.toml).
