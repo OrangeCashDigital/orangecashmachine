@@ -4,11 +4,11 @@
 # Entry point único. Solo ensambla. Sin lógica de negocio.
 #
 # CLI USAGE:
-#   uv run python main.py                                    # dev (default)
-#   uv run python main.py env=production                     # prod
-#   uv run python main.py env=test                           # test
-#   uv run python main.py pipeline.historical.backfill_mode=true
-#   uv run python main.py -m env=development,production      # multirun
+#   uv run python -m app.cli.main                                     # dev (default)
+#   uv run python -m app.cli.main env=production                      # prod
+#   uv run python -m app.cli.main env=test                            # test
+#   uv run python -m app.cli.main pipeline.historical.backfill_mode=true
+#   uv run python -m app.cli.main -m env=development,production       # multirun
 # ==============================================================================
 
 defaults:
