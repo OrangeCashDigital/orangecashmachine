@@ -29,11 +29,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal
 
-# SSOT: tipo canónico de lado de orden. Usado en el campo y en la validación.
-OrderSide = Literal["buy", "sell"]
-_VALID_ORDER_SIDES: frozenset[str] = frozenset({"buy", "sell"})
+# SSOT: tipo canónico de lado de orden y validación, definidos en shared.enums.
+from shared.enums import _VALID_ORDER_SIDES, OrderSide
 
 
 def _validate_order_side(side: str, caller: str) -> OrderSide:

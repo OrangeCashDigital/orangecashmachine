@@ -30,6 +30,8 @@ DATASOURCE_REPLAY: DataSource = "replay"
 
 _VALID_SOURCES: frozenset[str] = frozenset({"live", "backfill", "replay"})
 _VALID_SIGNAL_DIRECTIONS: frozenset[str] = frozenset({"buy", "sell", "hold"})
+_VALID_ORDER_SIDES: frozenset[str] = frozenset({"buy", "sell"})
+_VALID_POSITION_SIDES: frozenset[str] = frozenset({"long", "short"})
 
 __all__ = [
     "SignalDirection",
@@ -41,4 +43,6 @@ __all__ = [
     "DATASOURCE_REPLAY",
     "_VALID_SOURCES",
     "_VALID_SIGNAL_DIRECTIONS",
+    "_VALID_ORDER_SIDES",
+    "_VALID_POSITION_SIDES",
 ]

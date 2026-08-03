@@ -22,3 +22,18 @@ repos:
         language: system
         files: ^README\.md$
         pass_filenames: false
+      - id: import-linter
+        name: Import-linter (arquitectura)
+        entry: uv run lint-imports --config architecture/importlinter.toml
+        language: system
+        pass_filenames: false
+      - id: mypy-shared
+        name: Mypy (shared)
+        entry: uv run mypy shared/
+        language: system
+        pass_filenames: false
+      - id: ssot-enums
+        name: SSOT literales
+        entry: uv run python scripts/check_ssot_enums.py
+        language: system
+        pass_filenames: false

@@ -29,11 +29,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Optional
 
-# SSOT: tipo canónico de lado de posición.
-PositionSide = Literal["long", "short"]
-_VALID_POSITION_SIDES: frozenset[str] = frozenset({"long", "short"})
+# SSOT: tipo canónico de lado de posición y validación, definidos en shared.enums.
+from shared.enums import _VALID_POSITION_SIDES, PositionSide
 
 
 def _validate_position_side(side: str, caller: str) -> PositionSide:
