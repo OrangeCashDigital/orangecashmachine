@@ -46,8 +46,8 @@ integrations:
     bootstrap_servers: ${oc.env:KAFKA_BOOTSTRAP_SERVERS,localhost:9092}
 
   postgres:
-    enabled: ${oc.env:KAFKA_ENABLED,false}
     enabled: false
+    host: ${oc.env:POSTGRES_HOST,localhost}
     port: ${oc.env:POSTGRES_PORT,5432}
     user: ${oc.env:POSTGRES_USER,""}
     password: ${oc.env:POSTGRES_PASSWORD,""}
