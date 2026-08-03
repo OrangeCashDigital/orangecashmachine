@@ -157,7 +157,9 @@ class OCMContainer:
             PrometheusResampleMetrics,
         )
 
-        self.orchestrator = PipelineOrchestrator(factory=ConcretePipelineFactory())
+        self.orchestrator = PipelineOrchestrator(
+            factory=ConcretePipelineFactory(cfg=self._app_cfg) if self._app_cfg is not None else None
+        )
         from market_data.adapters.outbound.storage.iceberg_factory import (
             IcebergStorageFactory,
         )

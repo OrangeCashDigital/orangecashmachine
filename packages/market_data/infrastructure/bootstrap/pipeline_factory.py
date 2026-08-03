@@ -24,7 +24,10 @@ Principios: DIP · SRP · KISS · SafeOps · Fail-Fast
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from ocm.config.schema import AppConfig
 
 # --------------------------------------------------------------------------- #
 # Catalog builder — DRY, único punto de construcción del catalog Iceberg       #
@@ -61,6 +64,9 @@ class ConcretePipelineFactory:
     para evitar coste de inicialización en import-time y mantener
     el feedback de errores near-fail-fast en construcción, no en import.
     """
+
+    def __init__(self, cfg: "AppConfig") -> None:
+        self._cfg = cfg
 
     def build(self, request: Any) -> Any:
         """
@@ -133,16 +139,15 @@ class ConcretePipelineFactory:
 
     def _build_kafka_publisher(self) -> Any:
         """
-        Construye KafkaOHLCVPublisher respetando el feature flag KAFKA_ENABLED.
+        Construye KafkaOHLCVPublisher respetando integrations.kafka.enabled (AppConfig).
+
+        SSOT: la decisión viene de AppConfig, ya validado por Pydantic (L4/L5),
+        no de os.environ directo — evita drift entre este componente y el
+        resto del sistema que consume AppConfig.
 
         Retorna None si Kafka está deshabilitado o no disponible (fail-soft).
         """
-        import os
-
-        from ocm.config.env_vars import KAFKA_ENABLED as _KAFKA_ENABLED_VAR
-
-        kafka_flag = os.environ.get(_KAFKA_ENABLED_VAR, "false").strip().lower()
-        if kafka_flag not in ("1", "true", "yes"):
+        if not self._cfg.integrations.kafka.enabled:
             return None
         try:
             from market_data.infrastructure.kafka.ohlcv_publisher import (

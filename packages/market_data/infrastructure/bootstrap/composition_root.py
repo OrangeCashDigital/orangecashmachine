@@ -134,7 +134,7 @@ class CompositionRoot:
             ConcretePipelineFactory,
         )
 
-        factory = ConcretePipelineFactory()
+        factory = ConcretePipelineFactory(cfg=config)
         return cls(factory=factory)
 
     @classmethod
