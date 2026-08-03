@@ -94,6 +94,11 @@ Las fronteras entre módulos están protegidas por **contratos import-linter** q
 ejecutan como gate del CI — una violación rompe el pipeline antes de llegar a review.
 La lista completa vive en [`architecture/importlinter.toml`](architecture/importlinter.toml).
 
+La calidad del Shared Kernel está gobernada por automatización (ADR-0010): contratos
+BC-46/47/48, verificación de SSOT de literales (`scripts/check_ssot_enums.py`),
+métricas de salud (`scripts/metrics_report.py` → `architecture/metrics.json`),
+`pip-audit` (vulnerabilidades) y hooks de pre-commit (import-linter, mypy, SSOT).
+
 El ensamblaje de dependencias ocurre en **Composition Roots** (uno por bounded context),
 por ejemplo `packages/market_data/infrastructure/bootstrap/` y
 `packages/portfolio/bootstrap/`.

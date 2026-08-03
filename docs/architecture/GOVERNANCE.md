@@ -64,3 +64,32 @@ reconstruirse, debe implementar las cinco capas explícitamente
 (domain/ports/adapters/services|application/bootstrap), no
 necesariamente con esos nombres literales, pero sí con la separación
 de responsabilidades que representan.
+
+## 8. Gobernanza automatizada (ADR-0010)
+
+La arquitectura del kernel no solo se documenta: se hace cumplir en
+CI y en el commit local. Ver ADR-0010 para la decisión completa.
+
+### Gates de CI (`.github/workflows/ocm-ci.yml`)
+
+- `architecture` (import-linter, 43 contratos) — fail-fast, bloquea el merge si un BC-NN se rompe.
+- `quality` — ruff check, ruff format, mypy shared/, SSOT literales, pip-audit.
+
+### Scripts de gobernanza (`scripts/`)
+
+- `check_ssot_enums.py` — verifica que los literales de dominio (OrderSide, PositionSide,
+  SignalDirection, DataSource) solo se definan en `shared/enums.py`. Falla en CI si se duplica.
+- `metrics_report.py` — genera `architecture/metrics.json` (contratos KEPT/BROKEN, errores mypy,
+  tests passed, vulnerabilidades). En CI se sube como artifact, no se commitea.
+
+### Contratos del kernel (shared)
+
+BC-01 (dependency-free) · BC-32 (SSOT del bus) · BC-33 (schemas aislados del dominio) ·
+BC-34 (neutralidad) · BC-35 (sin duplicación de wire) · BC-45 (types/contracts no importan
+kafka) · BC-46 (`enums` stdlib-only) · BC-47 (`kafka` no importa dominio) · BC-48 (`utils` genérico).
+
+### SafeOps
+
+- `pip-audit --requirement pyproject.toml` en CI (vulnerabilidades conocidas).
+- Dependabot semanal (ecosistema `pip`).
+- Pre-commit: ruff, import-linter, mypy shared/, SSOT — detección local antes del commit.
