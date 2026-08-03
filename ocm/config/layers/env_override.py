@@ -42,6 +42,8 @@ from typing import Final
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
+from ocm.config.env_vars import is_known_non_structured_var
+
 # SSOT para constantes booleanas — importadas desde el motor canónico de coerción.
 # L2 y L3 usan el mismo conjunto de strings reconocidos; sin duplicación ni riesgo
 # de divergencia silenciosa entre capas.
@@ -93,8 +95,13 @@ def apply_env_overrides(
         parts = remainder.lower().split(_SEPARATOR)
 
         # Requiere al menos SECCIÓN + CLAVE (2 partes).
-        # OCM_FOO (sin __) no tiene path estructurado válido — skip con warning.
+        # OCM_FOO (sin __) no tiene path estructurado válido para L2.
         if len(parts) < 2:
+            # Bandera plana conocida (SSOT: env_vars.py) consumida fuera de L2
+            # — p.ej. OCM_VALIDATE_ONLY, OCM_DEBUG. No es un error: se omite
+            # en silencio en vez de generar un falso positivo de "malformada".
+            if is_known_non_structured_var(key):
+                continue
             skipped.append(key)
             logger.warning(
                 "config_l2_env_override | malformed_key={} "

@@ -183,3 +183,18 @@ del _module_constants, _missing_from_registry, _missing_from_module
 
 def default_debug_for(env: str) -> bool:
     return _DEBUG_DEFAULTS.get(env, False)
+
+
+def is_known_non_structured_var(key: str) -> bool:
+    """True si `key` es una var OCM_* registrada que NO sigue el protocolo
+    estructurado OCM_SECTION__KEY de L2 (env_override.py).
+
+    Ejemplos: OCM_VALIDATE_ONLY, OCM_DEBUG, OCM_API_KEY — banderas planas
+    consumidas directamente por otras capas (RunConfig, credentials, paths),
+    no por el mecanismo de override estructurado de L2.
+
+    Usado por ocm.config.layers.env_override para distinguir "clave conocida
+    pero fuera del alcance de L2" de "clave realmente malformada" — evita
+    falsos positivos de warning sobre banderas planas legítimas.
+    """
+    return key in _ENV_VAR_NAMES and "__" not in key
