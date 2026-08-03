@@ -142,7 +142,7 @@ class TestDeserialize:
         assert recovered.symbol == original.symbol
         assert recovered.timeframe == original.timeframe
         assert recovered.batch_start_ts == original.batch_start_ts
-        assert recovered.event_version == original.event_version
+        assert recovered.SCHEMA_VERSION == original.SCHEMA_VERSION
         assert recovered.meta == original.meta
 
     def test_round_trip_preserves_bars(self):

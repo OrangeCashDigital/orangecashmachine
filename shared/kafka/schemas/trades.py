@@ -46,15 +46,13 @@ from shared.kafka.schemas._base import (
     DATASOURCE_REPLAY,
     BasePayload,
     DataSource,
+    KappaSourceMixin,
     SchemaVersionError,
 )
 
 # ---------------------------------------------------------------------------
 # Constantes de schema
 # ---------------------------------------------------------------------------
-
-TRADE_SCHEMA_VERSION: int = 1
-TRADE_SERIES_SCHEMA_VERSION: int = 1
 
 TradeSideWire = Literal["buy", "sell", "unknown"]
 
@@ -70,7 +68,7 @@ TradeSchemaVersionError = SchemaVersionError
 
 
 @dataclass(frozen=True)
-class TradePayload(BasePayload):
+class TradePayload(BasePayload, KappaSourceMixin):
     """
     Tick individual de microestructura en formato wire.
 
@@ -89,7 +87,7 @@ class TradePayload(BasePayload):
     price        : precio de ejecución (str para preservar precisión Decimal)
     amount       : cantidad base ejecutada (str)
     side         : "buy" | "sell" | "unknown"
-    source       : Kappa discriminator
+    source       : Kappa discriminator — KappaSourceMixin
     run_id       : correlación con el run
 
     Nota sobre price/amount como str
@@ -107,25 +105,10 @@ class TradePayload(BasePayload):
     price: str = "0"  # Decimal serializado como str
     amount: str = "0"  # Decimal serializado como str
     side: TradeSideWire = "unknown"
-    source: DataSource = DATASOURCE_LIVE
     run_id: str = ""
     meta: Optional[Dict[str, Any]] = None
 
-    # ------------------------------------------------------------------
-    # Kappa helpers
-    # ------------------------------------------------------------------
-
-    @property
-    def is_live(self) -> bool:
-        return self.source == DATASOURCE_LIVE
-
-    @property
-    def is_backfill(self) -> bool:
-        return self.source == DATASOURCE_BACKFILL
-
-    @property
-    def is_replay(self) -> bool:
-        return self.source == DATASOURCE_REPLAY
+    # Kappa helpers is_live/is_backfill/is_replay heredados de KappaSourceMixin.
 
     # ------------------------------------------------------------------
     # Serialización
@@ -135,7 +118,6 @@ class TradePayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": TRADE_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "market_type": self.market_type,
                 "symbol": self.symbol,
@@ -154,10 +136,8 @@ class TradePayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TradePayload":
         version = int(data.get("event_version", 1))
-        if version != TRADE_SCHEMA_VERSION:
-            raise SchemaVersionError(
-                f"TradePayload schema v{version} incompatible con v{TRADE_SCHEMA_VERSION} esperada."
-            )
+        if version != cls.SCHEMA_VERSION:
+            raise SchemaVersionError(f"TradePayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada.")
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
             raise SchemaVersionError(f"TradePayload.source desconocido: {source!r}. Válidos: {sorted(_VALID_SOURCES)}.")
@@ -166,7 +146,6 @@ class TradePayload(BasePayload):
             side = "unknown"  # fail-soft: lado desconocido no es error fatal
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             market_type=str(data["market_type"]),
@@ -188,7 +167,7 @@ class TradePayload(BasePayload):
 
 
 @dataclass(frozen=True)
-class TradeSeriesPayload(BasePayload):
+class TradeSeriesPayload(BasePayload, KappaSourceMixin):
     """
     Ventana temporal agregada de trades en formato wire.
 
@@ -230,7 +209,6 @@ class TradeSeriesPayload(BasePayload):
     close_price: str = "0"
     high_price: str = "0"
     low_price: str = "0"
-    source: DataSource = DATASOURCE_LIVE
     run_id: str = ""
     meta: Optional[Dict[str, Any]] = None
 
@@ -238,7 +216,6 @@ class TradeSeriesPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": TRADE_SERIES_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "market_type": self.market_type,
                 "symbol": self.symbol,
@@ -265,16 +242,15 @@ class TradeSeriesPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TradeSeriesPayload":
         version = int(data.get("event_version", 1))
-        if version != TRADE_SERIES_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"TradeSeriesPayload schema v{version} incompatible con v{TRADE_SERIES_SCHEMA_VERSION} esperada."
+                f"TradeSeriesPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
             raise SchemaVersionError(f"TradeSeriesPayload.source desconocido: {source!r}.")
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             market_type=str(data["market_type"]),
@@ -296,6 +272,11 @@ class TradeSeriesPayload(BasePayload):
             run_id=str(data.get("run_id", "")),
             meta=data.get("meta"),
         )
+
+
+# Alias de compatibilidad — SSOT de versión: SCHEMA_VERSION de cada clase.
+TRADE_SCHEMA_VERSION: int = TradePayload.SCHEMA_VERSION
+TRADE_SERIES_SCHEMA_VERSION: int = TradeSeriesPayload.SCHEMA_VERSION
 
 
 __all__ = [

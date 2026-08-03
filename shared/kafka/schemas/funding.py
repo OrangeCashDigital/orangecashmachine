@@ -36,8 +36,6 @@ from typing import Any, Dict, Optional
 
 from shared.kafka.schemas._base import BasePayload, SchemaVersionError
 
-FUNDING_RATE_SCHEMA_VERSION: int = 1
-
 # Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
 FundingSchemaVersionError = SchemaVersionError
 
@@ -76,7 +74,6 @@ class FundingRatePayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": FUNDING_RATE_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
                 "market_type": self.market_type,
@@ -92,13 +89,12 @@ class FundingRatePayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FundingRatePayload":
         version = int(data.get("event_version", 1))
-        if version != FUNDING_RATE_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"FundingRatePayload schema v{version} incompatible con v{FUNDING_RATE_SCHEMA_VERSION} esperada."
+                f"FundingRatePayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -109,6 +105,10 @@ class FundingRatePayload(BasePayload):
             interval_h=data.get("interval_h"),
             predicted_rate=data.get("predicted_rate"),
         )
+
+
+# Alias de compatibilidad — SSOT de versión: FundingRatePayload.SCHEMA_VERSION.
+FUNDING_RATE_SCHEMA_VERSION: int = FundingRatePayload.SCHEMA_VERSION
 
 
 __all__ = [

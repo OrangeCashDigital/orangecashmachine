@@ -47,10 +47,6 @@ from shared.kafka.schemas._base import (
     SignalDirection,
 )
 
-SIGNAL_SCHEMA_VERSION: int = 1
-APPROVED_SCHEMA_VERSION: int = 1
-REJECTED_SCHEMA_VERSION: int = 1
-
 # Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
 SignalSchemaVersionError = SchemaVersionError
 
@@ -100,7 +96,6 @@ class SignalPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": SIGNAL_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
                 "timeframe": self.timeframe,
@@ -117,9 +112,9 @@ class SignalPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SignalPayload":
         version = int(data.get("event_version", 1))
-        if version != SIGNAL_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"SignalPayload schema v{version} incompatible con v{SIGNAL_SCHEMA_VERSION} esperada."
+                f"SignalPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         direction = data["direction"]
         if direction not in _VALID_SIGNAL_DIRECTIONS:
@@ -131,7 +126,6 @@ class SignalPayload(BasePayload):
             raise ValueError(f"SignalPayload.confidence debe estar en [0, 1], recibido: {confidence}")
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -182,7 +176,6 @@ class ApprovedSignalPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": APPROVED_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
                 "timeframe": self.timeframe,
@@ -202,9 +195,9 @@ class ApprovedSignalPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ApprovedSignalPayload":
         version = int(data.get("event_version", 1))
-        if version != APPROVED_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"ApprovedSignalPayload schema v{version} incompatible con v{APPROVED_SCHEMA_VERSION} esperada."
+                f"ApprovedSignalPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         direction = data["direction"]
         if direction not in _VALID_SIGNAL_DIRECTIONS:
@@ -217,7 +210,6 @@ class ApprovedSignalPayload(BasePayload):
             raise ValueError(f"ApprovedSignalPayload.confidence debe estar en [0, 1], recibido: {confidence}")
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -259,7 +251,6 @@ class RejectedSignalPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": REJECTED_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
                 "direction": self.direction,
@@ -273,9 +264,9 @@ class RejectedSignalPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "RejectedSignalPayload":
         version = int(data.get("event_version", 1))
-        if version != REJECTED_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"RejectedSignalPayload schema v{version} incompatible con v{REJECTED_SCHEMA_VERSION} esperada."
+                f"RejectedSignalPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         direction = data.get("direction", "hold")
         if direction not in _VALID_SIGNAL_DIRECTIONS:
@@ -285,7 +276,6 @@ class RejectedSignalPayload(BasePayload):
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -294,6 +284,12 @@ class RejectedSignalPayload(BasePayload):
             original_event_id=str(data.get("original_event_id", "")),
             run_id=str(data.get("run_id", "")),
         )
+
+
+# Alias de compatibilidad — SSOT de versión: SCHEMA_VERSION de cada clase.
+SIGNAL_SCHEMA_VERSION: int = SignalPayload.SCHEMA_VERSION
+APPROVED_SCHEMA_VERSION: int = ApprovedSignalPayload.SCHEMA_VERSION
+REJECTED_SCHEMA_VERSION: int = RejectedSignalPayload.SCHEMA_VERSION
 
 
 __all__ = [

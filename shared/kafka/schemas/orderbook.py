@@ -43,9 +43,6 @@ from shared.kafka.schemas._base import BasePayload, SchemaVersionError
 # Constantes de schema
 # ---------------------------------------------------------------------------
 
-ORDERBOOK_SNAPSHOT_SCHEMA_VERSION: int = 1
-ORDERBOOK_DELTA_SCHEMA_VERSION: int = 1
-
 # PriceLevel: (price_str, size_str) — str para preservar precisión Decimal
 PriceLevel = Tuple[str, str]
 
@@ -93,7 +90,6 @@ class OrderBookSnapshotPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": ORDERBOOK_SNAPSHOT_SCHEMA_VERSION,
                 "payload_type": "snapshot",
                 "exchange": self.exchange,
                 "symbol": self.symbol,
@@ -109,14 +105,12 @@ class OrderBookSnapshotPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OrderBookSnapshotPayload":
         version = int(data.get("event_version", 1))
-        if version != ORDERBOOK_SNAPSHOT_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"OrderBookSnapshotPayload schema v{version} "
-                f"incompatible con v{ORDERBOOK_SNAPSHOT_SCHEMA_VERSION} esperada."
+                f"OrderBookSnapshotPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -162,7 +156,6 @@ class OrderBookDeltaPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": ORDERBOOK_DELTA_SCHEMA_VERSION,
                 "payload_type": "delta",
                 "exchange": self.exchange,
                 "symbol": self.symbol,
@@ -177,9 +170,9 @@ class OrderBookDeltaPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OrderBookDeltaPayload":
         version = int(data.get("event_version", 1))
-        if version != ORDERBOOK_DELTA_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"OrderBookDeltaPayload schema v{version} incompatible con v{ORDERBOOK_DELTA_SCHEMA_VERSION} esperada."
+                f"OrderBookDeltaPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         side = data.get("side", "bid")
         if side not in _VALID_SIDES:
@@ -188,7 +181,6 @@ class OrderBookDeltaPayload(BasePayload):
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -197,6 +189,11 @@ class OrderBookDeltaPayload(BasePayload):
             price=str(data["price"]),
             size=str(data["size"]),
         )
+
+
+# Alias de compatibilidad — SSOT de versión: SCHEMA_VERSION de cada clase.
+ORDERBOOK_SNAPSHOT_SCHEMA_VERSION: int = OrderBookSnapshotPayload.SCHEMA_VERSION
+ORDERBOOK_DELTA_SCHEMA_VERSION: int = OrderBookDeltaPayload.SCHEMA_VERSION
 
 
 __all__ = [

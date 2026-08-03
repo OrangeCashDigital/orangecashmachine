@@ -38,9 +38,6 @@ from typing import Any, Dict
 
 from shared.kafka.schemas._base import BasePayload, PositionSide, SchemaVersionError
 
-POSITION_OPENED_SCHEMA_VERSION: int = 1
-POSITION_CLOSED_SCHEMA_VERSION: int = 1
-
 # Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
 PositionSchemaVersionError = SchemaVersionError
 
@@ -83,7 +80,6 @@ class PositionOpenedPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": POSITION_OPENED_SCHEMA_VERSION,
                 "order_id": self.order_id,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
@@ -99,13 +95,12 @@ class PositionOpenedPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PositionOpenedPayload":
         version = int(data.get("event_version", 1))
-        if version != POSITION_OPENED_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"PositionOpenedPayload schema v{version} incompatible con v{POSITION_OPENED_SCHEMA_VERSION} esperada."
+                f"PositionOpenedPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             order_id=str(data["order_id"]),
             exchange=str(data["exchange"]),
@@ -158,7 +153,6 @@ class PositionClosedPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": POSITION_CLOSED_SCHEMA_VERSION,
                 "order_id": self.order_id,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
@@ -177,13 +171,12 @@ class PositionClosedPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PositionClosedPayload":
         version = int(data.get("event_version", 1))
-        if version != POSITION_CLOSED_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"PositionClosedPayload schema v{version} incompatible con v{POSITION_CLOSED_SCHEMA_VERSION} esperada."
+                f"PositionClosedPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             order_id=str(data["order_id"]),
             exchange=str(data["exchange"]),
@@ -197,6 +190,11 @@ class PositionClosedPayload(BasePayload):
             closed_at=str(data.get("closed_at", "")),
             run_id=str(data.get("run_id", "")),
         )
+
+
+# Alias de compatibilidad — SSOT de versión: SCHEMA_VERSION de cada clase.
+POSITION_OPENED_SCHEMA_VERSION: int = PositionOpenedPayload.SCHEMA_VERSION
+POSITION_CLOSED_SCHEMA_VERSION: int = PositionClosedPayload.SCHEMA_VERSION
 
 
 __all__ = [

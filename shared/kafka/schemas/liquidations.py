@@ -37,8 +37,6 @@ from typing import Any, Dict, Literal, Optional
 
 from shared.kafka.schemas._base import BasePayload, SchemaVersionError
 
-LIQUIDATION_SCHEMA_VERSION: int = 1
-
 LiquidationSide = Literal["buy", "sell"]
 _VALID_SIDES: frozenset[str] = frozenset({"buy", "sell"})
 
@@ -78,7 +76,6 @@ class LiquidationPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": LIQUIDATION_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
                 "market_type": self.market_type,
@@ -95,16 +92,15 @@ class LiquidationPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiquidationPayload":
         version = int(data.get("event_version", 1))
-        if version != LIQUIDATION_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"LiquidationPayload schema v{version} incompatible con v{LIQUIDATION_SCHEMA_VERSION} esperada."
+                f"LiquidationPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         side = data.get("side", "buy")
         if side not in _VALID_SIDES:
             raise SchemaVersionError(f"LiquidationPayload.side desconocido: {side!r}.")
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -116,6 +112,10 @@ class LiquidationPayload(BasePayload):
             side=side,
             order_type=str(data.get("order_type", "market")),
         )
+
+
+# Alias de compatibilidad — SSOT de versión: LiquidationPayload.SCHEMA_VERSION.
+LIQUIDATION_SCHEMA_VERSION: int = LiquidationPayload.SCHEMA_VERSION
 
 
 __all__ = [

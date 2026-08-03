@@ -54,9 +54,6 @@ from typing import Any, Dict
 
 from shared.kafka.schemas._base import BasePayload, OrderSide, SchemaVersionError
 
-ORDER_FILLED_SCHEMA_VERSION: int = 1
-ORDER_REJECTED_SCHEMA_VERSION: int = 1
-
 # Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
 OrderSchemaVersionError = SchemaVersionError
 
@@ -106,7 +103,6 @@ class OrderFilledPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": ORDER_FILLED_SCHEMA_VERSION,
                 "order_id": self.order_id,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
@@ -123,13 +119,12 @@ class OrderFilledPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OrderFilledPayload":
         version = int(data.get("event_version", 1))
-        if version != ORDER_FILLED_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"OrderFilledPayload schema v{version} incompatible con v{ORDER_FILLED_SCHEMA_VERSION} esperada."
+                f"OrderFilledPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             order_id=str(data["order_id"]),
             exchange=str(data["exchange"]),
@@ -169,7 +164,6 @@ class OrderRejectedPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": ORDER_REJECTED_SCHEMA_VERSION,
                 "order_id": self.order_id,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
@@ -184,13 +178,12 @@ class OrderRejectedPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OrderRejectedPayload":
         version = int(data.get("event_version", 1))
-        if version != ORDER_REJECTED_SCHEMA_VERSION:
+        if version != cls.SCHEMA_VERSION:
             raise SchemaVersionError(
-                f"OrderRejectedPayload schema v{version} incompatible con v{ORDER_REJECTED_SCHEMA_VERSION} esperada."
+                f"OrderRejectedPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             order_id=str(data["order_id"]),
             exchange=str(data["exchange"]),
@@ -200,6 +193,11 @@ class OrderRejectedPayload(BasePayload):
             signal_event_id=str(data.get("signal_event_id", "")),
             run_id=str(data.get("run_id", "")),
         )
+
+
+# Alias de compatibilidad — SSOT de versión: SCHEMA_VERSION de cada clase.
+ORDER_FILLED_SCHEMA_VERSION: int = OrderFilledPayload.SCHEMA_VERSION
+ORDER_REJECTED_SCHEMA_VERSION: int = OrderRejectedPayload.SCHEMA_VERSION
 
 
 __all__ = [

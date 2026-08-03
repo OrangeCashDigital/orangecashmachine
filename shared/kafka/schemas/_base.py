@@ -42,7 +42,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Literal
+from typing import Any, ClassVar, Dict, Literal
 
 
 def _utc_now() -> str:
@@ -97,6 +97,30 @@ _VALID_SIGNAL_DIRECTIONS: frozenset[str] = frozenset({"buy", "sell", "hold"})
 
 
 @dataclass(frozen=True)
+class KappaSourceMixin:
+    """
+    Campos y helpers Kappa (live | backfill | replay) para payloads con source.
+
+    SSOT del campo `source` y de las reglas de filtrado por origen:
+    consumers usan is_live/is_backfill/is_replay, nunca comparan el string.
+    """
+
+    source: DataSource = DATASOURCE_LIVE
+
+    @property
+    def is_live(self) -> bool:
+        return self.source == DATASOURCE_LIVE
+
+    @property
+    def is_backfill(self) -> bool:
+        return self.source == DATASOURCE_BACKFILL
+
+    @property
+    def is_replay(self) -> bool:
+        return self.source == DATASOURCE_REPLAY
+
+
+@dataclass(frozen=True)
 class BasePayload:
     """
     Envelope común para todos los wire payloads Kafka.
@@ -104,23 +128,28 @@ class BasePayload:
     Campos
     ------
     event_id      : UUID v4 — idempotencia y deduplicación downstream
-    event_version : versión del schema — detecta incompatibilidad en consumer
     occurred_at   : ISO-8601 UTC del momento de creación del payload
 
-    Subclases deben declarar su propia constante SCHEMA_VERSION:
+    Versionado
+    ----------
+    SCHEMA_VERSION (ClassVar) es el SSOT de versión de cada payload concreto.
+    to_dict() lo emite como "event_version"; from_dict() valida contra él.
+    Las subclases SOBRESCRIBEN SCHEMA_VERSION si su versión ≠ 1:
+
         class MyPayload(BasePayload):
-            SCHEMA_VERSION: ClassVar[int] = 1
+            SCHEMA_VERSION: ClassVar[int] = 2
     """
 
+    SCHEMA_VERSION: ClassVar[int] = 1
+
     event_id: str = field(default_factory=_new_uuid)
-    event_version: int = 1
     occurred_at: str = field(default_factory=_utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         """Base dict con campos de envelope. Subclases extienden."""
         return {
             "event_id": self.event_id,
-            "event_version": self.event_version,
+            "event_version": type(self).SCHEMA_VERSION,
             "occurred_at": self.occurred_at,
         }
 
@@ -128,6 +157,7 @@ class BasePayload:
 __all__ = [
     "BasePayload",
     "SchemaVersionError",
+    "KappaSourceMixin",
     "SignalDirection",
     "OrderSide",
     "PositionSide",

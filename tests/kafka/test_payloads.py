@@ -109,7 +109,7 @@ class TestEventPayload:
             event.exchange = "kucoin"  # type: ignore
 
     def test_default_version(self):
-        assert _event().event_version == PAYLOAD_SCHEMA_VERSION
+        assert _event().SCHEMA_VERSION == PAYLOAD_SCHEMA_VERSION
 
     def test_default_meta_is_none(self):
         assert _event().meta is None
@@ -145,7 +145,7 @@ class TestEventPayload:
         d = _event().to_dict()
         del d["event_version"]
         e = EventPayload.from_dict(d)
-        assert e.event_version == 1
+        assert e.SCHEMA_VERSION == 1
 
     def test_from_dict_incompatible_version_raises(self):
         d = _event().to_dict()

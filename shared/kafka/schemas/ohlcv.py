@@ -54,14 +54,13 @@ from shared.kafka.schemas._base import (
     DATASOURCE_REPLAY,
     BasePayload,
     DataSource,
+    KappaSourceMixin,
     SchemaVersionError,
 )
 
 # ---------------------------------------------------------------------------
 # Constantes de schema
 # ---------------------------------------------------------------------------
-
-OHLCV_SCHEMA_VERSION: int = 1
 
 # Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
 OHLCVSchemaVersionError = SchemaVersionError
@@ -117,7 +116,7 @@ class KafkaOHLCVBar:
 
 
 @dataclass(frozen=True)
-class EventPayload(BasePayload):
+class EventPayload(BasePayload, KappaSourceMixin):
     """
     Lote de velas OHLCV con metadatos de contexto.
 
@@ -130,7 +129,7 @@ class EventPayload(BasePayload):
     timeframe      : resolución        (e.g. "1m", "1h")
     batch_start_ts : ms UTC de la primera vela del lote
     bars           : lista de velas OHLCV
-    source         : Kappa discriminator (live | backfill | replay)
+    source         : Kappa discriminator (live | backfill | replay) — KappaSourceMixin
     run_id         : correlación con el run que generó el evento
 
     Kappa helpers
@@ -144,25 +143,13 @@ class EventPayload(BasePayload):
     timeframe: str = ""
     batch_start_ts: int = 0
     bars: List[KafkaOHLCVBar] = field(default_factory=list)
-    source: DataSource = DATASOURCE_LIVE
     run_id: str = ""
     meta: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
     # Kappa helpers — SSOT de reglas de filtrado
+    # (is_live/is_backfill/is_replay heredados de KappaSourceMixin)
     # ------------------------------------------------------------------
-
-    @property
-    def is_live(self) -> bool:
-        return self.source == DATASOURCE_LIVE
-
-    @property
-    def is_backfill(self) -> bool:
-        return self.source == DATASOURCE_BACKFILL
-
-    @property
-    def is_replay(self) -> bool:
-        return self.source == DATASOURCE_REPLAY
 
     @property
     def should_generate_signal(self) -> bool:
@@ -180,7 +167,6 @@ class EventPayload(BasePayload):
         base = super().to_dict()
         base.update(
             {
-                "event_version": OHLCV_SCHEMA_VERSION,
                 "exchange": self.exchange,
                 "symbol": self.symbol,
                 "timeframe": self.timeframe,
@@ -196,10 +182,8 @@ class EventPayload(BasePayload):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EventPayload":
         version = int(data.get("event_version", 1))
-        if version != OHLCV_SCHEMA_VERSION:
-            raise SchemaVersionError(
-                f"EventPayload schema v{version} incompatible con v{OHLCV_SCHEMA_VERSION} esperada."
-            )
+        if version != cls.SCHEMA_VERSION:
+            raise SchemaVersionError(f"EventPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada.")
 
         bars_raw = data["bars"]
         if isinstance(bars_raw, str):
@@ -220,7 +204,6 @@ class EventPayload(BasePayload):
 
         return cls(
             event_id=str(data["event_id"]),
-            event_version=version,
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
@@ -231,6 +214,10 @@ class EventPayload(BasePayload):
             run_id=str(data.get("run_id", "")),
             meta=meta_raw,
         )
+
+
+# Alias de compatibilidad — SSOT de versión: EventPayload.SCHEMA_VERSION.
+OHLCV_SCHEMA_VERSION: int = EventPayload.SCHEMA_VERSION
 
 
 __all__ = [
