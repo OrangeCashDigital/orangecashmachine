@@ -134,3 +134,42 @@ jobs:
 
       - name: Validate config
         run: OCM_VALIDATE_ONLY=true uv run python -m app.cli.main
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 4: Quality gates
+  # ruff + format + mypy + SSOT + pip-audit. Corre tras architecture (fail-fast).
+  # Cualquier fallo aquí impide el merge.
+  # ──────────────────────────────────────────────────────────────────────────
+  quality:
+    name: Quality gates (ruff/mypy/SSOT/audit)
+    runs-on: ubuntu-latest
+    needs: architecture
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format . --check
+
+      - name: Mypy (shared)
+        run: uv run mypy shared/
+
+      - name: SSOT literales
+        run: uv run python scripts/check_ssot_enums.py
+
+      - name: Vulnerabilidades (pip-audit)
+        # Risk-accept documentado (2026-08-03): pyarrow 19.0.1 (PYSEC-2026-113) y
+        # ecdsa 0.19.2 transitiva de python-jose (PYSEC-2026-1325). Actualizar junto
+        # al pin de pyarrow (<20.0) o python-jose cuando se valide en staging.
+        run: uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325

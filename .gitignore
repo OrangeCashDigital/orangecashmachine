@@ -47,3 +47,9 @@ AUDITORIA_IMPORT_LINTER.txt
 docs/arch/import_graph_*.svg
 *.pyc
 *.bak
+
+# Gobernanza automatizada — artefactos generados, nunca versionables
+# metrics_report.py escribe el informe; se sube como artifact en CI.
+architecture/metrics.json
+# shared.svg es el grafo generado por pydeps (artifact opcional, no se commitea).
+shared.svg
