@@ -786,3 +786,22 @@ forbidden_modules = [
     "portfolio.infra.redis_store",
     "portfolio.infra.redis_factory",
 ]
+
+[[tool.importlinter.contracts]]
+# Contrato de capas para portfolio: bootstrap (composition root) puede
+# importar todo; infra solo services/ports/models; services solo
+# ports/models (DIP: nunca importa infra directamente — PortfolioService
+# recibe PositionStore como Protocol, no RedisPositionStore concreto);
+# ports solo models; models no importa nada del propio bounded context.
+# Formaliza como regla ejecutable en CI la disciplina DIP ya presente
+# en el código desde Fase 3 (ver ADR-0008).
+name = "BC-44: portfolio layer order (bootstrap < infra < services < ports < models)"
+type = "layers"
+containers = ["portfolio"]
+layers = [
+    "bootstrap",
+    "infra",
+    "services",
+    "ports",
+    "models",
+]
