@@ -42,11 +42,11 @@ integrations:
     retry_on_timeout: true
 
   kafka:
-    enabled: false
+    enabled: ${oc.env:KAFKA_ENABLED,false}
     bootstrap_servers: ${oc.env:KAFKA_BOOTSTRAP_SERVERS,localhost:9092}
 
   postgres:
-    enabled: false
+    enabled: ${oc.env:KAFKA_ENABLED,false}
     host: ${oc.env:POSTGRES_HOST,localhost}
     port: ${oc.env:POSTGRES_PORT,5432}
     user: ${oc.env:POSTGRES_USER,""}
