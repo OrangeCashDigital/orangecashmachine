@@ -217,6 +217,7 @@ testpaths     = ["tests"]
 pythonpath    = [".", "apps"]
 log_cli       = true
 log_cli_level = "DEBUG"
+addopts       = "--cov=packages --cov=ocm --cov=shared --cov=apps --cov-report=term-missing"
 markers = [
     "integration: tests de integración contra infraestructura real (Kafka, Redis, Iceberg)",
 ]
@@ -232,6 +233,7 @@ source = ["packages", "ocm", "shared", "apps"]
 
 [tool.coverage.report]
 show_missing = true
+fail_under   = 80  # ajustar según tu baseline real
 
 # =============================================================================
 # tool.mypy
