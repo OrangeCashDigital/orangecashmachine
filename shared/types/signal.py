@@ -6,8 +6,10 @@ shared/types/signal.py
 Signal — value object de dominio.
 
 Representa la intención de trading generada por una estrategia.
-Inmutable en práctica (frozen=True no aplica por datetime mutable,
-pero ningún campo debe modificarse tras construcción).
+No es frozen (auditoría pendiente, ver Fase 7 del plan de shared/):
+`metadata` es un dict mutable — frozen=True impediría reasignar atributos
+pero NO impediría mutar el contenido del dict. Por convención, ningún
+campo se modifica ni se muta tras construcción.
 
 Reglas de dominio
 -----------------
@@ -15,7 +17,7 @@ Reglas de dominio
 - is_actionable ≡ direction ∈ {buy, sell}  — derivada, nunca almacenar
 - hold signals son válidas (carry information: "no actúes")
 
-Ubicación: domain/ (sin imports externos a stdlib)
+Ubicación: shared/types/ (kernel compartido — solo imports intra-shared y stdlib)
 
 Principios: SOLID · DDD · SSOT · Fail-Fast
 """
@@ -48,12 +50,15 @@ class Signal:
     price       : precio de cierre al momento de la señal
     timestamp   : timestamp UTC de la vela que generó la señal
     confidence  : confianza de la señal ∈ [0.0, 1.0]
-    metadata    : datos adicionales de la estrategia (sin schema fijo)
+    metadata    : datos adicionales de la estrategia (sin schema fijo).
+                  Dict mutable — por convención no se muta tras construcción.
 
     Inmutabilidad
     -------------
-    No usar frozen=True porque datetime es mutable en Python < 3.11.
-    Por convención, ningún campo se modifica tras construcción.
+    No se usa frozen=True (auditoría pendiente — Fase 7 del plan shared/).
+    Nota: metadata es un dict mutable; frozen=True impediría reasignar
+    atributos pero NO mutar el contenido del dict. Por convención, ningún
+    campo se modifica ni se muta tras construcción.
     """
 
     symbol: str
