@@ -118,7 +118,7 @@ por ejemplo `packages/market_data/infrastructure/bootstrap/` y
 | `docs/`                | ADRs, guía de dominio, auditorías                                   |
 | `tests/`               | Suites por paquete                                                  |
 
-Entrypoints (definidos en `pyproject.toml` y `run.sh`, SSOT):
+Entrypoints (SSOT: `[project.scripts]` en `pyproject.toml`; `run.sh` expone un subconjunto `ocm|live|paper`):
 
 | Comando        | Descripción                                                              |
 |----------------|--------------------------------------------------------------------------|
@@ -133,7 +133,7 @@ Entrypoints (definidos en `pyproject.toml` y `run.sh`, SSOT):
 
 ---
 
-## Inicio rápido
+## Instalación
 
 Requisitos: **Python ≥ 3.11**, **uv**, **Docker** + **Docker Compose**, **Redis 6+**.
 
@@ -142,32 +142,80 @@ Requisitos: **Python ≥ 3.11**, **uv**, **Docker** + **Docker Compose**, **Redi
 git clone https://github.com/OrangeCashDigital/orangecashmachine.git
 cd orangecashmachine
 
-# 2. Instalar dependencias
+# 2. Instalar dependencias (runtime)
 uv sync
 
-# 3. Configurar entorno
+# 3. Configurar entorno — .env alimenta Docker Compose y las variables OCM_*
 cp .env.example .env
-# editar .env: API keys de exchanges, OCM_STORAGE__DATA_LAKE__PATH, etc.
+# editar .env:
+#   - GRAFANA_PASSWORD: obligatoria — sin ella, `docker compose up -d` falla
+#   - API keys de exchanges (BYBIT_*, KUCOIN_*)
+#   - OCM_STORAGE__DATA_LAKE__PATH: ruta del data lake
+#   - OCM_ENV: development (default) o production
 
 # 4. Levantar infraestructura local (Redis, Kafka, observabilidad)
 docker compose up -d
 
 # 5. Validar la configuración sin ejecutar nada
 uv run ocm --cfg job
-
-# 6. Ejecutar el pipeline de datos de mercado
-uv run ocm
-```
-
-Para trading:
-
-```bash
-uv run paper   # paper trading — modo seguro
-uv run live    # ⚠️ capital real — leer la configuración de riesgo antes
 ```
 
 > **Seguridad:** `uv run ocm --cfg job` expone secretos en stdout. Nunca redirigir ese
 > output a logs en producción.
+
+Para desarrollo y contribución, instala también las herramientas dev
+(`pytest`, `ruff`, `mypy`, `bandit`, `import-linter`, `pre-commit`):
+
+```bash
+uv sync --group dev
+```
+
+## Uso
+
+### Pipeline de datos de mercado
+
+```bash
+uv run ocm                                            # desarrollo (dry-run por default)
+uv run ocm env=production                             # entorno de producción
+uv run ocm pipeline.historical.backfill_mode=true     # backfill histórico
+uv run ocm --cfg job                                  # imprimir config efectiva (⚠️ secretos)
+OCM_VALIDATE_ONLY=true uv run python -m app.cli.main  # validar config y salir sin ejecutar
+```
+
+Alternativa equivalente vía [`run.sh`](run.sh): `./run.sh ocm [args...]`.
+
+### Trading en paper
+
+```bash
+uv run paper --symbol BTC/USDT --timeframe 1h --fast 9 --slow 21 --market-type spot
+```
+
+> El capital en paper sale de `config.portfolio.capital_usd` (no hay flag `--capital`).
+> Ver más opciones con `uv run paper --help`.
+
+### Trading en vivo — ⚠️ **capital real**
+
+```bash
+uv run live --capital 10000 --symbol BTC/USDT --timeframe 1h \
+  --strategy ema_crossover --fast 9 --slow 21
+```
+
+> **SafeOps:** `live` exige `--capital` explícito (sin default). Revisa la configuración
+> de riesgo en `config/risk/` antes de ejecutar.
+
+### API gateway — ⚠️ experimental
+
+```bash
+uv run ocm-api
+```
+
+### Tests
+
+```bash
+uv run pytest tests/ -q -m "not integration"   # unit tests (sin infraestructura)
+uv run pytest tests/ -q -m integration         # integración — requiere Kafka en :9093
+uv run pytest tests/ -q                        # suite completa (incluye integración)
+```
 
 ## Configuración
 
@@ -250,7 +298,6 @@ Estos principios están formalizados en
 **Limitaciones conocidas** (se resuelven en el roadmap, no son defectos del README):
 
 - Errores de tipado (`mypy`) pendientes de resolución durante la migración a Polars.
-- El job de validación de configuración del CI aún usa una invocación desactualizada.
 - El control plane de orquestación sigue consolidándose (Docker Compose + Hydra CLIs;
   ver [ADR-0002](docs/architecture/0002-event-driven-kappa-architecture.md) y
   [ADR-0006](docs/architecture/0006-verificacion-adrs-vs-codigo.md)).
@@ -264,7 +311,7 @@ Estos principios están formalizados en
 |-------------------------------------------|------------------------------------------------------------------------|
 | [`docs/DOMAIN.md`](docs/DOMAIN.md)        | Guía por bounded context, deuda técnica, camino de evolución           |
 | [`docs/architecture/`](docs/architecture/) | ADRs 0000–0006: principios, Kappa, Composition Root, Hydra             |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADRs 0003–0008: decisiones puntuales por BC |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADRs 0003–0009: decisiones puntuales por BC |
 | [`docs/architecture/GOVERNANCE.md`](docs/architecture/GOVERNANCE.md) | Gobernanza de la arquitectura                    |
 | [`AGENTS.md`](AGENTS.md)                  | Comandos, convenciones y *gotchas* para desarrolladores                |
 | [`architecture/importlinter.toml`](architecture/importlinter.toml) | Contratos de frontera verificados              |
@@ -273,20 +320,31 @@ Estos principios están formalizados en
 
 ## Contribución
 
-1. Crea una rama desde `main`.
-2. Commits en formato [Conventional Commits](https://www.conventionalcommits.org/).
-3. Pre-commit aplica `ruff check --fix` y `ruff format` automáticamente.
-4. Verifica antes del PR:
+1. Instala las herramientas dev y los hooks de pre-commit:
+
+   ```bash
+   uv sync --group dev
+   pre-commit install
+   ```
+
+2. Trabaja sobre `main` con commits atómicos en formato
+   [Conventional Commits](https://www.conventionalcommits.org/).
+3. Los hooks de pre-commit aplican `ruff check --fix` y `ruff format` automáticamente;
+   `readme-size-guard` bloquea la pérdida masiva de contenido en `README.md`.
+   Si un hook modifica archivos: `git add -u && git commit` — nunca saltear hooks.
+4. Verifica antes del push:
 
    ```bash
    uv run ruff check .
    uv run lint-imports --config architecture/importlinter.toml
-   uv run pytest tests/ -q
+   uv run pytest tests/ -q -m "not integration"
    uv run mypy .
    uv run bandit .
    ```
 
 5. `type: ignore` requiere un comentario explicativo.
+6. Los tests de integración (`-m integration`) requieren infraestructura real (Kafka);
+   en CI corren en un job separado con Kafka como *service container*.
 
 El flujo completo de CI, convenciones y *gotchas* está en [`AGENTS.md`](AGENTS.md).
 
