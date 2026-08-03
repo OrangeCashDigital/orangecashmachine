@@ -5,3 +5,20 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: readme-size-guard
+        name: Bloquear pérdida masiva de contenido en README.md
+        description: >-
+          Fail-fast: rechaza el commit si README.md perdería más del 50%
+          de sus líneas respecto al HEAD actual (protección SafeOps contra
+          overwrites accidentales, p.ej. '>' en vez de '>>' en heredocs).
+        entry: >-
+          bash -c 'staged=$(git show ":README.md" 2>/dev/null | wc -l || echo 0);
+          head=$(git show "HEAD:README.md" 2>/dev/null | wc -l || echo 0);
+          if [ "$head" -gt 20 ] && [ "$staged" -lt $((head / 2)) ]; then
+          echo "README.md perdería más del 50% de sus líneas ($head -> $staged)";
+          exit 1; fi'
+        language: system
+        files: ^README\.md$
+        pass_filenames: false
