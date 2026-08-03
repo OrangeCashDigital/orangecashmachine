@@ -150,25 +150,3 @@ class OrderRejected:
             reason=reason,
             rejected_at=datetime.now(timezone.utc),
         )
-
-
-@dataclass(frozen=True)
-class OrderCancelled:
-    """
-    Orden cancelada antes de ejecutarse.
-
-    Publicado por: OMS.cancel()
-    """
-
-    order_id: str
-    symbol: str
-    cancelled_at: datetime
-
-    @classmethod
-    def now(cls, order_id: str, symbol: str) -> "OrderCancelled":
-        """Factory con timestamp UTC automático."""
-        return cls(
-            order_id=order_id,
-            symbol=symbol,
-            cancelled_at=datetime.now(timezone.utc),
-        )
