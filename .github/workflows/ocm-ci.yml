@@ -82,4 +82,4 @@ jobs:
         run: uv sync
 
       - name: Validate config
-        run: OCM_VALIDATE_ONLY=1 uv run python main.py
+        run: OCM_VALIDATE_ONLY=true uv run python -m app.cli.main

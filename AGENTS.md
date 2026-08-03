@@ -65,7 +65,7 @@ infrastructure are hybrid during migration. Key facts:
 ## Gotchas
 
 - `import-linter 2.x`: config moved to `architecture/importlinter.toml` (was `pyproject.toml`). Use `uv run lint-imports --config architecture/importlinter.toml`. NEVER `python -m importlinter` (no `__main__.py` in 2.6) and never bare `uv run lint-imports` without `--config` (pyproject.toml no longer has `[tool.importlinter]`, fails with "Could not read any configuration").
-- CI bug — `.github/workflows/ocm-ci.yml` config-validation job runs `OCM_VALIDATE_ONLY=1 uv run python main.py` (no main.py at repo root). Should be `OCM_VALIDATE_ONLY=1 uv run python -m app.cli.main`.
+- CI bug (fix en `ocm-ci.yml`) — el job config-validation ejecutaba `OCM_VALIDATE_ONLY=1 uv run python main.py` (no existe main.py en la raíz). Ahora es `OCM_VALIDATE_ONLY=true uv run python -m app.cli.main`. Nota: `OCM_VALIDATE_ONLY` usa `BOOL_TRUE` = {true, yes, on} (`ocm/config/layers/coercion.py`) — `1` NO activa validate-only.
 - E402 allowed only in files explicitly listed in pyproject.toml per-file-ignores (composition roots, entrypoints, tests). Not a global ignore.
 - `type: ignore` requires an explanatory comment (non-default).
 - `dry_run: true` = global default in `config/base.yaml`. Production overrides. Never reached production by omission.
@@ -78,7 +78,7 @@ infrastructure are hybrid during migration. Key facts:
   `aioresilience==0.2.1`, `pybreaker==1.4.1`.
 - CD workflow is a placeholder (`workflow_dispatch` only, no automation).
 - `uv run ocm --cfg job` exposes secrets in stdout (Hydra DictConfig pre-Pydantic). Never pipe to logs in production.
-- Config validation: `OCM_VALIDATE_ONLY=1 uv run python -m app.cli.main` — validates Hydra+Pydantic bootstrap and exits.
+- Config validation: `OCM_VALIDATE_ONLY=true uv run python -m app.cli.main` — validates Hydra+Pydantic bootstrap and exits.
 - Structural invariants beyond import-linter: `tests/architecture/` (import contracts, kafka contracts) and `tests/market_data/test_layer_contracts.py` (pytest wrapper for the AST linter). Run standalone: `uv run python tools/architecture/forbidden_frameworks.py`. These supplement, not replace, the import-linter contracts in pyproject.toml.
 
 ## Package remapping (hatchling)
