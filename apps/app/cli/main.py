@@ -225,8 +225,8 @@ def hydra_main(cfg: DictConfig) -> None:
     Variables de entorno reconocidas (prefijo ``OCM_``)::
 
         OCM_ENV             — entorno activo (development | production)
-        OCM_DEBUG           — activa logging verboso (1 | true)
-        OCM_VALIDATE_ONLY   — valida config y sale sin ejecutar pipeline (1 | true)
+        OCM_DEBUG           — activa logging verboso (true | yes | on)
+        OCM_VALIDATE_ONLY   — valida config y sale sin ejecutar pipeline (true | yes | on)
     """
     bootstrap_logging()
 

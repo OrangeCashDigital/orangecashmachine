@@ -57,7 +57,7 @@ ADR-0007 para la decisión de no forzar naming uniforme.
 |---|---|---|---|---|---|---|
 | market_data | domain/ | ports/ | adapters/ | application/ | infrastructure/bootstrap/ | Completo (naming propio) |
 | portfolio | models/ | ports/ | infra/ | services/ | bootstrap/ | Completo (naming propio) |
-| trading | ninguno | ninguno | ninguno | ninguno | bootstrap/ (perdido) | Deuda real — reconstruir con capas al recuperar bootstrap |
+| trading | ninguno (naming propio: analytics/, execution/, risk/, strategies/, data/) | | | bootstrap/ | En desarrollo — capas execution/, risk/, strategies/, analytics/, data/ + composition_root |
 
 Regla derivada: cualquier bounded context nuevo, o `trading` al
 reconstruirse, debe implementar las cinco capas explícitamente

@@ -1,22 +1,19 @@
 # AGENTS.md — OrangeCashMachine
 
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
-Clean/Hexagonal with bounded contexts and ~37 import-linter contracts (BC-NN).
+Clean/Hexagonal with bounded contexts and 39 import-linter contracts (BC-NN).
 
 ## Commands
 
     uv sync                           # prod deps
     uv sync --group dev               # dev deps (import-linter, mypy, ruff, bandit)
-    uv run lint-imports               # ARCH CONTRACTS — GATE: broken = blocked merge
+    uv run lint-imports --config architecture/importlinter.toml  # ARCH CONTRACTS — GATE: broken = blocked merge
     uv run pytest tests/ -x -q        # tests, fail-fast
     uv run pytest tests/ -x -q -m integration  # integration tests (need infra)
     uv run ruff check .               # lint
     uv run ruff format . --check      # format check
     uv run mypy .                     # type check (excludes tests/, .venv/)
-    uv run bandit .                   # security audit
-    uv run python tools/architecture/forbidden_frameworks.py       # AST linter — domain no infra frameworks
-    uv run python tools/architecture/forbidden_frameworks.py --json   # JSON output
-    uv run python tools/architecture/forbidden_frameworks.py --strict # exit 1 on violations
+    uv run bandit -r apps ocm packages shared infrastructure   # security audit
     uv run ocm --cfg job              # validate/print Hydra config (no main.py at root)
     uv run ocm-api                    # FastAPI gateway (experimental)
     uv run live                       # live trading — ⚠️ capital real
@@ -46,7 +43,9 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - Never import infrastructure into domain.
 - Never import bounded contexts directly across domains.
 - Use ports/contracts instead.
-- Composition Root = por bounded context (ver ADR-0003) — hoy: portfolio.bootstrap.composition_root; market_data/trading aun sin CR propio dedicado.
+- Composition Root = por bounded context (ver ADR-0003) — todos los BCs tienen CR propio:
+  `market_data.infrastructure.bootstrap.composition_root`, `trading.bootstrap.composition_root`,
+  `portfolio.bootstrap.composition_root`.
 - shared/ may only import stdlib and approved 3rd-party libs.
 
 ## Active migration: pandas → polars
@@ -56,11 +55,13 @@ infrastructure are hybrid during migration. Key facts:
 
 - `ports/outbound/normalization.py` = SSOT of DataFrame transforms for persistence.
   Application and infrastructure both import this.
-- `application/processing/polars_interop.py` = transient bridge (`to_polars`/`to_pandas`),
-  will be eliminated when migration completes.
+- The transient bridge (`application/processing/polars_interop.py`) was ELIMINATED.
+  The single conversion boundary is now `application/use_cases/ohlcv_transformer.py`:
+  `pl.from_pandas()` on entry, `.to_pandas()` on exit (see its module header).
+- Remaining pandas usage lives only in adapters/ and infrastructure/ (fetchers,
+  storages, quality checkers, some trading strategies). Domain is untouched.
 - Already polars-native: `grid_alignment`, `ohlcv_schema`, `gap_scanner` (no pandas).
-- Migration phases documented in `PLAN_MIGRACION_POLARS.md` (repo root).
-- Phase order: transformer → pandas_to_domain → storages → delete bridge.
+- Phase order: transformer → pandas_to_domain → storages (bridge already deleted).
 
 ## Gotchas
 
@@ -79,7 +80,7 @@ infrastructure are hybrid during migration. Key facts:
 - CD workflow is a placeholder (`workflow_dispatch` only, no automation).
 - `uv run ocm --cfg job` exposes secrets in stdout (Hydra DictConfig pre-Pydantic). Never pipe to logs in production.
 - Config validation: `OCM_VALIDATE_ONLY=true uv run python -m app.cli.main` — validates Hydra+Pydantic bootstrap and exits.
-- Structural invariants beyond import-linter: `tests/architecture/` (import contracts, kafka contracts) and `tests/market_data/test_layer_contracts.py` (pytest wrapper for the AST linter). Run standalone: `uv run python tools/architecture/forbidden_frameworks.py`. These supplement, not replace, the import-linter contracts in pyproject.toml.
+- Structural invariants beyond import-linter: `tests/architecture/` (import contracts, kafka contracts) and `tests/market_data/test_layer_contracts.py` (placeholder — BC-09 gobernado por import-linter). These supplement, not replace, the import-linter contracts in `architecture/importlinter.toml`.
 
 ## Package remapping (hatchling)
 
@@ -99,9 +100,8 @@ infrastructure are hybrid during migration. Key facts:
 - `packages/portfolio/` = position management + rebalance.
 - `apps/api/` = FastAPI gateway, experimental. `apps/app/` = CLI entrypoints.
 - `apps/research/` = read-only gold layer consumer for notebooks. Not importable as package.
-- `pyproject.toml` = SSOT for build, deps, tools, and all BC-NN contracts.
+- `pyproject.toml` = SSOT for build, deps, tools. BC-NN contracts live in `architecture/importlinter.toml`.
 - `config/` = Hydra YAML (layered: base→env→exchange→pipeline→CLI→env vars).
-- `tools/architecture/` = forbidden_frameworks.py (AST governance)
 - Import graph: `uv run pydeps <package> --max-bacon 4` (pydeps en grupo dev)
 
 ## Git workflow
@@ -112,7 +112,7 @@ infrastructure are hybrid during migration. Key facts:
 - Never commit: `.coverage`, `.venv`, `.pytest_cache`, `uv.lock` changes without real dep change.
 - Never `git push --force` on main.
 - Run before push (domain logic changes):
-  `uv run ruff check . && uv run lint-imports && uv run pytest tests/ -q`
+  `uv run ruff check . && uv run lint-imports --config architecture/importlinter.toml && uv run pytest tests/ -q`
 
 ## Tool ownership
 
@@ -120,4 +120,4 @@ infrastructure are hybrid during migration. Key facts:
 - `Ruff` → style and hygiene
 - `mypy` → typing contracts
 - `pytest` → runtime and integration behavior
-- `tools/architecture/forbidden_frameworks.py` → technology governance (flags: `--json`, `--strict`)
+- `import-linter` BC-09 → technology governance (domain no importa frameworks de infra/datos)
