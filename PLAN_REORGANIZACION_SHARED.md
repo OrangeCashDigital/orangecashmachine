@@ -590,7 +590,7 @@ forbidden_modules = [
 
 - `pyproject.toml` → `[dependency-groups] dev`: añadir `"pip-audit>=2.7,<3.0"` (junto a bandit).
 - `uv lock` → actualiza `uv.lock`. **Nota:** es un cambio de dependencia real (no el caso prohibido de AGENTS.md), commiteable.
-- Uso: `uv run pip-audit --requirement pyproject.toml`.
+- Uso en CI: `uv run pip-audit .` (proyecto PEP 621). Para el informe de métricas se usa `uv run pip-audit -l -f json` (entorno completo). **Nota (verificado en ejecución):** `pip-audit --requirement pyproject.toml --json` falla — `--requirement` trata el pyproject como archivo de requirements pip y `--json` no existe en 2.10.1 (el flag es `-f FORMAT`).
 
 ### Fase 4 — Scripts de gobernanza (`scripts/`, directorio nuevo)
 
@@ -658,12 +658,13 @@ def _pytest_passed() -> int:
 
 def _audit_vulns() -> int:
     r = subprocess.run(
-        ["uv", "run", "pip-audit", "--requirement", "pyproject.toml", "--json"],
+        ["uv", "run", "pip-audit", "-l", "-f", "json"],
         capture_output=True, text=True,
     )
     try:
         data = json.loads(r.stdout or r.stderr)
-        return len(data.get("vulnerabilities", []))
+        deps = data.get("dependencies", [])
+        return sum(len(d.get("vulns", [])) for d in deps)
     except json.JSONDecodeError:
         return -1
 
@@ -726,7 +727,10 @@ Añadir job nuevo, siguiendo el patrón existente (`needs: architecture`, `uv sy
         run: uv run python scripts/check_ssot_enums.py
 
       - name: Vulnerabilidades (pip-audit)
-        run: uv run pip-audit --requirement pyproject.toml
+        # Risk-accept documentado (2026-08-03): pyarrow 19.0.1 (PYSEC-2026-113) y
+        # ecdsa 0.19.2 transitiva de python-jose (PYSEC-2026-1325). Actualizar junto
+        # al pin de pyarrow (<20.0) o python-jose cuando se valide en staging.
+        run: uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325
 ```
 
 **pydeps NO entra como gate** (ver §3, hallazgo 7). Visualización opcional no bloqueante:
@@ -847,6 +851,9 @@ El drift pre-existente (`packages/market_data/infrastructure/runtime/`) queda in
 - 2026-08-03 (ejecución): **Risk-accept de 2 vulnerabilidades** en CI: `pyarrow` 19.0.1 (`PYSEC-2026-113`) y `ecdsa` transitiva de `python-jose` (`PYSEC-2026-1325`) → `--ignore-vuln` documentado en el workflow.
 - 2026-08-03 (ejecución): el JSON de pip-audit anida vulns en `dependencies[].vulns` (no hay clave top-level) → el script las suma por dependencia.
 - 2026-08-03 (ejecución): `mypy .` global tiene 21 errores **pre-existentes fuera de alcance** (apps/api, apps/research, infrastructure/redis, market_data drift, trading/paper_bot) — ninguno en `shared/` ni `scripts/`, que son los que este plan gobierna.
+- 2026-08-03 (revisión post-ejecución): **Punto 1 — duplicación `OrderSide`/`PositionSide` verificado resuelto** en `0e33e48`; `shared/types/__init__.py` sigue re-exportando ambos desde `shared.enums`, sin romper compatibilidad con consumidores. Sin acción.
+- 2026-08-03 (revisión post-ejecución): **Punto 2 — regex de lint-imports verificado contra salida real** `Contracts: 43 kept, 0 broken.` (con punto final); el regex `r"Contracts: (\d+) kept, (\d+) broken\."` de `_contracts()` coincide exactamente. `--json` NO existe en import-linter 2.6 (ver §3) — el parseo de texto es la única vía. Sin acción.
+- 2026-08-03 (revisión post-ejecución): **Punto 3 — colisión BC-43 confirmada.** El bloque COMENTADO de `market_data.feeds` (`architecture/importlinter.toml:246-257`) usa el número BC-43, ya ocupado por el contrato **activo** de portfolio (PositionStore adapters, línea 819). Al re-activar feeds se usará **BC-49** (próximo libre tras BC-48). Documentado para evitar colisiones futuras.
 
 ## 8. Fuera de Alcance (no se ejecuta en este plan)
 
