@@ -47,7 +47,7 @@ integrations:
 
   postgres:
     enabled: ${oc.env:KAFKA_ENABLED,false}
-    host: ${oc.env:POSTGRES_HOST,localhost}
+    enabled: false
     port: ${oc.env:POSTGRES_PORT,5432}
     user: ${oc.env:POSTGRES_USER,""}
     password: ${oc.env:POSTGRES_PASSWORD,""}
