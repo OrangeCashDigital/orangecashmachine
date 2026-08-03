@@ -6,10 +6,10 @@ shared/types/signal.py
 Signal — value object de dominio.
 
 Representa la intención de trading generada por una estrategia.
-No es frozen (auditoría pendiente, ver Fase 7 del plan de shared/):
-`metadata` es un dict mutable — frozen=True impediría reasignar atributos
-pero NO impediría mutar el contenido del dict. Por convención, ningún
-campo se modifica ni se muta tras construcción.
+Frozen (dataclass frozen=True): ningún campo puede reasignarse tras la
+construcción. Nota: `metadata` es un dict mutable — frozen impide
+reasignar el atributo pero NO impide mutar el contenido del dict; por
+convención, no se muta tras la construcción.
 
 Reglas de dominio
 -----------------
@@ -34,7 +34,7 @@ from shared.kafka.schemas._base import SignalDirection
 SignalType = SignalDirection
 
 
-@dataclass
+@dataclass(frozen=True)
 class Signal:
     """
     Value object que representa una señal de trading.
@@ -55,10 +55,11 @@ class Signal:
 
     Inmutabilidad
     -------------
-    No se usa frozen=True (auditoría pendiente — Fase 7 del plan shared/).
-    Nota: metadata es un dict mutable; frozen=True impediría reasignar
-    atributos pero NO mutar el contenido del dict. Por convención, ningún
-    campo se modifica ni se muta tras construcción.
+    frozen=True: la dataclass es inmutable — reasignar cualquier atributo
+    tras la construcción lanza FrozenInstanceError.
+    Nota: metadata es un dict mutable; frozen impide reasignar el atributo
+    pero NO impide mutar el contenido del dict. Por convención, no se
+    muta tras la construcción.
     """
 
     symbol: str
