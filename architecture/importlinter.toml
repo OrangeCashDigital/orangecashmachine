@@ -541,6 +541,35 @@ type = "forbidden"
 source_modules = ["shared.types", "shared.contracts"]
 forbidden_modules = ["shared.kafka"]
 
+[[tool.importlinter.contracts]]
+# BC-46: shared.enums es vocabulario puro — cero dependencias internas de shared.
+# Los BCs externos ya los cubre BC-01 (fuente shared completa).
+name = "BC-46: shared.enums is stdlib-only (no internal shared deps)"
+type = "forbidden"
+source_modules = ["shared.enums"]
+forbidden_modules = [
+    "shared.types", "shared.contracts", "shared.exceptions",
+    "shared.kafka", "shared.utils",
+]
+
+[[tool.importlinter.contracts]]
+# BC-47: shared.kafka es transporte — no conoce dominio (types/contracts).
+# Verificado: pasa desde el primer run (kafka solo importa stdlib + _base).
+name = "BC-47: shared.kafka does not import domain (types/contracts)"
+type = "forbidden"
+source_modules = ["shared.kafka"]
+forbidden_modules = ["shared.types", "shared.contracts"]
+
+[[tool.importlinter.contracts]]
+# BC-48: shared.utils es genérico — sin dominio ni negocio.
+name = "BC-48: shared.utils is generic (no domain/business)"
+type = "forbidden"
+source_modules = ["shared.utils"]
+forbidden_modules = [
+    "shared.types", "shared.contracts", "shared.kafka",
+    "market_data", "trading", "portfolio",
+]
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 3 — platform (ocm): config / runtime / observability
 # ─────────────────────────────────────────────────────────────────────────────
