@@ -5,7 +5,7 @@ Documento raíz de planificación del kernel compartido (Shared Kernel) de OCM. 
 | Fase | Estado | Contenido |
 |---|---|---|
 | **Fase 1 — Reorganización** | ✅ COMPLETADA (`dfe9c24`) | Separación del vocabulario de dominio del envelope wire Kafka + BC-45 |
-| **Fase 2 — Gobernanza Automatizada** | 🚧 EN EJECUCIÓN | BC-46/47/48, scripts SSOT/métricas, job `quality` en CI, dependabot, pre-commit, ADR-0010 |
+| **Fase 2 — Gobernanza Automatizada** | ✅ COMPLETADA (`2436f2f`) | BC-46/47/48, scripts SSOT/métricas, job `quality` en CI, dependabot, pre-commit, ADR-0010 |
 
 **Área:** Shared Kernel · **Fecha:** 2026-08-03
 
@@ -433,7 +433,7 @@ git commit -m "refactor(shared): separar vocabulario de dominio (shared/enums.py
 
 ---
 
-# FASE 2 — Gobernanza Automatizada del Shared Kernel (EJECUTADA — pendiente commits)
+# FASE 2 — Gobernanza Automatizada del Shared Kernel (COMPLETADA)
 
 > Continuación de la Fase 1: pasar de una arquitectura *documentada* a una arquitectura *gobernada por
 > automatización* — reglas ejecutables en CI, contratos de arquitectura, SSOT enforcement, seguridad de
@@ -446,15 +446,15 @@ git commit -m "refactor(shared): separar vocabulario de dominio (shared/enums.py
 
 | Fase | Acción | Estado |
 |---|---|---|
-| 1 | Unificar `OrderSide`/`PositionSide` en `shared/enums.py` (+ `_VALID_*`) | ✅ consumidores importan de `shared.enums`; ruff/mypy OK |
-| 2 | Contratos BC-46/47/48 en `importlinter.toml` | ✅ 40 → **43 KEPT / 0 broken** |
-| 3 | `pip-audit` en `[dependency-groups] dev` + `uv.lock` | ✅ `pip-audit>=2.7,<3.0` (2.10.1 instalada) |
-| 4 | Scripts `check_ssot_enums.py` + `metrics_report.py` | ✅ creados, tipados, ruff OK; `check_ssot` pasa; `metrics_report` genera `architecture/metrics.json` |
-| 5 | Job `quality` en `ocm-ci.yml` | ✅ añadido (ruff · format · mypy shared · SSOT · pip-audit) |
-| 6 | `.github/dependabot.yml` | ✅ ecosistema pip, weekly, grupo dev-dependencies |
-| 7 | Pre-commit: import-linter + mypy-shared + ssot-enums | ✅ hooks locales añadidos |
-| 8 | ADR-0010 + `GOVERNANCE.md` §8 + README | ✅ documentados |
-| 9 | Validación final | ✅ ruff/format/lint-imports/pytest/SSOT/pip-audit/bandit; `mypy .` → 21 errores pre-existentes fuera de alcance (ninguno en `shared/` ni `scripts/`) |
+| 1 | Unificar `OrderSide`/`PositionSide` en `shared/enums.py` (+ `_VALID_*`) | ✅ `0e33e48` — consumidores importan de `shared.enums`; ruff/mypy OK |
+| 2 | Contratos BC-46/47/48 en `importlinter.toml` | ✅ `23fe011` — 40 → **43 KEPT / 0 broken** |
+| 3 | `pip-audit` en `[dependency-groups] dev` + `uv.lock` | ✅ `bb430e8` — `pip-audit>=2.7,<3.0` (2.10.1 instalada) |
+| 4 | Scripts `check_ssot_enums.py` + `metrics_report.py` | ✅ `bb430e8` — creados, tipados, ruff OK; `check_ssot` pasa; `metrics_report` genera `architecture/metrics.json` |
+| 5 | Job `quality` en `ocm-ci.yml` | ✅ `bb430e8` — añadido (ruff · format · mypy shared · SSOT · pip-audit) |
+| 6 | `.github/dependabot.yml` | ✅ `bb430e8` — ecosistema pip, weekly, grupo dev-dependencies |
+| 7 | Pre-commit: import-linter + mypy-shared + ssot-enums | ✅ `bb430e8` — hooks locales añadidos |
+| 8 | ADR-0010 + `GOVERNANCE.md` §8 + README | ✅ `5d94d4a` — documentados |
+| 9 | Validación final | ✅ `8ac8149` + `2436f2f` — ruff/format/lint-imports/pytest/SSOT/pip-audit/bandit; `mypy .` → 21 errores pre-existentes fuera de alcance (ninguno en `shared/` ni `scripts/`) |
 
 ### Incidencias encontradas en ejecución (Fase 9)
 
