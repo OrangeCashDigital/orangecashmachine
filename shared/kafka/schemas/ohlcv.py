@@ -30,7 +30,7 @@ Retention policy (documentada, aplicar en Kafka admin)
   ohlcv.raw       → delete, retention.ms = 604800000  (7 días)
   ohlcv.validated → delete, retention.ms = 259200000  (3 días)
   ohlcv.features  → delete, retention.ms = 86400000   (1 día)
-  ohlcv.dlq       → delete, retention.ms = 2592000000 (30 días)
+  ocm.dlq         → delete, retention.ms = 2592000000 (30 días)
 
 Schema version history
 ----------------------

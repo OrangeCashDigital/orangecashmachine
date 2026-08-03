@@ -207,7 +207,6 @@ Permite routing sin deserializar en consumers multi-topic."""
 #   ohlcv.raw          delete   7d     — serie temporal, no compactar
 #   ohlcv.validated    delete   3d
 #   ohlcv.features     delete   1d
-#   ohlcv.dlq          delete   30d    — replay manual
 #   signals.raw        delete   1d
 #   signals.approved   delete   1d
 #   signals.rejected   delete   7d     — auditoría

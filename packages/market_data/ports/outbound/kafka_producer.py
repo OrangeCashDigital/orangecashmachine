@@ -8,7 +8,7 @@ Puerto OUTBOUND del productor Kafka — DIP.
 Responsabilidad única
 ---------------------
 Definir el contrato async mínimo que el productor Kafka debe cumplir.
-Los topics, headers y grupos viven en infrastructure/kafka/topics.py (SSOT).
+Los topics, headers y grupos viven en shared.kafka.topics (SSOT global).
 Este port NO contiene constantes de infraestructura — SRP.
 
 Nivel de abstracción
@@ -67,7 +67,7 @@ class KafkaProducerPort(Protocol):
         topic   : nombre canónico del tópico (desde topics.py — SSOT).
         value   : payload serializado como bytes (JSON UTF-8 via serialize()).
         key     : routing key bytes — determina la partición.
-                  None = round-robin. Usar make_routing_key() para OHLCV.
+                  None = round-robin. Usar make_ohlcv_key() para OHLCV.
         headers : metadatos del mensaje. Claves desde topics.HEADER_*.
 
         SafeOps: encola sin esperar confirmación del broker.

@@ -8,13 +8,18 @@ Kafka Domain Model — SSOT de contratos wire para todos los bounded contexts.
 Estructura
 ----------
   topics.py      — topics, consumer groups, headers (SSOT global)
-  serializer.py  — serialize/deserialize + routing key (genérico)
-  schemas/       — wire payloads por dominio
-    _base.py     — BasePayload común (envelope de transporte)
+  serializer.py  — serialize/deserialize + routing keys (genérico)
+  schemas/       — wire payloads por dominio (9 schemas)
+    _base.py     — BasePayload, SchemaVersionError, KappaSourceMixin, literales
     ohlcv.py     — EventPayload, KafkaOHLCVBar
     signals.py   — SignalPayload, ApprovedSignalPayload, RejectedSignalPayload
     orders.py    — OrderFilledPayload, OrderRejectedPayload
     positions.py — PositionOpenedPayload, PositionClosedPayload
+    trades.py    — TradePayload, TradeSeriesPayload
+    orderbook.py — OrderBookSnapshotPayload, OrderBookDeltaPayload
+    funding.py   — FundingRatePayload
+    oi.py        — OpenInterestPayload
+    liquidations.py — LiquidationPayload
 
 Regla de dependencia (BC-01)
 -----------------------------

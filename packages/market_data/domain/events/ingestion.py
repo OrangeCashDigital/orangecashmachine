@@ -125,7 +125,7 @@ class QualityCheckFailed(DomainEvent):
     Quality gate rechazó el batch — va a DLQ.
 
     Disparado por: QualityGateConsumer
-    Publicado a:   dlq.ohlcv
+    Publicado a:   ocm.dlq
     """
 
     exchange: str = ""

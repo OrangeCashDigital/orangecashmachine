@@ -10,6 +10,7 @@ Estructura
   types/      — value objects, entities, domain events (stdlib-only)
   contracts/  — protocols/abstracciones inter-BC (DIP · OCP)
   exceptions/ — excepciones base compartidas
+  kafka/      — wire schemas + serializer + topics (SSOT del bus)
   utils/      — utilidades puras sin lógica de negocio
 
 Regla de dependencia (BC-09 en pyproject.toml):

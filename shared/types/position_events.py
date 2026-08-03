@@ -13,6 +13,15 @@ Fail-Fast — Los factory methods validan ``side`` contra el Literal
 permitido antes de construir el dataclass. Un side inválido indica
 un bug en el caller — debe fallar en el punto de origen, no en runtime.
 
+Evolución prevista del modelo wire
+----------------------------------
+Los wire payloads canónicos para el bus viven en
+shared/kafka/schemas/positions.py (PositionOpenedPayload,
+PositionClosedPayload). Estos DomainEvents permanecen como modelo de
+dominio interno en memoria, pensado como evolución prevista de los wire
+payloads. No se serializan hoy: los publishers traducen a los wire
+payloads en la frontera del bus.
+
 Principios: DDD · SSOT · Fail-Fast · KISS
 """
 
