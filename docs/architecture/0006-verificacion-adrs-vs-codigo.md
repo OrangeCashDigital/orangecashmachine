@@ -111,7 +111,7 @@ El "Pendiente #1" del ADR (¿systemd timers suficiente?) quedó **resuelto de fa
 | `PortfolioConfig` integrado a `AppConfig`/Hydra | ✅ `ocm/config/schema.py:519,743` + `config/portfolio/portfolio.yaml` |
 | Contrato BC-43 (PositionStore solo desde Composition Root) | ✅ `architecture/importlinter.toml:779` |
 | Legados `live.py`/`paper.py` aún presentes (eliminación pendiente de confirmación) | ✅ Siguen en `apps/app/cli/`; ningún módulo los importa (solo docstrings) |
-| Docstrings "Coexiste con `app/cli/paper.py` sin reemplazarlo" obsoletos | ✅ Confirmado obsoletos (`live_hydra.py:10`, `paper_hydra.py:8`) — sin actualizar |
+| Docstrings "Coexiste con `app/cli/paper.py` sin reemplazarlo" obsoletos | ✅ Corregido — commit `fef31a0` (2026-08-02) actualiza `live_hydra.py`/`paper_hydra.py` para reflejar ADR-0005 |
 | Nota 2.3/3.1: manejo de señales SIGINT/SIGTERM "no verificado" | 🔍 **Ahora verificado — parcial:** `live_hydra.py:162-181` SÍ traduce SIGTERM vía `signal.signal`; `paper_hydra.py` NO maneja señales. Ninguno de los dos llama `bootstrap_logging()` explícito (config de logging vía Hydra/AppConfig). |
 | Nota 3.2: `MetricsRuntime.shutdown()` fuera de alcance | ✅ Correcto — sigue sin invocarse en `cli/main.py` |
 
@@ -119,21 +119,36 @@ El "Pendiente #1" del ADR (¿systemd timers suficiente?) quedó **resuelto de fa
 
 ## Hallazgos adicionales (fuera de los ADRs)
 
-1. **AGENTS.md desactualizado sobre Dagster** — líneas 25-29 (`./run.sh dagster`, `dagster_defs.py`), 51, 93, 103 referencian componentes eliminados.
-2. **pyproject.toml:24** — la descripción del proyecto aún dice "orquestación Dagster".
-3. **Archivos `.bak` sin trackear** — `apps/app/use_cases/execute_live.py.bak`, `execute_paper.py.bak`, `packages/portfolio/services/portfolio_service.py.bak` (basura de sesión de Fase 3).
+1. ~~AGENTS.md desactualizado sobre Dagster~~ — ✅ **Resuelto** (verificado 2026-08-02): sin menciones a Dagster en el archivo actual.
+2. ~~pyproject.toml:24 con "orquestación Dagster"~~ — ✅ **Resuelto** (verificado 2026-08-02): la descripción actual no menciona Dagster.
+3. ~~Archivos `.bak` sin trackear~~ — ✅ **Resuelto** (verificado 2026-08-02): `find . -name "*.bak"` no encuentra ninguno.
 4. **Docstring desactualizado en `live_hydra.py`** — dice "uv run live-hydra", pero el script es `live` (`uv run live`).
-5. **Docstring de clase en `portfolio_service.py:58`** — dice "default: InMemoryPositionStore" pero el parámetro es obligatorio.
+5. ~~Docstring de clase en `portfolio_service.py:58`~~ — ✅ **Resuelto** (verificado 2026-08-02): dice "obligatorio, sin default — ver BC-43".
 
 ---
 
 ## Plan de reconciliación propuesto
 
-1. **ADR-0002**: enmendar Decisión 4 + Pendiente #1 para reflejar la eliminación de Dagster (commit `9eb6de3`); corregir ruta de `event_bus` a `packages/market_data/infrastructure/event_bus/`.
-2. **ADR-0001**: marcar `control_plane`, `build_market_data()`, `build_trading()` y el CR General como *pendientes* (no implementados), para no presentar intención como estado.
-3. **AGENTS.md + pyproject.toml**: eliminar referencias a Dagster.
-4. **Deuda menor**: borrar `.bak`, actualizar docstrings obsoletos ("Coexiste...", "uv run live-hydra", "default: InMemoryPositionStore").
+1. ~~**ADR-0002**: enmendar Decisión 4 + Pendiente #1~~ — ✅ **Implementado**: nota de enmienda presente al inicio del documento, referenciando este ADR-0006.
+2. ~~**ADR-0001**: marcar `control_plane`, `build_market_data()`, `build_trading()` y el CR General como *pendientes*~~ — ✅ **Implementado**: nota de enmienda presente al inicio del documento.
+3. ~~**AGENTS.md + pyproject.toml**: eliminar referencias a Dagster~~ — ✅ **Resuelto** (verificado 2026-08-02).
+4. **Deuda menor** — ✅ `.bak` eliminados; ✅ docstrings "Coexiste..." corregidos (commit `fef31a0`); ✅ "default: InMemoryPositionStore" corregido; ⏳ pendiente confirmar wording "uv run live-hydra" en `live_hydra.py`.
 
 ---
 
 *Documento de verificación generado el 2026-08-02. Cada afirmación fue comprobada contra el árbol de código y el historial de git.*
+
+---
+
+## Adenda — re-verificación 2026-08-02 (sesión posterior)
+
+4 de los 5 "Hallazgos adicionales" y 3 de los 4 ítems del "Plan de
+reconciliación" ya estaban resueltos al momento de esta re-verificación,
+la mayoría antes de esta sesión (drift positivo: el código avanzó más
+rápido que este documento). Único ítem verificado y corregido en esta
+sesión: docstrings de `live_hydra.py`/`paper_hydra.py` (commit `fef31a0`).
+Pendiente sin verificar: wording "uv run live-hydra" (ítem 4 original).
+
+Lección operativa: este documento, por su propia naturaleza de
+verificación puntual, tiende al mismo drift que audita. Re-verificar
+periódicamente, no asumir vigencia indefinida.
