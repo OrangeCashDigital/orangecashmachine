@@ -42,7 +42,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 
 
 def _utc_now() -> str:
@@ -51,6 +51,49 @@ def _utc_now() -> str:
 
 def _new_uuid() -> str:
     return str(uuid.uuid4())
+
+
+# =============================================================================
+# SchemaVersionError — fail-fast en deserialización (SSOT)
+# =============================================================================
+
+
+class SchemaVersionError(ValueError):
+    """
+    Versión de schema wire incompatible durante from_dict().
+
+    Fail-fast: un consumer no puede procesar un payload de versión
+    desconocida sin riesgo de corrupción silenciosa.
+    """
+
+
+# =============================================================================
+# Literales cross-wire — SSOT compartido por todos los wire schemas
+# =============================================================================
+# BC-33 permite a shared.kafka.schemas importar SOLO desde _base. Por eso los
+# literales que varios schemas comparten viven aquí, nunca en shared.types.
+# shared.types y shared.contracts re-exportan desde este módulo (dirección
+# permitida: types/contracts → kafka.schemas._base, no al revés).
+
+SignalDirection = Literal["buy", "sell", "hold"]
+"""Dirección de señal de trading: 'buy' | 'sell' | 'hold'."""
+
+OrderSide = Literal["buy", "sell"]
+"""Lado de una orden: 'buy' | 'sell'."""
+
+PositionSide = Literal["long", "short"]
+"""Lado de una posición: 'long' | 'short'."""
+
+DataSource = Literal["live", "backfill", "replay"]
+"""Origen Kappa de un dato de mercado."""
+
+DATASOURCE_LIVE: DataSource = "live"
+DATASOURCE_BACKFILL: DataSource = "backfill"
+DATASOURCE_REPLAY: DataSource = "replay"
+
+_VALID_SOURCES: frozenset[str] = frozenset({"live", "backfill", "replay"})
+
+_VALID_SIGNAL_DIRECTIONS: frozenset[str] = frozenset({"buy", "sell", "hold"})
 
 
 @dataclass(frozen=True)
@@ -82,4 +125,14 @@ class BasePayload:
         }
 
 
-__all__ = ["BasePayload"]
+__all__ = [
+    "BasePayload",
+    "SchemaVersionError",
+    "SignalDirection",
+    "OrderSide",
+    "PositionSide",
+    "DataSource",
+    "DATASOURCE_LIVE",
+    "DATASOURCE_BACKFILL",
+    "DATASOURCE_REPLAY",
+]

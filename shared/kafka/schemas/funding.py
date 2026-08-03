@@ -34,13 +34,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import BasePayload, SchemaVersionError
 
 FUNDING_RATE_SCHEMA_VERSION: int = 1
 
-
-class FundingSchemaVersionError(ValueError):
-    """Schema version incompatible en FundingRatePayload."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+FundingSchemaVersionError = SchemaVersionError
 
 
 @dataclass(frozen=True)
@@ -94,7 +93,7 @@ class FundingRatePayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "FundingRatePayload":
         version = int(data.get("event_version", 1))
         if version != FUNDING_RATE_SCHEMA_VERSION:
-            raise FundingSchemaVersionError(
+            raise SchemaVersionError(
                 f"FundingRatePayload schema v{version} incompatible con v{FUNDING_RATE_SCHEMA_VERSION} esperada."
             )
         return cls(

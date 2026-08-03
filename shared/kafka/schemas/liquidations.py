@@ -35,16 +35,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import BasePayload, SchemaVersionError
 
 LIQUIDATION_SCHEMA_VERSION: int = 1
 
 LiquidationSide = Literal["buy", "sell"]
 _VALID_SIDES: frozenset[str] = frozenset({"buy", "sell"})
 
-
-class LiquidationSchemaVersionError(ValueError):
-    """Schema version incompatible en LiquidationPayload."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+LiquidationSchemaVersionError = SchemaVersionError
 
 
 @dataclass(frozen=True)
@@ -97,12 +96,12 @@ class LiquidationPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "LiquidationPayload":
         version = int(data.get("event_version", 1))
         if version != LIQUIDATION_SCHEMA_VERSION:
-            raise LiquidationSchemaVersionError(
+            raise SchemaVersionError(
                 f"LiquidationPayload schema v{version} incompatible con v{LIQUIDATION_SCHEMA_VERSION} esperada."
             )
         side = data.get("side", "buy")
         if side not in _VALID_SIDES:
-            raise LiquidationSchemaVersionError(f"LiquidationPayload.side desconocido: {side!r}.")
+            raise SchemaVersionError(f"LiquidationPayload.side desconocido: {side!r}.")
         return cls(
             event_id=str(data["event_id"]),
             event_version=version,

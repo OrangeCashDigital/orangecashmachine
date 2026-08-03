@@ -35,13 +35,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import BasePayload, SchemaVersionError
 
 OPEN_INTEREST_SCHEMA_VERSION: int = 1
 
-
-class OISchemaVersionError(ValueError):
-    """Schema version incompatible en OpenInterestPayload."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+OISchemaVersionError = SchemaVersionError
 
 
 @dataclass(frozen=True)
@@ -89,7 +88,7 @@ class OpenInterestPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "OpenInterestPayload":
         version = int(data.get("event_version", 1))
         if version != OPEN_INTEREST_SCHEMA_VERSION:
-            raise OISchemaVersionError(
+            raise SchemaVersionError(
                 f"OpenInterestPayload schema v{version} incompatible con v{OPEN_INTEREST_SCHEMA_VERSION} esperada."
             )
         return cls(

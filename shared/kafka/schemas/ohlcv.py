@@ -45,9 +45,17 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import (
+    _VALID_SOURCES,
+    DATASOURCE_BACKFILL,
+    DATASOURCE_LIVE,
+    DATASOURCE_REPLAY,
+    BasePayload,
+    DataSource,
+    SchemaVersionError,
+)
 
 # ---------------------------------------------------------------------------
 # Constantes de schema
@@ -55,22 +63,8 @@ from shared.kafka.schemas._base import BasePayload
 
 OHLCV_SCHEMA_VERSION: int = 1
 
-DataSource = Literal["live", "backfill", "replay"]
-
-DATASOURCE_LIVE: DataSource = "live"
-DATASOURCE_BACKFILL: DataSource = "backfill"
-DATASOURCE_REPLAY: DataSource = "replay"
-
-_VALID_SOURCES = frozenset({DATASOURCE_LIVE, DATASOURCE_BACKFILL, DATASOURCE_REPLAY})
-
-
-# ---------------------------------------------------------------------------
-# SchemaVersionError — Fail-Fast en deserialización
-# ---------------------------------------------------------------------------
-
-
-class OHLCVSchemaVersionError(ValueError):
-    """Schema version incompatible en EventPayload.from_dict()."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+OHLCVSchemaVersionError = SchemaVersionError
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +197,7 @@ class EventPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "EventPayload":
         version = int(data.get("event_version", 1))
         if version != OHLCV_SCHEMA_VERSION:
-            raise OHLCVSchemaVersionError(
+            raise SchemaVersionError(
                 f"EventPayload schema v{version} incompatible con v{OHLCV_SCHEMA_VERSION} esperada."
             )
 
@@ -218,7 +212,7 @@ class EventPayload(BasePayload):
 
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
-            raise OHLCVSchemaVersionError(
+            raise SchemaVersionError(
                 f"EventPayload.source desconocido: {source!r}. "
                 f"Válidos: {sorted(_VALID_SOURCES)}. "
                 "Enviar mensaje al DLQ — no asumir source=live en trading."

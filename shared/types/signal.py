@@ -24,10 +24,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal
 
-# stdlib únicamente — dominio puro
-SignalType = Literal["buy", "sell", "hold"]
+# SignalType re-exporta SignalDirection desde _base (BC-33: el SSOT de los
+# literales wire vive en shared.kafka.schemas._base; types solo re-expone).
+from shared.kafka.schemas._base import SignalDirection
+
+SignalType = SignalDirection
 
 
 @dataclass

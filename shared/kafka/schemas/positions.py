@@ -34,18 +34,15 @@ Principios: SSOT · DDD · Fail-Fast · KISS
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Literal
+from typing import Any, Dict
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import BasePayload, PositionSide, SchemaVersionError
 
 POSITION_OPENED_SCHEMA_VERSION: int = 1
 POSITION_CLOSED_SCHEMA_VERSION: int = 1
 
-PositionSide = Literal["long", "short"]
-
-
-class PositionSchemaVersionError(ValueError):
-    """Schema version incompatible en PositionPayload.from_dict()."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+PositionSchemaVersionError = SchemaVersionError
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +100,7 @@ class PositionOpenedPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "PositionOpenedPayload":
         version = int(data.get("event_version", 1))
         if version != POSITION_OPENED_SCHEMA_VERSION:
-            raise PositionSchemaVersionError(
+            raise SchemaVersionError(
                 f"PositionOpenedPayload schema v{version} incompatible con v{POSITION_OPENED_SCHEMA_VERSION} esperada."
             )
         return cls(
@@ -181,7 +178,7 @@ class PositionClosedPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "PositionClosedPayload":
         version = int(data.get("event_version", 1))
         if version != POSITION_CLOSED_SCHEMA_VERSION:
-            raise PositionSchemaVersionError(
+            raise SchemaVersionError(
                 f"PositionClosedPayload schema v{version} incompatible con v{POSITION_CLOSED_SCHEMA_VERSION} esperada."
             )
         return cls(

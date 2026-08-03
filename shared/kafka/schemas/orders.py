@@ -50,18 +50,15 @@ Principios: SSOT · DDD · Fail-Fast · KISS · exactly-once awareness
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Literal
+from typing import Any, Dict
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import BasePayload, OrderSide, SchemaVersionError
 
 ORDER_FILLED_SCHEMA_VERSION: int = 1
 ORDER_REJECTED_SCHEMA_VERSION: int = 1
 
-OrderSide = Literal["buy", "sell"]
-
-
-class OrderSchemaVersionError(ValueError):
-    """Schema version incompatible en OrderFilledPayload.from_dict()."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+OrderSchemaVersionError = SchemaVersionError
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +124,7 @@ class OrderFilledPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "OrderFilledPayload":
         version = int(data.get("event_version", 1))
         if version != ORDER_FILLED_SCHEMA_VERSION:
-            raise OrderSchemaVersionError(
+            raise SchemaVersionError(
                 f"OrderFilledPayload schema v{version} incompatible con v{ORDER_FILLED_SCHEMA_VERSION} esperada."
             )
         return cls(
@@ -188,7 +185,7 @@ class OrderRejectedPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "OrderRejectedPayload":
         version = int(data.get("event_version", 1))
         if version != ORDER_REJECTED_SCHEMA_VERSION:
-            raise OrderSchemaVersionError(
+            raise SchemaVersionError(
                 f"OrderRejectedPayload schema v{version} incompatible con v{ORDER_REJECTED_SCHEMA_VERSION} esperada."
             )
         return cls(

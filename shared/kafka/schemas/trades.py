@@ -39,7 +39,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import (
+    _VALID_SOURCES,
+    DATASOURCE_BACKFILL,
+    DATASOURCE_LIVE,
+    DATASOURCE_REPLAY,
+    BasePayload,
+    DataSource,
+    SchemaVersionError,
+)
 
 # ---------------------------------------------------------------------------
 # Constantes de schema
@@ -49,18 +57,11 @@ TRADE_SCHEMA_VERSION: int = 1
 TRADE_SERIES_SCHEMA_VERSION: int = 1
 
 TradeSideWire = Literal["buy", "sell", "unknown"]
-DataSource = Literal["live", "backfill", "replay"]
 
-DATASOURCE_LIVE: DataSource = "live"
-DATASOURCE_BACKFILL: DataSource = "backfill"
-DATASOURCE_REPLAY: DataSource = "replay"
-
-_VALID_SOURCES = frozenset({"live", "backfill", "replay"})
 _VALID_SIDES = frozenset({"buy", "sell", "unknown"})
 
-
-class TradeSchemaVersionError(ValueError):
-    """Schema version incompatible en TradePayload.from_dict()."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+TradeSchemaVersionError = SchemaVersionError
 
 
 # ---------------------------------------------------------------------------
@@ -154,14 +155,12 @@ class TradePayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "TradePayload":
         version = int(data.get("event_version", 1))
         if version != TRADE_SCHEMA_VERSION:
-            raise TradeSchemaVersionError(
+            raise SchemaVersionError(
                 f"TradePayload schema v{version} incompatible con v{TRADE_SCHEMA_VERSION} esperada."
             )
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
-            raise TradeSchemaVersionError(
-                f"TradePayload.source desconocido: {source!r}. Válidos: {sorted(_VALID_SOURCES)}."
-            )
+            raise SchemaVersionError(f"TradePayload.source desconocido: {source!r}. Válidos: {sorted(_VALID_SOURCES)}.")
         side = data.get("side", "unknown")
         if side not in _VALID_SIDES:
             side = "unknown"  # fail-soft: lado desconocido no es error fatal
@@ -267,12 +266,12 @@ class TradeSeriesPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "TradeSeriesPayload":
         version = int(data.get("event_version", 1))
         if version != TRADE_SERIES_SCHEMA_VERSION:
-            raise TradeSchemaVersionError(
+            raise SchemaVersionError(
                 f"TradeSeriesPayload schema v{version} incompatible con v{TRADE_SERIES_SCHEMA_VERSION} esperada."
             )
         source = data.get("source", DATASOURCE_LIVE)
         if source not in _VALID_SOURCES:
-            raise TradeSchemaVersionError(f"TradeSeriesPayload.source desconocido: {source!r}.")
+            raise SchemaVersionError(f"TradeSeriesPayload.source desconocido: {source!r}.")
         return cls(
             event_id=str(data["event_id"]),
             event_version=version,

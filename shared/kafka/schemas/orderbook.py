@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from shared.kafka.schemas._base import BasePayload
+from shared.kafka.schemas._base import BasePayload, SchemaVersionError
 
 # ---------------------------------------------------------------------------
 # Constantes de schema
@@ -53,9 +53,8 @@ Side = Literal["bid", "ask"]
 
 _VALID_SIDES: frozenset[str] = frozenset({"bid", "ask"})
 
-
-class OrderBookSchemaVersionError(ValueError):
-    """Schema version incompatible."""
+# Alias de compatibilidad — el canónico es SchemaVersionError (_base.py).
+OrderBookSchemaVersionError = SchemaVersionError
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +110,7 @@ class OrderBookSnapshotPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "OrderBookSnapshotPayload":
         version = int(data.get("event_version", 1))
         if version != ORDERBOOK_SNAPSHOT_SCHEMA_VERSION:
-            raise OrderBookSchemaVersionError(
+            raise SchemaVersionError(
                 f"OrderBookSnapshotPayload schema v{version} "
                 f"incompatible con v{ORDERBOOK_SNAPSHOT_SCHEMA_VERSION} esperada."
             )
@@ -179,12 +178,12 @@ class OrderBookDeltaPayload(BasePayload):
     def from_dict(cls, data: Dict[str, Any]) -> "OrderBookDeltaPayload":
         version = int(data.get("event_version", 1))
         if version != ORDERBOOK_DELTA_SCHEMA_VERSION:
-            raise OrderBookSchemaVersionError(
+            raise SchemaVersionError(
                 f"OrderBookDeltaPayload schema v{version} incompatible con v{ORDERBOOK_DELTA_SCHEMA_VERSION} esperada."
             )
         side = data.get("side", "bid")
         if side not in _VALID_SIDES:
-            raise OrderBookSchemaVersionError(
+            raise SchemaVersionError(
                 f"OrderBookDeltaPayload.side desconocido: {side!r}. Válidos: {sorted(_VALID_SIDES)}."
             )
         return cls(
