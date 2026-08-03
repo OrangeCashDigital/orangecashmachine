@@ -82,44 +82,6 @@ class SignalProtocol(Protocol):
 
 
 # =============================================================================
-# execution -> portfolio  (on_fill callback)
-# =============================================================================
-
-
-@runtime_checkable
-class FillHandler(Protocol):
-    """
-    Callback que execution llama cuando una orden se llena.
-
-    Implementado por: portfolio.TradeTracker via on_fill().
-    OMS acepta cualquier FillHandler — no importa TradeTracker directamente.
-    SafeOps: implementaciones no deben lanzar.
-    """
-
-    def on_fill(self, order: Any) -> None: ...
-
-
-# =============================================================================
-# portfolio -> backtesting
-# =============================================================================
-
-
-@runtime_checkable
-class TradeHistory(Protocol):
-    """
-    Contrato minimo que backtesting espera de portfolio.
-
-    Implementado por: portfolio.TradeTracker.
-    backtesting no importa TradeTracker directamente.
-    """
-
-    @property
-    def closed_trades(self) -> list[Any]:
-        """Lista de TradeRecord cerrados. Append-only, inmutable por elemento."""
-        ...
-
-
-# =============================================================================
 # execution -> risk
 # =============================================================================
 
