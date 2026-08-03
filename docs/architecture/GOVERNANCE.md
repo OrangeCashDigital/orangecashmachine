@@ -47,3 +47,20 @@ de cualquier otra acción. Los backups no reemplazan el commit a git.
 
 Ver docs/architecture/INVENTORY.md (pendiente de crear): bounded
 contexts, composition roots, ports, adapters, contratos BC-NN activos.
+
+## 7. Estructura real por bounded context (equivalencia de capas)
+
+Auditoría verificada por estructura de carpetas (paso 2, Fase 0). Ver
+ADR-0007 para la decisión de no forzar naming uniforme.
+
+| Bounded context | domain | ports | adapters | application/services | bootstrap | Estado |
+|---|---|---|---|---|---|---|
+| market_data | domain/ | ports/ | adapters/ | application/ | infrastructure/bootstrap/ | Completo (naming propio) |
+| portfolio | models/ | ports/ | infra/ | services/ | bootstrap/ | Completo (naming propio) |
+| trading | ninguno | ninguno | ninguno | ninguno | bootstrap/ (perdido) | Deuda real — reconstruir con capas al recuperar bootstrap |
+
+Regla derivada: cualquier bounded context nuevo, o `trading` al
+reconstruirse, debe implementar las cinco capas explícitamente
+(domain/ports/adapters/services|application/bootstrap), no
+necesariamente con esos nombres literales, pero sí con la separación
+de responsabilidades que representan.
