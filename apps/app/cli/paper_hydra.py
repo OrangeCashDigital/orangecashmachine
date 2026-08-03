@@ -5,10 +5,10 @@ app/cli/paper_hydra.py
 
 Entrypoint CLI para paper trading — variante Hydra/AppConfig (Fase 2).
 
-Coexiste con app/cli/paper.py sin reemplazarlo ni modificarlo. Fase 2
-del plan de integración CLI ↔ Hydra. Cuando ambos caminos demuestren
-construir el mismo grafo de dependencias (Fase 4), este entrypoint
-reemplaza a paper.py y paper.py se retira.
+CLI oficial de paper trading (ADR-0005) — reemplaza a app/cli/paper.py.
+app/cli/paper.py permanece en el arbol hasta confirmar que ningun
+consumidor externo (systemd, cron, scripts fuera de este repo) lo
+invoca directamente; ver ADR-0005, seccion Consecuencias.
 
 Qué cambia respecto a app/cli/paper.py
 ---------------------------------------

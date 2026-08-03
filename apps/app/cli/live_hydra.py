@@ -7,7 +7,10 @@ Entrypoint CLI para live trading — variante Hydra/AppConfig (Fase 2).
 
 ⚠️  ADVERTENCIA: Este comando opera con capital real.
 
-Coexiste con app/cli/live.py sin reemplazarlo ni modificarlo.
+CLI oficial de live trading (ADR-0005) — reemplaza a app/cli/live.py.
+app/cli/live.py permanece en el arbol hasta confirmar que ningun
+consumidor externo (systemd, cron, scripts fuera de este repo) lo
+invoca directamente; ver ADR-0005, seccion Consecuencias.
 
 Qué cambia respecto a app/cli/live.py
 ---------------------------------------
