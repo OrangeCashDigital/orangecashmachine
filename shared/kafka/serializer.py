@@ -103,17 +103,9 @@ def make_symbol_key(exchange: str, symbol: str) -> bytes:
     return f"{exchange}:{symbol}".encode("utf-8")
 
 
-# Alias de compatibilidad — ELIMINAR en Fase 2 cuando se borre
-# market_data/infrastructure/kafka/serializer.py.
-# Condición de eliminación: grep -r "make_routing_key" — debe devolver cero resultados
-# fuera de este archivo antes de borrar el alias.
-make_routing_key = make_ohlcv_key
-
-
 __all__ = [
     "serialize",
     "deserialize",
     "make_ohlcv_key",
     "make_symbol_key",
-    "make_routing_key",
 ]

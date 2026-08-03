@@ -3,7 +3,7 @@
 tests/kafka/test_serializer.py
 ================================
 
-Tests de serializer.py — serialize / deserialize / make_routing_key.
+Tests de serializer.py — serialize / deserialize / make_ohlcv_key.
 
 Sin dependencias externas — puro Python.
 Verifica: round-trip, Fail-Fast, routing key formato canónico.
@@ -29,7 +29,7 @@ from shared.kafka.schemas.ohlcv import (
 )
 from shared.kafka.serializer import (
     deserialize,
-    make_routing_key,
+    make_ohlcv_key,
     serialize,
 )
 
@@ -197,39 +197,39 @@ class TestDeserialize:
 
 
 # ---------------------------------------------------------------------------
-# make_routing_key()
+# make_ohlcv_key()
 # ---------------------------------------------------------------------------
 
 
-class TestMakeRoutingKey:
+class TestMakeOhlcvKey:
     def test_returns_bytes(self):
-        assert isinstance(make_routing_key("bybit", "BTC/USDT", "1h"), bytes)
+        assert isinstance(make_ohlcv_key("bybit", "BTC/USDT", "1h"), bytes)
 
     def test_canonical_format(self):
-        key = make_routing_key("bybit", "BTC/USDT", "1h")
+        key = make_ohlcv_key("bybit", "BTC/USDT", "1h")
         assert key == b"bybit:BTC/USDT:1h"
 
     def test_kucoin_futures(self):
-        key = make_routing_key("kucoinfutures", "XBT/USDT:USDT", "4h")
+        key = make_ohlcv_key("kucoinfutures", "XBT/USDT:USDT", "4h")
         assert key == b"kucoinfutures:XBT/USDT:USDT:4h"
 
     def test_different_timeframes_produce_different_keys(self):
-        k1 = make_routing_key("bybit", "BTC/USDT", "1h")
-        k4 = make_routing_key("bybit", "BTC/USDT", "4h")
+        k1 = make_ohlcv_key("bybit", "BTC/USDT", "1h")
+        k4 = make_ohlcv_key("bybit", "BTC/USDT", "4h")
         assert k1 != k4
 
     def test_different_symbols_produce_different_keys(self):
-        kb = make_routing_key("bybit", "BTC/USDT", "1h")
-        ke = make_routing_key("bybit", "ETH/USDT", "1h")
+        kb = make_ohlcv_key("bybit", "BTC/USDT", "1h")
+        ke = make_ohlcv_key("bybit", "ETH/USDT", "1h")
         assert kb != ke
 
     def test_different_exchanges_produce_different_keys(self):
-        k1 = make_routing_key("bybit", "BTC/USDT", "1h")
-        k2 = make_routing_key("kucoin", "BTC/USDT", "1h")
+        k1 = make_ohlcv_key("bybit", "BTC/USDT", "1h")
+        k2 = make_ohlcv_key("kucoin", "BTC/USDT", "1h")
         assert k1 != k2
 
     def test_utf8_decodable(self):
-        key = make_routing_key("bybit", "BTC/USDT", "1h")
+        key = make_ohlcv_key("bybit", "BTC/USDT", "1h")
         assert key.decode("utf-8") == "bybit:BTC/USDT:1h"
 
 

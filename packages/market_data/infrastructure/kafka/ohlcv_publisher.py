@@ -52,8 +52,7 @@ from shared.kafka.schemas.ohlcv import (
 from shared.kafka.schemas.ohlcv import (
     OHLCV_SCHEMA_VERSION as PAYLOAD_SCHEMA_VERSION,
 )
-from shared.kafka.serializer import make_ohlcv_key as make_routing_key
-from shared.kafka.serializer import serialize
+from shared.kafka.serializer import make_ohlcv_key, serialize
 from shared.kafka.topics import (
     HEADER_RUN_ID,
     HEADER_SOURCE,
@@ -173,7 +172,7 @@ class KafkaOHLCVPublisher:
             )
 
             payload_bytes = serialize(event)
-            routing_key = make_routing_key(chunk.exchange, chunk.symbol, chunk.timeframe)
+            routing_key = make_ohlcv_key(chunk.exchange, chunk.symbol, chunk.timeframe)
 
             # HEADER_SOURCE lleva el source del dominio (legible para observabilidad).
             # EventPayload.source lleva el wire DataSource (legible para consumers).
