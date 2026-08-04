@@ -305,8 +305,8 @@ Estos principios están formalizados en
 
 - Errores de tipado (`mypy`) pendientes de resolución durante la migración a Polars.
 - El control plane de orquestación sigue consolidándose (Docker Compose + Hydra CLIs;
-  ver [ADR-0002](docs/architecture/0002-event-driven-kappa-architecture.md) y
-  [ADR-0006](docs/architecture/0006-verificacion-adrs-vs-codigo.md)).
+  ver [ADR-0002](docs/architecture/0002-event-driven-kappa-architecture.md) y el
+  [log de verificación de ADRs](docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md)).
 - Deuda arquitectónica conocida y analizada en [`docs/DOMAIN.md`](docs/DOMAIN.md) (§ 5).
 
 ---
@@ -316,8 +316,8 @@ Estos principios están formalizados en
 | Recurso                                   | Qué encontrarás                                                        |
 |-------------------------------------------|------------------------------------------------------------------------|
 | [`docs/DOMAIN.md`](docs/DOMAIN.md)        | Guía por bounded context, deuda técnica, camino de evolución           |
-| [`docs/architecture/`](docs/architecture/) | ADRs 0000–0006: principios, Kappa, Composition Root, Hydra             |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADRs 0003–0009: decisiones puntuales por BC |
+| [`docs/architecture/`](docs/architecture/) | Serie heredada 0000–0005 (principios, Kappa, Composition Root, Hydra) |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADRs canónicos 0003–0010: decisiones puntuales por BC |
 | [`docs/architecture/GOVERNANCE.md`](docs/architecture/GOVERNANCE.md) | Gobernanza de la arquitectura                    |
 | [`AGENTS.md`](AGENTS.md)                  | Comandos, convenciones y *gotchas* para desarrolladores                |
 | [`architecture/importlinter.toml`](architecture/importlinter.toml) | Contratos de frontera verificados              |
