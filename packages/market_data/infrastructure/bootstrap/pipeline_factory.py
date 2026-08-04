@@ -93,16 +93,32 @@ class ConcretePipelineFactory:
     # ----------------------------------------------------------------------- #
 
     def _resolve_adapter_kwargs(self, request: Any) -> dict[str, Any]:
-        """Extrae kwargs de CCXTAdapter desde el request (DRY)."""
-        kwargs: dict[str, Any] = {
-            "exchange_id": request.exchange,
-            "market_type": request.market_type,
-        }
-        if request.credentials is not None:
-            kwargs["credentials"] = request.credentials
+        """Extrae kwargs de CCXTAdapter desde el request (DRY).
+
+        CCXTAdapter.__init__ solo acepta exchange_id/api_key/api_secret/
+        config/default_type — no market_type/credentials/resilience sueltos.
+        market_type se mapea a default_type. credentials/resilience se
+        canalizan vía ExchangeConfig (único vehículo que preserva
+        resilience — ver docstring de CCXTAdapter, "recomendado en
+        pipelines"). Si no hay credentials explícitas, ExchangeConfig las
+        resuelve desde variables de entorno (mismo comportamiento que
+        AppConfig al arrancar).
+        """
+        from ocm.config.schema import ExchangeConfig
+
+        config_kwargs: dict[str, Any] = {"name": request.exchange}
         if request.resilience is not None:
-            kwargs["resilience"] = request.resilience
-        return kwargs
+            config_kwargs["resilience"] = request.resilience
+        if request.credentials is not None:
+            config_kwargs["credentials"] = request.credentials
+
+        exc_cfg = ExchangeConfig(**config_kwargs)
+
+        return {
+            "exchange_id": request.exchange,
+            "default_type": request.market_type,
+            "config": exc_cfg,
+        }
 
     def _build_event_bus_wiring(self) -> Any:
         """
