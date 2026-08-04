@@ -9,9 +9,9 @@ Responsabilidad única: parsear args, configurar logging, llamar
 al use case correspondiente, reportar resultado y exit code.
 No contiene lógica de negocio ni de ensamblaje (SRP).
 
-  live.py         — live trading ⚠️  capital real
-  paper.py        — paper trading (Gold/Iceberg o dry-run)
-  market_data.py  — market data pipeline (Hydra orquestado)
+  live_hydra.py   — live trading ⚠️  capital real
+  paper_hydra.py  — paper trading (Gold/Iceberg o dry-run)
+  main.py         — market data pipeline (Hydra orquestado)
 
 Instalados como scripts en pyproject.toml (SSOT del CLI).
 

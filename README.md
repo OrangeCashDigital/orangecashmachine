@@ -132,9 +132,10 @@ Entrypoints (SSOT: `[project.scripts]` en `pyproject.toml`; `run.sh` expone un s
 | `paper`        | Trading en paper (modo seguro)                                           |
 | `live`         | Trading en vivo — ⚠️ **capital real**                                    |
 
-> **Entrypoints legacy vs Hydra.** `live` y `paper` resuelven a las variantes Hydra
-> (`live_hydra`, `paper_hydra`); los módulos legacy `apps/app/cli/live.py` y `paper.py`
-> coexisten por compatibilidad y se eliminarán al completar la migración (ADR-0005).
+> **Entrypoints.** `live` y `paper` resuelven a las variantes Hydra
+> (`live_hydra`, `paper_hydra`). Los módulos legacy `apps/app/cli/live.py` y
+> `paper.py` se eliminaron el 2026-08-03 al completar la migración (ADR-0005);
+> `portfolio_service` es obligatorio en `execute_live`/`execute_paper`.
 
 ---
 

@@ -8,12 +8,12 @@ Use case: ejecutar un ciclo de live trading.
 Responsabilidad
 ---------------
 Ensamblar las dependencias para live trading y ejecutar un ciclo:
-  GoldData -> TradingEngine(live) -> TradeTracker -> PortfolioService(Redis)
+  GoldData -> TradingEngine(live) -> TradeTracker -> PortfolioService
 
 Diferencias vs execute_paper.py
 --------------------------------
   - LiveExecutor en lugar de PaperExecutor
-  - RedisPositionStore en lugar de InMemoryPositionStore
+  - PortfolioService inyectado (store decidido por PortfolioCompositionRoot)
   - guard obligatorio -- sin kill switch no hay live trading
   - risk_config obligatoria -- no defaults permisivos
   - Sin SyntheticDataSource -- siempre datos reales de Gold
@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any, Optional
 if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
     from trading.analytics.performance import PerformanceSummary
+    from trading.analytics.trade_tracker import TradeTracker
     from trading.engine import EngineResult, TradingEngine
 
 from loguru import logger
@@ -89,6 +90,7 @@ class LiveEngineResources:
 
     engine: TradingEngine
     portfolio: PortfolioService
+    tracker: "TradeTracker"
     redis_client: Any
     exchange_client: Optional[Any] = None
     kafka_producer: Optional[Any] = None
@@ -121,41 +123,37 @@ class LiveEngineResources:
 # ---------------------------------------------------------------------------
 
 
-def build_live_engine(args: argparse.Namespace, tracker, portfolio_service=None):
+def build_live_engine(args: argparse.Namespace, portfolio_service: PortfolioService):
     """
-    Ensambla TradingEngine(live) + PortfolioService(Redis).
+    Ensambla TradingEngine(live) + PortfolioService vía Composition Root.
 
     Fail-Fast:
-    - guard construido y validado antes de llamar a build_live()
-    - risk_config explicita -- no defaults permisivos
+    - guard construido y validado antes de llamar a assemble_live()
+    - risk explicita (AppConfig.risk) -- no defaults permisivos
 
     Parameters
     ----------
     args    : namespace de argparse con todos los parametros del ciclo
-    tracker : TradeTracker ya instanciado (para conectar on_fill)
-    portfolio_service : PortfolioService ya ensamblado (opcional). Si se
-        provee (tipicamente por PortfolioCompositionRoot.assemble() desde
-        app/cli/live_hydra.py), se usa directamente y este builder NO abre
-        una conexion Redis propia -- el Composition Root ya es dueno de la
-        suya (SSOT: un unico dueno de la conexion por ejecucion). None
-        preserva el comportamiento anterior a Fase 3, usado por
-        app/cli/live.py (argparse puro).
+    portfolio_service : PortfolioService ya ensamblado por
+        PortfolioCompositionRoot.assemble() (app/cli/live_hydra.py). El
+        Composition Root del portfolio es dueno de su conexion Redis (SSOT:
+        un unico dueno de la conexion por ejecucion); este builder NO abre
+        ninguna conexion propia.
 
     Returns
     -------
     LiveEngineResources
     """
-    from portfolio.services.portfolio_service import PortfolioService
-    from trading.data.gold_adapter import GoldLoaderAdapter
-    from trading.engine import TradingEngine
-    from trading.execution.fill_sync import build_fill_sync
-    from trading.risk.models import (
-        OrderLimits,
-        PositionConfig,
-        RiskConfig,
-        SignalFilterConfig,
-    )
+    from trading.bootstrap.composition_root import TradingCompositionRoot
 
+    from ocm.config.schema import (
+        RiskConfig as AppRiskConfig,
+    )
+    from ocm.config.schema import (
+        RiskOrderConfig,
+        RiskPositionConfig,
+        TradingConfig,
+    )
     from ocm.runtime.guard import ExecutionGuard
 
     # Fail-Fast: guard obligatorio en live -- sin kill switch no hay ejecucion
@@ -163,95 +161,46 @@ def build_live_engine(args: argparse.Namespace, tracker, portfolio_service=None)
         max_errors=args.max_errors,
     )
 
-    # RiskConfig explicita -- no defaults permisivos en live
-    risk_config = RiskConfig(
-        position=PositionConfig(
+    # Sub-configs angostos (ADR-0003) desde args (AppConfig + flags CLI).
+    trading_cfg = TradingConfig(
+        strategy_name=args.strategy,
+        strategy_cfg={
+            "symbol": args.symbol,
+            "timeframe": args.timeframe,
+            "fast_period": args.fast,
+            "slow_period": args.slow,
+        },
+        capital_usd=args.capital,
+        exchange=args.exchange,
+        market_type=args.market_type,
+    )
+    risk_cfg = AppRiskConfig(
+        position=RiskPositionConfig(
             max_position_pct=args.max_risk_pct,
             max_open_positions=args.max_positions,
         ),
-        signal_filter=SignalFilterConfig(
-            min_confidence=args.min_confidence,
-        ),
-        order=OrderLimits(
-            min_order_usd=args.min_order_usd,
+        order=RiskOrderConfig(
+            min_order_usd=getattr(args, "min_order_usd", 10.0),
             max_order_usd=args.capital * args.max_risk_pct,
         ),
     )
 
-    redis_client = None
-    if portfolio_service is not None:
-        # Inyectado por el caller -- ver app/cli/live_hydra.py, que ensambla
-        # PortfolioCompositionRoot.assemble(config, capital_usd_override=args.capital)
-        # antes de llamar execute(). El Composition Root es dueno de su
-        # propia conexion Redis; este builder no abre una segunda (evita
-        # una conexion redundante y mantiene SSOT sobre quien posee el
-        # recurso).
-        portfolio = portfolio_service
-    else:
-        # Camino por defecto -- sin cambios respecto al comportamiento
-        # anterior a Fase 3. Usado por app/cli/live.py (argparse puro).
-        from portfolio.infra.redis_factory import build_redis_client
-        from portfolio.infra.redis_store import RedisPositionStore
+    root = TradingCompositionRoot(
+        trading=trading_cfg,
+        risk=risk_cfg,
+        portfolio=portfolio_service,
+        guard=guard,
+    )
+    runtime = root.assemble_live(min_confidence=args.min_confidence)
 
-        redis_client = build_redis_client(
-            host=args.redis_host,
-            port=args.redis_port,
-            db=args.redis_db,
-            password=getattr(args, "redis_password", None),
-        )
-        store = RedisPositionStore(
-            redis_client=redis_client,
-            exchange=args.exchange,
-        )
-        portfolio = PortfolioService(
-            capital_usd=args.capital,
-            store=store,
-            exchange=args.exchange,
-        )
-
-    try:
-        # SSOT: callback compartido con paper trading -- ver trading/execution/fill_sync.py
-        on_fill_composite = build_fill_sync(tracker, portfolio)
-
-        data_source = GoldLoaderAdapter(exchange=args.exchange)
-
-        engine = TradingEngine.build_live(
-            strategy_name=args.strategy,
-            strategy_cfg={
-                "symbol": args.symbol,
-                "timeframe": args.timeframe,
-                "fast_period": args.fast,
-                "slow_period": args.slow,
-            },
-            data_source=data_source,
-            risk_config=risk_config,
-            capital_usd=args.capital,
-            exchange=args.exchange,
-            market_type=args.market_type,
-            guard=guard,
-            on_fill=on_fill_composite,
-        )
-
-        return LiveEngineResources(
-            engine=engine,
-            portfolio=portfolio,
-            redis_client=redis_client,
-        )
-    except Exception:
-        # Fail-Fast parcial: si algo falla despues de abrir Redis, cerrar
-        # la conexion antes de propagar -- evita fuga de conexion en el
-        # camino de error de build_live_engine. Si redis_client es None
-        # (portfolio_service inyectado), no hay nada que cerrar aqui -- el
-        # Composition Root es responsable de su propio ciclo de vida.
-        if redis_client is not None:
-            try:
-                redis_client.close()
-            except Exception as close_exc:
-                logger.warning(
-                    "build_live_engine: error cerrando redis_client tras fallo | {}",
-                    close_exc,
-                )
-        raise
+    # redis_client siempre None: la conexion Redis pertenece al
+    # PortfolioCompositionRoot del caller (portfolio_root.close()).
+    return LiveEngineResources(
+        engine=runtime.engine,
+        portfolio=runtime.portfolio,
+        tracker=runtime.tracker,
+        redis_client=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +208,7 @@ def build_live_engine(args: argparse.Namespace, tracker, portfolio_service=None)
 # ---------------------------------------------------------------------------
 
 
-def execute(args: argparse.Namespace, portfolio_service=None) -> LiveRunResult:
+def execute(args: argparse.Namespace, portfolio_service: PortfolioService) -> LiveRunResult:
     """
     Ejecuta un ciclo de live trading.
 
@@ -270,12 +219,9 @@ def execute(args: argparse.Namespace, portfolio_service=None) -> LiveRunResult:
     LiveRunResult con todo lo necesario para que el CLI loguee y salga.
     """
     from trading.analytics.performance import PerformanceEngine
-    from trading.analytics.trade_tracker import TradeTracker
-
-    tracker = TradeTracker(exchange=args.exchange)
 
     try:
-        resources = build_live_engine(args, tracker, portfolio_service=portfolio_service)
+        resources = build_live_engine(args, portfolio_service=portfolio_service)
     except Exception as exc:
         logger.error(
             "Error construyendo engine live | {} -- {}",
@@ -285,7 +231,7 @@ def execute(args: argparse.Namespace, portfolio_service=None) -> LiveRunResult:
         return LiveRunResult(success=False, error=str(exc))
 
     logger.info("Engine live listo | {}", resources.engine)
-    logger.info("Portfolio (Redis) | {}", resources.portfolio)
+    logger.info("Portfolio | {}", resources.portfolio)
 
     try:
         engine_result = resources.engine.run_once()
@@ -299,13 +245,13 @@ def execute(args: argparse.Namespace, portfolio_service=None) -> LiveRunResult:
     finally:
         resources.shutdown()
 
-    trades = tracker.closed_trades
+    trades = resources.tracker.closed_trades
     performance = PerformanceEngine.summarize(trades, capital_usd=args.capital) if trades else None
 
     return LiveRunResult(
         success=True,
         engine_result=engine_result,
         performance=performance,
-        open_positions=tracker.open_positions,
+        open_positions=resources.tracker.open_positions,
         oms_summary=resources.engine.oms_summary,
     )
