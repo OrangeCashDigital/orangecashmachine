@@ -176,7 +176,7 @@ class CompositionRoot:
 
         # ── Localizar feeds.yaml (SSOT de configuración WS) ──────────────
         # Usamos __file__ para resolver repo_root sin depender de shared.utils.repo
-        _repo_root = Path(__file__).resolve().parents[5]
+        _repo_root = Path(__file__).resolve().parents[4]
         feeds_path = _repo_root / "config" / "market_data" / "feeds.yaml"
 
         if not feeds_path.exists():
