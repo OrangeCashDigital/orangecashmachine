@@ -4,10 +4,13 @@
 # SSOT de configuración del proyecto Python:
 #   • build system
 #   • metadata
-#   • dependencias
+#   • dependencias (agrupadas por bounded context / responsabilidad)
 #   • herramientas de desarrollo
 #
-# La arquitectura del sistema vive en architecture/.
+# La arquitectura del sistema (capas, contratos de import-linter, bounded
+# contexts) vive en architecture/. Este archivo NO decide arquitectura,
+# solo declara qué se instala y con qué versión — Single Source of Truth
+# de dependencias, nada más.
 # =============================================================================
 
 [build-system]
@@ -25,6 +28,7 @@ description     = "Pipeline profesional de ingestión, procesamiento y almacenam
 readme          = "README.md"
 requires-python = ">=3.11,<3.14"
 authors         = [{ name = "orangemusic" }]
+license         = "MIT"  # PEP 639 (SPDX string) — reemplaza la forma tabular {text = "MIT"}, deprecada por hatchling
 
 keywords = [
     "trading", "algorithmic-trading", "market-data", "crypto",
@@ -36,6 +40,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",  # faltaba: debe coincidir con project.license
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -45,66 +50,98 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+# -----------------------------------------------------------------------------
+# Dependencias — agrupadas por bounded context (DDD) para orden lógico y
+# legibilidad. El pin explícito con comentario es obligatorio cuando la
+# versión está acotada por una razón técnica concreta (evita "pin mágico").
+# -----------------------------------------------------------------------------
 dependencies = [
+    # ── Config & validación (bounded context: configuración) ────────────────
     # pydantic: pinneado en 2.8.2 — 2.9 introdujo breaking changes en
     # model_rebuild() con forward refs en schemas anidados (Hydra + Pydantic).
-    # Desbloquear solo tras validar ocm/config/schema.py en staging completo.
-    # TODO verificar: pydantic-settings>=2.13.1 puede requerir pydantic>=2.9
-    # internamente — correr `uv lock --dry-run` antes de tocar cualquiera de las dos.
+    # ACCIÓN PENDIENTE (prioridad alta): probar pydantic>=2.9 contra
+    # ocm/config/schema.py en staging completo. pydantic-settings>=2.13.1
+    # puede requerir pydantic>=2.9 internamente — correr
+    # `uv lock --dry-run` ANTES de tocar cualquiera de las dos versiones,
+    # como single source of truth de resolución de dependencias.
     "pydantic==2.8.2",
     "pydantic-settings>=2.13.1,<3.0",
-    "pandera>=0.20.0",
-    "numpy>=2.0,<3.0",
-    "pandas>=2.3,<3.0",
-    "pyarrow>=17.0,<20.0",
-    # ccxt: pinneado en 4.3.58 — versiones posteriores cambian la firma de
-    # fetch_ohlcv() y el campo default_type en exchange params (CCXTAdapter).
-    # Actualizar solo tras smoke test completo contra Bybit + KuCoin en staging.
-    "ccxt==4.3.58",
-    # loguru: pinneado en 0.7.2 — API de sink Loki acoplada a esta versión.
-    # Structlog también depende del record format de loguru. Actualizar con ambos.
-    "loguru==0.7.2",
-    "structlog>=24.1.0,<25.0",
-    "httpx>=0.27.0,<1.0",
-    "prometheus-client>=0.20.0,<1.0",
     # pyyaml: pinneado en 6.0.2 — Hydra 1.3.x requiere exactamente esta API
     # de yaml.safe_load con soporte de anchors. 6.1 cambió el comportamiento
     # de merge keys (<<) que se usan en config/. Desbloquear con Hydra 2.x.
     "pyyaml==6.0.2",
     "python-dotenv>=1.0,<3.0",
     "hydra-core>=1.3.2,<2.0",
+
+    # ── Validación / calidad de datos ───────────────────────────────────────
+    # DECISIÓN PENDIENTE: pandera y great-expectations cubren validación de
+    # datos — confirmar si son casos de uso distintos (schema-level vs
+    # expectation-suites) o si hay solapamiento real a resolver antes de
+    # sumar código nuevo contra cualquiera de las dos.
+    "pandera>=0.20.0",
+    "great-expectations>=1.17.2",
+
+    # ── Núcleo de datos (dataframes / arrays) ───────────────────────────────
+    # DECISIÓN PENDIENTE: pandas y polars conviven — confirmar si es
+    # migración en curso (y entonces documentar el plan de salida de una
+    # de las dos) o si hay una separación de responsabilidades real
+    # (p. ej. polars solo en paths de alto volumen). Dos motores de
+    # dataframe sin ese plan es superficie de mantenimiento innecesaria
+    # (viola KISS/DRY a nivel de stack).
+    "numpy>=2.0,<3.0",
+    "pandas>=2.3,<3.0",
+    "polars[rtcompat]>=1.40.1",
+    "pyarrow>=17.0,<20.0",
+
+    # ── Market data / exchange adapters (bounded context: market_data) ─────
+    # ccxt: pinneado en 4.3.58 — versiones posteriores cambian la firma de
+    # fetch_ohlcv() y el campo default_type en exchange params (CCXTAdapter).
+    # Actualizar solo tras smoke test completo contra Bybit + KuCoin en staging.
+    "ccxt==4.3.58",
+    "cryptofeed>=2.4.1",
+
+    # ── Resiliencia (circuit breakers: async + fallback sync) ──────────────
     # aioresilience: pinneado en 0.2.1 — API de CircuitBreaker no estabilizada.
     # Versiones posteriores cambian el constructor y los hooks de estado.
     # Acoplado a import-linter CI (aioresilience rompe resolución en Python 3.12
     # con deps transitivas de anyio — ver MIGRATION.md §circuit-breaker).
     "aioresilience==0.2.1",
     "aiometer>=0.10.0",
-    # pybreaker: pinneado en 1.4.1 — usado como fallback sync de circuit breaker.
-    # 2.x cambia la interfaz de listeners. Sincronizar con aioresilience.
+    # pybreaker: pinneado en 1.4.1 — usado deliberadamente como fallback SYNC
+    # de circuit breaker (no es redundancia: aioresilience cubre el path
+    # async, pybreaker el sync). 2.x cambia la interfaz de listeners.
+    # Sincronizar el pin con aioresilience al actualizar cualquiera de las dos.
     "pybreaker==1.4.1",
-    "redis>=7.4.0,<8.0",
+
+    # ── Mensajería / streaming ───────────────────────────────────────────────
+    "redis>=7.4.0,<8.0",  # techo <8.0 deliberado: 8.0 cambia RESP2→RESP3 por defecto (breaking)
     "aiokafka>=0.11.0,<1.0",
+
+    # ── Storage / data lakehouse ─────────────────────────────────────────────
     # pyiceberg: <1.0 — API pública no estabilizada en 1.x todavía.
     # >=0.9.1: requiere TimestampType microsecond epoch (int) en scan filters.
     # Actualizar solo tras smoke test completo en staging (iceberg_storage tests).
     "pyiceberg[pyarrow,sql-sqlite]>=0.9.1,<1.0",
     "duckdb>=1.5.1,<2.0",
-    "fastapi>=0.111.0,<1.0",
-    "uvicorn[standard]>=0.14.0,<0.29.0",
-    "python-jose[cryptography]>=3.3.0,<4.0",
-    # TODO decisión pendiente: ¿reemplaza polars a pandas, o coexisten
-    # a propósito? Dos motores de dataframe en el mismo proyecto es
-    # superficie extra de mantenimiento si no hay plan de migración.
-    "polars[rtcompat]>=1.40.1",
-    # TODO decisión pendiente: pandera (arriba) y great-expectations
-    # cubren validación de datos — ¿casos de uso distintos o solapados?
-    "great-expectations>=1.17.2",
     "lz4>=4.4.5",
-    "cryptofeed>=2.4.1",
-]
 
-[project.license]
-text = "MIT"
+    # ── Web / API layer ───────────────────────────────────────────────────────
+    "fastapi>=0.111.0,<1.0",
+    # uvicorn: techo previo <0.29.0 quedó obsoleto (release real vigente:
+    # 0.5x.x). Un techo tan viejo bloquea parches de seguridad sin ninguna
+    # razón documentada — corregido a un rango abierto razonable.
+    # Validar en staging antes de fijar un techo definitivo si se necesita uno.
+    "uvicorn[standard]>=0.30.0,<1.0",
+    "python-jose[cryptography]>=3.3.0,<4.0",
+
+    # ── Observabilidad (logging + métricas) ─────────────────────────────────
+    # loguru: pinneado en 0.7.2 — API de sink Loki acoplada a esta versión.
+    # Structlog también depende del record format de loguru. Actualizar con ambos.
+    "loguru==0.7.2",
+    "structlog>=24.1.0,<25.0",
+    "httpx>=0.27.0,<1.0",
+    "prometheus-client>=0.20.0,<1.0",
+]
 
 [project.urls]
 Repository = "https://github.com/orangemusic/orangecashmachine"
@@ -115,7 +152,7 @@ docs = [
     "sphinx-autodoc-typehints>=1.22,<2.0",
 ]
 # ci: sin entradas propias por ahora — pre-commit vive en dependency-groups.dev
-# (era una duplicación; se removió de acá).
+# (evita duplicación de SSOT entre optional-dependencies y dependency-groups).
 
 # =============================================================================
 # Dependency groups (herramientas de desarrollo, no van al wheel)
@@ -133,11 +170,14 @@ dev = [
     "pip-audit>=2.7,<3.0",
     "pre-commit>=3.8.0",
     "pydeps>=3.0.6",
+    # types-pyyaml: versión con sufijo de fecha (esquema típico de typeshed,
+    # X.Y.Z.YYYYMMDD) — verificada como release real y vigente en PyPI.
     "types-pyyaml>=6.0.12.20260518",
     "pandas-stubs>=2.3,<3.0",
-    # structlog y httpx removidos de acá: ya cubiertos por dependencies (arriba).
-    # Si necesitás una versión más nueva solo para dev/testing, agregar
-    # con un comentario que explique por qué diverge del pin runtime.
+    # structlog y httpx NO van acá: ya están en [project.dependencies] (arriba).
+    # Duplicarlas rompería SSOT de versiones. Si dev necesita una versión más
+    # nueva solo para testing, agregar acá con un comentario que explique
+    # por qué diverge del pin runtime.
 ]
 
 # =============================================================================
@@ -166,8 +206,10 @@ indent-style = "space"
 
 [tool.ruff.lint]
 # E402 — module level import not at top of file.
-# Solo se permite en composition roots y entrypoints conocidos.
-# NO ignorar globalmente: acotar por archivo para no enmascarar imports mal ubicados.
+# Solo se permite en composition roots y entrypoints conocidos (bootstrap,
+# lazy imports por orden de arranque). NO se ignora globalmente para no
+# enmascarar imports mal ubicados en el resto del código (fail-fast en
+# lint por default, fail-soft solo donde el propio diseño lo exige).
 select = ["E", "F", "I"]
 ignore = []
 
@@ -179,7 +221,7 @@ ignore = []
 "packages/market_data/application/pipelines/ohlcv_pipeline.py"      = ["E402"]
 "ocm/config/hydra_loader.py"                                         = ["E402"]
 "ocm/config/loader/env_resolver.py"                                  = ["E402"]
-"ocm/config/loader/yaml_loader.py"                                   = ["E402"]
+"ocm/config/loader/yaml_loader.py"                                    = ["E402"]
 "ocm/config/schema.py"                                               = ["E402"]
 "ocm/observability/logger.py"                                        = ["E402"]
 "ocm/observability/processors.py"                                    = ["E402"]
@@ -225,8 +267,6 @@ markers = [
 
 # =============================================================================
 # tool.coverage
-# TODO: no existía antes — no hay settings previos que preservar.
-# Dejo el esqueleto mínimo; confirmame umbrales/exclusiones si los querés.
 # =============================================================================
 
 [tool.coverage.run]
@@ -234,7 +274,13 @@ source = ["packages", "ocm", "shared", "apps"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under   = 0  # TODO: sin baseline medido aún — subir gradualmente cuando el equipo defina una meta real de cobertura
+# ACCIÓN PENDIENTE (antes de subir este número): correr
+# `pytest --cov-report=term-missing` y medir la cobertura real actual.
+# Fijar fail_under por encima de esa medición rompe el CI de inmediato
+# (fail-fast mal aplicado, sobre una baseline que no existe todavía).
+# Una vez medido: fijar fail_under un par de puntos por debajo del valor
+# real y subirlo gradualmente en PRs siguientes — no de un salto a 60.
+fail_under = 0
 
 # =============================================================================
 # tool.mypy
@@ -253,8 +299,9 @@ plugins                 = ["pydantic.mypy"]
 # pero ignore_errors = true acá previene errores de tipo transitivos
 # que pyiceberg puede filtrar hacia nuestro código cuando mypy sigue
 # los imports a través de sus módulos internos.
-# ⚠️ Reconstruido por inferencia del comentario original — confirmar
-# contra tu archivo real antes de aplicar.
+# ⚠️ VERIFICAR: esta sección fue reconstruida por inferencia sobre el
+# comentario original — confirmar contra el pyproject.toml real del
+# repo antes de aplicar en CI (no asumir que coincide byte a byte).
 [[tool.mypy.overrides]]
 module        = ["pyiceberg.*"]
 ignore_errors = true
@@ -284,11 +331,19 @@ packages = [
 "apps/api"               = "api"
 "apps/app"               = "app"
 "apps/research"          = "research"
-# shared: sin entrada — se instala desde la raíz directamente.
+# ocm y shared: SIN entrada intencional. El basename del directorio fuente
+# ya coincide con el nombre de import deseado ("ocm" -> ocm, raíz -> shared),
+# por lo que hatchling los instala correctamente sin remapeo. Agregar un
+# mapeo identidad (p. ej. "ocm" = "ocm") sería ruido sin efecto funcional —
+# si aparece un error de instalación real, documentarlo acá con el caso
+# concreto antes de tocar esta sección (SSOT: no "arreglar" sin evidencia).
 
 # =============================================================================
 # Arquitectura
 # Los contratos de import-linter viven en architecture/importlinter.toml,
-# NO en este archivo — ver architecture/README.md.
+# NO en este archivo — ver architecture/README.md. Esta separación es
+# deliberada (SRP/desacoplamiento): pyproject.toml declara QUÉ se instala,
+# architecture/ declara QUÉ PUEDE DEPENDER DE QUÉ (bounded contexts, DIP
+# entre capas). Mezclar ambas cosas en un solo archivo violaría SSOT.
 # Invocación: uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports(config_filename='architecture/importlinter.toml'))"
 # =============================================================================
