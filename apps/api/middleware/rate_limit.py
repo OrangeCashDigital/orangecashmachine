@@ -12,6 +12,17 @@
 #   Razón: mejor disponibilidad que un 503 por fallo de infra secundaria.
 #   SafeOps: loguea el fallo — nunca silencioso.
 #
+# H6: /health, /ready y /metrics están excluidos (SILENT_PATHS) — las probes
+# de infraestructura no representan carga de cliente y no deben poder degradar
+# la rotación del nodo.
+#
+# H5 (limitación conocida — documentada, no corregida): la clave es
+# request.client.host. Detrás de un reverse proxy / load balancer todo el
+# tráfico comparte la IP del proxy → el límite se vuelve global. No hay proxy
+# en el despliegue actual; si aparece, configurar ProxyHeadersMiddleware
+# (confianza del header a decidir en infraestructura) o clavar por
+# X-Forwarded-For de primer hop / identidad autenticada.
+#
 # Principios: SRP · Fail-Soft · SafeOps · KISS
 # ==============================================================================
 from __future__ import annotations
@@ -24,6 +35,8 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from api.middleware import SILENT_PATHS
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
@@ -31,6 +44,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     Ventana: 60 segundos.
     Clave por IP — degraded mode si Redis no responde.
+    Excluye SILENT_PATHS (probes de observabilidad).
     """
 
     _WINDOW_S: int = 60  # ventana deslizante en segundos
@@ -41,6 +55,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._rpm = rpm
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if request.url.path in SILENT_PATHS:
+            return await call_next(request)
+
         ip = request.client.host if request.client else "unknown"
         key = f"rl:{ip}"
         now = time.time()

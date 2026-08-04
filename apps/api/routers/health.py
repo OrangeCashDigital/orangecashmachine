@@ -12,7 +12,7 @@
 #               Usado por load balancer para sacar el nodo de rotación.
 #
 # Sin auth — estos endpoints deben ser accesibles por infra sin token.
-# Sin rate limit — el middleware los excluye (_SILENT_PATHS).
+# Sin rate limit — el middleware los excluye (SILENT_PATHS).
 #
 # Principios: SRP · Fail-Fast · KISS · SafeOps
 # ==============================================================================
@@ -68,7 +68,10 @@ async def ready(redis: RedisDep) -> JSONResponse:
     503 si Redis no responde: el load balancer debe sacar este nodo.
     """
     try:
-        await redis.ping()
+        # redis.asyncio tipa ping() como Awaitable[bool] | bool — mypy no puede
+        # verificar un await sobre una unión; en runtime el cliente async siempre
+        # es awaitable (el overload sync/bool es para redis-py sync, no aplica aquí).
+        await redis.ping()  # type: ignore[misc]
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"status": "ready", "redis": "ok"},

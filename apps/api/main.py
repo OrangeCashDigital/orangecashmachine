@@ -7,8 +7,8 @@
 #   lifespan()    — gestiona recursos: startup + shutdown ordenados
 #   serve()       — entrypoint CLI: uvicorn programático
 #
-# Orden de middleware (LIFO en ejecución — primero registrado = más externo):
-#   1. RequestLoggingMiddleware   (más externo — loguea todo)
+# Orden de middleware (LIFO en ejecución — el ÚLTIMO registrado = más externo):
+#   1. RequestLoggingMiddleware   (más externo — loguea todo, incluidos 429)
 #   2. RateLimitMiddleware        (segundo — rechaza antes de procesar)
 #
 # Sin lógica de negocio aquí. Los routers delegan a app/use_cases/.
@@ -64,7 +64,10 @@ async def lifespan(app: FastAPI):
     # Fail-Fast: verificar Redis antes de aceptar tráfico
     redis_client: aioredis.Redis = _redis_pool(settings.redis_url)
     try:
-        await redis_client.ping()
+        # redis.asyncio tipa ping() como Awaitable[bool] | bool — mypy no puede
+        # verificar un await sobre una unión; en runtime el cliente async siempre
+        # es awaitable (el overload sync/bool es para redis-py sync, no aplica aquí).
+        await redis_client.ping()  # type: ignore[misc]
         logger.info("api_redis_ok | url={}", settings.redis_url_sanitized)
     except Exception as exc:
         logger.critical("api_redis_unreachable | url={} error={}", settings.redis_url, exc)

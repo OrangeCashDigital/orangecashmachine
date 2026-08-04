@@ -18,15 +18,14 @@ from fastapi import Request, Response
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Paths excluidos del log — ruido sin valor operacional
-_SILENT_PATHS: frozenset[str] = frozenset({"/health", "/ready", "/metrics"})
+from api.middleware import SILENT_PATHS
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Loguea request + response con duración. Silent para health checks."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.url.path in _SILENT_PATHS:
+        if request.url.path in SILENT_PATHS:
             return await call_next(request)
 
         start = time.perf_counter()
