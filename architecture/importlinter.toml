@@ -434,6 +434,23 @@ type = "forbidden"
 source_modules = ["portfolio"]
 forbidden_modules = ["trading.execution", "trading.strategies"]
 
+[[tool.importlinter.contracts]]
+# BC-50: trading→market_data — solo trading.bootstrap.composition_root puede
+# importar market_data (GoldReader). El resto de trading consume
+# FeatureSource/FeatureReaderPort (DIP). Concentra el acoplamiento externo en
+# un solo archivo auditable — mismo principio que BC-38/BC-42 (ver ADR-0004).
+# Número: BC-47 quedó ocupado por shared.kafka → se formaliza como BC-50.
+# trading/data/gold_adapter.py retirado en la auditoría 2026-08-03 (violaba esto).
+#
+# NOTA: import-linter analiza el grafo estático — el import de GoldReader
+# dentro del root es LAZY (build_gold_data_source) y no genera arista, por lo
+# que no requiere ignore_imports. La excepción se gobierna por convención y
+# documentación (ADR-0004): solo el composition root puede tocar market_data.
+name = "BC-50: trading imports market_data only from trading/bootstrap/composition_root"
+type = "forbidden"
+source_modules = ["trading"]
+forbidden_modules = ["market_data"]
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 2 (detalle shared) — contratos de neutralidad del bus Kafka
 # ─────────────────────────────────────────────────────────────────────────────

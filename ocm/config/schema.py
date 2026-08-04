@@ -537,6 +537,23 @@ class PortfolioConfig(StrictBaseModel):
     # Ver: config/layers/coercion.py — motor canónico único.
 
 
+class TradingConfig(StrictBaseModel):
+    """Configuración del bounded context trading.
+
+    SSOT de los parámetros de negocio de TradingCompositionRoot. No incluye
+    una bandera paper/live propia: esa es una decisión operacional del
+    caller (invoca assemble_live() o assemble_paper() explícitamente),
+    no un valor declarativo de configuración — mismo criterio que
+    PortfolioConfig con integrations.redis.enabled.
+    """
+
+    strategy_name: str = Field(default="", description="Nombre registrado en StrategyRegistry.")
+    strategy_cfg: dict[str, Any] = Field(default_factory=dict)
+    capital_usd: float = Field(default=10_000.0, gt=0)
+    exchange: str = "bybit"
+    market_type: str = "spot"
+
+
 class KafkaConfig(StrictBaseModel):
     """Configuración de Kafka (streaming — future-ready)."""
 
@@ -741,6 +758,7 @@ class AppConfig(StrictBaseModel):
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
+    trading: TradingConfig = Field(default_factory=TradingConfig)
     testing: TestingConfig = Field(
         default_factory=TestingConfig,
         description="Configuración exclusiva de CI/test. Ignorada en producción.",

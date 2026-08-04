@@ -31,6 +31,9 @@ PORTFOLIO_SERVICES = PORTFOLIO / "services"
 PORTFOLIO_INFRA = PORTFOLIO / "infra"
 PORTFOLIO_BOOTSTRAP = PORTFOLIO / "bootstrap"
 
+TRADING = ROOT / "packages" / "trading"
+TRADING_BOOTSTRAP = TRADING / "bootstrap"
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -247,3 +250,44 @@ class TestPortfolioCompositionRoot:
         assert not violations, "PositionStore adapter importado fuera de portfolio/bootstrap/ (BC-43):\n" + "\n".join(
             f"  {v}" for v in violations
         )
+
+
+class TestTradingCompositionRoot:
+    """BC-50: trading importa market_data solo desde trading/bootstrap/composition_root."""
+
+    def test_market_data_imports_only_in_composition_root(self):
+        """
+        BC-50: todo import REAL de market_data en trading (incluidos los lazy
+        dentro de funciones, que import-linter no ve al analizar solo el grafo
+        estático de nivel de módulo) debe estar en trading/bootstrap/
+        composition_root.py — el único punto autorizado (ADR-0004/BC-50).
+        """
+        allowed = TRADING_BOOTSTRAP / "composition_root.py"
+        violations: list[str] = []
+        for f in _python_files(TRADING):
+            for imp in _imports_in(f):
+                if imp == "market_data" or imp.startswith("market_data."):
+                    if f != allowed:
+                        violations.append(f"{f.relative_to(ROOT)}: imports {imp}")
+        assert not violations, (
+            "trading importa market_data fuera del composition root (BC-50):\n"
+            + "\n".join(f"  {v}" for v in violations)
+            + "\n\nMover el acoplamiento a trading.bootstrap.composition_root "
+            "(ADP: GoldReader es el único contacto trading→market_data)."
+        )
+
+    def test_trading_runtime_exposes_exactly_three_fields(self):
+        """
+        SSOT (forense §2 + ADR-0003 enmendado): TradingRuntime es exactamente
+        (engine, portfolio, tracker) — sin estado oculto adicional.
+        """
+        import dataclasses
+
+        from trading.bootstrap.composition_root import TradingRuntime
+
+        fields = [f.name for f in dataclasses.fields(TradingRuntime)]
+        assert fields == ["engine", "portfolio", "tracker"], (
+            f"TradingRuntime debe ser exactamente (engine, portfolio, tracker) — actual: {fields}"
+        )
+        assert TradingRuntime.__dataclass_params__.frozen is True
+        assert hasattr(TradingRuntime, "__slots__") or TradingRuntime.__dataclass_params__.slots is True
