@@ -239,8 +239,8 @@ class OMS:
         """
         Expone la validación de riesgo como API pública del OMS.
 
-        Permite que TradingEngine y PaperBot validen señales sin acceder
-        a self._risk directamente (Law of Demeter). El OMS es el punto
+        Permite que TradingEngine valide señales sin acceder a
+        self._risk directamente (Law of Demeter). El OMS es el punto
         de entrada correcto para cualquier interacción con el RiskManager.
 
         Returns

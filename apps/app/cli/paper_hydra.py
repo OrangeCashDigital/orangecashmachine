@@ -24,7 +24,7 @@ Parámetros de estrategia/ejecución sin modelo en AppConfig todavía —
 se mantienen como flags CLI (no se fuerza su inclusión en Hydra solo
 para cerrar esta fase; ver Fase 5 del plan):
 
-    symbol, timeframe, market_type, fast, slow, min_confidence
+    symbol, timeframe, market_type, strategy, fast, slow, min_confidence
 
 Uso
 ---
@@ -95,6 +95,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # Estrategia — sin modelo en AppConfig aún
+    p.add_argument("--strategy", default="ema_crossover", help="Nombre de estrategia")
     p.add_argument("--fast", type=int, default=9, help="EMA rápida (períodos)")
     p.add_argument("--slow", type=int, default=21, help="EMA lenta (períodos)")
     p.add_argument(

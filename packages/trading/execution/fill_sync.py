@@ -21,7 +21,7 @@ Principios: SRP . DRY . SSOT . DIP
 
 from __future__ import annotations
 
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from loguru import logger
 
@@ -44,7 +44,9 @@ class SupportsPositionSync(Protocol):
         entry_at,
     ) -> None: ...
 
-    def close_position(self, order_id: str) -> None: ...
+    def close_position(self, order_id: str) -> Any:
+        """build_fill_sync descarta el retorno; Any admite PortfolioService
+        (devuelve Optional[PositionSnapshot]) sin acoplar trading->portfolio."""
 
 
 def build_fill_sync(
@@ -67,7 +69,8 @@ def build_fill_sync(
 
     Returns
     -------
-    Callable que se pasa como on_fill= a TradingEngine.build_live()/build_paper().
+    Callable que se pasa como on_fill= al OMS en
+    TradingCompositionRoot.assemble_live()/assemble_paper().
     """
     open_order_ids: dict[str, str] = {}
 

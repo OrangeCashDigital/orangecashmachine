@@ -16,6 +16,11 @@ Orquestar el ciclo completo:
 No contiene lógica de riesgo (RiskManager), ni de órdenes (OMS),
 ni de estrategia (BaseStrategy). Solo los conecta. (SRP)
 
+Objeto runtime puro (ADR-0012): no construye sus dependencias — el
+ensamblaje de Strategy + RiskManager + Executor + OMS vive en
+TradingCompositionRoot.assemble_live()/assemble_paper() (ADR-0003).
+Los factories build_live()/build_paper() fueron eliminados (2026-08-03).
+
 Principios: SOLID · KISS · DRY · SafeOps
 """
 
@@ -27,7 +32,7 @@ if TYPE_CHECKING:
     from trading.risk.manager import RiskDecision
 
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Optional
 
 from loguru import logger
 
@@ -36,9 +41,7 @@ from shared.contracts.boundaries import (
     FeatureSource,
 )  # SSOT — unica definicion del contrato
 from trading.execution.order import Order, OrderStatus
-from trading.risk.models import RiskConfig
 from trading.strategies.base import BaseStrategy
-from trading.strategies.registry import StrategyRegistry
 
 # ---------------------------------------------------------------------------
 # Result
@@ -92,11 +95,11 @@ class TradingEngine:
     def __init__(
         self,
         strategy: BaseStrategy,
-        oms,  # OMS — importado lazy en build_paper
+        oms,
         data_source: FeatureSource,
         guard: Optional[ExecutionGuard] = None,
         exchange: str = "bybit",
-        market_type: str = "spot",  # default consistente con PaperBot
+        market_type: str = "spot",
     ) -> None:
         self._strategy = strategy
         self._oms = oms
@@ -193,143 +196,13 @@ class TradingEngine:
         """
         Expone la validación de riesgo sin violar Law of Demeter.
 
-        PaperBot._evaluate_signal() tenía acceso a self._engine._oms._risk
-        (3 niveles privados — LoD violation). Este método es la API pública
-        correcta: TradingEngine como facade oculta la estructura interna.
+        TradingEngine es la fachada que oculta la estructura interna del OMS.
 
         Returns
         -------
         RiskDecision con campos: rejected (bool), reason (str), size_pct (float).
         """
         return self._oms.validate_signal(signal)
-
-    # ------------------------------------------------------------------
-    # Factory
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def build_live(
-        cls,
-        strategy_name: str,
-        strategy_cfg: dict,
-        data_source: FeatureSource,
-        risk_config: Optional[RiskConfig] = None,
-        capital_usd: float = 10_000.0,
-        exchange: str = "bybit",
-        market_type: str = "spot",
-        guard: Optional[ExecutionGuard] = None,
-        on_fill: Optional[Callable[[Order], None]] = None,
-        on_reject: Optional[Callable[[Order], None]] = None,
-    ) -> "TradingEngine":
-        """
-        Factory para live trading.
-
-        Construye: Strategy + RiskManager + LiveExecutor + OMS + Engine.
-        LiveExecutor envia ordenes reales al exchange via CCXT.
-
-        PRECAUCIÓN SafeOps
-        ------------------
-        - Requiere ExecutionGuard activo — build_live() falla si guard=None.
-          El guard es el kill switch de emergencia en produccion.
-        - RiskConfig obligatoria en live — no usa defaults permisivos.
-        - Separado de build_paper() (SRP) — sin condicional interno.
-
-        Parameters
-        ----------
-        on_fill   : callback(order) — TradeTracker + PortfolioService via composite.
-        on_reject : callback(order) — alerting / logging externo.
-        """
-        from trading.execution.live_executor import LiveExecutor
-        from trading.execution.oms import OMS
-        from trading.risk.manager import RiskManager
-
-        # Fail-Fast: guard obligatorio en live — sin kill switch no hay live trading
-        if guard is None:
-            raise ValueError(
-                "TradingEngine.build_live: guard es obligatorio en live trading. "
-                "Proporcionar un ExecutionGuard configurado."
-            )
-        # Fail-Fast: RiskConfig obligatoria en live — no defaults permisivos
-        if risk_config is None:
-            raise ValueError(
-                "TradingEngine.build_live: risk_config es obligatoria en live trading. "
-                "Los defaults de RiskConfig no son apropiados para capital real."
-            )
-
-        strategy = StrategyRegistry.get(strategy_name)(**strategy_cfg)
-        risk_manager = RiskManager(
-            config=risk_config,
-            capital_usd=capital_usd,
-        )
-        executor = LiveExecutor(exchange=exchange, market_type=market_type)
-        oms = OMS(
-            risk_manager=risk_manager,
-            executor=executor,
-            guard=guard,
-            on_fill=on_fill,
-            on_reject=on_reject,
-        )
-        return cls(
-            strategy=strategy,
-            oms=oms,
-            data_source=data_source,
-            guard=guard,
-            exchange=exchange,
-            market_type=market_type,
-        )
-
-    @classmethod
-    def build_paper(
-        cls,
-        strategy_name: str,
-        strategy_cfg: dict,
-        data_source: FeatureSource,
-        risk_config: Optional[RiskConfig] = None,
-        capital_usd: float = 10_000.0,
-        exchange: str = "bybit",
-        market_type: str = "spot",
-        guard: Optional[ExecutionGuard] = None,
-        on_fill: Optional[Callable[[Order], None]] = None,
-        on_reject: Optional[Callable[[Order], None]] = None,
-    ) -> "TradingEngine":
-        """
-        Factory para paper trading.
-
-        Construye: Strategy + RiskManager + PaperExecutor + OMS + Engine.
-        Un único punto de ensamblaje — el caller no necesita conocer
-        las dependencias internas. (DIP)
-
-        Parameters
-        ----------
-        on_fill   : callback(order) invocado por OMS al completar un fill.
-                    Uso principal: TradeTracker.on_fill para analytics.
-        on_reject : callback(order) invocado por OMS al rechazar una orden.
-        """
-        from trading.execution.oms import OMS
-        from trading.execution.paper_executor import PaperExecutor
-        from trading.risk.manager import RiskManager
-
-        strategy = StrategyRegistry.get(strategy_name)(**strategy_cfg)
-        risk_manager = RiskManager(
-            config=risk_config or RiskConfig(),
-            capital_usd=capital_usd,
-        )
-        executor = PaperExecutor()
-        oms = OMS(
-            risk_manager=risk_manager,
-            executor=executor,
-            guard=guard,
-            on_fill=on_fill,  # conecta OMS → TradeTracker (o cualquier observer)
-            on_reject=on_reject,
-        )
-        return cls(
-            strategy=strategy,
-            oms=oms,
-            data_source=data_source,
-            guard=guard,
-            exchange=exchange,
-            market_type=market_type,
-        )
 
     # ------------------------------------------------------------------
     # Private

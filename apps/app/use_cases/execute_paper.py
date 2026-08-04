@@ -12,7 +12,7 @@ Ensamblar las dependencias y ejecutar un ciclo completo:
 
 Separación de concerns
 -----------------------
-    app/cli/paper.py               → CLI: argparse, logging, exit codes
+    app/cli/paper_hydra.py        → CLI: Hydra, logging, exit codes
     app/use_cases/execute_paper.py → ensamblaje y ejecución (este módulo)
 
 _SyntheticDataSource vive aquí — es un detalle de implementación
@@ -28,8 +28,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
+    from portfolio.services.portfolio_service import PortfolioService
     from trading.analytics.performance import PerformanceSummary
     from trading.engine import EngineResult
+
+    from shared.contracts.boundaries import FeatureSource
 
 from loguru import logger
 
@@ -138,56 +141,71 @@ class SyntheticDataSource:
 # ---------------------------------------------------------------------------
 
 
-def build_paper_engine(args: argparse.Namespace, tracker, portfolio_service=None):
+def build_paper_engine(args: argparse.Namespace, portfolio_service: PortfolioService):
     """
-    Ensambla TradingEngine + PortfolioService para paper trading.
+    Ensambla TradingEngine + PortfolioService para paper trading vía Composition Root.
 
     Separado de execute() (SRP):
         build_paper_engine → sabe cómo construir
         execute()          → sabe cómo correr
 
-    Fail-Fast: si dry_run=False y GoldLoaderAdapter no puede cargar datos,
+    Fail-Fast: si dry_run=False y la FeatureSource Gold no puede cargar datos,
     lanza explícitamente en lugar de dejar que el engine corra con None
     y genere 0 señales sin diagnóstico.
 
     Parameters
     ----------
     args    : namespace de argparse con todos los parámetros del ciclo
-    tracker : TradeTracker ya instanciado (para conectar on_fill)
-    portfolio_service : PortfolioService ya ensamblado (opcional). Si se
-        provee (típicamente por PortfolioCompositionRoot.assemble() desde
-        app/cli/paper_hydra.py), se usa directamente y se omite la
-        construcción manual de abajo. None preserva el comportamiento
-        actual para paper.py (InMemoryPositionStore construido aquí).
+    portfolio_service : PortfolioService ya ensamblado por
+        PortfolioCompositionRoot.assemble() (app/cli/paper_hydra.py).
 
     Returns
     -------
-    tuple[TradingEngine, PortfolioService]
+    TradingRuntime — (engine, portfolio, tracker) ya ensamblado.
     """
-    from portfolio.services.portfolio_service import PortfolioService
-    from trading.engine import TradingEngine
-    from trading.execution.fill_sync import build_fill_sync
-    from trading.risk.models import (
-        OrderLimits,
-        PositionConfig,
-        RiskConfig,
-        SignalFilterConfig,
+    from trading.bootstrap.composition_root import TradingCompositionRoot
+
+    from ocm.config.schema import (
+        RiskConfig as AppRiskConfig,
+    )
+    from ocm.config.schema import (
+        RiskOrderConfig,
+        RiskPositionConfig,
+        TradingConfig,
     )
 
-    risk_config = RiskConfig(
-        position=PositionConfig(
+    # Sub-configs angostos (ADR-0003) desde args (AppConfig + flags CLI).
+    trading_cfg = TradingConfig(
+        strategy_name=args.strategy,
+        strategy_cfg={
+            "symbol": args.symbol,
+            "timeframe": args.timeframe,
+            "fast_period": args.fast,
+            "slow_period": args.slow,
+        },
+        capital_usd=args.capital,
+        exchange=args.exchange,
+        market_type=args.market_type,
+    )
+    risk_cfg = AppRiskConfig(
+        position=RiskPositionConfig(
             max_position_pct=args.max_risk_pct,
             max_open_positions=args.max_positions,
         ),
-        signal_filter=SignalFilterConfig(
-            min_confidence=args.min_confidence,
-        ),
-        order=OrderLimits(
-            min_order_usd=10.0,
+        order=RiskOrderConfig(
+            min_order_usd=getattr(args, "min_order_usd", 10.0),
             max_order_usd=args.capital * args.max_risk_pct,
         ),
     )
 
+    root = TradingCompositionRoot(
+        trading=trading_cfg,
+        risk=risk_cfg,
+        portfolio=portfolio_service,
+        guard=None,
+    )
+
+    data_source: FeatureSource
     if args.dry_run:
         data_source = SyntheticDataSource()
         logger.info(
@@ -198,46 +216,10 @@ def build_paper_engine(args: argparse.Namespace, tracker, portfolio_service=None
         # Fail-Fast: verificar que Gold tiene datos antes de construir el engine.
         # Sin este check, engine.run_once() corre normalmente pero genera 0 señales
         # sin ningún diagnóstico — difícil de debuggear.
-        from trading.data.gold_adapter import GoldLoaderAdapter
-
-        data_source = GoldLoaderAdapter(exchange=args.exchange)
+        data_source = root.build_gold_data_source()
         _probe_gold_data(data_source, args)
 
-    if portfolio_service is not None:
-        # Inyectado por el caller — ver app/cli/paper_hydra.py, que ensambla
-        # PortfolioCompositionRoot.assemble(config) antes de llamar execute().
-        portfolio = portfolio_service
-    else:
-        # Camino por defecto — sin cambios respecto al comportamiento
-        # anterior a Fase 3. Usado por app/cli/paper.py (argparse puro).
-        from portfolio.infra.memory_store import InMemoryPositionStore
-
-        portfolio = PortfolioService(
-            capital_usd=args.capital,
-            store=InMemoryPositionStore(),
-            exchange=args.exchange,
-        )
-
-    # SSOT: callback compartido con live trading — ver trading/execution/fill_sync.py
-    on_fill_composite = build_fill_sync(tracker, portfolio)
-
-    engine = TradingEngine.build_paper(
-        strategy_name="ema_crossover",
-        strategy_cfg={
-            "symbol": args.symbol,
-            "timeframe": args.timeframe,
-            "fast_period": args.fast,
-            "slow_period": args.slow,
-        },
-        data_source=data_source,
-        risk_config=risk_config,
-        capital_usd=args.capital,
-        exchange=args.exchange,
-        market_type=args.market_type,
-        on_fill=on_fill_composite,
-    )
-
-    return engine, portfolio
+    return root.assemble_paper(data_source=data_source, min_confidence=args.min_confidence)
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +280,7 @@ def _probe_gold_data(data_source, args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 
-def execute(args: argparse.Namespace, portfolio_service=None) -> PaperRunResult:
+def execute(args: argparse.Namespace, portfolio_service: PortfolioService) -> PaperRunResult:
     """
     Ejecuta un ciclo completo de paper trading.
 
@@ -312,32 +294,29 @@ def execute(args: argparse.Namespace, portfolio_service=None) -> PaperRunResult:
     PaperRunResult con todo lo necesario para que el CLI loguee y salga.
     """
     from trading.analytics.performance import PerformanceEngine
-    from trading.analytics.trade_tracker import TradeTracker
-
-    tracker = TradeTracker(exchange=args.exchange)
 
     try:
-        engine, portfolio = build_paper_engine(args, tracker, portfolio_service=portfolio_service)
+        runtime = build_paper_engine(args, portfolio_service=portfolio_service)
     except Exception as exc:
         logger.error("Error construyendo engine | {} — {}", type(exc).__name__, exc)
         return PaperRunResult(success=False, error=str(exc))
 
-    logger.info("Engine listo | {}", engine)
-    logger.info("Portfolio | {}", portfolio)
+    logger.info("Engine listo | {}", runtime.engine)
+    logger.info("Portfolio | {}", runtime.portfolio)
 
     try:
-        engine_result = engine.run_once()
+        engine_result = runtime.engine.run_once()
     except Exception as exc:
         logger.error("Error en run_once | {} — {}", type(exc).__name__, exc)
         return PaperRunResult(success=False, error=str(exc))
 
-    trades = tracker.closed_trades
+    trades = runtime.tracker.closed_trades
     performance = PerformanceEngine.summarize(trades, capital_usd=args.capital) if trades else None
 
     return PaperRunResult(
         success=True,
         engine_result=engine_result,
         performance=performance,
-        open_positions=tracker.open_positions,
-        oms_summary=engine.oms_summary,
+        open_positions=runtime.tracker.open_positions,
+        oms_summary=runtime.engine.oms_summary,
     )
