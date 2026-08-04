@@ -861,3 +861,33 @@ layers = [
     "ports",
     "models",
 ]
+
+[[tool.importlinter.contracts]]
+# Hydra/OmegaConf deben permanecer encapsulados detrás de ocm.config
+# (Configuration Service). El resto del sistema — app, market_data, trading,
+# portfolio, infrastructure, api, research, shared — solo debe ver AppConfig
+# (Pydantic, tipado e inmutable), nunca DictConfig/OmegaConf crudo.
+#
+# EXCEPCIÓN DOCUMENTADA: app.cli.main es el único módulo fuera de ocm.config
+# que puede importar hydra/omegaconf — es el composition root donde vive el
+# decorator @hydra.main (frontera obligatoria del framework). Su única
+# navegación de DictConfig es resolve_explicit_env() (ocm.config.hydra_loader);
+# el resto del cuerpo de hydra_main() delega a load_appconfig_from_hydra().
+# Ver ADR-0006.
+name = "BC-51: hydra/omegaconf encapsulados detrás de ocm.config (Configuration Service)"
+type = "forbidden"
+source_modules = [
+    "app", "market_data", "trading", "portfolio",
+    "infrastructure", "api", "research", "shared",
+]
+forbidden_modules = ["hydra", "omegaconf"]
+# allow_indirect_imports: el contrato solo evalúa imports DIRECTOS de hydra/omegaconf.
+# Sin esto, "forbidden" es transitivo por defecto — y como ocm.config.hydra_loader
+# importa omegaconf internamente, cualquier módulo que llame a su API pública
+# (load_appconfig_from_hydra, etc.) contaría como violación, penalizando el uso
+# correcto del Configuration Service. Mismo patrón que BC-35.
+allow_indirect_imports = true
+ignore_imports = [
+    "app.cli.main -> hydra",
+    "app.cli.main -> omegaconf",
+]

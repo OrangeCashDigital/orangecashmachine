@@ -10,9 +10,6 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Union
-
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -97,47 +94,3 @@ class RiskConfig(BaseModel):
     def min_confidence(self) -> float:
         """SSOT: delegado a signal_filter.min_confidence."""
         return self.signal_filter.min_confidence
-
-    @classmethod
-    def from_yaml(cls, path: Union[str, Path]) -> "RiskConfig":
-        """
-        Carga desde YAML. Soporta estructura con clave raiz ``risk:``.
-
-        SafeOps: retorna defaults con warning ante cualquier error de I/O
-        o parsing. Nunca lanza.
-        """
-        import yaml
-        from loguru import logger
-
-        try:
-            raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-            return cls.model_validate(cls._extract_root(raw))
-        except FileNotFoundError:
-            logger.warning("RiskConfig: {} no encontrado -- usando defaults", path)
-        except PermissionError:
-            logger.error("RiskConfig: sin permisos para leer {} -- usando defaults", path)
-        except yaml.YAMLError as exc:
-            logger.error("RiskConfig: YAML invalido en {} | {} -- usando defaults", path, exc)
-        except Exception as exc:
-            logger.error(
-                "RiskConfig: error inesperado cargando {} | {} -- usando defaults",
-                path,
-                exc,
-            )
-        return cls()
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "RiskConfig":
-        """Carga desde dict (OmegaConf / Hydra compatible)."""
-        return cls.model_validate(cls._extract_root(data))
-
-    @staticmethod
-    def _extract_root(raw: object) -> dict:
-        """
-        Extrae el bloque interior si el YAML/dict tiene clave raiz ``risk:``.
-
-        DRY: unico punto de normalizacion para from_yaml y from_dict.
-        """
-        if isinstance(raw, dict):
-            return raw.get("risk", raw)
-        return {}

@@ -190,6 +190,25 @@ def ensure_log_dir(log_dir_path: str) -> None:
     logger.debug("bootstrap | log_dir_ensured={}", log_dir)
 
 
+def resolve_explicit_env(cfg: DictConfig) -> Optional[str]:
+    """Extrae el entorno explícito (si existe) del DictConfig compuesto por Hydra.
+
+    Único punto fuera de ``load_appconfig_from_hydra`` donde se navega el
+    DictConfig crudo — mantiene toda la lectura de ``cfg.environment.*``
+    encapsulada en ocm.config (BC-51), en vez de en el entrypoint (main.py).
+
+    Args:
+        cfg: DictConfig compuesto por Hydra, aún sin validar contra AppConfig.
+
+    Returns:
+        El nombre de entorno explícito (``cfg.environment.name``), o ``None``
+        si no está presente — en cuyo caso el caller debe resolverlo desde
+        ``OCM_ENV`` (ver ``RunConfig.from_env``).
+    """
+    env_block = cfg.get("environment", {})
+    return env_block.get("name") or None
+
+
 def hydra_cfg_to_appconfig(cfg: DictConfig) -> AppConfig:
     """Convierte un DictConfig de Hydra en AppConfig via ConfigPipeline formal.
 

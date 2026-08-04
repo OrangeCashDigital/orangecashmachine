@@ -8,6 +8,7 @@ Flujo de ejecución::
 
     hydra_main(cfg)
         ├── bootstrap_logging()
+        ├── resolve_explicit_env(cfg)        → str | None (BC-51: único acceso a cfg)
         ├── RunConfig.from_env()             → RunConfig (env, debug, run_id…)
         ├── load_appconfig_from_hydra(cfg)   → AppConfig (Pydantic validado)
         ├── run_application(config, run_cfg)
@@ -75,7 +76,7 @@ _register_structured_configs()
 from market_data.ports.outbound.observability import MetricsPusherPort
 
 from app.cli.entrypoint import run as _default_pipeline_runner
-from ocm.config.hydra_loader import load_appconfig_from_hydra
+from ocm.config.hydra_loader import load_appconfig_from_hydra, resolve_explicit_env
 from ocm.config.loader.exceptions import (
     ConfigurationError,
     ConfigValidationError,
@@ -217,6 +218,11 @@ def hydra_main(cfg: DictConfig) -> None:
     Hydra compone: ``base.yaml → env/{env}.yaml → settings.yaml``
     y resuelve todas las interpolaciones ``${oc.env:VAR,default}``.
 
+    BC-51: este es el único cuerpo de función fuera de ``ocm.config`` que
+    recibe un ``DictConfig`` crudo. Su única navegación directa es delegar
+    a ``resolve_explicit_env()`` — el resto del flujo pasa por
+    ``load_appconfig_from_hydra()``, que ya produce ``AppConfig`` tipado.
+
     Args:
         cfg: DictConfig compuesto por Hydra.
 
@@ -228,8 +234,7 @@ def hydra_main(cfg: DictConfig) -> None:
     """
     bootstrap_logging()
 
-    env_block = cfg.get("environment", {})
-    explicit_env = env_block.get("name") or None  # None → RunConfig resuelve OCM_ENV
+    explicit_env = resolve_explicit_env(cfg)  # único punto de acceso a cfg fuera de ocm.config
     run_cfg = RunConfig.from_env(explicit_env=explicit_env)
 
     try:
