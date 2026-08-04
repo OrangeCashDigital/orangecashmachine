@@ -92,7 +92,7 @@ class RepairStrategy(StrategyMixin):
             raise TypeError(
                 "RepairStrategy: 'metrics' es obligatorio. "
                 "Inyectar PrometheusRepairMetrics desde el composition root "
-                "(market_data.factories.pipeline_factory o OCMContainer)."
+                "(market_data.infrastructure.bootstrap.pipeline_factory)."
             )
         self._tolerance = gap_tolerance
         self._metrics: RepairMetricsPort = metrics

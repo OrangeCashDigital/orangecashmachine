@@ -165,8 +165,9 @@ forbidden_modules = ["market_data.application"]
 [[tool.importlinter.contracts]]
 # infrastructure NO puede importar application en nivel módulo — viola DIP.
 # EXCEPCIONES DOCUMENTADAS (Composition Roots legítimos):
-#   · market_data.infrastructure.bootstrap.container — OCMContainer, único CR
+#   · market_data.infrastructure.bootstrap.pipeline_factory — composition root
 #     interno; import lazy (dentro de build()) — no contamina el grafo en import-time.
+#   · OCMContainer (bootstrap.container) fue eliminado el 2026-08-03 (muerto y roto).
 # REGLA: ningún otro módulo de infrastructure puede importar application.
 name = "BC-07: market_data.infrastructure does not import application (DIP)"
 type = "forbidden"
@@ -176,10 +177,7 @@ source_modules = [
 ]
 forbidden_modules = ["market_data.application"]
 ignore_imports = [
-    # Composition Root interno: OCMContainer (import lazy en método build()).
-    # container → pipeline_factory es composition root legítimo (via method).
-    "market_data.infrastructure.bootstrap.container -> market_data.application",
-    # Composition Root: ConcretePipelineFactory instancia pipelines concretos.
+    # Composition Root: pipeline_factory instancia pipelines concretos.
     # pipeline_factory es el único punto de ensamble de application en infrastructure.
     # DEUDA TÉCNICA: mover a factories/ o composition root externo en World-B.
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.pipelines.ohlcv_pipeline",

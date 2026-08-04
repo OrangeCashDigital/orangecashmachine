@@ -82,7 +82,7 @@ class KafkaGapPublisher:
 
     Lifecycle
     ---------
-    Gestionado por el composition root (OCMContainer / factory):
+    Gestionado por el composition root (pipeline_factory):
         publisher = KafkaGapPublisher(bootstrap_servers="localhost:9092")
         await publisher.start()
         # inyectar en RepairStrategy via constructor

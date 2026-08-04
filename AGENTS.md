@@ -1,7 +1,7 @@
 # AGENTS.md — OrangeCashMachine
 
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
-Clean/Hexagonal with bounded contexts and 39 import-linter contracts (BC-NN).
+Clean/Hexagonal with bounded contexts and 44 import-linter contracts (BC-NN).
 
 ## Commands
 
@@ -43,7 +43,7 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
 - Never import infrastructure into domain.
 - Never import bounded contexts directly across domains.
 - Use ports/contracts instead.
-- Composition Root = por bounded context (ver ADR-0003) — todos los BCs tienen CR propio:
+- Composition Root = por bounded context (ver ADR-0003, serie heredada: CR jerárquico en OCM — no confundir con `decisions/ADR-0003`, constructor angosto de trading) — todos los BCs tienen CR propio:
   `market_data.infrastructure.bootstrap.composition_root`, `trading.bootstrap.composition_root`,
   `portfolio.bootstrap.composition_root`.
 - shared/ may only import stdlib and approved 3rd-party libs.
@@ -99,7 +99,7 @@ infrastructure are hybrid during migration. Key facts:
 - `packages/trading/` = engine in active development.
 - `packages/portfolio/` = position management + rebalance.
 - `apps/api/` = FastAPI gateway, experimental. `apps/app/` = CLI entrypoints.
-- `apps/research/` = read-only gold layer consumer for notebooks. Not importable as package.
+- `apps/research/` = read-only gold layer consumer for notebooks. Importable as package `research` (root_packages de importlinter); no expone ruta CLI.
 - `pyproject.toml` = SSOT for build, deps, tools. BC-NN contracts live in `architecture/importlinter.toml`.
 - `config/` = Hydra YAML (layered: base→env→exchange→pipeline→CLI→env vars).
 - Import graph: `uv run pydeps <package> --max-bacon 4` (pydeps en grupo dev)

@@ -74,7 +74,7 @@ class QualityPipelineConsumer(BaseConsumer):
             raise TypeError(
                 "QualityPipelineConsumer: 'tracker' es obligatorio. "
                 "Inyectar LineageTracker desde el composition root "
-                "(OCMContainer o ConcretePipelineFactory)."
+                "(market_data.infrastructure.bootstrap.pipeline_factory)."
             )
         super().__init__(bus)
         # AnomalyRegistryPort inyectado desde pipeline_factory (Composition Root).
