@@ -72,11 +72,9 @@ def _register_structured_configs() -> None:
 _register_structured_configs()
 
 # Imports post-registration — Hydra requiere que ConfigStore esté listo primero
-from market_data.application.pipelines.ohlcv_pipeline import (
-    OHLCVPipeline as _default_pipeline_runner,
-)
 from market_data.ports.outbound.observability import MetricsPusherPort
 
+from app.cli.entrypoint import run as _default_pipeline_runner
 from ocm.config.hydra_loader import load_appconfig_from_hydra
 from ocm.config.loader.exceptions import (
     ConfigurationError,

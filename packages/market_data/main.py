@@ -142,8 +142,11 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
         PipelineOrchestrator,
         PipelineRequest,
     )
+    from market_data.infrastructure.bootstrap.composition_root import CompositionRoot
 
-    orchestrator = PipelineOrchestrator()
+    # Composition Root — único punto de ensamblado (BC-38). PipelineOrchestrator
+    # exige la factory por inyección; nunca instanciarla directamente aquí.
+    orchestrator = PipelineOrchestrator(factory=CompositionRoot.assemble(ctx.app_config).factory)
     app_cfg = ctx.app_config
 
     while not guard.should_stop():
