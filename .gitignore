@@ -24,6 +24,11 @@ data_platform/local_data_lake/
 logs/
 *.bak
 
+# El log de verificación de ADRs (reubicado desde docs/architecture/0006)
+# SÍ es versionable — excepción al patrón logs/ de arriba.
+!docs/architecture/logs/
+!docs/architecture/logs/**
+
 # ==============================================================================
 # Iceberg runtime — artefactos generados, nunca versionables
 # ==============================================================================

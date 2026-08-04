@@ -93,3 +93,30 @@ kafka) · BC-46 (`enums` stdlib-only) · BC-47 (`kafka` no importa dominio) · B
 - `pip-audit --requirement pyproject.toml` en CI (vulnerabilidades conocidas).
 - Dependabot semanal (ecosistema `pip`).
 - Pre-commit: ruff, import-linter, mypy shared/, SSOT — detección local antes del commit.
+
+## 9. Series de ADR — serie canónica y serie heredada
+
+La serie canónica vive en `docs/architecture/decisions/ADR-NNNN-*.md`
+(§3). La serie raíz `docs/architecture/0000-0005*.md` quedó **deprecada
+2026-08-03** (auditoría de composition roots, hallazgo H5 — colisión de
+numeración). Se conserva como registro histórico con banner de deprecación
+en cada archivo; **no usar su numeración para referencias nuevas**.
+
+### Mapa serie heredada → serie canónica
+
+| Serie heredada (`docs/architecture/`) | Serie canónica (`docs/architecture/decisions/`) |
+|---|---|
+| `0000-principios-arquitectonicos` | — (sin equivalente; principios base) |
+| `0001-bounded-contexts-composition-root` | — (sin equivalente directo; lectura histórica) |
+| `0002-event-driven-kappa-architecture` | — (sin equivalente; supersedida en notas) |
+| `0003-composition-root-jerarquico` | `ADR-0003-trading-composition-root-narrow-constructor` (tema distinto) |
+| `0004-rebalance-service-capacidad-adelantada` | `ADR-0004-bc47-market-data-import-boundary` (tema distinto) |
+| `0005-hydra-reemplaza-cli-legado` | `ADR-0005-trading-engine-internal-external-split` (tema distinto) |
+
+Nota: el log de verificación `0006-verificacion-adrs-vs-codigo` se reubicó
+en `docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md`
+(no es un ADR y colisionaba con `decisions/ADR-0006`).
+
+Regla: referencias nuevas a decisiones de arquitectura apuntan a
+`decisions/ADR-NNNN-*`. La serie heredada solo se cita como contexto
+histórico y nunca por su número de forma ambigua.

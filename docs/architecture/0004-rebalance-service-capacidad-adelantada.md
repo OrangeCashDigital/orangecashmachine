@@ -1,5 +1,11 @@
 # ADR-0004: RebalanceService como capacidad adelantada del bounded context portfolio
 
+> **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
+> `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).
+> Este documento se conserva como registro histórico; su numeración no debe
+> usarse para referencias nuevas. Nota: la colisión de numeración con
+> `decisions/ADR-0004` (frontera market_data) motivó esta deprecación.
+
 **Estado:** Aceptado
 **Fecha:** 2026-08-01
 **Contexto del bounded context:** portfolio

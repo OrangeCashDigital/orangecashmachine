@@ -1,5 +1,10 @@
 # ADR-0000: Principios arquitectónicos de OrangeCashMachine
 
+> **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
+> `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).
+> Este documento se conserva como registro histórico; su numeración no debe
+> usarse para referencias nuevas.
+
 **Estado:** Aceptado
 **Fecha:** 2026-08-01
 **Contexto del bounded context:** Todo el repositorio — este documento no cambia con la tecnología, solo con la filosofía del proyecto.

@@ -1,10 +1,16 @@
 # ADR-0002: Arquitectura objetivo event-driven para OCM
 
+> **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
+> `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).
+> Este documento se conserva como registro histórico; su numeración no debe
+> usarse para referencias nuevas.
+
 **Estado:** Aceptado (parcial — ver sección "Pendiente de decisión")
 **Fecha:** 2026-07-25
 **Contexto del bounded context:** `market_data` (y su relación con futuros `control_plane`, `trading`)
 
-> **Nota de estado (2026-08-02):** Ver ADR-0006, que supersede la Decisión 4 y el Pendiente #1 de este documento. Dagster fue eliminado por completo del código (commit `9eb6de3`, posterior a este ADR) — la Decisión 4 de abajo ("Dagster permanece instalado y disponible...") ya no refleja el sistema real. El Pendiente #1 (¿systemd timers alcanza?) quedó resuelto de facto por la eliminación. La ruta `infrastructure/event_bus/` mencionada en la Decisión 2 también está corregida en ADR-0006 a su ubicación real.
+> **Nota de estado (2026-08-02):** Ver el log de verificación
+> `docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md`, que supersede la Decisión 4 y el Pendiente #1 de este documento. Dagster fue eliminado por completo del código (commit `9eb6de3`, posterior a este ADR) — la Decisión 4 de abajo ("Dagster permanece instalado y disponible...") ya no refleja el sistema real. El Pendiente #1 (¿systemd timers alcanza?) quedó resuelto de facto por la eliminación. La ruta `infrastructure/event_bus/` mencionada en la Decisión 2 también está corregida en el log a su ubicación real.
 
 ## Contexto
 

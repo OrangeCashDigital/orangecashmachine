@@ -1,5 +1,11 @@
 # ADR-0003: Composition Root jerárquico en OCM
 
+> **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
+> `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).
+> Este documento se conserva como registro histórico; su numeración no debe
+> usarse para referencias nuevas. Nota: la colisión de numeración con
+> `decisions/ADR-0003` (constructor angosto) motivó esta deprecación.
+
 **Estado:** Aceptado — Decisión 3 reemplazada por `ADR-0005` (ver nota abajo)
 **Fecha:** 2026-08-01
 **Contexto del bounded context:** `apps/` (todos los entrypoints: `cli/main.py`, `cli/live.py`, `cli/paper.py`, `apps/api/main.py`, `apps/research/`), y su relación con `market_data`, `trading`, `portfolio`, `control_plane`

@@ -1,5 +1,13 @@
 # ADR-0005: Hydra/AppConfig reemplaza a los CLIs argparse-puros en live/paper trading
 
+> **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
+> `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).
+> Este documento se conserva como registro histórico; su numeración no debe
+> usarse para referencias nuevas. Nota: la colisión de numeración con
+> `decisions/ADR-0005` (split TradingEngine) motivó esta deprecación.
+> **Estado de implementación:** los CLIs legacy `apps/app/cli/live.py` y
+> `paper.py` se eliminaron el 2026-08-03 (Fase C).
+
 **Estado:** Aceptado
 **Fecha:** 2026-08-02
 **Enmienda a:** ADR-0003, Decisión 3 (declarada superseded por este documento)

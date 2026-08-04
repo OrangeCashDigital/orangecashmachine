@@ -1,10 +1,17 @@
 # ADR-0001: Mapa de bounded contexts y aplicación del Composition Root jerárquico
 
+> **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
+> `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).
+> Este documento se conserva como registro histórico; su numeración no debe
+> usarse para referencias nuevas.
+
 **Estado:** Aceptado
 **Fecha:** 2026-08-02
 **Contexto del bounded context:** Todo el repositorio
 
-> **Nota de estado (2026-08-02):** Ver ADR-0006. Los siguientes elementos descritos abajo como Decisión están **pendientes de implementación**, no materializados: `control_plane` (bounded context, sin paquete propio), `build_market_data()`/`build_trading()` (no existen), y el Composition Root General único en `apps/` (cada entrypoint es hoy su propio CR — permitido por `ADR-0003`, pero no lo que este mapa describe). `build_portfolio()` sí tiene equivalente real: `PortfolioCompositionRoot.assemble()`.
+> **Nota de estado (2026-08-02):** Ver el log de verificación
+> `docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md`.
+> Los siguientes elementos descritos abajo como Decisión están **pendientes de implementación**, no materializados: `control_plane` (bounded context, sin paquete propio), `build_market_data()`/`build_trading()` (no existen), y el Composition Root General único en `apps/` (cada entrypoint es hoy su propio CR — permitido por `ADR-0003`, pero no lo que este mapa describe). `build_portfolio()` sí tiene equivalente real: `PortfolioCompositionRoot.assemble()`.
 
 ## Contexto
 

@@ -1,4 +1,11 @@
-# ADR-0006: Verificación de ADRs vs Código Real
+# Verificación de ADRs vs Código Real (log, 2026-08-02)
+
+> **Log de verificación, no un ADR.** Reubicado desde
+> `docs/architecture/0006-verificacion-adrs-vs-codigo.md` (2026-08-03, Fase D
+> de la auditoría de composition roots) para eliminar la colisión de
+> numeración con `decisions/ADR-0006-portfolio-owns-position-state.md`. La
+> serie canónica de ADRs es `docs/architecture/decisions/ADR-NNNN-*`
+> (ver `GOVERNANCE.md §3` y §9).
 
 **Fecha:** 2026-08-02
 **Método:** Revisión manual de los 6 ADRs (`docs/architecture/0000-0005`) contrastada contra el código fuente real (imports, símbolos, scripts, docker-compose, git history).
@@ -85,7 +92,7 @@ El "Pendiente #1" del ADR (¿systemd timers suficiente?) quedó **resuelto de fa
 | Decisión 1: `build_market_data()`/`build_trading()`/`build_control_plane()` | ⏳ No creados — el propio ADR los lista como consecuencia ("Se requiere crear...") ✓ coherente |
 | Decisión 2: lifecycle es responsabilidad del BC | ✅ `LiveEngineResources` (commit `6f4ff38`) |
 | Decisión 3: SUPERSEDED por ADR-0005 | ✅ Implementado (Hydra CLIs oficiales) |
-| Consecuencia: `redis_client` migra al CR de portfolio "cuando viene inyectado" | ✅ `execute_live.py:182-197` — solo construye Redis inline cuando `portfolio_service is None` (fallback documentado, candidato a eliminarse según ADR-0005) |
+| Consecuencia: `redis_client` migra al CR de portfolio "cuando viene inyectado" | ✅ `execute_live.py` — el fallback Redis inline (`portfolio_service is None`) se eliminó el 2026-08-03 (Fase C): `portfolio_service` es obligatorio e inyectado por `PortfolioCompositionRoot` |
 | Consecuencia: 3.2 `MetricsRuntime.shutdown()` en `cli/main.py` | ⏳ Sigue abierto — no hay `.shutdown()` en `apps/app/cli/main.py` (el ADR lo registra como pendiente) ✓ |
 
 ---
