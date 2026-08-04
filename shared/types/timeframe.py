@@ -109,8 +109,10 @@ class Timeframe(str, Enum):
         """Fail-Fast: lanza InvalidTimeframeError si el string no es reconocido."""
         try:
             return cls(value)
-        except ValueError:
-            raise InvalidTimeframeError(f"Timeframe desconocido: {value!r}. Válidos: {sorted(VALID_TIMEFRAMES)}")
+        except ValueError as err:
+            raise InvalidTimeframeError(
+                f"Timeframe desconocido: {value!r}. Válidos: {sorted(VALID_TIMEFRAMES)}"
+            ) from err
 
 
 # ===========================================================================
@@ -126,8 +128,10 @@ def timeframe_to_ms(timeframe: str) -> int:
     """
     try:
         return _TF_TO_MS[timeframe]
-    except KeyError:
-        raise InvalidTimeframeError(f"Timeframe desconocido: {timeframe!r}. Válidos: {sorted(VALID_TIMEFRAMES)}")
+    except KeyError as err:
+        raise InvalidTimeframeError(
+            f"Timeframe desconocido: {timeframe!r}. Válidos: {sorted(VALID_TIMEFRAMES)}"
+        ) from err
 
 
 # align_to_grid(ts, timeframe) — ELIMINADO 2026-07-25. Sin callers reales

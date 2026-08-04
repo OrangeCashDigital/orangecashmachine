@@ -317,10 +317,10 @@ class GoldReader:
 
         try:
             return int(version)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as err:
             raise VersionNotFoundError(
                 f"Versión inválida '{version}' — usa 'latest', snapshot_id entero, o as_of=ISO timestamp"
-            )
+            ) from err
 
 
 # ---------------------------------------------------------------------------

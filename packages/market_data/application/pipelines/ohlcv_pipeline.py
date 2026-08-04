@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.exchange_client import ExchangeClientPort
     from market_data.ports.outbound.throttle import ThrottlePort
 
+from market_data.ports.outbound.metrics import RepairMetricsPort
 from market_data.ports.outbound.publisher import (
     NullPublisher,
     OHLCVPublisherPort,
@@ -190,6 +191,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         auto_lookback_days: int = 3650,
         throttle: "Optional[ThrottlePort]" = None,
         event_bus: "Optional[EventBusPort]" = None,
+        repair_metrics: Optional[RepairMetricsPort] = None,
     ) -> None:
         # Fail-fast: dependencias de infraestructura obligatorias.
         # OHLCVPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).
@@ -209,6 +211,12 @@ class OHLCVPipeline(PipelineTriggerPort):
         if metrics is None:
             raise TypeError(
                 "OHLCVPipeline: 'metrics' es obligatorio. Inyectar PrometheusPipelineMetrics desde el composition root."
+            )
+        if repair_metrics is None:
+            raise TypeError(
+                "OHLCVPipeline: 'repair_metrics' es obligatorio. "
+                "Inyectar PrometheusRepairMetrics desde el composition root "
+                "(market_data.infrastructure.bootstrap.pipeline_factory)."
             )
 
         self.symbols = symbols
@@ -255,7 +263,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         self._strategies: dict[PipelineMode, PipelineStrategy] = {
             PipelineMode.INCREMENTAL: IncrementalStrategy(),
             PipelineMode.BACKFILL: BackfillStrategy(),
-            PipelineMode.REPAIR: RepairStrategy(),
+            PipelineMode.REPAIR: RepairStrategy(metrics=repair_metrics),
         }
         self._log = bind_pipeline("pipeline", exchange=self._exchange_id)
 

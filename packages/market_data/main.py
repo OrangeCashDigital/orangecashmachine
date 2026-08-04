@@ -589,7 +589,10 @@ async def get_ohlcv(
             timeframe=timeframe,
             error=str(exc),
         )
-        raise HTTPException(status_code=500, detail=f"storage_error:{type(exc).__name__}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"storage_error:{type(exc).__name__}",
+        ) from exc
 
 
 # _get_storage() eliminado — IcebergStorage se instancia en lifespan (composition root).

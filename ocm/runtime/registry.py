@@ -205,7 +205,7 @@ def query_runs(
 
         result_list = []
         for row in rows:
-            d = dict(zip(cols, row))
+            d = dict(zip(cols, row, strict=True))
             d["exchanges"] = json.loads(d["exchanges"])
             if d.get("extra"):
                 d["extra"] = json.loads(d["extra"])

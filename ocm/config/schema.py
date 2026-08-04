@@ -352,9 +352,9 @@ class HistoricalConfig(StrictBaseModel):
         if v == "auto":
             return v
         try:
-            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
-        except ValueError:
-            raise ValueError(f"start_date must be ISO 8601 or 'auto', got: '{v}'")
+            dt = datetime.fromisoformat(v.replace("Z", "+00:00")).replace(tzinfo=timezone.utc)
+        except ValueError as err:
+            raise ValueError(f"start_date must be ISO 8601 or 'auto', got: '{v}'") from err
         if dt > datetime.now(timezone.utc):
             raise ValueError("start_date cannot be in the future.")
         return v

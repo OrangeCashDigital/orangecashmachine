@@ -116,6 +116,7 @@ def ohlcv_df_to_chunk(
         lows,
         closes,
         volumes,
+        strict=True,
     ):
         candle = Candle(
             timestamp_ms=int(ts_ms),

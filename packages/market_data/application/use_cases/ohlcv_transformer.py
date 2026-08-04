@@ -404,7 +404,7 @@ class OHLCVTransformer:
 
         # value_counts nativo polars — DRY, sin conversión a pandas
         vc = pl_df["quality_flag"].value_counts()
-        flag_counts = dict(zip(vc["quality_flag"].to_list(), vc["count"].to_list()))
+        flag_counts = dict(zip(vc["quality_flag"].to_list(), vc["count"].to_list(), strict=True))
         logger.info(
             "OHLCV transformed | {}/{} exchange={} rows={}/{} quality_flag_counts={}",
             symbol,

@@ -240,15 +240,15 @@ class ResilienceLayer:
             can_exec = await self._breaker.can_execute()
             if not can_exec:
                 raise CircuitBreakerOpenError(self._exchange_id)
-        except AioResilienceCBError:
-            raise CircuitBreakerOpenError(self._exchange_id)
+        except AioResilienceCBError as err:
+            raise CircuitBreakerOpenError(self._exchange_id) from err
 
         # Primer intento para clasificar el error y seleccionar policy.
         # Si tiene éxito, retorna directamente (fast path — 0 overhead de retry).
         try:
             return await coro_fn()
-        except AioResilienceCBError:
-            raise CircuitBreakerOpenError(self._exchange_id)
+        except AioResilienceCBError as err:
+            raise CircuitBreakerOpenError(self._exchange_id) from err
         except Exception as exc:
             error_type = classify_error(exc)
             if error_type == "unknown":
@@ -305,8 +305,8 @@ class ResilienceLayer:
 
         try:
             return await policy.execute(_breaker_guard)
-        except AioResilienceCBError:
-            raise CircuitBreakerOpenError(self._exchange_id)
+        except AioResilienceCBError as err:
+            raise CircuitBreakerOpenError(self._exchange_id) from err
         except Exception as exc:
             if classify_error(exc) == "unknown":
                 raise

@@ -172,7 +172,7 @@ async def run_worker_pool(
 
     try:
         await asyncio.wait_for(queue.join(), timeout=timeout_s)
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as err:
         log.error(
             "worker_pool_timeout | exchange={} timeout_s={}",
             exchange_id,
@@ -181,7 +181,7 @@ async def run_worker_pool(
         for w in worker_tasks:
             w.cancel()
         await asyncio.gather(*worker_tasks, return_exceptions=True)
-        raise RuntimeError(f"Worker pool timed out after {timeout_s:.0f}s | exchange={exchange_id}")
+        raise RuntimeError(f"Worker pool timed out after {timeout_s:.0f}s | exchange={exchange_id}") from err
     except asyncio.CancelledError:
         for w in worker_tasks:
             w.cancel()

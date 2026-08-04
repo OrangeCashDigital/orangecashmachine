@@ -218,11 +218,12 @@ class ConcretePipelineFactory:
         from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
         from market_data.infrastructure.observability.metrics_adapter import (
             PrometheusPipelineMetrics,
+            PrometheusRepairMetrics,
         )
         from market_data.infrastructure.quality.anomaly_registry import default_registry
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
         from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
-        from market_data.ports.outbound.metrics import MetricsPort
+        from market_data.ports.outbound.metrics import MetricsPort, RepairMetricsPort
         from market_data.ports.outbound.quality_pipeline import QualityPipelinePort
         from market_data.ports.outbound.state import (
             AsyncCursorStorePort,
@@ -249,7 +250,7 @@ class ConcretePipelineFactory:
             transformer=OHLCVTransformer(),
             exchange_client=raw_adapter,
             cursor_store=cast(AsyncCursorStorePort, cursor),
-            backfill_mode=True,
+            backfill_mode=(request.mode == "backfill"),
             market_type=request.market_type,
             config_start_date=request.start_date or "auto",
             auto_lookback_days=request.auto_lookback_days or 3650,
@@ -270,6 +271,7 @@ class ConcretePipelineFactory:
             exchange_client=cast(ExchangeClientPort, exchange_client),
             fetcher=cast(HistoricalFetcherPort, fetcher),
             metrics=cast(MetricsPort, PrometheusPipelineMetrics()),
+            repair_metrics=cast(RepairMetricsPort, PrometheusRepairMetrics()),
             quality=cast(QualityPipelinePort, quality),
             cursor_store=cast(CursorStorePort, cursor),
             market_type=request.market_type,

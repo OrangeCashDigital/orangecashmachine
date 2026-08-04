@@ -268,7 +268,7 @@ class GoldTransformer:
     @staticmethod
     def _sanitize(df: pl.DataFrame) -> pl.DataFrame:
         """±inf → null en todas las columnas numéricas Float64."""
-        float_cols = [c for c, t in zip(df.columns, df.dtypes) if t == pl.Float64]
+        float_cols = [c for c, t in zip(df.columns, df.dtypes, strict=True) if t == pl.Float64]
         if not float_cols:
             return df
         inf_counts = {c: int(df[c].is_infinite().sum()) for c in float_cols}

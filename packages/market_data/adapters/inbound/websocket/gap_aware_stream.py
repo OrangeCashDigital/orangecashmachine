@@ -224,7 +224,7 @@ class GapAwareStream:
                 reconnected = await self._handle_disconnection()
                 if not reconnected:
                     self._running = False
-                    raise StopAsyncIteration
+                    raise StopAsyncIteration from None
 
             except Exception as exc:
                 # Error inesperado del source — loguear y continuar

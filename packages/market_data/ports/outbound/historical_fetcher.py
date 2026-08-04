@@ -29,6 +29,14 @@ ensure_exchange  — garantiza que la sesión HTTP/WebSocket está abierta.
 fetch_ohlcv      — descarga candles paginando desde since_ms hasta now.
                    Retorna AsyncIterator para que el caller procese chunk
                    a chunk sin acumular en memoria (Kappa — streaming).
+download_data    — descarga histórico completo en pd.DataFrame. La
+                   implementación canónica (HistoricalFetcherAsync) opera
+                   internamente en pandas (pd.concat/sort_values/
+                   drop_duplicates); IncrementalStrategy aplica su propio
+                   ACL (pl.from_pandas) en el boundary hacia el quality
+                   gate — ver application/strategies/incremental.py.
+                   Este contrato refleja el estado real de fase 3 del plan
+                   de migración pandas→polars (pendiente, no completado).
 
 Principios
 ----------
@@ -42,6 +50,7 @@ from __future__ import annotations
 
 from typing import AsyncIterator, List, Optional, Protocol, runtime_checkable
 
+import pandas as pd
 import polars as pl
 
 
@@ -110,13 +119,20 @@ class HistoricalFetcherPort(Protocol):
         timeframe: str,
         start_date: Optional[str] = None,
         limit: int = 500,
-    ) -> pl.DataFrame:
+    ) -> pd.DataFrame:
         """
         Descarga todos los datos OHLCV disponibles desde start_date.
 
+        Nota de arquitectura
+        ---------------------
+        Retorna pd.DataFrame (no pl.DataFrame): la implementación canónica
+        (HistoricalFetcherAsync) opera internamente en pandas y el único
+        consumidor (IncrementalStrategy) ya convierte a Polars en su propio
+        ACL, en el boundary hacia el quality gate.
+
         Returns
         -------
-        pl.DataFrame con columnas OHLCV canónicas. DataFrame vacío si no hay datos.
+        pd.DataFrame con columnas OHLCV canónicas. DataFrame vacío si no hay datos.
         """
         ...
 

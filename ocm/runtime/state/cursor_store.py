@@ -278,7 +278,7 @@ class RedisCursorStore:
             for key in keys:
                 pipe.get(key)
             values = _retry(lambda: pipe.execute())
-            for key, raw in zip(keys, values):
+            for key, raw in zip(keys, values, strict=True):
                 if raw:
                     result[key] = int(raw)
             if _active_cursors:

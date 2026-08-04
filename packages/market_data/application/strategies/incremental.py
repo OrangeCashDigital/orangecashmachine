@@ -56,7 +56,7 @@ class IncrementalStrategy(StrategyMixin):
             start_date=ctx.start_date,
         )
 
-        if df is None or df.empty:
+        if df is None or len(df) == 0:
             result.skipped = True
             logger.debug(
                 "Sin datos nuevos [{}/{}] | symbol={} timeframe={}",
