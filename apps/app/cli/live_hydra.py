@@ -33,6 +33,10 @@ Parámetros de estrategia sin modelo en AppConfig (symbol, timeframe,
 market_type, strategy, fast, slow, min_confidence, max_errors) se
 mantienen como flags CLI — igual que en live.py.
 
+H1 (AUDIT-apps-2026-08-03): el Namespace muere en el borde CLI —
+assemble_cli_config() deriva TradingConfig/RiskConfig/RunParams tipados
+(app/cli/_bootstrap.py). execute_live ya no recibe argparse.Namespace.
+
 Uso
 ---
     uv run live --capital 1000
@@ -120,53 +124,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 # ---------------------------------------------------------------------------
-# Puente AppConfig -> argparse.Namespace
-# ---------------------------------------------------------------------------
-
-
-def _merge_config_into_args(config, cli_args: argparse.Namespace) -> argparse.Namespace:
-    """Construye el Namespace que espera execute_live.execute().
-
-    SSOT: exchange/riesgo/redis vienen de AppConfig. capital es
-    explícito por CLI (ver nota SafeOps en el docstring del módulo).
-    Lo que AppConfig no modela (symbol, timeframe, strategy) viene de
-    cli_args tal cual.
-
-    Args:
-        config:   AppConfig validado (pipeline L1-L5 completo).
-        cli_args: Namespace ya parseado por _build_parser(), con
-                   capital ya validado como no-None por main().
-
-    Returns:
-        argparse.Namespace con el mismo shape que produce app/cli/live.py.
-    """
-    merged = argparse.Namespace(**vars(cli_args))
-
-    merged.exchange = config.portfolio.exchange
-    merged.max_risk_pct = config.risk.position.max_position_pct
-    merged.max_positions = config.risk.position.max_open_positions
-    merged.min_order_usd = config.risk.order.min_order_usd
-
-    redis_cfg = config.integrations.redis
-    merged.redis_host = redis_cfg.host
-    merged.redis_port = redis_cfg.port
-    merged.redis_db = redis_cfg.db
-    merged.redis_password = redis_cfg.password.get_secret_value() if redis_cfg.password else None
-
-    return merged
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 
-def _handle_sigterm(signum, frame) -> None:
-    """Traduce SIGTERM a SystemExit -- dispara los finally pendientes."""
-    raise SystemExit(1)
-
-
 def main(argv: list[str] | None = None) -> int:
+    from app.cli._bootstrap import (
+        assemble_cli_config,
+        handle_sigterm,
+        log_cycle_result,
+        setup_logging,
+    )
+
     cli_args = _build_parser().parse_args(argv)
 
     # Fail-Fast explícito y con mensaje accionable — aunque argparse ya
@@ -180,16 +149,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    signal.signal(signal.SIGTERM, _handle_sigterm)
-
-    logger.remove()
-    level = "DEBUG" if cli_args.debug else "INFO"
-    logger.add(
-        sys.stderr,
-        level=level,
-        colorize=True,
-        format="<red>{time:HH:mm:ss}</red> | <level>{level:<8}</level> | {message}",
-    )
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    setup_logging(debug=cli_args.debug, color="red")
 
     from ocm.config.hydra_loader import load_appconfig_standalone
     from ocm.config.loader.exceptions import ConfigurationError, ConfigValidationError
@@ -200,30 +161,37 @@ def main(argv: list[str] | None = None) -> int:
         logger.opt(exception=True).critical("config_load_failed | {}", exc)
         return 1
 
-    args = _merge_config_into_args(config, cli_args)
+    trading_cfg, risk_cfg, params = assemble_cli_config(
+        config,
+        cli_args,
+        capital=cli_args.capital,
+        max_errors=cli_args.max_errors,
+    )
+    symbol = trading_cfg.strategy_cfg["symbol"]
+    timeframe = trading_cfg.strategy_cfg["timeframe"]
 
     logger.warning("=" * 52)
     logger.warning("⚠️   LIVE TRADING (HYDRA) — CAPITAL REAL")
     logger.warning(
         "    exchange={} symbol={} capital={:.0f} USD",
-        args.exchange,
-        args.symbol,
-        args.capital,
+        trading_cfg.exchange,
+        symbol,
+        trading_cfg.capital_usd,
     )
     logger.warning("=" * 52)
 
     logger.info(
         "Live trading iniciando (hydra) | exchange={} symbol={} tf={} market_type={} strategy={} capital={:.0f}",
-        args.exchange,
-        args.symbol,
-        args.timeframe,
-        args.market_type,
-        args.strategy,
-        args.capital,
+        trading_cfg.exchange,
+        symbol,
+        timeframe,
+        trading_cfg.market_type,
+        trading_cfg.strategy_name,
+        trading_cfg.capital_usd,
     )
 
     # Fase 3: ensamblar PortfolioService vía CompositionRoot. capital_usd_override
-    # es obligatorio aquí (no None) — args.capital ya fue validado como
+    # es obligatorio aquí (no None) — cli_args.capital ya fue validado como
     # explícito y positivo arriba. Sin este override, CompositionRoot usaría
     # config.portfolio.capital_usd (10000.0 default) y anularía el guard
     # SafeOps de --capital obligatorio que existe justamente para live.
@@ -231,12 +199,18 @@ def main(argv: list[str] | None = None) -> int:
         CompositionRoot as PortfolioCompositionRoot,
     )
 
-    portfolio_root = PortfolioCompositionRoot.assemble(config, capital_usd_override=args.capital)
+    portfolio_root = PortfolioCompositionRoot.assemble(config, capital_usd_override=cli_args.capital)
 
     from app.use_cases.execute_live import execute
 
     try:
-        run_result = execute(args, portfolio_service=portfolio_root.portfolio_service)
+        run_result = execute(
+            trading_cfg,
+            risk_cfg,
+            portfolio_service=portfolio_root.portfolio_service,
+            max_errors=params.max_errors,
+            min_confidence=params.min_confidence,
+        )
     except (KeyboardInterrupt, SystemExit) as exc:
         logger.warning("Live trading interrumpido | {}", exc)
         return 1
@@ -247,61 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("Live use case fallido | {}", run_result.error)
         return run_result.exit_code
 
-    assert run_result.engine_result is not None, (
-        "engine_result is None with success=True — contrato roto en LiveRunResult"
-    )
-    result = run_result.engine_result
-
-    logger.info(
-        "Ciclo completado | status={} signals={} submitted={} filled={} rejected={}",
-        result.status,
-        result.signals_generated,
-        result.orders_submitted,
-        result.orders_filled,
-        result.orders_rejected,
-    )
-
-    if result.skipped:
-        logger.warning("Ciclo skipped | reason={}", result.skip_reason)
-        return 0
-
-    if not result.orders:
-        logger.info("Sin señales accionables en este ciclo.")
-        return 0
-
-    for order in result.orders:
-        logger.info(
-            "  [LIVE] {} {} {} @ {:.4f} | size={:.1%} | status={}",
-            order.order_id,
-            order.side.value.upper(),
-            order.symbol,
-            order.signal.price,
-            order.size_pct,
-            order.status.value,
-        )
-
-    summary = run_result.performance
-    if summary:
-        logger.info("── Performance ─────────────────────────────────")
-        logger.info("  Trades cerrados : {}", summary.total_trades)
-        logger.info(
-            "  Win rate        : {}",
-            f"{summary.win_rate:.1%}" if summary.win_rate is not None else "N/A",
-        )
-        logger.info("  PnL total       : {:+.2%}", summary.total_pnl_pct)
-        logger.info(
-            "  PnL USD         : {:+.2f}",
-            summary.pnl_usd if summary.pnl_usd is not None else 0.0,
-        )
-        logger.info("  Max drawdown    : {:.2%}", summary.max_drawdown)
-        logger.info("────────────────────────────────────────────────")
-    else:
-        open_pos = run_result.open_positions
-        if open_pos:
-            logger.info("Posiciones abiertas | symbols={}", list(open_pos.keys()))
-
-    logger.debug("OMS summary | {}", run_result.oms_summary)
-    return 0
+    return log_cycle_result(run_result, order_tag="[LIVE]")
 
 
 if __name__ == "__main__":

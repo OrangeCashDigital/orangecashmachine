@@ -18,49 +18,30 @@ Separación de concerns
 _SyntheticDataSource vive aquí — es un detalle de implementación
 del use case (dry-run mode), no del CLI.
 
+H1 (AUDIT-apps-2026-08-03): las firmas reciben TradingConfig/RiskConfig
+tipados (no argparse.Namespace). El borde CLI deriva max_order_usd y
+min_order_usd vía model_copy — este use case no repite fórmulas ni getattr.
+H4: min_order_usd viene de config.risk.order.min_order_usd (SSOT), ya no
+del fallback hardcodeado 10.0.
+
 Principios: SRP · DIP · DRY · SSOT · SafeOps · Composition Root
 """
 
 from __future__ import annotations
 
-import argparse
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
-    from trading.analytics.performance import PerformanceSummary
-    from trading.engine import EngineResult
 
+    from ocm.config.schema import RiskConfig, TradingConfig
     from shared.contracts.boundaries import FeatureSource
 
 from loguru import logger
 
+from app.use_cases.run_result import CycleRunResult
+
 # Import estático — no dentro de closures (DRY · KISS · evita re-evaluación por fill)
-
-# ---------------------------------------------------------------------------
-# Result
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class PaperRunResult:
-    """
-    Resultado completo de un ciclo de paper trading.
-
-    Usado por el CLI para determinar el exit code y el logging final.
-    """
-
-    success: bool
-    error: Optional[str] = None
-    engine_result: Optional["EngineResult"] = None
-    performance: Optional["PerformanceSummary"] = None
-    open_positions: Optional[dict] = None
-    oms_summary: Optional[dict] = None
-
-    @property
-    def exit_code(self) -> int:
-        return 0 if self.success else 1
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +122,14 @@ class SyntheticDataSource:
 # ---------------------------------------------------------------------------
 
 
-def build_paper_engine(args: argparse.Namespace, portfolio_service: PortfolioService):
+def build_paper_engine(
+    trading: "TradingConfig",
+    risk: "RiskConfig",
+    portfolio_service: PortfolioService,
+    *,
+    dry_run: bool,
+    min_confidence: float,
+):
     """
     Ensambla TradingEngine + PortfolioService para paper trading vía Composition Root.
 
@@ -155,9 +143,14 @@ def build_paper_engine(args: argparse.Namespace, portfolio_service: PortfolioSer
 
     Parameters
     ----------
-    args    : namespace de argparse con todos los parámetros del ciclo
+    trading : TradingConfig tipado — derivado por assemble_cli_config() en
+        el borde CLI (AppConfig SSOT + flags CLI; ADR-0003).
+    risk    : RiskConfig tipado — idem. max_order_usd/min_order_usd ya
+        derivados en el CLI vía model_copy (H1/H4).
     portfolio_service : PortfolioService ya ensamblado por
         PortfolioCompositionRoot.assemble() (app/cli/paper_hydra.py).
+    dry_run : True → datos sintéticos (SyntheticDataSource); False → Gold.
+    min_confidence : confianza mínima de señal para actuar.
 
     Returns
     -------
@@ -165,48 +158,15 @@ def build_paper_engine(args: argparse.Namespace, portfolio_service: PortfolioSer
     """
     from trading.bootstrap.composition_root import TradingCompositionRoot
 
-    from ocm.config.schema import (
-        RiskConfig as AppRiskConfig,
-    )
-    from ocm.config.schema import (
-        RiskOrderConfig,
-        RiskPositionConfig,
-        TradingConfig,
-    )
-
-    # Sub-configs angostos (ADR-0003) desde args (AppConfig + flags CLI).
-    trading_cfg = TradingConfig(
-        strategy_name=args.strategy,
-        strategy_cfg={
-            "symbol": args.symbol,
-            "timeframe": args.timeframe,
-            "fast_period": args.fast,
-            "slow_period": args.slow,
-        },
-        capital_usd=args.capital,
-        exchange=args.exchange,
-        market_type=args.market_type,
-    )
-    risk_cfg = AppRiskConfig(
-        position=RiskPositionConfig(
-            max_position_pct=args.max_risk_pct,
-            max_open_positions=args.max_positions,
-        ),
-        order=RiskOrderConfig(
-            min_order_usd=getattr(args, "min_order_usd", 10.0),
-            max_order_usd=args.capital * args.max_risk_pct,
-        ),
-    )
-
     root = TradingCompositionRoot(
-        trading=trading_cfg,
-        risk=risk_cfg,
+        trading=trading,
+        risk=risk,
         portfolio=portfolio_service,
         guard=None,
     )
 
-    data_source: FeatureSource
-    if args.dry_run:
+    data_source: "FeatureSource"
+    if dry_run:
         data_source = SyntheticDataSource()
         logger.info(
             "[DRY-RUN] Usando datos sintéticos — sin conexión a Iceberg | seed={}",
@@ -217,9 +177,15 @@ def build_paper_engine(args: argparse.Namespace, portfolio_service: PortfolioSer
         # Sin este check, engine.run_once() corre normalmente pero genera 0 señales
         # sin ningún diagnóstico — difícil de debuggear.
         data_source = root.build_gold_data_source()
-        _probe_gold_data(data_source, args)
+        _probe_gold_data(
+            data_source,
+            exchange=trading.exchange,
+            symbol=trading.strategy_cfg["symbol"],
+            timeframe=trading.strategy_cfg["timeframe"],
+            market_type=trading.market_type,
+        )
 
-    return root.assemble_paper(data_source=data_source, min_confidence=args.min_confidence)
+    return root.assemble_paper(data_source=data_source, min_confidence=min_confidence)
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +193,14 @@ def build_paper_engine(args: argparse.Namespace, portfolio_service: PortfolioSer
 # ---------------------------------------------------------------------------
 
 
-def _probe_gold_data(data_source, args: argparse.Namespace) -> None:
+def _probe_gold_data(
+    data_source: "FeatureSource",
+    *,
+    exchange: str,
+    symbol: str,
+    timeframe: str,
+    market_type: str,
+) -> None:
     """Verifica que Gold tiene datos antes de construir el engine.
 
     Fail-Fast: lanza RuntimeError si no hay datos disponibles.
@@ -244,33 +217,33 @@ def _probe_gold_data(data_source, args: argparse.Namespace) -> None:
     """
     try:
         probe = data_source.load_features(
-            exchange=args.exchange,
-            symbol=args.symbol,
-            timeframe=args.timeframe,
-            market_type=args.market_type,
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            market_type=market_type,
         )
     except Exception as exc:
         raise RuntimeError(
-            f"Gold data unavailable | exchange={args.exchange} "
-            f"symbol={args.symbol} tf={args.timeframe} "
-            f"market_type={args.market_type} | "
+            f"Gold data unavailable | exchange={exchange} "
+            f"symbol={symbol} tf={timeframe} "
+            f"market_type={market_type} | "
             f"Correr './run.sh ocm' para ingestar datos primero. "
             f"Error: {exc}"
         ) from exc
 
     if probe is None or (hasattr(probe, "empty") and probe.empty):
         raise RuntimeError(
-            f"Gold data empty | exchange={args.exchange} "
-            f"symbol={args.symbol} tf={args.timeframe} "
-            f"market_type={args.market_type} | "
+            f"Gold data empty | exchange={exchange} "
+            f"symbol={symbol} tf={timeframe} "
+            f"market_type={market_type} | "
             f"Correr './run.sh ocm' para ingestar datos primero."
         )
 
     logger.info(
         "Gold data OK | exchange={} symbol={} tf={} rows={}",
-        args.exchange,
-        args.symbol,
-        args.timeframe,
+        exchange,
+        symbol,
+        timeframe,
         len(probe) if hasattr(probe, "__len__") else "?",
     )
 
@@ -280,26 +253,42 @@ def _probe_gold_data(data_source, args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 
-def execute(args: argparse.Namespace, portfolio_service: PortfolioService) -> PaperRunResult:
+def execute(
+    trading: "TradingConfig",
+    risk: "RiskConfig",
+    portfolio_service: PortfolioService,
+    *,
+    dry_run: bool,
+    min_confidence: float,
+) -> CycleRunResult:
     """
     Ejecuta un ciclo completo de paper trading.
 
     Punto de entrada del use case — el CLI llama esto.
     Encapsula todo el flujo: build → run → analytics.
 
-    SafeOps: nunca lanza — errores retornados en PaperRunResult.
+    SafeOps: nunca lanza — errores retornados en CycleRunResult.
+
+    H7: analytics (closed_trades + summarize) dentro del try — un fallo en
+    PerformanceEngine no pierde el resultado del ciclo.
 
     Returns
     -------
-    PaperRunResult con todo lo necesario para que el CLI loguee y salga.
+    CycleRunResult con todo lo necesario para que el CLI loguee y salga.
     """
     from trading.analytics.performance import PerformanceEngine
 
     try:
-        runtime = build_paper_engine(args, portfolio_service=portfolio_service)
+        runtime = build_paper_engine(
+            trading,
+            risk,
+            portfolio_service=portfolio_service,
+            dry_run=dry_run,
+            min_confidence=min_confidence,
+        )
     except Exception as exc:
         logger.error("Error construyendo engine | {} — {}", type(exc).__name__, exc)
-        return PaperRunResult(success=False, error=str(exc))
+        return CycleRunResult(success=False, error=str(exc))
 
     logger.info("Engine listo | {}", runtime.engine)
     logger.info("Portfolio | {}", runtime.portfolio)
@@ -308,12 +297,20 @@ def execute(args: argparse.Namespace, portfolio_service: PortfolioService) -> Pa
         engine_result = runtime.engine.run_once()
     except Exception as exc:
         logger.error("Error en run_once | {} — {}", type(exc).__name__, exc)
-        return PaperRunResult(success=False, error=str(exc))
+        return CycleRunResult(success=False, error=str(exc))
 
-    trades = runtime.tracker.closed_trades
-    performance = PerformanceEngine.summarize(trades, capital_usd=args.capital) if trades else None
+    try:
+        trades = runtime.tracker.closed_trades
+        performance = PerformanceEngine.summarize(trades, capital_usd=trading.capital_usd) if trades else None
+    except Exception as exc:
+        logger.error(
+            "Error calculando performance | {} — {}",
+            type(exc).__name__,
+            exc,
+        )
+        return CycleRunResult(success=False, error=str(exc))
 
-    return PaperRunResult(
+    return CycleRunResult(
         success=True,
         engine_result=engine_result,
         performance=performance,

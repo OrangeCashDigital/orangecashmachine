@@ -10,14 +10,16 @@ y expone CLIs. Puede importar libremente de cualquier dominio.
 Estructura interna
 ------------------
   cli/              — thin CLI entrypoints (argparse, logging, exit codes)
-    live.py         — live trading ⚠️  capital real
-    paper.py        — paper trading
-    market_data.py  — market data pipeline (Hydra)
+    main.py         — market data pipeline (Hydra / AppConfig)
+    live_hydra.py   — live trading ⚠️  capital real
+    paper_hydra.py  — paper trading (Gold/Iceberg o dry-run)
+    entrypoint.py   — runner del pipeline (data)
+    _bootstrap.py   — helpers compartidos de los CLIs Hydra (H1/H8)
 
   use_cases/        — Application Layer (orquestación, DI, flujos)
-    execute_live.py
-    execute_paper.py
-    rebalance.py
+    execute_live.py — ciclo de live trading (capital real)
+    execute_paper.py — ciclo de paper trading (Gold/Iceberg o dry-run)
+    run_result.py   — CycleRunResult (contrato único del resultado de ciclo)
 
 Flujo canónico:
   cli/ → use_cases/ → trading/ → portfolio/ → domain/

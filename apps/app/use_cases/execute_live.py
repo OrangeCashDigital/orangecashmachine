@@ -21,50 +21,31 @@ Diferencias vs execute_paper.py
 SafeOps en live
 ---------------
 - Fail-Fast en build: guard y risk_config obligatorios.
-- Fail-Soft en execute: errores retornados en LiveRunResult, no lanzan.
+- Fail-Soft en execute: errores retornados en CycleRunResult, no lanzan.
 - Toda orden enviada al exchange queda logueada con order_id.
+
+H1 (AUDIT-apps-2026-08-03): las firmas reciben TradingConfig/RiskConfig
+tipados (no argparse.Namespace). El borde CLI deriva max_order_usd y
+min_order_usd vía model_copy — este use case no repite fórmulas ni getattr.
 
 Principios: SRP - DIP - DRY - SafeOps - Composition Root
 """
 
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
-    from trading.analytics.performance import PerformanceSummary
     from trading.analytics.trade_tracker import TradeTracker
-    from trading.engine import EngineResult, TradingEngine
+    from trading.engine import TradingEngine
+
+    from ocm.config.schema import RiskConfig, TradingConfig
 
 from loguru import logger
 
-# ---------------------------------------------------------------------------
-# Result
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class LiveRunResult:
-    """
-    Resultado completo de un ciclo de live trading.
-
-    Usado por el CLI para determinar exit code y logging final.
-    """
-
-    success: bool
-    error: Optional[str] = None
-    engine_result: Optional["EngineResult"] = None
-    performance: Optional["PerformanceSummary"] = None
-    open_positions: Optional[dict] = None
-    oms_summary: Optional[dict] = None
-
-    @property
-    def exit_code(self) -> int:
-        return 0 if self.success else 1
-
+from app.use_cases.run_result import CycleRunResult
 
 # ---------------------------------------------------------------------------
 # Resources -- recursos vivos abiertos por build_live_engine()
@@ -123,22 +104,34 @@ class LiveEngineResources:
 # ---------------------------------------------------------------------------
 
 
-def build_live_engine(args: argparse.Namespace, portfolio_service: PortfolioService):
+def build_live_engine(
+    trading: "TradingConfig",
+    risk: "RiskConfig",
+    portfolio_service: PortfolioService,
+    *,
+    max_errors: int,
+    min_confidence: float,
+) -> LiveEngineResources:
     """
     Ensambla TradingEngine(live) + PortfolioService vía Composition Root.
 
     Fail-Fast:
     - guard construido y validado antes de llamar a assemble_live()
-    - risk explicita (AppConfig.risk) -- no defaults permisivos
+    - risk explicita (AppConfig.risk derivada por el CLI) -- no defaults permisivos
 
     Parameters
     ----------
-    args    : namespace de argparse con todos los parametros del ciclo
+    trading : TradingConfig tipado — derivado por assemble_cli_config() en
+        el borde CLI (AppConfig SSOT + flags CLI; ADR-0003).
+    risk    : RiskConfig tipado — idem. max_order_usd/min_order_usd ya
+        derivados en el CLI vía model_copy (H1/H4).
     portfolio_service : PortfolioService ya ensamblado por
         PortfolioCompositionRoot.assemble() (app/cli/live_hydra.py). El
         Composition Root del portfolio es dueno de su conexion Redis (SSOT:
         un unico dueno de la conexion por ejecucion); este builder NO abre
         ninguna conexion propia.
+    max_errors : errores consecutivos antes de activar guard/halt.
+    min_confidence : confianza mínima de señal (live: más restrictivo).
 
     Returns
     -------
@@ -146,52 +139,18 @@ def build_live_engine(args: argparse.Namespace, portfolio_service: PortfolioServ
     """
     from trading.bootstrap.composition_root import TradingCompositionRoot
 
-    from ocm.config.schema import (
-        RiskConfig as AppRiskConfig,
-    )
-    from ocm.config.schema import (
-        RiskOrderConfig,
-        RiskPositionConfig,
-        TradingConfig,
-    )
     from ocm.runtime.guard import ExecutionGuard
 
     # Fail-Fast: guard obligatorio en live -- sin kill switch no hay ejecucion
-    guard = ExecutionGuard(
-        max_errors=args.max_errors,
-    )
-
-    # Sub-configs angostos (ADR-0003) desde args (AppConfig + flags CLI).
-    trading_cfg = TradingConfig(
-        strategy_name=args.strategy,
-        strategy_cfg={
-            "symbol": args.symbol,
-            "timeframe": args.timeframe,
-            "fast_period": args.fast,
-            "slow_period": args.slow,
-        },
-        capital_usd=args.capital,
-        exchange=args.exchange,
-        market_type=args.market_type,
-    )
-    risk_cfg = AppRiskConfig(
-        position=RiskPositionConfig(
-            max_position_pct=args.max_risk_pct,
-            max_open_positions=args.max_positions,
-        ),
-        order=RiskOrderConfig(
-            min_order_usd=getattr(args, "min_order_usd", 10.0),
-            max_order_usd=args.capital * args.max_risk_pct,
-        ),
-    )
+    guard = ExecutionGuard(max_errors=max_errors)
 
     root = TradingCompositionRoot(
-        trading=trading_cfg,
-        risk=risk_cfg,
+        trading=trading,
+        risk=risk,
         portfolio=portfolio_service,
         guard=guard,
     )
-    runtime = root.assemble_live(min_confidence=args.min_confidence)
+    runtime = root.assemble_live(min_confidence=min_confidence)
 
     # redis_client siempre None: la conexion Redis pertenece al
     # PortfolioCompositionRoot del caller (portfolio_root.close()).
@@ -208,27 +167,43 @@ def build_live_engine(args: argparse.Namespace, portfolio_service: PortfolioServ
 # ---------------------------------------------------------------------------
 
 
-def execute(args: argparse.Namespace, portfolio_service: PortfolioService) -> LiveRunResult:
+def execute(
+    trading: "TradingConfig",
+    risk: "RiskConfig",
+    portfolio_service: PortfolioService,
+    *,
+    max_errors: int,
+    min_confidence: float,
+) -> CycleRunResult:
     """
     Ejecuta un ciclo de live trading.
 
-    SafeOps: nunca lanza -- errores retornados en LiveRunResult.
+    SafeOps: nunca lanza -- errores retornados en CycleRunResult.
+
+    H7: analytics (closed_trades + summarize) dentro del try -- un fallo en
+    PerformanceEngine no pierde el resultado del ciclo.
 
     Returns
     -------
-    LiveRunResult con todo lo necesario para que el CLI loguee y salga.
+    CycleRunResult con todo lo necesario para que el CLI loguee y salga.
     """
     from trading.analytics.performance import PerformanceEngine
 
     try:
-        resources = build_live_engine(args, portfolio_service=portfolio_service)
+        resources = build_live_engine(
+            trading,
+            risk,
+            portfolio_service=portfolio_service,
+            max_errors=max_errors,
+            min_confidence=min_confidence,
+        )
     except Exception as exc:
         logger.error(
             "Error construyendo engine live | {} -- {}",
             type(exc).__name__,
             exc,
         )
-        return LiveRunResult(success=False, error=str(exc))
+        return CycleRunResult(success=False, error=str(exc))
 
     logger.info("Engine live listo | {}", resources.engine)
     logger.info("Portfolio | {}", resources.portfolio)
@@ -241,14 +216,22 @@ def execute(args: argparse.Namespace, portfolio_service: PortfolioService) -> Li
             type(exc).__name__,
             exc,
         )
-        return LiveRunResult(success=False, error=str(exc))
+        return CycleRunResult(success=False, error=str(exc))
     finally:
         resources.shutdown()
 
-    trades = resources.tracker.closed_trades
-    performance = PerformanceEngine.summarize(trades, capital_usd=args.capital) if trades else None
+    try:
+        trades = resources.tracker.closed_trades
+        performance = PerformanceEngine.summarize(trades, capital_usd=trading.capital_usd) if trades else None
+    except Exception as exc:
+        logger.error(
+            "Error calculando performance live | {} -- {}",
+            type(exc).__name__,
+            exc,
+        )
+        return CycleRunResult(success=False, error=str(exc))
 
-    return LiveRunResult(
+    return CycleRunResult(
         success=True,
         engine_result=engine_result,
         performance=performance,

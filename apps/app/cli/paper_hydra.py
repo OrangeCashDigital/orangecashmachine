@@ -26,6 +26,13 @@ para cerrar esta fase; ver Fase 5 del plan):
 
     symbol, timeframe, market_type, strategy, fast, slow, min_confidence
 
+H1 (AUDIT-apps-2026-08-03): el Namespace muere en el borde CLI —
+assemble_cli_config() deriva TradingConfig/RiskConfig/RunParams tipados
+(app/cli/_bootstrap.py). execute_paper ya no recibe argparse.Namespace.
+
+H4 (SSOT de min_order_usd): paper respeta config.risk.order.min_order_usd —
+antes usaba un fallback hardcodeado (10.0).
+
 Uso
 ---
     uv run paper
@@ -118,53 +125,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 # ---------------------------------------------------------------------------
-# Puente AppConfig -> argparse.Namespace
-# ---------------------------------------------------------------------------
-# execute_paper.execute() espera argparse.Namespace (Fase 3 lo reemplaza por
-# AppConfig directo vía PortfolioCompositionRoot). Fase 2 no toca ese
-# contrato — solo cambia de dónde vienen los valores que lo pueblan.
-
-
-def _merge_config_into_args(config, cli_args: argparse.Namespace) -> argparse.Namespace:
-    """Construye el Namespace que espera execute_paper.execute().
-
-    SSOT: capital/exchange/riesgo vienen de AppConfig (Hydra). Lo que
-    AppConfig todavía no modela (symbol, timeframe, estrategia) viene
-    de cli_args tal cual.
-
-    Args:
-        config:   AppConfig validado (pipeline L1-L5 completo).
-        cli_args: Namespace ya parseado por _build_parser().
-
-    Returns:
-        argparse.Namespace con el mismo shape que produce app/cli/paper.py.
-    """
-    merged = argparse.Namespace(**vars(cli_args))
-
-    merged.capital = config.portfolio.capital_usd
-    merged.exchange = config.portfolio.exchange
-    merged.max_risk_pct = config.risk.position.max_position_pct
-    merged.max_positions = config.risk.position.max_open_positions
-
-    # dry_run: config.safety.dry_run es el default SSOT; --dry-run del CLI
-    # solo puede forzarlo a True, nunca desactivarlo silenciosamente.
-    merged.dry_run = config.safety.dry_run or cli_args.dry_run
-
-    return merged
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-
-
-def _handle_sigterm(signum, frame) -> None:
-    """Traduce SIGTERM a SystemExit -- dispara los finally pendientes.
-
-    Mismo contrato que app/cli/live_hydra.py._handle_sigterm -- SSOT de
-    comportamiento ante señal de terminación entre ambos entrypoints Hydra.
-    """
-    raise SystemExit(1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -175,21 +137,20 @@ def main(argv: list[str] | None = None) -> int:
     -------
     int — exit code (0 = OK, 1 = error)
     """
+    from app.cli._bootstrap import (
+        assemble_cli_config,
+        handle_sigterm,
+        log_cycle_result,
+        setup_logging,
+    )
+
     cli_args = _build_parser().parse_args(argv)
 
     # Resiliencia / SafeOps: registrar el handler apenas se conocen los args,
     # antes de abrir cualquier recurso (logger, config, engine) -- ver nota
     # "Manejo de señales" en el docstring del módulo.
-    signal.signal(signal.SIGTERM, _handle_sigterm)
-
-    logger.remove()
-    level = "DEBUG" if cli_args.debug else "INFO"
-    logger.add(
-        sys.stderr,
-        level=level,
-        colorize=True,
-        format="<green>{time:HH:mm:ss}</green> | <level>{level:<8}</level> | {message}",
-    )
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    setup_logging(debug=cli_args.debug, color="green")
 
     # Fail-Fast: config inválida detiene acá con mensaje accionable —
     # no en medio del ensamblaje del engine.
@@ -202,19 +163,28 @@ def main(argv: list[str] | None = None) -> int:
         logger.opt(exception=True).critical("config_load_failed | {}", exc)
         return 1
 
-    args = _merge_config_into_args(config, cli_args)
+    # dry_run: config.safety.dry_run es el default SSOT; --dry-run del CLI
+    # solo puede forzarlo a True, nunca desactivarlo silenciosamente.
+    trading_cfg, risk_cfg, params = assemble_cli_config(
+        config,
+        cli_args,
+        capital=config.portfolio.capital_usd,
+        dry_run=config.safety.dry_run or cli_args.dry_run,
+    )
+    symbol = trading_cfg.strategy_cfg["symbol"]
+    timeframe = trading_cfg.strategy_cfg["timeframe"]
 
     logger.info(
         "Paper trading iniciando (hydra) | exchange={} symbol={} tf={} "
         "market_type={} ema={}/{} capital={:.0f} dry_run={}",
-        args.exchange,
-        args.symbol,
-        args.timeframe,
-        args.market_type,
-        args.fast,
-        args.slow,
-        args.capital,
-        args.dry_run,
+        trading_cfg.exchange,
+        symbol,
+        timeframe,
+        trading_cfg.market_type,
+        trading_cfg.strategy_cfg["fast_period"],
+        trading_cfg.strategy_cfg["slow_period"],
+        trading_cfg.capital_usd,
+        params.dry_run,
     )
 
     # Fase 3: ensamblar PortfolioService vía CompositionRoot en vez de
@@ -230,7 +200,13 @@ def main(argv: list[str] | None = None) -> int:
     from app.use_cases.execute_paper import execute
 
     try:
-        run_result = execute(args, portfolio_service=portfolio_root.portfolio_service)
+        run_result = execute(
+            trading_cfg,
+            risk_cfg,
+            portfolio_service=portfolio_root.portfolio_service,
+            dry_run=params.dry_run,
+            min_confidence=params.min_confidence,
+        )
     except (KeyboardInterrupt, SystemExit) as exc:
         logger.warning("Paper trading interrumpido | {}", exc)
         return 1
@@ -241,69 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("Use case fallido | {}", run_result.error)
         return run_result.exit_code
 
-    assert run_result.engine_result is not None, (
-        "engine_result is None with success=True — contrato roto en PaperRunResult"
-    )
-    result = run_result.engine_result
-
-    logger.info(
-        "Ciclo completado | status={} signals={} submitted={} filled={} rejected={}",
-        result.status,
-        result.signals_generated,
-        result.orders_submitted,
-        result.orders_filled,
-        result.orders_rejected,
-    )
-
-    if result.skipped:
-        logger.warning("Ciclo skipped | reason={}", result.skip_reason)
-        return 0
-
-    if not result.orders:
-        logger.info("Sin señales accionables en este ciclo.")
-        return 0
-
-    for order in result.orders:
-        logger.info(
-            "  {} {} {} @ {:.4f} | size={:.1%} | status={}",
-            order.order_id,
-            order.side.value.upper(),
-            order.symbol,
-            order.signal.price,
-            order.size_pct,
-            order.status.value,
-        )
-
-    summary = run_result.performance
-    if summary:
-        logger.info("── Performance ─────────────────────────────────")
-        logger.info("  Trades cerrados : {}", summary.total_trades)
-        logger.info(
-            "  Win rate        : {}",
-            f"{summary.win_rate:.1%}" if summary.win_rate is not None else "N/A",
-        )
-        logger.info("  PnL total       : {:+.2%}", summary.total_pnl_pct)
-        logger.info(
-            "  PnL USD         : {:+.2f}",
-            summary.pnl_usd if summary.pnl_usd is not None else 0.0,
-        )
-        logger.info(
-            "  Sharpe ratio    : {}",
-            (f"{summary.sharpe_ratio:.2f}" if summary.sharpe_ratio is not None else "N/A"),
-        )
-        logger.info("  Max drawdown    : {:.2%}", summary.max_drawdown)
-        logger.info(
-            "  Profit factor   : {}",
-            (f"{summary.profit_factor:.2f}" if summary.profit_factor is not None else "N/A"),
-        )
-        logger.info("────────────────────────────────────────────────")
-    else:
-        open_pos = run_result.open_positions
-        if open_pos:
-            logger.info("Posiciones abiertas | symbols={}", list(open_pos.keys()))
-
-    logger.debug("OMS summary | {}", run_result.oms_summary)
-    return 0
+    return log_cycle_result(run_result, extra_performance=True)
 
 
 if __name__ == "__main__":
