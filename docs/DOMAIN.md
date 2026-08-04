@@ -60,7 +60,7 @@ No sigue el mismo patrón de capas que `market_data`. Está organizado por capac
 - `risk/models.py` — configuración Pydantic (`RiskConfig`, `PositionConfig`, `DrawdownConfig`, etc.), correctamente separada de:
 - `risk/manager.py` — **`RiskManager`**, **`RiskDecision`**, **`RiskViolation`** — estos sí son conceptos de dominio (decisión de riesgo, violación como excepción). BC-12 de `import-linter` ya protege `trading.risk` de importar `trading.execution`.
 - `strategies/base.py` — **`BaseStrategy`** es Policy pura: stateless, solo depende de `Signal` (de `shared/types/`) y pandas, sin fugas hacia infraestructura. `strategies/ema_crossover.py` es una implementación limpia del contrato.
-- `engine.py` — **`TradingEngine`** actúa como Composition Root informal de `trading`: sus factories `build_live()`/`build_paper()` ensamblan `Strategy + RiskManager + Executor + OMS`. No contiene lógica propia de riesgo/órdenes/estrategia — solo conecta (SRP explícito en su docstring).
+- `engine.py` — **`TradingEngine`** es un objeto runtime puro: orquesta el ciclo estrategia→riesgo→OMS sin lógica propia de riesgo/órdenes/estrategia (SRP). El ensamblaje de `Strategy + RiskManager + Executor + OMS` vive en `bootstrap/composition_root.py` (`assemble_live()`/`assemble_paper()`), único punto de ensamblado del contexto (ADR-0003/ADR-0012). Los factories `build_live()`/`build_paper()` fueron eliminados (2026-08-03).
 
 ---
 

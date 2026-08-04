@@ -5,6 +5,13 @@
 **Estado:** Diseño recuperado — implementación pendiente de reconstrucción (ver §7)
 **ADRs relacionados:** ADR-0003, ADR-0004, ADR-0005, ADR-0006
 
+> **Actualización 2026-08-03:** la reconstrucción del bootstrap de trading
+> está COMPLETADA (`packages/trading/bootstrap/composition_root.py`, v3,
+> ADR-0003 enmendado). Los factories `TradingEngine.build_live()/build_paper()`
+> que este forense documenta como colaboradores fueron **eliminados** — el
+> root ensambla todas las dependencias (ADR-0012, que reemplaza ADR-0005).
+> Las secciones siguientes describen el diseño histórico recuperado.
+
 ---
 
 ## 0. Resumen ejecutivo
@@ -127,6 +134,7 @@ runtime de trading: construye las dependencias externas al ciclo de
 trading (PositionStore, PortfolioService, TradeTracker, ExecutionGuard,
 GoldReader) y delega en TradingEngine.build_live()/build_paper() las
 dependencias internas (Strategy, RiskManager, Executor, OMS).
+*(2026-08-03: la delegación fue eliminada — ver ADR-0012.)*
 
 No existen evidencias de lógica de negocio dentro del bootstrap (no hay
 strings ni imports asociados a cálculo de señales, riesgo o ejecución).
@@ -143,14 +151,14 @@ de imports de librerías de cálculo/estrategia en co_names.
 |---|---|---|---|
 | TradingCompositionRoot | Existía | Perdido | Reimplementar (ver §7) |
 | TradingRuntime (dataclass) | Existía | Perdido | Reimplementar (ver §7) |
-| RedisFactory (build_redis_client) | Existía | Perdido | Reimplementar (ver §7) |
+| RedisFactory (build_redis_client) | Existía | Existe en portfolio/infra/redis_factory.py | **OBSOLETO** — portfolio es dueño de Redis (BC-43); NO recrear (ver §7) |
 | TradingConfig | Existía (tipo esperado) | No existe en el repo | Bloqueante — crear antes de reconstruir |
 | CompositeFillObserver | Existía (import) | No localizado | Bloqueante — ubicar o recrear |
 | GoldFeatureReaderPort | Referenciado (alias) | No existe con ese nombre | El contrato real es FeatureReaderPort |
 | RiskConfig | Existía | Existe (ocm/config/schema.py:694) | Compatible |
 | RedisConfig | Existía | Existe (ocm/config/schema.py:496) | Compatible |
 | GoldReader | Existía | Existe (market_data/adapters/outbound/storage/gold_reader.py:74) | Compatible — implementa FeatureReaderPort estructuralmente |
-| TradingEngine.build_live / build_paper | Existía (colaborador) | Existe (packages/trading/engine.py:211,282) | Compatible |
+| TradingEngine.build_live / build_paper | Existía (colaborador) | Eliminado (2026-08-03, ADR-0012) | El root ensambla todo — ver ADR-0012 |
 | ExecutionGuard | Existía | Existe (ocm/runtime/guard.py:49) | Compatible |
 | PortfolioService | Existía | Existe (migrado en Fase 3, PositionStore obligatorio por constructor) | Compatible |
 | PositionStore (Protocol) | Existía | Existe (portfolio/ports/position_store.py) | Compatible |
@@ -170,6 +178,7 @@ de imports de librerías de cálculo/estrategia en co_names.
 - **TradingEngine.build_live/build_paper construyen solo dependencias
   internas al ciclo:** evita duplicar lógica de ensamblaje ya cubierta
   por esos factories (DRY). Ver ADR-0005.
+  *(2026-08-03: ambos factories eliminados — el root ensambla todo, ADR-0012.)*
 - **RedisFactory separado del Composition Root:** único lugar del
   sistema que instancia redis.Redis directamente y resuelve
   password:SecretStr correctamente — evita que cada caller reimplemente
@@ -199,18 +208,32 @@ de imports de librerías de cálculo/estrategia en co_names.
 
 ## 7. Plan de reconstrucción
 
+> **Corrección 2026-08-03 (auditoría de composition roots):** este plan
+> recuperó intención de diseño por bytecode, no una especificación
+> ejecutable. Dos pasos quedaron OBSOLETOS y NO deben ejecutarse:
+>
+> - **Paso 2 (Recrear RedisFactory):** obsoleto. `portfolio` es el único
+>   dueño de Redis (BC-43, Fase 3). `build_redis_client` vive en
+>   `portfolio/infra/redis_factory.py`. No se recrea.
+> - **`_build_position_store_*`/`_build_portfolio` (§2):** NO reconstruir.
+>   Esos métodos predatan ADR-0006/BC-43; reconstruirlos violaría BC-43
+>   directamente. El composition root recibe `portfolio` ya ensamblado por
+>   `PortfolioCompositionRoot.assemble()` (decisión D2).
+
 1. **Crear TradingConfig** en `ocm/config/schema.py` — bloqueante, no
-   existe hoy en ningún commit del repo.
-2. **Recrear RedisFactory** (`build_redis_client(cfg)`) — bajo riesgo,
-   firma y campos ya confirmados en §2.
-3. **Recrear TradingRuntime** (dataclass: engine, portfolio, tracker).
-4. **Localizar o recrear CompositeFillObserver** — bloqueante, no
-   localizado en el árbol actual.
-5. **Recrear TradingCompositionRoot** usando esta arquitectura recuperada
-   como guía funcional y `portfolio/bootstrap/composition_root.py` como
+   existe hoy en ningún commit del repo. [HECHO en WIP 2026-08-03]
+2. ~~**Recrear RedisFactory**~~ (`build_redis_client(cfg)`) — **ELIMINADO**,
+   ver corrección arriba. `portfolio/infra/redis_factory.py` ya existe.
+3. **Crear TradingRuntime** (dataclass: engine, portfolio, tracker).
+4. ~~**Localizar o recrear CompositeFillObserver**~~ — **CERRADO**: el
+   símbolo real es `trading/execution/fill_sync.py::build_fill_sync`
+   (hallazgo H7 de la auditoría 2026-08-03). No se crea una clase nueva.
+5. **Crear TradingCompositionRoot** con la interfaz aprobada
+   (`__init__(trading, risk, portfolio, guard=None)`, ver ADR-0003
+   enmendado) y usando `portfolio/bootstrap/composition_root.py` como
    referencia de estilo (patrón ya validado y committeado).
-6. **Formalizar el contrato BC-47** en `architecture/importlinter.toml`
-   (ver ADR-0004) antes o junto con el paso anterior.
+6. **Formalizar el contrato BC-50** en `architecture/importlinter.toml`
+   (BC-47 quedó ocupado por shared.kafka — ver ADR-0004 enmendado).
 7. **Agregar pruebas** unitarias para cada método público
    (assemble_live, assemble_paper, assemble_rebalance,
    build_gold_data_source).
@@ -251,6 +274,10 @@ GoldLoaderAdapter) y delega en TradingEngine.build_live()/build_paper()
 la construcción de las dependencias INTERNAS (Strategy, RiskManager,
 OMS, Executor) — ya cubierto por esos factories existentes (DRY).
 
+*(Docstring recuperado del diseño histórico. La implementación v3
+(2026-08-03) elimina la delegación: el root construye también las
+internas, ver ADR-0012.)*
+
 Constructor angosto (no AppConfig completo)
 --------------------------------------------
 Recibe TradingConfig + RiskConfig + RedisConfig — los mismos tipos
@@ -266,6 +293,15 @@ El entrypoint Hydra (ocm) sigue usando AppConfig completo vía
 OCMContainer (market_data) — ese composition root no se toca acá.
 
 Principios: SOLID · DDD · SafeOps · KISS · DRY · Composition Root
+
+## Nota de proceso — atomic commits (2026-08-03)
+
+El `composition_root.py` de trading se perdió dentro de un commit
+`feat(portfolio)` que tocó dos bounded contexts (portfolio + trading/
+bootstrap). Lección: **un commit = un cambio lógico en un BC**. La
+reconstrucción forense fue necesaria solo porque el archivo nunca se
+committeó de forma aislada — un commit atómico habría preservado el
+código o, al menos, su commit de referencia. Ver también ADR-0003.
 
 ## Referencias
 

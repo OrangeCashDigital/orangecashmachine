@@ -13,7 +13,7 @@ Fase 0) contra el patrón de referencia domain/ports/adapters/services/bootstrap
 |---|---|---|---|---|---|
 | market_data | domain/ | ports/ | adapters/ | application/ | infrastructure/bootstrap/ (anidado) |
 | portfolio | models/ | ports/ | infra/ | services/ | bootstrap/ (top-level) |
-| trading | ninguno (organizado por capacidad: execution/, risk/, strategies/, analytics/) | ninguno | ninguno | ninguno | bootstrap/ (perdido, ver ADR-0003..0006) |
+| trading | ninguno (organizado por capacidad: execution/, risk/, strategies/, analytics/) | ninguno | ninguno | ninguno | bootstrap/ (perdido, ver decisions/ADR-0003..0006) |
 
 Ningún contexto usa literalmente los cinco nombres canónicos. market_data
 y portfolio separan capas con nombres propios pero equivalentes en
@@ -62,14 +62,19 @@ cumpla.
 ## Consecuencias
 
 - Ninguna migración de carpetas en market_data ni portfolio.
-- La reconstrucción de trading (ADR-0003..0006) queda obligada a crear
+- La reconstrucción de trading (decisions/ADR-0003..0006) queda obligada a crear
   domain/, ports/, adapters/, services/ además de bootstrap/ — no solo
   recuperar composition_root.py suelto.
+  **Estado (2026-08-03):** el bootstrap de trading se reconstruyó
+  (`packages/trading/bootstrap/composition_root.py`, interfaz v3 de
+  ADR-0003 enmendado) y quedó como único punto de ensamblado del contexto
+  (ADR-0012). El trabajo de separación en domain/ports/adapters/services/
+  de trading sigue pendiente como deuda estructural documentada.
 - GOVERNANCE.md §7 mantiene la tabla de equivalencia actualizada; si un
   bounded context cambia su estructura, este ADR se marca Reemplazado.
 
 ## Referencias
 
 - docs/architecture/recovered/trading-bootstrap-forensic-analysis.md
-- ADR-0003, ADR-0004, ADR-0005, ADR-0006
+- ADR-0003, ADR-0004, ADR-0005, ADR-0006 (serie decisions/)
 - GOVERNANCE.md §7 (inventario de estructura real)

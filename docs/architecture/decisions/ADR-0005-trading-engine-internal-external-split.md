@@ -1,8 +1,14 @@
 # ADR-0005: TradingEngine construye dependencias internas; el Composition Root, las externas
 
-**Estado:** Aceptado (verificado en código actual)
+**Estado:** Reemplazado por ADR-0012 (2026-08-03)
 **Fecha:** 2026-08-02
 **Bounded context(s) afectado(s):** trading
+
+> **Histórico.** Este ADR documenta el diseño previo a la auditoría de
+> composition roots. El 2026-08-03 se eliminaron los factories
+> `TradingEngine.build_live()/build_paper()` y el ensamblado completo
+> (internas + externas) vive en `TradingCompositionRoot`. Ver **ADR-0012**.
+> Se mantiene como documento histórico del razonamiento original.
 
 ## Contexto
 

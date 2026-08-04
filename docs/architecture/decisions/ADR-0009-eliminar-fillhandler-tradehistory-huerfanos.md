@@ -42,7 +42,8 @@ ya está resuelto, por otro camino, en
 1. **Implementarlos de verdad** — tipar `fill_sync.py`/`TradeTracker`
    contra los Protocols de `boundaries.py`. Rechazada: crearía un tercer
    punto de verdad para el mismo contrato (el real ya vive en
-   `fill_sync.py`), violando el Principio 1 (SSOT) de `ADR-0000`. DRY es
+   `fill_sync.py`), violando el Principio 1 (SSOT) de `ADR-0000` (Principios,
+   serie heredada). DRY es
    subordinado a SSOT (Principio 7) — el síntoma real no es duplicación
    de código sino dos fuentes de verdad para la misma frontera.
 2. **Dejarlos documentados sin implementar**, igual que `RiskGate`.
@@ -50,8 +51,8 @@ ya está resuelto, por otro camino, en
    Kafka `signals.raw`/`signals.approved`/`signals.rejected` ya
    declarados en `shared/kafka/schemas/signals.py`). `FillHandler`/
    `TradeHistory` no tienen ningún artefacto equivalente — la distinción
-   entre "adelantado a propósito" y "huérfano sin plan" (Principio 5,
-   ADR-0000) exige evidencia, no solo la posibilidad teórica de uso
+    entre "adelantado a propósito" y "huérfano sin plan" (Principio 5,
+    ADR-0000, serie heredada) exige evidencia, no solo la posibilidad teórica de uso
    futuro.
 3. **Eliminarlos de boundaries.py.**
 
@@ -66,7 +67,7 @@ este ADR.
 
 ## Justificación técnica
 
-SSOT (Principio 1, ADR-0000): un contrato documentado que nadie consume y
+SSOT (Principio 1, ADR-0000, serie heredada): un contrato documentado que nadie consume y
 que además compite conceptualmente con un contrato real en uso no aporta
 desacoplamiento — aporta confusión sobre cuál es la fuente de verdad. La
 atribución incorrecta del docstring agrava esto: un lector que confíe en
@@ -90,5 +91,5 @@ en vez de `trading.analytics`).
 - `docs/DOMAIN.md` §5.4 (distinción RiskGate vs FillHandler/TradeHistory)
 - `packages/trading/execution/fill_sync.py` (implementación real vigente)
 - `packages/trading/analytics/trade_tracker.py:69,87`
-- `ADR-0000` Principios 1 (SSOT), 5 (Event First — adelantado vs huérfano), 7 (DRY subordinado a SSOT)
-- `ADR-0004` (precedente de tratamiento: rebalance.py huérfano vs RebalanceService adelantado)
+- `ADR-0000` (serie heredada) Principios 1 (SSOT), 5 (Event First — adelantado vs huérfano), 7 (DRY subordinado a SSOT)
+- `ADR-0004` (serie heredada, RebalanceService adelantado) precedente de tratamiento: rebalance.py huérfano vs capacidad adelantada
