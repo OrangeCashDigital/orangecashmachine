@@ -97,7 +97,7 @@ dependencies = [
     # ccxt: pinneado en 4.3.58 — versiones posteriores cambian la firma de
     # fetch_ohlcv() y el campo default_type en exchange params (CCXTAdapter).
     # Actualizar solo tras smoke test completo contra Bybit + KuCoin en staging.
-    "ccxt==4.3.58",
+    "ccxt==4.5.70",
     "cryptofeed>=2.4.1",
 
     # ── Resiliencia (circuit breakers: async + fallback sync) ──────────────
