@@ -25,7 +25,7 @@ documento es la explicación completa de por qué y cómo.
 4. El modelo de eventos
 5. EventBus local vs. Kafka
 6. Kafka como SSOT operacional; Iceberg como proyección materializada
-7. Los tres niveles de datos
+7. Features reales vs. indicadores compuestos externos
 8. Alcance de `FeedOrchestrator`, `FeedsConfig`, `AppConfig.feeds`
 9. Diagrama de arquitectura completo
 10. Preguntas frecuentes / casos límite
@@ -84,13 +84,20 @@ Nunca Feed = Evento, y tampoco Feed = Fuente de datos.
 | CoinMarketCap / CoinGlass | Market cap, dominance, OI agregado | REST periódico | No |
 | FRED / DXY | Indicadores macro | REST periódico / batch | No |
 | Cualquier fuente | Datos históricos | Replay | No |
-| Interno (Silver/Gold) | Indicadores compuestos | Cálculo derivado | No |
+| Interno (Gold) | Features derivadas (return_1, log_return, volatility_20, high_low_spread, vwap) | Cálculo derivado | No |
 
 Esta tabla es ilustrativa, no exhaustiva. El criterio para clasificar una
 integración nueva es siempre el mismo: ¿mantiene una conexión persistente
 de streaming, o consulta/procesa datos de forma puntual/periódica? Lo
 primero es un feed; lo segundo no, sin importar cuán frecuente sea el
 polling.
+
+El mecanismo "cálculo derivado" existe conceptualmente, pero hoy solo
+produce las cinco features Gold (§7). Los indicadores compuestos (BTC
+Dominance, Altcoin Season Index, CVD, Order Flow Imbalance, Open Interest
+o Funding agregados, etc.) todavía no forman parte del modelo interno:
+cuando aparezcan provendrán de adapters externos consumidos por polling y
+se tratarán como ingestión externa, no como features internas.
 
 ## 4. El modelo de eventos
 
@@ -158,12 +165,14 @@ Iceberg y consumidas exclusivamente a través de `FeatureReaderPort`:
 Cualquier otro indicador mencionado en roadmaps o discusiones —CVD,
 Order Flow Imbalance, BTC Dominance, Altcoin Season Index, Open
 Interest agregado, Funding agregado, etc.— **no existe hoy como
-feature interna**. Cuando estos indicadores se incorporen, no
-provendrán del pipeline interno hacia Gold, sino de fuentes externas
-(CoinMarketCap, CoinGlass, Glassnode, CryptoQuant, FRED) consumidas
-mediante polling REST (ver §3), y requerirán antes resolver el
-bounded context de ingestión no-streaming (ver ADR-0013
-§"Pendiente de decisión").
+feature interna**. Cuando estos indicadores se incorporen, lo harán
+como **datos derivados, analytics o alpha research** construidos sobre
+eventos ya ingestados — no como feeds ni como mecanismos de ingestión.
+Sus insumos crudos pueden llegar por adapters externos (CoinMarketCap,
+CoinGlass, Glassnode, CryptoQuant, FRED) consumidos mediante polling
+REST (ver §3) dentro del dominio `market_data` (ver ADR-0013), pero el
+indicador en sí es un cómputo posterior sobre datos integrados, no un
+feed.
 
 Un adapter externo únicamente adquiere datos desde una fuente
 externa. Una feature representa un dato derivado e integrado dentro
@@ -194,9 +203,29 @@ se consumen por polling (Glassnode, CoinMarketCap, FRED) no es solo un
 error de nombres — implica un volumen y una naturaleza de ingestión
 distintos (ver §3) para los que `FeedOrchestrator` no fue diseñado.
 
-**Dónde vive el dominio de ingestión no-streaming** (polling, batch,
-cálculos derivados) es, a la fecha de este documento, una decisión
-abierta — ver `ADR-0013` §"Pendiente de decisión".
+**Dónde vive el dominio de ingestión no-streaming:** dentro del bounded
+context `market_data`, como capacidad interna separada de los feeds
+streaming. Polling, batch y replay no son un bounded context distinto —
+son mecanismos de adquisición del mismo dominio: adquieren información
+de mercado, la normalizan y la publican hacia Kafka como eventos, igual
+que los feeds. La creación de un BC independiente queda reservada a una
+futura separación de dominio real (ver `ADR-0013`).
+
+Estructura interna de `market_data` por capacidades:
+
+    market_data
+    ├── realtime_feeds        (WebSocket / FIX / SSE — FeedOrchestrator,
+    │                           FeedsConfig, AppConfig.feeds)
+    └── external_ingestion    (futuro — polling REST, batch, replay,
+                                scheduling de proveedores externos)
+
+Ambas capacidades convergen en el mismo flujo: fuente externa → mecanismo
+de ingestión → normalización → eventos de dominio → Kafka (SSOT
+operacional) → consumidores → Iceberg / features / estrategias.
+
+`FeedOrchestrator` **no** gestiona REST polling, batch, replay, ni
+proveedores macro u on-chain; esos mecanismos siguen perteneciendo al
+dominio `market_data`, pero bajo la capacidad `external_ingestion`.
 
 ## 9. Diagrama de arquitectura completo
 
@@ -225,12 +254,17 @@ consumers         Bronze/Silver/Gold
 Features       Features históricas
 │                   │
 └─────────┬─────────┘
-▼
+          │
+          ▼
+      Estrategias
+          │
+          ▼
+       Órdenes
+
+          ▲
+          │
 Indicadores compuestos
-▼
-Estrategias
-▼
-Órdenes 
+(futuro — ver §7) 
 ## 10. Preguntas frecuentes / casos límite
 
 **¿Un topic de Kafka consumido en tiempo real es un feed?**

@@ -69,23 +69,39 @@ es el caso hoy entre streaming WS y polling REST.
 - `feed-model.md` queda como referencia obligatoria para diseñar el
   dominio de ingestión no-streaming.
 
-## Pendiente de decisión
+## Resolución del ownership (enmienda 2026-08-05)
 
 **Bounded context responsable de la ingestión no-streaming (polling,
-batch, cálculos derivados de índices compuestos) — sin resolver.**
-Alternativas identificadas, ninguna descartada ni favorecida:
+batch, replay): `market_data`.**
 
-- Extender `market_data` con un subpaquete de ingestión no-streaming.
-- Crear un bounded context nuevo, p. ej. `data_ingestion` o
-  `market_intelligence`.
-- Incorporar parte de esta responsabilidad dentro de `control_plane`
-  (ADR-0002 serie heredada, Decisión 3, ya reserva espacio para
-  scheduling — pero scheduling no implica necesariamente ownership del
-  dominio de adquisición de datos).
-- Otra alternativa no identificada todavía.
+Decisión: la ingestión no-streaming se modela inicialmente **dentro del
+bounded context `market_data`** como capacidad interna separada de los
+feeds streaming — estructura interna `realtime_feeds` (streaming
+persistente, hoy) y `external_ingestion` (polling, batch, replay y
+scheduling, futuro), con su propio lifecycle, puertos, adapters,
+configuración Hydra y contratos, pero convergiendo al mismo modelo de
+eventos y a Kafka como SSOT operacional.
 
-Esta decisión requiere su propio ADR cuando se resuelva. No bloquea la
-adopción del modelo conceptual de este documento.
+Razonamiento: streaming y no-streaming resuelven la misma capacidad de
+negocio — adquirir y normalizar información de mercado hacia el modelo de
+eventos interno — y difieren únicamente en el mecanismo de adquisición, no
+en el lenguaje de dominio (sources, markets, trades, order books, funding,
+open interest, market metrics, events). Separarlos en bounded contexts
+distintos fragmentaría el ownership y duplicaría contratos sin ganancia de
+cohesión.
+
+La creación de un bounded context independiente (p. ej. `data_ingestion`,
+`market_intelligence`) queda reservada a una futura **separación de dominio
+real**: si aparecen responsabilidades de inteligencia de mercado o research
+cuantitativo que consuman market data para producir conocimiento nuevo
+(alpha, modelos de régimen, señales complejas), ese sí sería un dominio
+distinto y merecería su propio BC. No por incorporar más proveedores o
+protocolos.
+
+El diseño concreto de la estructura interna de `market_data`
+(`realtime_feeds` / `external_ingestion`), incluyendo puertos, lifecycle y
+contratos de publicación Kafka, se definirá en un ADR de diseño interno
+específico (futuro ADR-0014) y quedará fuera del alcance de este documento.
 
 ## Referencias
 

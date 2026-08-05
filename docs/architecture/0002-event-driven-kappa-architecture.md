@@ -10,7 +10,7 @@
 **Contexto del bounded context:** `market_data` (y su relación con futuros `control_plane`, `trading`)
 
 > **Nota de estado (2026-08-02):** Ver el log de verificación
-> `docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md`, que supersede la Decisión 4 y el Pendiente #1 de este documento. Dagster fue eliminado por completo del código (commit `9eb6de3`, posterior a este ADR) — la Decisión 4 de abajo ("Dagster permanece instalado y disponible...") ya no refleja el sistema real. El Pendiente #1 (¿systemd timers alcanza?) quedó resuelto de facto por la eliminación. La ruta `infrastructure/event_bus/` mencionada en la Decisión 2 también está corregida en el log a su ubicación real.
+> `docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md`, que supersede la Decisión 4 y el Pendiente #1 de este documento. Dagster fue eliminado por completo del código (commit `9eb6de3`, posterior a este ADR) — la Decisión 4 de abajo ("Dagster permanece instalado y disponible...") ya no refleja el sistema real. Dicha eliminación incluye su retirada de `docker-compose` (verificado 2026-08-05). El Pendiente #1 (¿systemd timers alcanza?) quedó resuelto de facto por la eliminación. La ruta `infrastructure/event_bus/` mencionada en la Decisión 2 también está corregida en el log a su ubicación real.
 
 ## Contexto
 
