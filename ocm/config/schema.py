@@ -31,6 +31,7 @@ from pydantic import (
 )
 
 from ocm.observability.config import LoggingConfig
+from shared.kafka.topics import TOPIC_TRADES_RAW
 
 CONFIG_PATH: Path = Path("config/settings.yaml")
 
@@ -641,7 +642,8 @@ class FeedsKafkaConfig(StrictBaseModel):
     """Topic Kafka de destino para trades WS. Brokers viven en
     IntegrationsConfig.kafka (SSOT de infra) — nunca aquí."""
 
-    topic_trades: str = "trades.raw"
+    # default: SSOT del literal en shared.kafka.topics (BC-35) — una sola fuente.
+    topic_trades: str = TOPIC_TRADES_RAW
 
 
 class FeedsConfig(StrictBaseModel):

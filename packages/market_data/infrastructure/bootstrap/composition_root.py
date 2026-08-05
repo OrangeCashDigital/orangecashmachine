@@ -20,7 +20,7 @@ SRP      — Una sola razón para cambiar: cambiar qué implementación se usa.
 KISS     — API pública: CompositionRoot.assemble(config) + build_feed_orchestrator(config).
 Fail-Fast — Valida AppConfig antes de instanciar cualquier adaptador.
 Fail-Soft — build_feed_orchestrator retorna None si feeds no están configurados.
-SafeOps  — No lanza en ausencia de feeds.yaml; solo logea y retorna None.
+SafeOps  — No lanza si feeds no están configurados; solo logea y retorna None.
 
 Referencia
 ----------
@@ -36,25 +36,18 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from market_data.adapters.inbound.websocket.funding_producer import FundingKafkaProducer
+    from market_data.adapters.inbound.websocket.liquidations_producer import LiquidationsKafkaProducer
+    from market_data.adapters.inbound.websocket.oi_producer import OIKafkaProducer
+    from market_data.adapters.inbound.websocket.orderbook_producer import OrderBookKafkaProducer
     from market_data.application.feed_orchestrator import FeedOrchestrator
     from market_data.infrastructure.bootstrap.pipeline_factory import (
         ConcretePipelineFactory,
     )
     from ocm.config.schema import AppConfig
 
-from dataclasses import dataclass as _dc
-from typing import TYPE_CHECKING as _TC
 
-from shared.kafka.topics import TOPIC_TRADES_RAW
-
-if _TC:
-    from market_data.adapters.inbound.websocket.funding_producer import FundingKafkaProducer
-    from market_data.adapters.inbound.websocket.liquidations_producer import LiquidationsKafkaProducer
-    from market_data.adapters.inbound.websocket.oi_producer import OIKafkaProducer
-    from market_data.adapters.inbound.websocket.orderbook_producer import OrderBookKafkaProducer
-
-
-@_dc(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True)
 class WSProducerBundle:
     """
     Bundle inmutable de los 4 producers WS reales.
@@ -142,24 +135,22 @@ class CompositionRoot:
         cls,
         config: "AppConfig",
     ) -> "FeedOrchestrator | None":
-        """Build a fully-wired FeedOrchestrator from config/market_data/feeds.yaml.
+        """Build a fully-wired FeedOrchestrator from config.feeds (AppConfig).
 
-        Fail-Soft: retorna None si feeds.yaml no existe, ingestion_mode='rest',
-        o no hay feeds habilitados. Nunca lanza — el caller decide si es error.
+        Fail-Soft: retorna None si ingestion_mode='rest' o no hay feeds
+        habilitados. Nunca lanza — el caller decide si es error.
 
-        Config de feeds leída de YAML standalone (no de AppConfig) — SSOT
-        desacoplada: AppConfig no necesita saber de WS feeds.
-        Kafka brokers sí vienen de AppConfig.integrations.kafka (SSOT de infra).
+        Config de feeds proviene de AppConfig.feeds — poblada por el
+        Configuration Service (pipeline Hydra L1-L5). SSOT único de
+        configuración: AppConfig. No se lee YAML directamente aquí.
+        Kafka brokers vienen de AppConfig.integrations.kafka (SSOT de infra).
 
         Args:
-            config: AppConfig con integrations.kafka configurado.
+            config: AppConfig con integrations.kafka y feeds configurados.
 
         Returns:
             FeedOrchestrator listo para run(), o None si WS feeds no aplican.
         """
-        from pathlib import Path
-
-        import yaml
         from loguru import logger
 
         from market_data.adapters.outbound.kafka_trade_publisher import (
@@ -174,38 +165,28 @@ class CompositionRoot:
             get_adapter_class,
         )
 
-        # ── Localizar feeds.yaml (SSOT de configuración WS) ──────────────
-        # Usamos __file__ para resolver repo_root sin depender de shared.utils.repo
-        _repo_root = Path(__file__).resolve().parents[4]
-        feeds_path = _repo_root / "config" / "market_data" / "feeds.yaml"
-
-        if not feeds_path.exists():
-            logger.warning("[composition-root] config/market_data/feeds.yaml not found — WS feeds disabled")
-            return None
-
-        with feeds_path.open() as f:
-            raw: dict = yaml.safe_load(f) or {}
+        # ── Config de feeds (SSOT: AppConfig.feeds, poblado por Hydra) ────
+        feeds_cfg = config.feeds
 
         # ── Fail-Soft: modo REST no necesita WS feeds ─────────────────────
-        ingestion_mode: str = raw.get("ingestion_mode", "rest")
+        ingestion_mode: str = feeds_cfg.ingestion_mode
         if ingestion_mode == "rest":
             logger.info("[composition-root] ingestion_mode=rest — WS feeds not started")
             return None
 
         # ── Construir lista de feeds habilitados ──────────────────────────
-        raw_feeds: dict = raw.get("feeds", {})
         feed_configs = [
             ExchangeFeedConfig(
                 exchange=name,
-                symbols=cfg.get("symbols", []),
-                enabled=cfg.get("enabled", False),
+                symbols=entry.symbols,
+                enabled=entry.enabled,
             )
-            for name, cfg in raw_feeds.items()
-            if cfg.get("enabled", False)
+            for name, entry in feeds_cfg.feeds.items()
+            if entry.enabled
         ]
 
         if not feed_configs:
-            logger.warning("[composition-root] No enabled feeds in feeds.yaml — WS feeds disabled")
+            logger.warning("[composition-root] No enabled feeds in config.feeds — WS feeds disabled")
             return None
 
         orch_cfg = OrchestratorConfig(
@@ -215,8 +196,8 @@ class CompositionRoot:
 
         # ── Kafka publisher ───────────────────────────────────────────────
         # brokers: AppConfig.integrations.kafka (SSOT de infraestructura)
-        # topic:   feeds.yaml (SSOT de configuración de WS feeds)
-        kafka_topic: str = raw.get("kafka", {}).get("topic_trades", TOPIC_TRADES_RAW)
+        # topic:   AppConfig.feeds.kafka.topic_trades (SSOT de config WS feeds)
+        kafka_topic: str = feeds_cfg.kafka.topic_trades
         publisher = KafkaTradePublisher(
             bootstrap_servers=config.integrations.kafka.bootstrap_servers,
             topic=kafka_topic,
