@@ -14,6 +14,11 @@ SSOT · OCP · Fail-Fast en import time.
 
 from __future__ import annotations
 
+from ocm.config.structured.market_data_feeds import (
+    ExchangeFeedEntry,
+    FeedsConfig,
+    FeedsKafkaConfig,
+)
 from ocm.config.structured.observability import ObservabilityConfig
 from ocm.config.structured.pipeline import (
     HistoricalConfig,
@@ -30,4 +35,7 @@ __all__ = [
     "RealtimeConfig",
     "RetryPolicyConfig",
     "ObservabilityConfig",
+    "FeedsConfig",
+    "FeedsKafkaConfig",
+    "ExchangeFeedEntry",
 ]

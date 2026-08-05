@@ -630,6 +630,33 @@ class ObservabilityConfig(StrictBaseModel):
     tracing: TracingConfig = Field(default_factory=TracingConfig)
 
 
+class ExchangeFeedEntryConfig(StrictBaseModel):
+    """Configuración de un único exchange dentro de feeds.feeds."""
+
+    enabled: bool = False
+    symbols: list[str] = Field(default_factory=list)
+
+
+class FeedsKafkaConfig(StrictBaseModel):
+    """Topic Kafka de destino para trades WS. Brokers viven en
+    IntegrationsConfig.kafka (SSOT de infra) — nunca aquí."""
+
+    topic_trades: str = "trades.raw"
+
+
+class FeedsConfig(StrictBaseModel):
+    """Configuración de feeds WebSocket de market_data.
+
+    ingestion_mode tipado como Literal — Fail-Fast en L4 (Pydantic):
+    un valor inválido rechaza el arranque aquí, antes de que
+    FeedOrchestrator.run() llegue a interpretarlo en runtime.
+    """
+
+    ingestion_mode: Literal["rest", "dual", "websocket"] = "rest"
+    kafka: FeedsKafkaConfig = Field(default_factory=FeedsKafkaConfig)
+    feeds: dict[str, ExchangeFeedEntryConfig] = Field(default_factory=dict)
+
+
 class HealthChecksConfig(StrictBaseModel):
     """Configuración de health checks del sistema."""
 
@@ -759,6 +786,7 @@ class AppConfig(StrictBaseModel):
     risk: RiskConfig = Field(default_factory=RiskConfig)
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     trading: TradingConfig = Field(default_factory=TradingConfig)
+    feeds: FeedsConfig = Field(default_factory=FeedsConfig)
     testing: TestingConfig = Field(
         default_factory=TestingConfig,
         description="Configuración exclusiva de CI/test. Ignorada en producción.",
