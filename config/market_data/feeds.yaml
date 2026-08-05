@@ -1,3 +1,4 @@
+# @package _global_
 # conf/market_data/feeds.yaml
 # ────────────────────────────────────────────────────────────────
 # Event-driven WebSocket feed configuration.
@@ -8,21 +9,22 @@
 #   websocket → Phase 3: WebSocket only, REST idle
 # ────────────────────────────────────────────────────────────────
 
-ingestion_mode: rest   # ← change to 'dual' when ready for Phase 2
-
-kafka:
-  topic_trades: trades.raw
-
 feeds:
-  bybit:
-    enabled: true
-    symbols:
-      - BTC-USDT-PERP
-      - ETH-USDT-PERP
-      - SOL-USDT-PERP
+  ingestion_mode: rest   # ← change to 'dual' when ready for Phase 2
 
-  kucoin:
-    enabled: false        # enable when KuCoin REST is also ready to retire
-    symbols:
-      - BTC-USDT
-      - ETH-USDT
+  kafka:
+    topic_trades: trades.raw
+
+  feeds:
+    bybit:
+      enabled: true
+      symbols:
+        - BTC-USDT-PERP
+        - ETH-USDT-PERP
+        - SOL-USDT-PERP
+
+    kucoin:
+      enabled: false        # enable when KuCoin REST is also ready to retire
+      symbols:
+        - BTC-USDT
+        - ETH-USDT

@@ -31,6 +31,7 @@ defaults:
   - storage/datalake
   - datasets
   - risk/risk
+  - market_data/feeds
   - features
 
   # Entorno (sobreescribe lo anterior)
