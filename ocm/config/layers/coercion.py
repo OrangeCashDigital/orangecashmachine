@@ -44,13 +44,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 
 # loguru importado de forma lazy para evitar circular:
 #   coercion → loguru → stdlib logging → core/logging/ → loguru
 # ocm/observability/ sombrea el stdlib logging — el import lazy rompe el ciclo.
-def _get_logger():  # noqa: ANN201
+def _get_logger() -> "Logger":
     from loguru import logger as _logger  # lazy — solo al primer log
 
     return _logger

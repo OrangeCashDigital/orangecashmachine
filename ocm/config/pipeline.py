@@ -161,7 +161,7 @@ class ConfigPipeline:
             detectarlos en L1 produce mensaje accionable con stage=RAW.
         """
         try:
-            top_level_keys = list(self._raw.keys())
+            top_level_keys: list[str] = [str(k) for k in self._raw.keys()]
         except Exception as exc:
             raise ConfigPipelineError(
                 ConfigStage.RAW,
@@ -175,7 +175,7 @@ class ConfigPipeline:
                 ConfigStage.RAW,
                 (
                     f"Missing required top-level keys: {missing}. "
-                    f"Present: {sorted(top_level_keys)}. "  # type: ignore[type-var]
+                    f"Present: {sorted(top_level_keys)}. "
                     "Verificar config/base.yaml y defaults list en config.yaml."
                 ),
             )
@@ -183,7 +183,7 @@ class ConfigPipeline:
         logger.debug(
             "config_pipeline_l1 | keys_count={} top_keys={} required_ok={}",
             len(top_level_keys),
-            sorted(top_level_keys),  # type: ignore[type-var]
+            sorted(top_level_keys),
             required_keys,
         )
         # Guard lazy: OmegaConf.to_yaml() es costoso — solo en DEBUG activo.
