@@ -21,6 +21,7 @@ import pytest
 
 from scripts.app_layer_guard import (
     check_cli_main_not_god,
+    check_cli_must_import_bootstrap,
     check_flow_helpers_single_source,
     check_middleware_excludes_probes,
     check_no_argparse_in_use_cases,
@@ -204,6 +205,37 @@ class TestCliMainNotGod:
         _cli(tmp_path, "live_hydra.py", f"def main(argv=None):\n{body}\n    return 0\n")
         out = check_cli_main_not_god(tmp_path)
         assert out, out
+
+
+class TestCliMustImportBootstrap:
+    def test_positive_real(self):
+        assert check_cli_must_import_bootstrap(ROOT) == []
+
+    def test_positive_direct_import(self, tmp_path):
+        _cli(
+            tmp_path,
+            "live_hydra.py",
+            "from app.cli._bootstrap import setup_logging, handle_sigterm\ndef main():\n    return 0\n",
+        )
+        assert check_cli_must_import_bootstrap(tmp_path) == []
+
+    def test_positive_lazy_import(self, tmp_path):
+        _cli(
+            tmp_path,
+            "paper_hydra.py",
+            "def main():\n    from app.cli._bootstrap import setup_logging, handle_sigterm\n    return 0\n",
+        )
+        assert check_cli_must_import_bootstrap(tmp_path) == []
+
+    def test_negative_without_import(self, tmp_path):
+        _cli(tmp_path, "live_hydra.py", "def main():\n    return 0\n")
+        out = check_cli_must_import_bootstrap(tmp_path)
+        assert any("importar su scaffolding" in m for m in out), out
+
+    def test_negative_imports_other_module(self, tmp_path):
+        _cli(tmp_path, "live_hydra.py", "from app.cli.other import setup_logging\n")
+        out = check_cli_must_import_bootstrap(tmp_path)
+        assert any("importar su scaffolding" in m for m in out), out
 
 
 # ── R15 → H12: un único CycleRunResult ───────────────────────────────────────

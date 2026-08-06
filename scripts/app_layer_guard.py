@@ -301,6 +301,35 @@ def check_cli_main_not_god(root: Path) -> list[str]:
     return sorted(out)
 
 
+def check_cli_must_import_bootstrap(root: Path) -> list[str]:
+    """H8: live_hydra/paper_hydra DEBEN importar su scaffolding de _bootstrap.
+
+    Reemplaza el contrato 'must_import' que import-linter 2.x no soporta: los CLIs
+    no pueden saltarse el DRY del scaffolding (setup_logging, handle_sigterm,
+    assemble_cli_config, log_cycle_result) sin que el guard lo detecte.
+    """
+    out: list[str] = []
+    for fname in ("live_hydra.py", "paper_hydra.py"):
+        f = root / APP_DIR / CLI_DIR / fname
+        if not f.is_file():
+            continue
+        rel = _rel(f, root)
+        try:
+            tree = _parse(f)
+        except SyntaxError:
+            continue
+        imports_bootstrap = any(
+            isinstance(n, ast.ImportFrom) and n.module == "app.cli._bootstrap" for n in ast.walk(tree)
+        )
+        if not imports_bootstrap:
+            out.append(
+                f"{rel}: R14/AUDIT-2026-08-03#H8 — "
+                f"{fname} debe importar su scaffolding de {BOOTSTRAP} "
+                "(setup_logging, handle_sigterm, assemble_cli_config, log_cycle_result)"
+            )
+    return sorted(out)
+
+
 # ── R15 → H12: un único CycleRunResult ────────────────────────────────────────
 
 
@@ -423,6 +452,7 @@ CHECKS = (
     check_no_logger_remove_outside_bootstrap,
     check_flow_helpers_single_source,
     check_cli_main_not_god,
+    check_cli_must_import_bootstrap,
     check_run_result_single_source,
     check_silent_paths_single_source,
     check_middleware_excludes_probes,

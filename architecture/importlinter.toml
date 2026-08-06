@@ -911,3 +911,37 @@ ignore_imports = [
     "app.cli.main -> hydra",
     "app.cli.main -> omegaconf",
 ]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER — Blindaje app-layers: Application Layer (AUDIT-apps-2026-08-03)
+# ─────────────────────────────────────────────────────────────────────────────
+# Estos contratos son la PRIMERA línea (imports de módulo). La Application Layer
+# de apps/ usa lazy imports deliberados (E402 en apps/app/cli), que import-linter
+# no ve al analizar solo el grafo estático — por eso el guard AST
+# scripts/app_layer_guard.py (reglas R12–R16) es la cobertura completa.
+# Corresponde a los contratos import-linter BC-53..54 (ver PLAN-Maestro §1.1).
+
+[[tool.importlinter.contracts]]
+# H1 (AUDIT-apps-2026-08-03): el Namespace muere en el borde CLI. Si un use case
+# importara argparse a nivel de módulo, reintroduciría el anti-patrón que
+# execute_live.py/execute_paper.py tenían antes del refactor (recibir el Namespace).
+# Guard de propósito completo vía AST: scripts/app_layer_guard.py check_no_argparse.
+name = "BC-53: app.use_cases — argparse forbidden (el Namespace muere en el borde CLI)"
+type = "forbidden"
+source_modules = ["app.use_cases"]
+forbidden_modules = ["argparse"]
+
+[[tool.importlinter.contracts]]
+# No dependencia hacia abajo: use_cases (núcleo de la aplicación) no debe importar
+# nunca la capa de presentación/CLI. Los CLIs dependen de los use cases, no al revés.
+# Complementa la regla AST R12 (Namespace/config tipada) y BC-18 (no hacia API).
+name = "BC-54: app.use_cases — no dependencia a app.cli"
+type = "forbidden"
+source_modules = ["app.use_cases"]
+forbidden_modules = ["app.cli"]
+
+# NOTA: la garantía "live_hydra/paper_hydra DEBEN importar su scaffolding de
+# app.cli._bootstrap" (H8) no se puede expresar con import-linter 2.x — el tipo
+# "must_import" no existe (solo forbidden/layers/independence/protected). Se
+# implementa en el guard AST: scripts/app_layer_guard.py check_cli_must_import_bootstrap
+# (regla R14), que es además el mecanismo que ve los lazy imports.
