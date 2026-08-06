@@ -459,8 +459,8 @@ hallazgos:
     fase: F4
     prioridad: ALTA
     estado: PENDIENTE
-    estado_auditoria: PARCIALMENTE_CONFIRMADO
-    evidencia: "fill_sync.py:75 (open_order_ids); trade_tracker.py:57 (_open_positions); portfolio_service.py:89-152 (close_position traga errores y devuelve None; retorno descartado en fill_sync:49)"
+    estado_auditoria: CONFIRMADO
+    evidencia: "Verificado en F0 2026-07-29: estado de posicion repartido en 3 representaciones mutables: open_order_ids (fill_sync.py:75), _open_positions (analytics/trade_tracker.py:58) y PortfolioService.store; riesgo real: close_position (portfolio_service.py:126-152) traga excepcion (except->None, nunca lanza) y fill_sync descarta el retorno (protocolo fill_sync.py:46-49, rama SELL :96-98) -> cierre puede fallar en silencio sin propagacion"
     solucion: "Unificar estado de posición en PortfolioService (única fuente mutable, ADR-0006); fill_sync/TradeTracker consumen eventos"
     pruebas:
       - "test: un solo dueño mutable; cierre no falla silenciosamente"
@@ -468,7 +468,7 @@ hallazgos:
     riesgo_residual: "Medio: migración de estado"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "docs/audits/2026-08-auditoria-integral.md H-09 — requiere verificación en F0"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-09 — confirmado en F0 2026-07-29"}
       backlog: {estado: HECHO, referencia: "B-15 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0017"}
       implementacion: {estado: PENDIENTE, referencia: "unificar en PortfolioService"}
