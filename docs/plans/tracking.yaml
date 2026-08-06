@@ -525,8 +525,8 @@ hallazgos:
     fase: F4
     prioridad: MEDIA
     estado: PENDIENTE
-    estado_auditoria: PARCIALMENTE_CONFIRMADO
-    evidencia: "shared/kafka/schemas/ (dataclasses SSOT, BC-35); sin Avro/Protobuf ni schema registry en docker-compose"
+    estado_auditoria: CONFIRMADO
+    evidencia: "Verificado en F0 2026-07-29: shared/kafka/schemas/ = dataclasses frozen (SSOT BC-35; @dataclass p.ej. KappaSourceMixin); rg avro|protobuf en schemas -> 0; docker-compose.yml sin servicio schema-registry|redpanda (rg -> 0). Wire format = dataclasses nativos, sin schema registry. CONFIRMADO"
     solucion: "Evaluar/implementar Schema Registry (Avro + compatibilidad backward) manteniendo BC-35"
     pruebas:
       - "test de cambio backward-compatible"
@@ -534,7 +534,7 @@ hallazgos:
     riesgo_residual: "Medio: formato de cable"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "docs/audits/2026-08-auditoria-integral.md H-15 — requiere verificación en F0"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-15 — confirmado en F0 2026-07-29"}
       backlog: {estado: HECHO, referencia: "B-18 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0018"}
       implementacion: {estado: PENDIENTE, referencia: "Avro + registry"}
