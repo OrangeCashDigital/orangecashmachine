@@ -46,9 +46,9 @@ def _build_catalog() -> Any:
     -------
     pyiceberg.catalog.Catalog
     """
-    from market_data.infrastructure.storage.catalog import build_catalog
+    from market_data.infrastructure.storage.iceberg.catalog import get_catalog
 
-    return build_catalog()
+    return get_catalog()
 
 
 # --------------------------------------------------------------------------- #

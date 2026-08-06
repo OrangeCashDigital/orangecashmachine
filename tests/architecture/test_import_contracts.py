@@ -214,6 +214,34 @@ class TestCompositionRoot:
             + "\n\nNota: ports/inbound/pipeline_factory.py es un Port abstracto — legítimo."
         )
 
+    def test__build_catalog_imports_iceberg_get_catalog_not_stale_path(self):
+        """
+        R2 / B-02: `_build_catalog` DEBE importar `get_catalog` desde el módulo
+        iceberg real, no desde el path stale `storage.catalog` (módulo inexistente).
+
+        El bug histórico apuntaba a
+        `market_data.infrastructure.storage.catalog` (no existe) y a
+        `build_catalog` (no exportada). El módulo real es
+        `market_data.infrastructure.storage.iceberg.catalog` y exporta
+        `get_catalog`.
+        """
+        src = (INFRA / "bootstrap" / "pipeline_factory.py").read_text()
+        assert "market_data.infrastructure.storage.iceberg.catalog" in src, (
+            "`_build_catalog` debe importar el modulo iceberg.catalog real (BC-R2)"
+        )
+        assert "get_catalog" in src, "`_build_catalog` debe usar get_catalog() (R2)"
+
+        # El modulo objetivo y su simbolo deben existir (guard del import real).
+        import importlib
+
+        mod = importlib.import_module("market_data.infrastructure.storage.iceberg.catalog")
+        assert callable(getattr(mod, "get_catalog")), "iceberg.catalog.get_catalog inexistente (R2)"
+
+    def test__build_catalog_does_not_import_legacy_path(self):
+        """B-02: ningun import a `storage.catalog` (path inexistente) en pipeline_factory."""
+        src = (INFRA / "bootstrap" / "pipeline_factory.py").read_text()
+        assert "storage.catalog import" not in src, "import legacy storage.catalog presente (B-02)"
+
 
 class TestPortfolioCompositionRoot:
     """BC-43: CompositionRoot de portfolio es el único punto de ensamblaje."""
