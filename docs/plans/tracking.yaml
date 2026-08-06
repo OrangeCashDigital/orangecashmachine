@@ -547,8 +547,8 @@ hallazgos:
     fase: F4
     prioridad: MEDIA
     estado: PENDIENTE
-    estado_auditoria: PARCIALMENTE_CONFIRMADO
-    evidencia: "kafka_trade_publisher.py:50-51 / kafka_gap_publisher.py:114-115 (acks=all, idempotence); infrastructure/kafka/dedup.py existe"
+    estado_auditoria: CONFIRMADO
+    evidencia: "Verificado en F0 2026-07-29: kafka_trade_publisher.py:50-51 y kafka_gap_publisher.py:114-115 = enable_idempotence=True + acks=all (sin drift); infrastructure/kafka/dedup.py existe y esta CABLEADO en bronze_writer.py (importa SeenFilter :63, instancia :107, is_duplicate(event.event_id) :220-221). Limitacion: dedup L1 es en memoria (SeenFilter max_size=10000, por sesion de proceso) y no hay claves de idempotencia naturales ni test de reintento -> residuo exactly-once ante reinicios. CONFIRMADO"
     solucion: "Claves de idempotencia naturales + dedup en Bronze + test de reintento"
     pruebas:
       - "test: reintento no duplica en Bronze/Silver"
@@ -556,7 +556,7 @@ hallazgos:
     riesgo_residual: "Medio"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "docs/audits/2026-08-auditoria-integral.md H-16 — requiere verificación en F0"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-16 — confirmado en F0 2026-07-29"}
       backlog: {estado: HECHO, referencia: "B-19 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "dedup Bronze"}
