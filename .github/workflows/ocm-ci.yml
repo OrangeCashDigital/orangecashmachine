@@ -33,8 +33,17 @@ jobs:
       - name: Install dev dependencies
         run: uv sync --group dev
 
-      - name: Check architecture contracts
-        run: uv run lint-imports --config architecture/importlinter.toml
+      - name: Check architecture contracts (no-vacuo)
+        run: |
+          set -euo pipefail
+          out="$(uv run lint-imports --config architecture/importlinter.toml)"
+          echo "$out"
+          grep -q "kept" <<<"$out"
+          n=$(grep -oP '\d+(?=\s+kept)' <<<"$out")
+          if [ "$n" -lt 49 ]; then
+            echo "::error::Contratos BC activos $n < 49 (baseline F2.1); bajar el conteo requiere ADR + tracking.yaml"
+            exit 1
+          fi
 
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 1b: app-guard (blindaje de la Application Layer)
