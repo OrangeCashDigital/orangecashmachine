@@ -1,0 +1,40 @@
+# .dockerignore — B-05/H-14: no hornear secretos ni artefactos en la imagen.
+# COPIAR SECRETS = riesgo de "baked-in" credentials en el build context.
+
+# Secretos y env (¡crítico!)
+.env
+.env.*
+!.env.example
+
+# Entorno virtual / dependencias
+.venv
+venv
+__pycache__/
+*.py[cod]
+
+# Artefactos de datos y cache
+.coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.bandit
+htmlcov
+*.log
+
+# Infra local
+data_platform/
+kafka-data/
+redis-data/
+zookeeper-data/
+prometheus-data/
+grafana-data/
+loki-data/
+logs/
+
+# Build context redundante
+.git
+docker-compose.yml
+Dockerfile
+dist/
+build/
+*.egg-info
