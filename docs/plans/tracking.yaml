@@ -1,0 +1,599 @@
+schema_version: 2
+baseline:
+  commit: dcd1741
+  fecha: "2026-08-06"
+  informe_base: INFORME-Auditoria.md
+  plan_maestro: PLAN-Maestro-Ingenieria.md
+
+# =============================================================================
+# TRACKING V2 — fuente de verdad operativa (consumible por máquinas)
+# =============================================================================
+# Este archivo es el SSOT operativo del sistema de ingeniería. El documento
+# PLAN-Maestro-Ingenieria.md es el MAPA; aquí vive el ESTADO.
+#
+# Cadena de trazabilidad por hallazgo (ver PLAN-Maestro-Ingenieria.md §2):
+#   Hallazgo → Backlog → ADR → Implementación → Tests → CI → Evidencia → Cierre
+#
+# Estados cerrados (enum — SSOT; el job `tracking-consistency` los valida):
+#   estado:           PENDIENTE | EN_CURSO | HECHO | VERIFICACION | RECHAZADO
+#   estado_auditoria: CONFIRMADO | NO_CONFIRMADO | PARCIALMENTE_CONFIRMADO | REFORMULADO
+#                     PARCIALMENTE_CONFIRMADO = requiere resolución (confirmar/descartar) en F0
+#   eslabon_estado:   NO_APLICA | PENDIENTE | HECHO
+#                     (el eslabón `cadena.hallazgo` usa también los estados de
+#                      estado_auditoria: HECHO | PARCIALMENTE_CONFIRMADO)
+#
+# Reglas de coherencia (validadas por job `tracking-consistency` en CI):
+#   - todo `regla.hallazgo_informe` DEBE ser un ID plano `H-NN` o `B-NN` no vacío.
+#   - `estado: HECHO` requiere `fecha_cierre` y `cadena.cierre.evidencia`.
+#   - `estado_auditoria: CONFIRMADO` requiere `evidencia` no vacía.
+#   - toda `regla` con `backtest: ok` DEBE tener `activada_en_ci: true`.
+#   - todo eslabón en `cadena` debe usar un eslabon_estado del enum.
+#   - umbrales numéricos solo tras medición en vivo en F0 (nada inventado).
+# =============================================================================
+
+# ------------------------------------------------------------------
+# Reglas auto-defendibles (ver PLAN-Maestro-Ingenieria.md §7 / §3)
+# backtest:  pendiente | ok | fail
+# activada_en_ci: false | true   (solo true cuando backtest == ok)
+# ------------------------------------------------------------------
+reglas:
+  - id: R1
+    hallazgo: H-01
+    descripcion: "Bloquear `uv run live` con LiveExecutor stub"
+    mecanismo: "AST guard + guard de arranque en execute_live"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R2
+    hallazgo: H-02
+    descripcion: "Prohibir import de `market_data.infrastructure.storage.catalog` inexistente"
+    mecanismo: "import-linter forbid / AST guard + smoke test assemble()"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R3
+    hallazgo: H-03
+    descripcion: "`record_open()` sin `record_close()` en flujo de fill"
+    mecanismo: "AST guard sobre trading.execution.oms + test round-trip BUY→SELL"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R4
+    hallazgo: H-06
+    descripcion: "SecretStr en claro en snapshot de config"
+    mecanismo: "test unit de serialización de snapshot"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R5
+    hallazgo: H-04
+    descripcion: "Cobertura crítica por debajo del umbral (umbral definido tras medición en vivo en F0)"
+    mecanismo: "CI fail_under sobre módulos críticos"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R6
+    hallazgo: H-07
+    descripcion: "Bandit fuera de CI o con hallazgos BLOCKER"
+    mecanismo: "CI job security + pre-commit bandit -ll"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R7
+    hallazgo: H-05
+    descripcion: "`config.yaml#defaults` divergente de `_MODULE_GLOBS`"
+    mecanismo: "test de paridad de config"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R8
+    hallazgo: H-10
+    descripcion: "Módulo dead stub re-importable con imports inválidos"
+    mecanismo: "import-linter/AST guard"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R9
+    hallazgo: B-12
+    descripcion: "Orden live sin camino de reconciliación de fills"
+    mecanismo: "AST guard en LiveExecutor._submit"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R10
+    hallazgo: B-12
+    descripcion: "`size_pct` crudo en orden live sin conversión a qty"
+    mecanismo: "AST guard en live_executor"
+    backtest: pendiente
+    activada_en_ci: false
+  - id: R11
+    hallazgo: H-11
+    descripcion: "`subprocess` en domain (pureza de dominio)"
+    mecanismo: "AST guard tipo BC-09 sobre subprocess"
+    backtest: pendiente
+    activada_en_ci: false
+
+# ------------------------------------------------------------------
+# Backlog maestro de hallazgos (ver PLAN-Maestro-Ingenieria.md §7)
+# Cada hallazgo lleva la cadena de trazabilidad completa (v2).
+# cadena eslabones: hallazgo | backlog | adr | implementacion | tests | ci | evidencia | cierre
+# ------------------------------------------------------------------
+hallazgos:
+  - id: B-01
+    hallazgo_informe: H-01
+    fase: F1
+    prioridad: CRITICA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/trading/execution/live_executor.py:91-134 (_submit STUB, bloque CCXT comentado :99-128)"
+    solucion: "Guard de arranque bloquea live con stub; implementación real en F3 (B-12)"
+    pruebas:
+      - "test de arquitectura: uv run live no arranca sin executor real"
+      - "test positivo/negativo R1"
+    adr_relacionado: ADR-0015
+    riesgo_residual: "Operacional: si se re-habilita antes de F3, reaparece el riesgo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-01"}
+      backlog: {estado: HECHO, referencia: "B-01 en tracking v2"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0015 (guard en F1)"}
+      implementacion: {estado: PENDIENTE, referencia: null}
+      tests: {estado: PENDIENTE, referencia: "R1 positivo/negativo"}
+      ci: {estado: PENDIENTE, referencia: "R1 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: "backtest R1"}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-02
+    hallazgo_informe: H-02
+    fase: F1
+    prioridad: CRITICA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/market_data/infrastructure/bootstrap/pipeline_factory.py:49 (`from market_data.infrastructure.storage.catalog import build_catalog` — módulo inexistente)"
+    solucion: "Apuntar a market_data.infrastructure.storage.iceberg.catalog.get_catalog"
+    pruebas:
+      - "smoke test: assemble(config) construye ohlcv+trades+derivatives"
+    adr_relacionado: null
+    riesgo_residual: "Ninguno si el smoke test es verde"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-02"}
+      backlog: {estado: HECHO, referencia: "B-02 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "fix pipeline_factory.py:49"}
+      tests: {estado: PENDIENTE, referencia: "smoke test assemble()"}
+      ci: {estado: PENDIENTE, referencia: "R2 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: "backtest R2"}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-03
+    hallazgo_informe: H-03
+    fase: F1
+    prioridad: CRITICA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/trading/execution/oms.py:172 (record_open en submit) vs :217/:308 (record_close solo en cancel/_reject); _fill() :270-289 no decrementa; risk/manager.py:126-139"
+    solucion: "record_close() en flujo de fill, o redefinir semántica de _open_positions como 'órdenes activas'"
+    pruebas:
+      - "test round-trip BUY fill → SELL fill aserta contador"
+    adr_relacionado: ADR-0006
+    riesgo_residual: "Medio: toca OMS; requiere decisión de semántica"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-03"}
+      backlog: {estado: HECHO, referencia: "B-03 en tracking v2"}
+      adr: {estado: PENDIENTE, referencia: "semántica _open_positions (ADR-0015 o ADR nueva)"}
+      implementacion: {estado: PENDIENTE, referencia: "record_close en _fill"}
+      tests: {estado: PENDIENTE, referencia: "round-trip BUY→SELL"}
+      ci: {estado: PENDIENTE, referencia: "R3 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: "backtest R3"}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-04
+    hallazgo_informe: H-06
+    fase: F1
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "ocm/config/loader/snapshot.py:92 (`model_dump(mode=json)` serializa SecretStr en claro); apps/app/cli/main.py:27 (`--cfg job`)"
+    solucion: "Redactar SecretStr al serializar snapshot; restringir `--cfg job` en producción"
+    pruebas:
+      - "test: snapshot no contiene el valor del secret"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-06"}
+      backlog: {estado: HECHO, referencia: "B-04 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "serializador redactado"}
+      tests: {estado: PENDIENTE, referencia: "snapshot sin secret"}
+      ci: {estado: PENDIENTE, referencia: "R4 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: "backtest R4"}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-05
+    hallazgo_informe: H-14
+    fase: F1
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "Dockerfile:35 (COPY . .); docker-compose.yml (binds 0.0.0.0 por defecto: Redis 6379, Prometheus 9090, Grafana 3000, kafka-ui 8080 sin auth)"
+    solucion: ".dockerignore, binds locales/red interna, auth en kafka-ui/grafana, HEALTHCHECK"
+    pruebas:
+      - "docker build sin .env horneado"
+      - "test de puertos expuestos"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-14"}
+      backlog: {estado: HECHO, referencia: "B-05 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: ".dockerignore, compose, Dockerfile"}
+      tests: {estado: PENDIENTE, referencia: "build + puertos"}
+      ci: {estado: PENDIENTE, referencia: "cheque de imagen"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-06
+    hallazgo_informe: H-04
+    fase: F2
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "pyproject.toml:280-284 (fail_under = 0 con TODO); CI quality no gatea cobertura; medición en vivo 43%"
+    solucion: "Medir cobertura por módulo en F0; fijar fail_under con margen; subir cobertura en trading/execution y storage/iceberg"
+    pruebas:
+      - "pytest --cov gateado con fail_under > 0"
+    adr_relacionado: null
+    riesgo_residual: "Bajo: umbral se fija sobre medición real, no a ciegas"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-04"}
+      backlog: {estado: HECHO, referencia: "B-06 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "fail_under en pyproject"}
+      tests: {estado: PENDIENTE, referencia: "cobertura crítica medida"}
+      ci: {estado: PENDIENTE, referencia: "R5 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: "medición F0"}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-07
+    hallazgo_informe: H-07
+    fase: F2
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "pyproject.toml:169 (bandit en deps dev); sin [tool.bandit]; ausente de ocm-ci.yml y .pre-commit-config.yaml"
+    solucion: "Job CI security + pre-commit con `bandit -ll`; umbral por BLOCKER"
+    pruebas:
+      - "CI rojo ante hallazgo BLOCKER; verde sin hallazgos"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-07"}
+      backlog: {estado: HECHO, referencia: "B-07 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "job security en CI"}
+      tests: {estado: PENDIENTE, referencia: "bandit -ll"}
+      ci: {estado: PENDIENTE, referencia: "R6 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-08
+    hallazgo_informe: H-12
+    fase: F2
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "ocm-ci.yml job quality ejecuta `mypy shared/` únicamente; pyproject strict=false"
+    solucion: "Extender mypy a packages+ocm+shared en CI; limpiar errores"
+    pruebas:
+      - "CI verde con mypy completo"
+    adr_relacionado: null
+    riesgo_residual: "Medio: puede requerir limpieza de tipado amplia"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-12"}
+      backlog: {estado: HECHO, referencia: "B-08 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "mypy completo"}
+      tests: {estado: PENDIENTE, referencia: "mypy sin errores"}
+      ci: {estado: PENDIENTE, referencia: "gate mypy"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-09
+    hallazgo_informe: H-05
+    fase: F2
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "config/config.yaml:35 (market_data/external_ingestion) no está en _MODULE_GLOBS (ocm/config/hydra_loader.py:94-109); _MODULE_GLOBS incluye portfolio/portfolio.yaml ausente de config.yaml; tests/config/test_structured_parity.py no existe"
+    solucion: "Derivar _MODULE_GLOBS de config.yaml#defaults; añadir test de paridad"
+    pruebas:
+      - "test: listas de módulos idénticas"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-05"}
+      backlog: {estado: HECHO, referencia: "B-09 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "unificar listas"}
+      tests: {estado: PENDIENTE, referencia: "test de paridad"}
+      ci: {estado: PENDIENTE, referencia: "R7 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-10
+    hallazgo_informe: H-20
+    fase: F2
+    prioridad: BAJA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "AGENTS.md '44 contracts', GOVERNANCE.md '43', archivo real 47; pyproject E402 obsoleta para container.py (eliminado 8/3)"
+    solucion: "Generar conteo de contratos en CI; limpiar E402 obsoleta"
+    pruebas:
+      - "script compara conteo real vs docs"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-20"}
+      backlog: {estado: HECHO, referencia: "B-10 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "script de conteo"}
+      tests: {estado: PENDIENTE, referencia: null}
+      ci: {estado: PENDIENTE, referencia: "gate de docs"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-11
+    hallazgo_informe: H-10
+    fase: F2
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/market_data/adapters/inbound/websocket/onchain_producer.py:9-13 (imports a infra.kafka.* y market_data.domain.ports — inexistentes)"
+    solucion: "Eliminar el stub o implementarlo bajo ADR (topic TOPIC_ONCHAIN_RAW ya existe en shared/kafka/topics.py)"
+    pruebas:
+      - "módulo ausente o con imports válidos"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-10"}
+      backlog: {estado: HECHO, referencia: "B-11 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "eliminar/mover stub"}
+      tests: {estado: PENDIENTE, referencia: "R8"}
+      ci: {estado: PENDIENTE, referencia: "R8 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-12
+    hallazgo_informe: H-01
+    fase: F3
+    prioridad: CRITICA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "live_executor.py:91-134 (bloque CCXT comentado refiere CCXTAdapter.create_order); execute_live.py:64-70 (exchange_client None)"
+    solucion: "Implementar _submit() con CCXTAdapter.create_order; conversión size_pct→qty real; reconciliación de fills"
+    pruebas:
+      - "test integración sandbox/mock: orden → fill → estado"
+      - "test positivo/negativo R9, R10"
+    adr_relacionado: ADR-0015
+    riesgo_residual: "Alto: capital real"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-01 (resolución)"}
+      backlog: {estado: HECHO, referencia: "B-12 en tracking v2"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0015"}
+      implementacion: {estado: PENDIENTE, referencia: "LiveExecutor._submit real"}
+      tests: {estado: PENDIENTE, referencia: "integración sandbox/mock"}
+      ci: {estado: PENDIENTE, referencia: "R9/R10 activadas_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: "backtest R9/R10"}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-13
+    hallazgo_informe: H-19
+    fase: F3
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/trading/bootstrap/composition_root.py:359-376 (NotImplementedError con TODO(ADR-0011)); rebalance_service.py:131-157 sin invocaciones externas"
+    solucion: "Cerrar ADR-0011 (delegación a portfolio) y cablear rebalance a un use-case"
+    pruebas:
+      - "test end-to-end de rebalance"
+    adr_relacionado: ADR-0011
+    riesgo_residual: "Medio"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-19"}
+      backlog: {estado: HECHO, referencia: "B-13 en tracking v2"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0011 (cerrar)"}
+      implementacion: {estado: PENDIENTE, referencia: "cablear rebalance"}
+      tests: {estado: PENDIENTE, referencia: "end-to-end rebalance"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-14
+    hallazgo_informe: H-22
+    fase: F3
+    prioridad: BAJA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/trading/strategies/base.py:19, ema_crossover.py:22 (import pandas) sin contrato tipo BC-09 para trading"
+    solucion: "Migrar a polars + añadir contrato de tecnología"
+    pruebas:
+      - "test estrategia con polars"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-22"}
+      backlog: {estado: HECHO, referencia: "B-14 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "migrar strategies a polars"}
+      tests: {estado: PENDIENTE, referencia: "test estrategia polars"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-15
+    hallazgo_informe: H-09
+    fase: F4
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: PARCIALMENTE_CONFIRMADO
+    evidencia: "fill_sync.py:75 (open_order_ids); trade_tracker.py:57 (_open_positions); portfolio_service.py:89-152 (close_position traga errores y devuelve None; retorno descartado en fill_sync:49)"
+    solucion: "Unificar estado de posición en PortfolioService (única fuente mutable, ADR-0006); fill_sync/TradeTracker consumen eventos"
+    pruebas:
+      - "test: un solo dueño mutable; cierre no falla silenciosamente"
+    adr_relacionado: "ADR-0006; ADR-0016"
+    riesgo_residual: "Medio: migración de estado"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-09 — requiere verificación en F0"}
+      backlog: {estado: HECHO, referencia: "B-15 en tracking v2"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0016"}
+      implementacion: {estado: PENDIENTE, referencia: "unificar en PortfolioService"}
+      tests: {estado: PENDIENTE, referencia: "un solo dueño mutable"}
+      ci: {estado: PENDIENTE, referencia: "G10"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-16
+    hallazgo_informe: H-08
+    fase: F4
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/trading/execution/order.py:94 (order_id = uuid[:8]); clave de posición en portfolio/infra/redis_store.py"
+    solucion: "UUID completo (32 hex) + assert de unicidad en el store"
+    pruebas:
+      - "test de colisión en el store"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-08"}
+      backlog: {estado: HECHO, referencia: "B-16 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "UUID completo"}
+      tests: {estado: PENDIENTE, referencia: "test colisión store"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-17
+    hallazgo_informe: H-18
+    fase: F4
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "ocm/observability/ (logger multi-sink, Prometheus, Loki) sin módulo de tracing; sin OpenTelemetry en pyproject"
+    solucion: "OpenTelemetry + request-id propagado en consumers"
+    pruebas:
+      - "test de propagación de contexto"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-18"}
+      backlog: {estado: HECHO, referencia: "B-17 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "OTel + request-id"}
+      tests: {estado: PENDIENTE, referencia: "propagación contexto"}
+      ci: {estado: PENDIENTE, referencia: "G11"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-18
+    hallazgo_informe: H-15
+    fase: F4
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: PARCIALMENTE_CONFIRMADO
+    evidencia: "shared/kafka/schemas/ (dataclasses SSOT, BC-35); sin Avro/Protobuf ni schema registry en docker-compose"
+    solucion: "Evaluar/implementar Schema Registry (Avro + compatibilidad backward) manteniendo BC-35"
+    pruebas:
+      - "test de cambio backward-compatible"
+    adr_relacionado: ADR-0017
+    riesgo_residual: "Medio: formato de cable"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-15 — requiere verificación en F0"}
+      backlog: {estado: HECHO, referencia: "B-18 en tracking v2"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0017"}
+      implementacion: {estado: PENDIENTE, referencia: "Avro + registry"}
+      tests: {estado: PENDIENTE, referencia: "cambio backward"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-19
+    hallazgo_informe: H-16
+    fase: F4
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: PARCIALMENTE_CONFIRMADO
+    evidencia: "kafka_trade_publisher.py:50-51 / kafka_gap_publisher.py:114-115 (acks=all, idempotence); infrastructure/kafka/dedup.py existe"
+    solucion: "Claves de idempotencia naturales + dedup en Bronze + test de reintento"
+    pruebas:
+      - "test: reintento no duplica en Bronze/Silver"
+    adr_relacionado: null
+    riesgo_residual: "Medio"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-16 — requiere verificación en F0"}
+      backlog: {estado: HECHO, referencia: "B-19 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "dedup Bronze"}
+      tests: {estado: PENDIENTE, referencia: "reintento no duplica"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-20
+    hallazgo_informe: H-11
+    fase: F4
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/market_data/domain/quality/types.py:25,33 (subprocess git rev-parse)"
+    solucion: "Inyectar git-hash como metadato desde infra/composition root"
+    pruebas:
+      - "test: dominio sin subprocess"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-11"}
+      backlog: {estado: HECHO, referencia: "B-20 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "inyectar git-hash"}
+      tests: {estado: PENDIENTE, referencia: "dominio sin subprocess (R11)"}
+      ci: {estado: PENDIENTE, referencia: "R11 activada_en_ci"}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-21
+    hallazgo_informe: H-17
+    fase: F4
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "shared/contracts/boundaries.py:86-106 (RiskGate con evaluate→tuple) vs risk/manager.py (validate→RiskDecision); oms.py:134,250 usa RiskManager directo"
+    solucion: "Alinear RiskGate con RiskManager o eliminar el protocol muerto"
+    pruebas:
+      - "test de coherencia de contrato"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-17"}
+      backlog: {estado: HECHO, referencia: "B-21 en tracking v2"}
+      adr: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: PENDIENTE, referencia: "alinear/eliminar RiskGate"}
+      tests: {estado: PENDIENTE, referencia: "coherencia contrato"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-22
+    hallazgo_informe: H-13
+    fase: F5
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "pyproject.toml:125 (duckdb>=1.5.1,<2.0) sin ningún import en el repo"
+    solucion: "Adoptar DuckDB como capa de consulta con ADR, o eliminar dependencia y corregir descripción del proyecto"
+    pruebas:
+      - "test: dependencia presente solo si se usa"
+    adr_relacionado: null
+    riesgo_residual: "Bajo"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-13"}
+      backlog: {estado: HECHO, referencia: "B-22 en tracking v2"}
+      adr: {estado: PENDIENTE, referencia: "ADR nueva en F5"}
+      implementacion: {estado: PENDIENTE, referencia: "adoptar o eliminar"}
+      tests: {estado: PENDIENTE, referencia: "dependencia solo si se usa"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
