@@ -32,6 +32,7 @@ defaults:
   - datasets
   - risk/risk
   - market_data/feeds
+  - market_data/external_ingestion
   - features
 
   # Entorno (sobreescribe lo anterior)

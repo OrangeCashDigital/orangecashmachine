@@ -32,6 +32,8 @@ Contratos enforced: BC-38.
 
 from __future__ import annotations
 
+import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -40,10 +42,14 @@ if TYPE_CHECKING:
     from market_data.adapters.inbound.websocket.liquidations_producer import LiquidationsKafkaProducer
     from market_data.adapters.inbound.websocket.oi_producer import OIKafkaProducer
     from market_data.adapters.inbound.websocket.orderbook_producer import OrderBookKafkaProducer
+    from market_data.application.external_ingestion.orchestrator import (
+        ExternalIngestionOrchestrator as ExternalIngestionOrchestrator,
+    )
     from market_data.application.feed_orchestrator import FeedOrchestrator
     from market_data.infrastructure.bootstrap.pipeline_factory import (
         ConcretePipelineFactory,
     )
+    from market_data.ports.inbound.external.polling import PollingSourcePort
     from ocm.config.schema import AppConfig
 
 
@@ -207,6 +213,98 @@ class CompositionRoot:
             config=orch_cfg,
             publisher=publisher,
             get_adapter=get_adapter_class,
+        )
+
+    @classmethod
+    def build_external_ingestion_orchestrator(
+        cls,
+        config: "AppConfig",
+    ) -> "ExternalIngestionOrchestrator | None":
+        """Build a fully-wired ExternalIngestionOrchestrator from config.
+
+        Fail-Soft: retorna None si external_ingestion no está habilitado o
+        no hay fuentes habilitadas. Nunca lanza — el caller decide.
+
+        Config (SSOT): AppConfig.external_ingestion (poblada por Hydra).
+        Brokers: AppConfig.integrations.kafka (SSOT de infra).
+        Adapters: factory local identidad → clase concreta.
+        Publisher: ExternalKafkaEventPublisher sobre KafkaProducerAdapter.
+
+        Args:
+            config: AppConfig con integrations.kafka y external_ingestion.
+
+        Returns:
+            ExternalIngestionOrchestrator listo para run(), o None si no aplica.
+        """
+        from loguru import logger
+
+        from market_data.adapters.inbound.external import (
+            CoinglassPollingSource,
+            CoinMarketCapPollingSource,
+        )
+        from market_data.adapters.outbound.external_kafka_publisher import (
+            ExternalKafkaEventPublisher,
+        )
+        from market_data.application.external_ingestion.orchestrator import (
+            ExternalIngestionOrchestrator,
+            ExternalSourceRuntime,
+        )
+        from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+
+        ext_cfg = config.external_ingestion
+        if not ext_cfg.enabled:
+            logger.info("[composition-root] external_ingestion.enabled=false — no se inicia")
+            return None
+
+        enabled = {sid: cfg for sid, cfg in ext_cfg.sources.items() if cfg.enabled}
+        if not enabled:
+            logger.warning("[composition-root] external_ingestion habilitado pero sin fuentes activas")
+            return None
+
+        factory: dict[str, Callable[[str], PollingSourcePort]] = {
+            "coinglass": lambda api_key: CoinglassPollingSource(api_key=api_key),
+            "coinmarketcap": lambda api_key: CoinMarketCapPollingSource(api_key=api_key),
+        }
+
+        sources: list[ExternalSourceRuntime] = []
+        for source_id, cfg in enabled.items():
+            if source_id not in factory:
+                logger.warning("[composition-root] fuente externa desconocida, ignorada: {}", source_id)
+                continue
+            kafka_key = f"{source_id.upper()}_API_KEY"
+            api_key = os.environ.get(kafka_key, "")
+            if not api_key:
+                logger.warning("[composition-root] fuente '{}' sin API key (env {}) — omitida", source_id, kafka_key)
+                continue
+            sources.append(
+                ExternalSourceRuntime(
+                    source_id=source_id,
+                    metric=cfg.metric,
+                    topic=cfg.topic,
+                    enabled=cfg.enabled,
+                    symbols=tuple(cfg.symbols),
+                    schedule_every_s=cfg.schedule.every,
+                    rate_limit_per_minute=cfg.rate_limit.per_minute,
+                )
+            )
+
+        if not sources:
+            logger.warning("[composition-root] external_ingestion: sin fuentes cableables")
+            return None
+
+        producer_adapter = KafkaProducerAdapter(
+            bootstrap_servers=config.integrations.kafka.bootstrap_servers,
+            client_id="ocm-external-ingestion",
+        )
+        publisher = ExternalKafkaEventPublisher(producer_adapter)
+
+        def get_source(source_id: str) -> PollingSourcePort:
+            return factory[source_id](os.environ.get(f"{source_id.upper()}_API_KEY", ""))
+
+        return ExternalIngestionOrchestrator(
+            sources=sources,
+            get_source=get_source,
+            publisher=publisher,
         )
 
     @classmethod

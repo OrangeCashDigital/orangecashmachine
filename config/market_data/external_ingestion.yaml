@@ -1,0 +1,39 @@
+# @package _global_
+# conf/market_data/external_ingestion.yaml
+# ────────────────────────────────────────────────────────────────
+# Capacidad external_ingestion (ADR-0014) — adquisición no-streaming
+# de fuentes externas: polling periódico, batch y replay histórico.
+#
+# Default: disabled. Habilitar explícitamente (enabling una fuente)
+# — nunca alcanza producción por omisión.
+#
+# topic default = TOPIC_EXTERNAL_RAW (external.raw) — SSOT en
+# shared/kafka/topics.py. Las métricas escalares de todas las fuentes
+# externas fluyen al topic canónico; el routing por metric vive en el body.
+# ────────────────────────────────────────────────────────────────
+
+external_ingestion:
+  enabled: false
+
+  sources:
+    coinglass:
+      enabled: false          # ← cambiar a true para activar
+      metric: funding_rate    # funding_rate | open_interest
+      schedule:
+        every: 300            # segundos entre ciclos
+      rate_limit:
+        per_minute: 60
+      symbols:
+        - BTC/USDT
+        - ETH/USDT
+      topic: external.raw
+
+    coinmarketcap:
+      enabled: false
+      metric: market_metrics  # btc_dominance, total_market_cap_usd, ...
+      schedule:
+        every: 3600
+      rate_limit:
+        per_minute: 30
+      symbols: []             # métrica global (symbol=None)
+      topic: external.raw

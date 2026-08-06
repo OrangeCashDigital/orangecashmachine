@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from ocm.observability.config import LoggingConfig
-from shared.kafka.topics import TOPIC_TRADES_RAW
+from shared.kafka.topics import TOPIC_EXTERNAL_RAW, TOPIC_TRADES_RAW
 
 CONFIG_PATH: Path = Path("config/settings.yaml")
 
@@ -659,6 +659,45 @@ class FeedsConfig(StrictBaseModel):
     feeds: dict[str, ExchangeFeedEntryConfig] = Field(default_factory=dict)
 
 
+class ExternalSourceSchedule(StrictBaseModel):
+    """Cadencia de captura de una fuente externa.
+
+    every: intervalo en segundos entre ciclos. Cron se reserva para
+    una fase posterior (scheduling avanzado).
+    """
+
+    every: int = Field(default=300, ge=1, description="Intervalo de captura en segundos")
+
+
+class ExternalSourceRateLimit(StrictBaseModel):
+    """Rate limit de una fuente externa (requests por minuto)."""
+
+    per_minute: int = Field(default=60, ge=1)
+
+
+class ExternalSourceConfig(StrictBaseModel):
+    """Configuración de una única fuente externa dentro de external_ingestion.sources."""
+
+    enabled: bool = False
+    metric: str = ""
+    schedule: ExternalSourceSchedule = Field(default_factory=ExternalSourceSchedule)
+    rate_limit: ExternalSourceRateLimit = Field(default_factory=ExternalSourceRateLimit)
+    symbols: list[str] = Field(default_factory=list)
+    topic: str = TOPIC_EXTERNAL_RAW
+
+
+class ExternalIngestionConfig(StrictBaseModel):
+    """Configuración de la capacidad external_ingestion (ADR-0014).
+
+    Adquisición no-streaming de fuentes externas. Separada de
+    FeedsConfig (streaming). Default global disabled — nunca alcanza
+    producción por omisión (mismo patrón que safety.dry_run).
+    """
+
+    enabled: bool = False
+    sources: dict[str, ExternalSourceConfig] = Field(default_factory=dict)
+
+
 class HealthChecksConfig(StrictBaseModel):
     """Configuración de health checks del sistema."""
 
@@ -789,6 +828,7 @@ class AppConfig(StrictBaseModel):
     portfolio: PortfolioConfig = Field(default_factory=PortfolioConfig)
     trading: TradingConfig = Field(default_factory=TradingConfig)
     feeds: FeedsConfig = Field(default_factory=FeedsConfig)
+    external_ingestion: ExternalIngestionConfig = Field(default_factory=ExternalIngestionConfig)
     testing: TestingConfig = Field(
         default_factory=TestingConfig,
         description="Configuración exclusiva de CI/test. Ignorada en producción.",

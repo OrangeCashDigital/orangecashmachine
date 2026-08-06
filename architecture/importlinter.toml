@@ -191,6 +191,8 @@ ignore_imports = [
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.consumers.quality_consumer",
     # Composition Root: composition_root ensambla feed_orchestrator.
     "market_data.infrastructure.bootstrap.composition_root -> market_data.application.feed_orchestrator",
+    # Composition Root: composition_root ensambla external_ingestion.
+    "market_data.infrastructure.bootstrap.composition_root -> market_data.application.external_ingestion.orchestrator",
     # Composition Root: pipeline_factory inyecta source_manager para gap recovery.
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.source_manager",
 
@@ -241,24 +243,22 @@ forbidden_modules = [
 # TIER 1 (detalle feeds) — boundary DIP del módulo WebSocket
 # ─────────────────────────────────────────────────────────────────────────────
 
-# BC-49: COMENTADO — market_data.feeds.protocol/types no existen aún.
-# El módulo feeds/ está en desarrollo (WebSocket gap-aware streaming).
-# Renumerado de BC-39 a BC-49: BC-39 fue reasignado al contrato activo de
-# adapters/inbound/websocket (TIER 1b) y no puede haber dos BC-39. Además BC-43
-# ya está tomado por el contrato activo de portfolio (PositionStore adapters).
-# Re-activar cuando feeds/protocol.py y feeds/types.py existan en el árbol.
-# [[tool.importlinter.contracts]]
-# name = "BC-49: market_data.feeds — vendor SDKs forbidden in protocol/types boundary"
-# type = "forbidden"
-# source_modules = [
-#     "market_data.feeds.protocol",
-#     "market_data.feeds.types",
-# ]
-# forbidden_modules = [
-#     "cryptofeed",
-#     "websockets",
-#     "ccxt",
-# ]
+# BC-49: REACTIVADO 2026-08-05 — ports/inbound/external (capacidad
+# external_ingestion, ADR-0014). El boundary de adquisición es un contrato
+# puro: vetado cualquier SDK de vendor y la capa HTTP. Los adapters concretos
+# (adapters/inbound/external) son los únicos que tocan transporte/aiohttp.
+# Antes comentado porque market_data.feeds.protocol/types no existían.
+[[tool.importlinter.contracts]]
+name = "BC-49: ports/inbound/external — vendor SDKs forbidden in acquisition contract"
+type = "forbidden"
+source_modules = [
+    "market_data.ports.inbound.external",
+]
+forbidden_modules = [
+    "aiohttp",
+    "httpx",
+    "requests",
+]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 1 (detalle medallion) — flujo unidireccional de storage
@@ -370,6 +370,26 @@ source_modules = [
 ]
 forbidden_modules = [
     "market_data.infrastructure.bootstrap.composition_root",
+]
+
+[[tool.importlinter.contracts]]
+# BC-52 (NUEVO 2026-08-05) — adapters/inbound/external no importa SDK de vendor
+# a nivel módulo (estilo BC-39). Los adapters son la frontera de transporte:
+# usan aiohttp (HTTP genérico) — permitido — pero NUNCA el SDK propietario del
+# proveedor en el grafo estático. Si un provider requiriera su SDK, el import
+# debe ser lazy dentro de fetch() (no genera arista, mismo patrón que BC-39).
+name = "BC-52: adapters/inbound/external — vendor SDKs forbidden at module level"
+type = "forbidden"
+source_modules = [
+    "market_data.adapters.inbound.external",
+]
+forbidden_modules = [
+    "coinglass",
+    "coinmarketcap",
+    "glassnode",
+    "cryptoquant",
+    "fred",
+    "cryptofeed",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
