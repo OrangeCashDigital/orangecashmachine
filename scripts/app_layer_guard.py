@@ -1,6 +1,6 @@
 """scripts/app_layer_guard.py — Guard AST del blindaje de la Application Layer.
 
-Convierte hallazgos ya corregidos de `AUDIT-apps-2026-08-03.md` (H1, H4, H6, H8,
+Convierte hallazgos ya corregidos de `docs/audits/2026-08-apps-audit.md` (H1, H4, H6, H8,
 H12) en reglas estructurales verificables de forma automática
 (PLAN-Maestro-Ingenieria.md §6): cada bug corregido pasa a ser una regla
 permanente para que no vuelva a aparecer — la calidad no depende de disciplina
@@ -20,7 +20,7 @@ H-01…H-22; ver reporte BLINDAJE-APPS-2026-08-06.md §2):
     R16 → H6  SILENT_PATHS SSOT en api/middleware/__init__.py
 
 Cada regla lleva prueba positiva (código limpio → sin violaciones) y negativa
-(anti-patrón → violación): tests/architecture/test_app_layer_architecture.py.
+(anti-patrón → violación): tests/architecture/test_app_layer_guard.py.
 Backtest obligatorio antes de activar en CI: scripts/backtest_app_guard.py.
 
 Uso:
