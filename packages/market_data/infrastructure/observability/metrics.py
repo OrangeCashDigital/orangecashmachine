@@ -38,6 +38,12 @@ Métricas disponibles
 • ocm_silver_gap_max_candles            — tamaño del gap más grande por serie
 • ocm_silver_series_coverage_ratio      — fracción de velas presentes vs esperadas
 • ocm_silver_freshness_seconds          — segundos desde último candle Silver (SLA)
+• ocm_external_cycles_total             — ciclos de adquisición externa por fuente/métrica
+• ocm_external_fetches_total            — fetches exitosos (polling OK) por fuente/métrica
+• ocm_external_events_published_total   — eventos canónicos publicados por fuente/métrica
+• ocm_external_cycle_duration_ms        — duración del ciclo fetch→normalize→publish
+• ocm_external_errors_total             — errores de fuente por tipo (transient|fatal|rate_limit)
+• ocm_external_health                   — gauge de health observado por fuente (1 ok / 0 down)
 """
 
 from __future__ import annotations
@@ -249,6 +255,53 @@ EXCHANGE_CIRCUIT_OPEN = Counter(
     "ocm_exchange_circuit_open_total",
     "Veces que el circuit breaker rechazó una llamada al exchange",
     ["exchange", "operation"],
+)
+
+# ==========================================================
+# Métricas de external_ingestion (ADR-0014)
+# ==========================================================
+
+# Ciclos de adquisición ejecutados por fuente/métrica.
+EXTERNAL_CYCLES_TOTAL = Counter(
+    "ocm_external_cycles_total",
+    "Ciclos de adquisición externa ejecutados",
+    ["source_id", "metric"],
+)
+
+# Fetches que terminaron OK (polling exitoso), por fuente/métrica.
+EXTERNAL_FETCHES_TOTAL = Counter(
+    "ocm_external_fetches_total",
+    "Fetches de polling exitosos",
+    ["source_id", "metric"],
+)
+
+# Eventos canónicos publicados (ExternalMetricEvent) por fuente/métrica.
+EXTERNAL_EVENTS_PUBLISHED_TOTAL = Counter(
+    "ocm_external_events_published_total",
+    "Eventos canónicos publicados",
+    ["source_id", "metric"],
+)
+
+# Duración del ciclo fetch → normalize → publish (ms).
+EXTERNAL_CYCLE_DURATION_MS = Histogram(
+    "ocm_external_cycle_duration_ms",
+    "Duración de un ciclo de adquisición externa (ms)",
+    ["source_id", "metric"],
+    buckets=[10, 50, 100, 250, 500, 1000, 2500, 5000],
+)
+
+# Errores de fuente por tipo de fallo.
+EXTERNAL_ERRORS_TOTAL = Counter(
+    "ocm_external_errors_total",
+    "Errores de fuente externa por tipo",
+    ["source_id", "metric", "error_type"],
+)
+
+# Gauge de health observado: 1 ok / 0 down (solo observación, no gating).
+EXTERNAL_HEALTH = Gauge(
+    "ocm_external_health",
+    "Health observado de la fuente externa (1 ok / 0 down)",
+    ["source_id"],
 )
 
 # ==========================================================

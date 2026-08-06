@@ -224,6 +224,8 @@ __all__ = [
     "NullQualityMetrics",
     "ResampleMetricsPort",
     "NullResampleMetrics",
+    "ExternalMetricsPort",
+    "NullExternalMetrics",
 ]
 
 
@@ -408,4 +410,71 @@ class NullResampleMetrics:
         pass
 
     def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:
+        pass
+
+
+class ExternalMetricsPort(Protocol):
+    """
+    Contrato de telemetría de la capacidad external_ingestion.
+
+    Implementación de referencia:
+    market_data.infrastructure.observability.metrics_adapter.PrometheusExternalMetrics
+
+    DIP: ExternalIngestionOrchestrator inyecta este port — nunca importa
+    Prometheus directamente. ISP: interfaz mínima — solo lo que el orquestador
+    necesita por ciclo (fetch → normalize → publish) y la observación de health.
+
+    Fire-and-forget: ningún método lanza excepciones (SafeOps). Los labels son
+    (source_id, metric) — identidad canónica, no exchange/timeframe.
+    """
+
+    def cycles_total_inc(self, source_id: str, metric: str) -> None:
+        """Incrementa contador de ciclos de adquisición ejecutados."""
+        ...
+
+    def fetches_total_inc(self, source_id: str, metric: str) -> None:
+        """Incrementa contador de fetches exitosos (polling OK)."""
+        ...
+
+    def events_published_inc(self, source_id: str, metric: str, count: int = 1) -> None:
+        """Incrementa contador de eventos canónicos publicados."""
+        ...
+
+    def cycle_duration_observe(self, source_id: str, metric: str, duration_ms: int) -> None:
+        """Observa la duración de un ciclo fetch→normalize→publish (ms)."""
+        ...
+
+    def errors_total_inc(self, source_id: str, metric: str, error_type: str) -> None:
+        """Incrementa contador de errores de fuente. error_type: transient|fatal|rate_limit."""
+        ...
+
+    def health_observed(self, source_id: str, ok: bool) -> None:
+        """Registra el estado de health observado de una fuente (gauge)."""
+        ...
+
+
+class NullExternalMetrics:
+    """
+    Implementación vacía de ExternalMetricsPort.
+
+    Uso: tests, entornos sin Prometheus, composición en dry_run.
+    Todos los métodos son no-op — SafeOps garantizado por diseño.
+    """
+
+    def cycles_total_inc(self, source_id: str, metric: str) -> None:
+        pass
+
+    def fetches_total_inc(self, source_id: str, metric: str) -> None:
+        pass
+
+    def events_published_inc(self, source_id: str, metric: str, count: int = 1) -> None:
+        pass
+
+    def cycle_duration_observe(self, source_id: str, metric: str, duration_ms: int) -> None:
+        pass
+
+    def errors_total_inc(self, source_id: str, metric: str, error_type: str) -> None:
+        pass
+
+    def health_observed(self, source_id: str, ok: bool) -> None:
         pass

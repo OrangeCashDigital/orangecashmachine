@@ -218,3 +218,48 @@ class PrometheusRepairMetrics:
     @property
     def rows_ingested(self) -> object:
         return self._rows_ingested
+
+
+class PrometheusExternalMetrics:
+    """Implementa ExternalMetricsPort con contadores Prometheus reales.
+
+    Instancia lazy: el import de metrics ocurre solo cuando se construye
+    (evita coste de import prometheus_client en tests/tools).
+    SafeOps: los métodos delegan a .labels().inc()/.observe() — si un
+    contador fallara, el orquestador no debe romperse (no propagamos errores).
+    """
+
+    def __init__(self) -> None:
+        from market_data.infrastructure.observability.metrics import (
+            EXTERNAL_CYCLE_DURATION_MS,
+            EXTERNAL_CYCLES_TOTAL,
+            EXTERNAL_ERRORS_TOTAL,
+            EXTERNAL_EVENTS_PUBLISHED_TOTAL,
+            EXTERNAL_FETCHES_TOTAL,
+            EXTERNAL_HEALTH,
+        )
+
+        self._cycles_total = EXTERNAL_CYCLES_TOTAL
+        self._fetches_total = EXTERNAL_FETCHES_TOTAL
+        self._events_published_total = EXTERNAL_EVENTS_PUBLISHED_TOTAL
+        self._cycle_duration_ms = EXTERNAL_CYCLE_DURATION_MS
+        self._errors_total = EXTERNAL_ERRORS_TOTAL
+        self._health = EXTERNAL_HEALTH
+
+    def cycles_total_inc(self, source_id: str, metric: str) -> None:
+        self._cycles_total.labels(source_id=source_id, metric=metric).inc()
+
+    def fetches_total_inc(self, source_id: str, metric: str) -> None:
+        self._fetches_total.labels(source_id=source_id, metric=metric).inc()
+
+    def events_published_inc(self, source_id: str, metric: str, count: int = 1) -> None:
+        self._events_published_total.labels(source_id=source_id, metric=metric).inc(count)
+
+    def cycle_duration_observe(self, source_id: str, metric: str, duration_ms: int) -> None:
+        self._cycle_duration_ms.labels(source_id=source_id, metric=metric).observe(duration_ms)
+
+    def errors_total_inc(self, source_id: str, metric: str, error_type: str) -> None:
+        self._errors_total.labels(source_id=source_id, metric=metric, error_type=error_type).inc()
+
+    def health_observed(self, source_id: str, ok: bool) -> None:
+        self._health.labels(source_id=source_id).set(1.0 if ok else 0.0)
