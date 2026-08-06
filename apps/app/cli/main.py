@@ -31,6 +31,7 @@ Principios: SOLID · KISS · DRY · SSOT · SafeOps
 
 from __future__ import annotations
 
+import os
 import sys
 from datetime import datetime, timezone
 from typing import Callable
@@ -259,14 +260,33 @@ def hydra_main(cfg: DictConfig) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _reject_cfg_job_in_production() -> None:
+    """B-04/H-06: bloquea `--cfg` en producción.
+
+    Hydra imprime el DictConfig resuelto (OmegaConf pre-Pydantic) SIN redactar
+    SecretStr, exponiendo credenciales a stdout (poca de antes en AGENTS.md).
+    En el entorno de producción, `--cfg job`/`--cfg all` se bloquea.
+    """
+    if not any(a == "--cfg" or a.startswith("--cfg=") for a in sys.argv):
+        return
+    if os.environ.get("OCM_ENV", "development") == "production":
+        logger.critical(
+            "--cfg_bloqueado_en_produccion",
+            reason="--cfg dumpa SecretStr sin redactar (Hydra OmegaConf pre-Pydantic)",
+        )
+        raise SystemExit(2)
+
+
 def main() -> None:
     """Punto de entrada del script ``ocm`` definido en pyproject.toml.
 
     Exit codes:
         0   — éxito o validate-only OK.
         1   — error de configuración o fallo del pipeline.
+        2   — `--cfg` bloqueado en producción (B-04/H-06).
         130 — interrupción por teclado (SIGINT / Ctrl-C).
     """
+    _reject_cfg_job_in_production()  # Guard B-04: nunca dump de config segura en prod
     try:
         hydra_main()  # type: ignore[call-arg]
     except KeyboardInterrupt:
