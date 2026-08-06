@@ -1,4 +1,8 @@
-# ADR-0005: Hydra/AppConfig reemplaza a los CLIs argparse-puros en live/paper trading
+# [SUPERSEDED] ADR-0005: Hydra/AppConfig reemplaza a los CLIs argparse-puros en live/paper trading
+
+> **SUPERSEDED (2026-08-06).** Serie heredada colisionaba con `decisions/ADR-0005`
+> (`decisions/ADR-0005-trading-engine-internal-external-split.md`). Renombrado a `SUPERSEDED-0005`;
+> único SSOT activo: `docs/architecture/decisions/` (PLAN §13 N3). Registro histórico.
 
 > **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
 > `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).

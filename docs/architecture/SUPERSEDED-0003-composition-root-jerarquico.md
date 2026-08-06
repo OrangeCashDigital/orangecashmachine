@@ -1,4 +1,11 @@
-# ADR-0003: Composition Root jerárquico en OCM
+# [SUPERSEDED] ADR-0003: Composition Root jerárquico en OCM
+
+> **SUPERSEDED (2026-08-06).** Este documento de la serie heredada colisionaba con la serie
+> canónica `docs/architecture/decisions/ADR-NNNN-*`. Fue renombrado a `SUPERSEDED-0003`
+> para que el SSOT activo de ADRs sea únicamente `docs/architecture/decisions/` (ver
+> `PLAN-Maestro-Ingenieria.md §13 N3`). La serie activa correspondiente:
+> `decisions/ADR-0003-trading-composition-root-narrow-constructor.md`.
+> Se conserva como registro histórico; no usar su numeración para referencias nuevas.
 
 > **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
 > `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).

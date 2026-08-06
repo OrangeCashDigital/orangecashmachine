@@ -1,4 +1,8 @@
-# ADR-0004: RebalanceService como capacidad adelantada del bounded context portfolio
+# [SUPERSEDED] ADR-0004: RebalanceService como capacidad adelantada del bounded context portfolio
+
+> **SUPERSEDED (2026-08-06).** Serie heredada colisionaba con `decisions/ADR-0004`
+> (`decisions/ADR-0004-bc47-market-data-import-boundary.md`). Renombrado a `SUPERSEDED-0004`;
+> único SSOT activo: `docs/architecture/decisions/` (PLAN §13 N3). Registro histórico.
 
 > **SERIE HEREDADA (deprecada 2026-08-03).** La serie canónica de ADRs es
 > `docs/architecture/decisions/ADR-NNNN-*` (ver `GOVERNANCE.md §3` y §9).
