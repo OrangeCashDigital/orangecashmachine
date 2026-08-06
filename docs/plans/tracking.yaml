@@ -103,6 +103,39 @@ reglas:
     mecanismo: "AST guard tipo BC-09 sobre subprocess"
     backtest: pendiente
     activada_en_ci: false
+  # R12–R16 provienen de la serie AUDIT-apps-2026-08-03 (H1/H4/H6/H8/H12), distinta
+  # de INFORME-2026-08-06#H-01…H-22. El prefijo desambiguado evita confluir series
+  # (ver ADR-0015 y BLINDAJE-APPS-2026-08-06.md §2).
+  - id: R12
+    hallazgo: "AUDIT-apps-2026-08-03#H1"
+    descripcion: "`use_cases` tocan argparse/Namespace/constructores de config (el Namespace muere en el borde CLI)"
+    mecanismo: "Guard AST en app/use_cases + BC-53 (forbidden app.use_cases → argparse)"
+    backtest: ok
+    activada_en_ci: true
+  - id: R13
+    hallazgo: "AUDIT-apps-2026-08-03#H4"
+    descripcion: "`getattr` con default en use_cases (config tipada es la única fuente de verdad)"
+    mecanismo: "Guard AST: getattr con default prohibido en app/use_cases"
+    backtest: ok
+    activada_en_ci: true
+  - id: R14
+    hallazgo: "AUDIT-apps-2026-08-03#H8"
+    descripcion: "scaffolding de CLI duplicado fuera de app/cli/_bootstrap.py (sigterm, logger.remove, helpers, main() god)"
+    mecanismo: "Guard AST de _bootstrap (una sola fuente + must-import + complejidad) + BC-54 (forbidden app.use_cases → app.cli)"
+    backtest: ok
+    activada_en_ci: true
+  - id: R15
+    hallazgo: "AUDIT-apps-2026-08-03#H12"
+    descripcion: "CycleRunResult redefinido (LiveRunResult/PaperRunResult duplicados)"
+    mecanismo: "Guard AST: un único CycleRunResult en app/use_cases/run_result.py"
+    backtest: ok
+    activada_en_ci: true
+  - id: R16
+    hallazgo: "AUDIT-apps-2026-08-03#H6"
+    descripcion: "SILENT_PATHS fuera de api/middleware/__init__.py y probes no excluidas antes de procesar"
+    mecanismo: "Guard AST: SILENT_PATHS SSOT en api/middleware/__init__.py + exclusión temprana en middleware"
+    backtest: ok
+    activada_en_ci: true
 
 # ------------------------------------------------------------------
 # Backlog maestro de hallazgos (ver PLAN-Maestro-Ingenieria.md §7)
