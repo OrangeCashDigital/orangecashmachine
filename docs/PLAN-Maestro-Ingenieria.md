@@ -6,6 +6,11 @@
 - **Rol:** fuente de verdad (SSOT) para la evolución técnica del proyecto.
 - **Alineado con:** `docs/audits/2026-08-auditoria-integral.md` — fotografía histórica del estado en commit `dcd1741` (2026-08-06 00:08:04 -0500), **inmutable**.
 - **Datos operativos:** `docs/plans/tracking.yaml` (v2) — fuente de verdad **por máquina**; este documento es el **mapa** que explica cómo funciona el sistema, no el tracker.
+
+> ## ⚖️ Regla suprema (preamble)
+> **No se implementará ninguna funcionalidad nueva si degrada cualquiera de los artefactos normativos del proyecto.**
+> Orden inviolable del cambio: `Plan → Tracking → ADR → Código → Tests → CI → Release`. Un paso nunca se salta; los artefactos normativos son la Constitución (ver §13 · §14).
+
 - **Métricas baseline (remedidas en vivo en F0, 2026-08-06):** 882 tests (suite unit, integration excluidas) / 43 % cobertura / **49 contratos BC** / 25 constantes de tópicos Kafka / 52 237 LOC Python. El baseline "47 contratos" se corrigió a "49" **por BC-53 y BC-54** (trazabilidad del blindaje de `apps/`, serie INFORME-2026-08-06) — es trazabilidad, no un error previo; el `mediciones_f0` del tracking registra el delta 47→49.
 
 ---
@@ -94,43 +99,93 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 > Cada fase se cierra cuando su **criterio de salida** es verificable por comando. Un hallazgo crítico puede adelantarse a F1 siempre que lleve su test de regresión y actualice el yaml.
 
-### F0 — Verificación de la auditoría (2–3 días)
+### F0 — Verificación de la auditoría (2–3 días) ✅ Cerrada (2026-08-06)
 
 - **Objetivo:** confirmar/descartar cada hallazgo de `docs/audits/2026-08-auditoria-integral.md` con re-lectura; medir métricas en vivo (cobertura por módulo, conteos) para fijar umbrales **después**, nunca antes.
 - **DOR:** informe base + repo en `dcd1741`.
 - **Entregables:** tracking.yaml v2 con `estado_auditoria` decidido para todos; mediciones en vivo registradas (con comando y hash).
 - **DOD:** 100 % de hallazgos con estado de auditoría; los `PARCIALMENTE_CONFIRMADO` resueltos o marcados como "requiere F0 para decidirse".
 - **Criterio de salida (verificable):** `python -c "import yaml; d=yaml.safe_load(open('docs/plans/tracking.yaml')); assert all(h['estado_auditoria'] in {'CONFIRMADO','NO_CONFIRMADO','REFORMULADO'} for h in d['hallazgos'])"`.
+- **Cierre:**
+  - **22/22** hallazgos clasificados (`estado_auditoria` en enum; `PARCIALMENTE_CONFIRMADO = 0`); T1–T3 resueltos (H-09, H-15, H-16 → `CONFIRMADO`).
+  - **Mediciones F0** registradas en `tracking` (`mediciones_f0`, hash `eaca97a`).
+  - **Baseline vivo:** 900 tests · **44 %** cobertura · **49 contratos BC** · 25 tópicos · 52 237 LOC. Gate F0 **22/22**.
 
-### F1 — Bloquear lo que causa pérdidas (≈1 semana)
+### F1 — Bloquear lo que causa pérdidas (≈1 semana) ✅ Cerrada (2026-08-06)
 
 - **Objetivo:** eliminar caminos que con capital real causan daño (H-01, H-02, H-03, H-06, H-14 parcial).
 - **DOR:** F0 cerrada; fixes de crítica con test de regresión.
 - **Entregables:** reglas R1–R4 con `backtest: ok` y `activada_en_ci: true`; guard de arranque live; snapshot sin secrets; `pipeline_factory` corrige + smoke test.
 - **DOD:** `uv run live` no arranca con stub; `assemble()` construye ohlcv+trades+derivatives; round-trip BUY→SELL con contador correcto; snapshot sin `SecretStr` en claro; CI bloquea R1–R4.
 - **Criterio de salida:** `scripts/check_production_gates.py` → G1–G4 PASS.
+- **Cierre (B-01…B-05 HECHO):**
+  - **B-01/H-01** guard fail-closed en `assemble_live` (LiveExecutor `IS_STUB`).
+  - **B-02/H-02** `pipeline_factory` crea catálogo Iceberg + guard R2.
+  - **B-03/H-03** semántica held-position en OMS (`_fill` cierra en SELL) + round-trip R3.
+  - **B-04/H-06** bloqueo `--cfg` en producción + redacción de secrets en snapshot (R4).
+  - **B-05/H-14** `.dockerignore`, auth kafka-ui, binds loopback.
+  - Gate F1: ruff ✓ · import-linter **49/49** ✓ · pytest **900 passed** ✓ · mypy ✓.
 
-### F2 — Blindar calidad (1–2 semanas)
+### F2 — Blindar calidad (F2.0 → F2.4, 1–2 semanas)
 
-- **Objetivo:** calidad automática y gateada (H-04, H-05, H-07, H-12, H-20, H-10).
-- **DOR:** F1 cerrada; CI verde en `main`.
-- **Entregables:** `fail_under` sobre medición en vivo; bandit en CI+pre-commit; mypy sobre todos los paquetes; Docker endurecido (`.dockerignore`, HEALTHCHECK, binds); test de paridad config; reglas R5–R8 activas.
-- **DOD:** `fail_under > 0`; bandit `-ll` en CI sin BLOCKER; mypy completo verde (o fallo documentado); `docker build` sin `.env` horneado; paridad config verde.
+> F2 se subdivide en **F2.0–F2.4** para aislar frentes reversibles. Por la regla suprema (§14), **todo `main` debe pasar el Engineering Health Check (F2.0)** antes de ejecutar F2.1–F2.4. `tracking.yaml` guarda `fase` por issue (SS del backlog); este documento son mapas y no replica el backlog.
+
+#### F2.0 — Engineering Health Check (gate de entrada)
+
+- **Objetivo:** validar automáticamente la **coherencia** entre Plan Maestro ↔ `tracking` ↔ ADR ↔ contratos de arquitectura ↔ CI, antes de cada ejecución del resto de F2.
+- **Entregables:** job CI `engineering-health` que comprueba en una sola pasada:
+  1. YAML de `tracking.yaml` válido; enums del propio tracker; `fase` coherente con `estado`.
+  2. Artefactos normativos: ADRs activos referenciados; contratos de arquitectura **>= 49** en vivo.
+  3. No-vacío de `lint-imports`: salida **sin** `"Could not find…"` y conteo de contratos exigido (≥49).
+  4. CI mapea a reglas: cada gate en `ocm-ci.yml` corresponde a una regla con `activada_en_ci: true`.
+- **DOD:** `engineering-health` devuelve `PASS` **solo** cuando Plan↔tracking↔ADR↔contratos↔CI están alineados; `FAIL` bloquea el resto.
+- **Criterio de salida:** job verde en CI, respaldado por un primer check de prueba en `tests/` y tracking sincronizado.
+
+#### F2.1 — Blindaje de calidad (contract-linter no vacuo + gates)
+
+- **Objetivo:** calidad automática y gateada (H-04, H-05, H-07, H-12, H-20, H-10); en particular **no-vacuo** el `contract-linter`: hoy un `--config` roto devuelve **salida 0** (falso verde).
+- **DOR:** F2.0 verde; F1 cerrada; CI verde en `main`.
+- **Entregables:** `fail_under` sobre medición en vivo; bandit en CI+pre-commit; Docker endurecido (`.dockerignore`, HEALTHCHECK, bindings); paridad de config; reglas R5–R8 activas.
+- **DOD:** `fail_under > 0`; bandit `-ll` sin BLOCKER; mypy completo verde (o fallo documentado); `docker build` sin `.env` horneado; paridad config verde; `lint-imports` falla si el conteo de contratos baja de `49`.
 - **Criterio de salida:** G5–G9 PASS; ADR-0020 (Production Gate como gate de release) aceptada.
 
-### F3 — Completar funcionalidades (1–2 meses)
+#### F2.2 — Gobernanza documental (ADR única SSOT)
 
-- **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22).
+- **Objetivo:** eliminar la colisión real entre `docs/architecture/0003-0005-*.md` (legacy) y `docs/architecture/decisions/ADR-0003…` (serie activa).
+- **DOR:** F2.0 verde; F2.1 avanzada.
+- **Entregables:** renombrar los legacy a `SUPERSEDED-00xx-*.md` con nota de sustitución por la ADR activa.
+- **DOD:** `docs/architecture/decisions/` como único SSOT activo; cero legacy activos.
+- **Criterio de salida:** legacy cerrados (0 colisión); Plan↔tracking coherentes.
+
+#### F2.3 — Contratos Kafka (8 schemas, de 0 % a >0 %)
+
+- **Objetivo:** elevar cobertura real de los 8 esquemas en `shared/kafka/schemas/` (liquidations, ohlcv, oi, orderbook, orders, positions, signals, trades) desde **0 %**.
+- **DOR:** ADR-0013 (modelo de ingestión) aceptada; F2.2 cerrada.
+- **Entregables:** tests parametrizados por esquema — round-trip serialización/deserialización, campos, tópico.
+- **DOD:** cada esquema con casos positivos+negativos; cobertura de schemas > 0 % medida.
+- **Criterio de salida:** los 8 tipos con tests; cobertura > 0.
+
+#### F2.4 — Engineering health / alineación de backlog
+
+- **Objetivo:** registrar la salud del proyecto en el SSOT operativo (`tracking.yaml`), candidato de los ítems #2/#3 de la nueva auditoría.
+- **DOR:** F2.0 cerrado.
+- **Entregables:** bloque `Engineering Health` en tracking (contratos 49, snapshot, comandos) sin duplicar el mapa del Plan; nota que documenta los `return True` benignos en OMS/`rebalance`.
+- **DOD:** `tracking-consistency` valida el bloque en el snapshot; Plan↔tracking coherentes.
+- **Criterio de salida:** job `tracking-consistency` verde (SSOT); G5/G6 documentados.
+
+### F3 — Completar funcionalidades (trading live, 1–2 meses)
+
+- **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
 - **DOR:** F2 cerrada; **ADR-0016** aceptada; **ADR-0011** decidida.
 - **Entregables:** `LiveExecutor._submit()` con `CCXTAdapter.create_order` + reconciliación de fills; `RebalanceService.rebalance()` cableado; strategies a polars; reglas R9–R10.
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
 
-### F4 — Madurez de producción (2–4 meses)
+### F4 — Madurez de producción / Observabilidad (2–4 meses)
 
-- **Objetivo:** consistencia de estado, trazabilidad, semántica de entrega (H-08, H-09, H-11, H-15, H-16, H-17, H-18).
+- **Objetivo:** consistencia de estado, trazabilidad, semántica de entrega (H-08, H-09, H-11, H-15, H-16, H-17, H-18) + **Observabilidad** (OTel + request-id; único SS de posiciones).
 - **DOR:** F3 cerrada; ADR-0017, ADR-0018 en revisión.
-- **Entregables:** estado de posición único (PortfolioService); UUID completo; OTel + request-id; evaluación/implementación Schema Registry; exactly-once (dedup + reintento); dominio sin `subprocess`; `RiskGate` alineado.
+- **Entregables:** estado de posición única (PortfolioService); UUID completo; OTel + request-id; evaluación/implementación Schema Registry; exactly-once (dedup + reintento); dominio sin `subprocess`; `RiskGate` alineado.
 - **DOD:** una sola fuente de verdad de posiciones; traces end-to-end; schema evolution backward-probada; dedup con test de reintento; dominio 100 % puro.
 - **Criterio de salida:** Production Gate release PASS completo.
 
@@ -139,7 +194,22 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Objetivo:** millones de eventos/día, multiworker (ADR-0019, ADR-0020, H-13 DuckDB).
 - **DOR:** F4 cerrada; ADR-0019/0020 en revisión.
 - **Entregables:** catalog Iceberg remoto (REST/Nessie/MinIO); streaming dedicado (Dagster/Flink) para Silver→Gold; decisión DuckDB (adoptar con ADR o eliminar).
-- **DOD:** catalog remoto en staging; pipelines fuera del proceso de feed; benchmarks documentados.
+- **DOD:** catalog remoto en staging; pipelines fuera del feed; benchmarks documentados.
+
+### Mapa Fase ↔ Hallazgos (gobernanza; SSOT de estado en `tracking.yaml`)
+
+> `tracking.yaml` mantiene su `fase` por hallazgo (SS backlog). Este mapa indica qué hallazgos/backlog se resuelven en cada fase del Plan — no reasigna `fase`; es informativo.
+
+| Fase | Hallazgos / Backlog | ADR / reglas | Nota |
+|---|---|---|---|
+| F2.0 | — | `engineering-health` (nueva) | gate previo |
+| F2.1 | B-06, B-07, B-10 (H-04, H-05, H-07, H-12, H-20, H-10) | ADR-0020, R5–R8 | contratos no-vacuos |
+| F2.2 | B-13 (legacy ADR 0003–0005) | ADR-0003..0015 SSOT | renaming |
+| F2.3 | B-18 (H-15) | ADR-0013, ADR-0018 | 8 schemas Kafka |
+| F2.4 | B-20, B-21 | — | tracking-consistency |
+| F3 | B-12, B-01, B-03 (H-01, H-19, H-22) | ADR-0016 | trading live |
+| F4 | B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0017, ADR-0018 | obs/estado |
+| F5 | B-14, B-22, H-13 | ADR-0019, ADR-0020 | escala |
 
 ---
 
@@ -173,9 +243,9 @@ Cada eslabón responde a las 4 preguntas del sistema:
 |---|---|---|---|---|
 | ADR-0016 | LiveExecutor real + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 (guard en F1) | H-01, H-03, B-01, B-03, B-12 | Verificar al crear (libre tras ADR-0015 real) |
 | ADR-0017 | Unificación del estado de posiciones | F4 | H-09, B-15 | Verificar al crear |
-| ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F4 | H-15, B-18 | Verificar al crear |
+| ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F2.3 / F4 | H-15, B-18 | Verificar al crear |
 | ADR-0019 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear |
-| ADR-0020 | Production Gate como gate de release | F2 | B-06, B-07 | Verificar al crear |
+| ADR-0020 | Production Gate como gate de release | F2.1 | B-06, B-07 | Verificar al crear |
 | — | *(semántica `_open_positions` cubierta por ADR-0016)* | — | H-03, B-03 | — |
 
 ---
@@ -309,10 +379,51 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 
 ---
 
+## 13. Artefactos normativos (Constitución)
+
+> Toda evolución técnica debe respetar estos artefactos. Son la **Constitución** que invoca la Regla suprema (preamble). Cada uno tiene un rol y una ubicación única (SSOT). Al degradar cualquiera de ellos, la funcionalidad nueva queda fuera de `main`.
+
+| # | Artefacto | Rol | Ubicación | Nota |
+|---|---|---|---|---|
+| N1 | Plan Maestro | Especificación normativa del cambio; fases + DOR/DOD | `docs/PLAN-Maestro-Ingenieria.md` | SSOT documental |
+| N2 | tracking.yaml | SSOT operativo del backlog y hallazgos | `docs/plans/tracking.yaml` | SSOT de `fase`/`estado` |
+| N3 | ADRs | Decisiones de arquitectura (activo) | `docs/architecture/decisions/ADR-*.md` | único SSOT, sin legacy |
+| N4 | Contratos de arquitectura | Boundaries/capas (BC-NN) | `architecture/importlinter.toml` | gate CI, ≥ 49 en vivo |
+| N5 | Contratos de código | Guards AST / invariantes | `tests/architecture/` | gate CI |
+| N6 | CI | Puerta del cambio | `.github/workflows/ocm-ci.yml` | fail-fast |
+| N7 | Auditorías | Fotografías históricas (inmutables) | `docs/audits/` | no se editan |
+
+### Jerarquía de autoridad (decreciente)
+
+`Plan (N1) → Tracking (N2) → ADR (N3) → Contratos (N4/N5) → Código → Tests → CI → Release`
+
+> Cuando N1 y N2 divergen, **N2 gana** para el estado del backlog; cuando N3 y el código divergen, gana N3 (y se abre un hallazgo). La coherencia entre todos es exactamente lo que valida el **Engineering Health Check (F2.0)**.
+
+---
+
+## 14. Ingeniería Continua (Continuous Engineering)
+
+> Workflow por defecto para todo cambio. Respeta la cadena maestra §2 y siempre termina registrado en `tracking.yaml`.
+
+1. **Hallazgo** — defecto/oportunidad registrado en `tracking.hallazgos` con `estado_auditoria` y evidencia.
+2. **Tracker** — entra al backlog (ID `B-NN`, `fase`, `prioridad`).
+3. **RFC/ADR** — si es decisión, crear o actualizar el ADR (guard de numeración §5).
+4. **Implementación** — commits atómicos (una regla = test→fix→docs, §8).
+5. **Tests** — regresión positivo+negativo en el mismo PR.
+6. **CI** — gates exigidos (import-linter, mypy, bandit, tracking-consistency, health).
+7. **Engineering Health Check** — (F2.0) valida coherencia Plan↔tracking↔ADR↔contratos↔CI.
+8. **Release** — merge a `main`; gate release opcional (Production Gate §6).
+9. **Cierre** — `estado: HECHO` con `fecha_cierre` y evidencia de cheque.
+
+> Cualquier funcionalidad nueva que no pueda pasar este flujo **no se implementa** (regla suprema). Ningún paso se salta.
+
+---
+
 ## 12. Registro de cambios
 
 | Fecha | Commit | Cambio |
 |---|---|---|
 | 2026-08-06 | (baseline `dcd1741`) | Creación como especificación SSOT del sistema de ingeniería; tracking.yaml v2; verificación de numeración ADR — ADR-0015 quedó ocupado por el blindaje de apps (`a48f28e`), siguiente libre: ADR-0016 |
+| 2026-08-06 | (F1 cerrada) | Cierre F0 (22/22 clasificados) y F1 (B-01…B-05 HECHO); reestructura §4 en F2.0–F2.4 (Engineering Health Check), F3 trading-only, F4 Observabilidad, F5 Escala; **Regla suprema** (preamble); §§13–14 Artefactos Normativos + Ingeniería Continua; **Mapa Fase ↔ Hallazgos**; tracking.yaml se mantiene SSOT de `fase` (sin reasignar hallazgos) |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
