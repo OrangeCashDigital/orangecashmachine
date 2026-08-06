@@ -208,7 +208,7 @@ uv run live --capital 10000 --symbol BTC/USDT --timeframe 1h \
 
 > **Estado actual (honestidad con el repositorio):** el modo `live` **todavía no envía
 > órdenes reales**. `LiveExecutor` es un *stub* que simula el envío (no hay conexión CCXT
-> activa todavía) — ver hallazgo **H-01** en [`INFORME-Auditoria.md`](INFORME-Auditoria.md)
+> activa todavía) — ver hallazgo **H-01** en [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md)
 > y el roadmap en [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md)
 > (fases F1/F3). Esta sección describe la **visión**; el estado vigente se consulta siempre
 > en esas fuentes. La decisión de arquitectura asociada (LiveExecutor real + reconciliación
@@ -312,7 +312,7 @@ Estos principios están formalizados en
 **Limitaciones conocidas** (se resuelven en el roadmap, no son defectos del README):
 
 - El modo `live` aún usa un **LiveExecutor stub** que no envía órdenes reales (ver
-  [`INFORME-Auditoria.md`](INFORME-Auditoria.md) H-01 y el roadmap de la fase F3 en
+  [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md) H-01 y el roadmap de la fase F3 en
   [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md)).
 - El **estado real y la trazabilidad** de cada hallazgo/pendiente se mantienen en
   [`docs/plans/tracking.yaml`](docs/plans/tracking.yaml) (fuente operativa por máquina);
@@ -331,7 +331,7 @@ Estos principios están formalizados en
 | Recurso                                   | Qué encontrarás                                                        |
 |-------------------------------------------|------------------------------------------------------------------------|
 | [`docs/DOMAIN.md`](docs/DOMAIN.md)        | Guía por bounded context, deuda técnica, camino de evolución           |
-| [`INFORME-Auditoria.md`](INFORME-Auditoria.md) | Auditoría técnica integral (fotografía del estado en `dcd1741`, 2026-08-06) |
+| [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md) | Auditoría técnica integral (fotografía del estado en `dcd1741`, 2026-08-06) |
 | [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md) | **SSOT de la evolución técnica**: fases F0–F5, reglas auto-defendibles, Production Gate, scorecard |
 | [`docs/plans/tracking.yaml`](docs/plans/tracking.yaml) | **Fuente operativa de estado y trazabilidad** del backlog (por máquina); el Plan Maestro es la especificación que lo gobierna |
 | [`docs/architecture/`](docs/architecture/) | Serie heredada 0000–0005 (principios, Kappa, Composition Root, Hydra) |

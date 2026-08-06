@@ -2,7 +2,7 @@ schema_version: 2
 baseline:
   commit: dcd1741
   fecha: "2026-08-06"
-  informe_base: INFORME-Auditoria.md
+  informe_base: docs/audits/2026-08-auditoria-integral.md
   plan_maestro: PLAN-Maestro-Ingenieria.md
 
 # =============================================================================
@@ -158,7 +158,7 @@ hallazgos:
     riesgo_residual: "Operacional: si se re-habilita antes de F3, reaparece el riesgo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-01"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01"}
       backlog: {estado: HECHO, referencia: "B-01 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0016 (LiveExecutor real)"}
       implementacion: {estado: PENDIENTE, referencia: null}
@@ -180,7 +180,7 @@ hallazgos:
     riesgo_residual: "Ninguno si el smoke test es verde"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-02"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-02"}
       backlog: {estado: HECHO, referencia: "B-02 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "fix pipeline_factory.py:49"}
@@ -202,7 +202,7 @@ hallazgos:
     riesgo_residual: "Medio: toca OMS; requiere decisión de semántica"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-03"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-03"}
       backlog: {estado: HECHO, referencia: "B-03 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "semántica _open_positions en ADR-0016 (LiveExecutor real)"}
       implementacion: {estado: PENDIENTE, referencia: "record_close en _fill"}
@@ -224,7 +224,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-06"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-06"}
       backlog: {estado: HECHO, referencia: "B-04 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "serializador redactado"}
@@ -247,7 +247,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-14"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-14"}
       backlog: {estado: HECHO, referencia: "B-05 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: ".dockerignore, compose, Dockerfile"}
@@ -269,7 +269,7 @@ hallazgos:
     riesgo_residual: "Bajo: umbral se fija sobre medición real, no a ciegas"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-04"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-04"}
       backlog: {estado: HECHO, referencia: "B-06 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "fail_under en pyproject"}
@@ -291,7 +291,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-07"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-07"}
       backlog: {estado: HECHO, referencia: "B-07 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "job security en CI"}
@@ -313,7 +313,7 @@ hallazgos:
     riesgo_residual: "Medio: puede requerir limpieza de tipado amplia"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-12"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-12"}
       backlog: {estado: HECHO, referencia: "B-08 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "mypy completo"}
@@ -335,7 +335,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-05"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-05"}
       backlog: {estado: HECHO, referencia: "B-09 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "unificar listas"}
@@ -357,7 +357,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-20"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-20"}
       backlog: {estado: HECHO, referencia: "B-10 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "script de conteo"}
@@ -379,7 +379,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-10"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-10"}
       backlog: {estado: HECHO, referencia: "B-11 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "eliminar/mover stub"}
@@ -402,7 +402,7 @@ hallazgos:
     riesgo_residual: "Alto: capital real"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-01 (resolución)"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01 (resolución)"}
       backlog: {estado: HECHO, referencia: "B-12 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0016 (LiveExecutor real)"}
       implementacion: {estado: PENDIENTE, referencia: "LiveExecutor._submit real"}
@@ -424,7 +424,7 @@ hallazgos:
     riesgo_residual: "Medio"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-19"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-19"}
       backlog: {estado: HECHO, referencia: "B-13 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0011 (cerrar)"}
       implementacion: {estado: PENDIENTE, referencia: "cablear rebalance"}
@@ -446,7 +446,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-22"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-22"}
       backlog: {estado: HECHO, referencia: "B-14 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "migrar strategies a polars"}
@@ -468,7 +468,7 @@ hallazgos:
     riesgo_residual: "Medio: migración de estado"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-09 — requiere verificación en F0"}
+      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "docs/audits/2026-08-auditoria-integral.md H-09 — requiere verificación en F0"}
       backlog: {estado: HECHO, referencia: "B-15 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0017"}
       implementacion: {estado: PENDIENTE, referencia: "unificar en PortfolioService"}
@@ -490,7 +490,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-08"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-08"}
       backlog: {estado: HECHO, referencia: "B-16 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "UUID completo"}
@@ -512,7 +512,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-18"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-18"}
       backlog: {estado: HECHO, referencia: "B-17 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "OTel + request-id"}
@@ -534,7 +534,7 @@ hallazgos:
     riesgo_residual: "Medio: formato de cable"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-15 — requiere verificación en F0"}
+      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "docs/audits/2026-08-auditoria-integral.md H-15 — requiere verificación en F0"}
       backlog: {estado: HECHO, referencia: "B-18 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0018"}
       implementacion: {estado: PENDIENTE, referencia: "Avro + registry"}
@@ -556,7 +556,7 @@ hallazgos:
     riesgo_residual: "Medio"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-16 — requiere verificación en F0"}
+      hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "docs/audits/2026-08-auditoria-integral.md H-16 — requiere verificación en F0"}
       backlog: {estado: HECHO, referencia: "B-19 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "dedup Bronze"}
@@ -578,7 +578,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-11"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-11"}
       backlog: {estado: HECHO, referencia: "B-20 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "inyectar git-hash"}
@@ -600,7 +600,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-17"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-17"}
       backlog: {estado: HECHO, referencia: "B-21 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
       implementacion: {estado: PENDIENTE, referencia: "alinear/eliminar RiskGate"}
@@ -622,7 +622,7 @@ hallazgos:
     riesgo_residual: "Bajo"
     fecha_cierre: null
     cadena:
-      hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-13"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-13"}
       backlog: {estado: HECHO, referencia: "B-22 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR nueva en F5"}
       implementacion: {estado: PENDIENTE, referencia: "adoptar o eliminar"}

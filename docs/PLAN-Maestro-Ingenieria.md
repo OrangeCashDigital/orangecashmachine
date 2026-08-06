@@ -4,7 +4,7 @@
 
 - **Estado:** Activo — documento operativo vivo (no un PDF). El historial se preserva en Git, no en versiones de archivo.
 - **Rol:** fuente de verdad (SSOT) para la evolución técnica del proyecto.
-- **Alineado con:** `INFORME-Auditoria.md` (raíz) — fotografía histórica del estado en commit `dcd1741` (2026-08-06 00:08:04 -0500), **inmutable**.
+- **Alineado con:** `docs/audits/2026-08-auditoria-integral.md` — fotografía histórica del estado en commit `dcd1741` (2026-08-06 00:08:04 -0500), **inmutable**.
 - **Datos operativos:** `docs/plans/tracking.yaml` (v2) — fuente de verdad **por máquina**; este documento es el **mapa** que explica cómo funciona el sistema, no el tracker.
 - **Métricas baseline (medidas en vivo 2026-08-06, no stale):** 844 tests / 43 % cobertura / 47 contratos BC / 44 constantes de tópicos Kafka / 52 429 LOC Python.
 
@@ -58,7 +58,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 > Usamos **B-03 / H-03** (drift del contador de riesgo) como el ejemplo canónico. Demuestra cómo se ve la cadena en la vida real.
 
-1. **Hallazgo** — `INFORME-Auditoria.md` H-03: `packages/trading/execution/oms.py:172` llama `record_open()` en todo `submit()`; `record_close()` solo en `cancel()` (`:217`) y `_reject()` (`:308`); `_fill()` (`:270-289`) no decrementa → un ciclo BUY→SELL deja `_open_positions` inflado. **Evidencia:** lectura directa de `oms.py` y `risk/manager.py:126-139`. `estado_auditoria: CONFIRMADO`.
+1. **Hallazgo** — `docs/audits/2026-08-auditoria-integral.md` H-03: `packages/trading/execution/oms.py:172` llama `record_open()` en todo `submit()`; `record_close()` solo en `cancel()` (`:217`) y `_reject()` (`:308`); `_fill()` (`:270-289`) no decrementa → un ciclo BUY→SELL deja `_open_positions` inflado. **Evidencia:** lectura directa de `oms.py` y `risk/manager.py:126-139`. `estado_auditoria: CONFIRMADO`.
 2. **Backlog** — Entrada `B-03` en tracking.yaml v2: fase F1, prioridad CRÍTICA, estado `PENDIENTE`.
 3. **ADR** — Revisión: ¿decisión de arquitectura? La semántica de `_open_positions` ("órdenes activas" vs "posiciones reales") **sí** es decisión → se documenta. **Guard ejecutado:** `ls docs/architecture/decisions/` → ADR-0015 ya está ocupado por el blindaje de apps, así que el siguiente libre es **ADR-0016** (ver §5). La decisión queda **dentro de ADR-0016** (tema: LiveExecutor real + reconciliación de fills + semántica del contador de posiciones), que agrupa el ciclo orden→fill→estado (§5, §7).
 4. **Implementación** — Commits atómicos: (a) `test(rules): R3 — round-trip BUY→SELL aserta contador` (rojo sobre el bug); (b) `fix(trading): record_close en flujo de fill` (verde); (c) `docs(plans): B-03 → EN_CURSO`.
@@ -96,7 +96,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 ### F0 — Verificación de la auditoría (2–3 días)
 
-- **Objetivo:** confirmar/descartar cada hallazgo de `INFORME-Auditoria.md` con re-lectura; medir métricas en vivo (cobertura por módulo, conteos) para fijar umbrales **después**, nunca antes.
+- **Objetivo:** confirmar/descartar cada hallazgo de `docs/audits/2026-08-auditoria-integral.md` con re-lectura; medir métricas en vivo (cobertura por módulo, conteos) para fijar umbrales **después**, nunca antes.
 - **DOR:** informe base + repo en `dcd1741`.
 - **Entregables:** tracking.yaml v2 con `estado_auditoria` decidido para todos; mediciones en vivo registradas (con comando y hash).
 - **DOD:** 100 % de hallazgos con estado de auditoría; los `PARCIALMENTE_CONFIRMADO` resueltos o marcados como "requiere F0 para decidirse".
@@ -215,9 +215,9 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 | Artefacto | Contenido | Rol |
 |---|---|---|
-| `docs/plans/tracking.yaml` | Estado real de los 22 hallazgos (backlog + cadena de trazabilidad completa) y las 11 reglas auto-defendibles (backtest + `activada_en_ci`) | **SSOT operativo** |
+| `docs/plans/tracking.yaml` | Estado real de los 22 hallazgos (backlog + cadena de trazabilidad completa) y las 16 reglas auto-defendibles (backtest + `activada_en_ci`) | **SSOT operativo** |
 | Este documento (§2) | La **cadena** (cómo funciona el backlog) y **un ejemplo transversal** (B-03) | Norma/jilosófulo |
-| `INFORME-Auditoria.md` | La **evidencia original** de cada hallazgo (fotografía inmutable de `dcd1741`) | Historial |
+| `docs/audits/2026-08-auditoria-integral.md` | La **evidencia original** de cada hallazgo (fotografía inmutable de `dcd1741`) | Historial |
 
 ### Vista conceptual del backlog (cómo funciona, no qué hay dentro)
 
@@ -261,7 +261,7 @@ B-NN:
 
 ## 9. Scorecard evolutivo (estado → objetivo → acciones → evidencia)
 
-> **Principios 3, 9, 10.** Los puntajes se recalculan al cierre de cada fase (no se congelan). Cada punto ganado exige **evidencia de cheque** (qué gate/regla lo demuestra). Baseline: `INFORME-Auditoria.md` §7 (2026-08-06).
+> **Principios 3, 9, 10.** Los puntajes se recalculan al cierre de cada fase (no se congelan). Cada punto ganado exige **evidencia de cheque** (qué gate/regla lo demuestra). Baseline: `docs/audits/2026-08-auditoria-integral.md` §7 (2026-08-06).
 
 | Eje | Actual | Objetivo | Acciones (mapeo) | Evidencia de cada punto ganado |
 |---|---|---|---|---|

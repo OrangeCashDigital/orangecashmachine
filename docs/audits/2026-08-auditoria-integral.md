@@ -1,4 +1,4 @@
-# INFORME-Auditoria.md
+# Auditoría técnica integral (INFORME)
 
 **OrangeCashMachine — Auditoría técnica integral (enfoque Staff/Principal Engineer y CTO)**
 
