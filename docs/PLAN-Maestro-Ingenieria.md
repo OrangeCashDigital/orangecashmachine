@@ -60,7 +60,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 1. **Hallazgo** — `INFORME-Auditoria.md` H-03: `packages/trading/execution/oms.py:172` llama `record_open()` en todo `submit()`; `record_close()` solo en `cancel()` (`:217`) y `_reject()` (`:308`); `_fill()` (`:270-289`) no decrementa → un ciclo BUY→SELL deja `_open_positions` inflado. **Evidencia:** lectura directa de `oms.py` y `risk/manager.py:126-139`. `estado_auditoria: CONFIRMADO`.
 2. **Backlog** — Entrada `B-03` en tracking.yaml v2: fase F1, prioridad CRÍTICA, estado `PENDIENTE`.
-3. **ADR** — Revisión: ¿decisión de arquitectura? La semántica de `_open_positions` ("órdenes activas" vs "posiciones reales") **sí** es decisión → se documenta. **Guard ejecutado:** `ls docs/architecture/decisions/` → ADR-0015 es el siguiente libre. La decisión queda **dentro de ADR-0015** (tema ampliado: LiveExecutor real + reconciliación de fills + semántica del contador de posiciones), que ya agrupa el ciclo orden→fill→estado (§5, §7).
+3. **ADR** — Revisión: ¿decisión de arquitectura? La semántica de `_open_positions` ("órdenes activas" vs "posiciones reales") **sí** es decisión → se documenta. **Guard ejecutado:** `ls docs/architecture/decisions/` → ADR-0015 ya está ocupado por el blindaje de apps, así que el siguiente libre es **ADR-0016** (ver §5). La decisión queda **dentro de ADR-0016** (tema: LiveExecutor real + reconciliación de fills + semántica del contador de posiciones), que agrupa el ciclo orden→fill→estado (§5, §7).
 4. **Implementación** — Commits atómicos: (a) `test(rules): R3 — round-trip BUY→SELL aserta contador` (rojo sobre el bug); (b) `fix(trading): record_close en flujo de fill` (verde); (c) `docs(plans): B-03 → EN_CURSO`.
 5. **Tests** — Positivo: round-trip con contador incorrecto → rojo. Negativo: tras el fix, contador correcto → verde.
 6. **CI** — La regla R3 (AST guard) se activa en CI **solo** cuando `backtest: ok` en el yaml. CI fail-fast bloquea merges con la regla roja.
@@ -116,12 +116,12 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **DOR:** F1 cerrada; CI verde en `main`.
 - **Entregables:** `fail_under` sobre medición en vivo; bandit en CI+pre-commit; mypy sobre todos los paquetes; Docker endurecido (`.dockerignore`, HEALTHCHECK, binds); test de paridad config; reglas R5–R8 activas.
 - **DOD:** `fail_under > 0`; bandit `-ll` en CI sin BLOCKER; mypy completo verde (o fallo documentado); `docker build` sin `.env` horneado; paridad config verde.
-- **Criterio de salida:** G5–G9 PASS; ADR-0019 (Production Gate como gate de release) aceptada.
+- **Criterio de salida:** G5–G9 PASS; ADR-0020 (Production Gate como gate de release) aceptada.
 
 ### F3 — Completar funcionalidades (1–2 meses)
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22).
-- **DOR:** F2 cerrada; **ADR-0015** aceptada; **ADR-0011** decidida.
+- **DOR:** F2 cerrada; **ADR-0016** aceptada; **ADR-0011** decidida.
 - **Entregables:** `LiveExecutor._submit()` con `CCXTAdapter.create_order` + reconciliación de fills; `RebalanceService.rebalance()` cableado; strategies a polars; reglas R9–R10.
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
@@ -129,15 +129,15 @@ Cada eslabón responde a las 4 preguntas del sistema:
 ### F4 — Madurez de producción (2–4 meses)
 
 - **Objetivo:** consistencia de estado, trazabilidad, semántica de entrega (H-08, H-09, H-11, H-15, H-16, H-17, H-18).
-- **DOR:** F3 cerrada; ADR-0016, ADR-0017 en revisión.
+- **DOR:** F3 cerrada; ADR-0017, ADR-0018 en revisión.
 - **Entregables:** estado de posición único (PortfolioService); UUID completo; OTel + request-id; evaluación/implementación Schema Registry; exactly-once (dedup + reintento); dominio sin `subprocess`; `RiskGate` alineado.
 - **DOD:** una sola fuente de verdad de posiciones; traces end-to-end; schema evolution backward-probada; dedup con test de reintento; dominio 100 % puro.
 - **Criterio de salida:** Production Gate release PASS completo.
 
 ### F5 — Escala (6+ meses)
 
-- **Objetivo:** millones de eventos/día, multiworker (ADR-0018, ADR-0019, H-13 DuckDB).
-- **DOR:** F4 cerrada; ADR-0018/0019 en revisión.
+- **Objetivo:** millones de eventos/día, multiworker (ADR-0019, ADR-0020, H-13 DuckDB).
+- **DOR:** F4 cerrada; ADR-0019/0020 en revisión.
 - **Entregables:** catalog Iceberg remoto (REST/Nessie/MinIO); streaming dedicado (Dagster/Flink) para Silver→Gold; decisión DuckDB (adoptar con ADR o eliminar).
 - **DOD:** catalog remoto en staging; pipelines fuera del proceso de feed; benchmarks documentados.
 
@@ -163,19 +163,20 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **ADR-0012** TradingEngine runtime puro; el CR ensambla todo
 - **ADR-0013** Modelo unificado de ingestión de datos (feed, fuente, mecanismo) — **commiteada**
 - **ADR-0014** Diseño interno de market_data — Market Data Platform (realtime_feeds + external_ingestion) — **commiteada**; implementación parcial en repo (commits `fb7df84`, `6165c11`, `e6cf272`, `dcd1741`: esqueleto `external_ingestion/` con puertos, orquestador, normalizers, config, wiring)
+- **ADR-0015** Blindaje de la Application Layer — guard AST + contratos BC-53/54 (serie `AUDIT-apps-2026-08-03#Hx`) — **commiteada y aceptada** (`a48f28e`)
 
-> **Resultado:** el siguiente número libre real es **ADR-0015**. Toda ADR nueva se crea con la plantilla `ADR-template.md` y se re-verifica la numeración al momento de crearla.
+> **Resultado:** el siguiente número libre real es **ADR-0016**. Toda ADR nueva se crea con la plantilla `ADR-template.md` y se re-verifica la numeración al momento de crearla (lección confirmada: el ADR-0015 asumido como "LiveExecutor" en borradores previos quedó ocupado por el blindaje de apps — el guard de numeración existe precisamente para esto).
 
 ### ADRs propuestas (estado Propuesto; se crean en su fase tras re-verificar numeración)
 
 | ADR | Tema | Fase | Enlaza hallazgos | Guard de numeración |
 |---|---|---|---|---|
-| ADR-0015 | LiveExecutor real + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 (guard en F1) | H-01, H-03, B-01, B-03, B-12 | Verificado: libre |
-| ADR-0016 | Unificación del estado de posiciones | F4 | H-09, B-15 | Verificar al crear |
-| ADR-0017 | Schema Registry (Avro + compatibilidad backward) | F4 | H-15, B-18 | Verificar al crear |
-| ADR-0018 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear |
-| ADR-0019 | Production Gate como gate de release | F2 | B-06, B-07 | Verificar al crear |
-| — | *(semántica `_open_positions` cubierta por ADR-0015)* | — | H-03, B-03 | — |
+| ADR-0016 | LiveExecutor real + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 (guard en F1) | H-01, H-03, B-01, B-03, B-12 | Verificar al crear (libre tras ADR-0015 real) |
+| ADR-0017 | Unificación del estado de posiciones | F4 | H-09, B-15 | Verificar al crear |
+| ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F4 | H-15, B-18 | Verificar al crear |
+| ADR-0019 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear |
+| ADR-0020 | Production Gate como gate de release | F2 | B-06, B-07 | Verificar al crear |
+| — | *(semántica `_open_positions` cubierta por ADR-0016)* | — | H-03, B-03 | — |
 
 ---
 
@@ -268,8 +269,8 @@ B-NN:
 | Seguridad | 4/10 | 8/10 | B-04, B-05, B-07, R6, G7 | bandit limpio en CI; snapshot sin secrets; puertos restringidos |
 | Testing | 6/10 | 8/10 | B-06, R5, F3/F4 tests integración/reconciliación | `fail_under` activo y sostenido sobre medición en vivo |
 | Observabilidad | 6/10 | 8/10 | B-17, G11 | traces end-to-end + correlación request-id |
-| Escalabilidad | 5/10 | 7/10 | ADR-0018/0019, H-13 | catalog remoto en staging; benchmarks documentados |
-| Mantenibilidad | 7/10 | 9/10 | tracking.yaml + production gate + ADR-0019 | CI valida tracking; docs de conteo generadas |
+| Escalabilidad | 5/10 | 7/10 | ADR-0019/0020, H-13 | catalog remoto en staging; benchmarks documentados |
+| Mantenibilidad | 7/10 | 9/10 | tracking.yaml + production gate + ADR-0020 | CI valida tracking; docs de conteo generadas |
 | DDD | 7/10 | 8/10 | B-03 (semántica risk), B-13, B-15 | tests de invariante de estado |
 | Clean Architecture | 8/10 | 9/10 | B-11, B-20, B-21 | AST guards de pureza (R11, R8) |
 | Hexagonal | 8/10 | 9/10 | B-12, B-21 | guards de ports/adapters |
@@ -312,4 +313,6 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 
 | Fecha | Commit | Cambio |
 |---|---|---|
-| 2026-08-06 | (baseline `dcd1741`) | Creación como especificación SSOT del sistema de ingeniería; tracking.yaml v2; verificación de numeración ADR (ADR-0015 libre) |
+| 2026-08-06 | (baseline `dcd1741`) | Creación como especificación SSOT del sistema de ingeniería; tracking.yaml v2; verificación de numeración ADR — ADR-0015 quedó ocupado por el blindaje de apps (`a48f28e`), siguiente libre: ADR-0016 |
+
+> Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).

@@ -154,13 +154,13 @@ hallazgos:
     pruebas:
       - "test de arquitectura: uv run live no arranca sin executor real"
       - "test positivo/negativo R1"
-    adr_relacionado: ADR-0015
+    adr_relacionado: ADR-0016
     riesgo_residual: "Operacional: si se re-habilita antes de F3, reaparece el riesgo"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-01"}
       backlog: {estado: HECHO, referencia: "B-01 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0015 (guard en F1)"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0016 (LiveExecutor real)"}
       implementacion: {estado: PENDIENTE, referencia: null}
       tests: {estado: PENDIENTE, referencia: "R1 positivo/negativo"}
       ci: {estado: PENDIENTE, referencia: "R1 activada_en_ci"}
@@ -204,7 +204,7 @@ hallazgos:
     cadena:
       hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-03"}
       backlog: {estado: HECHO, referencia: "B-03 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "semántica _open_positions (ADR-0015 o ADR nueva)"}
+      adr: {estado: PENDIENTE, referencia: "semántica _open_positions en ADR-0016 (LiveExecutor real)"}
       implementacion: {estado: PENDIENTE, referencia: "record_close en _fill"}
       tests: {estado: PENDIENTE, referencia: "round-trip BUY→SELL"}
       ci: {estado: PENDIENTE, referencia: "R3 activada_en_ci"}
@@ -398,13 +398,13 @@ hallazgos:
     pruebas:
       - "test integración sandbox/mock: orden → fill → estado"
       - "test positivo/negativo R9, R10"
-    adr_relacionado: ADR-0015
+    adr_relacionado: ADR-0016
     riesgo_residual: "Alto: capital real"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "INFORME-Auditoria.md H-01 (resolución)"}
       backlog: {estado: HECHO, referencia: "B-12 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0015"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0016 (LiveExecutor real)"}
       implementacion: {estado: PENDIENTE, referencia: "LiveExecutor._submit real"}
       tests: {estado: PENDIENTE, referencia: "integración sandbox/mock"}
       ci: {estado: PENDIENTE, referencia: "R9/R10 activadas_en_ci"}
@@ -464,13 +464,13 @@ hallazgos:
     solucion: "Unificar estado de posición en PortfolioService (única fuente mutable, ADR-0006); fill_sync/TradeTracker consumen eventos"
     pruebas:
       - "test: un solo dueño mutable; cierre no falla silenciosamente"
-    adr_relacionado: "ADR-0006; ADR-0016"
+    adr_relacionado: "ADR-0006; ADR-0017"
     riesgo_residual: "Medio: migración de estado"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-09 — requiere verificación en F0"}
       backlog: {estado: HECHO, referencia: "B-15 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0016"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0017"}
       implementacion: {estado: PENDIENTE, referencia: "unificar en PortfolioService"}
       tests: {estado: PENDIENTE, referencia: "un solo dueño mutable"}
       ci: {estado: PENDIENTE, referencia: "G10"}
@@ -530,13 +530,13 @@ hallazgos:
     solucion: "Evaluar/implementar Schema Registry (Avro + compatibilidad backward) manteniendo BC-35"
     pruebas:
       - "test de cambio backward-compatible"
-    adr_relacionado: ADR-0017
+    adr_relacionado: ADR-0018
     riesgo_residual: "Medio: formato de cable"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: PARCIALMENTE_CONFIRMADO, referencia: "INFORME-Auditoria.md H-15 — requiere verificación en F0"}
       backlog: {estado: HECHO, referencia: "B-18 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0017"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0018"}
       implementacion: {estado: PENDIENTE, referencia: "Avro + registry"}
       tests: {estado: PENDIENTE, referencia: "cambio backward"}
       ci: {estado: PENDIENTE, referencia: null}
