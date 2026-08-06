@@ -639,16 +639,19 @@ hallazgos:
 mediciones_f0:
   fecha: "2026-08-06"
   commit: eaca97a
+  f0_cerrada: true
+  f1_cerrada: true
+  cierre_fases: "F0 22/22 clasificados; F1 B-01..B-05 HECHO (gate: ruff + import-linter 49/49 + pytest 900 passed + mypy limpio)"
   test_suite:
-    passed: 882
+    passed: 900
     deselected: 4
     integration_excluded: true
-    cobertura_pct: "43%"
+    cobertura_pct: "44%"
   contratos_bc:
     total: 49
     rotos: 0
   topics_kafka_constantes: 25
-  loc_python: 52237
+  loc_pl: 52237
   reglas:
     total: 16
     activas_en_ci: 5
@@ -659,3 +662,26 @@ mediciones_f0:
     loc: {plan: 52429, medido: 52237}
     cobertura: {plan: "43%", medido: "43%"}
     reglas_ci: {plan: "R12-R16", medido: 5}
+
+# =============================================================================
+# ENGINEERING HEALTH CHECK (F2.0/F2.4) — snapshot de coherencia normativa.
+# Base para el job `engineering-health` (PLAN §4 F2.0): verifica que
+# Plan ↔ tracking ↔ ADR ↔ contratos ↔ CI estén alineados ANTES de F2.1-F2.4.
+# Este bloque NO reasigna `fase` de los hallazgos (tracking sigue siendo SSOT).
+# =============================================================================
+engineering_health:
+  fecha: "2026-08-06"
+  contratos_bc_objetivo: 49
+  contratos_bc_activos: 49
+  requeridos:
+    - "import-linter >= 49 kept (no vacuo; falla si 'Could not find...')"
+    - "ADR activas sin collision legacy (SUPERSEDED 0003-0005)"
+    - "tracking.yaml parseable + enums validos"
+    - "CI mapea cada gate a una regla con activada_en_ci"
+  pendientes_f2:
+    F2_0_health_ci: "job engineering-health no implementado (C4)"
+    F2_1_import_linter_no_vacuo: "B-06/B-07/B-10"
+    F2_2_adr_legacy_superseded: "renombrar docs/architecture/0003-0005 -> SUPERSEDED"
+    F2_3_kafka_schemas_8: "liquidations ohlcv oi orderbook orders positions signals trades (0% cobertura)"
+    F2_4_tracking_health: "este bloque es la base; escalar en C"
+nota: "Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md §4."
