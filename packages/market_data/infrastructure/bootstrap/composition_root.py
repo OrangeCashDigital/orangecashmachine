@@ -32,7 +32,6 @@ Contratos enforced: BC-38.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -227,6 +226,8 @@ class CompositionRoot:
 
         Config (SSOT): AppConfig.external_ingestion (poblada por Hydra).
         Brokers: AppConfig.integrations.kafka (SSOT de infra).
+        API keys: resueltas por ocm.config.credentials (SSOT de credenciales) —
+        nunca se lee os.environ directamente aquí.
         Adapters: factory local identidad → clase concreta.
         Publisher: ExternalKafkaEventPublisher sobre KafkaProducerAdapter.
 
@@ -250,6 +251,7 @@ class CompositionRoot:
             ExternalSourceRuntime,
         )
         from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+        from ocm.config.credentials import resolve_provider_api_key
 
         ext_cfg = config.external_ingestion
         if not ext_cfg.enabled:
@@ -271,10 +273,13 @@ class CompositionRoot:
             if source_id not in factory:
                 logger.warning("[composition-root] fuente externa desconocida, ignorada: {}", source_id)
                 continue
-            kafka_key = f"{source_id.upper()}_API_KEY"
-            api_key = os.environ.get(kafka_key, "")
+            api_key = resolve_provider_api_key(source_id.upper())
             if not api_key:
-                logger.warning("[composition-root] fuente '{}' sin API key (env {}) — omitida", source_id, kafka_key)
+                logger.warning(
+                    "[composition-root] fuente '{}' sin API key ({}) — omitida",
+                    source_id,
+                    f"{source_id.upper()}_API_KEY",
+                )
                 continue
             sources.append(
                 ExternalSourceRuntime(
@@ -299,7 +304,7 @@ class CompositionRoot:
         publisher = ExternalKafkaEventPublisher(producer_adapter)
 
         def get_source(source_id: str) -> PollingSourcePort:
-            return factory[source_id](os.environ.get(f"{source_id.upper()}_API_KEY", ""))
+            return factory[source_id](resolve_provider_api_key(source_id.upper()))
 
         return ExternalIngestionOrchestrator(
             sources=sources,

@@ -37,6 +37,7 @@ class TestBuildExternalIngestion:
 
     def test_returns_none_when_source_missing_api_key(self, monkeypatch):
         monkeypatch.delenv("COINGLASS_API_KEY", raising=False)
+        monkeypatch.delenv("OCM_API_KEY", raising=False)
         config = _DummyAppConfig(
             ExternalIngestionConfig(
                 enabled=True,
@@ -47,6 +48,24 @@ class TestBuildExternalIngestion:
 
     def test_returns_orchestrator_with_api_key(self, monkeypatch):
         monkeypatch.setenv("COINGLASS_API_KEY", "secret")
+        config = _DummyAppConfig(
+            ExternalIngestionConfig(
+                enabled=True,
+                sources={"coinglass": ExternalSourceConfig(enabled=True, metric="funding_rate")},
+            )
+        )
+        orch = CompositionRoot.build_external_ingestion_orchestrator(config)
+        from market_data.application.external_ingestion.orchestrator import (
+            ExternalIngestionOrchestrator,
+        )
+
+        assert isinstance(orch, ExternalIngestionOrchestrator)
+
+    def test_falls_back_to_generic_ocm_api_key(self, monkeypatch):
+        # Si no hay key específica del proveedor, se usa el fallback genérico
+        # OCM_API_KEY vía el resolver de ocm.config.credentials (SSOT).
+        monkeypatch.delenv("COINGLASS_API_KEY", raising=False)
+        monkeypatch.setenv("OCM_API_KEY", "generic-secret")
         config = _DummyAppConfig(
             ExternalIngestionConfig(
                 enabled=True,
