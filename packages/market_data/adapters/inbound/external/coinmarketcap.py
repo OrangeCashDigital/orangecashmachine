@@ -14,6 +14,7 @@ Solo adquisición: devuelve PollingResult crudo (JSON provider-native).
 La normalización ocurre en application/external_ingestion/normalizers.
 
 BC-52: no importa SDK de vendor a nivel módulo — usa aiohttp (HTTP genérico).
+Clasificación 4xx/5xx, Retry-After y health() los gestiona HTTPDataSourceBase.
 """
 
 from __future__ import annotations
@@ -21,10 +22,7 @@ from __future__ import annotations
 import aiohttp
 
 from market_data.adapters.inbound.external.base import HTTPDataSourceBase
-from market_data.ports.inbound.external.errors import (
-    ExternalRateLimitError,
-    ExternalSourceUnavailable,
-)
+from market_data.ports.inbound.external.errors import ExternalSourceUnavailable
 from market_data.ports.inbound.external.polling import (
     PollingRequest,
     PollingResult,
@@ -48,6 +46,7 @@ class CoinMarketCapPollingSource(HTTPDataSourceBase, PollingSourcePort):
                 "X-CMC_PRO_API_KEY": api_key,
                 "Accept": "application/json",
             },
+            health_path="/global/market/quotes/latest",
         )
         self.api_key = api_key
 
@@ -60,9 +59,8 @@ class CoinMarketCapPollingSource(HTTPDataSourceBase, PollingSourcePort):
         url = f"{self.base_url}/global/market/quotes/latest"
         try:
             async with self._get_session().get(url) as resp:
-                if resp.status == 429:
-                    raise ExternalRateLimitError("CoinMarketCap 429 (rate limit) en market_metrics")
-                resp.raise_for_status()
+                if resp.status >= 400:
+                    self.classify_status(resp.status, resp.headers.get("Retry-After") if resp.headers else None)
                 data = await resp.json()
         except aiohttp.ClientError as exc:
             raise ExternalSourceUnavailable(f"CoinMarketCap unreachable en /market_metrics: {exc}") from exc

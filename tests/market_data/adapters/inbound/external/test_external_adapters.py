@@ -9,29 +9,34 @@ from market_data.adapters.inbound.external.coinmarketcap import (
     CoinMarketCapPollingSource,
 )
 from market_data.ports.inbound.external import (
+    ExternalAuthenticationError,
     ExternalRateLimitError,
+    ExternalRequestError,
     ExternalSourceUnavailable,
     PollingRequest,
 )
 
 
 class _FakeResp:
-    def __init__(self, status: int = 200, data=None, exc: Exception | None = None) -> None:
+    def __init__(
+        self,
+        status: int = 200,
+        data=None,
+        exc: Exception | None = None,
+        headers: dict | None = None,
+    ) -> None:
         self.status = status
         self._data = data
         self._exc = exc
+        self.headers = headers or {}
 
     async def __aenter__(self) -> "_FakeResp":
+        if self._exc is not None:
+            raise self._exc  # simula fallo de red/DNS/timeout en el request
         return self
 
     async def __aexit__(self, *_: object) -> None:
         return None
-
-    def raise_for_status(self) -> None:
-        if self._exc is not None:
-            raise self._exc
-        if self.status >= 400:
-            raise aiohttp.ClientResponseError(request_info=None, history=(), status=self.status, message="boom")
 
     async def json(self) -> object:
         return self._data
@@ -43,7 +48,7 @@ class _FakeSession:
         self.closed = False
         self.urls: list[str] = []
 
-    def get(self, url: str) -> _FakeResp:
+    def get(self, url: str, **kwargs: object) -> _FakeResp:
         self.urls.append(url)
         return self._resp
 
@@ -67,10 +72,32 @@ class TestCoinglass:
         result = await adapter.fetch(PollingRequest("funding_rate"))
         assert result.payload == []
 
-    async def test_429_raises_rate_limit(self):
+    async def test_429_raises_rate_limit_with_retry_after(self):
         adapter = CoinglassPollingSource(api_key="k")
-        _attach(adapter, _FakeSession(_FakeResp(status=429)))
-        with pytest.raises(ExternalRateLimitError):
+        _attach(
+            adapter,
+            _FakeSession(_FakeResp(status=429, headers={"Retry-After": "17"})),
+        )
+        with pytest.raises(ExternalRateLimitError) as ei:
+            await adapter.fetch(PollingRequest("funding_rate"))
+        assert ei.value.retry_after_s == 17.0
+
+    async def test_401_raises_authentication_error(self):
+        adapter = CoinglassPollingSource(api_key="bad")
+        _attach(adapter, _FakeSession(_FakeResp(status=401)))
+        with pytest.raises(ExternalAuthenticationError):
+            await adapter.fetch(PollingRequest("funding_rate"))
+
+    async def test_400_raises_request_error(self):
+        adapter = CoinglassPollingSource(api_key="k")
+        _attach(adapter, _FakeSession(_FakeResp(status=400)))
+        with pytest.raises(ExternalRequestError):
+            await adapter.fetch(PollingRequest("funding_rate"))
+
+    async def test_500_raises_unavailable(self):
+        adapter = CoinglassPollingSource(api_key="k")
+        _attach(adapter, _FakeSession(_FakeResp(status=500)))
+        with pytest.raises(ExternalSourceUnavailable):
             await adapter.fetch(PollingRequest("funding_rate"))
 
     async def test_client_error_raises_unavailable(self):
@@ -102,7 +129,35 @@ class TestCoinMarketCap:
         with pytest.raises(ExternalRateLimitError):
             await adapter.fetch(PollingRequest("market_metrics"))
 
+    async def test_403_raises_authentication_error(self):
+        adapter = CoinMarketCapPollingSource(api_key="bad")
+        _attach(adapter, _FakeSession(_FakeResp(status=403)))
+        with pytest.raises(ExternalAuthenticationError):
+            await adapter.fetch(PollingRequest("market_metrics"))
+
     async def test_unsupported_metric_raises_valueerror(self):
         adapter = CoinMarketCapPollingSource(api_key="k")
         with pytest.raises(ValueError):
             await adapter.fetch(PollingRequest("funding_rate"))
+
+
+class TestHealth:
+    async def test_health_ok(self):
+        adapter = CoinglassPollingSource(api_key="k")
+        _attach(adapter, _FakeSession(_FakeResp(status=200, data={"data": []})))
+        status = await adapter.health()
+        assert status.ok is True
+
+    async def test_health_reports_auth_failure(self):
+        adapter = CoinglassPollingSource(api_key="bad")
+        _attach(adapter, _FakeSession(_FakeResp(status=401)))
+        status = await adapter.health()
+        assert status.ok is False
+        assert "API key" in status.detail
+
+    async def test_health_reports_unreachable(self):
+        adapter = CoinglassPollingSource(api_key="k")
+        _attach(adapter, _FakeSession(_FakeResp(exc=aiohttp.ClientError("boom"))))
+        status = await adapter.health()
+        assert status.ok is False
+        assert "unreachable" in status.detail

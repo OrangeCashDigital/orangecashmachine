@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 market_data/adapters/inbound/external/coinglass.py
-==================================================
+===================================================
 
 Adapter CoinGlass Open API — implementa PollingSourcePort.
 
@@ -14,9 +14,9 @@ Solo adquisición: devuelve PollingResult crudo (JSON provider-native).
 La normalización ocurre en application/external_ingestion/normalizers.
 
 BC-52: no importa SDK de vendor a nivel módulo — usa aiohttp (HTTP genérico).
-La API key se pasa por constructor (nunca hardcodeada).
-La sesión se cierra en shutdown (el orquestador/gestionador de lifecycle
-llama a close()).
+La API key se pasa por constructor (nunca hardcodeada). La sesión se cierra
+en shutdown (el orquestador llama a close()). Clasificación 4xx/5xx, Retry-After
+y health() los gestiona HTTPDataSourceBase.
 
 Principios: DIP · SRP · SafeOps · KISS
 """
@@ -26,10 +26,7 @@ from __future__ import annotations
 import aiohttp
 
 from market_data.adapters.inbound.external.base import HTTPDataSourceBase
-from market_data.ports.inbound.external.errors import (
-    ExternalRateLimitError,
-    ExternalSourceUnavailable,
-)
+from market_data.ports.inbound.external.errors import ExternalSourceUnavailable
 from market_data.ports.inbound.external.polling import (
     PollingRequest,
     PollingResult,
@@ -45,14 +42,7 @@ _ENDPOINTS: dict[str, str] = {
 
 
 class CoinglassPollingSource(HTTPDataSourceBase, PollingSourcePort):
-    """Adapter de polling de la API CoinGlass.
-
-    Uso dentro del orquestador (no context manager obligatorio):
-        source = CoinglassPollingSource(api_key=...)
-        await source.fetch(PollingRequest(metric="funding_rate"))
-    El gestionador de lifecycle (composition root) cierra la sesión en
-    shutdown llamando a close().
-    """
+    """Adapter de polling de la API CoinGlass."""
 
     source_id: str = "coinglass"
 
@@ -60,6 +50,7 @@ class CoinglassPollingSource(HTTPDataSourceBase, PollingSourcePort):
         super().__init__(
             base_url="https://open-api.coinglass.com/api",
             headers={"CG-API-KEY": api_key},
+            health_path="/futures/funding_rates",
         )
         self.api_key = api_key
 
@@ -73,9 +64,8 @@ class CoinglassPollingSource(HTTPDataSourceBase, PollingSourcePort):
         url = f"{self.base_url}{endpoint}"
         try:
             async with self._get_session().get(url) as resp:
-                if resp.status == 429:
-                    raise ExternalRateLimitError(f"CoinGlass 429 (rate limit) en {endpoint}")
-                resp.raise_for_status()
+                if resp.status >= 400:
+                    self.classify_status(resp.status, resp.headers.get("Retry-After") if resp.headers else None)
                 data = await resp.json()
         except aiohttp.ClientError as exc:
             raise ExternalSourceUnavailable(f"CoinGlass unreachable en {endpoint}: {exc}") from exc
@@ -84,6 +74,3 @@ class CoinglassPollingSource(HTTPDataSourceBase, PollingSourcePort):
         if not isinstance(rows, list):
             rows = []
         return PollingResult(source_id=self.source_id, metric=request.metric, payload=list(rows))
-
-
-__all__ = ["CoinglassPollingSource"]

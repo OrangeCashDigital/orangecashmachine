@@ -25,7 +25,21 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Protocol, runtime_checkable
 
-__all__ = ["PollingRequest", "PollingResult", "PollingSourcePort"]
+__all__ = ["PollingRequest", "PollingResult", "PollingSourcePort", "HealthStatus"]
+
+
+@dataclass(frozen=True, slots=True)
+class HealthStatus:
+    """Resultado de un health check de una fuente externa.
+
+    ok:        True si la fuente responde y las credenciales son válidas.
+    latency_ms: latencia del request de comprobación (monotónica).
+    detail:     motivo del fallo (auth / rate-limit / config / unreachable).
+    """
+
+    ok: bool
+    latency_ms: int = 0
+    detail: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +102,14 @@ class PollingSourcePort(Protocol):
 
     async def fetch(self, request: PollingRequest) -> PollingResult:
         """Adquiere la fotografía cruda de una métrica de la fuente."""
+        ...
+
+    async def health(self) -> HealthStatus:
+        """Valida credenciales y disponibilidad antes del polling continuo.
+
+        Nunca lanza: devuelve un HealthStatus con el diagnóstico. Lo usa el
+        orquestador para gatear el arranque de una fuente.
+        """
         ...
 
     async def close(self) -> None:

@@ -8,6 +8,7 @@ from market_data.ports.inbound.external import (
     ExternalRateLimitError,
     ExternalSourceError,
     ExternalSourceUnavailable,
+    HealthStatus,
     HistoricalRequest,
     PollingRequest,
     PollingResult,
@@ -53,6 +54,9 @@ class TestRuntimeCheckable:
 
             async def fetch(self, request: PollingRequest) -> PollingResult:
                 return PollingResult(source_id="fake", metric=request.metric)
+
+            async def health(self) -> HealthStatus:
+                return HealthStatus(ok=True)
 
             async def close(self) -> None:
                 return None
