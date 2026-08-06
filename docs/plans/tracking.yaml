@@ -630,3 +630,32 @@ hallazgos:
       ci: {estado: PENDIENTE, referencia: null}
       evidencia: {estado: PENDIENTE, referencia: null}
       cierre: {estado: PENDIENTE, referencia: null}
+
+# =============================================================================
+# MEDICIONES F0 — medidas en vivo 2026-08-06 (no stale), aditivo al esquema v2.
+# Diagnóstico para fijar umbrales (Principio 31): nada inventado.
+# No es un hallazgo ni un backlog item; es un snapshot verificable.
+# =============================================================================
+mediciones_f0:
+  fecha: "2026-08-06"
+  commit: eaca97a
+  test_suite:
+    passed: 882
+    deselected: 4
+    integration_excluded: true
+    cobertura_pct: "43%"
+  contratos_bc:
+    total: 49
+    rotos: 0
+  topics_kafka_constantes: 25
+  loc_python: 52237
+  reglas:
+    total: 16
+    activas_en_ci: 5
+  baseline_plan_vs_medido:
+    contratos: {plan: 47, medido: 49, causa: "BC-53/BC-54 (trazabilidad apps, no error)"}
+    topics: {plan: 44, medido: 25, nota: "sobre-conteo previo (incl. grupos/legacy); recontar en F0"}
+    tests: {plan: 844, medido: 851, nota: "suite unit, integration excluidas"}
+    loc: {plan: 52429, medido: 52237}
+    cobertura: {plan: "43%", medido: "43%"}
+    reglas_ci: {plan: "R12-R16", medido: 5}

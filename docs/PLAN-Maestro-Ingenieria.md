@@ -6,7 +6,7 @@
 - **Rol:** fuente de verdad (SSOT) para la evolución técnica del proyecto.
 - **Alineado con:** `docs/audits/2026-08-auditoria-integral.md` — fotografía histórica del estado en commit `dcd1741` (2026-08-06 00:08:04 -0500), **inmutable**.
 - **Datos operativos:** `docs/plans/tracking.yaml` (v2) — fuente de verdad **por máquina**; este documento es el **mapa** que explica cómo funciona el sistema, no el tracker.
-- **Métricas baseline (medidas en vivo 2026-08-06, no stale):** 844 tests / 43 % cobertura / 47 contratos BC / 44 constantes de tópicos Kafka / 52 429 LOC Python.
+- **Métricas baseline (remedidas en vivo en F0, 2026-08-06):** 882 tests (suite unit, integration excluidas) / 43 % cobertura / **49 contratos BC** / 25 constantes de tópicos Kafka / 52 237 LOC Python. El baseline "47 contratos" se corrigió a "49" **por BC-53 y BC-54** (trazabilidad del blindaje de `apps/`, serie INFORME-2026-08-06) — es trazabilidad, no un error previo; el `mediciones_f0` del tracking registra el delta 47→49.
 
 ---
 
