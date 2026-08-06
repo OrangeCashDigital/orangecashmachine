@@ -27,6 +27,8 @@ Principios: SRP · DIP · SafeOps · KISS
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from loguru import logger
 
 from trading.execution.order import Order
@@ -42,6 +44,12 @@ class LiveExecutor:
     market_type : str — "spot" | "linear" | "inverse"
     timeout_s   : int — timeout por llamada CCXT en segundos (default: 10)
     """
+
+    # Guard R1 / B-01: fail-closed. Mientras este executor sea un STUB (CCXT no
+    # activo), `IS_STUB` es True y el arranque live ABORTA — no se opera capital
+    # real con un executor simulado. F3 (B-12) lo pone a False junto con la
+    # implementación real de `_submit`.
+    IS_STUB: ClassVar[bool] = True
 
     def __init__(
         self,

@@ -152,8 +152,19 @@ def test_assemble_live_requires_risk() -> None:
         _build_root(guard=ExecutionGuard(max_errors=3), _risk_absent=True).assemble_live()
 
 
-def test_assemble_live_returns_runtime_with_injected_portfolio() -> None:
-    """G1: el root usa el portfolio INYECTADO — no construye stores propios."""
+def test_assemble_live_returns_runtime_with_injected_portfolio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """G1: el root usa el portfolio INYECTADO — no construye stores propios.
+
+    Guard R1 fail-closed: con un executor real (IS_STUB=False), assemble_live
+    procede y devuelve el runtime. El executor STUB por defecto aborta (ver
+    test_assemble_live_blocks_while_executor_is_stub).
+    """
+    from trading.execution.live_executor import LiveExecutor
+
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
     portfolio = _FakePortfolio()
     root = TradingCompositionRoot(
         trading=_trading_config(),
@@ -167,6 +178,12 @@ def test_assemble_live_returns_runtime_with_injected_portfolio() -> None:
     assert isinstance(runtime.engine, TradingEngine)
     assert isinstance(runtime.tracker, TradeTracker)
     assert runtime.portfolio is portfolio  # BC-43: misma instancia inyectada
+
+
+def test_assemble_live_blocks_while_executor_is_stub() -> None:
+    """B-01/R1 (positivo): live NO arranca mientras LiveExecutor sea un stub."""
+    with pytest.raises(RuntimeError, match="STUB"):
+        _build_root(guard=ExecutionGuard(max_errors=3)).assemble_live()
 
 
 # ── assemble_paper() ─────────────────────────────────────────────────────────

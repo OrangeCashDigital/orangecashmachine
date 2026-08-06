@@ -319,3 +319,30 @@ class TestTradingCompositionRoot:
         )
         assert TradingRuntime.__dataclass_params__.frozen is True
         assert hasattr(TradingRuntime, "__slots__") or TradingRuntime.__dataclass_params__.slots is True
+
+
+class TestLiveExecutorFailClosed:
+    """R1 / B-01: mientras LiveExecutor sea un stub, live trading queda BLOQUEADO."""
+
+    LIVE_EXECUTOR = TRADING / "execution" / "live_executor.py"
+    COMPOSITION_ROOT = TRADING_BOOTSTRAP / "composition_root.py"
+
+    def test_executor_declares_stub_flag(self):
+        """El executor debe declarar IS_STUB para que el arranque decida fail-closed."""
+        src = self.LIVE_EXECUTOR.read_text()
+        assert "IS_STUB" in src, "LiveExecutor debe exponer `IS_STUB` (B-01)"
+
+    def test_stub_means_true_flag(self):
+        """Fail-closed: si el STUB sigue presente (CCXT sin activar), IS_STUB debe ser True."""
+        src = self.LIVE_EXECUTOR.read_text()
+        stub_present = "[LIVE-STUB]" in src
+        if stub_present:
+            assert "IS_STUB: ClassVar[bool] = True" in src, (
+                "LiveExecutor es STUB pero IS_STUB no es True — fail-open, viola B-01"
+            )
+
+    def test_assemble_live_checks_stub_before_returning(self):
+        """El arranque live debe abortar si el executor es un stub."""
+        src = self.COMPOSITION_ROOT.read_text()
+        assert "IS_STUB" in src, "assemble_live() debe comprobar LiveExecutor.IS_STUB (B-01)"
+        assert "raise" in src, "assemble_live() debe abortar (raise) cuando detecta stub"

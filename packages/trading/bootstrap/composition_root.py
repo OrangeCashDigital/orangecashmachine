@@ -286,6 +286,12 @@ class TradingCompositionRoot:
             exchange=self._trading.exchange,
             market_type=self._trading.market_type,
         )
+        if executor.IS_STUB:
+            raise RuntimeError(  # Guard R1 / B-01: fail-closed
+                "assemble_live bloqueado: LiveExecutor es STUB (CCXT no activo). "
+                "No se opera capital real con un executor simulado. "
+                "F3 (B-12) reimplementa `_submit` y pone IS_STUB=False."
+            )
         oms = OMS(
             risk_manager=risk_manager,
             executor=executor,
