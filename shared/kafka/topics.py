@@ -157,6 +157,12 @@ TOPIC_INFRA_METRICS: str = "infra.metrics"
 Fuente: todos los producers/consumers vía MetricsEmitter.
 Consumidores: ObservabilityConsumer → Prometheus Pushgateway."""
 
+TOPIC_EXTERNAL_RAW: str = "external.raw"
+"""Datos no-streaming de fuentes externas (p.ej. CoinGlass, CoinMarketCap,
+Glassnode, FRED, ...). Fuente: ExternalIngestionOrchestrator.
+Consumidores: ExternalProcessor → silver.external.*. Topic único del
+modelo canónico de eventos de ADR-0014; el routing por metric va en el body."""
+
 # =============================================================================
 # Consumer Groups — SSOT de group_id por rol
 # =============================================================================
@@ -179,6 +185,7 @@ GROUP_WS_FUNDING_PRODUCER: str = "ocm-ws-funding-producer"
 GROUP_WS_OI_PRODUCER: str = "ocm-ws-oi-producer"
 GROUP_WS_ONCHAIN_PRODUCER: str = "ocm-ws-onchain-producer"
 GROUP_INFRA_METRICS_EMITTER: str = "ocm-infra-metrics-emitter"
+GROUP_EXTERNAL_INGESTION: str = "ocm-external-ingestion"
 
 
 # =============================================================================
@@ -262,6 +269,7 @@ _ALL_TOPICS = [
     TOPIC_OI_RAW,
     TOPIC_ONCHAIN_RAW,
     TOPIC_INFRA_METRICS,
+    TOPIC_EXTERNAL_RAW,
 ]
 assert len(_ALL_TOPICS) == len(set(_ALL_TOPICS)), (
     "shared/kafka/topics.py: topics con string duplicado — colisión de nombres"
@@ -286,6 +294,7 @@ _ALL_GROUPS = [
     GROUP_WS_OI_PRODUCER,
     GROUP_WS_ONCHAIN_PRODUCER,
     GROUP_INFRA_METRICS_EMITTER,
+    GROUP_EXTERNAL_INGESTION,
 ]
 assert len(_ALL_GROUPS) == len(set(_ALL_GROUPS)), "shared/kafka/topics.py: consumer groups con string duplicado"
 
@@ -343,6 +352,7 @@ __all__ = [
     "TOPIC_OI_RAW",
     "TOPIC_ONCHAIN_RAW",
     "TOPIC_INFRA_METRICS",
+    "TOPIC_EXTERNAL_RAW",
     # Consumer groups WS producers
     "GROUP_WS_ORDERBOOK_PRODUCER",
     "GROUP_WS_LIQUIDATIONS_PRODUCER",
@@ -350,4 +360,5 @@ __all__ = [
     "GROUP_WS_OI_PRODUCER",
     "GROUP_WS_ONCHAIN_PRODUCER",
     "GROUP_INFRA_METRICS_EMITTER",
+    "GROUP_EXTERNAL_INGESTION",
 ]

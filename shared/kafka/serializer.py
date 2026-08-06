@@ -103,9 +103,23 @@ def make_symbol_key(exchange: str, symbol: str) -> bytes:
     return f"{exchange}:{symbol}".encode("utf-8")
 
 
+def make_external_key(source_id: str, metric: str, symbol: str | None) -> bytes:
+    """
+    Routing key para el topic canónico external.raw (external_ingestion).
+
+    Formato: "{source_id}:{metric}:{symbol}"; symbol None → "global".
+    Ejemplo: b"coinglass:funding_rate:BTC/USDT", b"coinmarketcap:btc_dominance:global"
+
+    Mismo (source, metric, symbol) → misma partición → FIFO por serie.
+    """
+    scope = symbol or "global"
+    return f"{source_id}:{metric}:{scope}".encode("utf-8")
+
+
 __all__ = [
     "serialize",
     "deserialize",
     "make_ohlcv_key",
     "make_symbol_key",
+    "make_external_key",
 ]
