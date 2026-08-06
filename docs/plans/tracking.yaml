@@ -41,26 +41,26 @@ reglas:
     hallazgo: H-01
     descripcion: "Bloquear `uv run live` con LiveExecutor stub"
     mecanismo: "AST guard + guard de arranque en execute_live"
-    backtest: pendiente
-    activada_en_ci: false
+    backtest: ok
+    activada_en_ci: true
   - id: R2
     hallazgo: H-02
     descripcion: "Prohibir import de `market_data.infrastructure.storage.catalog` inexistente"
     mecanismo: "import-linter forbid / AST guard + smoke test assemble()"
-    backtest: pendiente
-    activada_en_ci: false
+    backtest: ok
+    activada_en_ci: true
   - id: R3
     hallazgo: H-03
     descripcion: "`record_open()` sin `record_close()` en flujo de fill"
     mecanismo: "AST guard sobre trading.execution.oms + test round-trip BUY→SELL"
-    backtest: pendiente
-    activada_en_ci: false
+    backtest: ok
+    activada_en_ci: true
   - id: R4
     hallazgo: H-06
     descripcion: "SecretStr en claro en snapshot de config"
     mecanismo: "test unit de serialización de snapshot"
-    backtest: pendiente
-    activada_en_ci: false
+    backtest: ok
+    activada_en_ci: true
   - id: R5
     hallazgo: H-04
     descripcion: "Cobertura crítica por debajo del umbral (umbral definido tras medición en vivo en F0)"
@@ -147,7 +147,7 @@ hallazgos:
     hallazgo_informe: H-01
     fase: F1
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "packages/trading/execution/live_executor.py:91-134 (_submit STUB, bloque CCXT comentado :99-128)"
     solucion: "Guard de arranque bloquea live con stub; implementación real en F3 (B-12)"
@@ -156,21 +156,21 @@ hallazgos:
       - "test positivo/negativo R1"
     adr_relacionado: ADR-0016
     riesgo_residual: "Operacional: si se re-habilita antes de F3, reaparece el riesgo"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-06"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01"}
       backlog: {estado: HECHO, referencia: "B-01 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0016 (LiveExecutor real)"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: "R1 positivo/negativo"}
-      ci: {estado: PENDIENTE, referencia: "R1 activada_en_ci"}
-      evidencia: {estado: PENDIENTE, referencia: "backtest R1"}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "guard fail-closed en assemble_live (77a9997)"}
+      tests: {estado: HECHO, referencia: "TestLiveExecutorFailClosed + test R1 pos/neg"}
+      ci: {estado: HECHO, referencia: "R1 activada_en_ci"}
+      evidencia: {estado: HECHO, referencia: "gate 900 tests + import-linter 49/49"}
+      cierre: {estado: HECHO, referencia: "F1-B01 completada 2026-08-06"}
   - id: B-02
     hallazgo_informe: H-02
     fase: F1
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "packages/market_data/infrastructure/bootstrap/pipeline_factory.py:49 (`from market_data.infrastructure.storage.catalog import build_catalog` — módulo inexistente)"
     solucion: "Apuntar a market_data.infrastructure.storage.iceberg.catalog.get_catalog"
@@ -178,21 +178,21 @@ hallazgos:
       - "smoke test: assemble(config) construye ohlcv+trades+derivatives"
     adr_relacionado: null
     riesgo_residual: "Ninguno si el smoke test es verde"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-06"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-02"}
       backlog: {estado: HECHO, referencia: "B-02 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: "fix pipeline_factory.py:49"}
-      tests: {estado: PENDIENTE, referencia: "smoke test assemble()"}
-      ci: {estado: PENDIENTE, referencia: "R2 activada_en_ci"}
-      evidencia: {estado: PENDIENTE, referencia: "backtest R2"}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "fix pipeline_factory.py:49 -> iceberg.get_catalog (3affa2)"}
+      tests: {estado: HECHO, referencia: "test_import_contracts::_build_catalog (R2)"}
+      ci: {estado: HECHO, referencia: "R2 activada_en_ci"}
+      evidencia: {estado: HECHO, referencia: "gate 900 tests + import-linter 49/49"}
+      cierre: {estado: HECHO, referencia: "F1-B02 completada 2026-08-06"}
   - id: B-03
     hallazgo_informe: H-03
     fase: F1
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "packages/trading/execution/oms.py:172 (record_open en submit) vs :217/:308 (record_close solo en cancel/_reject); _fill() :270-289 no decrementa; risk/manager.py:126-139"
     solucion: "record_close() en flujo de fill, o redefinir semántica de _open_positions como 'órdenes activas'"
@@ -200,21 +200,21 @@ hallazgos:
       - "test round-trip BUY fill → SELL fill aserta contador"
     adr_relacionado: ADR-0006
     riesgo_residual: "Medio: toca OMS; requiere decisión de semántica"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-06"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-03"}
       backlog: {estado: HECHO, referencia: "B-03 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "semántica _open_positions en ADR-0016 (LiveExecutor real)"}
-      implementacion: {estado: PENDIENTE, referencia: "record_close en _fill"}
-      tests: {estado: PENDIENTE, referencia: "round-trip BUY→SELL"}
-      ci: {estado: PENDIENTE, referencia: "R3 activada_en_ci"}
-      evidencia: {estado: PENDIENTE, referencia: "backtest R3"}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "held-position: BUY abre, SELL fill cierra (f8a1c73)"}
+      tests: {estado: HECHO, referencia: "test_oms_fill_lifecycle (R3 round-trip)"}
+      ci: {estado: HECHO, referencia: "R3 activada_en_ci"}
+      evidencia: {estado: HECHO, referencia: "gate 900 tests + import-linter 49/49"}
+      cierre: {estado: HECHO, referencia: "F1-B03 completada 2026-08-06"}
   - id: B-04
     hallazgo_informe: H-06
     fase: F1
     prioridad: ALTA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "ocm/config/loader/snapshot.py:92 (`model_dump(mode=json)` serializa SecretStr en claro); apps/app/cli/main.py:27 (`--cfg job`)"
     solucion: "Redactar SecretStr al serializar snapshot; restringir `--cfg job` en producción"
@@ -222,21 +222,21 @@ hallazgos:
       - "test: snapshot no contiene el valor del secret"
     adr_relacionado: null
     riesgo_residual: "Bajo"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-06"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-06"}
       backlog: {estado: HECHO, referencia: "B-04 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: "serializador redactado"}
-      tests: {estado: PENDIENTE, referencia: "snapshot sin secret"}
-      ci: {estado: PENDIENTE, referencia: "R4 activada_en_ci"}
-      evidencia: {estado: PENDIENTE, referencia: "backtest R4"}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "guard --cfg prod + redaccion SecretStr (ffa94c6)"}
+      tests: {estado: HECHO, referencia: "test_cfg_job_guard + test_snapshot_redaction (R4)"}
+      ci: {estado: HECHO, referencia: "R4 activada_en_ci"}
+      evidencia: {estado: HECHO, referencia: "gate 900 tests + import-linter 49/49"}
+      cierre: {estado: HECHO, referencia: "F1-B04 completada 2026-08-06"}
   - id: B-05
     hallazgo_informe: H-14
     fase: F1
     prioridad: ALTA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "Dockerfile:35 (COPY . .); docker-compose.yml (binds 0.0.0.0 por defecto: Redis 6379, Prometheus 9090, Grafana 3000, kafka-ui 8080 sin auth)"
     solucion: ".dockerignore, binds locales/red interna, auth en kafka-ui/grafana, HEALTHCHECK"
@@ -245,16 +245,16 @@ hallazgos:
       - "test de puertos expuestos"
     adr_relacionado: null
     riesgo_residual: "Bajo"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-06"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-14"}
       backlog: {estado: HECHO, referencia: "B-05 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: ".dockerignore, compose, Dockerfile"}
-      tests: {estado: PENDIENTE, referencia: "build + puertos"}
-      ci: {estado: PENDIENTE, referencia: "cheque de imagen"}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: ".dockerignore + kafka-ui auth + loopback (043c3e2)"}
+      tests: {estado: HECHO, referencia: "test_docker_hardening (R5 guard)"}
+      ci: {estado: HECHO, referencia: "guard docker en CI"}
+      evidencia: {estado: HECHO, referencia: "gate 900 tests + import-linter 49/49"}
+      cierre: {estado: HECHO, referencia: "F1-B05 completada 2026-08-06"}
   - id: B-06
     hallazgo_informe: H-04
     fase: F2
