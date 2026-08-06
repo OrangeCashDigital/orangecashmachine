@@ -25,7 +25,7 @@
 | LOC Python (paquetes) | 52 429 | `find packages apps shared ocm infrastructure -name '*.py' \| xargs wc -l` |
 | Hallazgos verificados | 25 (21 confirmados, 4 parcialmente confirmados) | ver §4 |
 
-Nota crítica de método: una auditoría previa del repo (`AUDIT-apps-2026-08-03.md`, `docs/audits/2026-08-composition-root-audit*.md`) reportaba cobertura **13 %** a partir del archivo `.coverage` (stale y gitignoreado en `.gitignore:48`). La medición en vivo al escribir este informe da **43 %**. **Ningún número de este documento proviene de artefactos stale.**
+Nota crítica de método: una auditoría previa del repo (`docs/audits/2026-08-apps-audit.md`, `docs/audits/2026-08-composition-root-audit*.md`) reportaba cobertura **13 %** a partir del archivo `.coverage` (stale y gitignoreado en `.gitignore:48`). La medición en vivo al escribir este informe da **43 %**. **Ningún número de este documento proviene de artefactos stale.**
 
 ---
 
@@ -189,7 +189,7 @@ Leyenda de estado: **Confirmado** = verificado por lectura directa del archivo c
 - **Riesgo:** Regresiones silenciosas en el corazón de datos/trading.
 - **Prioridad:** ALTA.
 - **Complejidad:** Baja fijar el gate (pero subir la cobertura es medio).
-- **Recomendación concreta:** Fijar `fail_under` por etapas (p.ej. 45 % → 60 % en 3 meses) y exigir cobertura >0 en los módulos críticos (`trading/execution`, `storage/iceberg`). Los números se fijarán tras medición real, nunca sobre `AUDIT-apps-2026-08-03.md`.
+- **Recomendación concreta:** Fijar `fail_under` por etapas (p.ej. 45 % → 60 % en 3 meses) y exigir cobertura >0 en los módulos críticos (`trading/execution`, `storage/iceberg`). Los números se fijarán tras medición real, nunca sobre `docs/audits/2026-08-apps-audit.md`.
 - **¿Contradice algún ADR?** No.
 
 #### H-05 — Dos pipelines de config divergentes sin test de paridad
