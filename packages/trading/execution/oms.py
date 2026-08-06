@@ -14,10 +14,11 @@ No genera señales, no accede a exchanges directamente.
 
 Ciclo correcto de posiciones (importante)
 -----------------------------------------
-  submit()  → record_open()  (se abre la posición al aceptar)
-  _fill()   → (posición ya contabilizada en submit)
-  _reject() → record_close() (revertir: la posición no se abrió)
-  cancel()  → record_close() (revertir: la posición no se completó)
+  _open_positions = posiciones HELD (abiertas y tenidas).
+  submit()  → record_open() SOLO si BUY (abre la posición y la mantiene)
+  _fill()   → record_close() SOLO si SELL (cierra la posición realizada)
+  _reject() → record_close() SOLO si era BUY (revertir: no se mantuvo abierta)
+  cancel()  → record_close() SOLO si era BUY (revertir: no se completó)
 
 SafeOps
 -------
@@ -168,8 +169,10 @@ class OMS:
             order.size_pct,
         )
 
-        # record_open aquí — la posición se considera abierta al aceptarla
-        self._risk.record_open()
+        # B-03: BUY abre posición HELD y la mantiene hasta SELL. SELL NO abre.
+        # `_open_positions` = posiciones tenidas (capping max_open_positions).
+        if order.side == OrderSide.BUY:
+            self._risk.record_open()
 
         # Transición a SUBMITTED — protegida ante bugs de estado
         try:
@@ -214,7 +217,9 @@ class OMS:
             order.transition(OrderStatus.CANCELLED)
             self._open.pop(order_id, None)
 
-        self._risk.record_close(pnl_pct=0.0)
+        # Revertir la posición HELD que abrió ese BUY pendiente (si la había).
+        if order.side == OrderSide.BUY:
+            self._risk.record_close(pnl_pct=0.0)
         self._log.info("Order cancelled | {}", order_id)
         return True
 
@@ -268,13 +273,22 @@ class OMS:
     # ------------------------------------------------------------------
 
     def _fill(self, order: Order) -> None:
-        """Transiciona a FILLED. record_open ya fue llamado en submit."""
+        """Transiciona a FILLED. record_open ya fue llamado en submit.
+
+        Semántica held-position (ADR-0003/B-03): `risk._open_positions` cuenta
+        posiciones TENIDAS. submit() abre solo si BUY. Aquí un SELL (cerrar la
+        posición abierta por un BUY previo) hace record_close. Sin este cierre,
+        el contador fuga y `max_open_positions` se agota tras el primer BUY→SELL.
+        """
         order.transition(
             OrderStatus.FILLED,
             fill_price=order.signal.price,
         )
         with self._lock:
             self._open.pop(order.order_id, None)
+
+        if order.side == OrderSide.SELL:
+            self._risk.record_close(pnl_pct=0.0)
 
         self._log.info(
             "Order FILLED | {} {} @ {:.2f}",
@@ -304,7 +318,7 @@ class OMS:
         with self._lock:
             self._open.pop(order.order_id, None)
 
-        if revert_open:
+        if revert_open and order.side == OrderSide.BUY:
             self._risk.record_close(pnl_pct=0.0)
 
         self._log.warning(
