@@ -673,15 +673,21 @@ engineering_health:
   fecha: "2026-08-06"
   contratos_bc_objetivo: 49
   contratos_bc_activos: 49
+  estado: ACTIVADO
+  fecha_activacion: "2026-08-06"
+  script: scripts/engineering_health_check.py
+  evidencia: "F2.0 gate en CI (job engineering-health) + pytest test_engineering_health + backtest ok"
+  gate_ci: "job engineering-health (ocm-ci.yml): Plan<->tracking<->ADR<->contratos<->CI; fail-fast"
   requeridos:
     - "import-linter >= 49 kept (no vacuo; falla si 'Could not find...')"
     - "ADR activas sin collision legacy (SUPERSEDED 0003-0005)"
     - "tracking.yaml parseable + enums validos"
     - "CI mapea cada gate a una regla con activada_en_ci"
+
   pendientes_f2:
-    F2_0_health_ci: "job engineering-health no implementado (C4)"
+    F2_0_health_ci: "ACTIVADO (script + job CI + pytest — 397459e)"
     F2_1_import_linter_no_vacuo: "B-06/B-07/B-10"
-    F2_2_adr_legacy_superseded: "renombrar docs/architecture/0003-0005 -> SUPERSEDED"
-    F2_3_kafka_schemas_8: "liquidations ohlcv oi orderbook orders positions signals trades (0% cobertura)"
-    F2_4_tracking_health: "este bloque es la base; escalar en C"
+    F2_2_adr_legacy_superseded: "HECHO (SUPERSEDED 0003-0005)"
+    F2_3_kafka_schemas_8: "liquidations ohlcv oi orderbook orders positions signals trades (cobertura >0 con tests)"
+    F2_4_tracking_health: "registrado en este bloque; escalar en C"
 nota: "Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md §4."
