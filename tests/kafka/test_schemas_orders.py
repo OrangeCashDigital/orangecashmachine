@@ -9,6 +9,12 @@ Sin dependencias externas. Verifica: round-trip, fail-fast por versión
 incompatible, immutabilidad (frozen).
 
 Regresión Fase 1: los aliases de error y versión son el SSOT canónico.
+
+PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+------------------------------------------------
+- OrderFilledPayload / OrderRejectedPayload → DOMAIN: eventos propios del
+  dominio OCM (OMS→portfolio); NO existen en ningún wire de exchange. Estables
+  por diseño; no requieren PROTOCOL/DOCUMENTATION.
 """
 
 from __future__ import annotations

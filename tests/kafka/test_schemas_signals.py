@@ -11,6 +11,12 @@ incompatible, invariantes de dirección y confianza, propiedades derivadas
 e immutabilidad (frozen).
 
 Regresión Fase 1: los aliases de error y versión son el SSOT canónico.
+
+PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+------------------------------------------------
+- SignalPayload / ApprovedSignalPayload / RejectedSignalPayload → DOMAIN:
+  eventos del dominio estrategia/risk de OCM; NO existen en ningún wire de
+  exchange. Estables por diseño; no requieren PROTOCOL/DOCUMENTATION.
 """
 
 from __future__ import annotations

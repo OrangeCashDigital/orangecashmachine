@@ -9,6 +9,13 @@ Sin dependencias externas. Verifica: round-trip, fail-fast por versión y por
 source desconocido, fail-soft en side, helpers Kappa e immutabilidad (frozen).
 
 Regresión Fase 1: literales SSOT (source) y aliases de versión canónicos.
+
+PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+------------------------------------------------
+- TradePayload / TradeSeriesPayload → ASSUMED (orphan): no hay productor que
+  use el schema; kafka_trade_publisher serializa raw NormalizedTrade JSON
+  directamente. Sin fuente ni emisor, provisional hasta F3.
+- (KafkaOHLCVBar / EventPayload: UPSTREAM_LIBRARY(CCXT); ver test_payloads.py)
 """
 
 from __future__ import annotations

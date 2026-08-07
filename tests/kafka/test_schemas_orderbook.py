@@ -10,6 +10,15 @@ Sin dependencias externas. Verifica: round-trip, fail-fast por versión y por
 side desconocido, payload_type discriminador e immutabilidad (frozen).
 
 Regresión Fase 1: aliases de versión canónicos.
+
+PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+------------------------------------------------
+- OrderBookSnapshotPayload / OrderBookDeltaPayload → PROTOCOL con matiz:
+    Tráfico Bybit WS OBSERVADO (confirmado en vivo via cryptofeed; ver
+    cryptofeed_orderbook_stream.py y este test). La forma del campo llega vía
+    cryptofeed (UPSTREAM_LIBRARY) que normaliza el wire, por eso se anota
+    PROTOCOL(observado) + UPSTREAM_LIBRARY(normalización library). El campo
+    checksum es opcional y puede ser None (exhange no siempre lo expone).
 """
 
 from __future__ import annotations

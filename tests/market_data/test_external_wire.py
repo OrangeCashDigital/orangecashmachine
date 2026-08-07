@@ -1,4 +1,14 @@
-"""Tests del wire payload canónico externo y su routing key."""
+"""Tests del wire payload canónico externo y su routing key.
+
+PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+------------------------------------------------
+- ExternalMetricPayload → DOCUMENTATION: campo canónico (source_id, metric,
+  symbol, timestamp_ms, value, quality_flags) derivado del modelo unificado
+  de fuentes externas (ADR-0014) y de los nombres de métrica detectados en la
+  documentación/OpenAPI de CoinGlass/CMC (ver normalizers/coinglass.py,
+  coinmarketcap.py). Los nombres concretos de campo del provider (fundingRate,
+  openInterest, updateTime, ...) se resuelven en el normalizer, no aquí.
+"""
 
 from __future__ import annotations
 

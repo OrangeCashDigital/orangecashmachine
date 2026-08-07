@@ -11,6 +11,18 @@ side desconocido (liquidations), preservación de campos None e immutabilidad
 (frozen).
 
 Regresión Fase 1: aliases de versión canónicos.
+
+PROVENANCE (Contract Provenance, gancho F3 → ADR-0017)
+------------------------------------------------------
+  FundingRatePayload   — UPSTREAM_LIBRARY(CCXT) para timestamp/funding_rate.
+                          ASSUMED para interval_h, predicted_rate, next_funding_ms
+                          (CCXT fetch_funding_rate solo entrega ts+rate; los
+                          demás son proyección de dominio sin fuente).
+  OpenInterestPayload   — UPSTREAM_LIBRARY(CCXT) para timestamp/open_interest_contracts.
+                          ASSUMED para open_interest_value, mark_price (derivados
+                          sin emisor real).
+  LiquidationPayload    — ASSUMED (orphan): no hay productor/stream (WsLiquidationsStream)
+                          ni conversion raw → payload; on_liquidation es código muerto.
 """
 
 from __future__ import annotations
