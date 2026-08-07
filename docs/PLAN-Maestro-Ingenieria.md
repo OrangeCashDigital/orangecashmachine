@@ -189,6 +189,29 @@ Cada eslabón responde a las 4 preguntas del sistema:
   reales hasta que Orders/Fills estén promovidos** (Provenance estable).
 - **⚠️ Auditoría 2026-08-07 — gate de capital NO enforced en código (B-23, CRÍTICA, tracking.yaml):** `live_hydra.py:196-214` verifica `exchange_config`/`has_credentials` pero **no verifica Promotion Rule/provenance de Orders-Fills**. `IS_STUB=False` ya está commiteado (`live_executor.py:78`, B-12) — el transporte real hacia Bybit está activo sin que el gate_capital declarado aquí tenga chequeo en código. Riesgo residual ALTO (capital real depende de disciplina humana, no de un guard fail-closed). Ver B-23 en `tracking.yaml` para solución propuesta (`is_promoted()` reusable + tercer guard en `live_hydra.py`) y criterios de test.
 
+#### F2.6 — Capacity Planning & Scalability Assessment (gate antes de tooling de escala)
+
+- **Objetivo:** documentar la carga real que `market_data`/`trading` deben soportar hoy y a
+  6–12 meses (exchanges, símbolos, tipos de dato por stream, frecuencia msg/s, cómputo por
+  evento, presupuesto de latencia `paper` vs `live`, hardware disponible en `orangehouse`)
+  antes de que cualquier decisión tecnológica de mayor complejidad (systemd vs. orquestador,
+  particionado, Dagster/Flink, DuckDB) se tome por intuición o anticipación. Principio:
+  crecimiento evolutivo y desacoplado — empezar con la solución más simple (`systemd` + Kafka
+  + lógica actual) y escalar solo cuando la medición lo justifique.
+- **DOR:** F2.5 cerrada (ADR-0017 aceptada); ADR-0016 commiteada (entrypoint `streaming`
+  operativo o en implementación, ver F3).
+- **Entregables:** tabla de capacidad completada (exchanges, símbolos totales, streams por
+  símbolo, msg/s promedio y pico, latencia p50/p99 tolerable, CPU/RAM disponible vs. consumido
+  por `streaming`); conclusión explícita sobre si el proceso único (`systemd`) es suficiente.
+- **DOD:** tabla completa con fuente de cada medición (no estimaciones sin respaldo);
+  conclusión documentada — "arquitectura de proceso único suficiente" o déficit específico
+  identificado con el mecanismo mínimo suficiente propuesto para resolverlo.
+- **Criterio de salida:** ningún entregable de **F5** (catalog remoto, streaming
+  Dagster/Flink, decisión DuckDB) se implementa sin que este assessment demuestre,
+  con métricas, que la carga excede lo que un solo servidor puede manejar; sirve además
+  para revalidar retroactivamente si la elección `systemd` de F3/ADR-0016 sigue siendo
+  adecuada una vez haya datos operativos reales.
+
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
