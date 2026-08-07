@@ -233,7 +233,7 @@ jobs:
         run: uv sync
 
       - name: Run integration tests
-        run: uv run pytest tests/ -q -m integration
+        run: uv run pytest tests/ -q -m integration --no-cov
 
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 3: Validación de config

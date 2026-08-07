@@ -21,7 +21,7 @@ WORKDIR /app
 
 COPY pyproject.toml .
 
-RUN pip install uv && uv sync --no-dev --system
+RUN pip install "uv==0.11.14" && uv sync --no-dev --system
 
 # Stage 2: runtime — imagen final limpia
 FROM python:3.11-slim-bookworm AS runtime
