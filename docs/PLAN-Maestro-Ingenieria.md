@@ -164,7 +164,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Entregables:** tests parametrizados por esquema — round-trip serialización/deserialización, campos, tópico.
 - **DOD:** cada esquema con casos positivos+negativos; cobertura de schemas > 0 % medida.
 - **Criterio de salida:** los 8 tipos con tests; cobertura > 0.
-- **Auditoría 2026-08-07:** verificado en código — existen los 8 schemas (`liquidations.py, ohlcv.py, oi.py, orderbook.py, orders.py, positions.py, signals.py, trades.py`, más `funding.py, external.py, _base.py`) y tests ejecutados (`test_schemas_derivatives/orderbook/orders/positions/signals/trades.py`, `test_schema_provenance.py`, `test_kafka_schemas_roundtrip.py`). **No confirmado:** cobertura % medida en vivo y cierre formal (`estado: HECHO` + `fecha_cierre`) en `tracking.yaml`. Recomendación: correr `pytest --cov=shared/kafka/schemas` y actualizar `tracking.yaml` antes de cerrar F2.3.
+- **Auditoría 2026-08-07 (cierre confirmado):** `pytest --cov=shared/kafka/schemas --cov=shared/kafka/provenance tests/kafka/` → **orderbook.py 100%, orders.py 100%, positions.py 100%, signals.py 100%, trades.py 100%, topics.py 100%, serializer.py 82%** (208 tests passed). Criterio de salida del DOD ("cobertura de schemas > 0%") **cumplido y superado**. Nota importante: el gate `fail_under = 40` de `pyproject.toml:283` es la cobertura **global** del repo (baseline F2.1/B-06/R5, 44% real) — no aplica a F2.3, que mide solo el módulo de schemas. No confundir ambos umbrales. **Pendiente formalizar:** actualizar `estado: HECHO` + `fecha_cierre` en `tracking.yaml` para el hallazgo correspondiente a F2.3.
 
 #### F2.4 — Engineering health / alineación de backlog
 
@@ -187,6 +187,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
   PROTOCOL/DOCUMENTATION/UPSTREAM_LIBRARY/DOMAIN/ASSUMED normativa; Promotion Rule (14) definida.
 - **Criterio de salida:** ADR-0017 aceptada y committeada; gate de capital: **F3 no envía órdenes
   reales hasta que Orders/Fills estén promovidos** (Provenance estable).
+- **⚠️ Auditoría 2026-08-07 — gate de capital NO enforced en código (B-23, CRÍTICA, tracking.yaml):** `live_hydra.py:196-214` verifica `exchange_config`/`has_credentials` pero **no verifica Promotion Rule/provenance de Orders-Fills**. `IS_STUB=False` ya está commiteado (`live_executor.py:78`, B-12) — el transporte real hacia Bybit está activo sin que el gate_capital declarado aquí tenga chequeo en código. Riesgo residual ALTO (capital real depende de disciplina humana, no de un guard fail-closed). Ver B-23 en `tracking.yaml` para solución propuesta (`is_promoted()` reusable + tercer guard en `live_hydra.py`) y criterios de test.
 
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
