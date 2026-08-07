@@ -541,7 +541,8 @@ services:
 
       # Logs menos verbosos
       KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
-      KAFKA_LOG4J_LOGGERS: "kafka=WARN,kafka.controller=WARN,kafka.log.LogCleaner=WARN,state.change.logger=WARN,kafka.producer.async.DefaultEventHandler=WARN"
+      KAFKA_LOG4J_LOGGERS: "kafka=WARN,kafka.controller=WARN,kafka.log.LogCleaner=WARN,state.change.logger=WARN,\
+        kafka.producer.async.DefaultEventHandler=WARN"
 
     volumes:
       - kafka_data:/var/lib/kafka/data
