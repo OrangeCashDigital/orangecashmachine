@@ -177,7 +177,8 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
 - **DOR:** F2.0 verde (Health Check CI); **ADR-0016 aceptada y commiteada** (Bybit, paper→live). ADR-0011 (rebalance) → **movida a F4** (no bloquea el motor).
-- **Entregables:** `LiveExecutor._submit()` con `CCXTAdapter.create_order` + reconciliación de fills; `RebalanceService.rebalance()` cableado; strategies a polars; reglas R9–R10.
+- **Entregables:** `LiveExecutor` real sobre `OrderTransport` (create_order + reconciliación fail-closed + kill switch; reglas **R9–R10 activadas en CI**, job `trading-guards`); `RebalanceService.rebalance()` cableado; strategies a polars.
+- **Avance:** [ ] motor de ejecución (B-12 implementado; paper|live via `--mode`) · [ ] rebalance (B-13 → F4) · [ ] polars strategies (B-14).
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
 
@@ -426,5 +427,6 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (baseline `dcd1741`) | Creación como especificación SSOT del sistema de ingeniería; tracking.yaml v2; verificación de numeración ADR — ADR-0015 quedó ocupado por el blindaje de apps (`a48f28e`), siguiente libre: ADR-0016 |
 | 2026-08-06 | (F1 cerrada) | Cierre F0 (22/22 clasificados) y F1 (B-01…B-05 HECHO); reestructura §4 en F2.0–F2.4 (Engineering Health Check), F3 trading-only, F4 Observabilidad, F5 Escala; **Regla suprema** (preamble); §§13–14 Artefactos Normativos + Ingeniería Continua; **Mapa Fase ↔ Hallazgos**; tracking.yaml se mantiene SSOT de `fase` (sin reasignar hallazgos) |
 | 2026-08-06 | (`397459e`) | **F2.0 ACTIVADO**: `scripts/engineering_health_check.py` + job CI `engineering-health` + pytest gate; valida Plan↔tracking↔ADR↔contratos↔CI (fail-fast). Decisiones F3: exchange inicial **Bybit** (único, paper→live siempre); **ADR-0011 → F4** (no bloquea F3). |
+| 2026-08-06 | (`5090245`, `e04f38d`) | **F3 motor de ejecución**: ADR-0016 aceptada; `OrderTransport` (port), `LiveExecutor` real (reconciliación fail-closed + kill switch + `_notional_qty`), `CCXTAdapter.create_order/fetch_order`, adaptador `_BybitTransport` (BC-50) en composition_root, modo `--mode paper\|live` en `uv run live`; reglas **R9–R10** activadas en CI (job `trading-guards`). Queda F3: rebalance (B-13) y polars strategies (B-14). |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
