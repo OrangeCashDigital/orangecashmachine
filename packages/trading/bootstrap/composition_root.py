@@ -59,11 +59,13 @@ from shared.kafka.provenance import require_promoted
 
 if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
+    from portfolio.services.rebalance_service import RebalanceSignal
     from trading.analytics.trade_tracker import TradeTracker
     from trading.engine import TradingEngine
 
     from ocm.config.schema import ExchangeConfig, TradingConfig
     from ocm.config.schema import RiskConfig as AppRiskConfig
+    from shared.contracts.boundaries import RebalancePort
 
 __all__ = ["TradingCompositionRoot", "TradingRuntime"]
 
@@ -319,6 +321,7 @@ class TradingCompositionRoot:
         risk: Optional["AppRiskConfig"],
         portfolio: "PortfolioService",
         guard: Optional[ExecutionGuard] = None,
+        rebalance_port: Optional["RebalancePort"] = None,
     ) -> None:
         if trading is None:
             raise ValueError(
@@ -331,10 +334,18 @@ class TradingCompositionRoot:
                 "Inyectar el ya ensamblado por PortfolioCompositionRoot.assemble() "
                 "(BC-43) — el root no construye stores propios."
             )
+        if rebalance_port is None:
+            raise ValueError(
+                "TradingCompositionRoot: rebalance_port (RebalancePort) es obligatorio. "
+                "ADR-0011: el caller (use case / CLI, no este root) decide e inyecta la "
+                "implementación concreta (p. ej. RebalanceService()) — el root no "
+                "construye dependencias de otro bounded context por su cuenta."
+            )
         self._trading = trading
         self._risk = risk
         self._portfolio = portfolio
         self._guard = guard
+        self._rebalance_port: "RebalancePort" = rebalance_port
 
     # ------------------------------------------------------------------
     # Data source
@@ -492,24 +503,46 @@ class TradingCompositionRoot:
         )
         return TradingRuntime(engine=engine, portfolio=self._portfolio, tracker=tracker)
 
-    def assemble_rebalance(self, *, use_redis: bool = False) -> TradingRuntime:
-        """Rebalance de posiciones — stub documentado (decisión D3).
+    def assemble_rebalance(
+        self,
+        targets: dict[str, float],
+        *,
+        trigger: str = "manual",
+    ) -> list["RebalanceSignal"]:
+        """Calcula señales de rebalanceo delegando en portfolio (ADR-0011).
 
-        TODO(ADR-0011): decisión de delegación PENDIENTE — delegar en
-        RebalanceService de portfolio vs. tracking propio de trading. Hasta
-        resolverla (ver ADR-0011), este método falla explícitamente en vez de
-        ensamblar un camino sin SSOT.
+        No ensambla un TradingRuntime — el rebalanceo es un cálculo puntual
+        (state + targets -> señales), no un modo de ejecución continua como
+        live/paper. TradingRuntime.engine (TradingEngine con strategy/OMS
+        corriendo run_once()) no es la abstracción correcta para esto. Si
+        las señales resultantes deben disparar órdenes, el caller las
+        despacha usando el runtime ya ensamblado (assemble_live()/
+        assemble_paper()), reutilizando el mismo OMS.
 
-        El tracking real de posiciones y la capacidad de rebalance viven en
-        el bounded context portfolio (RebalanceService), no en trading. La
-        decisión de delegación sigue pendiente; hasta resolverla, este método
-        falla explícitamente en vez de ensamblar un camino sin SSOT.
+        El port (self._rebalance_port) se inyecta en el constructor —
+        wiring único del composition root (ADR-0011); este método no
+        conoce ni construye RebalanceService.
+
+        Parameters
+        ----------
+        targets : dict symbol -> target_pct — pesos objetivo.
+        trigger : razón del rebalanceo ("scheduled" | "drift" | "manual").
+
+        Returns
+        -------
+        list[RebalanceSignal] — vacía si no hay ajustes o hay error
+        (SafeOps, heredado de RebalanceService.rebalance()).
+
+        Raises
+        ------
+        ValueError : si targets no son coherentes (validate_targets).
         """
-        raise NotImplementedError(
-            "assemble_rebalance: decisión de delegación pendiente (D3, auditoría "
-            "2026-08-03; ver ADR-0011). El tracking de posiciones vive en portfolio "
-            "(RebalanceService), no en trading."
-        )
+        state = self._portfolio.snapshot()
+        valid, error = self._rebalance_port.validate_targets(targets)
+        if not valid:
+            raise ValueError(f"assemble_rebalance: targets inválidos — {error}")
+
+        return self._rebalance_port.rebalance(state, targets, trigger=trigger)
 
     # ------------------------------------------------------------------
     # Helpers privados

@@ -148,11 +148,14 @@ def build_live_engine(
     # Fail-Fast: guard obligatorio en live -- sin kill switch no hay ejecucion
     guard = ExecutionGuard(max_errors=max_errors)
 
+    from portfolio.services.rebalance_service import RebalanceService
+
     root = TradingCompositionRoot(
         trading=trading,
         risk=risk,
         portfolio=portfolio_service,
         guard=guard,
+        rebalance_port=RebalanceService(),
     )
     runtime = root.assemble_live(
         min_confidence=min_confidence,

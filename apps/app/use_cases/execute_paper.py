@@ -156,6 +156,7 @@ def build_paper_engine(
     -------
     TradingRuntime — (engine, portfolio, tracker) ya ensamblado.
     """
+    from portfolio.services.rebalance_service import RebalanceService
     from trading.bootstrap.composition_root import TradingCompositionRoot
 
     root = TradingCompositionRoot(
@@ -163,6 +164,7 @@ def build_paper_engine(
         risk=risk,
         portfolio=portfolio_service,
         guard=None,
+        rebalance_port=RebalanceService(),
     )
 
     data_source: "FeatureSource"

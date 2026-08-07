@@ -104,3 +104,48 @@ class RiskGate(Protocol):
         reason es '' si approved=True.
         """
         ...
+
+
+# =============================================================================
+# trading -> portfolio  (rebalanceo, ADR-0011)
+# =============================================================================
+
+
+@runtime_checkable
+class RebalancePort(Protocol):
+    """
+    Contrato que trading espera de portfolio para calcular rebalanceo.
+
+    Implementado por: portfolio.services.rebalance_service.RebalanceService.
+    trading no importa RebalanceService directamente ni conoce su __init__
+    (drift_threshold/min_delta_pct son detalle interno de portfolio).
+
+    ADR-0011: decisión de delegación. portfolio conserva la propiedad
+    exclusiva del estado de posiciones (BC-43/ADR-0006).
+    """
+
+    def rebalance(
+        self,
+        state: Any,
+        targets: dict[str, float],
+        trigger: str = "manual",
+    ) -> list[Any]:
+        """
+        Calcula señales de rebalanceo dado el estado actual y los targets.
+
+        state  : duck-type de portfolio.models.position.PortfolioState.
+                 Tipado Any — shared no importa portfolio (BC-01/BC-34,
+                 contrato de import-linter, ni siquiera bajo TYPE_CHECKING).
+        Returns: duck-type de list[portfolio.services.rebalance_service.RebalanceSignal].
+
+        SafeOps: nunca lanza — retorna lista vacía en error.
+        """
+        ...
+
+    def validate_targets(self, targets: dict[str, float]) -> tuple[bool, str]:
+        """
+        Valida que los targets sean coherentes.
+
+        Returns (valid, error_message). error_message vacío si valid=True.
+        """
+        ...

@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 import pytest
+from portfolio.services.rebalance_service import RebalanceService
 from trading.analytics.trade_tracker import TradeTracker
 from trading.bootstrap.composition_root import TradingCompositionRoot
 from trading.engine import TradingEngine
@@ -49,13 +50,18 @@ from shared.contracts.boundaries import FeatureSource
 
 
 class _FakePortfolio:
-    """Stub de PortfolioService — solo lo que build_fill_sync necesita."""
+    """Stub de PortfolioService — solo lo que build_fill_sync/assemble_rebalance necesitan."""
 
     def open_position(self, **kwargs) -> None:
         pass
 
     def close_position(self, order_id) -> None:
         pass
+
+    def snapshot(self):
+        from portfolio.models.position import PortfolioState
+
+        return PortfolioState(positions=(), capital_usd=10_000.0)
 
 
 class _FakeDataSource:
@@ -107,12 +113,14 @@ def _build_root(
     guard=None,
     risk: AppRiskConfig | None = None,
     _risk_absent: bool = False,
+    rebalance_port=None,
 ) -> TradingCompositionRoot:
     return TradingCompositionRoot(
         trading=_trading_config(),
         risk=None if _risk_absent else (risk if risk is not None else _risk_config()),
         portfolio=_FakePortfolio(),
         guard=guard,
+        rebalance_port=rebalance_port if rebalance_port is not None else RebalanceService(),
     )
 
 
@@ -126,6 +134,7 @@ def test_constructor_requires_trading() -> None:
             risk=_risk_config(),
             portfolio=_FakePortfolio(),
             guard=None,
+            rebalance_port=RebalanceService(),
         )
 
 
@@ -171,6 +180,7 @@ def test_assemble_live_returns_runtime_with_injected_portfolio(
         risk=_risk_config(),
         portfolio=portfolio,
         guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
     )
 
     runtime = root.assemble_live()
@@ -198,6 +208,7 @@ def test_assemble_live_prefers_real_transport_when_exchange_config() -> None:
         risk=_risk_config(),
         portfolio=portfolio,
         guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
     )
     runtime = root.assemble_live()
     assert isinstance(runtime.engine, TradingEngine)
@@ -220,6 +231,7 @@ def test_assemble_live_ok_con_provenance_actual() -> None:
         risk=_risk_config(),
         portfolio=portfolio,
         guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
     )
 
     runtime = root.assemble_live()  # no debe lanzar
@@ -249,6 +261,7 @@ def test_assemble_live_bloquea_si_orders_fills_no_promovidos(monkeypatch) -> Non
         risk=_risk_config(),
         portfolio=_FakePortfolio(),
         guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
     )
 
     with pytest.raises(ValueError, match="OrderFilledPayload"):
@@ -342,6 +355,7 @@ def test_paper_mode_rejects_when_max_open_positions_reached() -> None:
         ),
         portfolio=_FakePortfolio(),
         guard=None,
+        rebalance_port=RebalanceService(),
     )
     runtime = root.assemble_paper(data_source=_FakeDataSourceWithData(_make_crossover_df()))
 
@@ -355,10 +369,64 @@ def test_paper_mode_rejects_when_max_open_positions_reached() -> None:
 # ── assemble_rebalance() ─────────────────────────────────────────────────────
 
 
-def test_assemble_rebalance_is_stubbed() -> None:
-    """D3: stub documentado — el tracking real vive en portfolio."""
-    with pytest.raises(NotImplementedError, match="portfolio"):
-        _build_root(guard=None).assemble_rebalance()
+def test_assemble_rebalance_ok_delegates_to_port() -> None:
+    """ADR-0011: assemble_rebalance delega en el RebalancePort inyectado.
+
+    No ensambla TradingRuntime — retorna list[RebalanceSignal] directo del
+    port (portfolio.RebalanceService en el default de _build_root).
+    """
+    root = _build_root(guard=None)
+
+    signals = root.assemble_rebalance({"BTC/USDT": 0.5}, trigger="manual")
+
+    assert isinstance(signals, list)
+
+
+def test_assemble_rebalance_rejects_invalid_targets() -> None:
+    """ADR-0011: targets inválidos (vacío) -> ValueError vía validate_targets."""
+    root = _build_root(guard=None)
+
+    with pytest.raises(ValueError, match="targets"):
+        root.assemble_rebalance({})
+
+
+def test_assemble_rebalance_uses_injected_port_not_concrete_class() -> None:
+    """ADR-0011: el composition root depende del protocolo, no de la
+    implementación concreta — un fake que satisface RebalancePort basta.
+    """
+
+    class _FakeRebalancePort:
+        def __init__(self) -> None:
+            self.called_with: tuple | None = None
+
+        def validate_targets(self, targets: dict[str, float]) -> tuple[bool, str]:
+            return True, ""
+
+        def rebalance(self, state, targets, trigger="manual"):
+            self.called_with = (state, targets, trigger)
+            return []
+
+    fake_port = _FakeRebalancePort()
+    root = _build_root(guard=None, rebalance_port=fake_port)
+
+    result = root.assemble_rebalance({"ETH/USDT": 0.3}, trigger="drift")
+
+    assert result == []
+    assert fake_port.called_with is not None
+    assert fake_port.called_with[1] == {"ETH/USDT": 0.3}
+    assert fake_port.called_with[2] == "drift"
+
+
+def test_constructor_requires_rebalance_port() -> None:
+    """ADR-0011: rebalance_port es obligatorio — fail-fast, mismo patrón que portfolio."""
+    with pytest.raises(ValueError, match="rebalance_port"):
+        TradingCompositionRoot(
+            trading=_trading_config(),
+            risk=_risk_config(),
+            portfolio=_FakePortfolio(),
+            guard=None,
+            rebalance_port=None,
+        )
 
 
 # ── _map_risk_config / _resolve_risk_config — mapeo 1:1 ──────────────────────

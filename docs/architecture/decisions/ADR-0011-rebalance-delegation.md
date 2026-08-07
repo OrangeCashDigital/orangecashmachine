@@ -1,6 +1,6 @@
 # ADR-0011: Decisión pendiente — delegación de rebalanceo (assemble_rebalance)
 
-**Estado:** Pendiente — decisión abierta, sin resolver (tracking de la deuda)
+**Estado:** Aceptada — 2026-08-07
 **Fecha:** 2026-08-03
 **Bounded context(s) afectado(s):** trading, portfolio
 
@@ -32,11 +32,21 @@ dry-run", pero sin el cuerpo.
 
 ## Decisión
 
-**SIN DECIDIR.** El stub `NotImplementedError` permanece hasta resolver la
-delegación. Este ADR existe como tracking persistente de la decisión abierta
-(requisito de la auditoría 2026-08-03, revisión de coherencia SSOT): un
-método público bloqueado necesita un artefacto descubrible que documente
-por qué y qué se evaluó.
+**Alternativa 1 — Delegar en `RebalanceService` de portfolio, vía protocolo/port.**
+
+`trading` no importa infraestructura de `portfolio` directamente. Se define
+`RebalancePort` (Protocol, `shared/contracts/boundaries.py`) que declara la
+API pública real de `RebalanceService` (`rebalance()`, `validate_targets()`).
+Los tipos que cruzan la frontera (`PortfolioState`, `RebalanceSignal`) se
+tipan bajo `TYPE_CHECKING` — sin import real en runtime, mismo patrón ya
+usado en `composition_root.py` para `PortfolioService`. `trading` recibe una
+instancia que satisface `RebalancePort` inyectada por Composition Root;
+nunca instancia `RebalanceService` ni conoce su `__init__`
+(`drift_threshold`/`min_delta_pct` son detalle interno de portfolio).
+
+Se descarta la Alternativa 2 (tracking propio en trading): viola SSOT
+(BC-43) al crear una segunda fuente de verdad sobre el estado de
+posiciones.
 
 ## Justificación técnica
 
@@ -47,13 +57,15 @@ el diseño no está resuelto.
 
 ## Consecuencias
 
-- `assemble_rebalance()` lanza `NotImplementedError` documentado
-  (composition_root.py, con `TODO(ADR-0011)`).
-- El roadmap debe cerrar esta decisión antes de habilitar rebalanceo desde
-  trading.
-- Mientras tanto, el rebalanceo desde trading no está disponible; portfolio
-  conserva `RebalanceService` como capacidad adelantada (ADR-0004, serie
-  heredada).
+- `RebalancePort` (Protocol, `@runtime_checkable`) declarado en
+  `shared/contracts/boundaries.py`.
+- `assemble_rebalance()` en `composition_root.py` recibe el port inyectado
+  y delega — deja de lanzar `NotImplementedError`.
+- `portfolio` sigue siendo dueño exclusivo del estado de posiciones
+  (BC-43/ADR-0006); `trading` solo conoce el contrato, no la implementación.
+- Cambios futuros en la construcción interna de `RebalanceService`
+  (parámetros de `__init__`, lógica de `_compute`) no rompen `trading`
+  mientras la forma de `RebalancePort` se mantenga estable.
 
 ## Referencias
 
