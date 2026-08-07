@@ -1,7 +1,7 @@
 # AGENTS.md — OrangeCashMachine
 
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
-Clean/Hexagonal with bounded contexts and 44 import-linter contracts (BC-NN).
+Clean/Hexagonal with bounded contexts and 49 import-linter contracts (BC-NN; baseline F2.1, verificada en CI).
 
 ## Commands
 
