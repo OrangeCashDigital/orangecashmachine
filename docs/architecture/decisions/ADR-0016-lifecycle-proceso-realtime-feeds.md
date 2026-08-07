@@ -61,7 +61,7 @@ Evidencia verificada en código (no hipótesis):
   necesita esperar activamente señales (`asyncio.Event()` +
   `loop.add_signal_handler()`), no envolver una ejecución que termina sola.
 - `require_promoted()` (`shared/kafka/provenance.py`) referencia
-  literalmente "Promotion Rule (ADR-0017 §14)" en su docstring, no "B-23";
+  literalmente "Promotion Rule (ADR-0017 §14)" en su docstring, equivalente al ticket B-23;
   su caso de uso documentado son guards de arranque para payloads de
   *ejecución de trading* (`OrderFilledPayload`, `OrderRejectedPayload`), no
   para eventos de `realtime_feeds`. Extenderlo a provenance de market data
