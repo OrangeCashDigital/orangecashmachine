@@ -466,7 +466,7 @@ services:
     restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: "2181"
-      ZOOKEEPER_TICK_TIME:   "2000"
+      ZOOKEEPER_TICK_TIME: "2000"
       ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: "WARN"
     volumes:
       - zookeeper_data:/var/lib/zookeeper/data
@@ -474,8 +474,8 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "zookeeper-shell localhost:2181 ls / > /dev/null 2>&1"]
       interval: 10s
-      timeout:  5s
-      retries:  5
+      timeout: 5s
+      retries: 5
       start_period: 15s
     logging: *default-logging
     networks:
@@ -508,53 +508,53 @@ services:
     ports:
       - "${KAFKA_HOST_PORT:-9093}:9093"
     environment:
-      KAFKA_BROKER_ID:                        "1"
-      KAFKA_ZOOKEEPER_CONNECT:                "zookeeper:2181"
+      KAFKA_BROKER_ID: "1"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
 
       # Listeners:
       #   INTERNAL — entre contenedores (Docker network)
       #   EXTERNAL — desde el host (pipeline local, CLI tools)
-      KAFKA_LISTENERS:                        "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093"
-      KAFKA_ADVERTISED_LISTENERS:             "INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_HOST_PORT:-9093}"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:   "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
-      KAFKA_INTER_BROKER_LISTENER_NAME:       "INTERNAL"
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_HOST_PORT:-9093}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
 
       # Tópicos automáticos — producción: desactivar y crear explícitamente
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE:        "true"
-      KAFKA_DEFAULT_REPLICATION_FACTOR:       "1"
-      KAFKA_MIN_INSYNC_REPLICAS:              "1"
-      KAFKA_NUM_PARTITIONS:                   "3"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_MIN_INSYNC_REPLICAS: "1"
+      KAFKA_NUM_PARTITIONS: "3"
 
       # Retención y rendimiento
-      KAFKA_LOG_RETENTION_HOURS:              "${KAFKA_LOG_RETENTION_HOURS:-168}"
-      KAFKA_LOG_SEGMENT_BYTES:                "1073741824"
-      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS:  "300000"
-      KAFKA_MESSAGE_MAX_BYTES:                "10485760"
+      KAFKA_LOG_RETENTION_HOURS: "${KAFKA_LOG_RETENTION_HOURS:-168}"
+      KAFKA_LOG_SEGMENT_BYTES: "1073741824"
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: "300000"
+      KAFKA_MESSAGE_MAX_BYTES: "10485760"
 
       # Rendimiento producer
-      KAFKA_COMPRESSION_TYPE:                 "gzip"
+      KAFKA_COMPRESSION_TYPE: "gzip"
 
       # Offsets
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR:    "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
 
       # Logs menos verbosos
-      KAFKA_LOG4J_ROOT_LOGLEVEL:              "WARN"
-      KAFKA_LOG4J_LOGGERS:                    "kafka=WARN,kafka.controller=WARN,kafka.log.LogCleaner=WARN,state.change.logger=WARN,kafka.producer.async.DefaultEventHandler=WARN"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_LOG4J_LOGGERS: "kafka=WARN,kafka.controller=WARN,kafka.log.LogCleaner=WARN,state.change.logger=WARN,kafka.producer.async.DefaultEventHandler=WARN"
 
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
       test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
       interval: 60s
-      timeout:  10s
-      retries:  5
+      timeout: 10s
+      retries: 5
       start_period: 30s
     deploy:
       resources:
         limits:
-          cpus:   "1.0"
+          cpus: "1.0"
           memory: 1024M
     logging: *default-logging
     networks:
@@ -581,10 +581,10 @@ services:
       AUTH_TYPE: "LOGIN_FORM"
       SPRING_SECURITY_USER_USERNAME: ${KAFKA_UI_USER:-admin}
       SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:?KAFKA_UI_PASSWORD must be set in .env}
-      KAFKA_CLUSTERS_0_NAME:            "ocm-local"
+      KAFKA_CLUSTERS_0_NAME: "ocm-local"
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
-      KAFKA_CLUSTERS_0_ZOOKEEPER:       "zookeeper:2181"
-      DYNAMIC_CONFIG_ENABLED:           "false"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
+      DYNAMIC_CONFIG_ENABLED: "false"
     logging: *default-logging
     networks:
       - ocm_internal
