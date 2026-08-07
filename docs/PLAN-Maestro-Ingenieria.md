@@ -176,7 +176,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
-- **DOR:** F2 cerrada; **ADR-0016** aceptada; **ADR-0011** decidida.
+- **DOR:** F2.0 verde (Health Check CI); **ADR-0016 aceptada y commiteada** (Bybit, paper→live). ADR-0011 (rebalance) → **movida a F4** (no bloquea el motor).
 - **Entregables:** `LiveExecutor._submit()` con `CCXTAdapter.create_order` + reconciliación de fills; `RebalanceService.rebalance()` cableado; strategies a polars; reglas R9–R10.
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
@@ -207,8 +207,8 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | F2.2 | B-13 (legacy ADR 0003–0005) | ADR-0003..0015 SSOT | renaming |
 | F2.3 | B-18 (H-15) | ADR-0013, ADR-0018 | 8 schemas Kafka |
 | F2.4 | B-20, B-21 | — | tracking-consistency |
-| F3 | B-12, B-01, B-03 (H-01, H-19, H-22) | ADR-0016 | trading live |
-| F4 | B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0017, ADR-0018 | obs/estado |
+| F3 | B-12, B-01, B-03 (H-01, H-19, H-22) | ADR-0016 (aceptada) | trading live — Bybit |
+| F4 | B-13 (rebalance, de F3), B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0011, ADR-0017, ADR-0018 | obs/estado |
 | F5 | B-14, B-22, H-13 | ADR-0019, ADR-0020 | escala |
 
 ---
@@ -241,7 +241,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 | ADR | Tema | Fase | Enlaza hallazgos | Guard de numeración |
 |---|---|---|---|---|
-| ADR-0016 | LiveExecutor real + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 (guard en F1) | H-01, H-03, B-01, B-03, B-12 | Verificar al crear (libre tras ADR-0015 real) |
+| ADR-0016 | LiveExecutor real (Bybit) + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 | H-01, H-03, B-01, B-03, B-12 | **Aceptada + commiteada** (2026-08-06) |
 | ADR-0017 | Unificación del estado de posiciones | F4 | H-09, B-15 | Verificar al crear |
 | ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F2.3 / F4 | H-15, B-18 | Verificar al crear |
 | ADR-0019 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear |
