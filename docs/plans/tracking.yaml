@@ -265,7 +265,7 @@ hallazgos:
     solucion: "Medir cobertura por módulo en F0; fijar fail_under con margen; subir cobertura en trading/execution y storage/iceberg"
     pruebas:
       - "pytest --cov gateado con fail_under > 0 (40, baseline 44%)"
-    adr_relacionado: null
+    adr_relacionado: "ADR-0020-production-gate-release"
     riesgo_residual: "Bajo: umbral fijado sobre medición real 44%, con margen de 4pts"
     fecha_cierre: 2026-08-06
     cadena:
@@ -287,7 +287,7 @@ hallazgos:
     solucion: "Job CI security + pre-commit con `bandit -ll`; umbral por BLOCKER"
     pruebas:
       - "CI rojo ante hallazgo BLOCKER; verde sin hallazgos (run local: 0 HIGH)"
-    adr_relacionado: null
+    adr_relacionado: "ADR-0020-production-gate-release"
     riesgo_residual: "Bajo"
     fecha_cierre: 2026-08-06
     cadena:
