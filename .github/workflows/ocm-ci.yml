@@ -99,7 +99,7 @@ jobs:
         run: uv sync --group dev
 
       - name: App layer AST guard (R12–R16)
-        run: uv run pytest tests/architecture/test_app_layer_guard.py -q -m "not integration"
+        run: uv run pytest tests/architecture/test_app_layer_guard.py -q -m "not integration" --no-cov
 
       - name: Backtest historico del guard (R12–R16)
         run: uv run python scripts/backtest_app_guard.py
@@ -132,7 +132,10 @@ jobs:
         run: uv sync --group dev
 
       - name: Live executor rules (R9/R10)
-        run: uv run pytest tests/trading/test_live_executor.py tests/trading/test_transport_mapping.py -q -m "not integration"
+        run: >-
+          uv run pytest tests/trading/test_live_executor.py
+          tests/trading/test_transport_mapping.py
+          -q -m "not integration" --no-cov
 
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 2a: Unit tests
@@ -159,7 +162,10 @@ jobs:
       - name: Run unit tests with coverage gate
         # R5 (B-06/F2.1): fail_under=40 sobre el baseline real 44% (margen),
         # subiéndolo gradualmente. Un descenso por debajo rompe el CI.
-        run: uv run pytest tests/ -x -q -m "not integration" --cov=packages --cov=ocm --cov=shared --cov=apps --cov-report=term
+        run: >-
+          uv run pytest tests/ -x -q -m "not integration"
+          --cov=packages --cov=ocm --cov=shared --cov=apps
+          --cov-report=term
 
   # ──────────────────────────────────────────────────────────────────────────
   # JOB 1d: security (R6 — B-07/F2.1)
