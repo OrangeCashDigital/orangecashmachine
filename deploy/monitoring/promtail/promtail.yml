@@ -24,9 +24,9 @@ scrape_configs:
       - targets:
           - localhost
         labels:
-          job:  ocm_app
+          job: ocm_app
           host: orangehouse
-          env:  development
+          env: development
           __path__: /logs/orangecashmachine_*.log
 
   - job_name: ocm_error_logs
@@ -34,7 +34,7 @@ scrape_configs:
       - targets:
           - localhost
         labels:
-          job:  ocm_errors
+          job: ocm_errors
           host: orangehouse
-          env:  development
+          env: development
           __path__: /logs/errors_*.log

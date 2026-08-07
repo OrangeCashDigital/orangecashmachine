@@ -12,7 +12,7 @@
 # SSOT: los targets deben coincidir con los service names de docker-compose.yml.
 
 global:
-  scrape_interval:     15s
+  scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
     monitor: 'ocm'
@@ -34,4 +34,3 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets: ['pushgateway:9091']
-
