@@ -9,9 +9,9 @@
 
 > ## ⚖️ Regla suprema (preamble)
 > **No se implementará ninguna funcionalidad nueva si degrada cualquiera de los artefactos normativos del proyecto.**
-> Orden inviolable del cambio: `Plan → Tracking → ADR → Código → Tests → CI → Release`. Un paso nunca se salta; los artefactos normativos son la Constitución (ver §13 · §14).
+> Orden inviolable del cambio: `Plan → Tracking → ADR → Código → Tests → CI → Release`. Un paso nunca se salta; los artefactos normativos son la Constitución (ver §12 · §13).
 
-- **Métricas baseline (remedidas en vivo en F0, 2026-08-06):** 882 tests (suite unit, integration excluidas) / 43 % cobertura / **49 contratos BC** / 25 constantes de tópicos Kafka / 52 237 LOC Python. El baseline "47 contratos" se corrigió a "49" **por BC-53 y BC-54** (trazabilidad del blindaje de `apps/`, serie INFORME-2026-08-06) — es trazabilidad, no un error previo; el `mediciones_f0` del tracking registra el delta 47→49.
+- **Métricas baseline (remedidas en vivo en F0, 2026-08-06):** 900 tests (suite unit, integration excluidas) / 44 % cobertura / **49 contratos BC** / 25 constantes de tópicos Kafka / 52 237 LOC Python. El baseline "47 contratos" se corrigió a "49" **por BC-53 y BC-54** (trazabilidad del blindaje de `apps/`, serie INFORME-2026-08-06) — es trazabilidad, no un error previo; el `mediciones_f0` del tracking registra el delta 47→49.
 
 ---
 
@@ -83,7 +83,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | # | Principio | ¿Qué problema evita? | ¿Mecanismo automático? | ¿Evidencia? | ¿Cómo previene la regresión? |
 |---|---|---|---|---|---|
 | 1 | Trazabilidad completa | Defectos huérfanos | Cadena de §2 + tracking.yaml v2 | Backlog con cadena por hallazgo | Job `tracking-consistency` en CI |
-| 2 | Automatización > disciplina | "Recordar revisar X" falla | import-linter (47 BC), AST guards (`tests/architecture/`), mypy, bandit, CI gates | Comando que da FAIL ante la violación | Las reglas son propiedad del repo, se ejecutan en cada PR |
+| 2 | Automatización > disciplina | "Recordar revisar X" falla | import-linter (49 BC), AST guards (`tests/architecture/`), mypy, bandit, CI gates | Comando que da FAIL ante la violación | Las reglas son propiedad del repo, se ejecutan en cada PR |
 | 3 | Evidencia verificable | "Mejoramos" sin demostrarlo | Cada objetivo = cheque medible (no intención) | Salida del cheque + fecha + commit | Cualquier afirmación sin cheque se marca **No verificado** |
 | 4 | ADR para decisiones | Arquitectura implícita | Plantilla `ADR-template.md` + guard de numeración | ADR con estado; enlace en yaml | Guard de numeración en cada creación |
 | 5 | DOR/DOD por tarea | Trabajo "en progreso" infinito | Criterios de entrada/salida por fase (§4) | Estado en yaml + cheque del DOD | DoD con comando verificable |
@@ -157,13 +157,14 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **DOD:** `docs/architecture/decisions/` como único SSOT activo; cero legacy activos.
 - **Criterio de salida:** legacy cerrados (0 colisión); Plan↔tracking coherentes.
 
-#### F2.3 — Contratos Kafka (8 schemas, de 0 % a >0 %)
+#### F2.3 — Contratos Kafka (8 schemas, de 0 % a >0 %) — ⚠️ AVANZADA, verificar cierre formal
 
 - **Objetivo:** elevar cobertura real de los 8 esquemas en `shared/kafka/schemas/` (liquidations, ohlcv, oi, orderbook, orders, positions, signals, trades) desde **0 %**.
 - **DOR:** ADR-0013 (modelo de ingestión) aceptada; F2.2 cerrada.
 - **Entregables:** tests parametrizados por esquema — round-trip serialización/deserialización, campos, tópico.
 - **DOD:** cada esquema con casos positivos+negativos; cobertura de schemas > 0 % medida.
 - **Criterio de salida:** los 8 tipos con tests; cobertura > 0.
+- **Auditoría 2026-08-07:** verificado en código — existen los 8 schemas (`liquidations.py, ohlcv.py, oi.py, orderbook.py, orders.py, positions.py, signals.py, trades.py`, más `funding.py, external.py, _base.py`) y tests ejecutados (`test_schemas_derivatives/orderbook/orders/positions/signals/trades.py`, `test_schema_provenance.py`, `test_kafka_schemas_roundtrip.py`). **No confirmado:** cobertura % medida en vivo y cierre formal (`estado: HECHO` + `fecha_cierre`) en `tracking.yaml`. Recomendación: correr `pytest --cov=shared/kafka/schemas` y actualizar `tracking.yaml` antes de cerrar F2.3.
 
 #### F2.4 — Engineering health / alineación de backlog
 
@@ -192,7 +193,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
 - **DOR:** F2.0 verde (Health Check CI); **ADR-0016 aceptada y commiteada** (Bybit, paper→live). ADR-0011 (rebalance) → **movida a F4** (no bloquea el motor).
 - **Entregables:** `LiveExecutor` real sobre `OrderTransport` (create_order + reconciliación fail-closed + kill switch; reglas **R9–R10 activadas en CI**, job `trading-guards`); `RebalanceService.rebalance()` cableado; strategies a polars.
-- **Avance:** [ ] motor de ejecución (B-12 implementado; paper|live via `--mode`) · [ ] rebalance (B-13 → F4) · [x] polars strategies (B-14, migrado a polars).
+- **Avance:** [x] motor de ejecución (B-12 implementado; paper|live via `--mode`) · [~] rebalance (B-13: `RebalanceService.rebalance()` **implementado** en `packages/portfolio/services/rebalance_service.py` — validación fail-fast, retorna `list[RebalanceSignal]` — pero **no wireado** en `apps/` ni `infrastructure/bootstrap/*.py`; auditoría 2026-08-07, grep sin resultados; permanece en F4 hasta integrarlo al CompositionRoot) · [x] polars strategies (B-14, migrado a polars, evidencia: cero `import pandas` residual, 23 tests).
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
 
@@ -258,7 +259,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | ADR | Tema | Fase | Enlaza hallazgos | Guard de numeración |
 |---|---|---|---|---|
 | ADR-0016 | LiveExecutor real (Bybit) + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 | H-01, H-03, B-01, B-03, B-12 | **Aceptada + commiteada** (2026-08-06) |
-| ADR-0017 | Protocol Discovery Framework (PDF) — metodología de descubrimiento/validación/modelado de protocolos externos; Contract Provenance como componente | F2.5 | H-15, B-18 | Verificar al crear |
+| ADR-0017 | Protocol Discovery Framework (PDF) — metodología de descubrimiento/validación/modelado de protocolos externos; Contract Provenance como componente | F2.5 | H-15, B-18 | **Aceptada + commiteada** (2026-08-06) |
 | ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F2.3 / F4 | H-15, B-18 | Verificar al crear |
 | ADR-0019 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear |
 | ADR-0020 | Production Gate como gate de release | F2.1 | B-06, B-07 | **Aceptada + commiteada** (2026-08-06) |
@@ -302,7 +303,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | Artefacto | Contenido | Rol |
 |---|---|---|
 | `docs/plans/tracking.yaml` | Estado real de los 22 hallazgos (backlog + cadena de trazabilidad completa) y las 16 reglas auto-defendibles (backtest + `activada_en_ci`) | **SSOT operativo** |
-| Este documento (§2) | La **cadena** (cómo funciona el backlog) y **un ejemplo transversal** (B-03) | Norma/jilosófulo |
+| Este documento (§2) | La **cadena** (cómo funciona el backlog) y **un ejemplo transversal** (B-03) | Mapa / filosofía |
 | `docs/audits/2026-08-auditoria-integral.md` | La **evidencia original** de cada hallazgo (fotografía inmutable de `dcd1741`) | Historial |
 
 ### Vista conceptual del backlog (cómo funciona, no qué hay dentro)
@@ -361,7 +362,7 @@ B-NN:
 | Clean Architecture | 8/10 | 9/10 | B-11, B-20, B-21 | AST guards de pureza (R11, R8) |
 | Hexagonal | 8/10 | 9/10 | B-12, B-21 | guards de ports/adapters |
 | Event Driven | 6/10 | 8/10 | B-18, B-19 | schema evolution + dedup probados |
-| Configuración | 8/10 | 9/10 | B-09, B-04 | paridad de config + secrets redactados |
+| Configuración | 8/10 | 9/10 | B-09, B-04 | secrets redactados (B-04, HECHO) — ⚠️ paridad de config (B-09) sigue PENDIENTE en tracking.yaml (auditoría 2026-08-07); el 8/10 actual no debería atribuirse a B-09 hasta su cierre |
 | Performance | 5/10 | 7/10 | B-14, F5 benchmarks | benchmarks documentados |
 
 > **Regla del scorecard:** un punto se considera ganado **solo** cuando existe la evidencia de la columna derecha (cheque verde con fecha+commit). Hasta entonces, el puntaje no sube — coherencia con el principio "evidencia, no intención".
@@ -395,7 +396,7 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 
 ---
 
-## 13. Artefactos normativos (Constitución)
+## 12. Artefactos normativos (Constitución)
 
 > Toda evolución técnica debe respetar estos artefactos. Son la **Constitución** que invoca la Regla suprema (preamble). Cada uno tiene un rol y una ubicación única (SSOT). Al degradar cualquiera de ellos, la funcionalidad nueva queda fuera de `main`.
 
@@ -417,7 +418,7 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 
 ---
 
-## 14. Ingeniería Continua (Continuous Engineering)
+## 13. Ingeniería Continua (Continuous Engineering)
 
 > Workflow por defecto para todo cambio. Respeta la cadena maestra §2 y siempre termina registrado en `tracking.yaml`.
 
@@ -435,7 +436,7 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 
 ---
 
-## 12. Registro de cambios
+## 14. Registro de cambios
 
 | Fecha | Commit | Cambio |
 |---|---|---|

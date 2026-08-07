@@ -488,6 +488,7 @@ hallazgos:
     solucion: "Unificar estado de posición en PortfolioService (única fuente mutable, ADR-0006); fill_sync/TradeTracker consumen eventos"
     pruebas:
       - "test: un solo dueño mutable; cierre no falla silenciosamente"
+      - "test: close_position (portfolio_service.py:126-152) propaga excepción — no debe atrapar y devolver None; fill_sync (fill_sync.py:46-49, rama SELL :96-98) no debe descartar el retorno"
     adr_relacionado: "ADR-0006; ADR-0021"
     riesgo_residual: "Medio: migración de estado"
     fecha_cierre: null
