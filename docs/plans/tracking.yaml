@@ -410,6 +410,30 @@ hallazgos:
       ci: {estado: HECHO, referencia: "R9/R10 activadas_en_ci (job trading-guards)"}
       evidencia: {estado: PENDIENTE, referencia: "backtest R9/R10"}
       cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-23
+    hallazgo_informe: H-01
+    fase: F2
+    prioridad: CRITICA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "live_hydra.py:196-214 (guard mode=live verifica exchange_config y has_credentials, pero NO verifica Promotion Rule/provenance de Orders-Fills); IS_STUB=False ya commiteado (live_executor.py:78, B-12) — el transporte real hacia Bybit está activo sin que exista enforcement en código del gate_capital declarado en tracking.yaml (prerequisito_f3_discovery)"
+    solucion: "Agregar tercer guard fail-closed en live_hydra.py, junto a los checks de exchange_config/has_credentials: verificar que Orders/Fills (OrderFilledPayload, OrderRejectedPayload) tengan provenance promovida (PROTOCOL|DOCUMENTATION|UPSTREAM_LIBRARY|DOMAIN, no ASSUMED) antes de permitir mode=live. Exponer una función pública reusable (p.ej. ocm.observability.provenance.is_promoted(schema_name) -> bool) que lea el registro PROVIDENCE sin acoplar el CLI al módulo de tests (DIP)."
+    pruebas:
+      - "test positivo: mode=live con Orders/Fills promovidos y credenciales válidas → procede"
+      - "test negativo: mode=live con algún schema crítico en ASSUMED → return 1, fail-closed, mensaje cita ADR-0017/Promotion Rule 14"
+      - "test negativo: mode=live con credenciales válidas pero función is_promoted() no disponible/import falla → fail-closed, nunca fail-open"
+    adr_relacionado: ADR-0017
+    riesgo_residual: "Alto: capital real — el gate_capital documentado en tracking.yaml (prerequisito_f3_discovery) depende hoy de disciplina humana, no de un chequeo en código"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01 (extensión — gap entre B-12/IS_STUB=False y gate_capital de F2.5)"}
+      backlog: {estado: HECHO, referencia: "B-23 en tracking v2"}
+      adr: {estado: HECHO, referencia: "ADR-0017-protocol-discovery-framework (Promotion Rule, punto 14)"}
+      implementacion: {estado: PENDIENTE, referencia: null}
+      tests: {estado: PENDIENTE, referencia: null}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
   - id: B-13
     hallazgo_informe: H-19
     fase: F3
