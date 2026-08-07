@@ -42,3 +42,9 @@ repos:
         entry: uv run bandit -r apps ocm packages shared infrastructure -ll
         language: system
         pass_filenames: false
+      - id: pytest-pre-push
+        name: Pytest (suite completa, sin integration)
+        entry: uv run pytest tests/ -x -q -m "not integration"
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

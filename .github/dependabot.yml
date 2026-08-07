@@ -7,3 +7,7 @@ updates:
     groups:
       dev-dependencies:
         patterns: ["pytest", "ruff", "mypy", "pydeps", "pip-audit"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
