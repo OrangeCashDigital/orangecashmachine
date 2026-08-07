@@ -58,3 +58,4 @@ docs/arch/import_graph_*.svg
 architecture/metrics.json
 # shared.svg es el grafo generado por pydeps (artifact opcional, no se commitea).
 shared.svg
+coverage.json
