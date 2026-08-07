@@ -55,6 +55,7 @@ from trading.risk.models import (
 
 from ocm.runtime.guard import ExecutionGuard
 from shared.contracts.boundaries import FeatureSource
+from shared.kafka.provenance import require_promoted
 
 if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
@@ -400,6 +401,14 @@ class TradingCompositionRoot:
         else:
             # Paper: mismo flujo orden→fill→reconciliación, sin I/O (ADR-0016).
             transport = PaperTransport()
+        # Guard B-23: fail-closed — Promotion Rule (ADR-0017 §14). Defensa en
+        # profundidad: protege contra degradación futura de PROVIDENCE (p. ej.
+        # un payload que pase a ASSUMED sin revalidación), no corrige un fallo
+        # actual — hoy Orders/Fills ya están en DOMAIN (promovido). Va antes
+        # de IS_STUB porque es un gate independiente y más estricto: ni se
+        # instancia el executor si la procedencia no está satisfecha.
+        require_promoted("OrderFilledPayload", "OrderRejectedPayload")
+
         executor = LiveExecutor(
             capital_usd=self._trading.capital_usd,
             transport=transport,

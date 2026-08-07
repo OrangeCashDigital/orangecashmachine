@@ -39,6 +39,17 @@ Este test:
 
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# Registro de procedencia (SSOT documental)
+# ---------------------------------------------------------------------------
+# Columns: payload_name -> (provenance, state, source_note)
+#   state: "wired"    = hay productor real que lo emite (o DOMAIN interno)
+#          "orphan"   = NO hay productor/stream que use este payload (código muerto o futuro)
+# El estado se documenta en __doc__ de cada test_*.py y se refuerza aquí.
+# SSOT: registro movido a shared/kafka/provenance.py (B-23) — este módulo
+# lo consume tanto para el fail-fast de cobertura (F2.3) como el gate de
+# capital en apps/app/cli/live_hydra.py. No duplicar el dict aquí.
+from shared.kafka.provenance import PROVIDENCE
 from shared.kafka.schemas.external import ExternalMetricPayload
 from shared.kafka.schemas.funding import FundingRatePayload
 from shared.kafka.schemas.liquidations import LiquidationPayload
@@ -65,51 +76,6 @@ from shared.kafka.schemas.trades import (
     TradePayload,
     TradeSeriesPayload,
 )
-
-# ---------------------------------------------------------------------------
-# Registro de procedencia (SSOT documental)
-# ---------------------------------------------------------------------------
-
-# Columns: payload_name -> (provenance, state, source_note)
-#   state: "wired"    = hay productor real que lo emite (o DOMAIN interno)
-#          "orphan"   = NO hay productor/stream que use este payload (código muerto o futuro)
-# El estado se documenta en __doc__ de cada test_*.py y se refuerza aquí.
-PROVIDENCE: dict[str, tuple[str, str, str]] = {
-    # --- PROTOCOL (tráfico observado) ---
-    "OrderBookSnapshotPayload": ("PROTOCOL", "wired", "WS Bybit observado (cryptofeed); ver test_schemas_orderbook.py"),
-    "OrderBookDeltaPayload": ("PROTOCOL", "wired", "WS Bybit observado (cryptofeed); ver test_schemas_orderbook.py"),
-    # --- UPSTREAM_LIBRARY (esquema unificado CCXT) ---
-    "KafkaOHLCVBar": ("UPSTREAM_LIBRARY", "wired", "CCXT fetch_ohlcv tuple (timestamp,o,h,l,c,v)"),
-    "EventPayload": ("UPSTREAM_LIBRARY", "wired", "CCXT OHLCV cuesco; envoltura interna"),
-    # --- DOCUMENTATION (OpenAPI / docs oficial) ---
-    "ExternalMetricPayload": ("DOCUMENTATION", "wired", "CoinGlass/CMC OpenAPI; ver test_external_wire.py"),
-    # --- DOMAIN (dominio interno, no existe en wire) ---
-    "SignalPayload": ("DOMAIN", "wired", "estrategia → RiskGate (evento propio)"),
-    "ApprovedSignalPayload": ("DOMAIN", "wired", "RiskGate → ejecución (evento propio)"),
-    "RejectedSignalPayload": ("DOMAIN", "wired", "RiskGate rechazo (evento propio)"),
-    "OrderFilledPayload": ("DOMAIN", "wired", "OMSS→portfolio (evento propio)"),
-    "OrderRejectedPayload": ("DOMAIN", "wired", "OMSS→ops (evento propio)"),
-    "PositionOpenedPayload": ("DOMAIN", "wired", "portfolio (evento propio)"),
-    "PositionClosedPayload": ("DOMAIN", "wired", "portfolio (evento propio)"),
-    # --- ASSIGNED/ASSUMED (provisional — sin productor real que lo use) ---
-    "TradePayload": (
-        "ASSUMED",
-        "orphan",
-        "no productor usa el schema (kafka_trade_publisher serializa raw NormalizedTrade JSON)",
-    ),
-    "TradeSeriesPayload": ("ASSUMED", "orphan", "no productor emitente (TradesAggregator pendiente)"),
-    "FundingRatePayload": (
-        "ASSUMED",
-        "orphan",
-        "campos extra (interval_h, predicted_rate, next_funding_ms) sin fuente; CCXT solo da ts+rate",
-    ),
-    "OpenInterestPayload": (
-        "ASSUMED",
-        "orphan",
-        "open_interest_value/mark_price derivados sin fuente; CCXT solo da ts+oi",
-    ),
-    "LiquidationPayload": ("ASSUMED", "orphan", "sin fuente ni productor (on_liquidation es código muerto)"),
-}
 
 # ---------------------------------------------------------------------------
 # Todos los payloads importados (para fail-fast si faltan en el registro)

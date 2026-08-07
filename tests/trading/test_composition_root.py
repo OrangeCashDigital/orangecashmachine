@@ -207,6 +207,54 @@ def test_assemble_live_prefers_real_transport_when_exchange_config() -> None:
     assert not LiveExecutor.IS_STUB, "LiveExecutor no debe ser STUB tras F3 (B-12)"
 
 
+def test_assemble_live_ok_con_provenance_actual() -> None:
+    """B-23: con PROVIDENCE actual (Orders/Fills en DOMAIN), assemble_live no bloquea.
+
+    Camino feliz — confirma que el guard de la Promotion Rule (ADR-0017 §14)
+    no interfiere con el estado presente del sistema. B-23 es defensa en
+    profundidad para el futuro, no una corrección de un fallo actual.
+    """
+    portfolio = _FakePortfolio()
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=portfolio,
+        guard=ExecutionGuard(max_errors=3),
+    )
+
+    runtime = root.assemble_live()  # no debe lanzar
+
+    assert isinstance(runtime.engine, TradingEngine)
+    assert runtime.portfolio is portfolio
+
+
+def test_assemble_live_bloquea_si_orders_fills_no_promovidos(monkeypatch) -> None:
+    """B-23: fail-closed — degradar OrderFilledPayload a ASSUMED bloquea assemble_live.
+
+    Simula un descuido futuro (schema pierde su categoría promovida sin
+    revalidación) y confirma que el guard de la Promotion Rule (ADR-0017 §14)
+    frena el ensamblaje del executor real antes de tocar IS_STUB, con un
+    mensaje que identifica el payload culpable.
+    """
+    from shared.kafka import provenance
+
+    monkeypatch.setitem(
+        provenance.PROVIDENCE,
+        "OrderFilledPayload",
+        ("ASSUMED", "wired", "monkeypatch de test B-23 — degradación simulada"),
+    )
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+    )
+
+    with pytest.raises(ValueError, match="OrderFilledPayload"):
+        root.assemble_live()
+
+
 # ── assemble_paper() ─────────────────────────────────────────────────────────
 
 
