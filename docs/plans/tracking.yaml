@@ -688,6 +688,33 @@ engineering_health:
     F2_0_health_ci: "ACTIVADO (script + job CI + pytest — 397459e)"
     F2_1_import_linter_no_vacuo: "B-06/B-07/B-10"
     F2_2_adr_legacy_superseded: "HECHO (SUPERSEDED 0003-0005)"
-    F2_3_kafka_schemas_8: "liquidations ohlcv oi orderbook orders positions signals trades (cobertura >0 con tests)"
+    F2_3_kafka_schemas_8: "liquidations ohlcv oi orderbook orders positions signals trades (cobertura >0 con tests) + PROVENANCE tags (protocol/documentation/upstream_library/domain/assumed)"
     F2_4_tracking_health: "registrado en este bloque; escalar en C"
+
+# =============================================================================
+# PREREQUISITO F3 — Protocol Discovery Framework (gancho, NO bloquea F2)
+# =============================================================================
+# Al alcanzar F3 (ejecución real de órdenes/fills) se institucionaliza la
+# ingesta basada en evidencia. Este bloque es gancho explícito de F3 y NO
+# abre trabajo en F2.
+#
+# Framework genérico (multi-exchange / multi-fuente; Bybit SOLO el primer
+# adapter):
+#   fuente (REST/WS/exchange/onchain) -> captura de protocolo (raw) ->
+#   persistencia raw (timestamp+version) -> catálogo de mensajes observados ->
+#   normalización vía adapter -> modelo interno OCM -> evento Kafka -> dominio.
+#
+# Regla SSOT de contratos (ADR-0017 en F3): todo contrato (Schema/DTO/Evento/
+# Entidad/VO) DEBE declarar su provenance:
+#   PROTOCOL | DOCUMENTATION | UPSTREAM_LIBRARY | DOMAIN | ASSUMED (provisional).
+# Solo los de provenance estable (no ASSUMED) califican SSOT; los provisionales
+# quedan marcados y se resuelven en F3.
+#
+# La provenance inicial de los schemas actuales queda registrada en
+# tests/kafka/test_schema_provenance.py (F2.3) como semilla del gancho.
+prerequisito_f3_discovery:
+  estado: "gancho (pendiente F3)"
+  semilla: "tests/kafka/test_schema_provenance.py (F2.3) -- provee linaje de cada schema"
+  institucionalizacion: "ADR-0017 en F3 + Discovery Kit segmentado (REST/WS/Execution-fills/Orders/Funding/Liquidations)"
+  nota: "Bybit es la primera implementación del framework; el diseño es multi-exchange/multi-fuente."
 nota: "Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md §4."
