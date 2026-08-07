@@ -198,7 +198,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
   particionado, Dagster/Flink, DuckDB) se tome por intuición o anticipación. Principio:
   crecimiento evolutivo y desacoplado — empezar con la solución más simple (`systemd` + Kafka
   + lógica actual) y escalar solo cuando la medición lo justifique.
-- **DOR:** F2.5 cerrada (ADR-0017 aceptada); ADR-0016 commiteada (entrypoint `streaming`
+- **DOR:** F2.5 cerrada (ADR-0017 aceptada); ADR-0022 commiteada (entrypoint `streaming`
   operativo o en implementación, ver F3).
 - **Entregables:** tabla de capacidad completada (exchanges, símbolos totales, streams por
   símbolo, msg/s promedio y pico, latencia p50/p99 tolerable, CPU/RAM disponible vs. consumido
@@ -209,7 +209,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Criterio de salida:** ningún entregable de **F5** (catalog remoto, streaming
   Dagster/Flink, decisión DuckDB) se implementa sin que este assessment demuestre,
   con métricas, que la carga excede lo que un solo servidor puede manejar; sirve además
-  para revalidar retroactivamente si la elección `systemd` de F3/ADR-0016 sigue siendo
+  para revalidar retroactivamente si la elección `systemd` de F3/ADR-0022 sigue siendo
   adecuada una vez haya datos operativos reales.
 
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
