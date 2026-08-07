@@ -46,6 +46,31 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────────────────────────────────
+  # JOB 1a: engineering-health (F2.0)
+  # Gate de coherencia normativa ANTES del resto de F2 (Plan §4 F2.0):
+  # Plan Maestro ↔ tracking.yaml ↔ ADR ↔ contratos ↔ CI. Sale de main con
+  # exit 1 si los artefactos divergen (regla suprema). Fail-fast: nada más
+  # avanza si el Health Check no pasa.
+  # ──────────────────────────────────────────────────────────────────────────
+  engineering-health:
+    name: Engineering Health Check (F2.0)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Engineering health check (F2.0)
+        run: uv run python scripts/engineering_health_check.py
+
+  # ──────────────────────────────────────────────────────────────────────────
   # JOB 1b: app-guard (blindaje de la Application Layer)
   # Gate de reglas auto-defendibles de apps/ (AUDIT-apps-2026-08-03, R12–R16):
   # el guard AST (scripts/app_layer_guard.py) bloquea reintroducción de
@@ -56,7 +81,7 @@ jobs:
   app-guard:
     name: App layer guard (AST + mypy apps)
     runs-on: ubuntu-latest
-    needs: architecture
+    needs: [architecture, engineering-health]
 
     steps:
       - uses: actions/checkout@v4
@@ -91,7 +116,7 @@ jobs:
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
-    needs: architecture
+    needs: [architecture, engineering-health]
 
     steps:
       - uses: actions/checkout@v4
@@ -117,7 +142,7 @@ jobs:
   integration-tests:
     name: Integration tests (Kafka)
     runs-on: ubuntu-latest
-    needs: architecture
+    needs: [architecture, engineering-health]
 
     services:
       kafka:
@@ -165,7 +190,7 @@ jobs:
   config-validation:
     name: Config validation (Hydra bootstrap)
     runs-on: ubuntu-latest
-    needs: architecture
+    needs: [architecture, engineering-health]
 
     steps:
       - uses: actions/checkout@v4
@@ -189,7 +214,7 @@ jobs:
   quality:
     name: Quality gates (ruff/mypy/SSOT/audit)
     runs-on: ubuntu-latest
-    needs: architecture
+    needs: [architecture, engineering-health]
 
     steps:
       - uses: actions/checkout@v4
