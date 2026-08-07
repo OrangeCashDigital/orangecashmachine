@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 from dataclasses import dataclass, field
 from typing import Optional
 
+import polars as pl
 from loguru import logger
 
 from ocm.runtime.guard import ExecutionGuard
@@ -145,6 +146,11 @@ class TradingEngine:
                 s.timeframe,
             )
             return result
+
+        # Punto único de conversión al framework de estrategias (polars).
+        # SSOT: packages/trading/strategies consumen pl.DataFrame; la fuente
+        # (FeatureSource.load_features) aún entrega pandas en algunos adapters.
+        df = pl.from_pandas(df)
 
         # Generar señales
         try:

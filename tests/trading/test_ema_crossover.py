@@ -4,42 +4,55 @@ tests/trading/test_ema_crossover.py
 =====================================
 
 Tests unitarios de EMACrossoverStrategy.
-Sin I/O — lógica pura con DataFrames sintéticos.
+Sin I/O — lógica pura con DataFrames sintéticos (polars).
 
 Nota sobre fixtures de cruce
 -----------------------------
-La estrategia evalúa SOLO la última vela (iloc[-1]).
+La estrategia evalúa SOLO la última vela.
 
 golden cross — patrón verificado numéricamente:
   N-1 velas a 40k, última vela a 80k.
-  EMA(9) reacciona antes que EMA(21) → fast cruza sobre slow en iloc[-1].
+  EMA(9) reacciona antes que EMA(21) → fast cruza sobre slow en la última vela.
 
 death cross — patrón verificado numéricamente:
   Base 40k, bloque alto 80k desde índice 10 hasta índice 58 (penúltima),
-  última vela cae a 40k. Fast ya estaba sobre slow (cruce en idx 10),
+  última vela cae a 40k. Fast ya estaba sobre a slow (cruce en idx 10),
   y la caída brusca hace que fast cruce bajo slow en la última vela.
 
-  No funciona con precio alto plano desde el inicio porque las EMAs
-  convergen al mismo valor — no hay "arriba" establecido antes del drop.
+  No funciona con precio altoa plano desde el inicio porque las EMAs
+  convergen al mismo valor — no hay "arriba" establecida antes del drop.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 from trading.strategies.ema_crossover import EMACrossoverStrategy
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
-def _make_df(n: int = 40, seed: int = 0) -> pd.DataFrame:
+def _timestamps(n: int) -> pl.Series:
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    return pl.datetime_range(
+        start=start,
+        end=start + timedelta(hours=n),
+        interval="1h",
+        closed="left",
+        eager=True,
+    ).slice(0, n)
+
+
+def _make_df(n: int = 40, seed: int = 0) -> pl.DataFrame:
     """DataFrame OHLCV aleatorio — sin cruce garantizado."""
     rng = np.random.default_rng(seed)
     close = rng.uniform(40_000, 50_000, n)
-    return pd.DataFrame(
+    return pl.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "timestamp": _timestamps(n),
             "open": close,
             "high": close + 100,
             "low": close - 100,
@@ -49,16 +62,16 @@ def _make_df(n: int = 40, seed: int = 0) -> pd.DataFrame:
     )
 
 
-def _make_golden_cross_df(n: int = 60) -> pd.DataFrame:
+def _make_golden_cross_df(n: int = 60) -> pl.DataFrame:
     """
     N-1 velas a 40k, última vela a 80k.
-    Cruce verificado: EMA(9) > EMA(21) en iloc[-1].
+    Cruce verificado: EMA(9) > EMA(21) en la última vela.
     """
     close = np.full(n, 40_000.0)
     close[-1] = 80_000.0
-    return pd.DataFrame(
+    return pl.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "timestamp": _timestamps(n),
             "open": close,
             "high": close + 100,
             "low": close - 100,
@@ -68,7 +81,7 @@ def _make_golden_cross_df(n: int = 60) -> pd.DataFrame:
     )
 
 
-def _make_death_cross_df(n: int = 60) -> pd.DataFrame:
+def _make_death_cross_df(n: int = 60) -> pl.DataFrame:
     """
     Base 40k, bloque alto 80k en [10:59], caída a 40k en la última vela.
 
@@ -81,11 +94,11 @@ def _make_death_cross_df(n: int = 60) -> pd.DataFrame:
     convergen al mismo valor y no hay "arriba" establecido antes del drop.
     """
     close = np.full(n, 40_000.0)
-    close[10:59] = 80_000.0  # fast sube sobre slow en idx 10
-    close[59] = 40_000.0  # fast cae bajo slow en idx 59 (última)
-    return pd.DataFrame(
+    close[10:59] = 80_000.0  # fast sube sobre a slow en idx 10
+    close[59] = 40_000.0  # fast cae bajo a slow en idx 59 (última)
+    return pl.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "timestamp": _timestamps(n),
             "open": close,
             "high": close + 100,
             "low": close - 100,
@@ -126,13 +139,13 @@ def test_returns_empty_when_too_few_rows(strategy):
 
 
 def test_returns_empty_when_df_missing_column(strategy):
-    df = _make_df(n=40).drop(columns=["volume"])
+    df = _make_df(n=40).drop("volume")
     with pytest.raises(ValueError, match="missing columns"):
         strategy.generate_signals(df)
 
 
 def test_returns_empty_when_df_is_empty(strategy):
-    df = _make_df(n=40).iloc[0:0]
+    df = _make_df(n=40).head(0)
     with pytest.raises(ValueError, match="empty"):
         strategy.generate_signals(df)
 
@@ -155,10 +168,12 @@ def test_death_cross_generates_sell(strategy):
 def test_flat_price_no_crossover_returns_empty(strategy):
     """Sin cruce en la última vela no hay señal."""
     df = _make_df(n=40)
-    df["close"] = 45_000.0
-    df["open"] = 45_000.0
-    df["high"] = 45_100.0
-    df["low"] = 44_900.0
+    df = df.with_columns(
+        pl.lit(45_000.0).alias("close"),
+        pl.lit(45_000.0).alias("open"),
+        pl.lit(45_100.0).alias("high"),
+        pl.lit(44_900.0).alias("low"),
+    )
     assert strategy.generate_signals(df) == []
 
 
@@ -192,7 +207,7 @@ def test_signal_metadata_contains_ema_values(strategy):
 def test_signal_price_equals_last_close(strategy):
     df = _make_golden_cross_df()
     signals = strategy.generate_signals(df)
-    assert signals[0].price == float(df.iloc[-1]["close"])
+    assert signals[0].price == float(df.row(-1)[df.columns.index("close")])
 
 
 def test_input_df_is_not_mutated(strategy):

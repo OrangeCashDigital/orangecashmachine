@@ -179,6 +179,7 @@ dev = [
     # nueva solo para testing, agregar acá con un comentario que explique
     # por qué diverge del pin runtime.
     "pytest-random-order>=1.2.0",
+    "vulture>=2.16",
 ]
 
 # =============================================================================

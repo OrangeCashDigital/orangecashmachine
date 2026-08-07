@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import timezone
 from typing import Literal
 
-import pandas as pd
+import polars as pl
 
 from trading.strategies.base import BaseStrategy, Signal
 
@@ -56,21 +56,24 @@ class EMACrossoverStrategy(BaseStrategy):
         self.symbol = symbol
         self.timeframe = timeframe
 
-    def generate_signals(self, df: pd.DataFrame) -> list[Signal]:
+    def generate_signals(self, df: pl.DataFrame) -> list[Signal]:
         self.validate_df(df)
 
         if len(df) < self.slow_period + 1:
             return []  # no hay suficientes datos para calcular EMA
 
-        df = df.copy().sort_values("timestamp").reset_index(drop=True)
-        df["ema_fast"] = df["close"].ewm(span=self.fast_period, adjust=False).mean()
-        df["ema_slow"] = df["close"].ewm(span=self.slow_period, adjust=False).mean()
+        df = df.sort("timestamp").with_row_index("_idx")
+        df = df.with_columns(
+            pl.col("close").ewm_mean(span=self.fast_period, adjust=False).alias("ema_fast"),
+            pl.col("close").ewm_mean(span=self.slow_period, adjust=False).alias("ema_slow"),
+        )
 
         # Cruce: fast cruza sobre o bajo slow entre t-1 y t
-        df["above"] = df["ema_fast"] > df["ema_slow"]
-        df["cross"] = df["above"] != df["above"].shift(1)
+        df = df.with_columns(
+            (pl.col("ema_fast") > pl.col("ema_slow")).alias("above"),
+        ).with_columns((pl.col("above") != pl.col("above").shift(1)).alias("cross"))
 
-        last = df.iloc[-1]
+        last = df.filter(pl.col("_idx") == len(df) - 1).row(0, named=True)
 
         if not last["cross"]:
             return []

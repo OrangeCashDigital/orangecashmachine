@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-import pandas as pd
+import polars as pl
 
 # Signal vive en domain/ — re-exportado aquí para backwards compatibility.
 # Importar directamente desde domain.value_objects en código nuevo.
@@ -37,13 +37,13 @@ class BaseStrategy(ABC):
     timeframe: str  # debe asignarse en __init__ de la subclase
 
     @abstractmethod
-    def generate_signals(self, df: pd.DataFrame) -> list[Signal]:
+    def generate_signals(self, df: pl.DataFrame) -> list[Signal]:
         """
         Genera señales de trading a partir de un DataFrame OHLCV.
 
         Parameters
         ----------
-        df : pd.DataFrame
+        df : pl.DataFrame
             DataFrame con columnas: timestamp, open, high, low, close, volume.
             Debe estar ordenado por timestamp ascendente.
 
@@ -54,11 +54,11 @@ class BaseStrategy(ABC):
         """
         ...
 
-    def validate_df(self, df: pd.DataFrame) -> None:
+    def validate_df(self, df: pl.DataFrame) -> None:
         """Valida que el DataFrame tenga las columnas mínimas requeridas."""
         required = {"timestamp", "open", "high", "low", "close", "volume"}
         missing = required - set(df.columns)
         if missing:
             raise ValueError(f"DataFrame missing columns: {missing}")
-        if df.empty:
+        if df.is_empty():
             raise ValueError("DataFrame is empty")

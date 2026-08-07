@@ -269,7 +269,7 @@ def test_paper_mode_rejects_signal_below_min_confidence() -> None:
                 symbol="BTC/USDT",
                 timeframe="1h",
                 direction="buy",
-                price=float(df.iloc[-1]["close"]),
+                price=float(df.select("close").row(-1)[0]),
                 timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
                 confidence=0.5,
             )
