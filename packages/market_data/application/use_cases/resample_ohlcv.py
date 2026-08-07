@@ -13,7 +13,7 @@ storage via StorageFactoryPort.
 
 Por qué existe esta capa
 ------------------------
-Sin esta capa, los inbound adapters (infrastructure/dagster/assets/, resample_flow.py)
+Sin esta capa, los inbound adapters (apps/app/cli/entrypoint.py, resample_flow.py)
 deben conocer:
   - Cómo extraer símbolos y targets desde AppConfig
   - Cómo construir storage via factory con dry_run correcto
@@ -33,7 +33,7 @@ procesar, y delega la ejecución al pipeline.
 
 Diagrama
 --------
-  Dagster asset / resample_flow / CLI
+  CLI entrypoint (Hydra) / resample_flow
       │
       ▼
   ResampleUseCase.execute(request)
@@ -348,7 +348,7 @@ class ResampleUseCase:
         nivel de módulo — la dependencia se resuelve solo en ejecución.
 
         ResamplePipeline.run() es async — se ejecuta via asyncio.run()
-        porque Dagster y Prefect no exponen un event loop al caller.
+        porque el CLI entrypoint (Hydra, síncrono) no expone un event loop al caller.
         """
         from market_data.application.pipelines.resample_pipeline import ResamplePipeline
 
@@ -375,7 +375,7 @@ class ResampleUseCase:
         #
         # Decisión arquitectónica (Fase 1 / 2026-05):
         #   La rama ThreadPoolExecutor fue eliminada porque:
-        #   1. En producción (Dagster sync assets, Prefect tasks) nunca se ejecutaba.
+        #   1. En producción (CLI entrypoint síncrono, Hydra) nunca se ejecutaba.
         #   2. En tests async causaba deadlocks potenciales: asyncio.run() dentro de
         #      un ThreadPoolExecutor con el loop del test activo crea un segundo loop
         #      no coordinado — comportamiento indefinido.

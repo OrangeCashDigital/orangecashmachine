@@ -25,13 +25,13 @@ Submódulos
 
 Re-exports públicos
 -------------------
-Exclusivamente para Composition Roots (infrastructure/dagster/assets/).
+Exclusivamente para Composition Roots (apps/app/cli/entrypoint.py).
 El dominio y los ports NO deben importar desde aquí.
 
 Principios: SRP · DIP · OCP · KISS · Clean Architecture
 """
 
-# Re-exports para Composition Roots (Dagster assets)
+# Re-exports para Composition Roots (Hydra CLI entrypoint)
 from market_data.application.use_cases.pipeline_orchestrator import (  # noqa: F401
     PipelineOrchestrator,
     PipelineRequest,

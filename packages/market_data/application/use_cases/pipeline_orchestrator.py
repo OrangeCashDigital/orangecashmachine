@@ -14,7 +14,7 @@ SSOT de la lógica de selección e instanciación de pipelines.
 
 Por qué existe esta capa
 ------------------------
-Sin esta capa, infrastructure/dagster/assets/ y main.py deben conocer:
+Sin esta capa, apps/app/cli/entrypoint.py deben conocer:
   - Qué clase concreta instanciar (OHLCVPipeline vs TradesPipeline)
   - Cómo construir CCXTAdapter con credentials y resilience
   - Qué modo pasarle (incremental/backfill/repair)
@@ -32,7 +32,7 @@ invoca cualquier PipelineTriggerPort concreto via factory.
 
 Diagrama de flujo
 -----------------
-  Dagster asset / main.py / test
+  CLI entrypoint (Hydra) / test
       │
       ▼
   PipelineOrchestrator.run(request)

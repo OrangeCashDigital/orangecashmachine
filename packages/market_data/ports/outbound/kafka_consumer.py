@@ -16,7 +16,6 @@ Consumer groups OCM
 -------------------
   "ocm-bronze-writer"   — escribe velas crudas a Iceberg Bronze
   "ocm-quality-gate"    — valida y publica a ohlcv.validated
-  "ocm-dagster-trigger" — dispara assets Dagster on new data
 
 Semántica de entrega
 --------------------
