@@ -743,3 +743,40 @@ prerequisito_f3_discovery:
   gate_capital: "F3 bloqueado a capital real hasta Promotion Rule (14) de Orders/Fills"
   nota: "El framework es unico y permanente; cambian los Discovery Profiles, nunca el framework."
 nota: "Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md §4."
+
+# ── F3.5 Capacity Planning + Streaming Entrypoint MVP ───────────────────
+f3_5a_capacity_teorico:
+  estado: PENDIENTE
+  adr_relacionado: null
+  entregable: docs/planning/fase3.5a-capacity-teorico.md
+  descripcion: >
+    Estimación de msg/s, tamaño de mensaje y throughput esperado por
+    exchange/símbolo/topic a partir de límites documentados de Bybit/KuCoin,
+    sin requerir despliegue.
+
+f3_5b_streaming_entrypoint_mvp:
+  estado: PENDIENTE
+  adr_relacionado: ADR-0022
+  entregable: apps/app/cli/streaming_hydra.py
+  alcance: "1 exchange (Bybit o KuCoin), subset de símbolos, CompositionRoot de market_data existente (build_ws_producers())"
+  criterios_aceptacion:
+    arranca_composition_root: PENDIENTE
+    invoca_build_ws_producers: PENDIENTE
+    publica_eventos_reales_kafka: PENDIENTE
+    responde_sigterm_sigint: PENDIENTE
+    delega_cierre_a_close_existentes: PENDIENTE
+    systemd_reinicia_correctamente: PENDIENTE
+    no_importa_trading_ni_live_hydra: PENDIENTE
+    no_crea_composition_root_alternativo: PENDIENTE
+    respeta_contrato_bc_market_data_trading: PENDIENTE
+
+f3_5c_capacity_empirico:
+  estado: BLOQUEADO
+  bloqueado_por: f3_5b_streaming_entrypoint_mvp
+  entregable: docs/planning/fase3.5c-capacity-empirico.md
+  metricas: [msg_s, bytes_s, cpu, ram, red, kafka_throughput, kafka_lag, latencia_p50, latencia_p99]
+
+f3_5d_decision_escalabilidad:
+  estado: BLOQUEADO
+  bloqueado_por: f3_5c_capacity_empirico
+  entregable: "ADR de escalabilidad (número TBD) — solo si evidencia empírica lo justifica"

@@ -471,3 +471,35 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
+
+
+## Roadmap F3.5 — Capacity Planning + Streaming Entrypoint MVP
+
+Hallazgo (2026-08-07): `market_data` ya tiene la infraestructura de ingestión
+realtime construida (`CompositionRoot.build_ws_producers()`, runners de
+Bybit/KuCoin, `KafkaProducerAdapter` por dominio), pero **no existe todavía
+un proceso operativo** que la ensamble y mantenga viva 24/7. `systemctl`
+confirma que no hay unit activa. `live_hydra.py`/`paper_hydra.py` son
+procesos de trading (BC `trading`), no de ingestión — no deben confundirse
+ni fusionarse con el entrypoint de streaming.
+
+Orden de trabajo:
+
+1. **F3.5a** — Capacity Planning teórico (sin despliegue): estimar msg/s,
+   tamaño de mensaje y throughput esperado a partir de símbolos/exchanges
+   configurados y límites documentados de cada exchange.
+2. **F3.5b** — Streaming Entrypoint MVP: `apps/app/cli/streaming_hydra.py`,
+   mismo patrón que `live_hydra.py`/`paper_hydra.py`. Usa el
+   `CompositionRoot` de `market_data` existente, un solo exchange, subset
+   pequeño de símbolos. Ver ADR-0022 para el contrato de lifecycle.
+3. **F3.5c** — Capacity Planning empírico: medir el canary bajo systemd
+   (msg/s, bytes/s, CPU, RAM, red, throughput/lag de Kafka, latencia
+   p50/p99).
+4. **F3.5d** — Decisión de escalabilidad: extrapolar al universo objetivo
+   de símbolos/exchanges. Solo si la extrapolación muestra déficit
+   concreto se abre un ADR de escalabilidad (particionado, múltiples
+   workers, Flink). No se introduce tooling adicional por anticipación.
+
+Invariante que el MVP no debe romper: `trading` no importa código de
+`market_data/adapters/inbound/websocket` (confirmado ausente al
+2026-08-07); el desacople sigue siendo exclusivamente vía Kafka.

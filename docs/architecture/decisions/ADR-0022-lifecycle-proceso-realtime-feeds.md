@@ -304,3 +304,25 @@ operativa real de patrones de staleness en producción.
 - `apps/app/cli/main.py`, `apps/app/cli/live_hydra.py`,
   `apps/app/cli/paper_hydra.py`, `run.sh`, `pyproject.toml`
   (`[project.scripts]`)
+
+
+## Addendum (2026-08-07): alcance del Streaming Entrypoint MVP
+
+Este ADR define el lifecycle del proceso; la implementación mínima que lo
+satisface es `apps/app/cli/streaming_hydra.py` (F3.5b en tracking.yaml),
+con este alcance:
+
+- Reutiliza `market_data.infrastructure.bootstrap.composition_root`
+  (`build_ws_producers()`) — no crea un `CompositionRoot` alternativo.
+- 1 exchange, subset pequeño de símbolos (canary, no despliegue completo).
+- Maneja SIGTERM/SIGINT y delega el cierre a los `close()` ya existentes
+  en los producers/adapters.
+- No importa ni modifica `apps/app/cli/live_hydra.py` ni
+  `apps/app/cli/paper_hydra.py`.
+- No requiere nuevo bounded context ni nuevo import-linter contract salvo
+  que el paso de verificación (2026-08-07) confirme que no existe ya un
+  contrato `market_data` ↔ `trading` — en ese caso se agrega antes de
+  mergear el MVP, no después.
+
+El capacity planning real (F3.5c) depende de que este canary esté
+corriendo bajo systemd; no es medible antes.
