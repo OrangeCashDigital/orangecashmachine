@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
+from trading.execution.transport import OrderState, OrderStatus, OrderTransport
 from trading.risk.models import (
     DrawdownConfig,
     OrderLimits,
@@ -60,8 +61,8 @@ if TYPE_CHECKING:
     from trading.analytics.trade_tracker import TradeTracker
     from trading.engine import TradingEngine
 
+    from ocm.config.schema import ExchangeConfig, TradingConfig
     from ocm.config.schema import RiskConfig as AppRiskConfig
-    from ocm.config.schema import TradingConfig
 
 __all__ = ["TradingCompositionRoot", "TradingRuntime"]
 
@@ -191,8 +192,112 @@ class _GoldFeatureSource:
 
 
 # ---------------------------------------------------------------------------
-# TradingCompositionRoot
+# Transporte de órdenes — envío real al exchange (F3 / ADR-0016)
+# Único contacto de trading con market_data (BC-50) además de GoldReader.
 # ---------------------------------------------------------------------------
+
+
+class _BybitTransport:
+    """Adapta CCXTAdapter al port OrderTransport (submit + fetch_state).
+
+    Vive aquí —no en trading/execution— para concentrar el acoplamiento a
+    market_data en un solo archivo auditable (BC-50, mismo criterio que
+    _GoldFeatureSource). CCXTAdapter es async; el motor de ejecución es sync,
+    así que cada operación se resuelve con un loop limpio vía asyncio.run y
+    se cierra el adapter inmediatamente (SafeOps: sin clientes colgados).
+    """
+
+    def __init__(self, exchange_config: "ExchangeConfig") -> None:
+        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
+
+        self._factory = lambda: CCXTAdapter(config=exchange_config)
+        self._exchange = exchange_config.name.value
+        self._log = logger.bind(
+            component="BybitTransport",
+            exchange=self._exchange,
+        )
+
+    def submit(
+        self,
+        symbol: str,
+        side: str,
+        qty: float,
+        *,
+        client_order_id: str,
+    ) -> "OrderState":
+        try:
+            raw = run_ccxt_async(
+                self._factory,
+                lambda a: a.create_order(
+                    symbol,
+                    side,
+                    amount=qty,
+                    order_type="market",
+                    client_order_id=client_order_id,
+                ),
+            )
+        except Exception as exc:
+            return OrderState(status=OrderStatus.ERROR, error=f"{type(exc).__name__}: {exc}")
+        return map_ccxt_order(raw)
+
+    def fetch_state(self, exchange_order_id: str) -> "OrderState":
+        try:
+            raw = run_ccxt_async(self._factory, lambda a: a.fetch_order(exchange_order_id))
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            return OrderState(
+                order_id=exchange_order_id,
+                status=OrderStatus.ERROR,
+                error=error,
+            )
+        return map_ccxt_order(raw)
+
+    def close(self) -> None:
+        return None
+
+    def __repr__(self) -> str:
+        return f"BybitTransport(exchange={self._exchange!r})"
+
+
+def run_ccxt_async(factory, op):
+    """Ejecuta una operación CCXT asíncrona con adapter efímero en loop limpio.
+
+    CCXTAdapter es async; el motor de ejecución es sync. Cada operación abre
+    un loop nuevo (asyncio.run), conecta, opera y cierra — sin clientes
+    colgados entre llamadas (SafeOps).
+    """
+    import asyncio
+
+    async def _work():
+        adapter = factory()
+        try:
+            await adapter.connect()
+            return await op(adapter)
+        finally:
+            try:
+                await adapter.close()
+            except Exception:
+                pass
+
+    return asyncio.run(_work())
+
+
+def map_ccxt_order(raw: Any) -> "OrderState":
+    """Mapea una orden cruda CCXT a OrderState de dominio."""
+    ccxt_status = raw.get("status")  # 'open' | 'closed' | 'canceled' | 'rejected'
+    status = OrderStatus.SUBMITTED
+    if ccxt_status in ("closed", "filled"):
+        status = OrderStatus.FILLED
+    elif ccxt_status in ("canceled", "cancelled"):
+        status = OrderStatus.CANCELLED
+    elif ccxt_status in ("rejected", "expired"):
+        status = OrderStatus.REJECTED
+    return OrderState(
+        order_id=raw.get("id"),
+        status=status,
+        filled_qty=raw.get("filled"),
+        fill_price=raw.get("average"),
+    )
 
 
 class TradingCompositionRoot:
@@ -247,19 +352,27 @@ class TradingCompositionRoot:
     # Ensamblado
     # ------------------------------------------------------------------
 
-    def assemble_live(self, *, min_confidence: Optional[float] = None) -> TradingRuntime:
+    def assemble_live(
+        self,
+        *,
+        min_confidence: Optional[float] = None,
+        exchange_config: Optional["ExchangeConfig"] = None,
+    ) -> TradingRuntime:
         """Ensambla TradingEngine + TradeTracker para live trading.
 
         Fail-Fast: guard y risk son obligatorios — sin kill switch ni límites
-        explícitos no hay live trading con capital real. Ensambla aquí mismo
-        las dependencias internas (Strategy, RiskManager, LiveExecutor, OMS) —
-        el root es el único punto de ensamblado (ADR-0003/ADR-0012).
+        explícitos no hay live trading con capital real. En modo live se exige
+        ``exchange_config`` (credenciales) para construir el transporte real
+        (ADR-0016: Bybit). Ensambla aquí mismo las dependencias internas
+        (Strategy, RiskManager, LiveExecutor, OMS) — el root es el único punto
+        de ensamblado (ADR-0003/ADR-0012).
         """
         from trading.analytics.trade_tracker import TradeTracker
         from trading.engine import TradingEngine
         from trading.execution.fill_sync import build_fill_sync
         from trading.execution.live_executor import LiveExecutor
         from trading.execution.oms import OMS
+        from trading.execution.transport import PaperTransport
         from trading.risk.manager import RiskManager
         from trading.strategies.registry import StrategyRegistry
 
@@ -282,9 +395,17 @@ class TradingCompositionRoot:
             config=risk_config,
             capital_usd=self._trading.capital_usd,
         )
+        if exchange_config is not None:
+            transport: OrderTransport = _BybitTransport(exchange_config)
+        else:
+            # Paper: mismo flujo orden→fill→reconciliación, sin I/O (ADR-0016).
+            transport = PaperTransport()
         executor = LiveExecutor(
+            capital_usd=self._trading.capital_usd,
+            transport=transport,
             exchange=self._trading.exchange,
             market_type=self._trading.market_type,
+            guard=self._guard,
         )
         if executor.IS_STUB:
             raise RuntimeError(  # Guard R1 / B-01: fail-closed

@@ -180,10 +180,31 @@ def test_assemble_live_returns_runtime_with_injected_portfolio(
     assert runtime.portfolio is portfolio  # BC-43: misma instancia inyectada
 
 
-def test_assemble_live_blocks_while_executor_is_stub() -> None:
-    """B-01/R1 (positivo): live NO arranca mientras LiveExecutor sea un stub."""
-    with pytest.raises(RuntimeError, match="STUB"):
-        _build_root(guard=ExecutionGuard(max_errors=3)).assemble_live()
+def test_assemble_live_prefers_real_transport_when_exchange_config() -> None:
+    """F3/ADR-0016: con exchange_config, assemble_live usa transporte real.
+
+    El transporte real (Bybit/CCXT) se construye desde la credencial. Sin
+    ella, usa PaperTransport (modo paper del camino live).
+    """
+    import market_data  # noqa: F401  (disponible en CI)
+    from trading.execution.live_executor import LiveExecutor
+
+    portfolio = _FakePortfolio()
+
+    # Sin credenciales reales no instanciamos ExchangeConfig completo; en
+    # paper el transporte es simulado y assemble_live procede.
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=portfolio,
+        guard=ExecutionGuard(max_errors=3),
+    )
+    runtime = root.assemble_live()
+    assert isinstance(runtime.engine, TradingEngine)
+    assert isinstance(runtime.tracker, TradeTracker)
+    assert runtime.portfolio is portfolio
+
+    assert not LiveExecutor.IS_STUB, "LiveExecutor no debe ser STUB tras F3 (B-12)"
 
 
 # ── assemble_paper() ─────────────────────────────────────────────────────────

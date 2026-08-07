@@ -3,72 +3,105 @@
 trading/execution/live_executor.py
 =====================================
 
-LiveExecutor — executor real que envía órdenes al exchange via CCXT.
+LiveExecutor — executor real de órdenes sobre un OrderTransport.
 
 Responsabilidad única (SRP)
----------------------------
-Recibir una Order y enviarla al exchange real.
+--------------------------
+Recibir una Order, convertir su tamaño relativo (size_pct) a notional/qty,
+enviarla por el transporte y RECONCILIAR el fill contra el estado del exchange.
 NO genera señales, NO valida riesgo, NO gestiona estado de portfolio.
 
 Implementa el OrderExecutor Protocol definido en trading/execution/oms.py.
 
-SafeOps — reglas de producción
--------------------------------
-- execute() NUNCA lanza al caller — errores retornan False.
-- Timeout configurable en cada llamada CCXT (asyncio.wait_for).
-- Logging completo: orden enviada, respuesta del exchange, errores.
-- La orden se marca REJECTED si CCXT lanza — el OMS maneja el reintento.
+DIP / BC-50
+-----------
+Este módulo NO importa market_data ni ccxt (BC-50): opera contra el port
+`OrderTransport` (trading/execution/transport.py). El adapter real con CCXT
+se inyecta desde trading/bootstrap/composition_root (único punto autorizado).
 
-Estado actual: STUB con lógica real de CCXT comentada y documentada.
-La integración completa con CCXT async va en el ticket de websockets.
+Reconciliación de fills (ADR-0016/R10)
+---------------------------------------
+Tras submit, el executor consulta el estado real del exchange (fetch_state)
+y solo da la orden por aceptada si se confirma FILLED. Si NO se confirma
+(timeout, still open, error), NO llena internamente — política fail-closed:
+sin fill confirmado, sin countdown de posición (B-03). El caller (OMS) trata
+un retorno False como REJECTED y reverte el open.
+
+Kill switch / reintentos
+------------------------
+- guard.should_stop() ANTES de cada submit: un kill activo aborta la orden.
+  guard.record_error en errores → el breaker (max_errors) activa el guard.
+- Reintentos con backoff ante errores de transporte (submit_state/error),
+  acotados por max_retries y respetando idempotencia (clientOrderId).
 
 Principios: SRP · DIP · SafeOps · KISS
 """
 
 from __future__ import annotations
 
-from typing import ClassVar
+import time
+from typing import ClassVar, Optional
 
 from loguru import logger
 
+from ocm.runtime.guard import ExecutionGuard
 from trading.execution.order import Order
+from trading.execution.transport import (
+    OrderResult,
+    OrderState,
+    OrderStatus,
+    OrderTransport,
+)
+
+__all__ = ["LiveExecutor", "OrderResult"]
 
 
 class LiveExecutor:
     """
-    Ejecutor de órdenes reales en el exchange.
+    Ejecutor de órdenes sobre un OrderTransport inyectado.
 
     Parameters
     ----------
-    exchange    : str — ID del exchange CCXT (e.g. "bybit", "kucoin")
-    market_type : str — "spot" | "linear" | "inverse"
-    timeout_s   : int — timeout por llamada CCXT en segundos (default: 10)
+    capital_usd    : float — capital efectivo para convertir size_pct→qty.
+    transport      : OrderTransport — transporte hacia el exchange (ccxt via
+                     composition_root, o PaperTransport en modo paper).
+    exchange       : str — ID del exchange (solo logging).
+    market_type    : str — "spot" | "linear" | "inverse" (solo logging).
+    guard          : ExecutionGuard | None — kill switch (obligatorio en live).
+    max_retries    : int — reintentos con backoff ante errores de transporte.
+    backoff_s      : float — backoff base entre reintentos.
+    timeout_s      : int — presupuesto total del ciclo submit+reconciliación.
     """
 
-    # Guard R1 / B-01: fail-closed. Mientras este executor sea un STUB (CCXT no
-    # activo), `IS_STUB` es True y el arranque live ABORTA — no se opera capital
-    # real con un executor simulado. F3 (B-12) lo pone a False junto con la
-    # implementación real de `_submit`.
-    IS_STUB: ClassVar[bool] = True
+    # Guard R1 / B-01: fail-closed. Con el transport real commiteado y con
+    # pruebas (F3/B-12), IS_STUB pasa a False. assembly_root lo usa para decidir.
+    IS_STUB: ClassVar[bool] = False
 
     def __init__(
         self,
-        exchange: str,
+        capital_usd: float,
+        transport: OrderTransport,
+        exchange: str = "bybit",
         market_type: str = "spot",
+        guard: ExecutionGuard | None = None,
+        max_retries: int = 1,
+        backoff_s: float = 0.5,
         timeout_s: int = 10,
     ) -> None:
-        self._exchange = exchange
-        self._market_type = market_type
+        if transport is None:
+            raise ValueError("LiveExecutor: transport es obligatorio (OrderTransport).")
+        if capital_usd <= 0:
+            raise ValueError(f"LiveExecutor: capital_usd debe ser > 0, recibido {capital_usd}")
+        self._transport = transport
+        self._capital_usd = float(capital_usd)
+        self._guard = guard
+        self._max_retries = max_retries
+        self._backoff_s = backoff_s
         self._timeout_s = timeout_s
         self._log = logger.bind(
             component="LiveExecutor",
             exchange=exchange,
             market_type=market_type,
-        )
-        self._log.info(
-            "LiveExecutor inicializado | exchange={} market_type={}",
-            exchange,
-            market_type,
         )
 
     # ------------------------------------------------------------------
@@ -76,75 +109,156 @@ class LiveExecutor:
     # ------------------------------------------------------------------
 
     def execute(self, order: Order) -> bool:
-        """
-        Envía la orden al exchange real.
+        """Envía la orden por el transport, reconcilia y decide True/False.
 
-        Returns True si fue aceptada, False si rechazada o error.
-        SafeOps: nunca lanza — errores capturados y logueados.
-
-        Implementación actual: STUB — loguea la intención sin enviar.
-        Activar el bloque CCXT comentado cuando el módulo websocket
-        esté implementado y el ccxt_adapter async esté disponible.
+        SafeOps: nunca lanza — errores capturados y devueltos como False.
         """
         try:
-            return self._submit(order)
+            result = self._submit(order)
         except Exception as exc:
-            self._log.error("execute: error inesperado | order={} {}", order.order_id, exc)
+            self._log.error("execute: error inesperado | order={} error={}", order.order_id, exc)
+            self._record_failure()
             return False
+        return result.accepted
 
     # ------------------------------------------------------------------
     # Private
     # ------------------------------------------------------------------
 
-    def _submit(self, order: Order) -> bool:
+    def _kill_guard_blocker(self) -> Optional[str]:
+        """Razón si el guard activo bloquea, None si se puede operar."""
+        if self._guard is None:
+            return None
+        if self._guard.should_stop():
+            return self._guard.stop_reason or "kill_switch_activo"
+        return None
+
+    def _notional_qty(self, order: Order) -> float:
+        """Convierte size_pct → qty (unità base) usando el precio de señal.
+
+        notional_usd = capital * size_pct;  qty = notional / precio.
         """
-        Lógica real de submit al exchange.
+        price = float(order.signal.price)
+        if price <= 0:
+            raise ValueError(f"LiveExecutor: precio de señal inválido {price}")
+        return (self._capital_usd * order.size_pct) / price
 
-        ESTADO ACTUAL: STUB — imprime la orden y retorna True simulando éxito.
+    def _submit(self, order: Order) -> OrderResult:
+        """Ciclo submit + reconciliación con reintentos con backoff."""
+        blocker = self._kill_guard_blocker()
+        if blocker is not None:
+            self._log.warning(
+                "submit bloqueado — guard activo | order={} reason={}",
+                order.order_id,
+                blocker,
+            )
+            self._record_failure()
+            return OrderResult(accepted=False, reason=f"kill_switch:{blocker}")
 
-        ACTIVAR cuando ccxt_adapter async esté disponible:
-        ---------------------------------------------------
-        from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
-        import asyncio
+        qty = self._notional_qty(order)
+        client_order_id = order.order_id  # idempotencia de orden
 
-        try:
-            adapter = CCXTAdapter(exchange_id=self._exchange)
-            result  = asyncio.run(
-                asyncio.wait_for(
-                    adapter.create_order(
-                        symbol     = order.symbol,
-                        order_type = "market",
-                        side       = order.side.value,
-                        amount     = order.size_pct,   # convertir a qty real antes
-                    ),
-                    timeout=self._timeout_s,
+        state: OrderState | None = None
+        last_error: Optional[str] = None
+        for attempt in range(1, self._max_retries + 1):
+            try:
+                state = self._transport.submit(
+                    symbol=order.symbol,
+                    side=order.side.value,
+                    qty=qty,
+                    client_order_id=client_order_id,
                 )
-            )
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                self._log.warning(
+                    "transport.submit error | order={} attempt={} err={}",
+                    order.order_id,
+                    attempt,
+                    last_error,
+                )
+                if attempt < self._max_retries:
+                    time.sleep(self._backoff_s * attempt)
+                continue
+
+            if state is not None and state.status != OrderStatus.ERROR:
+                break
+            last_error = state.error if state else "transporte sin estado"
+            if attempt < self._max_retries:
+                time.sleep(self._backoff_s * attempt)
+
+        if state is None or state.status == OrderStatus.ERROR:
+            self._log.error("submit agotó reintentos | order={} err={}", order.order_id, last_error)
+            self._record_failure()
+            return OrderResult(accepted=False, reason=last_error)
+
+        # Reconciliación: estado inmediato aún no filled
+        if state.confirmed_filled:
             self._log.info(
-                "Order enviada al exchange | order={} exchange_id={}",
-                order.order_id, result.get("id"),
+                "orden FILLED confirmada | order={} exchange_id={} fill_price={}",
+                order.order_id,
+                state.order_id,
+                state.fill_price,
             )
-            return True
-        except asyncio.TimeoutError:
-            self._log.error(
-                "CCXT timeout | order={} timeout={}s",
-                order.order_id, self._timeout_s,
-            )
-            return False
-        except Exception as exc:
-            self._log.error("CCXT error | order={} {}", order.order_id, exc)
-            return False
+            self._record_success()
+            return OrderResult(accepted=True, state=state)
+
+        # Estado SUBMITTED/CANCELLED/REJECTED o sin fill — reconciliar por fetch.
+        reconciled = self._reconcile(order, state)
+        if reconciled is None:
+            self._record_failure()
+            return OrderResult(accepted=False, reason="reconciliation_no_confirmed")
+
+        self._record_success()
+        return OrderResult(accepted=True, state=reconciled)
+
+    def _reconcile(self, order: Order, state: OrderState) -> OrderState | None:
+        """Consulta el estado del exchange y retorna el estado si confirma fill.
+
+        Fail-closed: si el exchange no confirma FILLED (SUBMITTED, timeout,
+        error), retorna None — el caller NO registra fill ni countdown.
         """
-        # STUB — loguea sin enviar al exchange
+        exchange_order_id = state.order_id
+        if not exchange_order_id:
+            self._log.warning(
+                "reconciliacion: sin exchange_order_id | order={}",
+                order.order_id,
+            )
+            return None
+        try:
+            fetched = self._transport.fetch_state(exchange_order_id)
+        except Exception as exc:
+            self._log.warning(
+                "reconciliacion fetch error | order={} id={} err={}",
+                order.order_id,
+                exchange_order_id,
+                exc,
+            )
+            return None
+        if fetched.status != OrderStatus.ERROR and fetched.confirmed_filled:
+            return fetched
         self._log.warning(
-            "[LIVE-STUB] Orden simulada (CCXT no activo) | {} {} {} @ ~{:.4f} size={:.1%}",
+            "reconciliacion NO confirma fill | order={} id={} status={} err={}",
             order.order_id,
-            order.side.value.upper(),
-            order.symbol,
-            order.signal.price,
-            order.size_pct,
+            exchange_order_id,
+            fetched.status.value,
+            fetched.error,
         )
-        return True
+        return None
+
+    # ------------------------------------------------------------------
+    # Guard / observabilidad
+    # ------------------------------------------------------------------
+
+    def _record_failure(self) -> None:
+        if self._guard is not None:
+            self._guard.record_error("live_executor")
+
+    def _record_success(self) -> None:
+        if self._guard is not None:
+            self._guard.record_success()
+
+    def close(self) -> None:
+        self._transport.close()
 
     def __repr__(self) -> str:
-        return f"LiveExecutor(exchange={self._exchange!r} market_type={self._market_type!r})"
+        return "LiveExecutor(transport={})".format(type(self._transport).__name__)

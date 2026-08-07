@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from trading.analytics.trade_tracker import TradeTracker
     from trading.engine import TradingEngine
 
-    from ocm.config.schema import RiskConfig, TradingConfig
+    from ocm.config.schema import ExchangeConfig, RiskConfig, TradingConfig
 
 from loguru import logger
 
@@ -111,6 +111,7 @@ def build_live_engine(
     *,
     max_errors: int,
     min_confidence: float,
+    exchange_config: Optional["ExchangeConfig"] = None,
 ) -> LiveEngineResources:
     """
     Ensambla TradingEngine(live) + PortfolioService vía Composition Root.
@@ -132,6 +133,9 @@ def build_live_engine(
         ninguna conexion propia.
     max_errors : errores consecutivos antes de activar guard/halt.
     min_confidence : confianza mínima de señal (live: más restrictivo).
+    exchange_config : ExchangeConfig (credenciales) para el transporte real
+        hacia el exchange. Si es None, el motor arranca en modo PAPER
+        (PaperTransport) — ignora honorario real. (ADR-0016)
 
     Returns
     -------
@@ -150,7 +154,10 @@ def build_live_engine(
         portfolio=portfolio_service,
         guard=guard,
     )
-    runtime = root.assemble_live(min_confidence=min_confidence)
+    runtime = root.assemble_live(
+        min_confidence=min_confidence,
+        exchange_config=exchange_config,
+    )
 
     # redis_client siempre None: la conexion Redis pertenece al
     # PortfolioCompositionRoot del caller (portfolio_root.close()).
@@ -174,6 +181,7 @@ def execute(
     *,
     max_errors: int,
     min_confidence: float,
+    exchange_config: Optional["ExchangeConfig"] = None,
 ) -> CycleRunResult:
     """
     Ejecuta un ciclo de live trading.
@@ -196,6 +204,7 @@ def execute(
             portfolio_service=portfolio_service,
             max_errors=max_errors,
             min_confidence=min_confidence,
+            exchange_config=exchange_config,
         )
     except Exception as exc:
         logger.error(

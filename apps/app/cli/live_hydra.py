@@ -71,6 +71,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     p.add_argument(
+        "--mode",
+        default="paper",
+        choices=["paper", "live"],
+        help=(
+            "paper -> valida el flujo real orden→fill→reconciliación sobre un "
+            "transporte simulado; live -> envía órdenes reales al exchange "
+            "(requiere credenciales). Siempre paper → live (ADR-0016)."
+        ),
+    )
+
+    p.add_argument(
         "--env",
         default=None,
         help=(
@@ -173,12 +184,35 @@ def main(argv: list[str] | None = None) -> int:
     logger.warning("=" * 52)
     logger.warning("⚠️   LIVE TRADING (HYDRA) — CAPITAL REAL")
     logger.warning(
-        "    exchange={} symbol={} capital={:.0f} USD",
+        "    exchange={} symbol={} capital={:.0f} USD mode={}",
         trading_cfg.exchange,
         symbol,
         trading_cfg.capital_usd,
+        cli_args.mode,
     )
     logger.warning("=" * 52)
+
+    # ADR-0016: modo del transporte. paper → simulado; live → requiere las
+    # credenciales del exchange (sin ellas, fail-fast. Nunca live directo por
+    # omisión).
+    exchange_config = None
+    if cli_args.mode == "live":
+        exchange_config = config.get_exchange(trading_cfg.exchange)
+        if exchange_config is None:
+            logger.critical(
+                "live requiere credenciales para el exchange {} (mode=live). "
+                "Configure exchanges.{}.api_key/api_secret o use --mode paper (ADR-0016).",
+                trading_cfg.exchange,
+                trading_cfg.exchange,
+            )
+            return 1
+        if not exchange_config.has_credentials:
+            logger.critical(
+                "live requiere credenciales no vacías para {} (mode=live). Sin "
+                "api_key/api_secret se aborta — nunca live directo por omisión (ADR-0016).",
+                trading_cfg.exchange,
+            )
+            return 1
 
     logger.info(
         "Live trading iniciando (hydra) | exchange={} symbol={} tf={} market_type={} strategy={} capital={:.0f}",
@@ -210,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
             portfolio_service=portfolio_root.portfolio_service,
             max_errors=params.max_errors,
             min_confidence=params.min_confidence,
+            exchange_config=exchange_config,
         )
     except (KeyboardInterrupt, SystemExit) as exc:
         logger.warning("Live trading interrumpido | {}", exc)

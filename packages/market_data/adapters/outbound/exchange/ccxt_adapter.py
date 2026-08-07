@@ -89,6 +89,8 @@ _GLOBAL_MARKETS_CACHED_AT: Dict[str, float] = {}
 _FETCH_TICKER_TIMEOUT = 10.0
 _FETCH_OHLCV_TIMEOUT = 30.0
 _FETCH_TRADES_TIMEOUT = 15.0
+_CREATE_ORDER_TIMEOUT = 15.0
+_FETCH_ORDER_TIMEOUT = 10.0
 
 
 class CCXTAdapter(ExchangeAdapter):
@@ -395,6 +397,104 @@ class CCXTAdapter(ExchangeAdapter):
             [k for k, v in required.items() if v],
         )
         return {k: v for k, v in required.items() if v}
+
+    # ----------------------------------------------------------
+    # Order write + reconciliation (F3 / ADR-0016)
+    # ----------------------------------------------------------
+
+    async def create_order(
+        self,
+        symbol: str,
+        side: str,
+        amount: float,
+        *,
+        order_type: str = "market",
+        client_order_id: Optional[str] = None,
+        price: Optional[float] = None,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Envía una orden al exchange (order creation) con timeout explícito.
+
+        Para órdenes market, ``price`` debe ser None (el exchange marketa).
+        ``client_order_id`` se propaga como idempotencia cuando el exchange lo
+        soporta (params clientOrderId/implicit_schema vía quirks)
+        """
+        client = await self._get_client()
+        order_params: Dict[str, Any] = dict(params or {})
+        if client_order_id:
+            order_params["clientOrderId"] = client_order_id
+        async with self._limiter.slot():
+
+            async def _call():
+                return await asyncio.wait_for(
+                    client.create_order(
+                        symbol,
+                        order_type,
+                        side,
+                        amount,
+                        price,
+                        order_params,
+                    ),
+                    timeout=_CREATE_ORDER_TIMEOUT,
+                )
+
+            try:
+                _t0 = time.perf_counter()
+                result = await self._resilience.retry_call(_call)
+                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+                return result
+            except RetryExhaustedError as exc:
+                self._throttle.record_error(error_type=exc.error_type)
+                if exc.error_type == "rate_limit":
+                    self._throttle.record_rate_limit_hit()
+                raise
+            except ExchangeCircuitOpenError:
+                self._handle_circuit_open("create_order")
+                raise
+            except asyncio.TimeoutError as exc:
+                self._throttle.record_error(error_type="timeout")
+                raise ExchangeAdapterError(f"create_order timeout ({symbol}) after {_CREATE_ORDER_TIMEOUT}s") from exc
+            except ccxt.AuthenticationError as exc:
+                raise ExchangeAdapterError(
+                    f"Authentication failed for {self._exchange_id} on create_order: {exc}"
+                ) from exc
+
+    async def fetch_order(
+        self,
+        order_id: str,
+        symbol: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Consulta el estado real de una orden en el exchange (reconciliación).
+
+        Usado por el motor de ejecución para confirmar fills (fail-closed).
+        """
+        client = await self._get_client()
+        async with self._limiter.slot():
+
+            async def _call():
+                return await asyncio.wait_for(
+                    client.fetch_order(order_id, symbol),
+                    timeout=_FETCH_ORDER_TIMEOUT,
+                )
+
+            try:
+                _t0 = time.perf_counter()
+                result = await self._resilience.retry_call(_call)
+                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+                return result
+            except RetryExhaustedError as exc:
+                self._throttle.record_error(error_type=exc.error_type)
+                if exc.error_type == "rate_limit":
+                    self._throttle.record_rate_limit_hit()
+                raise
+            except ExchangeCircuitOpenError:
+                self._handle_circuit_open("fetch_order")
+                raise
+            except asyncio.TimeoutError as exc:
+                self._throttle.record_error(error_type="timeout")
+                raise ExchangeAdapterError(
+                    f"fetch_order timeout (id={order_id}) after {_FETCH_ORDER_TIMEOUT}s"
+                ) from exc
 
     # ----------------------------------------------------------
     # Internal helpers

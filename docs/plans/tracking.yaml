@@ -405,8 +405,8 @@ hallazgos:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01 (resolución)"}
       backlog: {estado: HECHO, referencia: "B-12 en tracking v2"}
       adr: {estado: HECHO, referencia: "ADR-0016-live-executor-real-bybit (aceptada 2026-08-06)"}
-      implementacion: {estado: PENDIENTE, referencia: "LiveExecutor._submit real"}
-      tests: {estado: PENDIENTE, referencia: "integración sandbox/mock"}
+      implementacion: {estado: HECHO, referencia: "LiveExecutor sobre OrderTransport + CCXTAdapter.create_order/fetch_order + reconciliación + guard (F3)"}
+      tests: {estado: HECHO, referencia: "test_live_executor (R9/R10 pos/neg) + test_transport_mapping"}
       ci: {estado: PENDIENTE, referencia: "R9/R10 activadas_en_ci"}
       evidencia: {estado: PENDIENTE, referencia: "backtest R9/R10"}
       cierre: {estado: PENDIENTE, referencia: null}

@@ -260,7 +260,7 @@ def test_execute_live_fail_soft_when_engine_build_fails(monkeypatch) -> None:
     """Fail-Soft: si build_live_engine lanza, execute devuelve success=False."""
     from app.use_cases import execute_live
 
-    def _explode(trading, risk, portfolio_service, *, max_errors, min_confidence):
+    def _explode(trading, risk, portfolio_service, *, max_errors, min_confidence, exchange_config=None):
         raise RuntimeError("guard misconfigured")
 
     monkeypatch.setattr(execute_live, "build_live_engine", _explode)
