@@ -11,7 +11,7 @@ incompatible, propiedad derivada is_winner e immutabilidad (frozen).
 
 Regresión Fase 1: los aliases de error y versión son el SSOT canónico.
 
-PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+PROVENANCE (Contract Provenance — Protocol Discovery Framework (ADR-0017, F2.5))
 ------------------------------------------------
 - PositionOpenedPayload / PositionClosedPayload → DOMAIN: eventos del dominio
   portfolio OCM; NO existen en ningún wire externo. Estables por diseño.

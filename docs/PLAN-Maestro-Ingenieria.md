@@ -173,6 +173,20 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **DOD:** `tracking-consistency` valida el bloque en el snapshot; Plan↔tracking coherentes.
 - **Criterio de salida:** job `tracking-consistency` verde (SSOT); G5/G6 documentados.
 
+#### F2.5 — Protocol Discovery Framework (PDF) (gate normativo antes de capital)
+
+- **Objetivo:** institucionalizar la ingesta basada en evidencia como metodología permanente y
+  única (ADR-0017). No es un "kit" de scripts: el Framework nunca cambia; cambian los **Discovery
+  Profiles** por integración (Bybit primero; luego Binance, Hyperliquid, blockchains, brokers).
+- **DOR:** F2.1 cerrado; ADR-0020 (Production Gate) aceptada; semilla de provenance en F2.3.
+- **Entregables:** ADR-0017 (Protocol Discovery Framework con sus 14 componentes, Contract
+  Provenance como punto 9); reubicar la ADR de estado de posiciones a **ADR-0021** (renumeración
+  por colisión).
+- **DOD:** `test_schema_provenance.py` como semilla operativa de los puntos 9/13; taxonomía
+  PROTOCOL/DOCUMENTATION/UPSTREAM_LIBRARY/DOMAIN/ASSUMED normativa; Promotion Rule (14) definida.
+- **Criterio de salida:** ADR-0017 aceptada y committeada; gate de capital: **F3 no envía órdenes
+  reales hasta que Orders/Fills estén promovidos** (Provenance estable).
+
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
@@ -185,7 +199,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 ### F4 — Madurez de producción / Observabilidad (2–4 meses)
 
 - **Objetivo:** consistencia de estado, trazabilidad, semántica de entrega (H-08, H-09, H-11, H-15, H-16, H-17, H-18) + **Observabilidad** (OTel + request-id; único SS de posiciones).
-- **DOR:** F3 cerrada; ADR-0017, ADR-0018 en revisión.
+- **DOR:** F3 cerrada; ADR-0021, ADR-0018 en revisión.
 - **Entregables:** estado de posición única (PortfolioService); UUID completo; OTel + request-id; evaluación/implementación Schema Registry; exactly-once (dedup + reintento); dominio sin `subprocess`; `RiskGate` alineado.
 - **DOD:** una sola fuente de verdad de posiciones; traces end-to-end; schema evolution backward-probada; dedup con test de reintento; dominio 100 % puro.
 - **Criterio de salida:** Production Gate release PASS completo.
@@ -208,8 +222,9 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | F2.2 | B-13 (legacy ADR 0003–0005) | ADR-0003..0015 SSOT | renaming |
 | F2.3 | B-18 (H-15) | ADR-0013, ADR-0018 | 8 schemas Kafka |
 | F2.4 | B-20, B-21 | — | tracking-consistency |
+| F2.5 | B-18 (H-15, provenance) | ADR-0017 (Protocol Discovery Framework), ADR-0021 (ex-0017, posición) | gate normativo antes de capital |
 | F3 | B-12, B-01, B-03 (H-01, H-19, H-22) | ADR-0016 (aceptada) | trading live — Bybit |
-| F4 | B-13 (rebalance, de F3), B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0011, ADR-0017, ADR-0018 | obs/estado |
+| F4 | B-13 (rebalance, de F3), B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0011, ADR-0021, ADR-0018 | obs/estado |
 | F5 | B-14, B-22, H-13 | ADR-0019, ADR-0020 | escala |
 
 ---
@@ -243,10 +258,10 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | ADR | Tema | Fase | Enlaza hallazgos | Guard de numeración |
 |---|---|---|---|---|
 | ADR-0016 | LiveExecutor real (Bybit) + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 | H-01, H-03, B-01, B-03, B-12 | **Aceptada + commiteada** (2026-08-06) |
-| ADR-0017 | Unificación del estado de posiciones | F4 | H-09, B-15 | Verificar al crear |
+| ADR-0017 | Protocol Discovery Framework (PDF) — metodología de descubrimiento/validación/modelado de protocolos externos; Contract Provenance como componente | F2.5 | H-15, B-18 | Verificar al crear |
 | ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F2.3 / F4 | H-15, B-18 | Verificar al crear |
 | ADR-0019 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear |
-| ADR-0020 | Production Gate como gate de release | F2.1 | B-06, B-07 | Verificar al crear |
+| ADR-0020 | Production Gate como gate de release | F2.1 | B-06, B-07 | **Aceptada + commiteada** (2026-08-06) |
 | — | *(semántica `_open_positions` cubierta por ADR-0016)* | — | H-03, B-03 | — |
 
 ---

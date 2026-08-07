@@ -3,11 +3,12 @@
 tests/kafka/test_schema_provenance.py
 ========================================
 
-MODELO: Contract Provenance & Evidence-Based Modeling (gancho F3 → ADR-0017).
+MODELO: Contract Provenance (componente 9 del Protocol Discovery Framework — ADR-0017, F2.5).
 Registro SSOT de la procedencia de cada contrato wire Kafka de OCM.
 
-Todo este archivo queda como gancho documental de F3 (Protocolo Discovery
-Framework): la taxonomía y el registro viven aquí, sin bloquear F2.
+Este archivo es la semilla operativa de los puntos 9 (Contract Provenance) y 13
+(Tests) del Protocol Discovery Framework (ADR-0017). La taxonomía y el registro
+viven aquí como guard de linaje del contrato.
 
 Cada payload DEBE declarar una procedencia (provenance) antes de considerarse
 parte del SSOT. Un contrato sin procedencia explícita se considera provisional

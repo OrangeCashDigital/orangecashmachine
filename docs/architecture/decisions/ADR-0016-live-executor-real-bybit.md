@@ -102,4 +102,4 @@ ya fijó la semántica del contador `_open_positions` como **held-position** (BU
 - Hallazgos: H-01 (stub devolvía éxito sin enviar), H-03 (contador), H-19/H-22 (vías F3),
   B-01, B-03, B-12.
 - ADRs relacionados: ADR-0003 (CR trading), ADR-0011 (rebalance → movido a F4), ADR-0013
-  (modelo de ingestión). Próximo: ADR-0017 (estado de posición, F4).
+  (modelo de ingestión). Próximo: ADR-0021 (estado de posición, F4); ADR-0017 (Protocol Discovery Framework, F2.5).

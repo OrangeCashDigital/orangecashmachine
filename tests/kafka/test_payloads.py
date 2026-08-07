@@ -8,7 +8,7 @@ Tests de kafka/payloads.py — OHLCVBar, EventPayload, versionado.
 Sin dependencias externas. Verifica: immutability, round-trip,
 Fail-Fast en versión incompatible, normalización de wire format.
 
-PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+PROVENANCE (Contract Provenance — Protocol Discovery Framework (ADR-0017, F2.5))
 ------------------------------------------------
 - KafkaOHLCVBar → UPSTREAM_LIBRARY(CCXT): tuple fetch_ohlcv
   (timestamp, open, high, low, close, volume) documentada por CCXT.

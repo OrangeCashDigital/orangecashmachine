@@ -86,4 +86,4 @@ capital real en F3).
 - Hallazgos: H-04 (B-06, coverage vacua), H-07 (B-07, bandit fuera de CI), H-20 (B-10, conteo de
   contratos), H-05/H-10/H-12 (paridad de config, dead stubs).
 - ADRs relacionados: ADR-0016 (motor live; su requisito nº3 exige health check como gate real),
-  ADR-0015 (app-layer guard). Próximo: ADR-0017 (contract provenance, F3).
+  ADR-0015 (app-layer guard). Próximo: ADR-0017 (Protocol Discovery Framework, F2.5) — Contract Provenance como componente.

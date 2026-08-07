@@ -10,7 +10,7 @@ source desconocido, fail-soft en side, helpers Kappa e immutabilidad (frozen).
 
 Regresión Fase 1: literales SSOT (source) y aliases de versión canónicos.
 
-PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+PROVENANCE (Contract Provenance — Protocol Discovery Framework (ADR-0017, F2.5))
 ------------------------------------------------
 - TradePayload / TradeSeriesPayload → ASSUMED (orphan): no hay productor que
   use el schema; kafka_trade_publisher serializa raw NormalizedTrade JSON

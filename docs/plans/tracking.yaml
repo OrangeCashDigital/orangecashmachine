@@ -464,13 +464,13 @@ hallazgos:
     solucion: "Unificar estado de posición en PortfolioService (única fuente mutable, ADR-0006); fill_sync/TradeTracker consumen eventos"
     pruebas:
       - "test: un solo dueño mutable; cierre no falla silenciosamente"
-    adr_relacionado: "ADR-0006; ADR-0017"
+    adr_relacionado: "ADR-0006; ADR-0021"
     riesgo_residual: "Medio: migración de estado"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-09 — confirmado en F0 2026-07-29"}
       backlog: {estado: HECHO, referencia: "B-15 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0017"}
+      adr: {estado: PENDIENTE, referencia: "ADR-0021"}
       implementacion: {estado: PENDIENTE, referencia: "unificar en PortfolioService"}
       tests: {estado: PENDIENTE, referencia: "un solo dueño mutable"}
       ci: {estado: PENDIENTE, referencia: "G10"}
@@ -692,29 +692,28 @@ engineering_health:
     F2_4_tracking_health: "registrado en este bloque; escalar en C"
 
 # =============================================================================
-# PREREQUISITO F3 — Protocol Discovery Framework (gancho, NO bloquea F2)
+# F2.5 — Protocol Discovery Framework (PDF) (gate normativo; NO bloquea F2.0-F2.4)
 # =============================================================================
-# Al alcanzar F3 (ejecución real de órdenes/fills) se institucionaliza la
-# ingesta basada en evidencia. Este bloque es gancho explícito de F3 y NO
-# abre trabajo en F2.
+# Fase activa tras F2.1. Institutionaliza la ingesta basada en evidencia como
+# metodología permanente. ADR-0017 (PDF) aceptada en F2.5; Contract Provenance
+# es un componente del Framework (punto 9), no el objetivo principal.
 #
-# Framework genérico (multi-exchange / multi-fuente; Bybit SOLO el primer
-# adapter):
-#   fuente (REST/WS/exchange/onchain) -> captura de protocolo (raw) ->
-#   persistencia raw (timestamp+version) -> catálogo de mensajes observados ->
-#   normalización vía adapter -> modelo interno OCM -> evento Kafka -> dominio.
-#
-# Regla SSOT de contratos (ADR-0017 en F3): todo contrato (Schema/DTO/Evento/
-# Entidad/VO) DEBE declarar su provenance:
-#   PROTOCOL | DOCUMENTATION | UPSTREAM_LIBRARY | DOMAIN | ASSUMED (provisional).
-# Solo los de provenance estable (no ASSUMED) califican SSOT; los provisionales
-# quedan marcados y se resuelven en F3.
+# El Framework es ÚNICO y multi-fuente (exchanges / blockchains / brokers);
+# cada integración implementa un Discovery Profile (Bybit = primer profile).
+# Componentes (orden): 1 Objetivo, 2 Principios, 3 Tipos de evidencia,
+# 4 REST, 5 WebSocket, 6 Execution, 7 Funding, 8 Liquidation,
+# 9 Contract Provenance, 10 Normalización, 11 Validación, 12 Fixtures,
+# 13 Tests, 14 Promotion Rule (solo provenance estable -> SSOT).
 #
 # La provenance inicial de los schemas actuales queda registrada en
-# tests/kafka/test_schema_provenance.py (F2.3) como semilla del gancho.
+# tests/kafka/test_schema_provenance.py (F2.3) como semilla de los puntos 9/13.
+# El gate de capital: F3 NO envía órdenes reales hasta que los contratos de
+# Orders/Fills estén promovidos (Promotion Rule 14).
 prerequisito_f3_discovery:
-  estado: "gancho (pendiente F3)"
-  semilla: "tests/kafka/test_schema_provenance.py (F2.3) -- provee linaje de cada schema"
-  institucionalizacion: "ADR-0017 en F3 + Discovery Kit segmentado (REST/WS/Execution-fills/Orders/Funding/Liquidations)"
-  nota: "Bybit es la primera implementación del framework; el diseño es multi-exchange/multi-fuente."
+  estado: "activo (fase F2.5)"
+  adr: "ADR-0017-protocol-discovery-framework (aceptada 2026-08-06)"
+  semilla: "tests/kafka/test_schema_provenance.py (F2.3) -- provee linaje de cada schema (puntos 9/13)"
+  institucionalizacion: "Protocol Discovery Framework + Discovery Profiles (Bybit = primero; Binance/Hyperliquid/blockchains despues)"
+  gate_capital: "F3 bloqueado a capital real hasta Promotion Rule (14) de Orders/Fills"
+  nota: "El framework es unico y permanente; cambian los Discovery Profiles, nunca el framework."
 nota: "Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md §4."

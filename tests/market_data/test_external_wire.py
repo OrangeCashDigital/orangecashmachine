@@ -1,6 +1,6 @@
 """Tests del wire payload canónico externo y su routing key.
 
-PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+PROVENANCE (Contract Provenance — Protocol Discovery Framework (ADR-0017, F2.5))
 ------------------------------------------------
 - ExternalMetricPayload → DOCUMENTATION: campo canónico (source_id, metric,
   symbol, timestamp_ms, value, quality_flags) derivado del modelo unificado

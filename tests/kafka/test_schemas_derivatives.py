@@ -12,7 +12,7 @@ side desconocido (liquidations), preservación de campos None e immutabilidad
 
 Regresión Fase 1: aliases de versión canónicos.
 
-PROVENANCE (Contract Provenance, gancho F3 → ADR-0017)
+PROVENANCE (Contract Provenance, Protocol Discovery Framework (ADR-0017, F2.5))
 ------------------------------------------------------
   FundingRatePayload   — UPSTREAM_LIBRARY(CCXT) para timestamp/funding_rate.
                           ASSUMED para interval_h, predicted_rate, next_funding_ms

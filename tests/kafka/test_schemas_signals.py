@@ -12,7 +12,7 @@ e immutabilidad (frozen).
 
 Regresión Fase 1: los aliases de error y versión son el SSOT canónico.
 
-PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+PROVENANCE (Contract Provenance — Protocol Discovery Framework (ADR-0017, F2.5))
 ------------------------------------------------
 - SignalPayload / ApprovedSignalPayload / RejectedSignalPayload → DOMAIN:
   eventos del dominio estrategia/risk de OCM; NO existen en ningún wire de

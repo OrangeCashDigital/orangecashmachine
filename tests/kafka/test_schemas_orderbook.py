@@ -11,7 +11,7 @@ side desconocido, payload_type discriminador e immutabilidad (frozen).
 
 Regresión Fase 1: aliases de versión canónicos.
 
-PROVENANCE (Contract PICO, gancho F3 → ADR-0017)
+PROVENANCE (Contract Provenance — Protocol Discovery Framework (ADR-0017, F2.5))
 ------------------------------------------------
 - OrderBookSnapshotPayload / OrderBookDeltaPayload → PROTOCOL con matiz:
     Tráfico Bybit WS OBSERVADO (confirmado en vivo via cryptofeed; ver
