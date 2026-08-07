@@ -160,7 +160,7 @@ hallazgos:
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01"}
       backlog: {estado: HECHO, referencia: "B-01 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0016 (LiveExecutor real)"}
+      adr: {estado: HECHO, referencia: "ADR-0016-live-executor-real-bybit (aceptada 2026-08-06)"}
       implementacion: {estado: HECHO, referencia: "guard fail-closed en assemble_live (77a9997)"}
       tests: {estado: HECHO, referencia: "TestLiveExecutorFailClosed + test R1 pos/neg"}
       ci: {estado: HECHO, referencia: "R1 activada_en_ci"}
@@ -204,7 +204,7 @@ hallazgos:
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-03"}
       backlog: {estado: HECHO, referencia: "B-03 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "semántica _open_positions en ADR-0016 (LiveExecutor real)"}
+      adr: {estado: HECHO, referencia: "semántica _open_positions en ADR-0016-live-executor-real-bybit (aceptada 2026-08-06)"}
       implementacion: {estado: HECHO, referencia: "held-position: BUY abre, SELL fill cierra (f8a1c73)"}
       tests: {estado: HECHO, referencia: "test_oms_fill_lifecycle (R3 round-trip)"}
       ci: {estado: HECHO, referencia: "R3 activada_en_ci"}
@@ -404,7 +404,7 @@ hallazgos:
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01 (resolución)"}
       backlog: {estado: HECHO, referencia: "B-12 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0016 (LiveExecutor real)"}
+      adr: {estado: HECHO, referencia: "ADR-0016-live-executor-real-bybit (aceptada 2026-08-06)"}
       implementacion: {estado: PENDIENTE, referencia: "LiveExecutor._submit real"}
       tests: {estado: PENDIENTE, referencia: "integración sandbox/mock"}
       ci: {estado: PENDIENTE, referencia: "R9/R10 activadas_en_ci"}
