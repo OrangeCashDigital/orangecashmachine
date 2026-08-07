@@ -88,15 +88,15 @@ reglas:
   - id: R9
     hallazgo: B-12
     descripcion: "Orden live sin camino de reconciliación de fills"
-    mecanismo: "AST guard en LiveExecutor._submit"
-    backtest: pendiente
-    activada_en_ci: false
+    mecanismo: "LiveExecutor reconcilia fills contra el exchange (OrderTransport.fetch_state) — fail-closed"
+    backtest: ok
+    activada_en_ci: true
   - id: R10
     hallazgo: B-12
     descripcion: "`size_pct` crudo en orden live sin conversión a qty"
-    mecanismo: "AST guard en live_executor"
-    backtest: pendiente
-    activada_en_ci: false
+    mecanismo: "LiveExecutor._notional_qty + test_transport_mapping (AST/unit) en trading-guards"
+    backtest: ok
+    activada_en_ci: true
   - id: R11
     hallazgo: H-11
     descripcion: "`subprocess` en domain (pureza de dominio)"
@@ -407,7 +407,7 @@ hallazgos:
       adr: {estado: HECHO, referencia: "ADR-0016-live-executor-real-bybit (aceptada 2026-08-06)"}
       implementacion: {estado: HECHO, referencia: "LiveExecutor sobre OrderTransport + CCXTAdapter.create_order/fetch_order + reconciliación + guard (F3)"}
       tests: {estado: HECHO, referencia: "test_live_executor (R9/R10 pos/neg) + test_transport_mapping"}
-      ci: {estado: PENDIENTE, referencia: "R9/R10 activadas_en_ci"}
+      ci: {estado: HECHO, referencia: "R9/R10 activadas_en_ci (job trading-guards)"}
       evidencia: {estado: PENDIENTE, referencia: "backtest R9/R10"}
       cierre: {estado: PENDIENTE, referencia: null}
   - id: B-13

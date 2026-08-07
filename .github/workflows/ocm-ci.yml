@@ -108,6 +108,33 @@ jobs:
         run: uv run mypy apps/ --no-incremental
 
   # ──────────────────────────────────────────────────────────────────────────
+  # JOB 1c: trading-guards (R9/R10 — motor de ejecución live, ADR-0016)
+  # Gate de reglas auto-defendibles de trading/execution:
+  #   R9  → reconciliación de fills confirmada por el exchange (fail-closed)
+  #   R10 → conversión size_pct → qty en coordenadas del exchange
+  # Cada regla activa debe tener backtest=ok y activada_en_ci=true (esta job).
+  # Corre tras architecture; unit-tests ya ejecuta el resto de la suite.
+  # ──────────────────────────────────────────────────────────────────────────
+  trading-guards:
+    name: Trading guards (R9/R10)
+    runs-on: ubuntu-latest
+    needs: [architecture, engineering-health]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Live executor rules (R9/R10)
+        run: uv run pytest tests/trading/test_live_executor.py tests/trading/test_transport_mapping.py -q -m "not integration"
+
+  # ──────────────────────────────────────────────────────────────────────────
   # JOB 2a: Unit tests
   # Sin infraestructura externa. Fail-fast: -x detiene en el primer fallo.
   # No requiere Kafka/Redis reales — se excluyen vía marker `integration`
