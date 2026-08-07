@@ -218,7 +218,6 @@ ignore = []
 # ── Composition roots y entrypoints ────────────────────────────────────────
 # Lazy imports son intencionales: evitan circular imports en bootstrap order.
 # Paths relativos al repo root (donde está pyproject.toml).
-"packages/market_data/infrastructure/bootstrap/container.py"        = ["E402"]
 "packages/market_data/application/pipelines/ohlcv_pipeline.py"      = ["E402"]
 "ocm/config/hydra_loader.py"                                         = ["E402"]
 "ocm/config/loader/env_resolver.py"                                  = ["E402"]
@@ -275,13 +274,22 @@ source = ["packages", "ocm", "shared", "apps"]
 
 [tool.coverage.report]
 show_missing = true
-# ACCIÓN PENDIENTE (antes de subir este número): correr
-# `pytest --cov-report=term-missing` y medir la cobertura real actual.
-# Fijar fail_under por encima de esa medición rompe el CI de inmediato
-# (fail-fast mal aplicado, sobre una baseline que no existe todavía).
-# Una vez medido: fijar fail_under un par de puntos por debajo del valor
-# real y subirlo gradualmente en PRs siguientes — no de un salto a 60.
-fail_under = 0
+# Baseline medida en F2.1 (B-06/R5): `pytest --cov=packages --cov=ocm
+# --cov=shared --cov=apps --cov-report=term` dio 44% real. Per plan (B-06):
+# fijar fail_under un par de puntos por debajo del real (margen) y subirlo
+# gradualmente en PRs siguientes — no de un salto a 60.
+# *_COVERAGE.activada_en_ci=true en tracking.yaml (R5).
+fail_under = 40
+
+# =============================================================================
+# tool.bandit
+# =============================================================================
+# Gate de seguridad R6 (B-07/F2.1): workflows corren `bandit -r <dirs> -ll`.
+# Excluimos tests y venv; nivel de severidad mínimo HIGH (-ll) para que el CI
+# solo falle ante hallazgos BLOCKER reales, no ruido de severidad media.
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", ".git", "__pycache__"]
+skips = ["B101"]  # assert_used: asserts válidos en guard checks controlados
 
 # =============================================================================
 # tool.mypy

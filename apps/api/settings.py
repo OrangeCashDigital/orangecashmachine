@@ -92,7 +92,10 @@ class ApiSettings(BaseSettings):
 
     # ── Servidor ──────────────────────────────────────────────────────
     # Lee: OCM_API_HOST / OCM_API_PORT / OCM_API_ENV
-    host: str = Field(default="0.0.0.0")
+    # nosec B104: bind a todas las interfaces es intencional para la API
+    # (gateway expuesto); host override ESCRITO vía env OCM_API_HOST por
+    # configuración de despliegue (ver ocm/config/env_vars.py).
+    host: str = Field(default="0.0.0.0")  # nosec B104
     port: int = Field(default=8000, ge=1, le=65535)
     env: str = Field(default="development")
 

@@ -37,3 +37,8 @@ repos:
         entry: uv run python scripts/check_ssot_enums.py
         language: system
         pass_filenames: false
+      - id: bandit
+        name: Bandit security (R6)
+        entry: uv run bandit -r apps ocm packages shared infrastructure -ll
+        language: system
+        pass_filenames: false
