@@ -305,24 +305,58 @@ operativa real de patrones de staleness en producción.
   `apps/app/cli/paper_hydra.py`, `run.sh`, `pyproject.toml`
   (`[project.scripts]`)
 
-
 ## Addendum (2026-08-07): alcance del Streaming Entrypoint MVP
 
-Este ADR define el lifecycle del proceso; la implementación mínima que lo
-satisface es `apps/app/cli/streaming_hydra.py` (F3.5b en tracking.yaml),
-con este alcance:
+**Corrección de proceso:** la versión original de este addendum (commit
+`1b8fd92`) fue escrita antes de leer las Referencias de este mismo ADR y
+antes de auditar `scripts/app_layer_guard.py`. Se corrige aquí con hallazgos
+verificados.
+
+Verificado (2026-08-07):
+- `packages/market_data/main.py` es un servicio FastAPI ya desplegable
+  (`_lifespan`, `_ingestion_loop`, `_bronze_writer_loop`, `/health`, `/ready`)
+  que gobierna ingestión **polling** hacia Bronze/Iceberg para servir
+  `/ohlcv/...`. No es el proceso de streaming WS de microestructura — son
+  pipelines de ingestión distintos y complementarios.
+- `WSProducerBundle`/`build_ws_producers()` (orderbook/funding/oi/liquidations
+  vía WebSocket → Kafka raw) siguen sin entrypoint propio. Confirmado sin
+  unit systemd activo (`systemctl` vacío para market_data/streaming).
+- `[project.scripts]` (pyproject.toml) registra hoy: `ocm`, `ocm-api`,
+  `live`, `paper`. No existe `streaming` — el nombre de archivo propuesto
+  (`streaming_hydra.py`) es una convención por analogía con
+  `live_hydra.py`/`paper_hydra.py`, no una referencia textual de este ADR.
+- `scripts/app_layer_guard.py::check_cli_must_import_bootstrap` (R14/H8)
+  tiene los nombres de archivo hardcodeados a `("live_hydra.py",
+  "paper_hydra.py")` — **no cubre `streaming_hydra.py`**. Decisión de diseño:
+  no se agrega a esa lista, porque `_bootstrap.handle_sigterm` (`raise
+  SystemExit(1)`) no es seguro dentro de un loop asyncio persistente
+  (`FeedRunnerProtocol.run_until_stopped`). Streaming define su propio
+  manejo de señales vía `loop.add_signal_handler` + `asyncio.Event`, y
+  puede reutilizar `setup_logging`/`assemble_cli_config` de `_bootstrap.py`
+  donde aplique, sin heredar `handle_sigterm`.
+- `shared/kafka/provenance.py` (`require_promoted()`) NO cubre hoy eventos
+  de `realtime_feeds` — gap ya documentado en este ADR (ver arriba), no
+  introducido por el MVP.
+
+Alcance del MVP (`apps/app/cli/streaming_hydra.py`, F3.5b en tracking.yaml):
 
 - Reutiliza `market_data.infrastructure.bootstrap.composition_root`
-  (`build_ws_producers()`) — no crea un `CompositionRoot` alternativo.
+  (`build_ws_producers()` → `WSProducerBundle`) — no crea un
+  `CompositionRoot` alternativo.
 - 1 exchange, subset pequeño de símbolos (canary, no despliegue completo).
-- Maneja SIGTERM/SIGINT y delega el cierre a los `close()` ya existentes
-  en los producers/adapters.
-- No importa ni modifica `apps/app/cli/live_hydra.py` ni
-  `apps/app/cli/paper_hydra.py`.
-- No requiere nuevo bounded context ni nuevo import-linter contract salvo
-  que el paso de verificación (2026-08-07) confirme que no existe ya un
-  contrato `market_data` ↔ `trading` — en ese caso se agrega antes de
-  mergear el MVP, no después.
+- Shutdown vía `asyncio.get_running_loop().add_signal_handler(SIGTERM/SIGINT,
+  stop_event.set)` — no vía `_bootstrap.handle_sigterm`. Delega el cierre a
+  `WSProducerBundle` (método de cierre agregado ya existente, confirmar
+  nombre exacto antes de implementar).
+- No importa ni modifica `apps/app/cli/live_hydra.py`,
+  `apps/app/cli/paper_hydra.py` ni `packages/market_data/main.py`.
+- No se agrega a R14/H8 (`app_layer_guard.py`); si se decide un guard
+  propio para streaming, se documenta como R-nuevo separado.
+- No requiere nuevo import-linter contract: BC-10 (`market_data does not
+  import sibling bounded contexts`) y BC-50 (`trading imports market_data
+  only from trading/bootstrap/composition_root`) ya cubren ambas
+  direcciones; verificado en `architecture/importlinter.toml` líneas
+  424 y 467.
 
 El capacity planning real (F3.5c) depende de que este canary esté
 corriendo bajo systemd; no es medible antes.
