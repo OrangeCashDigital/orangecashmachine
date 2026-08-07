@@ -436,24 +436,24 @@ hallazgos:
     hallazgo_informe: H-22
     fase: F3
     prioridad: BAJA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "packages/trading/strategies/base.py:19, ema_crossover.py:22 (import pandas) sin contrato tipo BC-09 para trading"
+    evidencia: "Strategies migradas a polars: base.py/ema_crossover.py sin pandas; engine.py = punto único de conversión (pl.from_pandas)"
     solucion: "Migrar a polars + añadir contrato de tecnología"
     pruebas:
-      - "test estrategia con polars"
+      - "test estrategia con polars (23 tests trading/strategies pass; suite trading 85 pass)"
     adr_relacionado: null
-    riesgo_residual: "Bajo"
-    fecha_cierre: null
+    riesgo_residual: "Bajo: load_features (gold_reader/execute_paper) aún entrega pandas; engine convierte en el límite"
+    fecha_cierre: "2026-08-06"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-22"}
       backlog: {estado: HECHO, referencia: "B-14 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: "migrar strategies a polars"}
-      tests: {estado: PENDIENTE, referencia: "test estrategia polars"}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "base.py + ema_crossover.py a polars; engine pl.from_pandas en límite"}
+      tests: {estado: HECHO, referencia: "test_ema_crossover/test_base_strategy polars (23 pass)"}
+      ci: {estado: HECHO, referencia: "suite trading 85 pass; ruff/mypy/import-linter verdes"}
+      evidencia: {estado: HECHO, referencia: "pandas fuera de trading.strategies; cero import pandas residual"}
+      cierre: {estado: HECHO, referencia: "validado por engineering_health_check"}
   - id: B-15
     hallazgo_informe: H-09
     fase: F4
@@ -692,11 +692,12 @@ engineering_health:
     F2_4_tracking_health: "registrado en este bloque; escalar en C"
 
 # =============================================================================
-# F2.5 — Protocol Discovery Framework (PDF) (gate normativo; NO bloquea F2.0-F2.4)
+# F2.5 — Protocol Discovery (gate normativo; NO bloquea F2.0-F2.4)
 # =============================================================================
 # Fase activa tras F2.1. Institutionaliza la ingesta basada en evidencia como
-# metodología permanente. ADR-0017 (PDF) aceptada en F2.5; Contract Provenance
-# es un componente del Framework (punto 9), no el objetivo principal.
+# metodología permanente. ADR-0017 (Protocol Discovery Framework, PDF) aceptada
+# en F2.5; Contract Provenance es un componente del Framework (punto 9), no el
+# objetivo principal.
 #
 # El Framework es ÚNICO y multi-fuente (exchanges / blockchains / brokers);
 # cada integración implementa un Discovery Profile (Bybit = primer profile).
@@ -710,7 +711,7 @@ engineering_health:
 # El gate de capital: F3 NO envía órdenes reales hasta que los contratos de
 # Orders/Fills estén promovidos (Promotion Rule 14).
 prerequisito_f3_discovery:
-  estado: "activo (fase F2.5)"
+  estado: "activo (fase F2.5 Protocol Discovery)"
   adr: "ADR-0017-protocol-discovery-framework (aceptada 2026-08-06)"
   semilla: "tests/kafka/test_schema_provenance.py (F2.3) -- provee linaje de cada schema (puntos 9/13)"
   institucionalizacion: "Protocol Discovery Framework + Discovery Profiles (Bybit = primero; Binance/Hyperliquid/blockchains despues)"

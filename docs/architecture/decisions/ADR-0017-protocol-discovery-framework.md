@@ -40,11 +40,14 @@ validar y modelar protocolos externos. Componentes (orden de aplicación):
 
 1. **Objetivo** — definir el contrato de entrada/salida del discovery para la integración.
 2. **Principios** — evidencia sobre suposición; linaje obligatorio; no-SSOT hasta validar;
-   diseño multi-fuente desde el inicio.
+   diseño multi-fuente desde el inicio; **el dominio nunca depende directamente del protocolo
+   externo** — el protocolo se descubre, se valida y luego se *proyecta* al dominio. Los modelos
+   internos OCM se construyen a partir de protocolos descubiertos y validados, nunca de
+   suposiciones ni de estructuras crudas del exchange.
 3. **Tipos de evidencia** — PROTOCOL (mensaje observado del wire), DOCUMENTATION (documentación
    oficial), UPSTREAM_LIBRARY (librería verificada, p.ej. CCXT), DOMAIN (evento propio OCM),
    ASSUMED (provisional, sin fuente).
-4. **REST Discovery** — captura/observación de endpoints REST (OHLCV, meta, etc.).
+4. **REST Discovery** — captura/observación de endpoints REST (OHLCV, meta, balances, etc.).
 5. **WebSocket Discovery** — captura/observación de streams WS (orderbook, trades, funding).
 6. **Execution Discovery** — observación del ciclo orden→fill→estado en el exchange.
 7. **Funding Discovery** — observación de mensajes de funding/interest.
@@ -60,7 +63,11 @@ validar y modelar protocolos externos. Componentes (orden de aplicación):
     y validación.
 14. **Promotion Rule** — un contrato se **promueve a SSOT** solo si su provenance es estable
     (PROTOCOL/DOCUMENTATION/UPSTREAM_LIBRARY/DOMAIN) y pasa validación; los ASSUMED permanecen
-    provisionales y se resuelven en la fase que los haga observables.
+    provisionales y se resuelven en la fase que los haga observables. La regla es **genérica**: no
+    se limita a `Orders`/`Fills`; aplica a **todo tipo de dato que el dominio necesite con
+    garantías** — balances, posiciones, funding, liquidaciones, orderbook, trades, metamodelos y
+    cualquier contrato nuevo que se incorpore. Una clase de contrato crítico para capital solo
+    puede operar en el dominio con datos promovidos.
 
 Estructura del Framework:
 
@@ -73,9 +80,17 @@ Protocol Discovery Framework (PDF)
 │   └── OKX             └── Base
 ```
 
-Cada hoja es un **Discovery Profile**: implementa los 14 componentes para esa fuente sin tocar el
-Framework. Bybit es el primer profile (por ser el exchange operativo en F3), pero el diseño es
-agnóstico.
+Cada hoja es un **Discovery Profile** que implementa los 14 componentes para esa fuente **sin
+tocar el Framework**. Un profile declara EXPLÍCITAMENTE para su fuente:
+
+- **Fuentes de evidencia** — qué mensajes/endpoints provee (REST, WS, callbacks).
+- **Validación** — qué invariantes comprueba sobre los mensajes antes de normalizar.
+- **Criterios de promoción** — qué contratos promueve a SSOT y con qué evidencia.
+- **Limitaciones** — qué no ha observado aún, qué está ASSUMED, qué campos son especulativos.
+
+Este contrato de "profile" (evidencia + validación + promoción + limitaciones) es lo que hace que
+sumar Bybit, Binance, Hyperliquid, Ethereum o un broker sea *añadir un profile*, no rediseñar el
+Framework. Bybit es el primer profile (por ser el exchange operativo en F3); el diseño es agnóstico.
 
 ## Justificación técnica
 

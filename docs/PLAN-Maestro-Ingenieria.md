@@ -173,11 +173,11 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **DOD:** `tracking-consistency` valida el bloque en el snapshot; Plan↔tracking coherentes.
 - **Criterio de salida:** job `tracking-consistency` verde (SSOT); G5/G6 documentados.
 
-#### F2.5 — Protocol Discovery Framework (PDF) (gate normativo antes de capital)
+#### F2.5 — Protocol Discovery (metodología PDF; gate normativo antes de capital)
 
 - **Objetivo:** institucionalizar la ingesta basada en evidencia como metodología permanente y
-  única (ADR-0017). No es un "kit" de scripts: el Framework nunca cambia; cambian los **Discovery
-  Profiles** por integración (Bybit primero; luego Binance, Hyperliquid, blockchains, brokers).
+  única. Aquí la fase es **Protocol Discovery**; el artefacto normativo (ADR-0017) es el
+  **Protocol Discovery Framework (PDF)**.
 - **DOR:** F2.1 cerrado; ADR-0020 (Production Gate) aceptada; semilla de provenance en F2.3.
 - **Entregables:** ADR-0017 (Protocol Discovery Framework con sus 14 componentes, Contract
   Provenance como punto 9); reubicar la ADR de estado de posiciones a **ADR-0021** (renumeración
@@ -192,7 +192,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
 - **DOR:** F2.0 verde (Health Check CI); **ADR-0016 aceptada y commiteada** (Bybit, paper→live). ADR-0011 (rebalance) → **movida a F4** (no bloquea el motor).
 - **Entregables:** `LiveExecutor` real sobre `OrderTransport` (create_order + reconciliación fail-closed + kill switch; reglas **R9–R10 activadas en CI**, job `trading-guards`); `RebalanceService.rebalance()` cableado; strategies a polars.
-- **Avance:** [ ] motor de ejecución (B-12 implementado; paper|live via `--mode`) · [ ] rebalance (B-13 → F4) · [ ] polars strategies (B-14).
+- **Avance:** [ ] motor de ejecución (B-12 implementado; paper|live via `--mode`) · [ ] rebalance (B-13 → F4) · [x] polars strategies (B-14, migrado a polars).
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
 
@@ -220,12 +220,12 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | F2.0 | — | `engineering-health` (nueva) | gate previo |
 | F2.1 | B-06, B-07, B-10 (H-04, H-05, H-07, H-12, H-20, H-10) | ADR-0020, R5–R8 | contratos no-vacuos |
 | F2.2 | B-13 (legacy ADR 0003–0005) | ADR-0003..0015 SSOT | renaming |
-| F2.3 | B-18 (H-15) | ADR-0013, ADR-0018 | 8 schemas Kafka |
+| F2.3 | trabajo relacionado a B-18 (H-15, backlog en F4) | ADR-0013, ADR-0018 | 8 schemas Kafka — prerrequisito de B-18 |
 | F2.4 | B-20, B-21 | — | tracking-consistency |
-| F2.5 | B-18 (H-15, provenance) | ADR-0017 (Protocol Discovery Framework), ADR-0021 (ex-0017, posición) | gate normativo antes de capital |
+| F2.5 | trabajo relacionado a B-18 (H-15, provenance; backlog en F4) | ADR-0017 (Protocol Discovery), ADR-0021 (ex-0017, posición) | gate normativo antes de capital |
 | F3 | B-12, B-01, B-03 (H-01, H-19, H-22) | ADR-0016 (aceptada) | trading live — Bybit |
 | F4 | B-13 (rebalance, de F3), B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0011, ADR-0021, ADR-0018 | obs/estado |
-| F5 | B-14, B-22, H-13 | ADR-0019, ADR-0020 | escala |
+| F5 | B-22, H-13 | ADR-0019, ADR-0020 | escala |
 
 ---
 
@@ -443,5 +443,6 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (F1 cerrada) | Cierre F0 (22/22 clasificados) y F1 (B-01…B-05 HECHO); reestructura §4 en F2.0–F2.4 (Engineering Health Check), F3 trading-only, F4 Observabilidad, F5 Escala; **Regla suprema** (preamble); §§13–14 Artefactos Normativos + Ingeniería Continua; **Mapa Fase ↔ Hallazgos**; tracking.yaml se mantiene SSOT de `fase` (sin reasignar hallazgos) |
 | 2026-08-06 | (`397459e`) | **F2.0 ACTIVADO**: `scripts/engineering_health_check.py` + job CI `engineering-health` + pytest gate; valida Plan↔tracking↔ADR↔contratos↔CI (fail-fast). Decisiones F3: exchange inicial **Bybit** (único, paper→live siempre); **ADR-0011 → F4** (no bloquea F3). |
 | 2026-08-06 | (`5090245`, `e04f38d`) | **F3 motor de ejecución**: ADR-0016 aceptada; `OrderTransport` (port), `LiveExecutor` real (reconciliación fail-closed + kill switch + `_notional_qty`), `CCXTAdapter.create_order/fetch_order`, adaptador `_BybitTransport` (BC-50) en composition_root, modo `--mode paper\|live` en `uv run live`; reglas **R9–R10** activadas en CI (job `trading-guards`). Queda F3: rebalance (B-13) y polars strategies (B-14). |
+| 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
