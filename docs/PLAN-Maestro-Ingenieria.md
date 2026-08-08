@@ -475,23 +475,38 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 
 ## Roadmap F3.5 — Capacity Planning + Streaming Entrypoint MVP
 
-Hallazgo (2026-08-07): `market_data` ya tiene la infraestructura de ingestión
-realtime construida (`CompositionRoot.build_ws_producers()`, runners de
+Hallazgo (2026-08-07, corregido tras auditoría de código real): `market_data`
+tiene la infraestructura de ingestión WS realtime construida
+(`CompositionRoot.build_ws_producers()` → `WSProducerBundle`, runners de
 Bybit/KuCoin, `KafkaProducerAdapter` por dominio), pero **no existe todavía
 un proceso operativo** que la ensamble y mantenga viva 24/7. `systemctl`
-confirma que no hay unit activa. `live_hydra.py`/`paper_hydra.py` son
-procesos de trading (BC `trading`), no de ingestión — no deben confundirse
-ni fusionarse con el entrypoint de streaming.
+confirma que no hay unit activa.
+
+**Corrección de investigación:** en esta sesión se verificó
+`packages/market_data/main.py` — es un servicio FastAPI ya desplegable
+(`_lifespan`, `_ingestion_loop`, `_bronze_writer_loop`, `/health`, `/ready`)
+que gobierna un pipeline de ingestión **polling** hacia Bronze/Iceberg
+(sirve `/ohlcv/...`). Es un pipeline **distinto y complementario** al
+streaming WS de microestructura (orderbook/funding/OI/liquidations vía
+`WSProducerBundle`) — no deben confundirse ni fusionarse. Ver addendum
+verificado en ADR-0022 para el detalle completo.
+
+`live_hydra.py`/`paper_hydra.py` son procesos de trading (BC `trading`), no
+de ingestión — tampoco deben confundirse ni fusionarse con el entrypoint de
+streaming WS.
 
 Orden de trabajo:
 
 1. **F3.5a** — Capacity Planning teórico (sin despliegue): estimar msg/s,
    tamaño de mensaje y throughput esperado a partir de símbolos/exchanges
    configurados y límites documentados de cada exchange.
-2. **F3.5b** — Streaming Entrypoint MVP: `apps/app/cli/streaming_hydra.py`,
-   mismo patrón que `live_hydra.py`/`paper_hydra.py`. Usa el
-   `CompositionRoot` de `market_data` existente, un solo exchange, subset
-   pequeño de símbolos. Ver ADR-0022 para el contrato de lifecycle.
+2. **F3.5b** — Streaming Entrypoint MVP: `apps/app/cli/streaming_hydra.py`.
+   Usa el `CompositionRoot` de `market_data` existente
+   (`build_ws_producers()`), un solo exchange, subset pequeño de símbolos.
+   Shutdown vía `add_signal_handler`/`asyncio.Event` (no vía
+   `_bootstrap.handle_sigterm` — no es asyncio-safe para loop persistente).
+   No cubierto por el guard R14/H8 por diseño. Ver addendum verificado de
+   ADR-0022 para el contrato completo.
 3. **F3.5c** — Capacity Planning empírico: medir el canary bajo systemd
    (msg/s, bytes/s, CPU, RAM, red, throughput/lag de Kafka, latencia
    p50/p99).
@@ -500,6 +515,7 @@ Orden de trabajo:
    concreto se abre un ADR de escalabilidad (particionado, múltiples
    workers, Flink). No se introduce tooling adicional por anticipación.
 
-Invariante que el MVP no debe romper: `trading` no importa código de
-`market_data/adapters/inbound/websocket` (confirmado ausente al
-2026-08-07); el desacople sigue siendo exclusivamente vía Kafka.
+Invariantes que el MVP no debe romper (verificados, no supuestos):
+`trading` no importa código de `market_data/adapters/inbound/websocket`
+(BC-50); `market_data` no importa bounded contexts hermanos (BC-10); el
+MVP no toca `packages/market_data/main.py` (pipeline distinto).

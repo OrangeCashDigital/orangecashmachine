@@ -758,17 +758,23 @@ f3_5b_streaming_entrypoint_mvp:
   estado: PENDIENTE
   adr_relacionado: ADR-0022
   entregable: apps/app/cli/streaming_hydra.py
-  alcance: "1 exchange (Bybit o KuCoin), subset de símbolos, CompositionRoot de market_data existente (build_ws_producers())"
+  alcance: "1 exchange (Bybit o KuCoin), subset de símbolos, CompositionRoot de market_data existente (build_ws_producers() -> WSProducerBundle)"
+  hallazgos_verificados_2026_08_07:
+    - "packages/market_data/main.py es servicio FastAPI YA desplegable (ingestión polling -> Bronze/Iceberg para /ohlcv). Pipeline DISTINTO y complementario al streaming WS de microestructura — no confundir ni reutilizar como base."
+    - "WSProducerBundle/build_ws_producers() (orderbook/funding/oi/liquidations) sigue sin entrypoint. Sin unit systemd activo (confirmado vía systemctl)."
+    - "[project.scripts] no registra 'streaming' (solo ocm, ocm-api, live, paper). Nombre streaming_hydra.py es convención propia, no referencia textual del ADR."
+    - "R14/H8 (scripts/app_layer_guard.py) tiene nombres hardcodeados a (live_hydra.py, paper_hydra.py) — NO cubre streaming_hydra.py. Decisión: no agregar a esa lista porque _bootstrap.handle_sigterm (raise SystemExit) no es asyncio-safe para loop persistente."
+    - "BC-10 y BC-50 (architecture/importlinter.toml líneas 424, 467) ya cubren ambas direcciones del invariante market_data<->trading — no requiere contrato nuevo."
   criterios_aceptacion:
     arranca_composition_root: PENDIENTE
     invoca_build_ws_producers: PENDIENTE
     publica_eventos_reales_kafka: PENDIENTE
-    responde_sigterm_sigint: PENDIENTE
-    delega_cierre_a_close_existentes: PENDIENTE
+    shutdown_via_add_signal_handler_asyncio_event: PENDIENTE
+    delega_cierre_a_metodo_agregado_ws_producer_bundle: PENDIENTE
+    no_hereda_bootstrap_handle_sigterm: PENDIENTE
     systemd_reinicia_correctamente: PENDIENTE
-    no_importa_trading_ni_live_hydra: PENDIENTE
+    no_importa_trading_ni_live_hydra_ni_market_data_main: PENDIENTE
     no_crea_composition_root_alternativo: PENDIENTE
-    respeta_contrato_bc_market_data_trading: PENDIENTE
 
 f3_5c_capacity_empirico:
   estado: BLOQUEADO
