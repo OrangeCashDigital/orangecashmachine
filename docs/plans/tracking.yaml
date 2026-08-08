@@ -807,7 +807,7 @@ f2_6c_capacity_empirico:
     kafka_throughput: "no medido directo (no exporter); solo estimated_kafka_bytes_per_second"
     kafka_lag: "no medido (topic no consumido durante canary)"
     heartbeat: "126/126 pushes a 15s; job=ocm_pipeline_orderbook"
-  cierre: {estado: HECHO, referencia: "F2.6c cerrada 2026-08-08 por evidencia empirica 30 min (bybit BTC/ETH/SOL-USDT-PERP); sin exporters ni metricas ni schema nuevos; ADRs y Plan Maestro intactos"}>
+  cierre: {estado: HECHO, referencia: "F2.6c cerrada 2026-08-08 por evidencia empirica 30 min (bybit BTC/ETH/SOL-USDT-PERP); sin exporters ni metricas ni schema nuevos; ADRs y Plan Maestro intactos"}
 
 f2_6d_decision_escalabilidad:
   estado: BLOQUEADO
