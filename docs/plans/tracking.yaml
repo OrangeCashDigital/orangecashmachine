@@ -391,7 +391,7 @@ hallazgos:
     hallazgo_informe: H-01
     fase: F3
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "live_executor.py:91-134 (bloque CCXT comentado refiere CCXTAdapter.create_order); execute_live.py:64-70 (exchange_client None)"
     solucion: "Implementar _submit() con CCXTAdapter.create_order; conversión size_pct→qty real; reconciliación de fills"
@@ -399,17 +399,17 @@ hallazgos:
       - "test integración sandbox/mock: orden → fill → estado"
       - "test positivo/negativo R9, R10"
     adr_relacionado: ADR-0016
-    riesgo_residual: "Alto: capital real"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — capital real protegido por: reconciliación por orden consultando exchange (fail-closed), kill switch ExecutionGuard (manual + breaker por errores consecutivos), paper→live obligatorio (ADR-0016), guard B-23/Promotion Rule antes de instanciar LiveExecutor, y R9/R10 activadas en CI (job trading-guards)."
+    fecha_cierre: "2026-08-07"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01 (resolución)"}
       backlog: {estado: HECHO, referencia: "B-12 en tracking v2"}
       adr: {estado: HECHO, referencia: "ADR-0016-live-executor-real-bybit (aceptada 2026-08-06)"}
       implementacion: {estado: HECHO, referencia: "LiveExecutor sobre OrderTransport + CCXTAdapter.create_order/fetch_order + reconciliación + guard (F3)"}
-      tests: {estado: HECHO, referencia: "test_live_executor (R9/R10 pos/neg) + test_transport_mapping"}
+      tests: {estado: HECHO, referencia: "test_live_executor (R9/R10 pos/neg) + test_transport_mapping (14 tests, todos PASS)"}
       ci: {estado: HECHO, referencia: "R9/R10 activadas_en_ci (job trading-guards)"}
-      evidencia: {estado: PENDIENTE, referencia: "backtest R9/R10"}
-      cierre: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: HECHO, referencia: "evidencia reproducible de pruebas de reconciliación R9/R10: uv run pytest tests/trading/test_live_executor.py tests/trading/test_transport_mapping.py -q -m 'not integration' --no-cov → 14 passed, exit 0, sobre commit 0072162 (2026-08-07), idéntico al comando del job CI trading-guards (ocm-ci.yml:134-137)"}
+      cierre: {estado: HECHO, referencia: "B-12 cerrado 2026-08-07 con evidencia reproducible + gates verdes (health-check PASS, suite 966 passed)"}
   - id: B-23
     hallazgo_informe: H-01
     fase: F2
