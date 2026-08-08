@@ -321,6 +321,29 @@ hallazgos:
       ci: {estado: PENDIENTE, referencia: "gate mypy"}
       evidencia: {estado: PENDIENTE, referencia: null}
       cierre: {estado: PENDIENTE, referencia: null}
+
+  - id: B-24
+    hallazgo_informe: H-23
+    fase: F2
+    prioridad: P2
+    estado: HECHO
+    estado_auditoria: CONFIRMADO
+    evidencia: "packages/market_data/adapters/inbound/websocket/{orderbook,funding,oi,liquidations}_producer.py — _KAPPA_HEADERS con HEADER_SOURCE hardcodeado a \"live\" como constante de clase; único caller activo hoy es streaming_hydra.py (canary), no live_hydra.py"
+    solucion: "source: DataSource inyectado por constructor (default DATASOURCE_LIVE); CompositionRoot.build_ws_producers propaga el valor; streaming_hydra.py invoca con source=DATASOURCE_REPLAY explícito"
+    pruebas:
+      - "test_shutdown_order_and_return_zero: assert bundle.received_source == DATASOURCE_REPLAY"
+    adr_relacionado: null
+    riesgo_residual: "Bajo — semántica del header corregida; gap detection/DLQ sigue pendiente (ver H-24/F-007 si se formaliza aparte)"
+    fecha_cierre: "2026-08-08"
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-008 (addendum: H-23)"}
+      backlog: {estado: HECHO, referencia: "B-24 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "fix de composition root, no requiere ADR — valor DATASOURCE_REPLAY ya existente en SSOT shared/enums.py"}
+      implementacion: {estado: HECHO, referencia: "pendiente de commit — ver git status al cierre de la sesión 2026-08-08"}
+      tests: {estado: HECHO, referencia: "16/16 verdes: test_orderbook_producer_metrics.py, test_composition_root.py, test_streaming_hydra.py"}
+      ci: {estado: HECHO, referencia: "import-linter (BC-08) sin violaciones; py_compile OK"}
+      evidencia: {estado: HECHO, referencia: "pytest exit 0, ver sesión de auditoría 2026-08-08"}
+      cierre: {estado: HECHO, referencia: "F-008/H-23 resuelto 2026-08-08"}
   - id: B-09
     hallazgo_informe: H-05
     fase: F2

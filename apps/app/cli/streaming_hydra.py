@@ -66,6 +66,8 @@ from typing import Any
 
 from loguru import logger
 
+from shared.enums import DATASOURCE_REPLAY
+
 # Identidad del job en el Pushgateway — por diseño distinto del batch
 # (ocm_pipeline_local). Único para el canary: ocm_pipeline_orderbook.
 _PUSH_EXCHANGE = "orderbook"
@@ -204,7 +206,10 @@ async def _run_streaming(
     pusher = _build_pusher(config)
 
     # Composition Root (BC-38) — único punto de ensamblado de producers WS.
-    bundle = CompositionRoot.build_ws_producers(bootstrap_servers)
+    # source=DATASOURCE_REPLAY: este canary NO genera señales de trading
+    # (F-008, docs/audits/2026-08-08-streaming-canary-audit.md). El default
+    # DATASOURCE_LIVE queda reservado para live_hydra.py cuando lo adopte.
+    bundle = CompositionRoot.build_ws_producers(bootstrap_servers, source=DATASOURCE_REPLAY)
 
     stream = CryptofeedOrderBookStream(
         exchange=exchange,

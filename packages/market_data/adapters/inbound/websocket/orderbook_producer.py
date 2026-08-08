@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 
+from shared.enums import DATASOURCE_LIVE, DataSource
 from shared.kafka.schemas.orderbook import (
     OrderBookDeltaPayload,
     OrderBookSnapshotPayload,
@@ -73,18 +74,23 @@ class OrderBookKafkaProducer:
     topic: str = TOPIC_ORDERBOOK_RAW
     group: str = GROUP_WS_ORDERBOOK_PRODUCER
 
-    _KAPPA_HEADERS: dict = {
-        HEADER_SOURCE: "live",
-        HEADER_DOMAIN: "orderbook",
-    }
-
     def __init__(
         self,
         producer: "KafkaProducerPort",
         metrics: Optional["KafkaMetrics"] = None,
+        source: DataSource = DATASOURCE_LIVE,
     ) -> None:
+        """
+        source: origen Kappa real del proceso que instancia este producer.
+        SSOT: shared.enums.DataSource. Composition root decide el valor,
+        el adapter nunca lo asume (DIP) — ver docs/audits F-008.
+        """
         self._producer = producer
         self._metrics = metrics or self._make_metrics()
+        self._kappa_headers: dict = {
+            HEADER_SOURCE: source,
+            HEADER_DOMAIN: "orderbook",
+        }
         self._log = logger.bind(
             component="OrderBookKafkaProducer",
             topic=self.topic,
@@ -157,7 +163,7 @@ class OrderBookKafkaProducer:
                     topic=self.topic,
                     value=serialize(payload),
                     key=key,
-                    headers=self._KAPPA_HEADERS,
+                    headers=self._kappa_headers,
                 )
             self._metrics.event_published(exchange=exchange)
             self._metrics.event_processed(exchange=exchange, latency_ms=t.elapsed_ms)
@@ -205,7 +211,7 @@ class OrderBookKafkaProducer:
                     topic=self.topic,
                     value=serialize(payload),
                     key=key,
-                    headers=self._KAPPA_HEADERS,
+                    headers=self._kappa_headers,
                 )
             self._metrics.event_published(exchange=exchange)
             self._metrics.event_processed(exchange=exchange, latency_ms=t.elapsed_ms)
@@ -231,7 +237,7 @@ class OrderBookKafkaProducer:
             topic=self.topic,
             value=payload,
             key=key,
-            headers=self._KAPPA_HEADERS,
+            headers=self._kappa_headers,
         )
 
     def __repr__(self) -> str:

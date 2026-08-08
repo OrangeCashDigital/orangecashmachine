@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 
+from shared.enums import DATASOURCE_LIVE, DataSource
 from shared.kafka.schemas.liquidations import LiquidationPayload
 from shared.kafka.serializer import make_symbol_key, serialize
 from shared.kafka.topics import (
@@ -40,13 +41,21 @@ class LiquidationsKafkaProducer:
     topic: str = TOPIC_LIQUIDATIONS_RAW
     group: str = GROUP_WS_LIQUIDATIONS_PRODUCER
 
-    _KAPPA_HEADERS: dict = {
-        HEADER_SOURCE: "live",
-        HEADER_DOMAIN: "liquidations",
-    }
-
-    def __init__(self, producer: "KafkaProducerPort") -> None:
+    def __init__(
+        self,
+        producer: "KafkaProducerPort",
+        source: DataSource = DATASOURCE_LIVE,
+    ) -> None:
+        """
+        source: origen Kappa real del proceso que instancia este producer.
+        SSOT: shared.enums.DataSource. Composition root decide el valor,
+        el adapter nunca lo asume (DIP) — ver docs/audits F-008.
+        """
         self._producer = producer
+        self._kappa_headers: dict = {
+            HEADER_SOURCE: source,
+            HEADER_DOMAIN: "liquidations",
+        }
         self._log = logger.bind(
             component="LiquidationsKafkaProducer",
             topic=self.topic,
@@ -97,7 +106,7 @@ class LiquidationsKafkaProducer:
                 topic=self.topic,
                 value=serialize(payload),
                 key=key,
-                headers=self._KAPPA_HEADERS,
+                headers=self._kappa_headers,
             )
             self._log.bind(exchange=exchange, symbol=symbol).debug(
                 "liquidation_published | side={} price={} qty={}", side, price, quantity
@@ -107,7 +116,7 @@ class LiquidationsKafkaProducer:
 
     async def produce(self, payload: bytes, key: bytes | None = None) -> None:
         """API de bajo nivel — compatibilidad legacy."""
-        await self._producer.produce(topic=self.topic, value=payload, key=key, headers=self._KAPPA_HEADERS)
+        await self._producer.produce(topic=self.topic, value=payload, key=key, headers=self._kappa_headers)
 
     def __repr__(self) -> str:
         return f"LiquidationsKafkaProducer(topic={self.topic!r})"

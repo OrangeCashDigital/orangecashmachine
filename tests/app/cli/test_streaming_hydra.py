@@ -58,6 +58,7 @@ class _FakeBundle:
         self.orderbook = _FakeProducer()
         self.started = False
         self.closed = False
+        self.received_source = None  # blinda F-008: source pasado a build_ws_producers
 
     async def start_all(self) -> None:
         self.started = True
@@ -128,7 +129,11 @@ def patch_streaming(monkeypatch, bundle: _FakeBundle, fake_stream: _FakeStream):
 
     import ocm.runtime.context as ctx_mod
 
-    monkeypatch.setattr(cr_mod.CompositionRoot, "build_ws_producers", lambda bootstrap: bundle)
+    def _fake_build_ws_producers(bootstrap, source=None):
+        bundle.received_source = source
+        return bundle
+
+    monkeypatch.setattr(cr_mod.CompositionRoot, "build_ws_producers", _fake_build_ws_producers)
     monkeypatch.setattr(stream_mod, "CryptofeedOrderBookStream", lambda **kwargs: fake_stream)
     monkeypatch.setattr(ctx_mod, "RuntimeContext", lambda **kwargs: _FakeContext())
 
@@ -204,6 +209,11 @@ class TestRunStreaming:
         assert bundle.started is True
         assert fake_stream.stopped is True
         assert bundle.closed is True
+        # F-008 (docs/audits/2026-08-08-streaming-canary-audit.md): el canary
+        # de streaming NUNCA debe declararse source="live" — no genera señal
+        # de trading. Regresión: ver HEADER_SOURCE hardcodeado en los 4
+        # producers WS antes del fix.
+        assert bundle.received_source == streaming_hydra.DATASOURCE_REPLAY
 
 
 # ---------------------------------------------------------------------------

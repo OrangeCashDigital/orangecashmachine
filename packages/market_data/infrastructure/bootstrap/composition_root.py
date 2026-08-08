@@ -36,6 +36,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from shared.enums import DATASOURCE_LIVE
+
 if TYPE_CHECKING:
     from market_data.adapters.inbound.websocket.funding_producer import FundingKafkaProducer
     from market_data.adapters.inbound.websocket.liquidations_producer import LiquidationsKafkaProducer
@@ -50,6 +52,7 @@ if TYPE_CHECKING:
     )
     from market_data.ports.inbound.external.polling import PollingSourcePort
     from ocm.config.schema import AppConfig
+    from shared.enums import DataSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,6 +323,7 @@ class CompositionRoot:
     def build_ws_producers(
         cls,
         bootstrap_servers: str = "kafka:9092",
+        source: "DataSource" = DATASOURCE_LIVE,
     ) -> "WSProducerBundle":
         """
         Instancia y cablea los 4 producers WS reales con KafkaProducerPort.
@@ -353,25 +357,29 @@ class CompositionRoot:
                 KafkaProducerAdapter(
                     bootstrap_servers=bootstrap_servers,
                     client_id="ocm-ws-orderbook",
-                )
+                ),
+                source=source,
             ),
             funding=FundingKafkaProducer(
                 KafkaProducerAdapter(
                     bootstrap_servers=bootstrap_servers,
                     client_id="ocm-ws-funding",
-                )
+                ),
+                source=source,
             ),
             oi=OIKafkaProducer(
                 KafkaProducerAdapter(
                     bootstrap_servers=bootstrap_servers,
                     client_id="ocm-ws-oi",
-                )
+                ),
+                source=source,
             ),
             liquidations=LiquidationsKafkaProducer(
                 KafkaProducerAdapter(
                     bootstrap_servers=bootstrap_servers,
                     client_id="ocm-ws-liquidations",
-                )
+                ),
+                source=source,
             ),
         )
 

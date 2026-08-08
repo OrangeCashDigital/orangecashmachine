@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 
+from shared.enums import DATASOURCE_LIVE, DataSource
 from shared.kafka.schemas.funding import FundingRatePayload
 from shared.kafka.serializer import make_symbol_key, serialize
 from shared.kafka.topics import (
@@ -45,13 +46,21 @@ class FundingKafkaProducer:
     topic: str = TOPIC_FUNDING_RAW
     group: str = GROUP_WS_FUNDING_PRODUCER
 
-    _KAPPA_HEADERS: dict = {
-        HEADER_SOURCE: "live",
-        HEADER_DOMAIN: "funding",
-    }
-
-    def __init__(self, producer: "KafkaProducerPort") -> None:
+    def __init__(
+        self,
+        producer: "KafkaProducerPort",
+        source: DataSource = DATASOURCE_LIVE,
+    ) -> None:
+        """
+        source: origen Kappa real del proceso que instancia este producer.
+        SSOT: shared.enums.DataSource. Composition root decide el valor,
+        el adapter nunca lo asume (DIP) — ver docs/audits F-008.
+        """
         self._producer = producer
+        self._kappa_headers: dict = {
+            HEADER_SOURCE: source,
+            HEADER_DOMAIN: "funding",
+        }
         self._log = logger.bind(
             component="FundingKafkaProducer",
             topic=self.topic,
@@ -100,7 +109,7 @@ class FundingKafkaProducer:
                 topic=self.topic,
                 value=serialize(payload),
                 key=key,
-                headers=self._KAPPA_HEADERS,
+                headers=self._kappa_headers,
             )
             self._log.bind(exchange=exchange, symbol=symbol).debug("funding_rate_published | rate={}", funding_rate)
         except Exception as exc:
@@ -108,7 +117,7 @@ class FundingKafkaProducer:
 
     async def produce(self, payload: bytes, key: bytes | None = None) -> None:
         """API de bajo nivel — compatibilidad legacy."""
-        await self._producer.produce(topic=self.topic, value=payload, key=key, headers=self._KAPPA_HEADERS)
+        await self._producer.produce(topic=self.topic, value=payload, key=key, headers=self._kappa_headers)
 
     def __repr__(self) -> str:
         return f"FundingKafkaProducer(topic={self.topic!r})"
