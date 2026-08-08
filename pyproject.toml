@@ -149,7 +149,7 @@ Repository = "https://github.com/orangemusic/orangecashmachine"
 [project.optional-dependencies]
 docs = [
     "sphinx>=7.0,<8.0",
-    "sphinx-autodoc-typehints>=1.22,<2.0",
+    "sphinx-autodoc-typehints>=1.22,<4.0",
 ]
 # ci: sin entradas propias por ahora — pre-commit vive en dependency-groups.dev
 # (evita duplicación de SSOT entre optional-dependencies y dependency-groups).
