@@ -744,8 +744,8 @@ prerequisito_f3_discovery:
   nota: "El framework es unico y permanente; cambian los Discovery Profiles, nunca el framework."
 nota: "Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md §4."
 
-# ── F3.5 Capacity Planning + Streaming Entrypoint MVP ───────────────────
-f3_5a_capacity_teorico:
+# ── F2.6 Capacity Planning + Streaming Entrypoint MVP (Plan Maestro linea 192) ───────────────────
+f2_6a_capacity_teorico:
   estado: PENDIENTE
   adr_relacionado: null
   entregable: docs/planning/fase3.5a-capacity-teorico.md
@@ -754,7 +754,7 @@ f3_5a_capacity_teorico:
     exchange/símbolo/topic a partir de límites documentados de Bybit/KuCoin,
     sin requerir despliegue.
 
-f3_5b_streaming_entrypoint_mvp:
+f2_6b_streaming_entrypoint_mvp:
   estado: PENDIENTE
   adr_relacionado: ADR-0022
   entregable: apps/app/cli/streaming_hydra.py
@@ -776,13 +776,13 @@ f3_5b_streaming_entrypoint_mvp:
     no_importa_trading_ni_live_hydra_ni_market_data_main: PENDIENTE
     no_crea_composition_root_alternativo: PENDIENTE
 
-f3_5c_capacity_empirico:
+f2_6c_capacity_empirico:
   estado: BLOQUEADO
-  bloqueado_por: f3_5b_streaming_entrypoint_mvp
+  bloqueado_por: f2_6b_streaming_entrypoint_mvp
   entregable: docs/planning/fase3.5c-capacity-empirico.md
   metricas: [msg_s, bytes_s, cpu, ram, red, kafka_throughput, kafka_lag, latencia_p50, latencia_p99]
 
-f3_5d_decision_escalabilidad:
+f2_6d_decision_escalabilidad:
   estado: BLOQUEADO
-  bloqueado_por: f3_5c_capacity_empirico
+  bloqueado_por: f2_6c_capacity_empirico
   entregable: "ADR de escalabilidad (número TBD) — solo si evidencia empírica lo justifica"

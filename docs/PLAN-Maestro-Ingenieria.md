@@ -212,6 +212,27 @@ Cada eslabón responde a las 4 preguntas del sistema:
   para revalidar retroactivamente si la elección `systemd` de F3/ADR-0022 sigue siendo
   adecuada una vez haya datos operativos reales.
 
+**Hallazgos verificados (2026-08-07) — insumo para el Entregable de F2.6:**
+`market_data` ya tiene la infraestructura de ingestión WS realtime construida
+(`CompositionRoot.build_ws_producers()` → `WSProducerBundle`, runners de
+Bybit/KuCoin), pero sin entrypoint operativo (`systemctl` sin unit activa).
+`packages/market_data/main.py` es un servicio FastAPI YA desplegable, pero
+gobierna un pipeline de ingestión **polling** hacia Bronze/Iceberg
+(`/ohlcv/...`) — distinto y complementario al streaming WS, no debe
+confundirse. `[project.scripts]` no registra `streaming` (solo ocm,
+ocm-api, live, paper). El guard R14/H8 (`app_layer_guard.py`) no cubre un
+futuro `streaming_hydra.py` por diseño (nombres hardcodeados a
+`live_hydra.py`/`paper_hydra.py`; `_bootstrap.handle_sigterm` no es
+asyncio-safe para un loop persistente). BC-10/BC-50 (import-linter) ya
+cubren el invariante `market_data` ↔ `trading` sin requerir contrato nuevo.
+Detalle completo: addendum de ADR-0022.
+
+Sub-secuencia de trabajo dentro de F2.6 (tracking.yaml: `f2_6a`–`f2_6d`):
+F2.6a capacidad teórica (sin despliegue) → F2.6b Streaming Entrypoint MVP
+(`apps/app/cli/streaming_hydra.py`, canary 1 exchange/pocos símbolos) →
+F2.6c capacidad empírica (canary bajo systemd) → F2.6d decisión de
+escalabilidad (solo con evidencia).
+
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
@@ -471,51 +492,3 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
-
-
-## Roadmap F3.5 — Capacity Planning + Streaming Entrypoint MVP
-
-Hallazgo (2026-08-07, corregido tras auditoría de código real): `market_data`
-tiene la infraestructura de ingestión WS realtime construida
-(`CompositionRoot.build_ws_producers()` → `WSProducerBundle`, runners de
-Bybit/KuCoin, `KafkaProducerAdapter` por dominio), pero **no existe todavía
-un proceso operativo** que la ensamble y mantenga viva 24/7. `systemctl`
-confirma que no hay unit activa.
-
-**Corrección de investigación:** en esta sesión se verificó
-`packages/market_data/main.py` — es un servicio FastAPI ya desplegable
-(`_lifespan`, `_ingestion_loop`, `_bronze_writer_loop`, `/health`, `/ready`)
-que gobierna un pipeline de ingestión **polling** hacia Bronze/Iceberg
-(sirve `/ohlcv/...`). Es un pipeline **distinto y complementario** al
-streaming WS de microestructura (orderbook/funding/OI/liquidations vía
-`WSProducerBundle`) — no deben confundirse ni fusionarse. Ver addendum
-verificado en ADR-0022 para el detalle completo.
-
-`live_hydra.py`/`paper_hydra.py` son procesos de trading (BC `trading`), no
-de ingestión — tampoco deben confundirse ni fusionarse con el entrypoint de
-streaming WS.
-
-Orden de trabajo:
-
-1. **F3.5a** — Capacity Planning teórico (sin despliegue): estimar msg/s,
-   tamaño de mensaje y throughput esperado a partir de símbolos/exchanges
-   configurados y límites documentados de cada exchange.
-2. **F3.5b** — Streaming Entrypoint MVP: `apps/app/cli/streaming_hydra.py`.
-   Usa el `CompositionRoot` de `market_data` existente
-   (`build_ws_producers()`), un solo exchange, subset pequeño de símbolos.
-   Shutdown vía `add_signal_handler`/`asyncio.Event` (no vía
-   `_bootstrap.handle_sigterm` — no es asyncio-safe para loop persistente).
-   No cubierto por el guard R14/H8 por diseño. Ver addendum verificado de
-   ADR-0022 para el contrato completo.
-3. **F3.5c** — Capacity Planning empírico: medir el canary bajo systemd
-   (msg/s, bytes/s, CPU, RAM, red, throughput/lag de Kafka, latencia
-   p50/p99).
-4. **F3.5d** — Decisión de escalabilidad: extrapolar al universo objetivo
-   de símbolos/exchanges. Solo si la extrapolación muestra déficit
-   concreto se abre un ADR de escalabilidad (particionado, múltiples
-   workers, Flink). No se introduce tooling adicional por anticipación.
-
-Invariantes que el MVP no debe romper (verificados, no supuestos):
-`trading` no importa código de `market_data/adapters/inbound/websocket`
-(BC-50); `market_data` no importa bounded contexts hermanos (BC-10); el
-MVP no toca `packages/market_data/main.py` (pipeline distinto).
