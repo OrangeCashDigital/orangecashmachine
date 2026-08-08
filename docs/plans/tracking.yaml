@@ -339,7 +339,7 @@ hallazgos:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-008 (addendum: H-23)"}
       backlog: {estado: HECHO, referencia: "B-24 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "fix de composition root, no requiere ADR — valor DATASOURCE_REPLAY ya existente en SSOT shared/enums.py"}
-      implementacion: {estado: HECHO, referencia: "pendiente de commit — ver git status al cierre de la sesión 2026-08-08"}
+      implementacion: {estado: HECHO, referencia: "cade1d3 — fix(market-data): source real en vez de \"live\" hardcodeado en producers WS"}
       tests: {estado: HECHO, referencia: "16/16 verdes: test_orderbook_producer_metrics.py, test_composition_root.py, test_streaming_hydra.py"}
       ci: {estado: HECHO, referencia: "import-linter (BC-08) sin violaciones; py_compile OK"}
       evidencia: {estado: HECHO, referencia: "pytest exit 0, ver sesión de auditoría 2026-08-08"}
