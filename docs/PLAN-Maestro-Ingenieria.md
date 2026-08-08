@@ -187,7 +187,13 @@ Cada eslabón responde a las 4 preguntas del sistema:
   PROTOCOL/DOCUMENTATION/UPSTREAM_LIBRARY/DOMAIN/ASSUMED normativa; Promotion Rule (14) definida.
 - **Criterio de salida:** ADR-0017 aceptada y committeada; gate de capital: **F3 no envía órdenes
   reales hasta que Orders/Fills estén promovidos** (Provenance estable).
-- **⚠️ Auditoría 2026-08-07 — gate de capital NO enforced en código (B-23, CRÍTICA, tracking.yaml):** `live_hydra.py:196-214` verifica `exchange_config`/`has_credentials` pero **no verifica Promotion Rule/provenance de Orders-Fills**. `IS_STUB=False` ya está commiteado (`live_executor.py:78`, B-12) — el transporte real hacia Bybit está activo sin que el gate_capital declarado aquí tenga chequeo en código. Riesgo residual ALTO (capital real depende de disciplina humana, no de un guard fail-closed). Ver B-23 en `tracking.yaml` para solución propuesta (`is_promoted()` reusable + tercer guard en `live_hydra.py`) y criterios de test.
+- **✔️ Gate de capital enforced en código (B-23, verificado 2026-08-07):** el gate que F2.5 exige
+  está implementado como guard fail-closed en `composition_root.assemble_live`:
+  `require_promoted("OrderFilledPayload", "OrderRejectedPayload")` antes de instanciar
+  `LiveExecutor`, precediendo al guard `IS_STUB` (B-01). `shared/kafka/provenance.py` (SSOT
+  `PROVIDENCE`) expone `is_promoted()`/`require_promoted()`; defensa en profundidad, no corrige un
+  fallo actual (Orders/Fills ya en DOMAIN). Tests positivo/negativo en `test_composition_root.py`,
+  ejecutados en CI (job `unit-tests`). B-23 cerrado en `tracking.yaml`.
 
 #### F2.6 — Capacity Planning & Scalability Assessment (gate antes de tooling de escala)
 
@@ -236,9 +242,9 @@ escalabilidad (solo con evidencia).
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
-- **DOR:** F2.0 verde (Health Check CI); **ADR-0016 aceptada y commiteada** (Bybit, paper→live). ADR-0011 (rebalance) → **movida a F4** (no bloquea el motor).
+- **DOR:** F2.0 verde (Health Check CI); **ADR-0016 aceptada y commiteada** (Bybit, paper→live). ADR-0011 (rebalance) — originalmente movida a F4 para no bloquear el motor; **resuelta durante F3** (Aceptada 2026-08-07, B-13 HECHO).
 - **Entregables:** `LiveExecutor` real sobre `OrderTransport` (create_order + reconciliación fail-closed + kill switch; reglas **R9–R10 activadas en CI**, job `trading-guards`); `RebalanceService.rebalance()` cableado; strategies a polars.
-- **Avance:** [x] motor de ejecución (B-12 implementado; paper|live via `--mode`) · [~] rebalance (B-13: `RebalanceService.rebalance()` **implementado** en `packages/portfolio/services/rebalance_service.py` — validación fail-fast, retorna `list[RebalanceSignal]` — pero **no wireado** en `apps/` ni `infrastructure/bootstrap/*.py`; auditoría 2026-08-07, grep sin resultados; permanece en F4 hasta integrarlo al CompositionRoot) · [x] polars strategies (B-14, migrado a polars, evidencia: cero `import pandas` residual, 23 tests).
+- **Avance:** [x] motor de ejecución (B-12 implementado; paper|live via `--mode`) · [x] rebalance (B-13: `RebalancePort` + `assemble_rebalance()` delegando en el port inyectado, wireado en `apps/app/use_cases/execute_live.py` y `execute_paper.py`; ADR-0011 **Aceptada** 2026-08-07) · [x] polars strategies (B-14, migrado a polars, evidencia: cero `import pandas` residual, 23 tests).
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
 
@@ -269,8 +275,8 @@ escalabilidad (solo con evidencia).
 | F2.3 | trabajo relacionado a B-18 (H-15, backlog en F4) | ADR-0013, ADR-0018 | 8 schemas Kafka — prerrequisito de B-18 |
 | F2.4 | B-20, B-21 | — | tracking-consistency |
 | F2.5 | trabajo relacionado a B-18 (H-15, provenance; backlog en F4) | ADR-0017 (Protocol Discovery), ADR-0021 (ex-0017, posición) | gate normativo antes de capital |
-| F3 | B-12, B-01, B-03 (H-01, H-19, H-22) | ADR-0016 (aceptada) | trading live — Bybit |
-| F4 | B-13 (rebalance, de F3), B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0011, ADR-0021, ADR-0018 | obs/estado |
+| F3 | B-12, B-01, B-03, B-13 (H-01, H-19, H-22) | ADR-0016 (aceptada), ADR-0011 (aceptada) | trading live — Bybit + rebalance |
+| F4 | B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0021, ADR-0018 | obs/estado |
 | F5 | B-22, H-13 | ADR-0019, ADR-0020 | escala |
 
 ---
@@ -291,7 +297,7 @@ escalabilidad (solo con evidencia).
 - **ADR-0008** Contrato de capas para portfolio (bootstrap → infra → services → ports → models)
 - **ADR-0009** Eliminar FillHandler y TradeHistory huérfanos (superados por fill_sync.py)
 - **ADR-0010** Gobernanza automatizada del Shared Kernel
-- **ADR-0011** Rebalance — **decisión pendiente** (assemble_rebalance)
+- **ADR-0011** Rebalance — **Aceptada** (2026-08-07: delegación vía `RebalancePort`; assemble_rebalance wireado)
 - **ADR-0012** TradingEngine runtime puro; el CR ensambla todo
 - **ADR-0013** Modelo unificado de ingestión de datos (feed, fuente, mecanismo) — **commiteada**
 - **ADR-0014** Diseño interno de market_data — Market Data Platform (realtime_feeds + external_ingestion) — **commiteada**; implementación parcial en repo (commits `fb7df84`, `6165c11`, `e6cf272`, `dcd1741`: esqueleto `external_ingestion/` con puertos, orquestador, normalizers, config, wiring)

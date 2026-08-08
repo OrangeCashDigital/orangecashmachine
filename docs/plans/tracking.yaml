@@ -414,48 +414,50 @@ hallazgos:
     hallazgo_informe: H-01
     fase: F2
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "live_hydra.py:196-214 (guard mode=live verifica exchange_config y has_credentials, pero NO verifica Promotion Rule/provenance de Orders-Fills); IS_STUB=False ya commiteado (live_executor.py:78, B-12) — el transporte real hacia Bybit está activo sin que exista enforcement en código del gate_capital declarado en tracking.yaml (prerequisito_f3_discovery)"
-    solucion: "Agregar tercer guard fail-closed en live_hydra.py, junto a los checks de exchange_config/has_credentials: verificar que Orders/Fills (OrderFilledPayload, OrderRejectedPayload) tengan provenance promovida (PROTOCOL|DOCUMENTATION|UPSTREAM_LIBRARY|DOMAIN, no ASSUMED) antes de permitir mode=live. Exponer una función pública reusable (p.ej. ocm.observability.provenance.is_promoted(schema_name) -> bool) que lea el registro PROVIDENCE sin acoplar el CLI al módulo de tests (DIP)."
+    evidencia: "live_hydra.py:196-214 (guard mode=live verifica exchange_config y has_credentials, pero NO verifica Promotion Rule/provenance de Orders-Fills); IS_STUB=False ya commiteado (live_executor.py:78, B-12) — falta enforcement en código del gate_capital declarado en tracking.yaml (prerequisito_f3_discovery)"
+    solucion: "Guard fail-closed implementado en trading/bootstrap/composition_root.py::assemble_live: llamar require_promoted('OrderFilledPayload','OrderRejectedPayload') ANTES de instanciar LiveExecutor, precediendo al guard IS_STUB (B-01) — gate independiente y más estricto. shared/kafka/provenance.py (SSOT) expone is_promoted()/require_promoted() leyendo el registro PROVIDENCE; el CLI/y use cases consumen esta abstracción de producción, no un módulo de tests (DIP). No corrige un fallo actual (Orders/Fills ya en DOMAIN); es defensa en profundidad contra degradación futura de la procedencia."
     pruebas:
-      - "test positivo: mode=live con Orders/Fills promovidos y credenciales válidas → procede"
-      - "test negativo: mode=live con algún schema crítico en ASSUMED → return 1, fail-closed, mensaje cita ADR-0017/Promotion Rule 14"
-      - "test negativo: mode=live con credenciales válidas pero función is_promoted() no disponible/import falla → fail-closed, nunca fail-open"
+      - "test negativo: test_assemble_live_bloquea_si_orders_fills_no_promovidos (monkeypatch PROVIDENCE: OrderFilledPayload -> ASSUMED) — assemble_live lanza ValueError, fail-close"
+      - "test positivo: test_assemble_live_ok_con_provenance_actual — assemble_live procede con la PROVIDENCE actual, sin bloquear la promoción existente (Orders/Fills en DOMAIN)"
     adr_relacionado: ADR-0017
-    riesgo_residual: "Alto: capital real — el gate_capital documentado en tracking.yaml (prerequisito_f3_discovery) depende hoy de disciplina humana, no de un chequeo en código"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — guard fail-closed activo en el arranque real; la promoción actual de Orders/Fills (DOMINIO) está registrada en shared/kafka/provenance.py PROVIDENCE; cualquier degradación futura frena el ensamblaje y bloquea el merge."
+    fecha_cierre: "2026-08-07"
     cadena:
-      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01 (extensión — gap entre B-12/IS_STUB=False y gate_capital de F2.5)"}
-      backlog: {estado: HECHO, referencia: "B-23 en tracking v2"}
       adr: {estado: HECHO, referencia: "ADR-0017-protocol-discovery-framework (Promotion Rule, punto 14)"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-01 (gap B-12/IS_STUB=False vs gate_capital F2.5)"}
+      backlog: {estado: HECHO, referencia: "B-23 en tracking v2"}
+      implementacion: {estado: HECHO, referencia: "composition_root.assemble_live: require_promoted() previa a instanciar LiveExecutor; shared/kafka/provenance.py (PROVIDENCE + is_promoted/require_promoted) — commit fbff5dd"}
+      tests: {estado: HECHO, referencia: "test_assemble_live_bloquea_si_orders_fills_no_promovidos + test_assemble_live_ok_con_provenance_actual (tests/trading/test_composition_root.py)"}
+      ci: {estado: HECHO, referencia: "job unit-tests (pytest tests/ suite completa con gate fail_closed) corre las pruebas del guard B-23"}
+      evidencia: {estado: HECHO, referencia: "suite tests verde (job unit-tests) + guard fail-closed en código con payloads críticos identificados"}
+      cierre: {estado: HECHO, referencia: "reconciliado 2026-08-07 — B-23 cerrado con gate en código, tracking/Plan corregidos"}
   - id: B-13
     hallazgo_informe: H-19
     fase: F3
     prioridad: MEDIA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "packages/trading/bootstrap/composition_root.py:359-376 (NotImplementedError con TODO(ADR-0011)); rebalance_service.py:131-157 sin invocaciones externas"
-    solucion: "Cerrar ADR-0011 (delegación a portfolio) y cablear rebalance a un use-case"
+    solucion: "Cerrar ADR-0011 (delegación a portfolio): RebalancePort (Protocol @runtime_checkable, shared/contracts/boundaries.py) declara la API real de RebalanceService (rebalance(), validate_targets()); trading no importa infraestructura de portfolio. assemble_rebalance() delega en el port inyectado y retorna list[RebalanceSignal] (deja de retornar TradingRuntime y de lanzar NotImplementedError). El constructor exige rebalance_port (fail-fast, mismo patrón que portfolio). Wiring: execute_live.py y execute_paper.py inyectan RebalanceService() real."
     pruebas:
-      - "test end-to-end de rebalance"
+      - "test_assemble_rebalance_ok_delegates_to_port — delega en el port inyectado y retorna list[RebalanceSignal]"
+      - "test_assemble_rebalance_rejects_invalid_targets — validate_targets() falla targets inválidos (ValueError)"
+      - "test_assemble_rebalance_uses_injected_port_not_concrete_class — el root depende del protocolo, no de la clase concreta"
+      - "test_constructor_requires_rebalance_port — el constructor falla (fail-fast) si no se inyecta el port"
     adr_relacionado: ADR-0011
-    riesgo_residual: "Medio"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — RebalanceService real inyectado vía RebalancePort en execute_live/execute_paper; cambios futuros en la construcción interna de portfolio no rompen trading mientras RebalancePort se mantenga estable."
+    fecha_cierre: "2026-08-07"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-19"}
       backlog: {estado: HECHO, referencia: "B-13 en tracking v2"}
-      adr: {estado: PENDIENTE, referencia: "ADR-0011 (cerrar)"}
-      implementacion: {estado: PENDIENTE, referencia: "cablear rebalance"}
-      tests: {estado: PENDIENTE, referencia: "end-to-end rebalance"}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      adr: {estado: HECHO, referencia: "ADR-0011 (Aceptada 2026-08-07)"}
+      implementacion: {estado: HECHO, referencia: "RebalancePort en shared/contracts/boundaries.py; assemble_rebalance() delegado con rebalance_port inyectado; wiring en execute_live.py/execute_paper.py (1d81040)"}
+      tests: {estado: HECHO, referencia: "4 tests nuevos en test_composition_root.py (assemble_rebalance_* + constructor obligatorio), suite composition_root 21/21"}
+      ci: {estado: HECHO, referencia: "job unit-tests (pytest tests/ suite completa) ejecuta test_composition_root.py"}
+      evidencia: {estado: HECHO, referencia: "tests verdes + wiring real en use cases; sin caller que construya RebalanceService dentro del root"}
+      cierre: {estado: HECHO, referencia: "reconciliado 2026-08-07 — B-13 cerrado con port + wiring, ADR-0011 Aceptada"}
   - id: B-14
     hallazgo_informe: H-22
     fase: F3

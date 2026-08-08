@@ -1,4 +1,4 @@
-# ADR-0011: Decisión pendiente — delegación de rebalanceo (assemble_rebalance)
+# ADR-0011: Aceptada — delegación de rebalanceo (assemble_rebalance)
 
 **Estado:** Aceptada — 2026-08-07
 **Fecha:** 2026-08-03
