@@ -187,10 +187,11 @@ dev = [
 # =============================================================================
 
 [project.scripts]
-ocm     = "app.cli.main:main"
-ocm-api = "api.main:serve"
-live    = "app.cli.live_hydra:main"
-paper   = "app.cli.paper_hydra:main"
+ocm       = "app.cli.main:main"
+ocm-api   = "api.main:serve"
+live      = "app.cli.live_hydra:main"
+paper     = "app.cli.paper_hydra:main"
+streaming = "app.cli.streaming_hydra:main"
 
 # =============================================================================
 # tool.ruff

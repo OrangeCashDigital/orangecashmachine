@@ -58,8 +58,12 @@ class WSProducerBundle:
     Bundle inmutable de los 4 producers WS reales.
 
     Creado por CompositionRoot.build_ws_producers().
-    Usado por main.py para gestionar el lifecycle (start/close) de todos
-    los producers en un único punto.
+    Consumido por los entrypoints de vida larga (ADR-0022): el canary
+    ORDERBOOK usa streaming_hydra.py (apps/app/cli/) para gestionar el
+    lifecycle (start/close) de todos los producers en un único punto.
+
+    El canary ORDERBOOK (F2.6b) usa únicamente ``orderbook``; funding/oi/
+    liquidations permanecen sin runners hasta su fase.
 
     Campos
     ------

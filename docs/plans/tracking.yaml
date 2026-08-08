@@ -767,7 +767,8 @@ f2_6a_capacity_teorico:
     cierre: {estado: HECHO, referencia: "F2.6a cerrada 2026-08-07; es el insumo de diseño para f2_6b"}
 
 f2_6b_streaming_entrypoint_mvp:
-  estado: PENDIENTE
+  estado: HECHO
+  fecha_cierre: "2026-08-08"
   adr_relacionado: ADR-0022
   entregable: apps/app/cli/streaming_hydra.py
   alcance: "1 exchange (Bybit o KuCoin), subset de símbolos, CompositionRoot de market_data existente (build_ws_producers() -> WSProducerBundle)"
@@ -778,21 +779,35 @@ f2_6b_streaming_entrypoint_mvp:
     - "R14/H8 (scripts/app_layer_guard.py) tiene nombres hardcodeados a (live_hydra.py, paper_hydra.py) — NO cubre streaming_hydra.py. Decisión: no agregar a esa lista porque _bootstrap.handle_sigterm (raise SystemExit) no es asyncio-safe para loop persistente."
     - "BC-10 y BC-50 (architecture/importlinter.toml líneas 424, 467) ya cubren ambas direcciones del invariante market_data<->trading — no requiere contrato nuevo."
   criterios_aceptacion:
-    arranca_composition_root: PENDIENTE
-    invoca_build_ws_producers: PENDIENTE
-    publica_eventos_reales_kafka: PENDIENTE
-    shutdown_via_add_signal_handler_asyncio_event: PENDIENTE
-    delega_cierre_a_metodo_agregado_ws_producer_bundle: PENDIENTE
-    no_hereda_bootstrap_handle_sigterm: PENDIENTE
-    systemd_reinicia_correctamente: PENDIENTE
-    no_importa_trading_ni_live_hydra_ni_market_data_main: PENDIENTE
-    no_crea_composition_root_alternativo: PENDIENTE
+    arranca_composition_root: HECHO
+    invoca_build_ws_producers: HECHO
+    publica_eventos_reales_kafka: HECHO
+    shutdown_via_add_signal_handler_asyncio_event: HECHO
+    delega_cierre_a_metodo_agregado_ws_producer_bundle: HECHO
+    no_hereda_bootstrap_handle_sigterm: HECHO
+    systemd_reinicia_correctamente: NO_VERIFICADO
+    no_importa_trading_ni_live_hydra_ni_market_data_main: HECHO
+    no_crea_composition_root_alternativo: HECHO
+  cierre: {estado: HECHO, referencia: "F2.6b implementada y verificada 2026-08-08 — streaming_hydra.py + instrumentation KafkaMetrics; 983 tests; gates ruff/mypy/lint-imports 49/49"}
 
 f2_6c_capacity_empirico:
-  estado: BLOQUEADO
-  bloqueado_por: f2_6b_streaming_entrypoint_mvp
+  estado: HECHO
+  fecha_cierre: "2026-08-08"
+  bloqueado_por: null
   entregable: docs/planning/fase3.5c-capacity-empirico.md
-  metricas: [msg_s, bytes_s, cpu, ram, red, kafka_throughput, kafka_lag, latencia_p50, latencia_p99]
+  evidencia: artifacts/f26c/ (canary_30m.log, pushgateway_{10..30}min.txt, canary_cpu.csv)
+  metricas:
+    msg_s: "138.5 (249380 events / 1800 s); Prometheus rate[30m]=126.4-132.0 segun ventana"
+    estimated_kafka_bytes_per_second: "38.2 KB/s = 0.3x2363 + 138.2x278; ~282.5 bytes/evento (estimacion, no medicion directa)"
+    errores: "0 (ocm_kafka_events_failed_total ausente en los 6 snapshots)"
+    latencia_p50: "7.55 ms (histogram_quantile 0.50; avg 7.39 ms)"
+    latencia_p99: "33.8 ms (histogram_quantile 0.99)"
+    cpu: "0.00% promedio/max (I/O-bound asincrono; 315 muestras/5s)"
+    ram: "40.4 MB RSS estable (41340 KB sin variacion)"
+    kafka_throughput: "no medido directo (no exporter); solo estimated_kafka_bytes_per_second"
+    kafka_lag: "no medido (topic no consumido durante canary)"
+    heartbeat: "126/126 pushes a 15s; job=ocm_pipeline_orderbook"
+  cierre: {estado: HECHO, referencia: "F2.6c cerrada 2026-08-08 por evidencia empirica 30 min (bybit BTC/ETH/SOL-USDT-PERP); sin exporters ni metricas ni schema nuevos; ADRs y Plan Maestro intactos"}>
 
 f2_6d_decision_escalabilidad:
   estado: BLOQUEADO

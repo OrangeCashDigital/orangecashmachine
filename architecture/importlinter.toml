@@ -223,6 +223,9 @@ ignore_imports = [
     "market_data.adapters.outbound.storage.gold_reader -> market_data.infrastructure.storage.iceberg.catalog",
     "market_data.adapters.outbound.storage.iceberg_factory -> market_data.infrastructure.storage.iceberg.iceberg_storage",
     "market_data.adapters.outbound.exchange.ccxt_adapter -> market_data.infrastructure.observability.metrics",
+    # F2.6c (canary ORDERBOOK): OrderBookKafkaProducer instrumenta con KafkaMetrics
+    # (lazy en método). Mismo patrón que ohlcv_fetcher/ccxt_adapter hacia metrics.
+    "market_data.adapters.inbound.websocket.orderbook_producer -> market_data.infrastructure.kafka.metrics",
 ]
 
 [[tool.importlinter.contracts]]

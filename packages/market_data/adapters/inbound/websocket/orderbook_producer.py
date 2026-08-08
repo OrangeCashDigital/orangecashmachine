@@ -31,7 +31,7 @@ Principios: DIP · SRP · SafeOps · Kappa · SSOT
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 
@@ -48,6 +48,7 @@ from shared.kafka.topics import (
 )
 
 if TYPE_CHECKING:
+    from market_data.infrastructure.kafka.metrics import KafkaMetrics
     from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
 
@@ -77,12 +78,25 @@ class OrderBookKafkaProducer:
         HEADER_DOMAIN: "orderbook",
     }
 
-    def __init__(self, producer: "KafkaProducerPort") -> None:
+    def __init__(
+        self,
+        producer: "KafkaProducerPort",
+        metrics: Optional["KafkaMetrics"] = None,
+    ) -> None:
         self._producer = producer
+        self._metrics = metrics or self._make_metrics()
         self._log = logger.bind(
             component="OrderBookKafkaProducer",
             topic=self.topic,
         )
+
+    @staticmethod
+    def _make_metrics() -> "KafkaMetrics":
+        # Import lazy — evita arista adapters → infrastructure en import-linter
+        # (BC-08). Mismo patrón que CCXTAdapter en pipeline_orchestrator.
+        from market_data.infrastructure.kafka.metrics import KafkaMetrics
+
+        return KafkaMetrics(topic=TOPIC_ORDERBOOK_RAW)
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -120,7 +134,13 @@ class OrderBookKafkaProducer:
 
         SafeOps: captura cualquier excepción — el stream no debe morir
         porque el producer falle en un mensaje.
+
+        Métricas (F2.6c): publica ocm_kafka_events_published_total y
+        ocm_kafka_processing_latency_ms (KafkaMetrics existente) al éxito;
+        ocm_kafka_events_failed_total al fallo.
         """
+        from market_data.infrastructure.kafka.metrics import timer
+
         try:
             payload = OrderBookSnapshotPayload(
                 exchange=exchange,
@@ -132,16 +152,20 @@ class OrderBookKafkaProducer:
                 checksum=checksum,
             )
             key = make_symbol_key(exchange, symbol)
-            await self._producer.produce(
-                topic=self.topic,
-                value=serialize(payload),
-                key=key,
-                headers=self._KAPPA_HEADERS,
-            )
+            with timer() as t:
+                await self._producer.produce(
+                    topic=self.topic,
+                    value=serialize(payload),
+                    key=key,
+                    headers=self._KAPPA_HEADERS,
+                )
+            self._metrics.event_published(exchange=exchange)
+            self._metrics.event_processed(exchange=exchange, latency_ms=t.elapsed_ms)
             self._log.bind(exchange=exchange, symbol=symbol).debug(
                 "orderbook_snapshot_published | bids={} asks={}", len(bids), len(asks)
             )
         except Exception as exc:
+            self._metrics.event_failed(exchange=exchange, reason="write_error")
             self._log.bind(exchange=exchange, symbol=symbol, error=str(exc)).warning(
                 "orderbook_snapshot_publish_failed"
             )
@@ -159,7 +183,13 @@ class OrderBookKafkaProducer:
         Serializa y publica un delta incremental.
 
         SafeOps: captura cualquier excepción.
+
+        Métricas (F2.6c): ocm_kafka_events_published_total +
+        ocm_kafka_processing_latency_ms al éxito; ocm_kafka_events_failed_total
+        (reason=write_error) al fallo.
         """
+        from market_data.infrastructure.kafka.metrics import timer
+
         try:
             payload = OrderBookDeltaPayload(
                 exchange=exchange,
@@ -170,16 +200,20 @@ class OrderBookKafkaProducer:
                 size=size,
             )
             key = make_symbol_key(exchange, symbol)
-            await self._producer.produce(
-                topic=self.topic,
-                value=serialize(payload),
-                key=key,
-                headers=self._KAPPA_HEADERS,
-            )
+            with timer() as t:
+                await self._producer.produce(
+                    topic=self.topic,
+                    value=serialize(payload),
+                    key=key,
+                    headers=self._KAPPA_HEADERS,
+                )
+            self._metrics.event_published(exchange=exchange)
+            self._metrics.event_processed(exchange=exchange, latency_ms=t.elapsed_ms)
             self._log.bind(exchange=exchange, symbol=symbol).debug(
                 "orderbook_delta_published | side={} price={}", side, price
             )
         except Exception as exc:
+            self._metrics.event_failed(exchange=exchange, reason="write_error")
             self._log.bind(exchange=exchange, symbol=symbol, error=str(exc)).warning("orderbook_delta_publish_failed")
 
     # ------------------------------------------------------------------ #
