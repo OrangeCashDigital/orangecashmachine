@@ -748,13 +748,23 @@ nota: "Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`est
 
 # ── F2.6 Capacity Planning + Streaming Entrypoint MVP (Plan Maestro linea 192) ───────────────────
 f2_6a_capacity_teorico:
-  estado: PENDIENTE
+  estado: HECHO
+  fecha_cierre: "2026-08-07"
   adr_relacionado: null
-  entregable: docs/planning/fase3.5a-capacity-teorico.md
+  entregable: docs/planning/f2_6a-capacity-teorico.md
   descripcion: >
     Estimación de msg/s, tamaño de mensaje y throughput esperado por
     exchange/símbolo/topic a partir de límites documentados de Bybit/KuCoin,
     sin requerir despliegue.
+  cadena:
+    hallazgo: {estado: HECHO, referencia: "F2.6a en tracking v2"}
+    backlog: {estado: HECHO, referencia: "F2.6. entrada documental en PLAN-Maestro-Ingenieria.md §F2.6"}
+    adr: {estado: HECHO, referencia: "sin ADR nuevo (documento de capacidad no crea decisión técnica)"}
+    implementacion: {estado: NO_APLICA, referencia: "entregable documental, no código"}
+    tests: {estado: HECHO, referencia: "fuentes primarias (docs Bybit/KuCoin) + cálculo de schemas wire (shared/kafka/schemas, serializer.py:56)"}
+    ci: {estado: HECHO, referencia: "sin gate en CI (docs-only); validado en sesión documental"}
+    evidencia: {estado: HECHO, referencia: "docs/planning/f2_6a-capacity-teorico.md — tabla con fuente por celda, concluye proceso único suficiente para el canary de F2.6b; suficiencia de producción final delegada a F2.6c"}
+    cierre: {estado: HECHO, referencia: "F2.6a cerrada 2026-08-07; es el insumo de diseño para f2_6b"}
 
 f2_6b_streaming_entrypoint_mvp:
   estado: PENDIENTE

@@ -239,6 +239,17 @@ F2.6a capacidad teórica (sin despliegue) → F2.6b Streaming Entrypoint MVP
 F2.6c capacidad empírica (canary bajo systemd) → F2.6d decisión de
 escalabilidad (solo con evidencia).
 
+- **Avance F2.6a (HECHO 2026-08-07):** `docs/planning/f2_6a-capacity-teorico.md` —
+  modelo de carga de los 4 WS producers (orderbook/funding/oi/liquidations) para
+  Bybit (3 símbolos PERP, canary) + KuCoin (diseño). Conclusión con fuente por celda:
+  proceso único `streaming` + broker Kafka local **suficiente para el canary de F2.6b**
+  (~160 msg/s pico / ~54 KB/s ingreso Kafka con overhead; promedio ~12 msg/s / ~4 KB/s;
+  E2E p50 10–30 ms / p99 60–150 ms teórico). La suficiencia para **producción final se
+  declara como NO evaluada aquí** — se valida con medición empírica y hardware real en
+  F2.6c, antes de cualquier decisión de escala. Sin déficit para el canario; umbral de
+  invalidación (>50–100 símbolos activos o lag/CPU en F2.6c) documentado como input de
+  F2.6d. No requiere ADR nuevo (documento de capacidad, no decisión).
+
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
