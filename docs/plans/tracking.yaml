@@ -325,302 +325,390 @@ hallazgos:
   - id: B-25
     hallazgo_informe: H-24
     fase: F2
-    prioridad: P2
+    prioridad: MEDIA
     estado: PENDIENTE
     estado_auditoria: CONFIRMADO
-    evidencia: "KafkaProducerAdapter.send_async() (infrastructure/kafka/producer.py) captura toda excepción, sin retry/DLQ/circuit breaker; reason=dlq_sent ya reservado en KafkaMetrics.event_failed() pero ningún código lo dispara"
-    solucion: "Diseño de DLQ (tópico destino, consumo manual/automático) y gap detection (requiere sequence numbers en OrderBookDeltaPayload) — candidato a ADR dedicado, no a parche puntual"
-    pruebas: []
-    adr_relacionado: null
-    riesgo_residual: "Medio — pérdida silenciosa de deltas sin gap detection; ver F-009 en docs/audits/2026-08-08-streaming-canary-audit.md"
+    evidencia: "KafkaProducerAdapter.send_async() (infrastructure/kafka/producer.py) captura toda excepción, sin retry/DLQ/circuit breaker; reason=dlq_sent ya reservado en KafkaMetrics.event_failed() pero ningún código lo dispara. 2026-08-09: send_async() ya clasifica causas (F-019) y produce() eleva KafkaProducerError (F-013) — la visualización del fallo esta resuelta; lo pendiente es recuperacion (gap/DLQ product-side). No existe consumidor real de orderbook.raw (BookBuilder aspiracional: TOPIC_ORDERBOOK_RAW solo usado por el propio producer)"
+    solucion: "DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado hasta existir consumidor real de orderbook.raw (BookBuilder). Cuando exista: sequence aditivo en schema v2, book.sequence_number propagado, metrica ocm_kafka_gap_total, reutilizando TOPIC_DLQ. No tocar wire schema sin consumidor (no-especulativo)"
+    pruebas:
+      - "verificacion: grep TOPIC_ORDERBOOK_RAW en packages/+apps/ = solo producer; GROUP_BOOK_BUILDER/TOPIC_BOOK_DELTA/TOPIC_BOOK_SNAPSHOT = 0 usos productivos"
+      - "verificacion: cryptofeed expone book.sequence_number (cryptofeed_orderbook_stream.py:158-161)"
+    adr_relacionado: "ADR-0023 -- deferral formal hasta consumidor real"
+    riesgo_residual: "Medio — perdida posible de deltas sin gap detection; senal visible ya (KafkaProducerError + razones clasificadas), recuperacion pendiente de BookBuilder"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-009"}
       backlog: {estado: HECHO, referencia: "B-25 en tracking.yaml"}
-      adr: {estado: PENDIENTE, referencia: "ADR de DLQ/gap detection — número TBD"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      adr: {estado: HECHO, referencia: "ADR-0023 deferral gap detection/DLQ product-side (2026-08-09)"}
+      implementacion: {estado: PENDIENTE, referencia: "deferida por ADR-0023 hasta consumidor real de orderbook.raw"}
+      tests: {estado: NO_APLICA, referencia: "no hay cambio de contrato hoy"}
+      ci: {estado: NO_APLICA, referencia: null}
+      evidencia: {estado: HECHO, referencia: "0 consumidores de orderbook.raw; ADR-0023 firmado"}
+      cierre: {estado: PENDIENTE, referencia: "deferido hasta BookBuilder consumidor"}
 
   - id: B-26
     hallazgo_informe: H-25
     fase: F2
-    prioridad: P2
-    estado: PENDIENTE
+    prioridad: MEDIA
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "deploy/monitoring/alerts.yml: 3 reglas existentes (PipelineDown, HighFetchErrors, CircuitBreakerOpen) cubren solo pipeline batch/REST; grep de kafka|events_failed|lag|heartbeat|orderbook|stale|gap|dlq|retry contra ese archivo: 0 coincidencias"
     solucion: "Agregar reglas de alerta sobre ocm_kafka_events_failed_total (rate sostenida) y ausencia de heartbeat del canary, siguiendo el mismo formato que las 3 reglas existentes"
-    pruebas: []
+    pruebas:
+      - "verificacion: metrica ocm_kafka_events_failed_total existe en metrics.py:115-119 (labels [topic exchange reason])"
+      - "validacion: yaml.safe_load(alerts.yml) OK; regla KafkaWSEventsFailed con rate(ocm_kafka_events_failed_total[5m]) > 1 for 5m"
     adr_relacionado: null
-    riesgo_residual: "Medio — sin alerta, un fallo sostenido solo se detecta revisando Prometheus manualmente; ver F-010 en docs/audits/2026-08-08-streaming-canary-audit.md"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — regla agregada sobre metrica real; alertas no notifican por correo/pager hasta resolver F-016 (B-32, bloqueado) pero se ven en grafana/loki"
+    fecha_cierre: "2026-08-09"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-010"}
       backlog: {estado: HECHO, referencia: "B-26 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "extensión de alerts.yml existente, no requiere ADR"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "alerts.yml + regla KafkaWSEventsFailed (rate events_failed)"}
+      tests: {estado: HECHO, referencia: "yaml.safe_load OK; metrica confirmada en metrics.py"}
+      ci: {estado: HECHO, referencia: "yaml monitoring valido; suite completa (998 passed)"}
+      evidencia: {estado: HECHO, referencia: "ocm_kafka_events_failed_total en metrics.py; 4 reglas en alerts.yml"}
+      cierre: {estado: HECHO, referencia: "F-010 resuelto 2026-08-09"}
 
   - id: B-27
     hallazgo_informe: H-26
     fase: F5
-    prioridad: P3
-    estado: PENDIENTE
+    prioridad: BAJA
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "infrastructure/ en raíz del repo (infrastructure/redis/redis_stream.py) colisiona en nombre con la capa infrastructure/ de Clean Architecture usada dentro de cada bounded context (packages/*/infrastructure/); docstring de packages/market_data/infrastructure/timeouts.py instruye \"from infrastructure.timeouts import Timeouts\" — ModuleNotFoundError confirmado, ese módulo no existe"
-    solucion: "Renombrar infrastructure/ raíz a un nombre no ambiguo (ej. shared_infra/ o integrar bajo shared/), o documentar explícitamente por qué coexisten dos infrastructure/ con significados distintos; corregir el docstring falso de timeouts.py en cualquier caso"
-    pruebas: []
-    adr_relacionado: null
-    riesgo_residual: "Bajo — no hay dependencia cruzada real (verificado: redis_stream.py solo importa redis/loguru/stdlib), es un problema de naming y documentación, no de arquitectura en ejecución"
-    fecha_cierre: null
+    solucion: "Corregir el docstring falso de timeouts.py a ruta canónica (market_data.infrastructure.timeouts) y documentar explícitamente la coexistencia de infrastructure/ raíz con packages/*/infrastructure/ bajo ADR-0007 (Addendum 2026-08-09). Sin renombrar/mover/alterar imports (pyproject 249/330/341 e importlinter 37/57/106/121/137/175 referencian la raíz)"
+    pruebas:
+      - "test: uv run pytest tests/market_data/ -q -> suite market_data verde"
+      - "verificacion: docstring timeouts.py ahora importa from market_data.infrastructure.timeouts import Timeouts"
+      - "verificacion: ADR-0007 §Addendum 2026-08-09 documenta coexistencia raiz vs packages/*/infrastructure/"
+    adr_relacionado: "ADR-0007 (Addendum 2026-08-09)"
+    riesgo_residual: "Bajo — coexistencia documentada; raíz infrastructure/ sigue referenciada por pyproject e importlinter; candidato a unificación de streams con F-024"
+    fecha_cierre: "2026-08-09"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-011"}
       backlog: {estado: HECHO, referencia: "B-27 en tracking.yaml"}
-      adr: {estado: PENDIENTE, referencia: "decisión de renombrado o justificación formal — número TBD si aplica"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      adr: {estado: HECHO, referencia: "ADR-0007 §Addendum 2026-08-09 (coexistencia documentada, sin renombrar)"}
+      implementacion: {estado: HECHO, referencia: "docstring timeouts.py -> market_data.infrastructure.timeouts"}
+      tests: {estado: HECHO, referencia: "suite market_data verde"}
+      ci: {estado: HECHO, referencia: "gates ruff + import-linter + pytest"}
+      evidencia: {estado: HECHO, referencia: "docstring corregido + ADR-0007 addendum (2026-08-09)"}
+      cierre: {estado: HECHO, referencia: "F-011 resuelto 2026-08-09"}
 
   - id: B-28
     hallazgo_informe: H-27
     fase: F5
-    prioridad: P3
-    estado: PENDIENTE
+    prioridad: BAJA
+    estado: HECHO
     estado_auditoria: PARCIALMENTE_CONFIRMADO
     evidencia: "packages/market_data/infrastructure/timeouts.py — comentarios con cifras p99 específicas (\"Bybit/KuCoin spot: ~800ms\", \"scan() sobre S3... p99 ~3s\") sin fuente citada (medición propia, doc de proveedor, o heurística — no se indica cuál)"
-    solucion: "Reformular comentarios a lenguaje explícitamente heurístico (ej. \"cota operativa conservadora inicial; ajustar con telemetría real\") salvo que exista evidencia real citable que agregar como fuente"
-    pruebas: []
+    solucion: "Reformular docstring y comentarios a lenguaje explícitamente heurístico (\"cota operativa inicial; recalibrar con telemetría real\"), sin tocar los valores numéricos (sin cambio funcional)"
+    pruebas:
+      - "verificacion: valores numericos de Timeouts intactos (di- diff no toca float defaults)"
+      - "verificacion: defecteo claims p99/SLA eliminados -> euristicos en timeouts.py"
     adr_relacionado: null
-    riesgo_residual: "Bajo — no es un defecto funcional, es precisión de documentación; riesgo indirecto si alguien recalibra timeouts asumiendo que esos números fueron medidos"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — valores numericos intactos; solo linguaje de documentacion; recalibracion sigue delegada a telemetria real"
+    fecha_cierre: "2026-08-09"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-012"}
       backlog: {estado: HECHO, referencia: "B-28 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "corrección de comentarios, no requiere ADR"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "comentarios p99 -> euristicos en timeouts.py"}
+      tests: {estado: HECHO, referencia: "suite market_data verde"}
+      ci: {estado: HECHO, referencia: "gates ruff + import-linter + pytest"}
+      evidencia: {estado: HECHO, referencia: "claims p99 eliminados, valores intactos"}
+      cierre: {estado: HECHO, referencia: "F-012 resuelto 2026-08-09"}
 
   - id: B-29
     hallazgo_informe: F-013
     fase: F2
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "packages/market_data/infrastructure/kafka/producer.py — produce() descarta bool de send_async(); afecta OrderBookKafkaProducer, OIKafkaProducer, LiquidationsKafkaProducer, FundingKafkaProducer (4 de 6 producers WS confirmados)"
+    evidencia: "packages/market_data/infrastructure/kafka/producer.py — produce() antes descartaba bool de send_async(); afecta OrderBookKafkaProducer, OIKafkaProducer, LiquidationsKafkaProducer, FundingKafkaProducer. Alcance preciso: la metrica falsa solo aplica a orderbook (oi/funding/liquidations no emiten KafkaMetrics)"
     solucion: |-
-      Camino A (sin ADR): send_async()==False dispara log critical y/o metrica
-      adicional dentro de produce(), sin cambiar su firma publica -> None.
-      Camino B (requiere ADR): cambiar produce() a -> bool, obliga a los 4+
-      callers a manejar el resultado -- modifica contrato compartido de
-      KafkaProducerPort. Decision pendiente de cual camino tomar.
+      Camino A (sin ADR): produce() ahora evalua send_async()==False y eleva
+      KafkaProducerError (nueva en domain/exceptions) con log CRITICAL antes
+      de return. Los callers ya lo capturan con SafeOps — senal visible con
+      un cambio interno en infrastructure, sin tocar la firma de KafkaProducerPort.
     pruebas:
-      - "test: forzar excepcion en send_and_wait() y verificar que event_failed se dispare via produce()"
-    adr_relacionado: "PENDIENTE -- solo si se elige Camino B (ver nota en solucion)"
-    riesgo_residual: "Alto — perdida silenciosa de market data sin senal en metricas"
-    fecha_cierre: null
+      - "tests/market_data/infrastructure/kafka/test_producer_adapter.py TestProduceSignalsFailure: produce() eleva KafkaProducerError cuando send_async False; ok con True (8/8 del adapter)"
+    adr_relacionado: "NO_APLICA -- Camino A, sin cambio de contrato"
+    riesgo_residual: "Bajo — ahora el fallo se ve (log critical + exception); el conteo event_failed del orderbook solo se dispare al releer la excepcion"
+    fecha_cierre: "2026-08-08"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-013"}
       backlog: {estado: HECHO, referencia: "B-29 en tracking"}
-      adr: {estado: PENDIENTE, referencia: "evaluar necesidad de ADR de contrato KafkaProducerPort"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      adr: {estado: NO_APLICA, referencia: "Camino A, sin cambio de contrato"} 
+      implementacion: {estado: HECHO, referencia: "packages/market_data/infrastructure/kafka/producer.py produce()"}
+      tests: {estado: HECHO, referencia: "tests/market_data/infrastructure/kafka/test_producer_adapter.py (8 passed)"}
+      ci: {estado: HECHO, referencia: "49 contratos import-linter KEPT; ruff/mypy OK"}
+      evidencia: {estado: HECHO, referencia: "gate tests verdes 2026-08-08"}
+      cierre: {estado: HECHO, referencia: "F-013 resuelto Camino A 2026-08-08"}
+
   - id: B-30
     hallazgo_informe: F-014
     fase: F2
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "packages/market_data/infrastructure/kafka/producer.py close() llama a self._producer.stop() sin flush() previo; docstring de stop() afirma flush implicito falsamente"
-    solucion: "close() debe invocar await self.flush(timeout=...) antes de self._producer.stop(), con manejo de TimeoutError"
+    evidencia: "packages/market_data/infrastructure/kafka/producer.py close() llamaba a self._producer.stop() sin flush() previo; matiz verificado: aiokafka stop() sí drena via message_accumulator.close()+FIRST_COMPLETED, pero sin deadline propio ni garantia de entrega"
+    solucion: "close() ahora invoca await self.flush(timeout=self._close_flush_timeout=10.0) antes de stop(); TimeoutError se registra con log ERROR (no se silencia) y aun así se ejecuta stop() para liberar recursos"
     pruebas:
-      - "test: mensajes pendientes en buffer al invocar stop(), verificar que se entregan antes de cerrar"
+      - "tests/market_data/infrastructure/kafka/test_producer_adapter.py TestFlushBeforeStop: flush() primero, luego stop(); timeout→log+stop continua; idempotente (8/8)"
     adr_relacionado: null
-    riesgo_residual: "Alto — perdida de mensajes en cada shutdown/restart"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — flush previo con timeout 10s; si el broker esta caido igual se cierra (stop) y se loggea el riesgo de perdida"
+    fecha_cierre: "2026-08-08"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-014"}
       backlog: {estado: HECHO, referencia: "B-30 en tracking"}
-      adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      adr: {estado: NO_APLICA, referencia: "flux interno del adapter, no modifica contrato"}
+      implementacion: {estado: HECHO, referencia: "packages/market_data/infrastructure/kafka/producer.py close()"}
+      tests: {estado: HECHO, referencia: "tests/market_data/infrastructure/kafka/test_producer_adapter.py (8 passed)"}
+      ci: {estado: HECHO, referencia: "49 contratos import-linter KEPT; ruff/mypy OK"}
+      evidencia: {estado: HECHO, referencia: "gate tests verdes 2026-08-08"}
+      cierre: {estado: HECHO, referencia: "F-014 resuelto 2026-08-08"}
 
   - id: B-31
     hallazgo_informe: F-015
     fase: F2
     prioridad: ALTA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "packages/market_data/infrastructure/kafka/producer.py — AIOKafkaProducer instanciado sin enable_idempotence; default False en aiokafka; acks=all ya configurado"
-    solucion: "Evaluar enable_idempotence=True dado que acks=all ya esta configurado; parametro de configuracion, no cambia contrato de KafkaProducerPort"
+    evidencia: "packages/market_data/infrastructure/kafka/producer.py start() — AIOKafkaProducer(enable_idempotence=True) anadido. Verificado compatible con acks=all (aiokafka producer.py:265-281: acks in ('all',-1) permitido, mapea a -1); no hay parametro retries expuesto (retry del sender interno, retry_backoff_ms=500 ya estaba)"
+    solucion: "enable_idempotence=True en start(); parametro de configuracion, sin cambio de contrato KafkaProducerPort"
     pruebas:
-      - "test: simular retry y verificar ausencia/presencia de duplicados en topic"
+      - "tests/market_data/infrastructure/kafka/test_producer_adapter.py TestIdempotenceOnStart: captura kwargs del cliente y verifica enable_idempotence True + acks=all"
     adr_relacionado: null
-    riesgo_residual: "Medio — duplicados posibles bajo retry"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — idempotencia elimina duplicados bajo retry; requiere broker Kafka 0.11+ (Pushgateway local de canary no lo toca)"
+    fecha_cierre: "2026-08-08"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-015"}
       backlog: {estado: HECHO, referencia: "B-31 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "parametro de configuracion del cliente Kafka, no introduce ni cambia contrato arquitectonico"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "infrastructure/kafka/producer.py start()"}
+      tests: {estado: HECHO, referencia: "test_producer_adapter.py (13 passed)"}
+      ci: {estado: HECHO, referencia: "mypy/ruff OK; 49 contratos import-linter KEPT"}
+      evidencia: {estado: HECHO, referencia: "compatibilidad verificada contra aiokafka source 2026-08-08"}
+      cierre: {estado: HECHO, referencia: "F-015 resuelto 2026-08-08"}
+
   - id: B-32
     hallazgo_informe: F-016
     fase: F2
     prioridad: CRITICA
     estado: PENDIENTE
     estado_auditoria: CONFIRMADO
-    evidencia: "deploy/monitoring/alertmanager.yml — receiver default sin slack_configs/email_configs/webhook_configs; confirmado como config real desplegada via docker-compose.yml:161-162"
-    solucion: "Configurar al menos un receiver real (webhook/Slack/email); complementa F-010/B-26 — sin esto las reglas de B-26 tampoco notifican"
+    evidencia: "deploy/monitoring/alertmanager.yml — receiver default sin slack_configs/email_configs/webhook_configs; config real desplegada via docker-compose.yml. BLOQUEADO EXPLICITAMENTE (2026-08-08): el repo NO contiene ruta segura de notificacion (webhook/Slack/SMTP con credenciales gestionadas); configurar un receiver obligaria a commitear credenciales — rechazado por politica no-secrets. Reconfirmado 2026-08-09: sin forma segura verificable disponible (mas destinos reales en el repo); guards CI (gitleaks + config-guard) sostienen el bloqueo. Condicion de reapertura: secret manager externo"
+    solucion: "Bloqueo explicito documentado en alertmanager.yml (comentario F-016). Reabrir cuando exista un secret manager en el repo (contexto externo). No inventar destino sin credenciales seguras"
     pruebas:
-      - "verificacion manual: disparar alerta de prueba y confirmar notificacion real"
+      - "validacion: yaml.safe_load(alertmanager.yml) OK; decision de bloqueo declarada en el archivo"
+      - "guard anti-secretos: .github/workflows/gitleaks.yml corre en push/PR a main"
+      - "config-guard en docker-compose.yml:63-68 impide levantar prometheus/alertmanager con config rota (receiver con $(VAR) sin definir rompe el arranque)"
     adr_relacionado: null
-    riesgo_residual: "Alto — ninguna alerta notifica a un humano actualmente"
+    riesgo_residual: "Alto — ninguna alerta notifica a un humano; mitigado hoy por observabilidad interna (grafana/loki). Condicion para reabrir: secret manager"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-016"}
       backlog: {estado: HECHO, referencia: "B-32 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "configuracion pura de Alertmanager, no toca ningun contrato de codigo"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "bloqueo explicito documentado en alertmanager.yml (no receptor inventado)"}
+      tests: {estado: NO_APLICA, referencia: "no hay destino que probar; bloqueado por politica"}
+      ci: {estado: HECHO, referencia: "yaml monitoring valido; gitleaks + config-guard en CI; suite completa verde"}
+      evidencia: {estado: HECHO, referencia: "comentario F-016 en alertmanager.yml + decision declarada 2026-08-08; reconfirmada 2026-08-09"}
+      cierre: {estado: PENDIENTE, referencia: "bloqueado hasta secret manager externo"}
 
   - id: B-33
     hallazgo_informe: F-017
     fase: F2
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "apps/app/cli/streaming_hydra.py:73 — _PUSH_EXCHANGE = 'orderbook' hardcodeado, invalida aislamiento por job=ocm_pipeline_{exchange} entre exchanges paralelos"
-    solucion: "Derivar _PUSH_EXCHANGE del parametro exchange real de _run_streaming; bloqueante conceptual para B-34 (cualquier alerta de heartbeat nueva hereda el problema de aislamiento si no se corrige primero)"
+    evidencia: "apps/app/cli/streaming_hydra.py — _PUSH_EXCHANGE = 'orderbook' hardcodeado eliminado; _heartbeat_loop recibe exchange real del stream y pusher.push({'exchange': exchange, ...}) deriva job=ocm_pipeline_{exchange}"
+    solucion: "Derivar exchange del parametro real de _run_streaming (arg CLI --exchange, SSOT feeds). _heartbeat_loop(pusher, exchange, gateway, stop, push_interval) con exchange propagado; log usa el mismo valor"
     pruebas:
-      - "test: 2 exchanges simulados en paralelo, confirmar heartbeats aislados en Pushgateway"
+      - "tests/app/cli/test_streaming_hydra.py TestHeartbeatLoop.test_exchange_is_derived_not_hardcoded: kucoin no orderbook; assert not hasattr(_PUSH_EXCHANGE)"
+      - "test_pushes_labels_exchange_and_gateway: exchange=bybit propagado al pusher"
     adr_relacionado: null
-    riesgo_residual: "Alto — last-write-wins real entre exchanges en Pushgateway"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — aislamiento por job=ocm_pipeline_{exchange} restaurado; sin bloqueo entre exchanges"
+    fecha_cierre: "2026-08-08"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-017"}
       backlog: {estado: HECHO, referencia: "B-33 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "bugfix interno, la constante nunca fue parte de un contrato publico"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "apps/app/cli/streaming_hydra.py _heartbeat_loop + _run_streaming"}
+      tests: {estado: HECHO, referencia: "test_streaming_hydra.py (22 passed bloque 1+2)"}
+      ci: {estado: HECHO, referencia: "mypy OK; ruff OK; 49 contratos import-linter KEPT"}
+      evidencia: {estado: HECHO, referencia: "rg _PUSH_EXCHANGE = 0 hits en codigo; tests verdes 2026-08-08"}
+      cierre: {estado: HECHO, referencia: "F-017 resuelto 2026-08-08"}
   - id: B-34
     hallazgo_informe: F-018
     fase: F2
     prioridad: CRITICA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "deploy/monitoring/alerts.yml:6 — PipelineDown usa absent(ocm_pipeline_runs_total); metrica ausente en todo el codigo (rg exhaustivo sin resultados); metrica real es ocm_pipeline_heartbeat_total"
-    solucion: "Corregir expr a la metrica real, evaluar ventana de staleness; depende de B-33 (F-017) para definir expresion final por exchange"
+    evidencia: "deploy/monitoring/alerts.yml — corregido a metricas reales: ocm_pipeline_last_run_timestamp (deadman staleness), ocm_fetch_chunk_errors_total, ocm_exchange_circuit_open_total. Nombres erroneos previos (ocm_pipeline_runs_total, ocm_fetch_errors_total, ocm_exchange_circuit_open) respondieron a 0 hits en codigo"
+    solucion: "Reescrito alerts.yml con nombres reales; deadman por staleness (time()-ocm_pipeline_last_run_timestamp)>600 que la gauge set en cada push (ocm/observability/prometheus.py:61), no absent() — pushgateway persiste series de jobs muertos. Resuelto junto con B-33 (aislamiento por exchange)"
     pruebas:
-      - "verificacion: disparar ausencia de heartbeat simulada y confirmar que la alerta corregida dispara"
+      - "verificacion sintaxis: yaml.safe_load(alerts.yml) OK; 3 reglas con metricas reales"
+      - "validacion determinista: rg de nombres de metricas en codigo = coincidencias reales (ocm_pipeline_last_run_timestamp en prometheus.py:24)"
     adr_relacionado: null
-    riesgo_residual: "Alto — deadman-switch del streaming canary sin cobertura de alerta funcional"
-    fecha_cierre: null
+    riesgo_residual: "Medio — Alertmanager bloqueado (F-016) asi que las alertas no notifican; la regla es correcta y grafica/loki la exponen hoy"
+    fecha_cierre: "2026-08-08"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-018"}
       backlog: {estado: HECHO, referencia: "B-34 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "correccion de regla de alerta, no toca contrato de codigo"}
-      implementacion: {estado: PENDIENTE, referencia: "bloqueado_por: B-33"}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "deploy/monitoring/alerts.yml (deadman staleness + nombres reales)"}
+      tests: {estado: HECHO, referencia: "yaml valido; en suite completa 991 passed"}
+      ci: {estado: HECHO, referencia: "yaml de monitoring valido"}
+      evidencia: {estado: HECHO, referencia: "metricas verificadas contra prometheus.py/metrics.py 2026-08-08"}
+      cierre: {estado: HECHO, referencia: "F-018 resuelto 2026-08-08"}
 
   - id: B-35
     hallazgo_informe: F-019
     fase: F2
     prioridad: MEDIA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "producer.py::send_async() usa except Exception generico; aiokafka.errors define ~44 BrokerResponseError + KafkaTimeoutError/KafkaConnectionError/KafkaUnavailableError, todos colapsan a reason=write_error sin DLQ/retry topic"
-    solucion: "Se resuelve naturalmente al abordar B-25 (DLQ/gap detection ya pendiente); no requiere ADR propio ni esfuerzo aislado — extiende el mismo espacio de problema"
+    evidencia: "producer.py::send_async() ahora clasifica razon: KafkaTimeoutError -> broker_timeout, KafkaConnectionError -> connection_error, BrokerResponseError -> broker_response (code=errno), resto -> unknown_error. Antes un solo except Exception colapsaba las ~44 causas en reason=write_error"
+    solucion: "Clasificacion de excepciones en send_async() ganando visibilidad operativa. La estrategia DLQ/gap detection sigue cubierta por el ADR pendiente de B-25 — aqui no se decide estrategia, solo se clasifica"
     pruebas:
-      - "test: simular cada categoria de excepcion y verificar reason correcto en event_failed"
+      - "test: test_producer_adapter.py TestSendErrorClassification — 4 categorias parametrizadas con reason correcto en el log"
     adr_relacionado: null
-    riesgo_residual: "Medio — diagnostico operativo limitado, no bloqueante para F2"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — solo diagnostico; DLQ/retry logic pendiente bajo B-25 (ADR)"
+    fecha_cierre: "2026-08-08"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-019"}
       backlog: {estado: HECHO, referencia: "B-35 en tracking.yaml, relacionado con B-25"}
       adr: {estado: NO_APLICA, referencia: "cubierto por el ADR pendiente de B-25, no requiere uno separado"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "infrastructure/kafka/producer.py send_async()"}
+      tests: {estado: HECHO, referencia: "test_producer_adapter.py TestSendErrorClassification (13 passed)"}
+      ci: {estado: HECHO, referencia: "mypy/ruff OK; 49 contratos import-linter KEPT"}
+      evidencia: {estado: HECHO, referencia: "categorias verificadas contra aiokafka.errors 2026-08-08"}
+      cierre: {estado: HECHO, referencia: "F-019 resuelto 2026-08-08"}
+
   - id: B-36
     hallazgo_informe: F-020
     fase: F2
-    prioridad: ALTA
-    estado: PENDIENTE
-    estado_auditoria: NO_CONFIRMADO
-    evidencia: "onchain_producer.py:16 — OnchainKafkaProducer hereda de BaseKafkaProducer; grep exhaustivo en todo el repo no encuentra esa clase definida"
-    solucion: "Pendiente auditoria: confirmar import real y si el modulo carga correctamente"
+    prioridad: BAJA
+    estado: HECHO
+    estado_auditoria: CONFIRMADO
+    evidencia: "onchain_producer.py eliminado (dead code con imports rotos: infra.kafka.base_producer no existe; market_data.domain.ports no existe; sin callers confirmados por rg global)"
+    solucion: "Eliminar onchain_producer.py (dead code con imports rotos)"
     pruebas:
-      - "verificacion: python -c 'import ...onchain_producer' y confirmar si falla"
+      - "verificacion: rg onchain_producer/OnchainKafkaProducer = 0 hits tras eliminacion; py_compile/ruff/mypy OK"
     adr_relacionado: null
-    riesgo_residual: "Desconocido hasta verificar — potencialmente modulo no funcional"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — modulo aislado sin callers; eliminacion no toca contrato"
+    fecha_cierre: "2026-08-08"
     cadena:
-      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-020"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-020 (verificado)"}
       backlog: {estado: HECHO, referencia: "B-36 en tracking.yaml"}
-      adr: {estado: NO_APLICA, referencia: "aun no confirmado si es import roto real; reevaluar tras verificacion"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: "auditoria incompleta, ver pendientes del audit doc"}
-      cierre: {estado: PENDIENTE, referencia: null}
+      adr: {estado: NO_APLICA, referencia: "dead code aislado, no toca contrato publico"}
+      implementacion: {estado: HECHO, referencia: "eliminado onchain_producer.py"}
+      tests: {estado: HECHO, referencia: "suite completa (997 passed)"}
+      ci: {estado: HECHO, referencia: "mypy/ruff OK; 49 contratos import-linter KEPT"}
+      evidencia: {estado: HECHO, referencia: "ModuleNotFoundError reproducido pre-eliminacion; rg=0 post-eliminacion"}
+      cierre: {estado: HECHO, referencia: "F-020 resuelto 2026-08-08"}
   - id: B-37
     hallazgo_informe: F-021
     fase: F2
     prioridad: BAJA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "orderbook_producer.py — metodo legacy produce(payload, key) sin callers confirmado (rg sin resultados); patron similar presente en oi/liquidations/funding_producer.py, no verificado en esos 3"
-    solucion: "Eliminar metodo legacy si se confirma codigo muerto en los 4 archivos"
+    evidencia: "Metodo legacy produce(payload,key) eliminado de orderbook/oi/liquidations/funding_producer.py; rg de callers legacy = 0 confirmado pre-eliminacion. Nota: infra_metrics_producer.py conserva su produce() no-op (stub NOT IMPLEMENTED, pendiente de auditoria futura — no es metodo legacy delegante)"
+    solucion: "Eliminar metodo legacy produce(payload, key) de los 4 producers WS"
     pruebas:
-      - "verificacion: rg de callers en los 3 producers restantes antes de eliminar"
+      - "verificacion: rg 'async def produce(self, payload' = solo infra_metrics (stub no-op); suite completa 997 passed"
     adr_relacionado: null
     riesgo_residual: "Bajo — higiene de codigo"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-08"
     cadena:
-      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-021"}
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-021 (sin callers confirmado)"}
       backlog: {estado: HECHO, referencia: "B-37 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "eliminacion de codigo muerto, no toca contrato"}
-      implementacion: {estado: PENDIENTE, referencia: null}
-      tests: {estado: NO_APLICA, referencia: null}
+      implementacion: {estado: HECHO, referencia: "4 producers WS sin metodo legacy produce(payload,key)"}
+      tests: {estado: NO_APLICA, referencia: "eliminacion pura sin cambios de comportamiento; suite completa verde"}
+      ci: {estado: HECHO, referencia: "mypy/ruff OK; 49 contratos import-linter KEPT"}
+      evidencia: {estado: HECHO, referencia: "grep callers = 0 pre-eliminacion; post-eliminacion sin metodo legacy"}
+      cierre: {estado: HECHO, referencia: "F-021 resuelto 2026-08-08"}
+
+  - id: B-38
+    hallazgo_informe: F-022
+    fase: F2
+    prioridad: MEDIA
+    estado: HECHO
+    estado_auditoria: CONFIRMADO
+    evidencia: "Twin-import de metricas: market_data.infrastructure.observability.metrics + packages.market_data.infrastructure.observability.metrics en el mismo proceso lanza ValueError: Duplicated timeseries in CollectorRegistry (reproducido 2026-08-08). Causa real: pyproject.toml [tool.pytest.ini_options] pythonpath=['.','apps'] — la raiz del repo hace packages/ importable como paquete gemelo. No existe pytest.ini (descartado en verificacion)"
+    solucion: "Ruta canonica unica market_data.* (nunca packages.*); guard estatico en tests/architecture que falla si algun .py importa con prefijo 'packages.'"
+    pruebas:
+      - "test: tests/market_data/test_layer_contracts.py::test_no_twin_import_via_packages_prefix — scan AST de todo el repo, 1 passed (guard activo)"
+    adr_relacionado: null
+    riesgo_residual: "Media-Baja — guard estatico previene regresion; runtime canary usa ruta canonica"
+    fecha_cierre: "2026-08-08"
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-022 (nuevo)"}
+      backlog: {estado: HECHO, referencia: "B-38 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "fix de convencion de import, no arquitectura"}
+      implementacion: {estado: HECHO, referencia: "guard estatico anti twin-import en test_layer_contracts.py"}
+      tests: {estado: HECHO, referencia: "test_no_twin_import_via_packages_prefix 1 passed"}
+      ci: {estado: HECHO, referencia: "suite completa 997 passed; ruff/mypy OK"}
+      evidencia: {estado: HECHO, referencia: "Duplicated timeseries reproducido 2026-08-08; guard impide reintroduccion"}
+      cierre: {estado: HECHO, referencia: "F-022 resuelto 2026-08-08"}
+
+  - id: B-39
+    hallazgo_informe: F-023
+    fase: F2
+    prioridad: MEDIA
+    estado: HECHO
+    estado_auditoria: CONFIRMADO
+    evidencia: "scripts/engineering_health_check.py rechaza prioridad fuera de enum ['ALTA','BAJA','CRITICA','MEDIA']; B-24/B-25/B-26 prioridad=P2 y B-27/B-28=P3 -> tests/architecture/test_engineering_health.py FAIL (5 incoherencias). Preexistente en HEAD (git show) — no introducido por remediacion F-013/F-014"
+    solucion: "Normalizar prioridades B-24..B-28 al enum normativo (P2->MEDIA, P3->BAJA, mapeo a severidades F-008..F-012 del audit); verificar health check pasa y suite arquitectura verde"
+    pruebas:
+      - "test: uv run python scripts/engineering_health_check.py -> PASS, exit 0"
+      - "test: pytest tests/architecture/test_engineering_health.py -> 1 passed"
+      - "verificacion: prioridades B-24..B-28 normalizadas segun severidad del audit (F-008/009/010=P2->MEDIA; F-011/012=P3->BAJA)"
+    adr_relacionado: null
+    riesgo_residual: "Bajo — normalizacion de dato de tracking, no de arquitectura; enum cerrado garantiza que no reaparezcan prioridades P2/P3"
+    fecha_cierre: "2026-08-09"
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-023 (detectado en gate)"}
+      backlog: {estado: HECHO, referencia: "B-39 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "normalizacion de dato del tracking, no arquitectura"}
+      implementacion: {estado: HECHO, referencia: "prioridad B-24/B-25/B-26=P2->MEDIA; B-27/B-28=P3->BAJA"}
+      tests: {estado: HECHO, referencia: "test_engineering_health.py 1 passed; health check PASS"}
+      ci: {estado: HECHO, referencia: "health check exit 0 (gate fail-fast verde)"}
+      evidencia: {estado: HECHO, referencia: "health check PASS + test verde 2026-08-09; 5 incoherencias previas reproducidas"}
+      cierre: {estado: HECHO, referencia: "F-023 resuelto 2026-08-09"}
+
+  - id: B-40
+    hallazgo_informe: F-024
+    fase: F2
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "ocm/runtime/state/factories.py:198 y :236 importan 'from ocm.runtime.state.redis_stream import RedisStreamPublisher/Consumer' (lazy, FUERA del try/except) pero el módulo ocm.runtime.state.redis_stream NO existe. Reproducido: ModuleNotFoundError al llamar build_stream_publisher. Origen: 66cd1c4 refactor(layout) Fase 3 (rename ocm_platform->ocm) no movió el archivo streams. Símbolo equivalente real existe en infrastructure/redis/redis_stream.py:71,145 pero nadie lo importa. Sin callers de build_stream_publisher/build_stream_source hoy"
+    solucion: "Auditar qué debe importar realmente factories.py antes de tocar: mover infrastructure/redis/redis_stream.py a ocm.runtime.state.redis_stream O apuntar factories al módulo raíz — resolver junto con F-011 (coexistencia infrastructure/). NO tocar hasta decidir hogar canónico"
+    pruebas:
+      - "smoke: uv run python -c 'from ocm.runtime.state.factories import build_stream_publisher; build_stream_publisher(stream_name=\"ohlcv\")' -> ModuleNotFoundError (2026-08-09)"
+      - "verificacion: ls ocm/runtime/state/ (no redis_stream); grep build_stream_publisher/build_stream_source -> 0 callers"
+      - "verificacion: RedisStreamPublisher en infrastructure/redis/redis_stream.py:71, Consumer :145"
+    adr_relacionado: "PENDIENTE -- decidir hogar canonico junto a F-011; no hay ADR todavia"
+    riesgo_residual: "Bajo-MBaja hoy (sin callers); si se habilita RedisStreamsEventBus (event_bus.py:23) fallaria al invocar build_stream_* — latente"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-024 (reproducido)"}
+      backlog: {estado: HECHO, referencia: "B-40 en tracking.yaml"}
+      adr: {estado: PENDIENTE, referencia: "hogar canonico a decidir con F-011"}
+      implementacion: {estado: PENDIENTE, referencia: "NO tocar hasta decidir ruta canonica"}
+      tests: {estado: NO_APLICA, referencia: "smoke de reproduccion: ModuleNotFoundError"}
       ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: HECHO, referencia: "ModuleNotFoundError reproducido 2026-08-09; callers 0"}
       cierre: {estado: PENDIENTE, referencia: null}
 
   - id: B-24
     hallazgo_informe: H-23
     fase: F2
-    prioridad: P2
+    prioridad: MEDIA
     estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "packages/market_data/adapters/inbound/websocket/{orderbook,funding,oi,liquidations}_producer.py — _KAPPA_HEADERS con HEADER_SOURCE hardcodeado a \"live\" como constante de clase; único caller activo hoy es streaming_hydra.py (canary), no live_hydra.py"

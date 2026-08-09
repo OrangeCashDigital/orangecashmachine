@@ -73,6 +73,30 @@ cumpla.
 - GOVERNANCE.md §7 mantiene la tabla de equivalencia actualizada; si un
   bounded context cambia su estructura, este ADR se marca Reemplazado.
 
+## Addendum 2026-08-09 — coexistencia de `infrastructure/` raíz y `packages/*/infrastructure/`
+
+**Origen:** F-011 (auditoría streaming canary). Existen DOS rutas `infrastructure/`
+con significados distintos:
+
+- **`infrastructure/` en la raíz del repo** (junto a `shared/`, `ocm/`,
+  `packages/`, `apps/`). Contiene únicamente `redis/redis_stream.py` (código de
+  streams Redis) y `__init__.py`. Documentado en pyproject.toml (packages
+  remapped) y referenciado por import-linter (contrato de layers) — no es un
+  artefacto huérfano.
+- **`packages/<bc>/infrastructure/`** — capa de infraestructura del bounded
+  context, anidada bajo cada paquete (p.ej. `packages/market_data/infrastructure/`
+  con `timeouts.py`, `bootstrap/`, etc.).
+
+Decisión: **no se renombra ni se mueve la raíz `infrastructure/`.** Los dos
+árboles coexisten: la raíz aloja infraestructura transversal de plataforma
+fuera de cualquier bounded context, mientras que `packages/*/infrastructure/`
+es la capa hexagonal del contexto. Cualquier import canónico debe usar la ruta
+completa (`market_data.infrastructure.timeouts`, no `infrastructure.timeouts` —
+ver F-011; el ejemplo `from infrastructure.timeouts import ...` del docstring de
+timeouts.py apuntaba a un módulo inexistente y ya fue corregido). Candidato a
+futura unificación del código de streams bajo un único hogar canónico, según
+resolución de F-024.
+
 ## Referencias
 
 - docs/architecture/recovered/trading-bootstrap-forensic-analysis.md
