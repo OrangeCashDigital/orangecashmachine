@@ -198,3 +198,239 @@ violaría la propia regla de honestidad del documento auditor.
 - **Pendiente real (no cerrado por este fix, ver F-007):** sigue sin haber DLQ/retry/
   alerta activa sobre `ocm_kafka_events_failed_total`. F-008 corrige la semántica del
   header; no corrige la ausencia de gap detection.
+
+---
+
+## [F-009] Ausencia de retry/DLQ/gap detection en pipeline WS→Kafka
+- **Severidad:** P2
+- **Estado:** VERIFIED
+- **ID formal:** H-24 (docs/plans/tracking.yaml)
+- **Evidencia:** `KafkaProducerAdapter.send_async()` (packages/market_data/infrastructure/kafka/producer.py)
+  captura toda excepción, logea `warning`, retorna `False` — sin reintento, sin cola de
+  mensajes fallados, sin circuit breaker. Confirmado en 2 capas: los 4 producers WS
+  (`on_snapshot`/`on_delta`) y el adapter subyacente. `flush()` es la única excepción
+  documentada al patrón SafeOps del archivo (su propio docstring lo señala explícitamente).
+- **Dato relevante:** el enum de `reason` en `KafkaMetrics.event_failed()` ya contempla
+  `dlq_sent` como valor válido (`deserialize_error | schema_mismatch | write_error | dlq_sent`),
+  pero ningún código dispara ese reason — sugiere que un DLQ fue anticipado en el diseño
+  de métricas pero nunca implementado.
+- **Impacto:** un delta de order book perdido deja el book local desincronizado sin
+  mecanismo automático de detección (no hay sequence numbers verificados en
+  `OrderBookDeltaPayload`) ni de recuperación.
+- **Alcance de remediación:** diseño de DLQ (¿tópico destino? ¿consumo manual o
+  automático?) y gap detection (requiere sequence numbers en el schema) son decisiones
+  de arquitectura no triviales — candidatas a ADR dedicado, no a parche de auditoría.
+
+## [F-010] Sin alertas operacionales para el pipeline WS/Kafka
+- **Severidad:** P2
+- **Estado:** VERIFIED
+- **ID formal:** H-25 (docs/plans/tracking.yaml)
+- **Evidencia:** `deploy/monitoring/alerts.yml` contiene 3 reglas (`PipelineDown`,
+  `HighFetchErrors`, `CircuitBreakerOpen`), las 3 cubren el pipeline batch/REST
+  (`ocm_pipeline_*`, `ocm_fetch_errors_*`, `ocm_exchange_circuit_*`). Grep de
+  `kafka|events_failed|processing_latency|lag|heartbeat|orderbook|stale|gap|dlq|retry`
+  contra ese archivo: **cero coincidencias**.
+- **Impacto:** `ocm_kafka_events_failed_total` existe como métrica (confirmado en
+  `metrics.py`) pero no dispara ninguna alerta — un operador solo se entera mirando
+  Prometheus manualmente, no hay señal proactiva.
+- **Relación con F-009:** complementario — F-009 es la ausencia de recuperación
+  automática, F-010 es la ausencia de notificación humana del fallo.
+
+## [F-011] `infrastructure/` en raíz del repo — colisión de nomenclatura con la capa Clean Architecture
+- **Severidad:** P3
+- **Estado:** VERIFIED
+- **ID formal:** H-26 (docs/plans/tracking.yaml)
+- **Evidencia:** existe `infrastructure/` como directorio hermano de `packages/` en la
+  raíz del repo (`infrastructure/redis/redis_stream.py`, `infrastructure/__init__.py`),
+  registrado en `pyproject.toml` (líneas 249, 330, 341: excepción ruff E402 + path
+  mapping). Es un módulo standalone legítimo — no importa nada de `packages/`, solo
+  `redis`/`loguru`/stdlib — pero el nombre colisiona conceptualmente con la capa
+  `infrastructure/` que cada bounded context ya usa (`packages/market_data/infrastructure/`,
+  etc.), la misma palabra con dos significados arquitectónicos distintos en el mismo repo.
+- **Consecuencia concreta:** el docstring de `packages/market_data/infrastructure/timeouts.py`
+  instruye `from infrastructure.timeouts import Timeouts` — un import que **no existe**
+  (`ModuleNotFoundError` confirmado). Documentación desactualizada o nunca correcta,
+  probablemente residuo de una reubicación de archivo sin actualizar el ejemplo de uso.
+- **No es una violación de import-linter ni de Clean Architecture en sentido estricto**
+  (no hay dependencia cruzada real) — es un hallazgo de naming/Clean Code y de
+  documentación falsa dentro del propio código.
+
+## [F-012] Timeouts con claims de p99/SLA sin fuente verificable
+- **Severidad:** P3
+- **Estado:** VERIFIED (el claim existe tal cual) / UNVERIFIED (si los números tienen
+  respaldo real fuera de este código)
+- **ID formal:** H-27 (docs/plans/tracking.yaml)
+- **Evidencia:** `packages/market_data/infrastructure/timeouts.py` — comentarios como
+  "p99 en Bybit/KuCoin spot: ~800ms" (línea 46), "scan() sobre S3... p99 ~3s" (línea 52),
+  y el docstring general ("Los valores reflejan SLAs observados en producción") presentan
+  cifras cuantitativas específicas sin indicar fuente (¿medición propia de OCM? ¿doc
+  oficial del exchange? ¿heurística del autor?).
+  cuantitativos sin fuente citable — indistinguibles de datos medidos para quien lea el
+  código después.
+- **Riesgo:** en un sistema de trading, un timeout mal calibrado (demasiado corto → falsos
+  positivos de fallo; demasiado largo → latencia de detección de problemas reales) es un
+  parámetro operativo crítico. Presentarlo como "observado" sin serlo dificulta que alguien
+  audite o recalibre esos valores con confianza.
+- **Remediación sugerida (no aplicada, pendiente de decisión):** reformular a lenguaje
+  explícitamente heurístico (ej. "cota operativa conservadora inicial; ajustar con
+  telemetría real de producción") salvo que exista evidencia real que citar.
+
+## Kafka failure semantics / delivery guarantees (sesion 2026-08-08, continuacion)
+
+### [F-013] KafkaProducerAdapter.produce() descarta el bool de send_async() -> falso event_published
+- **Severidad:** P0
+- **Estado:** VERIFIED
+- **ID formal:** B-29 (docs/plans/tracking.yaml)
+- **Evidencia:** `packages/market_data/infrastructure/kafka/producer.py` — `produce()`
+  (firma `-> None`) hace `await self.send_async(...)` sin capturar ni evaluar el bool
+  de retorno. `send_async()` retorna `False` ante cualquier excepcion de
+  `AIOKafkaProducer.send_and_wait()` (broker reject, timeout, conexion, etc.), pero
+  `produce()` la descarta y retorna `None` sin excepcion en todos los casos.
+- **Impacto:** `OrderBookKafkaProducer.on_snapshot()`/`on_delta()` (y el mismo patron
+  confirmado en `OIKafkaProducer`, `LiquidationsKafkaProducer`, `FundingKafkaProducer` —
+  4 de 6 producers WS) llaman a `self._producer.produce(...)` y disparan
+  `event_published`/`event_processed` incondicionalmente tras el `await` sin excepcion,
+  incluyendo los casos donde Kafka rechazo o no confirmo el mensaje. `event_failed` solo
+  se dispara por excepciones *previas* a `produce()`, nunca por fallo real de entrega.
+- **Riesgo trading/market-data:** metricas de exito de publicacion pueden estar
+  sistematicamente incorrectas; imposible distinguir perdida real de datos de mercado
+  via dashboards/alertas basadas en
+  `ocm_kafka_events_published_total`/`ocm_kafka_events_processed_total`.
+- **Principio afectado:** SafeOps mal aplicado — absorbe la excepcion a nivel correcto
+  (`send_async()`) pero pierde la senal en la capa que la propaga (`produce()`).
+- **Remediacion propuesta (dos caminos, decision pendiente):**
+  - Camino A (sin ADR): `send_async()==False` dispara log critical y/o metrica adicional
+    dentro de `produce()`, sin cambiar su firma publica `-> None`.
+  - Camino B (requiere ADR): cambiar `produce()` a `-> bool`, obliga a los 4+ callers a
+    manejar el resultado — modifica el contrato compartido de `KafkaProducerPort`.
+- **Requiere:** codigo + tests. ADR solo si se elige Camino B.
+
+### [F-014] KafkaProducerAdapter.close() no hace flush() antes de stop() del cliente
+- **Severidad:** P0
+- **Estado:** VERIFIED
+- **ID formal:** B-30 (docs/plans/tracking.yaml)
+- **Evidencia:** `producer.py::close()` llama directo a `await self._producer.stop()`,
+  sin invocar `self.flush()`. El docstring del metodo publico `stop()` afirma "flush
+  implicito" — falso, no hay tal llamada en el codigo.
+- **Impacto:** mensajes en el buffer local del cliente (`linger_ms=5`, `max_batch_size`
+  configurados) pueden perderse en cualquier shutdown ordenado (SIGTERM, ADR-0022) sin
+  ninguna traza.
+- **Riesgo trading/market-data:** perdida de datos de mercado en cada restart/deploy del
+  streaming canary, silenciosa.
+- **Remediacion propuesta:** `close()` debe invocar `await self.flush(timeout=...)`
+  antes de `self._producer.stop()`, con manejo explicito de `TimeoutError`.
+- **Requiere:** codigo + test de shutdown. No requiere ADR (fix interno).
+
+### [F-015] AIOKafkaProducer sin enable_idempotence explicito
+- **Severidad:** P1
+- **Estado:** VERIFIED
+- **ID formal:** B-31 (docs/plans/tracking.yaml)
+- **Evidencia:** `producer.py` instancia `AIOKafkaProducer(...)` sin
+  `enable_idempotence`. Queda en el default de aiokafka (`False`), con `acks="all"`
+  ya configurado.
+- **Impacto:** un retry tras ack perdido en red puede duplicar el mensaje en el topic.
+- **Riesgo trading/market-data:** duplicados en `orderbook.raw` y topics equivalentes.
+- **Remediacion propuesta:** evaluar `enable_idempotence=True` en los 4+ producers que
+  comparten `KafkaProducerAdapter`.
+- **Requiere:** codigo + tests. No requiere ADR (parametro de configuracion).
+
+### [F-016] Alertmanager receiver 'default' sin destino configurado
+- **Severidad:** P0
+- **Estado:** VERIFIED
+- **ID formal:** B-32 (docs/plans/tracking.yaml)
+- **Evidencia:** `deploy/monitoring/alertmanager.yml` — `route.receiver: 'default'`,
+  `receivers: [{name: 'default'}]` sin `slack_configs`/`email_configs`/
+  `webhook_configs`/`pagerduty_configs`. Confirmado que `deploy/monitoring/alerts.yml`
+  se monta en `/etc/prometheus/alerts.yml` via `docker-compose.yml:161-162` — es la
+  config real desplegada, no teorica.
+- **Impacto:** cualquier alerta que dispare (incluidas `PipelineDown`,
+  `HighFetchErrors`, `CircuitBreakerOpen`, mas las que B-26/F-010 proponga) no
+  notifica a ningun humano por ningun canal.
+- **Remediacion propuesta:** configurar al menos un receiver real
+  (webhook/Slack/email) antes de considerar el sistema production-ready.
+- **Requiere:** configuracion unicamente. No requiere ADR.
+
+### [F-017] _PUSH_EXCHANGE hardcodeado invalida aislamiento por job en Pushgateway
+- **Severidad:** P0
+- **Estado:** VERIFIED
+- **ID formal:** B-33 (docs/plans/tracking.yaml)
+- **Evidencia:** `apps/app/cli/streaming_hydra.py:73` — `_PUSH_EXCHANGE = "orderbook"`,
+  constante fija usada como `exchange` en `push_metrics(exchange=_PUSH_EXCHANGE, ...)`.
+  El comentario de diseno ("un job por exchange evita last-write-wins") es falso en la
+  practica porque el label nunca varia entre exchanges.
+- **Impacto:** si 2+ procesos de streaming corren en paralelo (multi-exchange), todos
+  comparten `job=ocm_pipeline_orderbook` en el Pushgateway -> last-write-wins real.
+- **Remediacion propuesta:** `_PUSH_EXCHANGE` debe derivarse del `exchange` real del
+  proceso, no ser una constante de modulo.
+- **Requiere:** codigo + test de aislamiento entre 2 exchanges. No requiere ADR.
+
+### [F-018] Alerta PipelineDown referencia metrica inexistente en el codigo actual
+- **Severidad:** P0
+- **Estado:** VERIFIED
+- **ID formal:** B-34 (docs/plans/tracking.yaml)
+- **Evidencia:** `deploy/monitoring/alerts.yml:6` —
+  `expr: absent(ocm_pipeline_runs_total)`. Busqueda exhaustiva no encuentra esa
+  metrica en ningun `.py` del proyecto. La metrica real es
+  `ocm_pipeline_heartbeat_total` (`ocm/observability/prometheus.py:30`).
+- **Impacto:** la unica alerta que en teoria cubre el deadman-switch del canary esta
+  rota, posiblemente residuo de la era Prefect.
+- **Remediacion propuesta:** corregir la regla a `absent(ocm_pipeline_heartbeat_total)`
+  o equivalente con ventana de staleness, evaluando F-017 antes de la expresion final.
+- **Requiere:** configuracion, bloqueado por F-017/B-33. No requiere ADR.
+
+### [F-019] Captura generica en send_async() sin distinguir causas de fallo Kafka
+- **Severidad:** P1
+- **Estado:** VERIFIED
+- **ID formal:** B-35 (docs/plans/tracking.yaml)
+- **Evidencia:** `producer.py::send_async()` tiene una unica clausula
+  `except Exception`. Confirmado contra `aiokafka.errors`: ~44 subclases de
+  `BrokerResponseError` mas `KafkaTimeoutError`/`KafkaConnectionError`/
+  `KafkaUnavailableError` colapsan todas en el mismo log `kafka_send_failed` y el
+  mismo `reason="write_error"` en la metrica. No existe DLQ, retry topic, ni
+  persistencia para replay para ninguno de estos tipos.
+- **Impacto:** imposible diagnosticar operacionalmente si una falla es transitoria
+  vs permanente sin revisar logs manualmente.
+- **Remediacion propuesta:** se resuelve naturalmente al abordar F-009/B-25 (DLQ/gap
+  detection ya pendiente) — no requiere ADR propio, extiende el mismo espacio de
+  problema.
+- **Requiere:** codigo (clasificacion de excepciones). ADR ya cubierto por B-25.
+
+### [F-020] OnchainKafkaProducer hereda de BaseKafkaProducer, clase no encontrada en el repo
+- **Severidad:** P0 (candidato — pendiente confirmar si es import roto real)
+- **Estado:** UNVERIFIED
+- **ID formal:** B-36 (docs/plans/tracking.yaml)
+- **Evidencia:** `onchain_producer.py:16` —
+  `class OnchainKafkaProducer(OnchainKafkaProducerProtocol, BaseKafkaProducer):`.
+  Busqueda exhaustiva (`grep -rl "class BaseKafkaProducer"` en todo el repo) no
+  encuentra esa clase en ningun archivo.
+- **Pendiente de verificar:** de donde importa `BaseKafkaProducer` este archivo.
+  Proximo comando:
+  `rg -n "^from|^import" packages/market_data/adapters/inbound/websocket/onchain_producer.py`
+- **Riesgo:** si es import roto, `OnchainKafkaProducer` no puede instanciarse.
+
+### [F-021] Metodo legacy produce(payload, key) en OrderBookKafkaProducer sin callers
+- **Severidad:** P3
+- **Estado:** VERIFIED (codigo muerto confirmado, no punto ciego activo)
+- **ID formal:** B-37 (docs/plans/tracking.yaml)
+- **Evidencia:** `orderbook_producer.py` expone `produce(self, payload: bytes,
+  key=None)` sin try/except ni metricas. Busqueda de callers no encontro ningun uso
+  real.
+- **Nota:** mismo patron presente tambien en `oi_producer.py`,
+  `liquidations_producer.py`, `funding_producer.py` — pendiente confirmar si esos si
+  tienen callers activos.
+- **Remediacion propuesta:** eliminar si se confirma codigo muerto en los 4
+  archivos. No requiere ADR.
+
+### Pendientes de esta fase (no cerrados, explicitamente abiertos)
+- `InfraMetricsKafkaProducer` — no auditado a fondo, tiene su propio `produce()` con
+  semantica distinta, pendiente revision completa.
+- `OnchainKafkaProducer`/`BaseKafkaProducer` — ver F-020, pendiente confirmar import
+  real.
+- Retry interno de `aiokafka` (`_message_accumulator`/`_sender`) — confirmado que
+  `send()` no tiene retry loop propio visible; el mecanismo real queda en capas
+  internas de la libreria no auditadas.
+- Callers legacy de `produce(payload, key)` en
+  `oi_producer.py`/`liquidations_producer.py`/`funding_producer.py` — no verificado.
+- Gobernanza de ADR aplicada estrictamente (GOVERNANCE.md secc. 2): ninguno de
+  F-013 a F-021 dispara ADR automaticamente salvo F-013 Camino B (cambio de
+  contrato KafkaProducerPort) y F-019 (ya cubierto por el ADR pendiente de B-25).
