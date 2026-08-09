@@ -222,24 +222,6 @@ class OrderBookKafkaProducer:
             self._metrics.event_failed(exchange=exchange, reason="write_error")
             self._log.bind(exchange=exchange, symbol=symbol, error=str(exc)).warning("orderbook_delta_publish_failed")
 
-    # ------------------------------------------------------------------ #
-    # Compatibilidad con la firma de stub anterior                         #
-    # ------------------------------------------------------------------ #
-
-    async def produce(self, payload: bytes, key: bytes | None = None) -> None:
-        """
-        API de bajo nivel — publica bytes pre-serializados.
-
-        Usar on_snapshot() / on_delta() para el flujo normal.
-        Este método existe para compatibilidad con callers legacy.
-        """
-        await self._producer.produce(
-            topic=self.topic,
-            value=payload,
-            key=key,
-            headers=self._kappa_headers,
-        )
-
     def __repr__(self) -> str:
         return f"OrderBookKafkaProducer(topic={self.topic!r})"
 

@@ -1,27 +1,66 @@
+# deploy/monitoring/alerts.yml
+# ==============================
+# Reglas de alerta Prometheus para OrangeCashMachine.
+#
+# F-018 (docs/audits/2026-08-08-streaming-canary-audit.md): nombres de
+# métricas CORREGIDOS a los reales — las expresiones anteriores referenciaban
+# métricas inexistentes y jamás disparaban:
+#   - ocm_pipeline_runs_total      → ocm_pipeline_last_run_timestamp /
+#                                     ocm_pipeline_heartbeat_total
+#   - ocm_fetch_errors_total       → ocm_fetch_chunk_errors_total
+#   - ocm_exchange_circuit_open    → ocm_exchange_circuit_open_total
+#
+# Deadman switch (staleness, no absent())
+# ---------------------------------------
+# El pushgateway PERSISTE las métricas de jobs muertos (prometheus.py no
+# hace delete — los counters deben persistir entre runs). absent() solo
+# detectaría "nunca arrancó", no "murió". El deadman real compara la gauge
+# ocm_pipeline_last_run_timestamp (set cada push) con el tiempo actual.
+#
+# Aislamiento por exchange (F-017): el job del pushgateway es
+# ocm_pipeline_{exchange}; las alertas agregan por label exchange y no
+# tratan ningún exchange hardcodeado.
+
 groups:
   - name: ocm_pipeline
-    interval: 1m
+    interval: 15s
     rules:
+      # Deadman switch real por exchange — un job muerto deja su serie en el
+      # pushgateway, así que (time() - last_run) > ventana es la señal fiable.
       - alert: PipelineDown
-        expr: absent(ocm_pipeline_runs_total)
+        expr: absent(ocm_pipeline_last_run_timestamp) or
+            (time() - ocm_pipeline_last_run_timestamp) > 600
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "OCM pipeline sin métricas por 10 minutos"
+          summary: "OCM pipeline sin heartbeat por 10 minutos ({{ $labels.exchange }})"
 
       - alert: HighFetchErrors
-        expr: rate(ocm_fetch_errors_total[5m]) > 0.1
+        expr: rate(ocm_fetch_chunk_errors_total[5m]) > 0.1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Tasa de errores elevada {{ $value }}"
+          summary: "Tasa de errores de fetch elevada para {{ $labels.exchange }}: {{ $value }}"
 
       - alert: CircuitBreakerOpen
-        expr: ocm_exchange_circuit_open > 0
+        expr: ocm_exchange_circuit_open_total > 0
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: "Circuit breaker abierto en {{ $labels.exchange }}"
+
+      # B-26 / F-010: alerta operacional del pipeline WS→Kafka. Métrica real
+      # ocm_kafka_events_failed_total (packages/market_data/infrastructure/kafka/
+      # metrics.py:115-119, labels [topic exchange reason]). Rate sostenida de
+      # fallos de publicación WS→Kafka — señal proactiva antes de que se acumule
+      # una cola grande o el book se desincronice.
+      - alert: KafkaWSEventsFailed
+        expr: rate(ocm_kafka_events_failed_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fallo sostenido de publicación WS→Kafka para {{ $labels.exchange }} (topic {{ $labels.topic }}, reason {{ $labels.reason }}): {{ $value }}/s"

@@ -1,6 +1,14 @@
 global:
   resolve_timeout: 5m
 
+# F-016 (docs/audits/2026-08-08-streaming-canary-audit.md): el receiver
+# 'default' NO tiene ningún destino configurado por DECISIÓN EXPLÍCITA y
+# BLOQUEADO durablemente (2026-08-08): el repo no contiene ninguna ruta de
+# notificación segura (webhook/Slack/SMTP con credenciales gestionadas).
+# Configurar un receiver aquí obligaría a commitear credenciales o inventar
+# un destino — rechazado por política (GOVERNANCE.md, no-secrets).
+# Las alertas se resuelven HOY por observabilidad interna (grafana/loki), no
+# por correo/pager. Reabrir cuando exista un secret manager en el repo.
 route:
   group_by: ['alertname', 'exchange']
   group_wait: 30s
@@ -10,6 +18,7 @@ route:
 
 receivers:
   - name: 'default'
+    # Sin destinos — intencional. Ver nota F-016 arriba.
 
 inhibit_rules:
   - source_match:

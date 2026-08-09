@@ -110,10 +110,6 @@ class OIKafkaProducer:
         except Exception as exc:
             self._log.bind(exchange=exchange, symbol=symbol, error=str(exc)).warning("oi_publish_failed")
 
-    async def produce(self, payload: bytes, key: bytes | None = None) -> None:
-        """API de bajo nivel — compatibilidad legacy."""
-        await self._producer.produce(topic=self.topic, value=payload, key=key, headers=self._kappa_headers)
-
     def __repr__(self) -> str:
         return f"OIKafkaProducer(topic={self.topic!r})"
 

@@ -1,23 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-infrastructure/timeouts.py
-===========================
+market_data/infrastructure/timeouts.py
+=======================================
 
 SSOT de todos los timeouts del sistema.
 
 Regla de uso
 ------------
 NUNCA escribir un número mágico de timeout en el código.
-Importar siempre desde aquí:
+Importar siempre desde aquí — ruta canónica market_data.*:
 
-    from infrastructure.timeouts import Timeouts
+    from market_data.infrastructure.timeouts import Timeouts
     redis_client = Redis(socket_timeout=Timeouts.REDIS_OPERATION_S)
 
-Justificación de valores
+(Nota F-011: el antiguo ejemplo "from infrastructure.timeouts import
+Timeouts" apuntaba a un módulo que NO existe — ruta corregida.)
+
+Naturaleza de los valores
 -------------------------
-Los valores reflejan SLAs observados en producción con exchanges
-cripto (alta latencia p99) y Iceberg sobre object storage (S3/GCS).
-Ajustar mediante variables de entorno en entornos de CI/staging.
+Estimaciones conservadoras de operador, ajustables por env vars.
+Son COTA OPERATIVA inicial, NO medición garantizada: recalibrar con
+telemetría real antes de confiar en cada valor como referencia p99.
 
 Principios: SSOT, KISS, Fail-Fast ante latencia anómala.
 """
@@ -43,13 +46,15 @@ class Timeouts:
     REDIS_OPERATION_S: float = float(os.getenv("TIMEOUT_REDIS_OPERATION_S", "1.0"))
 
     # ── CCXT / Exchange HTTP ───────────────────────────────────────────────
-    # p99 en Bybit/KuCoin spot: ~800ms. 10s = margen conservador.
+    # Cota operativa inicial (~0.8s latencia típica en spot Bybit/KuCoin);
+    # 10s = margen conservador. Recalibrar con telemetría real.
     CCXT_REQUEST_S: float = float(os.getenv("TIMEOUT_CCXT_REQUEST_S", "10.0"))
     # Conexión TCP inicial al exchange
     CCXT_CONNECT_S: float = float(os.getenv("TIMEOUT_CCXT_CONNECT_S", "5.0"))
 
     # ── Iceberg / PyIceberg ────────────────────────────────────────────────
-    # scan() sobre S3 con partition pruning: p99 ~3s para tablas <100GB.
+    # Cota operativa: scan() sobre S3 con partition pruning tarda típicamente
+    # ~3s en tablas <100GB (no medido en prod aun).
     # Sin timeout → deadlock silencioso en producción.
     ICEBERG_SCAN_S: float = float(os.getenv("TIMEOUT_ICEBERG_SCAN_S", "30.0"))
     ICEBERG_WRITE_S: float = float(os.getenv("TIMEOUT_ICEBERG_WRITE_S", "60.0"))

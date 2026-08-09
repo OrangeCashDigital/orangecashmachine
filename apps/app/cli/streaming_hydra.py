@@ -68,10 +68,6 @@ from loguru import logger
 
 from shared.enums import DATASOURCE_REPLAY
 
-# Identidad del job en el Pushgateway — por diseño distinto del batch
-# (ocm_pipeline_local). Único para el canary: ocm_pipeline_orderbook.
-_PUSH_EXCHANGE = "orderbook"
-
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -157,18 +153,20 @@ def _build_pusher(config: Any):
 
 async def _heartbeat_loop(
     pusher: Any,
+    exchange: str,
     gateway: str,
     stop: asyncio.Event,
     push_interval: float,
 ) -> None:
     """Empuja el registro Prometheus al Pushgateway cada push_interval.
 
-    Etiquetas (F2.6c): exchange=_PUSH_EXCHANGE → job=ocm_pipeline_orderbook
-    (prometheus.py construye job a partir del label exchange). gateway sale
-    del contexto (PUSHGATEWAY_URL → RunConfig.pushgateway), nunca hardcodeado.
+    Etiquetas (F2.6c/F-017): exchange=<exchange real del stream> →
+    job=ocm_pipeline_{exchange} (prometheus.py construye job a partir del
+    label exchange). gateway sale del contexto (PUSHGATEWAY_URL → RunConfig.
+    pushgateway), nunca hardcodeado.
     """
     while not stop.is_set():
-        pusher.push({"exchange": _PUSH_EXCHANGE, "gateway": gateway})
+        pusher.push({"exchange": exchange, "gateway": gateway})
         try:
             await asyncio.wait_for(stop.wait(), timeout=push_interval)
         except asyncio.TimeoutError:
@@ -239,10 +237,10 @@ async def _run_streaming(
             "streaming_started | exchange={} symbols={} job=ocm_pipeline_{} gateway={}",
             exchange,
             symbols,
-            _PUSH_EXCHANGE,
+            exchange,
             gateway,
         )
-        await _heartbeat_loop(pusher, gateway, stop, push_interval)
+        await _heartbeat_loop(pusher, exchange, gateway, stop, push_interval)
         logger.info("streaming_stopped | shutdown limpio")
         return 0
     except Exception as exc:

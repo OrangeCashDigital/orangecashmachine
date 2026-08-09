@@ -145,12 +145,14 @@ def patch_streaming(monkeypatch, bundle: _FakeBundle, fake_stream: _FakeStream):
 
 @pytest.mark.asyncio
 class TestHeartbeatLoop:
-    async def test_pushes_labels_orderbook_and_gateway(self):
+    async def test_pushes_labels_exchange_and_gateway(self):
         pusher = _FakePusher()
         stop = asyncio.Event()
 
         async def _run() -> None:
-            task = asyncio.create_task(streaming_hydra._heartbeat_loop(pusher, "metrics.internal:9091", stop, 0.01))
+            task = asyncio.create_task(
+                streaming_hydra._heartbeat_loop(pusher, "bybit", "metrics.internal:9091", stop, 0.01)
+            )
             await asyncio.sleep(0.05)
             stop.set()
             await task
@@ -158,15 +160,33 @@ class TestHeartbeatLoop:
         await _run()
 
         assert pusher.pushed, "el loop debe empujar al menos un heartbeat"
-        assert pusher.pushed[0]["exchange"] == "orderbook"
+        assert pusher.pushed[0]["exchange"] == "bybit"
         assert pusher.pushed[0]["gateway"] == "metrics.internal:9091"
+
+    async def test_exchange_is_derived_not_hardcoded(self):
+        # F-017 (docs/audits/2026-08-08-streaming-canary-audit.md): el exchange
+        # del heartbeat debe derivar del stream (no "_PUSH_EXCHANGE" fijo).
+        pusher = _FakePusher()
+        stop = asyncio.Event()
+
+        async def _run() -> None:
+            task = asyncio.create_task(streaming_hydra._heartbeat_loop(pusher, "kucoin", "gw:9091", stop, 0.01))
+            await asyncio.sleep(0.05)
+            stop.set()
+            await task
+
+        await _run()
+
+        assert pusher.pushed, "el loop debe empujar al menos un heartbeat"
+        assert pusher.pushed[0]["exchange"] == "kucoin"
+        assert not hasattr(streaming_hydra, "_PUSH_EXCHANGE"), "F-017: la constante hardcodeada debe haber desaparecido"
 
     async def test_stops_when_event_set(self):
         pusher = _FakePusher()
         stop = asyncio.Event()
         stop.set()  # ya seteado → el loop no debe empujar nada
 
-        await streaming_hydra._heartbeat_loop(pusher, "gw:9091", stop, 0.01)
+        await streaming_hydra._heartbeat_loop(pusher, "bybit", "gw:9091", stop, 0.01)
         assert pusher.pushed == []
 
 
@@ -175,7 +195,7 @@ class TestHeartbeatLoop:
 # ---------------------------------------------------------------------------
 
 
-async def _short_heartbeat(pusher, gateway, stop, push_interval):
+async def _short_heartbeat(pusher, exchange, gateway, stop, push_interval):
     """Simula el heartbeat interrumpido por stop event (como una señal real).
 
     En tests no llegan SIGINT/SIGTERM — el event interno de _run_streaming

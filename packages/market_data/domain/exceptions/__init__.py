@@ -58,6 +58,16 @@ class MarketDataError(Exception):
     """Raíz de todas las excepciones del bounded context market_data."""
 
 
+class KafkaProducerError(MarketDataError):
+    """
+    El envío a Kafka no fue confirmado por el broker.
+
+    El port lo documenta (Raises KafkaProducerError) pero la clase no
+    existía — F-013: produce() tragaba el bool False de send_async(). Ahora
+    el adapter eleva esta excepción para que el caller la clasifique.
+    """
+
+
 # ===========================================================================
 # Ingestión
 # ===========================================================================

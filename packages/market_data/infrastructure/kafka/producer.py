@@ -18,6 +18,7 @@ from typing import Optional
 
 from loguru import logger
 
+from market_data.domain.exceptions import KafkaProducerError
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort  # noqa: F401
 from ocm.config.env_vars import (
     KAFKA_ACKS,
@@ -57,6 +58,7 @@ class KafkaProducerAdapter:
         self._linger_ms = linger_ms
         self._producer = None
         self._started = False
+        self._close_flush_timeout = 10.0
         self._log = logger.bind(
             component="KafkaProducerAdapter",
             broker=bootstrap_servers,
@@ -94,6 +96,10 @@ class KafkaProducerAdapter:
             return
         from aiokafka import AIOKafkaProducer
 
+        # F-015: enable_idempotence=True — elimina duplicados bajo retry.
+        # Verificado compatible con acks="all" (→ -1) por aiokafka
+        # producer.py:265-281. El retry del sender es interno (no hay
+        # parámetro retries expuesto); retry_backoff_ms=500 ya configurado.
         self._producer = AIOKafkaProducer(
             bootstrap_servers=self._bootstrap_servers,
             client_id=self._client_id,
@@ -103,6 +109,7 @@ class KafkaProducerAdapter:
             linger_ms=self._linger_ms,
             request_timeout_ms=30_000,
             retry_backoff_ms=500,
+            enable_idempotence=True,
         )
         if self._producer is None:
             raise RuntimeError("producer_not_initialized")
@@ -111,9 +118,26 @@ class KafkaProducerAdapter:
         self._log.info("kafka_producer_started")
 
     async def close(self) -> None:
-        """Cierra la conexión limpiamente. Idempotente. SafeOps."""
+        """
+        Cierra la conexión limpiamente. Idempotente. SafeOps.
+
+        F-014: antes de stop() se fuerza un flush() explícito para no
+        perder mensajes en buffer (linger_ms=5, batching activo). El
+        flush lanza TimeoutError si el broker no confirma — se DEBE
+        registrar (no es SafeOps de silencio) porque implica pérdida.
+        """
         if not self._started or self._producer is None:
             return
+        try:
+            await self.flush(timeout=self._close_flush_timeout)
+        except TimeoutError as exc:
+            self._log.error(
+                "kafka_close_flush_timeout",
+                timeout=self._close_flush_timeout,
+                error=str(exc),
+            )
+        except Exception as exc:
+            self._log.warning("kafka_close_flush_error", error=str(exc))
         try:
             await self._producer.stop()
             self._started = False
@@ -139,7 +163,18 @@ class KafkaProducerAdapter:
         para que los consumers puedan filtrar sin deserializar el body.
 
         SafeOps: captura cualquier excepción y retorna False.
+
+        F-019: la razón de fallo se CLASIFICA en el log (reason=category)
+        en vez de colapsar todas las causas en "write_error". El espacio de
+        problema (DLQ/gap detection) sigue cubierto por el ADR pendiente de
+        B-25 — aquí solo se gana visibilidad, no se decide estrategia.
         """
+        from aiokafka.errors import (
+            BrokerResponseError,
+            KafkaConnectionError,
+            KafkaTimeoutError,
+        )
+
         if not self._started or self._producer is None:
             self._log.warning("send_async_skipped — producer not started", topic=topic)
             return False
@@ -155,8 +190,21 @@ class KafkaProducerAdapter:
             )
             self._log.bind(topic=topic).debug("kafka_message_sent")
             return True
+        except KafkaTimeoutError:
+            self._log.bind(topic=topic, reason="broker_timeout").warning("kafka_send_failed")
+            return False
+        except KafkaConnectionError:
+            self._log.bind(topic=topic, reason="connection_error").warning("kafka_send_failed")
+            return False
+        except BrokerResponseError as exc:
+            self._log.bind(
+                topic=topic,
+                reason="broker_response",
+                code=exc.errno,
+            ).warning("kafka_send_failed", error=str(exc))
+            return False
         except Exception as exc:
-            self._log.bind(topic=topic, error=str(exc)).warning("kafka_send_failed")
+            self._log.bind(topic=topic, reason="unknown_error", error=str(exc)).warning("kafka_send_failed")
             return False
 
     async def flush(self, timeout: float = 10.0) -> None:
@@ -192,9 +240,16 @@ class KafkaProducerAdapter:
         Método canónico de KafkaProducerPort.
 
         Delega a send_async() — adaptación de nombre para cumplir el contrato.
-        SafeOps: captura excepciones internamente; no lanza si el mensaje se pierde.
+
+        F-013: antes de volver, verifica la señal real de send_async().
+        Si el mensaje no fue confirmado, eleva KafkaProducerError en vez de
+        tragarse el fallo. El port lo documenta (Raises KafkaProducerError);
+        los callers ya lo capturan con SafeOps — señal visible, sin silencio.
         """
-        await self.send_async(topic=topic, value=value, key=key, headers=headers)
+        ok = await self.send_async(topic=topic, value=value, key=key, headers=headers)
+        if not ok:
+            self._log.bind(topic=topic).critical("kafka_produce_not_confirmed")
+            raise KafkaProducerError(f"kafka produce no confirmado: topic={topic} (send_async retornó False)") from None
 
     async def stop(self) -> None:
         """
