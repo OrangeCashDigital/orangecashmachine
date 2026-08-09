@@ -547,3 +547,22 @@ violaría la propia regla de honestidad del documento auditor.
 - **Impacto:** latente — si se habilita el event bus Redis (`RedisStreamsEventBus` futuro, ver `ports/outbound/event_bus.py:23`) y se invoca `build_stream_publisher`/`build_stream_source`, falla con `ModuleNotFoundError`. Hoy sin efecto funcional (ningún caller).
 - **Remediación propuesta (NO ejecutada, requiere auditoría de "qué debe importar"):** decidir el hogar canónico de `RedisStreamPublisher`/`Consumer` (mover `infrastructure/redis/redis_stream.py` a `ocm.runtime.state.redis_stream`, o apuntar factories.py a la ruta real), según resolución de F-011. Ver ADR-0023 (deferral) para política similar de no tocar sin beneficiario real.
 - **No requiere ADR hasta decidir la ruta canónica** (cuando se defina, si mueve el módulo, actualizar importlinter/pyproject como ya señala F-011).
+
+### [F-025] Comentario de alertmanager.yml asume observabilidad de respaldo (Grafana/Loki) que no esta operativa
+- **Severidad:** P1
+- **Estado:** VERIFIED
+- **ID formal:** B-41 (docs/plans/tracking.yaml)
+- **Evidencia:** el comentario agregado en F-016 (`deploy/monitoring/alertmanager.yml`)
+  justifica dejar el receiver `default` sin destino argumentando "las alertas se
+  resuelven HOY por observabilidad interna (grafana/loki)". Verificado en vivo:
+  `docker compose ps` falla al interpolar el servicio `grafana` — `GRAFANA_PASSWORD`
+  no esta seteada en `.env` (aunque si existe como placeholder vacio en
+  `.env.example:26`). Grafana no puede levantar en el estado actual del repo.
+- **Impacto:** el razonamiento que sostiene la decision de F-016 (dejar Alertmanager
+  sin receiver) se apoya en un respaldo que no existe operativamente hoy — no hay
+  ninguna via de notificacion real, ni por Alertmanager ni por Grafana/Loki, mientras
+  `.env` no tenga `GRAFANA_PASSWORD`.
+- **Remediacion propuesta:** copiar `GRAFANA_PASSWORD` (y verificar el resto de
+  variables de `.env.example` relacionadas a monitoring) a `.env`, confirmar que
+  `grafana`/`loki` levantan, y solo entonces el comentario de F-016 queda respaldado
+  por la realidad. Accion operativa simple, no requiere codigo ni ADR.

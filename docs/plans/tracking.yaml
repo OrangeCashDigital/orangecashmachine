@@ -680,6 +680,29 @@ hallazgos:
       evidencia: {estado: HECHO, referencia: "health check PASS + test verde 2026-08-09; 5 incoherencias previas reproducidas"}
       cierre: {estado: HECHO, referencia: "F-023 resuelto 2026-08-09"}
 
+  - id: B-41
+    hallazgo_informe: F-025
+    fase: F2
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "Comentario agregado en F-016 (deploy/monitoring/alertmanager.yml) justifica dejar el receiver default sin destino argumentando observabilidad de respaldo via grafana/loki; docker compose ps falla al interpolar el servicio grafana porque GRAFANA_PASSWORD no esta seteada en .env (si existe como placeholder vacio en .env.example:26)"
+    solucion: "Copiar GRAFANA_PASSWORD (y demas variables de monitoring relacionadas) de .env.example a .env; confirmar que grafana/loki levantan antes de que el comentario de F-016 quede respaldado por la realidad. Accion operativa, no requiere codigo ni ADR"
+    pruebas:
+      - "verificacion: docker compose ps muestra grafana/loki healthy tras configurar .env"
+    adr_relacionado: null
+    riesgo_residual: "Alto — sin Alertmanager receiver ni Grafana/Loki operativos, no existe ninguna via de notificacion real hoy"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-025"}
+      backlog: {estado: HECHO, referencia: "B-41 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "configuracion de entorno, no toca contrato de codigo"}
+      implementacion: {estado: PENDIENTE, referencia: "responsabilidad operativa de Luis, no de codigo"}
+      tests: {estado: NO_APLICA, referencia: null}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+
   - id: B-40
     hallazgo_informe: F-024
     fase: F2
