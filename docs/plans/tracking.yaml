@@ -707,7 +707,7 @@ hallazgos:
     hallazgo_informe: F-026
     fase: F2
     prioridad: MEDIA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "Inventario canonico via _ENV_VAR_NAMES (ocm/config/env_vars.py) + credentials.py suman 27+ variables consumidas por el codigo; .env.example solo documenta 17. Faltan OCM_DEBUG, OCM_CONFIG_PATH, OCM_CONFIG_DIR, OCM_VALIDATE_ONLY, PUSHGATEWAY_URL, OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH, OCM_EXCHANGE, OCM_MARKET_TYPE, OCM_OHLCV_START_DATE, INGESTION_INTERVAL_S, MARKET_DATA_HOST/PORT, 7 variables KAFKA_* de config fina"
     solucion: "Sincronizar .env.example generando su contenido desde _ENV_VAR_NAMES + credentials.py (fuente de verdad ya existente en codigo). Ver plan de remediacion separado, requiere aprobacion antes de modificar .env.example"
@@ -715,16 +715,16 @@ hallazgos:
       - "verificacion: script que compara _ENV_VAR_NAMES contra .env.example y reporta diffs"
     adr_relacionado: null
     riesgo_residual: "Medio — onboarding/redeploy puede omitir variables relevantes confiando en defaults no siempre apropiados"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-09"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-026"}
       backlog: {estado: HECHO, referencia: "B-42 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "sincronizacion de configuracion, no toca contrato de codigo"}
-      implementacion: {estado: PENDIENTE, referencia: "esperando aprobacion del plan de remediacion"}
-      tests: {estado: PENDIENTE, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: ".env.example ampliado: seccion Kafka completa (host port, UI, config fina comentada), seccion General con OCM_DEBUG/CONFIG_PATH/CONFIG_DIR/VALIDATE_ONLY/PUSHGATEWAY_URL, puertos Docker internos, market data/ingesta, Gold layer. KAFKA_ENABLED y OCM_DATA_LAKE_PATH omitidas por decision explicita de Luis (F-027 pendiente, variable deprecated respectivamente)"}
+      tests: {estado: HECHO, referencia: "docker compose config --quiet OK; verificacion de formato de lineas (grep) sin lineas sospechosas"}
+      ci: {estado: NO_APLICA, referencia: "cambio de .env.example, no impacta CI"}
+      evidencia: {estado: HECHO, referencia: "comparacion completa codigo vs .env.example vs docker-compose.yml realizada 2026-08-09, ver F-026 en audit doc"}
+      cierre: {estado: HECHO, referencia: "F-026 resuelto y verificado 2026-08-09"}
   - id: B-43
     hallazgo_informe: F-027
     fase: F2
