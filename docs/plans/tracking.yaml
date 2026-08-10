@@ -684,7 +684,7 @@ hallazgos:
     hallazgo_informe: F-025
     fase: F2
     prioridad: ALTA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "Comentario agregado en F-016 (deploy/monitoring/alertmanager.yml) justifica dejar el receiver default sin destino argumentando observabilidad de respaldo via grafana/loki; docker compose ps falla al interpolar el servicio grafana porque GRAFANA_PASSWORD no esta seteada en .env (si existe como placeholder vacio en .env.example:26)"
     solucion: "Copiar GRAFANA_PASSWORD (y demas variables de monitoring relacionadas) de .env.example a .env; confirmar que grafana/loki levantan antes de que el comentario de F-016 quede respaldado por la realidad. Accion operativa, no requiere codigo ni ADR"
@@ -692,7 +692,7 @@ hallazgos:
       - "verificacion: docker compose ps muestra grafana/loki healthy tras configurar .env"
     adr_relacionado: null
     riesgo_residual: "Alto — sin Alertmanager receiver ni Grafana/Loki operativos, no existe ninguna via de notificacion real hoy"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-09"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-025"}
       backlog: {estado: HECHO, referencia: "B-41 en tracking.yaml"}
@@ -702,6 +702,96 @@ hallazgos:
       ci: {estado: PENDIENTE, referencia: null}
       evidencia: {estado: PENDIENTE, referencia: null}
       cierre: {estado: PENDIENTE, referencia: null}
+
+  - id: B-42
+    hallazgo_informe: F-026
+    fase: F2
+    prioridad: MEDIA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "Inventario canonico via _ENV_VAR_NAMES (ocm/config/env_vars.py) + credentials.py suman 27+ variables consumidas por el codigo; .env.example solo documenta 17. Faltan OCM_DEBUG, OCM_CONFIG_PATH, OCM_CONFIG_DIR, OCM_VALIDATE_ONLY, PUSHGATEWAY_URL, OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH, OCM_EXCHANGE, OCM_MARKET_TYPE, OCM_OHLCV_START_DATE, INGESTION_INTERVAL_S, MARKET_DATA_HOST/PORT, 7 variables KAFKA_* de config fina"
+    solucion: "Sincronizar .env.example generando su contenido desde _ENV_VAR_NAMES + credentials.py (fuente de verdad ya existente en codigo). Ver plan de remediacion separado, requiere aprobacion antes de modificar .env.example"
+    pruebas:
+      - "verificacion: script que compara _ENV_VAR_NAMES contra .env.example y reporta diffs"
+    adr_relacionado: null
+    riesgo_residual: "Medio — onboarding/redeploy puede omitir variables relevantes confiando en defaults no siempre apropiados"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-026"}
+      backlog: {estado: HECHO, referencia: "B-42 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "sincronizacion de configuracion, no toca contrato de codigo"}
+      implementacion: {estado: PENDIENTE, referencia: "esperando aprobacion del plan de remediacion"}
+      tests: {estado: PENDIENTE, referencia: null}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-43
+    hallazgo_informe: F-027
+    fase: F2
+    prioridad: BAJA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "env_vars.py declara KAFKA_ENABLED con docstring extenso sobre feature flag Kappa; busqueda exhaustiva sin consumidores reales en packages/apps/ocm. Streaming canary funciona sin que esta variable este seteada ni leida"
+    solucion: "Eliminar la constante si se confirma definitivamente sin uso, o conectarla al path real si la intencion de diseno original sigue vigente. Decision de Luis pendiente"
+    pruebas:
+      - "verificacion: grep exhaustivo repetido tras cualquier cambio futuro relacionado a Kafka enable/disable"
+    adr_relacionado: null
+    riesgo_residual: "Bajo — documentacion enganosa, sin efecto funcional real"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-027"}
+      backlog: {estado: HECHO, referencia: "B-43 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "limpieza/consistencia de documentacion, no cambio de contrato"}
+      implementacion: {estado: PENDIENTE, referencia: "decision de Luis: eliminar o conectar"}
+      tests: {estado: PENDIENTE, referencia: null}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+  - id: B-44
+    hallazgo_informe: F-028
+    fase: F2
+    prioridad: BAJA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: ".github/workflows/gitleaks.yml existe (gacts/gitleaks@v1) pero .pre-commit-config.yaml no tiene hook de gitleaks; config-guard es init container Docker Compose, mecanismo distinto no relacionado a deteccion de secretos en commits"
+    solucion: "Agregar gitleaks como hook de pre-commit local, consistente con ruff/mypy/import-linter/bandit ya presentes"
+    pruebas:
+      - "verificacion: pre-commit run gitleaks --all-files tras agregar el hook"
+    adr_relacionado: null
+    riesgo_residual: "Bajo — deteccion tardia (en push, no en commit local) de secretos accidentales"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-028"}
+      backlog: {estado: HECHO, referencia: "B-44 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "agregado de hook de pre-commit, no toca contrato de codigo"}
+      implementacion: {estado: PENDIENTE, referencia: null}
+      tests: {estado: PENDIENTE, referencia: null}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
+
+  - id: B-45
+    hallazgo_informe: F-029
+    fase: F2
+    prioridad: ALTA
+    estado: HECHO
+    estado_auditoria: CONFIRMADO
+    evidencia: "docker-compose.yml:197/509 comparten default de puerto 9093 (ALERTMANAGER_HOST_PORT/KAFKA_HOST_PORT); KAFKA_HOST_PORT no estaba declarado en .env/.env.example. Reproducido: docker compose up -d kafka fallo con port already allocated mientras alertmanager corria"
+    solucion: "Agregado KAFKA_HOST_PORT=9094 explicito a .env y .env.example. Verificado: 8 servicios corriendo simultaneamente, todos healthy"
+    pruebas:
+      - "verificacion en vivo: docker compose ps muestra kafka/zookeeper/redis/grafana/loki/prometheus/alertmanager/pushgateway healthy simultaneamente 2026-08-09"
+    adr_relacionado: null
+    riesgo_residual: "Ninguno conocido — verificar si algo externo asume Kafka en 9093 antes de propagar a otros entornos"
+    fecha_cierre: "2026-08-09"
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-029"}
+      backlog: {estado: HECHO, referencia: "B-45 en tracking.yaml"}
+      adr: {estado: NO_APLICA, referencia: "cambio de configuracion .env, no toca contrato de codigo ni docker-compose.yml"}
+      implementacion: {estado: HECHO, referencia: "KAFKA_HOST_PORT=9094 agregado a .env y .env.example"}
+      tests: {estado: HECHO, referencia: "verificacion manual de arranque simultaneo, ver pruebas"}
+      ci: {estado: NO_APLICA, referencia: "cambio de .env local, no impacta CI"}
+      evidencia: {estado: HECHO, referencia: "docker compose ps con 8 servicios healthy, 2026-08-09"}
+      cierre: {estado: HECHO, referencia: "F-029 resuelto y verificado 2026-08-09"}
 
   - id: B-40
     hallazgo_informe: F-024

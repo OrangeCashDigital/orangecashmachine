@@ -566,3 +566,119 @@ violaría la propia regla de honestidad del documento auditor.
   variables de `.env.example` relacionadas a monitoring) a `.env`, confirmar que
   `grafana`/`loki` levantan, y solo entonces el comentario de F-016 queda respaldado
   por la realidad. Accion operativa simple, no requiere codigo ni ADR.
+
+## Auditoria integral de configuracion y secretos de entorno (2026-08-09)
+
+### [F-026] .env.example incompleto frente al codigo real
+- **Severidad:** P2
+- **Estado:** VERIFIED
+- **ID formal:** B-42 (docs/plans/tracking.yaml)
+- **Evidencia:** inventario canonico via `_ENV_VAR_NAMES` (ocm/config/env_vars.py,
+  guard de sincronia en import-time) mas variables per-exchange dinamicas
+  (ocm/config/credentials.py) suman 27+ variables consumidas por el codigo.
+  `.env.example` solo documenta 17 — mayormente credenciales/puertos, faltan
+  OCM_DEBUG, OCM_CONFIG_PATH, OCM_CONFIG_DIR, OCM_VALIDATE_ONLY,
+  PUSHGATEWAY_URL, OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH, OCM_EXCHANGE,
+  OCM_MARKET_TYPE, OCM_OHLCV_START_DATE, INGESTION_INTERVAL_S,
+  MARKET_DATA_HOST/PORT, y las 7 variables KAFKA_* de configuracion fina
+  (KAFKA_ACKS, KAFKA_LINGER_MS, KAFKA_MAX_BATCH_SIZE,
+  KAFKA_CONSUMER_SESSION_TIMEOUT_MS, KAFKA_CONSUMER_HEARTBEAT_MS,
+  KAFKA_AUTO_OFFSET_RESET, KAFKA_ENABLED). Muchas tienen defaults razonables
+  en codigo, pero la plantilla no refleja el universo real de configuracion.
+- **Impacto:** onboarding de nuevo colaborador o redeploy desde cero puede
+  omitir variables relevantes sin saber que existen, confiando en defaults
+  no siempre apropiados para el entorno.
+- **Remediacion propuesta:** sincronizar .env.example generando su contenido
+  desde _ENV_VAR_NAMES + credentials.py (fuente de verdad ya existente en
+  codigo), evitando mantenimiento manual duplicado. Ver plan de remediacion
+  separado.
+- **Requiere:** configuracion + posible script de generacion. No requiere ADR.
+
+### [F-027] KAFKA_ENABLED es una variable huerfana sin consumidores reales
+- **Severidad:** P3
+- **Estado:** VERIFIED
+- **ID formal:** B-43 (docs/plans/tracking.yaml)
+- **Evidencia:** `env_vars.py` declara KAFKA_ENABLED con docstring extenso
+  ("Feature flag — activa el path Kappa... Override en produccion:
+  KAFKA_ENABLED=true en .env"). Busqueda exhaustiva
+  (`grep -rn "KAFKA_ENABLED" packages/ apps/ ocm/ --include="*.py" | grep -v
+  env_vars.py`) no encuentra ningun consumidor. El streaming canary (auditado
+  extensamente en sesiones previas, 249,380 eventos procesados) funciona sin
+  que esta variable este seteada en .env ni ser leida por ningun modulo.
+- **Impacto:** documentacion enganosa — sugiere un control operativo que no
+  existe; alguien podria asumir que necesita setear esta variable para
+  habilitar Kafka en produccion cuando no tiene ningun efecto.
+- **Remediacion propuesta:** eliminar la constante si se confirma
+  definitivamente sin uso, o conectarla al path real si la intencion de
+  diseno original sigue vigente (decision de Luis). No requiere ADR
+  (limpieza/consistencia de documentacion, no cambio de contrato).
+
+### [F-028] Gitleaks solo corre en CI, no en pre-commit local
+- **Severidad:** P3
+- **Estado:** VERIFIED
+- **ID formal:** B-44 (docs/plans/tracking.yaml)
+- **Evidencia:** `.github/workflows/gitleaks.yml` existe y usa
+  `gacts/gitleaks@v1`; `.pre-commit-config.yaml` no tiene ningun hook de
+  gitleaks ni config-guard (confirmado: `config-guard` es un init container
+  de Docker Compose que valida configs al arrancar el stack, mecanismo
+  distinto y no relacionado a deteccion de secretos en commits).
+- **Impacto:** un secreto commiteado por error se detecta recien cuando el
+  push llega a GitHub y corre el workflow — ventana de tiempo donde el
+  secreto ya salio de la maquina local antes de ser detectado.
+- **Remediacion propuesta:** agregar gitleaks (o equivalente) como hook de
+  pre-commit local, consistente con el resto de gates ya presentes
+  (ruff, mypy, import-linter, bandit). No requiere ADR.
+
+### Refinamiento a [F-025] (B-41) — precision de evidencia
+- GRAFANA_PASSWORD no esta ausente de .env: esta presente con valor vacio
+  (`GRAFANA_PASSWORD=` seguido de fin de linea, confirmado via
+  `cat -A .env`, sin caracteres ocultos tipo CRLF). docker-compose.yml:231
+  usa sintaxis estricta `${GRAFANA_PASSWORD:?...}` que exige valor no-vacio,
+  tratando "presente pero vacio" igual que "ausente". Reproducido limpio con
+  `docker compose config` (no requiere levantar contenedores). Cambia la
+  remediacion de "agregar variable" a "completar valor de variable
+  existente" — ver plan de remediacion separado.
+
+### Verificacion de higiene de secretos (sin hallazgos)
+- `.gitignore` incluye `.env`, `secrets.yaml`, `.envrc` — confirmado.
+- `git log --all --oneline -- .env` sin resultados: .env nunca fue
+  versionado en todo el historial del repo. Sin riesgo de secreto expuesto
+  en commits pasados.
+- OCM_API_KEY/OCM_API_SECRET (env_vars.py) no son huerfanas: sirven como
+  fallback generico en `resolve_provider_api_key`/`resolve_exchange_credentials`
+  (ocm/config/credentials.py) cuando no existe `{EXCHANGE}_API_KEY`
+  especifico. Como BYBIT_API_KEY/KUCOIN_API_KEY si estan seteadas, este
+  fallback no se ejercita hoy pero es diseno valido, no defecto.
+
+### [F-029] Colision de puerto 9093 entre Alertmanager y Kafka en docker-compose.yml
+- **Severidad:** P1
+- **Estado:** RESUELTO 2026-08-09
+- **ID formal:** B-45 (docs/plans/tracking.yaml)
+- **Evidencia:** docker-compose.yml:197 (`ALERTMANAGER_HOST_PORT:-9093`) y
+  docker-compose.yml:509 (`KAFKA_HOST_PORT:-9093`) comparten el mismo puerto
+  default. `.env`/`.env.example` tenian ALERTMANAGER_HOST_PORT=9093 explicito,
+  pero KAFKA_HOST_PORT no estaba declarado en ninguno de los dos — caia al
+  default del compose, coincidiendo con Alertmanager. Reproducido en vivo:
+  `docker compose up -d kafka` con alertmanager ya corriendo fallo con
+  "Bind for 0.0.0.0:9093 failed: port is already allocated".
+- **Impacto:** era estructuralmente imposible correr Kafka y Alertmanager
+  simultaneamente con la configuracion default — cualquiera que levantara el
+  stack completo se topaba con este conflicto sin saber la causa exacta.
+- **Remediacion aplicada:** agregado `KAFKA_HOST_PORT=9094` explicito a
+  `.env` y `.env.example`, desambiguando ambos puertos. Verificado en vivo:
+  los 8 servicios (kafka, zookeeper, redis, grafana, loki, prometheus,
+  alertmanager, pushgateway) corren simultaneamente, todos `healthy`.
+- **Riesgo residual:** ninguno conocido — si algo externo asume Kafka en
+  9093 desde fuera de Docker, revisar antes de propagar este cambio a otros
+  entornos. No detectado ningun consumidor externo en esta sesion.
+- **Requiere:** solo configuracion (.env/.env.example). No requiere ADR ni
+  cambio de docker-compose.yml (Opcion A: minima invasion).
+
+### [F-025] Actualizacion final — RESUELTO 2026-08-09
+- Confirmado con GRAFANA_PASSWORD completada por Luis en .env (valor no
+  visto ni generado por el auditor). `docker compose config --quiet` paso
+  de FALLA a OK. Grafana levanto y llego a `healthy` junto con el resto de
+  la cadena de observabilidad, una vez resuelto tambien F-029 (conflicto de
+  puerto que bloqueaba a Kafka en paralelo). El comentario de justificacion
+  de F-016 (alertmanager.yml, "las alertas se resuelven hoy por grafana/loki")
+  ahora si tiene respaldo operativo real.
