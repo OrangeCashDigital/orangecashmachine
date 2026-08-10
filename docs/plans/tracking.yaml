@@ -697,11 +697,11 @@ hallazgos:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-025"}
       backlog: {estado: HECHO, referencia: "B-41 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "configuracion de entorno, no toca contrato de codigo"}
-      implementacion: {estado: PENDIENTE, referencia: "responsabilidad operativa de Luis, no de codigo"}
-      tests: {estado: NO_APLICA, referencia: null}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "GRAFANA_PASSWORD completado en .env por Luis (valor no visto por el auditor); KAFKA_HOST_PORT=9094 agregado a .env.example (F-029)"}
+      tests: {estado: HECHO, referencia: "docker compose config paso de FALLA a OK; verificacion manual de arranque"}
+      ci: {estado: NO_APLICA, referencia: "cambio de .env local, no impacta CI"}
+      evidencia: {estado: HECHO, referencia: "docker compose ps: grafana/loki/prometheus/alertmanager/pushgateway healthy simultaneamente 2026-08-09, ver F-025 actualizacion final en audit doc"}
+      cierre: {estado: HECHO, referencia: "F-025 resuelto y verificado 2026-08-09"}
 
   - id: B-42
     hallazgo_informe: F-026
