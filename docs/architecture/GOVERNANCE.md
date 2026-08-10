@@ -120,3 +120,39 @@ en `docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md`
 Regla: referencias nuevas a decisiones de arquitectura apuntan a
 `decisions/ADR-NNNN-*`. La serie heredada solo se cita como contexto
 histórico y nunca por su número de forma ambigua.
+
+## Addendum 2026-08-09 — convencion de campos estructurados en tracking.yaml
+
+**Contexto:** `engineering_health_check.py` (no listado antes en la seccion
+"Scripts de gobernanza" — se suma aqui) valida que toda entrada `estado: HECHO`
+tenga `fecha_cierre` y `cadena.cierre.evidencia` (o `cadena.cierre.referencia`)
+no vacios. No valida el contenido de los demas eslabones individualmente.
+
+**Convencion adoptada** (aditiva, opcional, sin retrofit de entradas
+existentes, sin cambio al validador):
+
+- `referencia:` se mantiene siempre como contexto humano/documental en todos
+  los eslabones de `cadena`.
+- `implementacion.estado: HECHO` → sumar `commit: "<hash>"` cuando exista un
+  commit real asociado.
+- `ci.estado: HECHO` → sumar `workflow: "<nombre>"` cuando corresponda a un
+  workflow de CI identificable.
+- `tests`, `evidencia`, `cierre` y el resto de eslabones siguen usando solo
+  `referencia:` salvo que en el futuro surja un identificador estructurado
+  util para alguno.
+- Aplica unicamente a entradas `B-XX` nuevas desde esta fecha en adelante —
+  las ~45 entradas existentes no se retrofitean.
+
+**Ejemplo:**
+```yaml
+cadena:
+  implementacion: {estado: HECHO, commit: "0f3c2fd", referencia: "descripcion"}
+  ci: {estado: HECHO, workflow: "ocm-ci.yml", referencia: "suite completa"}
+
+```
+
+**No aplica todavia:** exigir estos campos en `engineering_health_check.py`
+(harian falta como requeridos solo si se decide formalizar mas adelante) ni
+adopcion de OSCAL como formato de trabajo -- esta convencion es un paso
+intermedio compatible que deja la puerta abierta a exportar OSCAL como
+artefacto derivado en el futuro, sin migrar el flujo diario.
