@@ -31,7 +31,9 @@ Referencia
 Seemann, Mark. «Dependency Injection in .NET», capítulo Composition Root.
 Martin, Robert C. «Clean Architecture», capítulo 26.
 
-Contratos enforced: <asignar próximo número BC-XX libre en .importlinter>.
+Contratos enforced: BC-43 (PositionStore adapters solo instanciables
+desde portfolio/bootstrap/composition_root) y BC-44 (portfolio layer
+order) en architecture/importlinter.toml.
 """
 
 from __future__ import annotations
