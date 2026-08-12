@@ -70,9 +70,16 @@ class SupportedExchange(str, Enum):
 
 
 class EnvironmentConfig(StrictBaseModel):
-    """Metadatos del entorno activo — solo descriptivos, no controlan comportamiento."""
+    """Metadatos del entorno activo.
 
-    name: str = "base"
+    ``name`` NO es meramente descriptivo: ``ConcretePipelineFactory._build_ohlcv``
+    (packages/market_data/infrastructure/bootstrap/pipeline_factory.py) lo compara
+    contra "production" para decidir fail-fast vs. degradación a
+    NullOHLCVPublisher (ver F-031). Los valores válidos están cerrados por los
+    archivos config/env/*.yaml existentes: base, development, test, production.
+    """
+
+    name: Literal["base", "development", "test", "production"] = "base"
     version: Optional[str] = None
     debug: bool = False
     last_modified_by: Optional[str] = None
