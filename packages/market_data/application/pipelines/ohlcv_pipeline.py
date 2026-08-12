@@ -228,7 +228,7 @@ class OHLCVPipeline(PipelineTriggerPort):
         if publisher is None:
             raise TypeError(
                 "OHLCVPipeline: 'publisher' es obligatorio. Inyectar OHLCVPublisherPort "
-                "(KafkaOHLCVPublisher en produccion; NullOHLCVPublisher solo permitido "
+                "(publisher Kafka real en produccion; NullOHLCVPublisher solo permitido "
                 "explicitamente en tests/dev) desde el composition root "
                 "(market_data.infrastructure.bootstrap.pipeline_factory._build_ohlcv)."
             )
