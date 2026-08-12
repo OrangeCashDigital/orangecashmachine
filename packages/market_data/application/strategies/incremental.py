@@ -113,8 +113,10 @@ class IncrementalStrategy(StrategyMixin):
             source=SOURCE_LIVE,
             run_id=getattr(ctx, "run_id", ""),
         )
-        ok = await ctx.publisher.publish_chunk(chunk)
-        if not ok:
+        from market_data.ports.outbound.publisher_port import PublishResult
+
+        publish_result = await ctx.publisher.publish_chunk(chunk)
+        if publish_result is not PublishResult.SUCCESS:
             logger.warning(
                 "Incremental kafka publish failed — cursor NO actualizado [{}/{}] | symbol={} timeframe={}",
                 idx,

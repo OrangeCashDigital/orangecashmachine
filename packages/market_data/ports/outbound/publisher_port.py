@@ -16,9 +16,18 @@ publisher.py re-exporta desde aquí — la dirección es publisher_port → publ
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Protocol, runtime_checkable
 
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk, OHLCVSource
+
+
+class PublishResult(str, Enum):
+    """Resultado explicito de publish_chunk() - reemplaza el bool ambiguo (F-031/#3)."""
+
+    SUCCESS = "success"
+    RETRYABLE_FAILURE = "retryable_failure"
+
 
 # ── Constantes de source ──────────────────────────────────────────────────────
 SOURCE_BACKFILL: str = OHLCVSource.BACKFILL
@@ -36,15 +45,15 @@ class OHLCVPublisherPort(Protocol):
 
     SafeOps
     -------
-    publish_chunk() retorna False en lugar de lanzar.
+    publish_chunk() retorna PublishResult.RETRYABLE_FAILURE en lugar de lanzar.
     close() libera recursos del transporte. Siempre debe llamarse al finalizar.
     """
 
-    async def publish_chunk(self, chunk: OHLCVChunk) -> bool:
+    async def publish_chunk(self, chunk: OHLCVChunk) -> PublishResult:
         """
         Publica un chunk OHLCV al bus de eventos.
 
-        Returns True si confirmado, False en fallo transitorio.
+        Returns PublishResult.SUCCESS si confirmado, RETRYABLE_FAILURE en fallo transitorio.
         """
         ...
 
@@ -60,11 +69,11 @@ class NullOHLCVPublisher:
     """
     Implementación nula de OHLCVPublisherPort — SOLO para tests unitarios.
 
-    Descarta silenciosamente todos los chunks y retorna True (éxito simulado).
+    Descarta silenciosamente todos los chunks y retorna PublishResult.SUCCESS (éxito simulado).
     """
 
-    async def publish_chunk(self, chunk: OHLCVChunk) -> bool:  # noqa: ARG002
-        return True
+    async def publish_chunk(self, chunk: OHLCVChunk) -> PublishResult:  # noqa: ARG002
+        return PublishResult.SUCCESS
 
     async def close(self) -> None:
         pass

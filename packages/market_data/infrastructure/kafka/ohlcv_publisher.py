@@ -41,6 +41,7 @@ import uuid as _uuid
 
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
+from market_data.ports.outbound.publisher_port import PublishResult
 from shared.kafka.schemas.ohlcv import (
     DATASOURCE_BACKFILL,
     DATASOURCE_LIVE,
@@ -110,7 +111,7 @@ class KafkaOHLCVPublisher:
     SafeOps
     -------
     publish_chunk() captura cualquier excepción de infraestructura y
-    retorna False. Nunca lanza — el caller activa el fallback a Iceberg.
+    retorna PublishResult.RETRYABLE_FAILURE. Nunca lanza — el caller activa el fallback a Iceberg.
     """
 
     def __init__(self, producer: KafkaProducerPort) -> None:
@@ -118,12 +119,12 @@ class KafkaOHLCVPublisher:
             raise ValueError("KafkaOHLCVPublisher: producer no puede ser None")
         self._producer = producer
 
-    async def publish_chunk(self, chunk: OHLCVChunk) -> bool:
+    async def publish_chunk(self, chunk: OHLCVChunk) -> PublishResult:
         """
         Serializa un OHLCVChunk a EventPayload y lo publica a ohlcv.raw.
 
         Fail-Fast: lanza ValueError si chunk está vacío (contrato violado por caller).
-        SafeOps  : cualquier fallo de Kafka/red retorna False sin propagar.
+        SafeOps  : cualquier fallo de Kafka/red retorna PublishResult.RETRYABLE_FAILURE sin propagar.
 
         Parameters
         ----------
@@ -131,8 +132,8 @@ class KafkaOHLCVPublisher:
 
         Returns
         -------
-        True si el mensaje fue encolado al broker.
-        False si ocurrió cualquier error de infraestructura.
+        PublishResult.SUCCESS si el mensaje fue encolado al broker.
+        PublishResult.RETRYABLE_FAILURE si ocurrió cualquier error de infraestructura.
         """
         if chunk.is_empty:
             raise ValueError(
@@ -188,10 +189,10 @@ class KafkaOHLCVPublisher:
                 key=routing_key,
                 headers=headers,
             )
-            return True
+            return PublishResult.SUCCESS
 
         except Exception:
-            return False  # SafeOps — caller activa fallback a Iceberg directo
+            return PublishResult.RETRYABLE_FAILURE  # SafeOps — caller activa fallback a Iceberg directo
 
 
 __all__ = ["KafkaOHLCVPublisher"]

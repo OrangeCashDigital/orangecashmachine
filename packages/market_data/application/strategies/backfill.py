@@ -434,8 +434,10 @@ class BackfillStrategy(StrategyMixin):
                         source=SOURCE_BACKFILL,
                         run_id=getattr(ctx, "run_id", ""),
                     )
-                    ok = await ctx.publisher.publish_chunk(chunk)
-                    if not ok:
+                    from market_data.ports.outbound.publisher_port import PublishResult
+
+                    publish_result = await ctx.publisher.publish_chunk(chunk)
+                    if publish_result is not PublishResult.SUCCESS:
                         log.warning(
                             "Backfill chunk kafka publish failed — cursor NO avanzado",
                             chunk=chunks + 1,
