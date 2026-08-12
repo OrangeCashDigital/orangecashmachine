@@ -26,11 +26,11 @@ priorización). Ante discrepancia, esos dos mandan.
 | 3 | `publish_chunk()` retorna `PublishResult` explícito en vez de `bool` ambiguo | ✅ Cerrado | commit `5724191` |
 | 4 | Test de wiring real del composition root sin mocks (`_build_kafka_publisher` → `KafkaOHLCVPublisher` real) | ✅ Cerrado | `tests/architecture/test_kafka_publisher_wiring.py`, commit `8afc09d` |
 | 5 | Test de guardrails de Kappa (NullPublisher prohibido en prod, publisher/chunk_converter obligatorios) + inyección real verificada en `_build_ohlcv` | ✅ Cerrado | `tests/architecture/test_kappa_publisher_wiring.py` (9 tests), commit `5749c1f` |
-| 6 | Separación explícita de publishers permitidos por entorno en config | ⏳ Pendiente | — |
+| 6 | Separación explícita de publishers permitidos por entorno en config | ✅ Cerrado | docstring `EnvironmentConfig.name` corregido (commit `1253c8f`); publishers gobernados por `integrations.kafka.enabled` + guard fail-fast en `_build_ohlcv` |
 | 7 | Pipeline CI como barrera dura: ruff → mypy → import-linter → tests → arch → config → health → docs | ⏳ Pendiente | — |
-| 8 | Detección automática de documentación contradictoria (ADRs vs código real) | ⏳ Pendiente | — |
-| 9 | Contratos de observabilidad obligatorios (ej. alertar si `_build_event_bus_wiring` falla en silencio) | ⏳ Pendiente | — |
-| 10 | Test de lifecycle SIGTERM/SIGINT | ⏳ Pendiente | — |
+| 8 | Detección automática de documentación contradictoria (ADRs vs código real) | 🔄 Parcial — docstrings contradictorios corregidos a mano (market_data/main.py "modo degradado", paper/live stale) | — |
+| 9 | Contratos de observabilidad obligatorios (ej. alertar si `_build_event_bus_wiring` falla en silencio) | ✅ Cerrado | `_build_event_bus_wiring` ahora loguea por loguru + counter `ocm_quality_consumer_wiring_failures_total`; test `tests/market_data/test_quality_consumer_wiring.py` |
+| 10 | Test de lifecycle SIGTERM/SIGINT | ✅ Cerrado | handler SIGTERM→KeyboardInterrupt en `apps/app/cli/main.py`; test `tests/app/test_sigterm_handler.py` |
 | 11 | Bootstrap común entre entrypoints (`ocm`/`paper`/`live`) | ⏳ Pendiente | — |
 | 12 | Cada hallazgo se documenta y se convierte en test sistemáticamente | 🔄 Parcial — F-031 como caso piloto | — |
 

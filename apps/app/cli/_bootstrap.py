@@ -100,6 +100,27 @@ def handle_sigterm(signum, frame) -> None:
     raise SystemExit(1)
 
 
+def install_sigterm_handler() -> None:
+    """SafeOps (R14/H8): registrar SIGTERM → KeyboardInterrupt (exit 130).
+
+    Uso: CLI batch (main.py). asyncio.run() ya cancela gracefulmente la tarea
+    pendiente al recibir KeyboardInterrupt; este handler extiende ese mismo
+    path al SIGTERM de systemd/k8s (default: kill con 143 sin cleanup). El
+    flujo retorna 130 como SIGINT y el cleanup del pipeline (task.cancel en
+    market_data) se ejecuta igual.
+
+    Difiere de handle_sigterm (paper/live, exit 1) porque el CLI batch corre
+    bajo asyncio.run y necesita la vía de cancelación para el shutdown limpio.
+    """
+
+    def _raise_keyboard_interrupt(signum: int, _frame: object) -> None:
+        raise KeyboardInterrupt  # noqa: S110 — propagación intencional
+
+    import signal
+
+    signal.signal(signal.SIGTERM, _raise_keyboard_interrupt)
+
+
 # ---------------------------------------------------------------------------
 # Puente AppConfig + CLI → configs tipados (ADR-0003)
 # ---------------------------------------------------------------------------

@@ -59,3 +59,8 @@ architecture/metrics.json
 # shared.svg es el grafo generado por pydeps (artifact opcional, no se commitea).
 shared.svg
 coverage.json
+
+# Artefactos de corridas/experimentos locales (pids, logs de canary, dumps)
+# Salidas de verificación empírica — evidencia viva, no versionable.
+# SI la evidencia debe persistirse, ir a un doc en docs/audits/ (como f26c).
+artifacts/

@@ -240,6 +240,15 @@ QUALITY_GAPS_TOTAL = Counter(
     ["exchange", "symbol", "timeframe", "severity"],
 )
 
+# Fallos al cablear observers aditivos (ej. QualityPipelineConsumer) en el
+# composition root. Fail-soft: el pipeline sigue operando, pero sin ese
+# observer el átomo de calidad no se registra — debe ser visible, no mudo.
+QUALITY_CONSUMER_WIRING_FAILURES = Counter(
+    "ocm_quality_consumer_wiring_failures_total",
+    "Intentos de registrar QualityPipelineConsumer que fallaron en startup",
+    ["reason"],
+)
+
 RESAMPLE_ROWS_TOTAL = Counter(
     "ocm_resample_rows_total",
     "Filas OHLCV producidas por ResamplePipeline",

@@ -132,25 +132,38 @@ class ConcretePipelineFactory:
         consumer registrado — el pipeline sigue operando en modo actual
         (sin observador), nunca bloquea la ingestion real.
 
+        Obs: el fail-soft NO es mudo — loguea por loguru y registra un
+        counter en ocm_quality_consumer_wiring_failures_total para que la
+        pérdida del observador de calidad sea visible en dashboards/alertas
+        (Guardrail #9).
+
         Returns
         -------
         EventBusPort — listo para inyectar en PipelineContext.
         """
+        from loguru import logger as _log
+
         from market_data.application.consumers.quality_consumer import (
             QualityPipelineConsumer,
         )
         from market_data.infrastructure.event_bus import event_bus
         from market_data.infrastructure.lineage.tracker import lineage_tracker
+        from market_data.infrastructure.observability.metrics import (
+            QUALITY_CONSUMER_WIRING_FAILURES,
+        )
 
         try:
             consumer = QualityPipelineConsumer(bus=event_bus, tracker=lineage_tracker)
             consumer.start()
         except Exception as exc:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "QualityPipelineConsumer no pudo registrarse — bus sin observador: %s", exc
+            _log.warning(
+                "quality_consumer_wiring_failed — bus sin observador de calidad",
+                error=str(exc),
             )
+            try:
+                QUALITY_CONSUMER_WIRING_FAILURES.labels(reason=type(exc).__name__).inc()
+            except Exception:  # noqa: BLE001 — fallo de métricas es no-fatal
+                pass
         return event_bus
 
     def _build_kafka_publisher(self) -> Any:

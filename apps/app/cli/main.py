@@ -76,6 +76,7 @@ _register_structured_configs()
 # Imports post-registration — Hydra requiere que ConfigStore esté listo primero
 from market_data.ports.outbound.observability import MetricsPusherPort
 
+from app.cli._bootstrap import install_sigterm_handler
 from app.cli.entrypoint import run as _default_pipeline_runner
 from ocm.config.hydra_loader import load_appconfig_from_hydra, resolve_explicit_env
 from ocm.config.loader.exceptions import (
@@ -284,8 +285,9 @@ def main() -> None:
         0   — éxito o validate-only OK.
         1   — error de configuración o fallo del pipeline.
         2   — `--cfg` bloqueado en producción (B-04/H-06).
-        130 — interrupción por teclado (SIGINT / Ctrl-C).
+        130 — interrupción por teclado (SIGINT / Ctrl-C) o SIGTERM.
     """
+    install_sigterm_handler()  # SafeOps (R14/H8): SIGTERM → KeyboardInterrupt → 130
     _reject_cfg_job_in_production()  # Guard B-04: nunca dump de config segura en prod
     try:
         hydra_main()  # type: ignore[call-arg]

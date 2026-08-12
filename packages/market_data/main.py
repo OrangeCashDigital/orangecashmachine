@@ -236,8 +236,9 @@ async def _bronze_writer_loop() -> None:
 
     Degraded mode:
       Si Kafka no está disponible (broker down), start() falla y el loop
-      retorna inmediatamente. El _ingestion_loop sigue corriendo en modo
-      degradado (escribe directo a Iceberg via ctx.kafka_producer=None path).
+      retorna inmediatamente (log.error). No existe un path de escritura
+      directa a Iceberg via ctx.kafka_producer=None: OHLCVPublisher no tiene
+      fallback de persistencia (F-031) — sin Kafka no hay publicación.
     """
     log = _log.bind(component="bronze_writer_loop")
     log.info("bronze_writer_loop_starting")

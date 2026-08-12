@@ -789,3 +789,35 @@ violaría la propia regla de honestidad del documento auditor.
   RepairStrategy (repair.py:488) no pasa por publisher/Kafka en ningun escenario — escribe directo a `ctx.storage.save_ohlcv()`, por lo que el riesgo de este hallazgo no le aplica.
   F-027/B-43 (KAFKA_ENABLED huerfana): confirmado RESUELTO como efecto colateral — `KAFKA_ENABLED` se interpola a `integrations.kafka.enabled` (config/base.yaml:45, production.yaml:42) y ese campo ahora si tiene consumidor real en `_build_kafka_publisher()`.
   Veredicto: F-031 PARCIALMENTE RESUELTO — no NO RESUELTO (el riesgo original en produccion esta genuinamente cerrado), no RESUELTO (el riesgo persiste fuera de produccion por diseno, sin alerta ni test que lo cubra).
+
+- **Actualización (2026-08-12, cierre de auditoría):** correcciones que
+  reducen el riesgo residual y cierran la evidencia falsa:
+  - **Comentario falso corregido** — `market_data/main.py:239-240` ("modo
+    degradado escribe directo a Iceberg via ctx.kafka_producer=None") NO
+    describía el código: `NullOHLCVPublisher` no escribe a Iceberg, descarta
+    el chunk. El docstring ahora describe el comportamiento real (sin Kafka →
+    sin publicación, no hay fallback de persistencia; F-031).
+  - **Fail-fast adelantado a config-load (L5)** — nueva regla
+    `PRODUCTION_REQUIRES_KAFKA_PUBLISHER` en `ocm/config/layers/rules.py`
+    impide arrancar producción con `integrations.kafka.enabled=False`, con
+    mensaje y fix accionables, antes de llegar a `_build_ohlcv` (tests en
+    `tests/ocm/config/test_business_rules.py`).
+  - **Fail-soft visible (Guardrail #9)** — si `_build_event_bus_wiring` no
+    puede registrar `QualityPipelineConsumer`, ahora loguea por loguru y
+    registra counter `ocm_quality_consumer_wiring_failures_total` (antes un
+    `logging.warning` del stdlib invisible en el pipeline). Test en
+    `tests/market_data/test_quality_consumer_wiring.py`.
+  - **SIGTERM (Guardrail #10)** — el CLI `ocm` (`apps/app/cli/main.py`) ahora
+    traduce SIGTERM a `KeyboardInterrupt` → 130 y cleanup graceful (antes,
+    systemd/k8s mataba con 143 sin cleanup). Test en
+    `tests/app/test_sigterm_handler.py`.
+  - **Warning de degradación visible** — el fallback a `NullOHLCVPublisher`
+    fuera de producción ahora usa loguru (logger del pipeline), no
+    `logging` del stdlib.
+  - Docstrings stale de `paper_hydra.py`/`live_hydra.py` (referencias a
+    `paper.py`/`live.py` inexistentes) corregidos.
+  Veredicto actualizado: F-031 sigue PARCIALMENTE RESUELTO (riesgo de éxito
+  simulado de `NullOHLCVPublisher` fuera de producción persiste por diseño,
+  ahora con degradación visible y alerta), pero el estado de implementación
+  es materialmente más fuerte: fail-fast en 2 capas (L5 config-load +
+  runtime factory) y todos los fall-soft relevante observables.
