@@ -4,6 +4,17 @@
 **Alcance**: 118 archivos Python, 5 capas (domain → ports → application → adapters → infrastructure)  
 **Método**: Revisión manual de cada archivo + análisis de imports + verificación de contratos arquitectónicos (BC-NN)
 
+> **Nota de estado (2026-08-10) — F-031/B-46:** snapshot histórico (2026-05-27).
+> Las tablas de este documento inventarían qué *implementaciones existen*
+> (p. ej. `OHLCVPublisherAdapter` + `NullPublisher`, §7; `ChunkConverter`,
+> §7) — NO afirman que el path esté *cableado*. Re-verificación 2026-08-10
+> (F-031/B-46, docs/audits/2026-08-08-streaming-canary-audit.md): el
+> `OHLCVPipeline` de producción publica a un `NullPublisher()` hardcodeado y
+> `_chunk_converter` no se inyecta, por lo que ningún evento OHLCV llega a
+> `ohlcv.raw`; `OHLCVPublisherAdapter`/`KafkaOHLCVPublisher` no tienen callers
+> en runtime (`_build_kafka_publisher` es código muerto). El inventario de la
+> fecha sigue siendo válido; el estado del wiring quedó corregido en F-031/B-46.
+
 ---
 
 ## Índice

@@ -63,6 +63,16 @@
 > matriz validada por hallazgo** (evidencia real, riesgo, beneficio, costo, riesgo de
 > regresión, prioridad, decisión final) y **§9 sin Fase 4**. Ámbito: solo informe, sin
 > ejecutar el plan.
+>
+> **Revisión 7 (2026-08-10) — F-031/B-46.** Precisión sobre las filas "Event-Driven:
+> ✅ Cumple / No rompe Kappa (ADR-0002)" y el punto "el CLI de datos consume vía
+> orquestador" (Resumen ejecutivo, §3.4 completitud canvas). Esa afirmación constata
+> que `apps/` no viola el modelo event-driven por import ni por invocación — sigue
+> siendo correcta. **No debe leerse como que el path Kappa de OHLCV exista**: en HEAD,
+> `OHLCVPipeline` publica a `NullPublisher()` hardcodeado y `_chunk_converter` no está
+> inyectado, de modo que ningún evento OHLCV llega a `ohlcv.raw` (F-031/B-46,
+> docs/audits/2026-08-08-streaming-canary-audit.md). "No romper Kappa" ≠ "Kappa OHLCV
+> implementado y publicado". Sin cambios en las conclusiones de `apps/`.
 
 ---
 

@@ -89,3 +89,15 @@ que exista un consumidor real de `orderbook.raw`** en el repositorio.
 - Docs: `docs/audits/2026-08-08-streaming-canary-audit.md` F-009,
   `docs/plans/tracking.yaml` B-25, `docs/plans/backlog-priorizado-2026-08-08.md`.
 - ADRs relacionados: ADR-0014 (diseño interno), ADR-0022 (realtime_feeds).
+
+## Nota de discrepancia (2026-08-10) — F-031 / B-46
+
+Este ADR cita como referencia que "el lado consumidor de OHLCV ya usa"
+`bronze_writer.py::_send_to_dlq` sobre `ohlcv.raw`. Cierto que el consumidor
+existe, pero el **productor** de `ohlcv.raw` no está conectado en producción:
+`OHLCVPipeline` publica a `NullPublisher()` y `_chunk_converter` no se
+inyecta, por lo que hoy no llega ningún evento a ese topic y `bronze_writer`
+no tiene qué consumir (F-031/B-46). La afirmación de este ADR era un
+precedente de patrón, válido cuando se reabra B-25; con el wiring Kappa
+pendiente, el patrón DLQ de OHLCV queda por el momento sin flujo real que lo
+ejercite.

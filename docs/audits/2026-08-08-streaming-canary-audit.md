@@ -608,6 +608,14 @@ violaría la propia regla de honestidad del documento auditor.
 - **Impacto:** documentacion enganosa — sugiere un control operativo que no
   existe; alguien podria asumir que necesita setear esta variable para
   habilitar Kafka en produccion cuando no tiene ningun efecto.
+- **Relacion con F-031/B-46 (2026-08-10):** la causa de fondo de que esta
+  variable no tenga consumidores es que el path Kappa de OHLCV nunca se
+  conecto: `KafkaOHLCVPublisher` se construye (si existiera wiring) respetando
+  `integrations.kafka.enabled` (AppConfig, `_build_kafka_publisher`,
+  pipeline_factory.py:166), pero ese builder no tiene callers. Si se remedia
+  F-031 con wiring real (Opcion A), KAFKA_ENABLED deja de ser huerfana y pasa
+  a gobernar el flag vía AppConfig — la eliminacion de la constante quedaría
+  entonces sin sustento. Decidir B-43 junto con F-031, no por separado.
 - **Remediacion propuesta:** eliminar la constante si se confirma
   definitivamente sin uso, o conectarla al path real si la intencion de
   diseno original sigue vigente (decision de Luis). No requiere ADR
@@ -682,3 +690,96 @@ violaría la propia regla de honestidad del documento auditor.
   puerto que bloqueaba a Kafka en paralelo). El comentario de justificacion
   de F-016 (alertmanager.yml, "las alertas se resuelven hoy por grafana/loki")
   ahora si tiene respaldo operativo real.
+
+## Auditoria estado del wiring Kappa OHLCV (2026-08-10)
+
+### [F-031] El path Kappa OHLCV (OHLCVPipeline → ohlcv.raw) no esta conectado: publisher Null sin inyectar y chunk_converter sin cablear
+- **Severidad:** P1
+- **Estado:** VERIFIED
+- **ID formal:** B-46 (docs/plans/tracking.yaml)
+- **Evidencia (estado actual del codigo, HEAD main):**
+  - Ambos entrypoints de produccion construyen OHLCVPipeline por la misma ruta:
+    `apps/app/cli/entrypoint.py:77` (CompositionRoot.assemble) y
+    `packages/market_data/main.py:149` (servicio FastAPI/polling; Docker
+    compose corre `python -m market_data.main`, docker-compose.yml:358, con
+    `_ingestion_loop` + `_bronze_writer_loop`).
+  - `ConcretePipelineFactory._build_ohlcv()` (pipeline_factory.py:190) NO
+    inyecta publisher ni `_chunk_converter`.
+  - `OHLCVPipeline.__init__` hardcodea `_publisher = NullPublisher()` con el
+    comentario falso "# Inyectado por CompositionRoot"
+    (ohlcv_pipeline.py:248) — la variable es local al `__init__`, el
+    `PipelineContext` se construye con ese Null siempre (linea 257).
+  - `ConcretePipelineFactory._build_kafka_publisher()`
+    (pipeline_factory.py:156) existe pero tiene **cero callers** — codigo
+    muerto (KafkaOHLCVPublisher nunca se construye en runtime).
+  - `PipelineContext._chunk_converter` queda en su default `None`
+    (runtime.py:298). `get_chunk_converter()` (runtime.py:311) lanza
+    `RuntimeError` fail-fast (lineas 318-323) si no fue inyectado.
+  - `IncrementalStrategy` llama `ctx.get_chunk_converter()` en
+    incremental.py:106 y `publish_chunk` en 116; `BackfillStrategy` en
+    backfill.py:427/437. Ninguno escribe a Iceberg directo
+    (storage=None es valido solo para Repair, runtime.py:269-271;
+    RepairStrategy escribe `ctx.storage.save_ohlcv`, repair.py:488).
+- **Impacto actual (comportamiento observable hoy):** fallo VISIBLE, no
+  silencioso. Con `_chunk_converter=None`, cualquier chunk aceptado por el
+  quality gate en modo incremental/backfill dispara `RuntimeError` en
+  `get_chunk_converter()` ANTES de `publish_chunk`. En backfill el error se
+  loguea como `error_type="fatal"` ("cursor NO avanzado, abortando",
+  backfill.py:457-468) y re-lanza; en incremental propaga sin catch. El
+  cursor no avanza, no se publica nada en `ohlcv.raw`, y `bronze_writer`
+  (consumer de `ohlcv.raw`, bronze_writer.py:77) nunca recibe datos de este
+  pipeline. Resultado: la ingestion OHLCV incremental/backfill de
+  OHLCVPipeline no persiste datos via Kappa en el estado actual.
+- **Riesgo latente (peligro futuro, NO ocurre hoy):** si se remedia SOLO el
+  `_chunk_converter` (para eliminar el RuntimeError) sin conectar el
+  publisher real, `NullPublisher.publish_chunk` retorna `True` (exito
+  simulado, publisher_port.py:74-76; flip `return False`→`True` en fe4525f,
+  17-may-2026). Con eso el pipeline reportaria exito completo: cursor avanza,
+  `rows_ingested_inc`, event_bus publica OHLCVBatchReceived, `KafkaMetrics`
+  de productor no existen como publisher real — pero **ningun evento llega a
+  Kafka ni a Iceberg** → perdida silenciosa de datos OHLCV. Este es el
+  escenario de mayor dano y el que debe prevenir la remediacion.
+- **Causa raiz:** la inyeccion de dependencias Kappa se perdio en la cadena
+  de refactors de mayo-2026. `fe4525f` (17-may) convirtio el publisher nulo
+  en "exito simulado" para tests. `673d1b0` (20-may) cambio el default de
+  `None` a `NullPublisher()` en OHLCVPipeline con comentario "Inyectado por
+  CompositionRoot" que nunca fue cierto. `1dd4f75` (19-may) agrego el wiring
+  de `_build_kafka_publisher` via `**pipeline_kwargs`, pero `7162784`
+  (20-may, Composition Root) cambio la firma de `_build_ohlcv` y a partir de
+  ahi los kwargs provocaban TypeError. `9e659be` (20-may, "fix: mypy")
+  elimino el wiring (publisher + chunk_converter) del factory para silenciar
+  el conflicto, dejando `_build_kafka_publisher` sin callers y
+  `_chunk_converter` en None. Desde entonces el path quedo en el estado
+  actual: fail-fast visible, con riesgo latente de exito simulado.
+- **Condiciones de reproduccion del riesgo latente (perdida silenciosa):**
+  1) inyectar `_chunk_converter` (PassthroughChunkConverter u otro) en
+  `PipelineContext` DESDE `_build_ohlcv`, sin inyectar publisher real; 2)
+  correr incremental/backfill con calidad OK; 3) `NullPublisher` devuelve
+  True sin emitir a Kafka; 4) cursor + metricas reportan exito. Sin un test
+  que verifique la publicacion real (o un fail-fast en publisher Null en
+  produccion), la perdida es indetectable por el pipeline.
+- **Referencias:** pipeline_factory.py:156/190; ohlcv_pipeline.py:248/257;
+  runtime.py:298/311-323; incremental.py:106/116; backfill.py:427/437;
+  repair.py:488; publisher_port.py:74-76; bronze_writer.py:10/77;
+  entrypoint.py:77; main.py:149; docker-compose.yml:358; commits fe4525f,
+  673d1b0, 1dd4f75, 7162784, 9e659be. Relacionado: F-027/B-43 (KAFKA_ENABLED
+  huerfana — mismo path Kafka OHLCV sin consumidor de la variable; si se
+  restaura el wiring real, KAFKA_ENABLED deja de estar huerfana y pasa a
+  gobernar `integrations.kafka.enabled`, ver 2039f4d que ya lee AppConfig).
+- **Remediacion propuesta (PENDIENTE — decision de Luis, NO elegida aqui):**
+  - Opcion A — cablear Kappa real: inyectar `KafkaOHLCVPublisher` (via el
+    `_build_kafka_publisher` existente) + `_chunk_converter` desde
+    `_build_ohlcv`, eliminar el default NullPublisher en produccion, validar
+    que `bronze_writer` consume `ohlcv.raw` y que `KAFKA_ENABLED`/`enabled`
+    gobierna el flag. Restaura el contrato documentado en 0002/ADR-0013.
+  - Opcion B — fail-fast sin silencio: quitar el default NullPublisher o
+    hacer que `publish_chunk` nulo falle en entornos no-test, de modo que la
+    perdida silenciosa sea estructuralmente imposible aunque falte el wiring.
+  - Opcion C — degradacion explicita configurada: publisher no-Null
+    desactivado por config con alerta/error visible y cursor segun sea el
+    caso (no avanzar o avanzar solo con storage directo arriba).
+  - Requisito transversal: test/guard que verifique que en runtime de
+    produccion el publisher publicado NO es NullPublisher y que el topic
+    `ohlcv.raw` recibe eventos del pipeline (contracara de F-027/B-43).
+- **Requiere:** decision de arquitectura (ADR nuevo o addendum) + wiring en
+  composition root + tests de integración con Kafka real. Relaciona F-027/B-43.

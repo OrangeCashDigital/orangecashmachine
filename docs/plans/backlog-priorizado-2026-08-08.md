@@ -9,13 +9,35 @@ alternativa. Ante cualquier discrepancia, el audit.md y tracking.yaml mandan.
 
 ## 🔴 Capital / data-integrity risk
 
-*(ninguno detectado en esta auditoría)*
+*(ver F-031 abajo — detectado 2026-08-10, ver nota de categoría que sigue)*
 
 Criterio de entrada a esta categoría: el sistema opera o podría operar con datos
 incorrectos/stale/corruptos **sin saberlo**, con riesgo directo de decisión de
 trading errónea. Los hallazgos de hoy son de *ausencia de detección* ante fallos
 ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
 (gap detection) se posterga indefinidamente, reevaluar si escala a esta categoría.
+
+### F-031 / B-46 — El path Kappa OHLCV no está conectado: publisher Null + chunk_converter sin cablear (2026-08-10)
+- **Severidad:** P1 | **Estado:** VERIFIED → **PENDIENTE** (remediación: decisión A/B/C, no elegida)
+- `OHLCVPipeline` (incremental/backfill) publica a `NullPublisher()` hardcodeado
+  (ohlcv_pipeline.py:248) y `_chunk_converter` no se inyecta (runtime.py:298);
+  `_build_kafka_publisher` (pipeline_factory.py:156) no tiene callers. Nada llega a
+  `ohlcv.raw` desde este pipeline; hoy las strategies fallan con `RuntimeError` en
+  `get_chunk_converter()` ANTES de `publish_chunk` (incremental.py:106,
+  backfill.py:427). Estado actual: fallo **visible** (no corrupto).
+- **Riesgo latente (mayor daño):** si se remedia solo el converter sin publisher
+  real, `NullPublisher.publish_chunk` retorna `True` → éxito simulado → cursor
+  avanza, métricas suben, pero ningún evento llega a Kafka/Iceberg = **pérdida
+  silenciosa de datos OHLCV** (bronze_writer de `ohlcv.raw` nunca recibe nada).
+- **Decisión pendiente:** A) cablear Kappa real (KafkaOHLCVPublisher +
+  `_chunk_converter` desde composition root); B) fail-fast sin silencio (Null
+  publisher falla fuera de tests); C) degradación explícita configurada.
+  Requiere decisión de arquitectura (ADR nuevo o addendum a ADR-0013/ADR-0014) +
+  guard/test que verifique publisher != Null en producción.
+- **Contradice:** 0002 "migración completa", ADR-0013/0014 "todo camino termina en
+  Kafka", ADR-0022 addendum ("main.py gobierna ingestión polling→Bronze"),
+  ADR-0023 nota (bronze_writer de `ohlcv.raw` como patrón existente sin productor).
+  Relacionado: F-027/B-43 (KAFKA_ENABLED).
 
 ---
 
@@ -72,6 +94,11 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
 
 ## Recomendación de secuencia
 
+0. **F-031 / B-46** (2026-08-10, data-integrity) — primero evaluar: el path Kappa
+   OHLCV completo (Incremental → `ohlcv.raw` → Bronze) no existe hoy. Decidir
+   A/B/C (remediación pendiente) antes de cualquier otra cosa del pipeline de
+   mercado, porque define si OHLCV vuelve a publicarse (A), se prohíbe el éxito
+   simulado (B) o se degrada explícitamente (C). Bloque 0, previo a F-010.
 1. **F-010** primero — menor esfuerzo, cierra el gap de "nadie se entera a las 3AM"
    sin requerir decisiones de diseño nuevas.
 2. **F-009** — mayor esfuerzo, requiere ADR; evaluar si el volumen actual del

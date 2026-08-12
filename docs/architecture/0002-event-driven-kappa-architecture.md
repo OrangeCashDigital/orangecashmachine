@@ -12,6 +12,22 @@
 > **Nota de estado (2026-08-02):** Ver el log de verificación
 > `docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md`, que supersede la Decisión 4 y el Pendiente #1 de este documento. Dagster fue eliminado por completo del código (commit `9eb6de3`, posterior a este ADR) — la Decisión 4 de abajo ("Dagster permanece instalado y disponible...") ya no refleja el sistema real. Dicha eliminación incluye su retirada de `docker-compose` (verificado 2026-08-05). El Pendiente #1 (¿systemd timers alcanza?) quedó resuelto de facto por la eliminación. La ruta `infrastructure/event_bus/` mencionada en la Decisión 2 también está corregida en el log a su ubicación real.
 
+> **Nota de estado (2026-08-10) — F-031/B-46:** La afirmación del Contexto de que
+> la migración Kappa "está completa para el pipeline REST actual (`OHLCVPipeline`
+> con `IncrementalStrategy`, `BackfillStrategy`, `RepairStrategy`)" **ya no se
+> sostiene**: en HEAD, `OHLCVPipeline` hardcodea `NullPublisher()` como publisher
+> (ohlcv_pipeline.py:248), `_chunk_converter` no se inyecta (runtime.py:298) y
+> `_build_kafka_publisher` (pipeline_factory.py:156) no tiene callers, por lo que
+> `ctx.publisher.publish_chunk()` de las strategies incremental/backfill nunca
+> llega a un productor Kafka real — de hecho hoy fallan con `RuntimeError` en
+> `get_chunk_converter()` ANTES de publicar (incremental.py:106, backfill.py:427).
+> Solo los datos aceptados por el quality gate pasan a publicar, pero el destino
+> de esa publicación es un Null publisher: la invariancia "solo datos aceptados
+> llegan a Kafka" no se está materializando en `ohlcv.raw`. Registrado en
+> F-031/B-46 (docs/audits/2026-08-08-streaming-canary-audit.md, docs/plans/
+> tracking.yaml); este documento es serie heredada y se conserva como registro
+> histórico, no actualiza su cuerpo.
+
 ## Contexto
 
 OCM comenzó como un pipeline REST/CCXT con orquestación Prefect y luego Dagster,

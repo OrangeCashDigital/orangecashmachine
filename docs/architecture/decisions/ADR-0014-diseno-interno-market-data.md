@@ -269,3 +269,19 @@ mismo `composition_root` (no sub-root nuevo, BC-38). `enable` global default
 - ADRs relacionados: ADR-0013 (ownership), ADR-0004 (BC-47 mercado datos),
   ADR-0007 (equivalencia de capas), ADR-0003 (composition roots), y
   `docs/architecture/feed-model.md` (§7/§8).
+
+## Nota de discrepancia (2026-08-10) — F-031 / B-46
+
+Este ADR asume "todo camino termina en el mismo log operacional (Kafka
+SSOT)" y lista `ports/outbound/publisher_port.py` como "publisher común
+(existe)". Válido en el papel; en el código, el camino de publicar OHLCV a
+Kafka **no está conectado hoy**: `OHLCVPipeline` instancia `NullPublisher()`
+como default local (ohlcv_pipeline.py:248) y `_chunk_converter` no se
+inyecta (pipeline_factory._build_ohlcv no les pasa publisher ni converter),
+de modo que `KafkaOHLCVPublisher` (`_build_kafka_publisher`,
+pipeline_factory.py:156) es código muerto sin callers y las strategies
+incremental/backfill fallan con RuntimeError antes de publicar (F-031/B-46).
+No invalida la decisión de estructura interna (el esqueleto `external_ingestion`
+y sus puertos siguen siendo los correctos); es una falla de wiring en la
+realización física, registrada en F-031/B-46 con remediación pendiente de
+decisión.

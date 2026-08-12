@@ -159,3 +159,21 @@ Pendiente sin verificar: wording "uv run live-hydra" (ítem 4 original).
 Lección operativa: este documento, por su propia naturaleza de
 verificación puntual, tiende al mismo drift que audita. Re-verificar
 periódicamente, no asumir vigencia indefinida.
+
+---
+
+## Adenda — re-verificación 2026-08-10 (ADR-0002, filas OHLCV)
+
+Re-verificación de la sección ADR-0002 motivada por F-031/B-46 (2026-08-10,
+`docs/audits/2026-08-08-streaming-canary-audit.md` + `docs/plans/tracking.yaml`).
+
+| Afirmación (de la tabla ADR-0002) | Verificación original (2026-08-02) | Re-verificación (2026-08-10) |
+|---|---|---|
+| `ohlcv.raw` como SSOT cross-proceso | ✅ `TOPIC_OHLCV_RAW` en `shared/kafka/topics.py:64` | ⚠️ **Constante existe pero no se produce.** `OHLCVPipeline` hardcodea `NullPublisher()` (ohlcv_pipeline.py:248), `_build_kafka_publisher()` (pipeline_factory.py:156) no tiene callers. El topic está definido pero ningún flujo de producción publica hoy. |
+| Quality gate ANTES de publicar a Kafka | ✅ `ctx.quality.run` (L77) → `ctx.publisher.publish_chunk` (L116) | ⚠️ **El orden de llamadas es correcto pero el destino es un Null publisher.** Además `ctx.get_chunk_converter()` (L106) lanza `RuntimeError` antes de publicar cuando `_chunk_converter` no está inyectado (default `None`, runtime.py:298) — hoy las strategies no llegan siquiera a `publish_chunk`. |
+
+**Lectura:** la afirmación formal del ADR-0002 (orden Quality→Kafka) sigue
+siendo la intención de diseño, pero la aserción "Confirmado en código" era
+incompleta: no se comprobó qué publisher estaba cableado. La fila de la
+tabla original queda supersedida por F-031/B-46. Re-verificación hecha
+contra HEAD en 2026-08-10.

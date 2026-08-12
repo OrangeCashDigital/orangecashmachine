@@ -360,3 +360,17 @@ Alcance del MVP (`apps/app/cli/streaming_hydra.py`, F3.5b en tracking.yaml):
 
 El capacity planning real (F3.5c) depende de que este canary esté
 corriendo bajo systemd; no es medible antes.
+
+## Nota de discrepancia (2026-08-10) — F-031 / B-46
+
+El addendum afirma que `main.py` "gobierna ingestión polling hacia
+Bronze/Iceberg para servir `/ohlcv/...`". Precisión requerida: lo que
+`main.py` gobierna es el arranque de `OHLCVPipeline` (mismo composition
+root), pero **ese pipeline hoy no persiste datos**: `OHLCVPipeline` hardcodea
+`NullPublisher()` (ohlcv_pipeline.py:248), `_chunk_converter` no se inyecta
+(runtime.py:298) y las strategies incremental/backfill lanzan `RuntimeError`
+en `get_chunk_converter()` antes de `publish_chunk` (incremental.py:106,
+backfill.py:427). Ningún evento llega a `ohlcv.raw` ni a Bronze/Iceberg por
+esta vía (y `storage` es opcional solo para Repair, runtime.py:269). Detalle
+en F-031/B-46; la descripción de `main.py` como servicio FastAPI y la
+separación streaming/polling siguen siendo correctas.

@@ -731,18 +731,19 @@ hallazgos:
     prioridad: BAJA
     estado: PENDIENTE
     estado_auditoria: CONFIRMADO
-    evidencia: "env_vars.py declara KAFKA_ENABLED con docstring extenso sobre feature flag Kappa; busqueda exhaustiva sin consumidores reales en packages/apps/ocm. Streaming canary funciona sin que esta variable este seteada ni leida"
-    solucion: "Eliminar la constante si se confirma definitivamente sin uso, o conectarla al path real si la intencion de diseno original sigue vigente. Decision de Luis pendiente"
+    evidencia: "env_vars.py declara KAFKA_ENABLED con docstring extenso sobre feature flag Kappa; busqueda exhaustiva sin consumidores reales en packages/apps/ocm. Streaming canary funciona sin que esta variable este seteada ni leida. Vinculo con F-031/B-46 (2026-08-10): KAFKA_ENABLED no tiene consumidores porque el path Kappa OHLCV nunca se conecto; KafkaOHLCVPublisher (si existiera wiring) respetaria integrations.kafka.enabled via AppConfig (_build_kafka_publisher, pipeline_factory.py:166) — builder sin callers"
+    solucion: "Eliminar la constante si se confirma definitivamente sin uso, o conectarla al path real si la intencion de diseno original sigue vigente. Decision de Luis pendiente. DECIDIR JUNTO con F-031/B-46: si se aplica Opcion A (wiring Kappa real), KAFKA_ENABLED deja de ser huerfana y pasa a gobernar el flag via AppConfig — la eliminacion quedaria sin sustento"
     pruebas:
       - "verificacion: grep exhaustivo repetido tras cualquier cambio futuro relacionado a Kafka enable/disable"
+      - "verificacion: tras resolver F-031, repetir grep de KAFKA_ENABLED para confirmar si ahora tiene consumidor y actualizar B-43 en consecuencia"
     adr_relacionado: null
-    riesgo_residual: "Bajo — documentacion enganosa, sin efecto funcional real"
+    riesgo_residual: "Bajo — documentacion enganosa, sin efecto funcional real; acoplado a la decision de F-031/B-46"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-027"}
       backlog: {estado: HECHO, referencia: "B-43 en tracking.yaml"}
       adr: {estado: NO_APLICA, referencia: "limpieza/consistencia de documentacion, no cambio de contrato"}
-      implementacion: {estado: PENDIENTE, referencia: "decision de Luis: eliminar o conectar"}
+      implementacion: {estado: PENDIENTE, referencia: "decision de Luis: eliminar o conectar; acoplado a remediacion F-031"}
       tests: {estado: PENDIENTE, referencia: null}
       ci: {estado: PENDIENTE, referencia: null}
       evidencia: {estado: PENDIENTE, referencia: null}
@@ -792,6 +793,30 @@ hallazgos:
       ci: {estado: NO_APLICA, referencia: "cambio de .env local, no impacta CI"}
       evidencia: {estado: HECHO, referencia: "docker compose ps con 8 servicios healthy, 2026-08-09"}
       cierre: {estado: HECHO, referencia: "F-029 resuelto y verificado 2026-08-09"}
+
+  - id: B-46
+    hallazgo_informe: F-031
+    fase: F2
+    prioridad: ALTA
+    estado: PENDIENTE
+    estado_auditoria: CONFIRMADO
+    evidencia: "Path Kappa OHLCV no conectado en produccion. _build_ohlcv (pipeline_factory.py:190) NO inyecta publisher ni _chunk_converter; OHLCVPipeline hardcodea _publisher=NullPublisher() con comentario falso 'Inyectado por CompositionRoot' (ohlcv_pipeline.py:248); _build_kafka_publisher (pipeline_factory.py:156) sin callers (codigo muerto); PipelineContext._chunk_converter=None (runtime.py:298) -> get_chunk_converter() lanza RuntimeError (runtime.py:311-323). Incremental/Backfill llaman converter antes de publish_chunk (incremental.py:106/116, backfill.py:427/437); storage=None es valido solo para Repair (runtime.py:269-271, repair.py:488). Ambos entrypoints prod: entrypoint.py:77, main.py:149 (docker-compose.yml:358). Broma historica: fe4525f(17-may, Null pub return True), 673d1b0(20-may, default NullPublisher), 1dd4f75(19-may wiring kwargs) roto por 7162784(20-may firma CR) y eliminado por 9e659be(20-may 'fix mypy'). Esta conectado con F-027/B-43 (KAFKA_ENABLED huerfana)"
+    solucion: "PENDIENTE — decision de Luis entre: A) cablear Kappa real (KafkaOHLCVPublisher via _build_kafka_publisher + _chunk_converter desde composition root, validar bronze_writer consume ohlcv.raw, KAFKA_ENABLED gobierna flag); B) fail-fast sin silencio (Null publisher falla fuera de tests — perdida silenciosa estructuralmente imposible); C) degradacion explicita configurada con alerta visible. Transversal: guard/test que verifique publisher!=Null en produccion y evento real en ohlcv.raw"
+    pruebas:
+      - "test: reproduccion del RuntimeError actual (get_chunk_converter) en incremental/backfill; tras remediacion, test de integracion con Kafka real verificando evento en ohlcv.raw"
+      - "verificacion: rg de callers de _build_kafka_publisher = 0 (estado actual, codigo muerto)"
+    adr_relacionado: null
+    riesgo_residual: "Alto si se remedia solo converter sin publisher: NullPublisher.publish_chunk retorna True -> exito simulado -> cursor avanza, metricas suben, pero nada llega a Kafka/Iceberg (perdida silenciosa de datos OHLCV)"
+    fecha_cierre: null
+    cadena:
+      hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-031 (2026-08-10)"}
+      backlog: {estado: HECHO, referencia: "B-46 en tracking.yaml"}
+      adr: {estado: PENDIENTE, referencia: "decision de arquitectura: option A/B/C, ADR nuevo o addendum a 0002/ADR-0013"}
+      implementacion: {estado: PENDIENTE, referencia: "wiring en composition root (pipeline_factory._build_ohlcv)"}
+      tests: {estado: PENDIENTE, referencia: "test integracion Kafka ohlcv.raw + guard publisher no-Null en produccion"}
+      ci: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PENDIENTE, referencia: null}
+      cierre: {estado: PENDIENTE, referencia: null}
 
   - id: B-40
     hallazgo_informe: F-024

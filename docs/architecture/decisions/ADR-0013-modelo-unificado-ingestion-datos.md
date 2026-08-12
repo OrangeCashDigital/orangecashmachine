@@ -113,3 +113,14 @@ específico (futuro ADR-0014) y quedará fuera del alcance de este documento.
 - `ocm/config/schema.py` (`FeedsConfig`, `FeedsKafkaConfig`,
   `ExchangeFeedEntryConfig`)
 - `packages/market_data/infrastructure/bootstrap/composition_root.py`
+
+## Nota de discrepancia (2026-08-10) — F-031 / B-46
+
+La decisión "todo mecanismo de ingestión converge a Kafka como SSOT
+operacional" no se cumple hoy para el camino **polling OHLCV** de
+`external_ingestion`: `OHLCVPipeline` (incremental/backfill) publica a un
+`NullPublisher()` hardcodeado y `_chunk_converter` no está cableado, por lo
+que ningún evento llega a `ohlcv.raw` (ver F-031 / B-46). La intención de
+diseño de este ADR queda intacta — el incumplimiento es de implementación,
+no de decisión. La remediación (cablear Kappa real / fail-fast / degradación
+explícita) está pendiente de decisión en F-031/B-46.
