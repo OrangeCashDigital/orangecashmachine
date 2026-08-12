@@ -249,6 +249,28 @@ escalabilidad (solo con evidencia).
   F2.6c, antes de cualquier decisión de escala. Sin déficit para el canario; umbral de
   invalidación (>50–100 símbolos activos o lag/CPU en F2.6c) documentado como input de
   F2.6d. No requiere ADR nuevo (documento de capacidad, no decisión).
+- **Avance F2.6b (HECHO 2026-08-08):** `apps/app/cli/streaming_hydra.py` — MVP del
+  entrypoint streaming (F3.5b en tracking.yaml), reutiliza CompositionRoot de
+  `market_data` (`build_ws_producers()` → `WSProducerBundle`), shutdown vía
+  `loop.add_signal_handler` + `asyncio.Event`, sin composition root alternativo.
+  983 tests; gates ruff/mypy/lint-imports 49/49. Pendiente operativo: unit systemd
+  (`systemd_reinicia_correctamente` NO_VERIFICADO).
+- **Avance F2.6c (HECHO 2026-08-08, entregable formalizado 2026-08-10):**
+  `docs/planning/fase3.5c-capacity-empirico.md` — canary 30 min bajo arranque
+  manual (Bybit, 3 símbolos PERP, 4 producers WS, depth 50). Medido:
+  **138.5 msg/s (249,380 eventos), 0 errores, CPU 0.00 %, RAM 40.4 MB RSS,
+  latencia procesamiento p50/p99 7.55/33.8 ms, heartbeat 139/139**. Todo muy por
+  debajo del umbral de invalidación de F2.6a. Evidencia cruda completa en
+  `artifacts/f26c/` (canary_30m.log, canary_cpu.csv, pushgateway_{10..30}min.txt).
+- **Avance F2.6d (HECHO 2026-08-10):** decisión de escalabilidad con evidencia —
+  **proceso único (`systemd`) + Kafka local suficiente; NO se crea ADR de escala**
+  (la evidencia empírica no lo justifica). F5 (catalog remoto, Dagster/Flink,
+  DuckDB) queda bloqueado salvo re-medición que cruce el umbral (>50–100 libros
+  activos o lag/CPU en tensión). Tracking: `f2_6d_decision_escalabilidad`
+  (estado HECHO, cierre 2026-08-10).
+- **F2.6 (a–d) CERRADA (2026-08-10):** capacity assessment completo con evidencia
+  empírica; criterio de salida cumplido — ningún entregable de F5 se implementa sin
+  que este assessment demuestre con métricas que la carga excede un solo servidor.
 
 ### F3 — Completar funcionalidades (trading live, 1–2 meses)
 
