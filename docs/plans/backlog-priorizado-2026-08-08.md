@@ -34,6 +34,13 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
   publisher falla fuera de tests); C) degradación explícita configurada.
   Requiere decisión de arquitectura (ADR nuevo o addendum a ADR-0013/ADR-0014) +
   guard/test que verifique publisher != Null en producción.
+- **Actualización 2026-08-12 (Guardrail #3):** `publish_chunk()` migró de bool
+  ambiguo a `PublishResult(SUCCESS|RETRYABLE_FAILURE)` explícito (commit
+  `5724191`) en `publisher_port.py`, `KafkaOHLCVPublisher`, `NullOHLCVPublisher`
+  y los call-sites (`backfill.py`, `incremental.py`). Esto no resuelve la
+  decisión A/B/C pendiente ni el riesgo latente de pérdida silenciosa descrito
+  arriba — solo hace inequívoco el contrato de retorno para cuando se
+  implemente la opción elegida.
 - **Contradice:** 0002 "migración completa", ADR-0013/0014 "todo camino termina en
   Kafka", ADR-0022 addendum ("main.py gobierna ingestión polling→Bronze"),
   ADR-0023 nota (bronze_writer de `ohlcv.raw` como patrón existente sin productor —
