@@ -14,7 +14,8 @@
 #
 # CÓMO AGREGAR UNA REGLA:
 #   1. Definir función _rule_<nombre>(cfg: AppConfig) -> None
-#   2. Agregarla a apply_business_rules() en orden lógico
+#   2. Agregarla a la lista _rules en apply_business_rules() en orden lógico
+#      (el orden es semántico: la más importante primero)
 #   3. Documentar qué viola y cómo corregirlo en el mensaje de error
 # ==============================================================================
 
@@ -63,6 +64,7 @@ def apply_business_rules(cfg: "AppConfig") -> None:
         _rule_order_range_coherent,
         _rule_max_backfill_production,
         _rule_require_confirmation_in_prod,
+        _rule_production_requires_kafka_publisher,
     ]
     for rule in _rules:
         rule(cfg)
@@ -165,4 +167,28 @@ def _rule_require_confirmation_in_prod(cfg: "AppConfig") -> None:
             rule="PRODUCTION_REQUIRE_CONFIRMATION",
             message="safety.require_confirmation=False en environment=production.",
             fix="Setear safety.require_confirmation=true en env/production.yaml.",
+        )
+
+
+def _rule_production_requires_kafka_publisher(cfg: "AppConfig") -> None:
+    """
+    REGLA: producción no puede arrancar con integrations.kafka.enabled=False.
+
+    F-031: si Kafka está deshabilitado en producción, ConcretePipelineFactory
+    no puede construir un publisher real y OHLCVPipeline rechaza el fallback a
+    NullOHLCVPublisher con RuntimeError — pero ese fallo ocurre recién al
+    construir el pipeline, no al arrancar. Esta regla lo adelanta a config-load
+    (L5), con mensaje accionable, en vez de esperar al primer intento de wiring.
+    No reemplaza el guard de pipeline_factory.py (ese sigue cubriendo el caso
+    de Kafka habilitado pero el broker caído en runtime).
+    """
+    if cfg.environment.name == "production" and not cfg.integrations.kafka.enabled:
+        raise ConfigRuleViolation(
+            rule="PRODUCTION_REQUIRES_KAFKA_PUBLISHER",
+            message=(
+                "environment.name=production con integrations.kafka.enabled=False. "
+                "OHLCVPipeline no puede construir un publisher real y rechaza "
+                "el fallback a NullOHLCVPublisher en producción (F-031)."
+            ),
+            fix="Setear integrations.kafka.enabled=true en env/production.yaml.",
         )
