@@ -18,7 +18,7 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
 (gap detection) se posterga indefinidamente, reevaluar si escala a esta categoría.
 
 ### F-031 / B-46 — El path Kappa OHLCV no está conectado: publisher Null + chunk_converter sin cablear (2026-08-10)
-- **Severidad:** P1 | **Estado:** VERIFIED → **PENDIENTE** (remediación: decisión A/B/C, no elegida)
+- **Severidad:** P1 | **Estado:** VERIFIED → **PARCIALMENTE RESUELTO** (2026-08-12, ver nota abajo; decisión A/B/C aún no elegida formalmente)
 - `OHLCVPipeline` (incremental/backfill) publica a `NullPublisher()` hardcodeado
   (ohlcv_pipeline.py:248) y `_chunk_converter` no se inyecta (runtime.py:298);
   `_build_kafka_publisher` (pipeline_factory.py:156) no tiene callers. Nada llega a
@@ -36,8 +36,22 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
   guard/test que verifique publisher != Null en producción.
 - **Contradice:** 0002 "migración completa", ADR-0013/0014 "todo camino termina en
   Kafka", ADR-0022 addendum ("main.py gobierna ingestión polling→Bronze"),
-  ADR-0023 nota (bronze_writer de `ohlcv.raw` como patrón existente sin productor).
-  Relacionado: F-027/B-43 (KAFKA_ENABLED).
+  ADR-0023 nota (bronze_writer de `ohlcv.raw` como patrón existente sin productor —
+  actualizacion 2026-08-12: esta contradiccion especifica ya no aplica, ver nota abajo).
+  Relacionado: F-027/B-43 (KAFKA_ENABLED, confirmado RESUELTO como efecto colateral).
+- **Actualización verificada (2026-08-12):** wiring confirmado con evidencia real
+  (ver tracking.yaml B-46 y streaming-canary-audit.md). `_build_kafka_publisher()`
+  tiene caller real, construye `KafkaOHLCVPublisher` con `produce()` real contra
+  `ohlcv.raw`; `KafkaOHLCVPublisher` (el productor real de `ohlcv.raw`) ya existe
+  y tiene caller — la nota de ADR-0023 sobre "sin productor" queda desactualizada.
+  Correccion de rol: `bronze_writer` es el CONSUMIDOR de `ohlcv.raw`, no el
+  productor — son piezas distintas del mismo flujo Kappa. Fail-fast real en
+  produccion impide `NullOHLCVPublisher`. Riesgo residual: fuera de produccion
+  (dev/paper/staging) sin Kafka, el pipeline aun cae a `NullOHLCVPublisher`
+  (perdida silenciosa posible ahi). Decision A/B/C formal sigue pendiente — el
+  codigo ya implementa algunas propiedades de A y B, pero la politica definitiva
+  para entornos no productivos no fue formalizada como decision de arquitectura
+  en ningun ADR.
 
 ---
 
@@ -94,11 +108,14 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
 
 ## Recomendación de secuencia
 
-0. **F-031 / B-46** (2026-08-10, data-integrity) — primero evaluar: el path Kappa
-   OHLCV completo (Incremental → `ohlcv.raw` → Bronze) no existe hoy. Decidir
-   A/B/C (remediación pendiente) antes de cualquier otra cosa del pipeline de
-   mercado, porque define si OHLCV vuelve a publicarse (A), se prohíbe el éxito
-   simulado (B) o se degrada explícitamente (C). Bloque 0, previo a F-010.
+0. **F-031 / B-46** (2026-08-10, data-integrity) — **actualizado 2026-08-12:**
+   el path Kappa OHLCV completo (Incremental → `ohlcv.raw` → Bronze) ya esta
+   cableado y verificado en produccion (ver nota en la seccion de detalle
+   arriba). Pendiente real: decidir formalmente A/B/C (el codigo ya implementa
+   algunas propiedades de A y B, pero la politica definitiva para entornos no
+   productivos no fue formalizada como decision de arquitectura en ningun ADR)
+   para cerrar el riesgo residual fuera de produccion. Ya no bloquea F-010 de
+   la misma forma — reevaluar prioridad relativa.
 1. **F-010** primero — menor esfuerzo, cierra el gap de "nadie se entera a las 3AM"
    sin requerir decisiones de diseño nuevas.
 2. **F-009** — mayor esfuerzo, requiere ADR; evaluar si el volumen actual del

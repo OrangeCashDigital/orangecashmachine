@@ -806,14 +806,14 @@ hallazgos:
       - "test: reproduccion del RuntimeError actual (get_chunk_converter) en incremental/backfill; tras remediacion, test de integracion con Kafka real verificando evento en ohlcv.raw"
       - "verificacion: rg de callers de _build_kafka_publisher = 0 (estado actual, codigo muerto)"
     adr_relacionado: null
-    riesgo_residual: "Alto si se remedia solo converter sin publisher: NullPublisher.publish_chunk retorna True -> exito simulado -> cursor avanza, metricas suben, pero nada llega a Kafka/Iceberg (perdida silenciosa de datos OHLCV)"
+    riesgo_residual: "Mitigado en produccion: RuntimeError fail-fast en OHLCVPipeline.__init__ y en pipeline_factory._build_ohlcv impide NullOHLCVPublisher cuando environment=production. Riesgo vivo confirmado fuera de produccion (dev/paper/staging sin Kafka disponible): NullOHLCVPublisher.publish_chunk() retorna True sin escribir nada -> cursor avanza, metricas de exito suben, dato descartado en silencio (solo un logging.warning). Docstring de NullOHLCVPublisher dice 'SOLO para tests unitarios' pero pipeline_factory._build_ohlcv lo usa tambien en runtime fuera de produccion. Hallazgo nuevo: comentario en market_data/main.py:239-240 ('modo degradado escribe directo a Iceberg via ctx.kafka_producer=None path') es incorrecto segun el codigo verificado -- NullOHLCVPublisher no escribe a Iceberg ni a ningun lado, solo descarta el chunk."
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-031 (2026-08-10)"}
       backlog: {estado: HECHO, referencia: "B-46 en tracking.yaml"}
       adr: {estado: PENDIENTE, referencia: "decision de arquitectura: option A/B/C, ADR nuevo o addendum a 0002/ADR-0013"}
-      implementacion: {estado: PENDIENTE, referencia: "wiring en composition root (pipeline_factory._build_ohlcv)"}
-      tests: {estado: PENDIENTE, referencia: "test integracion Kafka ohlcv.raw + guard publisher no-Null en produccion"}
+      implementacion: {estado: PARCIAL, referencia: "wiring verificado en pipeline_factory._build_ohlcv: publisher y chunk_converter sin default implicito, fail-fast si None, _build_kafka_publisher() con caller real confirmado, KafkaOHLCVPublisher.publish_chunk() confirmado con await producer.produce() real contra ohlcv.raw. Pendiente: NullOHLCVPublisher sigue permitiendo perdida silenciosa fuera de produccion; comentario falso en main.py:239-240 sin corregir"}
+      tests: {estado: PENDIENTE, referencia: "falta test integracion Kafka ohlcv.raw real (bloqueado hoy por broker no disponible en entorno de test); falta test que NullOHLCVPublisher no se use fuera de tests unitarios"}
       ci: {estado: PENDIENTE, referencia: null}
       evidencia: {estado: PENDIENTE, referencia: null}
       cierre: {estado: PENDIENTE, referencia: null}

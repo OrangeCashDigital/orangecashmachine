@@ -124,3 +124,23 @@ que ningún evento llega a `ohlcv.raw` (ver F-031 / B-46). La intención de
 diseño de este ADR queda intacta — el incumplimiento es de implementación,
 no de decisión. La remediación (cablear Kappa real / fail-fast / degradación
 explícita) está pendiente de decisión en F-031/B-46.
+
+### Actualización (2026-08-12) — cableado verificado, riesgo residual abierto
+
+El diagnóstico de "Kappa no está cableado" ya no aplica: `OHLCVPipeline` →
+`KafkaOHLCVPublisher` (productor real, `await producer.produce()` confirmado) →
+Kafka (`ohlcv.raw`) → `bronze_writer` (consumidor real, confirmado activo en
+`main.py`) → Bronze/Iceberg, con evidencia verificada (ver tracking.yaml B-46,
+streaming-canary-audit.md F-031). `_build_kafka_publisher()` tiene caller real
+y el fail-fast en producción impide arrancar accidentalmente con
+`NullOHLCVPublisher`. La intención de este ADR ("todo camino converge a
+Kafka") se cumple en producción.
+
+Riesgo residual sin cerrar: `NullOHLCVPublisher` sigue existiendo y retorna
+`True` sin publicar nada; en development/paper/staging sin Kafka disponible,
+el pipeline cae a esa clase (fail-soft documentado), lo que puede producir
+éxito simulado y pérdida silenciosa fuera de producción. El código ya
+implementa algunas propiedades de las opciones A y B discutidas en F-031/B-46,
+pero la política definitiva para entornos no productivos no ha sido
+formalizada como decisión de arquitectura. F-031/B-46 permanece
+PARCIALMENTE RESUELTO hasta que esa política se decida y documente.

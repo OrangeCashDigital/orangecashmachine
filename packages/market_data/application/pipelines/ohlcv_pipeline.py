@@ -38,9 +38,10 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.exchange_client import ExchangeClientPort
     from market_data.ports.outbound.throttle import ThrottlePort
 
+from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
 from market_data.ports.outbound.metrics import RepairMetricsPort
 from market_data.ports.outbound.publisher import (
-    NullPublisher,
+    NullOHLCVPublisher,
     OHLCVPublisherPort,
 )
 from ocm.observability import bind_pipeline
@@ -192,6 +193,9 @@ class OHLCVPipeline(PipelineTriggerPort):
         throttle: "Optional[ThrottlePort]" = None,
         event_bus: "Optional[EventBusPort]" = None,
         repair_metrics: Optional[RepairMetricsPort] = None,
+        publisher: Optional[OHLCVPublisherPort] = None,
+        chunk_converter: Optional[OHLCVChunkConverterPort] = None,
+        environment: str = "development",
     ) -> None:
         # Fail-fast: dependencias de infraestructura obligatorias.
         # OHLCVPipeline no puede importar infrastructure/ ni adapters/ (DIP · BC-05).
@@ -217,6 +221,35 @@ class OHLCVPipeline(PipelineTriggerPort):
                 "OHLCVPipeline: 'repair_metrics' es obligatorio. "
                 "Inyectar PrometheusRepairMetrics desde el composition root "
                 "(market_data.infrastructure.bootstrap.pipeline_factory)."
+            )
+        # F-031 / Kappa: publisher y chunk_converter ya NO tienen default implícito.
+        # Antes: OHLCVPipeline construía NullOHLCVPublisher() internamente sin que
+        # pipeline_factory pudiera inyectar Kafka real — ver F-031 en tracking.yaml.
+        if publisher is None:
+            raise TypeError(
+                "OHLCVPipeline: 'publisher' es obligatorio. Inyectar OHLCVPublisherPort "
+                "(KafkaOHLCVPublisher en produccion; NullOHLCVPublisher solo permitido "
+                "explicitamente en tests/dev) desde el composition root "
+                "(market_data.infrastructure.bootstrap.pipeline_factory._build_ohlcv)."
+            )
+        if chunk_converter is None:
+            raise TypeError(
+                "OHLCVPipeline: 'chunk_converter' es obligatorio. Inyectar "
+                "OHLCVChunkConverterPort (PassthroughChunkConverter) desde el "
+                "composition root (market_data.infrastructure.bootstrap.pipeline_factory)."
+            )
+        # F-031: NullOHLCVPublisher esta PROHIBIDO en produccion. Sin este guard,
+        # publish_chunk() retorna True sin publicar nada a Kafka y el cursor avanza
+        # como si el dato hubiera llegado al topic — exito silencioso con datos
+        # perdidos. Ver docs/architecture/decisions/ (F-031) y
+        # tests/architecture/test_kappa_publisher_wiring.py.
+        _environment_normalized = (environment or "development").strip().lower()
+        if _environment_normalized == "production" and isinstance(publisher, NullOHLCVPublisher):
+            raise RuntimeError(
+                "OHLCVPipeline: NullOHLCVPublisher no puede usarse con "
+                f"environment={_environment_normalized!r}. Verificar "
+                "integrations.kafka.enabled y la disponibilidad del broker Kafka "
+                "en AppConfig — ver ConcretePipelineFactory._build_kafka_publisher()."
             )
 
         self.symbols = symbols
@@ -245,8 +278,6 @@ class OHLCVPipeline(PipelineTriggerPort):
                 "Inyectar QualityPipeline desde ConcretePipelineFactory (composition root). "
                 "Ver infrastructure/bootstrap/pipeline_factory.py._build_ohlcv()."
             )
-        _publisher: OHLCVPublisherPort = NullPublisher()  # Inyectado por CompositionRoot
-
         self._ctx = PipelineContext(
             fetcher=fetcher,
             cursor=cursor,
@@ -254,10 +285,11 @@ class OHLCVPipeline(PipelineTriggerPort):
             exchange_id=self._exchange_id,
             market_type=self.market_type,
             start_date=start_date,
-            publisher=_publisher,
+            publisher=publisher,
             metrics=metrics,
             gap_registry=gap_registry,  # None = degradado (sin Redis — inyectar desde composition root)
             event_bus=event_bus,  # None = sin observador (SafeOps — comportamiento actual sin cambios)
+            _chunk_converter=chunk_converter,
         )
 
         self._strategies: dict[PipelineMode, PipelineStrategy] = {

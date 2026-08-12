@@ -24,7 +24,7 @@ Principios: DIP · SRP · KISS · SafeOps · Fail-Fast
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig
@@ -201,10 +201,17 @@ class ConcretePipelineFactory:
 
         Notas de cableado
         -----------------
-        - publisher: OHLCVPipeline lo gestiona internamente (NullPublisher por
-          defecto). No se pasa como kwarg — no es parte del contrato público.
-        - _chunk_converter: vive en PipelineContext, no en OHLCVPipeline.__init__.
-          Se inyecta via ctx si la estrategia lo necesita.
+        - publisher: inyectado explícitamente vía kwarg. En producción
+          (cfg.environment.name == "production") DEBE ser un publisher Kafka
+          real (_build_kafka_publisher()) — NullOHLCVPublisher está prohibido
+          y OHLCVPipeline.__init__ lo rechaza con RuntimeError. Fuera de
+          producción, si Kafka está deshabilitado o no disponible, se cae a
+          NullOHLCVPublisher explícitamente (modo degradado documentado).
+          Ver F-031 en tracking.yaml.
+        - chunk_converter: inyectado explícitamente vía kwarg (antes vivía
+          únicamente en PipelineContext con default None → RuntimeError en
+          get_chunk_converter() al primer uso). Implementación canónica:
+          PassthroughChunkConverter.
         - cast(ExchangeClientPort): CCXTAdapter satisface ExchangeClientPort
           estructuralmente (runtime_checkable Protocol). mypy no infiere subtyping
           desde ABC sin anotación explícita en la clase concreta — cast es correcto.
@@ -213,6 +220,9 @@ class ConcretePipelineFactory:
             HistoricalFetcherAsync,
         )
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
+        from market_data.adapters.outbound.storage.chunk_converter import (
+            PassthroughChunkConverter,
+        )
         from market_data.application.pipelines.ohlcv_pipeline import OHLCVPipeline
         from market_data.application.quality.pipeline import QualityPipeline
         from market_data.application.use_cases.ohlcv_transformer import OHLCVTransformer
@@ -221,9 +231,11 @@ class ConcretePipelineFactory:
             PrometheusRepairMetrics,
         )
         from market_data.infrastructure.quality.anomaly_registry import default_registry
+        from market_data.ports.outbound.chunk_converter import OHLCVChunkConverterPort
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
         from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
         from market_data.ports.outbound.metrics import MetricsPort, RepairMetricsPort
+        from market_data.ports.outbound.publisher import NullOHLCVPublisher, OHLCVPublisherPort
         from market_data.ports.outbound.quality_pipeline import QualityPipelinePort
         from market_data.ports.outbound.state import (
             AsyncCursorStorePort,
@@ -264,6 +276,39 @@ class ConcretePipelineFactory:
         if not request.start_date:
             raise ValueError(f"PipelineRequest.start_date es obligatorio para pipeline='ohlcv'. Request: {request}")
 
+        # F-031 / Kappa: wiring explícito de publisher + chunk_converter.
+        # Antes: OHLCVPipeline construía NullOHLCVPublisher() internamente y nunca
+        # llamaba a _build_kafka_publisher() (código muerto) → riesgo de éxito
+        # silencioso (NullOHLCVPublisher.publish_chunk() retorna True sin publicar).
+        environment_name = self._cfg.environment.name
+        is_production = str(environment_name).strip().lower() == "production"
+
+        chunk_converter = cast(OHLCVChunkConverterPort, PassthroughChunkConverter())
+
+        publisher = cast(Optional[OHLCVPublisherPort], self._build_kafka_publisher())
+        if publisher is None:
+            if is_production:
+                # Fail-Fast: en producción NUNCA se cae a NullOHLCVPublisher —
+                # eso simularía éxito y descartaría OHLCV sin publicar a Kafka.
+                raise RuntimeError(
+                    "ConcretePipelineFactory._build_ohlcv: no se pudo construir un "
+                    "publisher Kafka real en producción (environment="
+                    f"{environment_name!r}). Verificar integrations.kafka.enabled "
+                    "y la disponibilidad del broker — ver logs de "
+                    "_build_kafka_publisher() para la causa raíz. NullOHLCVPublisher "
+                    "está prohibido en producción (F-031)."
+                )
+            # Fuera de producción: degradación explícita y documentada, nunca silenciosa.
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "ConcretePipelineFactory._build_ohlcv: Kafka no disponible/deshabilitado "
+                "en environment=%r — usando NullOHLCVPublisher (modo degradado, "
+                "solo permitido fuera de producción).",
+                environment_name,
+            )
+            publisher = cast(OHLCVPublisherPort, NullOHLCVPublisher())
+
         return OHLCVPipeline(
             symbols=request.symbols,
             timeframes=request.timeframes,
@@ -278,6 +323,9 @@ class ConcretePipelineFactory:
             dry_run=request.dry_run,
             auto_lookback_days=request.auto_lookback_days or 3650,
             event_bus=self._build_event_bus_wiring(),
+            publisher=publisher,
+            chunk_converter=chunk_converter,
+            environment=environment_name,
         )
 
     def _build_trades(self, request: Any) -> Any:
