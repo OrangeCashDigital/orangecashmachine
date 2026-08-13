@@ -16,22 +16,41 @@ Flujo
       ↓  poll()
   deserialize() → EventPayload (shared.kafka.schemas.ohlcv — SSOT)
       ↓
-  dedup via event_id (SeenFilter L1 en memoria)
+  dedup check via event_id (L1 en memoria → L2 durable si hay store)
       ↓
   BronzeStorage.append(exchange=event.exchange)  ← exchange del wire, no del constructor
+      ↓  solo si el write fue exitoso:
+  mark_seen durable (L1 + L2) — el event_id queda registrado
       ↓
   commit() offset — at-least-once garantizado
 
-Idempotencia
-------------
-  SeenFilter L1 (en memoria)  — dedup dentro de la sesión del proceso
-  Iceberg merge-on-read        — Silver Dagster deduplica por event_id
+Idempotencia (B-19)
+-------------------
+  L1 SeenFilter (en memoria)  — cache/O(1), muere con el proceso
+  L2 durable (DeduplicationStoreProtocol, p.ej. RedisCursorStore) — sobrevive
+  reinicios y es la autoridad de "ya procesado" cuando está disponible.
+  CompositeSeenFilter combina ambos: L1 hit → skip sin round-trip; L1 miss →
+  consulta L2.
+
+  Nota: el contrato DeduplicationStoreProtocol es check-then-set (get_raw +
+  set_raw). No es una reclamación atómica SETNX — ante dos procesos concurrentes
+  puede haber un duplicado temporal, nunca pérdida silenciosa (fail-open).
+
+  Orden de operaciones (crítico — mark AFTER write):
+    dedup check → write Bronze → mark_seen durable (solo si el write OK).
+  Un fallo del write NO marca el event_id → el retry puede reintentar.
+  La ventana "write exitoso → crash antes de mark_seen" puede producir un
+  duplicado recuperable en el retry (at-least-once + dedup durable), nunca
+  pérdida silenciosa.
 
 Semántica at-least-once
-------------------------
+-----------------------
   CASO A — error de Bronze write:
     No se commitea → se reintenta en el próximo poll.
-    SeenFilter L1 + Iceberg dedup manejan el duplicado.
+    El event_id NO queda marcado (mark-after-write) → el retry reintenta.
+    Si el write llegó a persistir pero el proceso murió antes del mark,
+    el retry escribe un duplicado que el dedup L2 detecta en la siguiente
+    lectura (o Iceberg merge-on-read en Silver).
 
   CASO B — mensaje no deserializable o vacío:
     Va al DLQ → se cuenta como "handled" → sí se commitea.
@@ -55,12 +74,16 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 
 import polars as pl
 from loguru import logger
 
-from market_data.infrastructure.kafka.dedup import SeenFilter
+from market_data.infrastructure.kafka.dedup import (
+    CompositeSeenFilter,
+    DeduplicationStoreProtocol,
+    SeenFilter,
+)
 from market_data.infrastructure.kafka.metrics import KafkaMetrics
 from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
 from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort
@@ -81,6 +104,9 @@ class KafkaBronzeWriter:
     consumer         : KafkaConsumerPort — fuente de mensajes
     bronze_storage   : BronzeStoragePort — escritura Bronze (DIP)
     dlq_producer     : KafkaProducerPort opcional — mensajes no procesables
+    dedup_store      : DeduplicationStoreProtocol opcional — L2 durable
+                       (p.ej. RedisCursorStore). None → solo L1 en memoria
+                       (fail-soft: sin backend no se bloquea el pipeline).
     poll_timeout_ms  : tiempo de espera por poll en ms
     max_poll_records : máximo de mensajes por ciclo
     """
@@ -91,6 +117,7 @@ class KafkaBronzeWriter:
         bronze_storage: BronzeStorage,
         dlq_producer: Optional[KafkaProducerPort] = None,
         metrics: Optional[KafkaMetrics] = None,
+        dedup_store: Optional[DeduplicationStoreProtocol] = None,
         poll_timeout_ms: int = 1_000,
         max_poll_records: int = 500,
     ) -> None:
@@ -100,7 +127,13 @@ class KafkaBronzeWriter:
         self._metrics: KafkaMetrics = metrics or KafkaMetrics()
         self._poll_timeout_ms = poll_timeout_ms
         self._max_poll_records = max_poll_records
-        self._dedup = SeenFilter(max_size=10_000)
+        if dedup_store is not None:
+            # L1 (memoria) como cache + L2 (durable) como autoridad.
+            self._dedup: Union[SeenFilter, CompositeSeenFilter] = CompositeSeenFilter(
+                store=dedup_store, max_size=10_000
+            )
+        else:
+            self._dedup = SeenFilter(max_size=10_000)
         self._running = False
         self._log = logger.bind(component="KafkaBronzeWriter")
 
@@ -216,11 +249,13 @@ class KafkaBronzeWriter:
             await self._send_to_dlq(msg, reason=f"deserialize_error:{exc}")
             return "handled"
 
-        # ── Dedup L1 (en memoria) ─────────────────────────────────────
+        # ── Dedup check (L1 → L2 durable si está disponible) ──────────
+        # B-19: NO marcar aquí. El mark_seen durable ocurre SOLO después
+        # del write exitoso — un fallo del write NO debe consumir el
+        # event_id de forma irreversible (el retry debe poder reintentar).
         if self._dedup.is_duplicate(event.event_id):
             self._log.bind(event_id=event.event_id).debug("bronze_writer_dedup_skip")
             return "handled"
-        self._dedup.mark_seen(event.event_id)
 
         # ── Validar barras ────────────────────────────────────────────
         if not event.bars:
@@ -256,15 +291,6 @@ class KafkaBronzeWriter:
                 exchange=event.exchange,  # FIX B-NEW-06
                 run_id=event.event_id,
             )
-            self._log.bind(
-                event_id=event.event_id,
-                exchange=event.exchange,
-                symbol=event.symbol,
-                timeframe=event.timeframe,
-                bars=len(event.bars),
-                source=event.source,
-            ).info("bronze_written")
-            return "written"
         except Exception as exc:
             self._log.error(
                 "bronze_write_error",
@@ -274,7 +300,23 @@ class KafkaBronzeWriter:
                 timeframe=event.timeframe,
                 error=str(exc),
             )
+            # B-19: write fallido → event_id NO marcado → el retry reintenta.
             return "write_error"
+
+        # ── mark_seen durable SOLO tras write exitoso (B-19) ──────────
+        # Ventana residual: write persistido + crash antes de este mark →
+        # el retry puede escribir un duplicado recuperable (at-least-once
+        # + dedup durable). Nunca pérdida silenciosa.
+        self._dedup.mark_seen(event.event_id)
+        self._log.bind(
+            event_id=event.event_id,
+            exchange=event.exchange,
+            symbol=event.symbol,
+            timeframe=event.timeframe,
+            bars=len(event.bars),
+            source=event.source,
+        ).info("bronze_written")
+        return "written"
 
     async def _send_to_dlq(self, msg, reason: str) -> None:
         """

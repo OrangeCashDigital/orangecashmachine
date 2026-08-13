@@ -267,10 +267,28 @@ async def _bronze_writer_loop() -> None:
         log.warning("bronze_writer_dlq_producer_failed", error=str(exc))
         dlq_producer = None
 
+    # Dedup durable L2 (B-19) — RedisCursorStore satisface
+    # DeduplicationStoreProtocol (get_raw/set_raw).
+    # Fail-soft: si Redis está caído, PersistentSeenFilter opera fail-open
+    # (is_duplicate→False, mark_seen→noop) y la dedup L1 sigue activa.
+    dedup_store = None
+    try:
+        from ocm.runtime.state import build_cursor_store
+
+        dedup_store = build_cursor_store()
+        log.info("bronze_writer_dedup_store_ready — durable L2 activo")
+    except Exception as exc:
+        log.warning(
+            "bronze_writer_dedup_store_failed — L1 only (fail-soft)",
+            error=str(exc),
+        )
+        dedup_store = None
+
     writer = KafkaBronzeWriter(
         consumer=consumer,
         bronze_storage=bronze,
         dlq_producer=dlq_producer,  # type: ignore[arg-type]  # KafkaProducerAdapter implementa KafkaProducerPort
+        dedup_store=dedup_store,  # type: ignore[arg-type]  # RedisCursorStore implementa DeduplicationStoreProtocol
     )
 
     try:

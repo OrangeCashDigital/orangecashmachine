@@ -1128,24 +1128,24 @@ hallazgos:
     hallazgo_informe: H-16
     fase: F4
     prioridad: MEDIA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "Verificado en F0 2026-07-29: kafka_trade_publisher.py:50-51 y kafka_gap_publisher.py:114-115 = enable_idempotence=True + acks=all (sin drift); infrastructure/kafka/dedup.py existe y esta CABLEADO en bronze_writer.py (importa SeenFilter :63, instancia :107, is_duplicate(event.event_id) :220-221). Limitacion: dedup L1 es en memoria (SeenFilter max_size=10000, por sesion de proceso) y no hay claves de idempotencia naturales ni test de reintento -> residuo exactly-once ante reinicios. CONFIRMADO"
-    solucion: "Claves de idempotencia naturales + dedup en Bronze + test de reintento"
+    evidencia: "Verificado en F0 2026-07-29: kafka_trade_publisher.py:50-51 y kafka_gap_publisher.py:114-115 = enable_idempotence=True + acks=all (sin drift); infrastructure/kafka/dedup.py existe y esta CABLEADO en bronze_writer.py (importa SeenFilter :63, instancia :107, is_duplicate(event.event_id) :220-221). Limitacion: dedup L1 es en memoria (SeenFilter max_size=10000, por sesion de proceso) y no hay claves de idempotencia naturales ni test de reintento -> residuo exactly-once ante reinicios. CONFIRMADO. Implementado 2026-08-13 (B-19): mark_seen durable AFTER write exitoso (antes del write -> perdida silenciosa en reintento); dedup_store opcional (DeduplicationStoreProtocol) cableado via CompositeSeenFilter L1+L2 con RedisCursorStore (build_cursor_store, fail-open); sin cambio de contrato publico ni schema de cable."
+    solucion: "Claves de idempotencia naturales + dedup durable en Bronze (L2) + test de reintento"
     pruebas:
       - "test: reintento no duplica en Bronze/Silver"
     adr_relacionado: null
-    riesgo_residual: "Medio"
-    fecha_cierre: null
+    riesgo_residual: "Medio: ventana write OK -> crash antes de mark_seen puede producir duplicado recuperable (at-least-once + dedup durable, no exactamente-once); contrato L2 es check-then-set (get_raw/set_raw), no SETNX atomico"
+    fecha_cierre: 2026-08-13
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-16 — confirmado en F0 2026-07-29"}
       backlog: {estado: HECHO, referencia: "B-19 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: "dedup Bronze"}
-      tests: {estado: PENDIENTE, referencia: "reintento no duplica"}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "packages/market_data/infrastructure/kafka/bronze_writer.py: mark_seen tras write exitoso; dedup_store opcional via CompositeSeenFilter L1+L2; wire en packages/market_data/main.py _bronze_writer_loop (build_cursor_store, fail-soft)"}
+      tests: {estado: HECHO, referencia: "tests/kafka/test_bronze_writer.py::TestBronzeWriterDurableDedup — A-Escrito+marcado durable, B-dup no reprocesa, C-write falla no marca (retry reintenta), D-L2 caido fail-soft, E-store compartido unico procesamiento, F-ventana crash -> duplicado recuperable; backtest defecto confirmado (mark antes del write falla C)"}
+      ci: {estado: HECHO, referencia: "ruff, ruff format, mypy 356 ficheros, lint-imports 49/49 KEPT, pytest 1054 passed (1 fallo pre-existente B-15)"}
+      evidencia: {estado: HECHO, referencia: "Commit fix(market-data): B-19 — durable bronze deduplication"}
+      cierre: {estado: HECHO, referencia: "B-19 H-16 dedup durable Bronze resuelta — mark-after-write + L2 Redis, 1054 tests OK"}
   - id: B-20
     hallazgo_informe: H-11
     fase: F4
