@@ -33,6 +33,7 @@ defaults:
   - risk/risk
   - market_data/feeds
   - market_data/external_ingestion
+  - portfolio/portfolio
   - features
 
   # Entorno (sobreescribe lo anterior)

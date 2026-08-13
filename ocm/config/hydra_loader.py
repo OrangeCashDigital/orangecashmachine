@@ -104,6 +104,7 @@ _MODULE_GLOBS: list[str] = [
     "datasets.yaml",
     "risk/risk.yaml",
     "market_data/feeds.yaml",
+    "market_data/external_ingestion.yaml",
     "portfolio/portfolio.yaml",
     "features.yaml",
 ]

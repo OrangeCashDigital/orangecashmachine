@@ -870,24 +870,27 @@ hallazgos:
     hallazgo_informe: H-05
     fase: F2
     prioridad: ALTA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "config/config.yaml:35 (market_data/external_ingestion) no está en _MODULE_GLOBS (ocm/config/hydra_loader.py:94-109); _MODULE_GLOBS incluye portfolio/portfolio.yaml ausente de config.yaml; tests/config/test_structured_parity.py no existe"
-    solucion: "Derivar _MODULE_GLOBS de config.yaml#defaults; añadir test de paridad"
+    solucion: "Paridad config.yaml#defaults ↔ _MODULE_GLOBS (B-09): añadido market_data/external_ingestion.yaml a _MODULE_GLOBS y portfolio/portfolio a config.yaml#defaults. Tests: tests/ocm/config/test_structured_parity.py (derivan la lista real de config.yaml, sin hardcodeo) + tests/ocm/config/test_external_ingestion_standalone.py (verifican que el standalone loader aplica los YAML). Backtest: ambos tests fallan sin el fix."
     pruebas:
-      - "test: listas de módulos idénticas"
+      - "test: listas de módulos idénticas (config.yaml#defaults ↔ _MODULE_GLOBS)"
+      - "test: standalone carga external_ingestion.sources.coinglass/coinmarketcap del YAML"
+      - "test: standalone carga portfolio.capital_usd=10000.0 del YAML"
+      - "validación: ruff, format, mypy, import-linter (49 KEPT), 214 config tests, suite completa"
     adr_relacionado: null
     riesgo_residual: "Bajo"
-    fecha_cierre: null
+    fecha_cierre: "2026-08-12"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-05"}
       backlog: {estado: HECHO, referencia: "B-09 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: "unificar listas"}
-      tests: {estado: PENDIENTE, referencia: "test de paridad"}
+      implementacion: {estado: HECHO, referencia: "paridad config.yaml#defaults ↔ _MODULE_GLOBS"}
+      tests: {estado: HECHO, referencia: "tests/ocm/config/test_structured_parity.py + test_external_ingestion_standalone.py"}
       ci: {estado: PENDIENTE, referencia: "R7 activada_en_ci"}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: HECHO, referencia: "tests de paridad + funcionales pasan; 214 config tests; validación completa 2026-08-12"}
+      cierre: {estado: HECHO, referencia: "B-09 H-05 paridad config resuelta en PR commit"}
   - id: B-10
     hallazgo_informe: H-20
     fase: F2
