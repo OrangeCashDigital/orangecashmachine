@@ -25,7 +25,10 @@ OCP: intercambiable con InMemoryPositionStore sin tocar PortfolioService.
 
 SafeOps
 -------
-- Todas las operaciones bajo try/except — nunca lanzan al caller.
+- Todas las operaciones bajo try/except — nunca lanzan al caller, salvo
+  PositionIdCollisionError en save() (B-16): colisión de order_id entre
+  posiciones distintas = error de integridad que DEBE ser visible, no
+  atenuado como fallback Silencioso.
 - Errores de conexión logueados con warning, no error (Redis es best-effort).
 - Si Redis no está disponible, retorna estado vacío (Fail-Soft).
 
@@ -41,7 +44,7 @@ from typing import Optional
 
 from loguru import logger
 
-from portfolio.models.position import PositionSnapshot
+from portfolio.models.position import PositionIdCollisionError, PositionSnapshot
 
 # ---------------------------------------------------------------------------
 # Serialización — SSOT: JSON bidireccional para PositionSnapshot
@@ -144,9 +147,34 @@ class RedisPositionStore:
         """
         Persiste posición en Redis.
 
+        Unicidad del order_id (B-16): si ya existe una posición DIFERENTE
+        (distinto symbol/exchange/side) con el mismo order_id, eleva
+        PositionIdCollisionError en vez de sobrescribirla en silencio.
+
         Atomicidad: SET + SADD en pipeline — ambas operaciones o ninguna.
-        SafeOps: nunca lanza.
+        SafeOps: nunca lanza (el guard de colisión se evalúa antes).
         """
+        existing_raw = None
+        try:
+            existing_raw = self._redis.get(self._key(position.order_id))
+        except Exception as exc:
+            # Redis caído: el guard de colisión no puede consultar RED cache →
+            # se omite la comprobación y se cae al try/except de save (que
+            # también fallará y loggeará warning). SafeOps se respeta: estos
+            # errores nunca cruzan la frontera del store.
+            self._log.warning("save collision-check error | order_id={} {}", position.order_id, exc)
+        if existing_raw is not None:
+            existing = _deserialize(existing_raw)
+            if existing is not None and (
+                existing.symbol != position.symbol
+                or existing.exchange != position.exchange
+                or existing.side != position.side
+            ):
+                raise PositionIdCollisionError(
+                    order_id=position.order_id,
+                    existing=existing,
+                    incoming=position,
+                )
         try:
             raw = _serialize(position)
             key = self._key(position.order_id)

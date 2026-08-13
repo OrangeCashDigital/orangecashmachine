@@ -19,6 +19,27 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
+class PositionIdCollisionError(Exception):
+    """
+    Dos posiciones distintas comparten el mismo order_id.
+
+    El order_id es la clave única del PositionStore. Una colisión significa
+    que el segundo save() sobrescribiría una posición abierta por otra
+    (overwrite silencioso = riesgo de portfolio). Los stores deben elevar
+    este error en lugar de sobrescribir (B-16 / H-08).
+    """
+
+    def __init__(self, order_id: str, existing: "PositionSnapshot", incoming: "PositionSnapshot") -> None:
+        self.order_id = order_id
+        self.existing = existing
+        self.incoming = incoming
+        super().__init__(
+            f"PositionIdCollisionError: order_id={order_id!r} ya usado por "
+            f"{existing.symbol}/{existing.side} e intentado por "
+            f"{incoming.symbol}/{incoming.side}"
+        )
+
+
 @dataclass(frozen=True)
 class PositionSnapshot:
     """

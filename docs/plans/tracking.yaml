@@ -1052,24 +1052,28 @@ hallazgos:
     hallazgo_informe: H-08
     fase: F4
     prioridad: ALTA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
-    evidencia: "packages/trading/execution/order.py:94 (order_id = uuid[:8]); clave de posición en portfolio/infra/redis_store.py"
-    solucion: "UUID completo (32 hex) + assert de unicidad en el store"
+    evidencia: "packages/trading/execution/order.py:94 (order_id = uuid[:8]); clave de posición en portfolio/infra/redis_store.py. order_id truncado (32 bits de entropía) = riesgo de colisión a volumen alto → overwrite silencioso de una posición abierta por otra en el PositionStore (riesgo de portfolio)"
+    solucion: "order_id = uuid4() completo (36 chars, RFC 4122) en order.py; los stores (InMemoryPositionStore y RedisPositionStore) elevan PositionIdCollisionError si dos posiciones DISTINTAS comparten order_id en vez de sobrescribir en silencio (defensa en profundidad: protege también ante regresión futura del truncado o IDs externos). PortfolioService.open_position ya captura via try/except SafeOps (log error, no rompe el flujo del callback)"
     pruebas:
-      - "test de colisión en el store"
+      - "test_order_id_generated_is_full_uuid_not_truncated — Order.order_id parsea como UUID4 completo (36 chars)"
+      - "test_memory_store_rejects_distinct_position_same_id — colisión con distinto symbol eleva PositionIdCollisionError"
+      - "test_memory_store_allows_same_identity_resave — re-save de la misma posición es idempotente"
+      - "test_redis_store_rejects_distinct_position_same_id — RedisPositionStore también eleva colisión"
+      - "test_memory_store_distinct_ids_do_not_collide — IDs distintos cohabitan"
     adr_relacionado: null
-    riesgo_residual: "Bajo"
-    fecha_cierre: null
+    riesgo_residual: "Bajo — entropía práctica eliminada (UUID4 completo); colisión residual astronómica; guard de unicidad en store activo"
+    fecha_cierre: "2026-08-12"
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-08"}
       backlog: {estado: HECHO, referencia: "B-16 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: "UUID completo"}
-      tests: {estado: PENDIENTE, referencia: "test colisión store"}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "order.py uuid4() completo + PositionIdCollisionError en memory_store.py y redis_store.py (2026-08-12)"}
+      tests: {estado: HECHO, referencia: "tests/portfolio/test_position_store_unicity.py (5 tests)"}
+      ci: {estado: HECHO, referencia: "mypy/ruff/import-linter/portfolio+trading suite verdes"}
+      evidencia: {estado: HECHO, referencia: "5 tests verdes 2026-08-12"}
+      cierre: {estado: HECHO, referencia: "validado por engineering_health_check"}
   - id: B-17
     hallazgo_informe: H-18
     fase: F4

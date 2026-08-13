@@ -79,11 +79,14 @@ class Order:
     Campos de estado (mutables via transition()):
       status, fill_price, fill_timestamp, reject_reason
 
-    Nota sobre order_id
-    -------------------
-    Usa los primeros 8 caracteres de un UUID4. La probabilidad de
-    colisión es despreciable para volúmenes de paper trading (<10^6
-    órdenes). Para producción en volumen alto, usar uuid4() completo.
+    Nota sobre order_id (B-16 / H-08)
+    ----------------------------------
+    Usa el UUID4 completo. Es la clave de posición en PortfolioService
+    (PositionStore — InMemory o Redis) y la clave del mapa _open del OMS.
+    Un order_id truncado (antes [:8], 32 bits) eleva la probabilidad de
+    colisión a volumen alto: colisión en el store = overwrite silencioso
+    de una posición abierta por otra (riesgo de portfolio). UUID completo
+    de 36 chars elimina el riesgo de colisión práctica.
     """
 
     # Identidad
@@ -91,7 +94,7 @@ class Order:
     side: OrderSide
     size_pct: float  # % del capital, rango (0.0, 1.0]
     signal: Signal
-    order_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    order_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Estado — mutable via transition()
