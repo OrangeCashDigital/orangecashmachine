@@ -73,7 +73,7 @@ CI y en el commit local. Ver ADR-0010 para la decisión completa.
 ### Gates de CI (`.github/workflows/ocm-ci.yml`)
 
 - `architecture` (import-linter, 43 contratos) — fail-fast, bloquea el merge si un BC-NN se rompe.
-- `quality` — ruff check, ruff format, mypy shared/, SSOT literales, pip-audit.
+- `quality` — ruff check, ruff format, mypy . (todo el código de producción, no solo shared/), SSOT literales, pip-audit.
 
 ### Scripts de gobernanza (`scripts/`)
 

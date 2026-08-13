@@ -101,7 +101,7 @@ def _run(commit: str) -> tuple[list[str], set[str]]:
 
 def _check_snapshot(snapshot: Snapshot) -> tuple[bool, set[str], set[str]]:
     _, fired = _run(snapshot.commit)
-    missing = snapshot.expected_rules - fired
+    missing = set(snapshot.expected_rules) - fired
     unexpected = fired - snapshot.expected_rules
     ok = not missing and not unexpected
     return ok, missing, unexpected

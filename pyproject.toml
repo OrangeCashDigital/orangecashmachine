@@ -246,7 +246,6 @@ ignore = []
 "ocm/observability/bootstrap.py"                                     = ["E402"]
 "ocm/config/structured/pipeline.py"                                  = ["E402"]
 "apps/app/cli/*.py"                                                  = ["E402"]
-"infrastructure/redis/redis_stream.py"                               = ["E402"]
 "packages/market_data/adapters/inbound/data_providers/*.py"          = ["E402"]
 "packages/market_data/ports/outbound/observability.py"                = ["E402"]
 # ── Tests — imports condicionales y fixtures con setup previo ───────────────
@@ -327,7 +326,6 @@ packages = [
     "packages/trading",
     "packages/portfolio",
     "ocm",
-    "infrastructure/redis",
     "apps/api",
     "apps/app",
     "apps/research",
@@ -338,7 +336,6 @@ packages = [
 "packages/market_data"   = "market_data"
 "packages/trading"       = "trading"
 "packages/portfolio"     = "portfolio"
-"infrastructure/redis"   = "infrastructure/redis"
 "apps/api"               = "api"
 "apps/app"               = "app"
 "apps/research"          = "research"

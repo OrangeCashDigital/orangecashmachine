@@ -267,7 +267,9 @@ class PipelineContext:
 
     # ── Mantenimiento (RepairStrategy) ────────────────────────────────────────
     # storage=None es válido para backfill/incremental — solo Repair lo usa.
-    # Inyectado por RepairPipelineFactory, no por ConcretePipelineFactory.
+    # El caller que ejecute RepairStrategy debe inyectar storage aquí;
+    # hoy OHLCVPipeline construye PipelineContext sin storage (composition
+    # root: ConcretePipelineFactory), por lo que Repair lo requiere explícito.
     storage: OHLCVStorage | None = field(default=None)
 
     # ── Observabilidad ────────────────────────────────────────────────────────

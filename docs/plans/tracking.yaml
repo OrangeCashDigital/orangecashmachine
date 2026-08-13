@@ -303,24 +303,25 @@ hallazgos:
     hallazgo_informe: H-12
     fase: F2
     prioridad: MEDIA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "ocm-ci.yml job quality ejecuta `mypy shared/` únicamente; pyproject strict=false"
-    solucion: "Extender mypy a packages+ocm+shared en CI; limpiar errores"
+    solucion: "Extender mypy a packages+ocm+shared+infrastructure+scripts en CI; limpiar errores"
     pruebas:
       - "CI verde con mypy completo"
+      - "mypy . --no-incremental: Success, no issues found in 356 source files (2026-08-12)"
     adr_relacionado: null
-    riesgo_residual: "Medio: puede requerir limpieza de tipado amplia"
-    fecha_cierre: null
+    riesgo_residual: "Bajo: cobertura completa activa en CI; apps/ verificado por app-guard (AST + mypy apps)"
+    fecha_cierre: 2026-08-12
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-12"}
       backlog: {estado: HECHO, referencia: "B-08 en tracking v2"}
       adr: {estado: NO_APLICA, referencia: null}
-      implementacion: {estado: PENDIENTE, referencia: "mypy completo"}
-      tests: {estado: PENDIENTE, referencia: "mypy sin errores"}
-      ci: {estado: PENDIENTE, referencia: "gate mypy"}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      implementacion: {estado: HECHO, referencia: "mypy . --no-incremental en job quality (2026-08-12)"}
+      tests: {estado: HECHO, referencia: "mypy sin errores (356 fuentes)"}
+      ci: {estado: HECHO, referencia: "gate mypy completo"}
+      evidencia: {estado: HECHO, referencia: "Success: no issues found"}
+      cierre: {estado: HECHO, referencia: "validado por engineering_health_check"}
 
   - id: B-25
     hallazgo_informe: H-24
@@ -812,36 +813,36 @@ hallazgos:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-031 (2026-08-10)"}
       backlog: {estado: HECHO, referencia: "B-46 en tracking.yaml"}
       adr: {estado: PARCIAL, referencia: "Opcion B (fail-fast sin silencio) aplicada en codigo via 74f8b09 + regla L5; formalizacion como ADR o addendum a ADR-0013 pendiente"}
-      implementacion: {estado: PARCIAL, referencia: "wiring verificado en pipeline_factory._build_ohlcv: publisher y chunk_converter sin default implicito, fail-fast si None, _build_kafka_publisher() con caller real confirmado, KafkaOHLCVPublisher.publish_chunk() confirmado con await producer.produce() real contra ohlcv.raw. Actualizaciones 2026-08-12: (1) publish_chunk() migrado de bool ambiguo a PublishResult(SUCCESS|RETRYABLE_FAILURE) explicito (commit 5724191, Engineering Guardrail #3); (2) regla L5 PRODUCTION_REQUIRES_KAFKA_PUBLISHER (ocm/config/layers/rules.py) adelanta el fail-fast de produccion a config-load, con tests en test_business_rules.py (Guardrail #6); (3) comentario falso 'modo degradado escribe directo a Iceberg' en market_data/main.py corregido; (4) warning de degradacion fuera de produccion migrado de logging del stdlib a loguru. Pendiente: decision arquitectonica A/B/C formal (opcion B aplicada parcialmente en codigo), y NullOHLCVPublisher sigue permitiendo exito simulado fuera de produccion por diseno"}
-      tests: {estado: PARCIAL, referencia: "test_kappa_publisher_wiring.py (9 tests, Guardrail #5) cierra publisher/chunk_converter obligatorios y NullOHLCVPublisher prohibido en prod; test_kafka_publisher_wiring.py (Guardrail #4) wiring real via _build_kafka_publisher; test_business_rules.py (Guardrail #6) regla L5. Falta test integracion Kafka ohlcv.raw real (bloqueado hoy por broker no disponible en entorno de test)"}
+      implementacion: {estado: PARCIAL, referencia: "wiring verificado en pipeline_factory._build_ohlcv: publisher y chunk_converter sin default implicito, fail-fast si None, _build_kafka_publisher() con caller real confirmado, KafkaOHLCVPublisher.publish_chunk() confirmado con await producer.produce() real contra ohlcv.raw. Actualizaciones 2026-08-12: (1) publish_chunk() migrado de bool ambiguo a PublishResult(SUCCESS|RETRYABLE_FAILURE) explicito (commit 5724191, Engineering Guardrail #3); (2) regla L5 PRODUCTION_REQUIRES_KAFKA_PUBLISHER (ocm/config/layers/rules.py) adelanta el fail-fast de produccion a config-load, con tests en test_business_rules.py (Guardrail #6); (3) comentario falso 'modo degradado escribe directo a Iceberg' en market_data/main.py corregido; (4) warning de degradacion fuera de produccion migrado de logging del stdlib a loguru; (5) 2026-08-12: regla L5 demostrada E2E por el pipeline real L1->L5 (TestKafkaRuleEndToEndPipeline en test_business_rules.py: production+kafka disabled -> ConfigPipelineError(FROZEN) con causa ConfigRuleViolation PRODUCTION_REQUIRES_KAFKA_PUBLISHER; production+kafka enabled -> config valida; non-production+kafka disabled -> pasa) y deploy documentado alineado: docker-compose.yml setea KAFKA_ENABLED=${KAFKA_ENABLED:-true} en market_data (el stack ya provee broker) y .env.example/README documentan la invariante. MATIZ: kafka.enabled=true en config NO garantiza broker disponible — conectividad sigue siendo fallo runtime, no config. Pendiente: decision arquitectonica A/B/C formal (opcion B aplicada parcialmente en codigo), y NullOHLCVPublisher sigue permitiendo exito simulado fuera de produccion por diseno"}
+      tests: {estado: PARCIAL, referencia: "test_kappa_publisher_wiring.py (9 tests, Guardrail #5) cierra publisher/chunk_converter obligatorios y NullOHLCVPublisher prohibido en prod; test_kafka_publisher_wiring.py (Guardrail #4) wiring real via _build_kafka_publisher; test_business_rules.py TestKafkaRuleEndToEndPipeline (Guardrail #6) demuestra la regla L5 por el pipeline real L1->L5 de config-load. Falta test integracion Kafka ohlcv.raw real (bloqueado hoy por broker no disponible en entorno de test)"}
       ci: {estado: PENDIENTE, referencia: "guardrails #7 (pipeline CI barrera dura) y #9/#10 cerrados en docs/plans/engineering-guardrails.md"}
       evidencia: {estado: HECHO, referencia: "evidencia empírica 2026-08-12: audit docs/audits + tracking B-46 + commits 74f8b09/5749c1f/8afc09d/5724191 + tests architecture"}
-      cierre: {estado: PARCIAL, referencia: "F-031 cerrado en produccion (fail-fast estructural + regla L5); riesgo residual fuera de produccion documentado y ahora visible (loguru); decision A/B/C formal pendiente de arquitecto"}
+      cierre: {estado: PARCIAL, referencia: "F-031 cerrado en produccion (fail-fast estructural + regla L5, ahora demostrada E2E por el pipeline real L1->L5 el 2026-08-12 y deploy documentado alineado: docker-compose KAFKA_ENABLED=true + .env.example/README); riesgo residual fuera de produccion documentado y ahora visible (loguru); decision A/B/C formal pendiente de arquitecto"}
 
   - id: B-40
     hallazgo_informe: F-024
     fase: F2
     prioridad: MEDIA
-    estado: PENDIENTE
+    estado: HECHO
     estado_auditoria: CONFIRMADO
     evidencia: "ocm/runtime/state/factories.py:198 y :236 importan 'from ocm.runtime.state.redis_stream import RedisStreamPublisher/Consumer' (lazy, FUERA del try/except) pero el módulo ocm.runtime.state.redis_stream NO existe. Reproducido: ModuleNotFoundError al llamar build_stream_publisher. Origen: 66cd1c4 refactor(layout) Fase 3 (rename ocm_platform->ocm) no movió el archivo streams. Símbolo equivalente real existe en infrastructure/redis/redis_stream.py:71,145 pero nadie lo importa. Sin callers de build_stream_publisher/build_stream_source hoy"
-    solucion: "Auditar qué debe importar realmente factories.py antes de tocar: mover infrastructure/redis/redis_stream.py a ocm.runtime.state.redis_stream O apuntar factories al módulo raíz — resolver junto con F-011 (coexistencia infrastructure/). NO tocar hasta decidir hogar canónico"
+    solucion: "Eliminado como dead code (2026-08-12): cero callers, cero imports, cero tests. Se borró infrastructure/redis/redis_stream.py (y la carpeta redis/ huérfana), los builders/adapters build_stream_publisher/build_stream_source de ocm/runtime/state/factories.py, y la clase RedisStreamsEventBus. Las facciones stream de Kafka/SOLACE que sí se usan viven en infrastructure/adapters/streams. Se añadió test de no-regresión que asegura que los símbolos de stream siguen ausentes del módulo y de la fachada."
     pruebas:
       - "smoke: uv run python -c 'from ocm.runtime.state.factories import build_stream_publisher; build_stream_publisher(stream_name=\"ohlcv\")' -> ModuleNotFoundError (2026-08-09)"
       - "verificacion: ls ocm/runtime/state/ (no redis_stream); grep build_stream_publisher/build_stream_source -> 0 callers"
       - "verificacion: RedisStreamPublisher en infrastructure/redis/redis_stream.py:71, Consumer :145"
     adr_relacionado: "PENDIENTE -- decidir hogar canonico junto a F-011; no hay ADR todavia"
     riesgo_residual: "Bajo-MBaja hoy (sin callers); si se habilita RedisStreamsEventBus (event_bus.py:23) fallaria al invocar build_stream_* — latente"
-    fecha_cierre: null
+    fecha_cierre: 2026-08-12
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-08-streaming-canary-audit.md F-024 (reproducido)"}
       backlog: {estado: HECHO, referencia: "B-40 en tracking.yaml"}
-      adr: {estado: PENDIENTE, referencia: "hogar canonico a decidir con F-011"}
-      implementacion: {estado: PENDIENTE, referencia: "NO tocar hasta decidir ruta canonica"}
-      tests: {estado: NO_APLICA, referencia: "smoke de reproduccion: ModuleNotFoundError"}
-      ci: {estado: PENDIENTE, referencia: null}
-      evidencia: {estado: HECHO, referencia: "ModuleNotFoundError reproducido 2026-08-09; callers 0"}
-      cierre: {estado: PENDIENTE, referencia: null}
+      adr: {estado: NO_APLICA, referencia: "dead code eliminado sin cambiar hogar canónico de streams usados (infrastructure/adapters/streams)"}
+      implementacion: {estado: HECHO, referencia: "commit eliminando dead code (2026-08-12)"}
+      tests: {estado: HECHO, referencia: "tests/ocm/runtime/state/test_factories_surface.py (no-regresión)"}
+      ci: {estado: HECHO, referencia: "mypy . ahora en gate CI quality"}
+      evidencia: {estado: HECHO, referencia: "ModuleNotFoundError reproducido 2026-08-09; callers 0; mypy . verde post-eliminación"}
+      cierre: {estado: HECHO, referencia: "evidencia: mypy . verde + tests no-regresión + health PASS post-eliminación (2026-08-12)"}
 
   - id: B-24
     hallazgo_informe: H-23

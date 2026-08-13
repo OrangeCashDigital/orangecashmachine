@@ -64,7 +64,7 @@ def _py_files(directory: Path) -> list[Path]:
     return sorted(p for p in directory.rglob("*.py") if not p.name.startswith("test_"))
 
 
-def _parse(path: Path) -> ast.AST:
+def _parse(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"))
 
 

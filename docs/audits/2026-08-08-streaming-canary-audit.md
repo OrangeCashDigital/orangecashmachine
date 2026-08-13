@@ -527,7 +527,7 @@ violaría la propia regla de honestidad del documento auditor.
 
 ### [F-024] `ocm.runtime.state.redis_stream` importado por factories.py pero módulo inexistente (ruta funcional rota)
 - **Severidad propuesta:** P2 (import roto real en ruta funcional; hoy sin callers, pero si se alcanza falla con ModuleNotFoundError)
-- **Estado:** PENDIENTE — VERIFICADO el import roto (reproducido por ejecución); NO resuelto
+- **Estado:** HECHO — RESUELTO como dead code (2026-08-12, B-40): sin callers/imports/tests, se eliminaron `infrastructure/redis/redis_stream.py` (carpeta huérfana incluida), los builders `build_stream_publisher`/`build_stream_source` de `factories.py` y la clase `RedisStreamsEventBus`. Las facciones de stream usadas viven en `infrastructure/adapters/streams/`. Se añadió test de no-regresión (`tests/ocm/runtime/state/test_factories_surface.py`) que asegura la ausencia futura de esos símbolos.
 - **ID formal:** H-28 (docs/plans/tracking.yaml, entrada B-40)
 - **Archivo exacto y imports:**
   - `ocm/runtime/state/factories.py:198` — `from ocm.runtime.state.redis_stream import RedisStreamPublisher` (dentro de `build_stream_publisher`)

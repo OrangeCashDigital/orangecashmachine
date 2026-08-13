@@ -324,7 +324,9 @@ class RepairStrategy(StrategyMixin):
         """Lee datos Silver delegando al Protocol OHLCVStorage."""
         # fail-fast: storage es obligatorio para RepairStrategy
         assert ctx.storage is not None, (
-            "RepairStrategy._read_silver: ctx.storage es None. Inyectar desde RepairPipelineFactory."
+            "RepairStrategy._read_silver: ctx.storage es None. El caller que ejecute "
+            "RepairStrategy debe inyectar ctx.storage en el PipelineContext antes de "
+            "llamar a run() — OHLCVPipeline no lo provee hoy (ver pipeline/runtime.py)."
         )
         try:
             df = ctx.storage.load_ohlcv(symbol=symbol, timeframe=timeframe)
@@ -482,7 +484,9 @@ class RepairStrategy(StrategyMixin):
 
             # fail-fast: invariantes post-qres.accepted
             assert ctx.storage is not None, (
-                "RepairStrategy: ctx.storage es None — inyectar desde RepairPipelineFactory."
+                "RepairStrategy: ctx.storage es None — el caller debe inyectar ctx.storage en "
+                "el PipelineContext antes de ejecutar Repair (OHLCVPipeline no lo "
+                "provee hoy; ver pipeline/runtime.py)."
             )
             assert qres.df is not None, "qres.df no puede ser None cuando accepted=True"
             ctx.storage.save_ohlcv(

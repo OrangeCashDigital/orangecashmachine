@@ -292,8 +292,11 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format . --check
 
-      - name: Mypy (shared)
-        run: uv run mypy shared/
+      - name: Mypy (all production code)
+        # Guardrail #8: mypy . es la barrera real (packages/, ocm/, shared/,
+        # infrastructure/, scripts/). Excluye tests/ y .venv/ via [tool.mypy].
+        # apps/ sigue verificado también por app-guard (mypy apps/).
+        run: uv run mypy . --no-incremental
 
       - name: SSOT literales
         run: uv run python scripts/check_ssot_enums.py

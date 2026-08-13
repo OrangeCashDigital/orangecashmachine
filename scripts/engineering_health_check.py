@@ -176,7 +176,8 @@ def main() -> int:
         data = None
 
     if data is None:
-        errors and print_errors()
+        if errors:
+            print_errors()
         return 1
 
     check_tracking_parses()
