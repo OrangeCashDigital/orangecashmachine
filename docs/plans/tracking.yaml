@@ -1029,25 +1029,28 @@ hallazgos:
     hallazgo_informe: H-09
     fase: F4
     prioridad: ALTA
-    estado: PENDIENTE
+    estado: PARCIAL
     estado_auditoria: CONFIRMADO
     evidencia: "Verificado en F0 2026-07-29: estado de posicion repartido en 3 representaciones mutables: open_order_ids (fill_sync.py:75), _open_positions (analytics/trade_tracker.py:58) y PortfolioService.store; riesgo real: close_position (portfolio_service.py:126-152) traga excepcion (except->None, nunca lanza) y fill_sync descarta el retorno (protocolo fill_sync.py:46-49, rama SELL :96-98) -> cierre puede fallar en silencio sin propagacion"
-    solucion: "Unificar estado de posición en PortfolioService (única fuente mutable, ADR-0006); fill_sync/TradeTracker consumen eventos"
+    solucion: "[PARCIAL] Mitigacion de observabilidad implementada (2026-08-12): el SELL path de build_fill_sync captura el retorno de close_position() y, si es None (cierre no confirmado por SafeOps), emite logger.critical 'POSITION_CLOSE_UNCONFIRMED' con symbol, sell_order_id y buy_order_id — el fallo silencioso de cierre ahora es visible en operacion, sin cambiar el contrato SafeOps ni hacer que el flujo lance. La unificacion definitiva del estado de posicion en PortfolioService (unico dueño mutable, ADR-0006; fill_sync/TradeTracker consumen eventos) queda PENDIENTE — decision arquitectonica no resuelta (ADR-0021 pendiente de redactar)"
     pruebas:
-      - "test: un solo dueño mutable; cierre no falla silenciosamente"
-      - "test: close_position (portfolio_service.py:126-152) propaga excepción — no debe atrapar y devolver None; fill_sync (fill_sync.py:46-49, rama SELL :96-98) no debe descartar el retorno"
-    adr_relacionado: "ADR-0006; ADR-0021"
-    riesgo_residual: "Medio: migración de estado"
+      - "test (mitigacion): SELL fill cuyo close_position() devuelve None -> logger.critical con symbol/sell_order_id/buy_order_id (tests/trading/test_fill_sync_close_divergence.py)"
+      - "test (mitigacion): cierre confirmado -> sin alerta critica"
+      - "test (mitigacion): fallo de close_position NO propaga excepcion desde fill_sync (SafeOps conservado)"
+      - "PENDIENTE (raiz): un solo dueño mutable; cierre no falla silenciosamente"
+      - "PENDIENTE (raiz): close_position propaga excepción — no debe atrapar y devolver None; fill_sync no debe descartar el retorno"
+    adr_relacionado: "ADR-0006; ADR-0021 (pendiente de redactar)"
+    riesgo_residual: "Medio: el fallo de cierre ya es observable (log critico), pero sigue siendo silencioso a nivel de estado (Ningún destino se corrige automaticamente); la posicion fantasma puede persistir hasta reconciliacion manual. Ademas, el contrato de close_position no permite distinguir 'posicion inexistente' de 'fallo de persistencia' (ambos None) — limitacion documentada en fill_sync.py"
     fecha_cierre: null
     cadena:
       hallazgo: {estado: HECHO, referencia: "docs/audits/2026-08-auditoria-integral.md H-09 — confirmado en F0 2026-07-29"}
       backlog: {estado: HECHO, referencia: "B-15 en tracking v2"}
       adr: {estado: PENDIENTE, referencia: "ADR-0021"}
-      implementacion: {estado: PENDIENTE, referencia: "unificar en PortfolioService"}
-      tests: {estado: PENDIENTE, referencia: "un solo dueño mutable"}
+      implementacion: {estado: PARCIAL, referencia: "mitigacion de observabilidad en fill_sync.py (2026-08-12); unificar en PortfolioService PENDIENTE"}
+      tests: {estado: PARCIAL, referencia: "test_fill_sync_close_divergence.py (5 tests, mitigacion); PENDIENTE: invariante de estado single-owner (G10)"}
       ci: {estado: PENDIENTE, referencia: "G10"}
-      evidencia: {estado: PENDIENTE, referencia: null}
-      cierre: {estado: PENDIENTE, referencia: null}
+      evidencia: {estado: PARCIAL, referencia: "logs CO+cierre-no-confirmado visibles y testeado; raiz arquitectonica sin resolver"}
+      cierre: {estado: PENDIENTE, referencia: "requiere decision arquitectonica (ADR-0021)"}
   - id: B-16
     hallazgo_informe: H-08
     fase: F4
