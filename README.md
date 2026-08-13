@@ -158,6 +158,8 @@ cp .env.example .env
 #   - API keys de exchanges (BYBIT_*, KUCOIN_*)
 #   - OCM_STORAGE__DATA_LAKE__PATH: ruta del data lake
 #   - OCM_ENV: development (default) o production
+#   - KAFKA_ENABLED=true en producción — obligatoria (regla L5, F-031):
+#     production no arranca sin publisher Kafka (config-load fail-fast)
 
 # 4. Levantar infraestructura local (Redis, Kafka, observabilidad)
 docker compose up -d

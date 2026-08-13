@@ -22,9 +22,13 @@ AppConfig real, sin mocks.
 
 from __future__ import annotations
 
+import os
+
 import pytest
+from omegaconf import OmegaConf
 
 from ocm.config.layers.rules import ConfigRuleViolation, apply_business_rules
+from ocm.config.pipeline import ConfigPipelineError, ConfigStage
 from ocm.config.schema import (
     AppConfig,
     EnvironmentConfig,
@@ -165,6 +169,115 @@ class TestRuleProductionRequiresKafkaPublisher:
         with pytest.raises(ConfigRuleViolation) as exc_info:
             apply_business_rules(cfg)
         assert "F-031" in str(exc_info.value)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# E2E — Guardrail #6 por el pipeline real L1→L5 (F-031)
+#
+# Los tests anteriores prueban la regla en aislamiento (AppConfig manual →
+# apply_business_rules). Esto NO demostraba que el flujo real de config-load
+# (ConfigPipeline.run → L1 compose → L2 env override → L3 coercion → L4 pydantic
+# → L5 reglas) surface la violación al cargar config en producción. Estos tests
+# recorren load_appconfig_from_hydra() completo con un DictConfig válido que
+# pasa L1-L4 y solo difiere en integrations.kafka.enabled.
+#
+# Importante (F-031): kafka.enabled=True en config NO garantiza broker
+# disponible — la conectividad es un fallo runtime, no de config. Aquí solo
+# demostramos que la config permite el publisher; la disponibilidad del broker
+# sigue siendo responsabilidad de la capa de infraestructura (pipeline_factory).
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _production_dict_config(*, kafka_enabled: bool):
+    """DictConfig mínimo que pasa L1-L5 con environment=production.
+
+    Replica el patrón de test_snapshot_contract (bybit habilitado con
+    credenciales + pipeline coherente) y añade safety.dry_run=False y
+    require_confirmation=True — de otro modo L5 abortaría en otra regla
+    de producción antes de evaluar la de Kafka.
+    """
+    return OmegaConf.create(
+        {
+            "exchanges": {
+                "bybit": {
+                    "enabled": True,
+                    "api_key": "test-key",
+                    "api_secret": "test-secret",
+                    "api_password": "test-password",
+                }
+            },
+            "pipeline": {
+                "historical": {"start_date": "auto", "timeframes": ["1m"]},
+                "resample": {"targets": ["5m"], "source_tf": "1m"},
+                "realtime": {},
+            },
+            "environment": {"name": "production"},
+            "safety": {
+                "dry_run": False,
+                "max_backfill_days": 90,
+                "require_confirmation": True,
+            },
+            "integrations": {"kafka": {"enabled": kafka_enabled}},
+        }
+    )
+
+
+class TestKafkaRuleEndToEndPipeline:
+    """Guardrail #6 a través del flujo real de config-load (L1→L5)."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_ocm_override_env(self, monkeypatch):
+        """L2 aplica overrides OCM_* del entorno — aíslan el test de la máquina."""
+        for key in list(os.environ.keys()):
+            if key.startswith("OCM_"):
+                monkeypatch.delenv(key, raising=False)
+
+    def _load(self, cfg):
+        from ocm.config.hydra_loader import load_appconfig_from_hydra
+
+        return load_appconfig_from_hydra(cfg, env="production", write_snapshot=False)
+
+    def test_production_kafka_disabled_raises_at_config_load(self) -> None:
+        """Producción + kafka disabled: fallo en config-load (L5), no en runtime."""
+        with pytest.raises(ConfigPipelineError) as exc_info:
+            self._load(_production_dict_config(kafka_enabled=False))
+        assert exc_info.value.stage == ConfigStage.FROZEN
+        cause = exc_info.value.__cause__
+        assert isinstance(cause, ConfigRuleViolation)
+        assert cause.rule == "PRODUCTION_REQUIRES_KAFKA_PUBLISHER"
+        assert "F-031" in str(cause)
+
+    def test_production_kafka_enabled_returns_valid_config(self) -> None:
+        """Producción + kafka enabled: config válida, publisher permitido."""
+        app_cfg = self._load(_production_dict_config(kafka_enabled=True))
+        assert app_cfg.environment.name == "production"
+        assert app_cfg.integrations.kafka.enabled is True
+
+    def test_production_kafka_missing_defaults_to_disabled_raises(self) -> None:
+        """Sin bloque integrations.kafka, el default es disabled → viola en L5.
+
+        Cubre el caso real del deploy: si KAFKA_ENABLED nunca se setea,
+        kafka.enabled resuelve a False (default del schema) y producción
+        aborta en config-load.
+        """
+        cfg = _production_dict_config(kafka_enabled=False)
+        del cfg.integrations
+        with pytest.raises(ConfigPipelineError) as exc_info:
+            self._load(cfg)
+        cause = exc_info.value.__cause__
+        assert isinstance(cause, ConfigRuleViolation)
+        assert cause.rule == "PRODUCTION_REQUIRES_KAFKA_PUBLISHER"
+
+    def test_non_production_kafka_disabled_passes(self) -> None:
+        """Fuera de producción, kafka disabled es degradación válida (F-031)."""
+        from ocm.config.hydra_loader import load_appconfig_from_hydra
+
+        cfg = _production_dict_config(kafka_enabled=False)
+        cfg.environment.name = "development"
+        cfg.safety.dry_run = True
+        app_cfg = load_appconfig_from_hydra(cfg, env="development", write_snapshot=False)
+        assert app_cfg.integrations.kafka.enabled is False
+        assert app_cfg.environment.name == "development"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

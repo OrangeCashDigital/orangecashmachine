@@ -349,6 +349,7 @@ services:
       MARKET_DATA_HOST: "0.0.0.0"
       MARKET_DATA_PORT: "8001"
       INGESTION_INTERVAL_S: "${INGESTION_INTERVAL_S:-300}"
+      KAFKA_ENABLED: "${KAFKA_ENABLED:-true}"
     ports:
       - "${MARKET_DATA_HOST_PORT:-8001}:8001"
     volumes:

@@ -59,6 +59,24 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
   codigo ya implementa algunas propiedades de A y B, pero la politica definitiva
   para entornos no productivos no fue formalizada como decision de arquitectura
   en ningun ADR.
+- **Actualización 2026-08-12 (regla L5 E2E + deploy):** la regla
+  `PRODUCTION_REQUIRES_KAFKA_PUBLISHER` ahora está demostrada por el pipeline
+  real de config-load (L1→L5): `TestKafkaRuleEndToEndPipeline` en
+  `tests/ocm/config/test_business_rules.py` — production+kafka disabled →
+  `ConfigPipelineError(FROZEN)` con causa `ConfigRuleViolation`; production+kafka
+  enabled → config válida; non-production+kafka disabled → pasa. El deploy
+  documentado quedó alineado con la invariante: `docker-compose.yml` setea
+  `KAFKA_ENABLED=${KAFKA_ENABLED:-true}` en el servicio `market_data` (el stack ya
+  incluye broker Kafka), y `.env.example`/README documentan la obligación.
+  **Matiz (no confundir):** `kafka.enabled=true` en config NO asegura broker
+  disponible — CONFIG permite el publisher; la conectividad del broker sigue
+  siendo un fallo runtime (infrastructure), no de config.
+  **Nota — fallo L4 independiente:** el compose actual (OCM_ENV=production)
+  tampoco habilita ningún exchange (todos `enabled: false` en config), así que
+  L4 aborta con "At least one exchange must be enabled" ANTES de alcanzar L5.
+  Es un fallo preexistente, NO relacionado con la regla Kafka, que impide que el
+  compose llegue a L5 — documentado aquí para no mezclar ambos problemas; NO se
+  arregla en este cambio (F-031).
 
 ---
 
@@ -118,7 +136,14 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
 0. **F-031 / B-46** (2026-08-10, data-integrity) — **actualizado 2026-08-12:**
    el path Kappa OHLCV completo (Incremental → `ohlcv.raw` → Bronze) ya esta
    cableado y verificado en produccion (ver nota en la seccion de detalle
-   arriba). Pendiente real: decidir formalmente A/B/C (el codigo ya implementa
+   arriba). La parte "produccion no puede arrancar sin publisher Kafka" esta
+   RESUELTA y demostrada E2E: la regla L5 `PRODUCTION_REQUIRES_KAFKA_PUBLISHER`
+   aborta en config-load por el pipeline real L1→L5
+   (`TestKafkaRuleEndToEndPipeline`, test_business_rules.py) y el deploy
+   documentado quedó alineado (docker-compose `market_data` con
+   `KAFKA_ENABLED=${KAFKA_ENABLED:-true}`, `.env.example`/README documentan la
+   invariante; el broker ya es parte del stack). Pendiente real: decidir
+   formalmente A/B/C (el codigo ya implementa
    algunas propiedades de A y B, pero la politica definitiva para entornos no
    productivos no fue formalizada como decision de arquitectura en ningun ADR)
    para cerrar el riesgo residual fuera de produccion. Ya no bloquea F-010 de
