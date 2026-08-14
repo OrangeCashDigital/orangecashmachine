@@ -50,6 +50,17 @@ OCM_API_KEY: str = "OCM_API_KEY"
 OCM_API_SECRET: str = "OCM_API_SECRET"
 
 # =============================================================================
+# API service (apps/api) — leídas directamente por apps/api/settings.py vía
+# pydantic-settings (env_prefix="OCM_API_"). NO pasan por AppConfig/Hydra ni
+# por el protocolo estructurado OCM_SECCIÓN__CLAVE de L2 — se registran aquí
+# únicamente para que L2 las reconozca como "planas conocidas" y no las marque
+# como malformed_key (ver is_known_non_structured_var).
+# =============================================================================
+
+OCM_API_JWT_SECRET: str = "OCM_API_JWT_SECRET"
+OCM_API_JWT_EXPIRE_MINUTES: str = "OCM_API_JWT_EXPIRE_MINUTES"
+
+# =============================================================================
 # Storage — leídas por core/config/paths.py
 # =============================================================================
 
@@ -68,7 +79,15 @@ OCM_OHLCV_START_DATE: str = "OCM_OHLCV_START_DATE"
 
 MARKET_DATA_HOST: str = "MARKET_DATA_HOST"
 MARKET_DATA_PORT: str = "MARKET_DATA_PORT"
+MARKET_DATA_URL: str = "MARKET_DATA_URL"
 INGESTION_INTERVAL_S: str = "INGESTION_INTERVAL_S"
+
+# =============================================================================
+# Internal service ports (Docker host port mappings)
+# =============================================================================
+
+TRADING_HOST_PORT: str = "TRADING_HOST_PORT"
+PORTFOLIO_HOST_PORT: str = "PORTFOLIO_HOST_PORT"
 
 # =============================================================================
 # Kafka — leídas por KafkaProducerAdapter.from_env() y KafkaConsumerAdapter
@@ -135,6 +154,9 @@ _ENV_VAR_NAMES: frozenset[str] = frozenset(
         # Credenciales
         OCM_API_KEY,
         OCM_API_SECRET,
+        # API service (apps/api) — ver bloque de declaración arriba
+        OCM_API_JWT_SECRET,
+        OCM_API_JWT_EXPIRE_MINUTES,
         # Storage / runtime
         OCM_STORAGE__DATA_LAKE__PATH,
         OCM_DATA_LAKE_PATH,
@@ -142,10 +164,14 @@ _ENV_VAR_NAMES: frozenset[str] = frozenset(
         OCM_GOLD_FEATURES_PATH,
         MARKET_DATA_HOST,
         MARKET_DATA_PORT,
+        MARKET_DATA_URL,
         INGESTION_INTERVAL_S,
         OCM_EXCHANGE,
         OCM_MARKET_TYPE,
         OCM_OHLCV_START_DATE,
+        # Internal service ports
+        TRADING_HOST_PORT,
+        PORTFOLIO_HOST_PORT,
         # Kafka
         KAFKA_ENABLED,
         KAFKA_BOOTSTRAP_SERVERS,
