@@ -37,4 +37,4 @@ COPY . .
 RUN useradd --create-home appuser
 USER appuser
 
-CMD ["python", "-m", "market_data.orchestration.entrypoint"]
+CMD ["python", "-m", "market_data.main"]
