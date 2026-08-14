@@ -20,25 +20,8 @@ Consumidores legítimos
 Principios: SRP · DIP · SSOT
 """
 
-from __future__ import annotations
-
-import subprocess
 from dataclasses import dataclass, field
 from typing import Dict, List
-
-
-def _get_git_hash() -> str:
-    """Retorna el git hash corto del HEAD. Fail-soft: retorna 'unknown'."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        return result.stdout.strip() or "unknown"
-    except Exception:
-        return "unknown"
 
 
 @dataclass

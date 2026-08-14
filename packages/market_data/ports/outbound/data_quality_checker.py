@@ -87,20 +87,20 @@ class DataQualityCheckerPort(Protocol):
 # ---------------------------------------------------------------------------
 
 CheckerFactory = Callable[
-    [str, str, int],  # (timeframe, exchange, rows_removed)
+    [str, str, int, str],  # (timeframe, exchange, rows_removed, git_hash)
     DataQualityCheckerPort,
 ]
 """
 Callable que construye un DataQualityCheckerPort listo para usar.
 
-Signature: (timeframe: str, exchange: str, rows_removed: int) -> DataQualityCheckerPort
+Signature: (timeframe: str, exchange: str, rows_removed: int, git_hash: str) -> DataQualityCheckerPort
 
 Uso en QualityPipeline:
-    checker = self._checker_factory(timeframe, exchange, rows_removed)
+    checker = self._checker_factory(timeframe, exchange, rows_removed, git_hash)
     report  = checker.check(df, symbol=symbol)
 
 Uso en tests:
-    factory = lambda tf, ex, rr: MockChecker(expected_report)
+    factory = lambda tf, ex, rr, gh: MockChecker(expected_report)
 
 Uso en producción (GE):
     factory = ge_checker_factory  # infrastructure/quality/ge_checker.py

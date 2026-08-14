@@ -36,6 +36,7 @@ from market_data.domain.events import (
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 from market_data.ports.outbound.event_bus import EventBusPort
+from shared.utils.repo import _get_git_hash
 
 # Columnas del DataFrame OHLCV — SSOT con OHLCVChunk.candles
 _CANDLE_COLS = ("timestamp", "open", "high", "low", "close", "volume")
@@ -134,6 +135,7 @@ class QualityPipelineConsumer(BaseConsumer):
             event.batch.timeframe,
             event.batch.exchange,
             0,  # rows_removed: consumer no tiene contexto de remoción upstream
+            _get_git_hash(),
         )
         report = checker.check(pl.from_pandas(df), symbol=event.batch.symbol)
 

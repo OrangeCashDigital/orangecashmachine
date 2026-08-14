@@ -279,7 +279,7 @@ class GEChecker:
 
         import datetime as _dt
 
-        from market_data.domain.quality.types import _get_git_hash
+        from shared.utils.repo import _get_git_hash
 
         return DataQualityReport(
             symbol=symbol,
@@ -300,7 +300,8 @@ class GEChecker:
         """Reporte mínimo de fallback cuando GE falla internamente."""
         import datetime as _dt
 
-        from market_data.domain.quality.types import DataQualityReport, QualityIssue, _get_git_hash
+        from market_data.domain.quality.types import DataQualityReport, QualityIssue
+        from shared.utils.repo import _get_git_hash
 
         return DataQualityReport(
             symbol=symbol,

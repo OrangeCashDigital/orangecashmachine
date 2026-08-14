@@ -73,6 +73,7 @@ from market_data.ports.outbound.data_quality_checker import CheckerFactory
 from market_data.ports.outbound.lineage import LineageTrackerPort
 from market_data.ports.outbound.metrics import NullQualityMetrics, QualityMetricsPort
 from market_data.ports.outbound.quality import AnomalyRegistryPort
+from shared.utils.repo import _get_git_hash
 
 # ===========================================================================
 # Resultado del pipeline
@@ -158,6 +159,7 @@ class QualityPipeline:
         exchange: str,
         run_id: Optional[str] = None,
         rows_removed: int = 0,
+        git_hash: str = "unknown",
     ) -> QualityPipelineResult:
         """
         Ejecuta el pipeline de calidad completo.
@@ -170,10 +172,15 @@ class QualityPipeline:
         exchange     : nombre del exchange (e.g. "bybit")
         run_id       : ID de correlación para lineage (None = no registrar)
         rows_removed : velas CORRUPT eliminadas upstream (para gap scan)
+        git_hash     : hash de git del commit actual (se obtiene automáticamente si "unknown")
         """
+        # Resolver git_hash automáticamente si no se proporciona
+        if git_hash == "unknown":
+            git_hash = _get_git_hash()
+
         # 1. Validación de calidad
         # DIP: checker inyectado por factory
-        checker = self._checker_factory(timeframe, exchange, rows_removed)
+        checker = self._checker_factory(timeframe, exchange, rows_removed, git_hash)
         report = checker.check(pl.from_pandas(df), symbol=symbol)
         result = self._policy.evaluate(report)
 

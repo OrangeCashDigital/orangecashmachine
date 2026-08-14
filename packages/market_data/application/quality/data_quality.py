@@ -1,22 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-market_data/application/quality/data_quality.py
-=================================================
-
-DataQualityChecker — checks estadísticos sobre DataFrames OHLCV.
-
-Migración Fase 3 — pandas → polars
-------------------------------------
-Todo el procesamiento interno opera sobre pl.DataFrame nativo.
-La firma pública check(df: pl.DataFrame) acepta polars directamente.
-Los callers (QualityPipeline) ya reciben pl.DataFrame desde OHLCVTransformer.
-
-Principios: SRP · DIP · SSOT · KISS · Fail-Fast
-"""
-
 from __future__ import annotations
 
-import subprocess
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Dict, cast
 
@@ -29,25 +12,6 @@ from loguru import logger
 from market_data.domain.exceptions import DataQualityError  # noqa: F401
 from market_data.domain.quality.types import DataQualityReport, QualityIssue
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
-
-# ===========================================================================
-# Helpers
-# ===========================================================================
-
-
-def _get_git_hash() -> str:
-    """Retorna el git hash corto del HEAD. Fail-soft: retorna 'unknown'."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        return result.stdout.strip() or "unknown"
-    except Exception:
-        return "unknown"
-
 
 # ===========================================================================
 # Constantes — SSOT
@@ -70,7 +34,6 @@ _FLATLINE_THRESHOLD_BY_TF: Dict[str, float] = {
     "1d": 0.002,
 }
 _FLATLINE_THRESHOLD_DEFAULT: float = 0.0001
-
 
 # ===========================================================================
 # Checker
@@ -97,9 +60,11 @@ class DataQualityChecker:
         timeframe: str,
         exchange: str = "unknown",
         rows_removed: int = 0,
+        git_hash: str = "unknown",
     ) -> None:
         self._timeframe = timeframe
         self._exchange = exchange
+        self._git_hash = git_hash
         self._tf_ms = _TF_MS.get(timeframe)
         self._flatline_threshold = _FLATLINE_THRESHOLD_BY_TF.get(timeframe, _FLATLINE_THRESHOLD_DEFAULT)
         self._rows_removed = max(0, int(rows_removed))
@@ -111,7 +76,7 @@ class DataQualityChecker:
             exchange=self._exchange,
             rows=len(df) if df is not None else 0,
             checked_at=datetime.now(timezone.utc).isoformat(),
-            git_hash=_get_git_hash(),
+            git_hash=self._git_hash,
         )
         if df is None or df.is_empty():
             report.issues.append(
@@ -340,6 +305,7 @@ def native_checker_factory(
     timeframe: str,
     exchange: str,
     rows_removed: int,
+    git_hash: str = "unknown",
 ) -> "DataQualityCheckerPort":
     """
     Factory que produce el DataQualityChecker nativo como DataQualityCheckerPort.
@@ -351,6 +317,7 @@ def native_checker_factory(
         timeframe=timeframe,
         exchange=exchange,
         rows_removed=rows_removed,
+        git_hash=git_hash,
     )
 
 
