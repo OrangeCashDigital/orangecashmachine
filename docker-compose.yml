@@ -373,6 +373,11 @@ services:
       - ocm_internal
       - ocm_public
 
+  # ⚠️ SCAFFOLDING FUTURO (EN CONSTRUCCIÓN — NO EJECUTABLE).
+  # trading es un bounded context en construcción: dominio + tests reales,
+  # pero integrado in-process en paper/live. NO existe trading.main.
+  # Este bloque anticipa la extracción futura; NO levantar hasta que exista
+  # el entrypoint real (ver ADR-0024, NIVEL 2 → NIVEL 1).
   trading:
     profiles: [microservices]
     build:
@@ -416,6 +421,11 @@ services:
       - ocm_internal
       - ocm_public
 
+  # ⚠️ SCAFFOLDING FUTURO (EN CONSTRUCCIÓN — NO EJECUTABLE).
+  # portfolio es un bounded context en construcción: dominio + tests reales,
+  # pero integrado in-process en paper/live. NO existe portfolio.main.
+  # Este bloque anticipa la extracción futura; NO levantar hasta que exista
+  # el entrypoint real (ver ADR-0024, NIVEL 2 → NIVEL 1).
   portfolio:
     profiles: [microservices]
     build:
