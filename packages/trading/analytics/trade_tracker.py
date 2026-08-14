@@ -39,6 +39,7 @@ from loguru import logger
 
 from trading.analytics.trade_record import TradeRecord
 from trading.execution.order import Order, OrderSide
+from trading.execution.settlement import Settlement
 
 
 class TradeTracker:
@@ -167,25 +168,62 @@ class TradeTracker:
         assert entry_order.fill_price is not None, "TradeRecord.close: entry_order sin fill_price"
         assert order.fill_price is not None, "TradeRecord.close: exit order sin fill_price"
         assert entry_order.fill_timestamp is not None, "TradeRecord.close: entry_order sin fill_timestamp"
-        trade = TradeRecord.close(
-            trade_id=entry_order.order_id,
-            symbol=order.symbol,
-            exchange=self._exchange,
-            timeframe=entry_order.signal.timeframe,
-            entry_price=entry_order.fill_price,
-            exit_price=order.fill_price,
-            size_pct=entry_order.size_pct,
-            entry_at=entry_order.fill_timestamp,
-            exit_at=order.fill_timestamp,
-        )
+
+        # Costes (S1): usar fees del settlement si están disponibles.
+        # Si fee_status es UNKNOWN, NO asumir zero (ADR-0026).
+        settlement: Optional[Settlement] = getattr(order, "settlement", None)
+
+        if settlement is not None:
+            # Camino canónico (F3): el TradeRecord consume el settlement.
+            # Toda la economía (closed_qty, WAC, exit, gross, net, fee_status)
+            # proviene del settlement; aquí no se recalcula P&L.
+            trade = TradeRecord.from_settlement(
+                settlement,
+                trade_id=entry_order.order_id,
+                exchange=self._exchange,
+                timeframe=entry_order.signal.timeframe,
+                size_pct=entry_order.size_pct,
+                entry_at=entry_order.fill_timestamp,
+                exit_at=order.fill_timestamp,
+            )
+        else:
+            # Modo defensivo legacy (sin settlement — no debería pasar en un
+            # flujo F3 correcto, pero protegemos contra casos límite).
+            self._log.warning(
+                "TradeTracker: settlement None — cayendo en cálculo legacy "
+                "(F3: settlement debería estar siempre presente)"
+            )
+            closed_qty = entry_order.filled_qty or 1.0
+            avg_entry_price = entry_order.fill_price
+            exit_price = order.fill_price
+            fees = (entry_order.fees or 0.0) + (order.fees or 0.0)
+            entry_notional = (
+                entry_order.fill_price * entry_order.filled_qty if entry_order.filled_qty is not None else None
+            )
+
+            trade = TradeRecord.close(
+                trade_id=entry_order.order_id,
+                symbol=order.symbol,
+                exchange=self._exchange,
+                timeframe=entry_order.signal.timeframe,
+                entry_price=avg_entry_price,
+                exit_price=exit_price,
+                size_pct=entry_order.size_pct,
+                entry_at=entry_order.fill_timestamp,
+                exit_at=order.fill_timestamp,
+                fees=fees,
+                entry_notional=entry_notional,
+                closed_qty=closed_qty,
+            )
 
         with self._lock:
             self._closed.append(trade)
 
         self._log.info(
-            "Trade cerrado | {} pnl={:+.2%} entry={:.4f} exit={:.4f} dur={:.0f}s",
+            "Trade cerrado | {} pnl={:+.2%} net={:+.2%} entry={:.4f} exit={:.4f} dur={:.0f}s",
             trade.trade_id,
             trade.pnl_pct,
+            trade.net_pnl_pct,
             trade.entry_price,
             trade.exit_price,
             trade.duration_s,

@@ -35,7 +35,8 @@ def _pos(order_id: str, symbol: str = "BTC/USDT", side: str = "long") -> Positio
         symbol=symbol,
         exchange="bybit",
         side=side,
-        entry_price=50_000.0,
+        quantity=1.0,
+        avg_entry=50_000.0,
         size_pct=0.10,
         entry_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
         order_id=order_id,
@@ -101,7 +102,8 @@ def test_redis_store_rejects_distinct_position_same_id() -> None:
     # Segunda save con MISMO order_id pero distinto symbol → Redis ya tiene valor
     client.get.return_value = (
         b'{"order_id":"id-1","symbol":"BTC/USDT","exchange":"bybit","side":"long",'
-        b'"entry_price":50000.0,"size_pct":0.1,"entry_at":"2024-01-01T00:00:00+00:00"}'
+        b'"quantity":1.0,"avg_entry":50000.0,"size_pct":0.1,'
+        b'"entry_at":"2024-01-01T00:00:00+00:00"}'
     )
     with pytest.raises(PositionIdCollisionError, match="id-1"):
         store.save(_pos("id-1", symbol="ETH/USDT"))

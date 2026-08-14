@@ -16,6 +16,7 @@ from trading.analytics.performance import PerformanceEngine
 from trading.analytics.trade_record import TradeRecord
 from trading.analytics.trade_tracker import TradeTracker
 from trading.execution.order import Order, OrderSide, OrderStatus
+from trading.execution.settlement import FeeStatus
 from trading.strategies.base import Signal
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,9 +92,12 @@ class TestTradeRecord:
     def test_is_winner_zero_pnl(self):
         assert _make_trade(0.0).is_winner is False
 
-    def test_pnl_usd_returns_none(self):
-        # TradeRecord no conoce capital — siempre None
-        assert _make_trade(0.05).pnl_usd is None
+    def test_pnl_usd_returns_net_realized_usd_when_fees_known(self):
+        """F3: pnl_usd = net_realized_usd cuando fee_status=KNOWN (incluyendo fees=0 conocido)."""
+        trade = _make_trade(0.05)
+        assert trade.fee_status == FeeStatus.KNOWN
+        assert trade.fee_amount_usd == 0.0
+        assert trade.pnl_usd == pytest.approx(2500.0)  # net = gross - 0 = 2500
 
     def test_str_contains_win_loss(self):
         assert "WIN" in str(_make_trade(0.05))
@@ -215,22 +219,33 @@ class TestPerformanceEngine:
         trades = self._trades([-0.05, -0.03, -0.02])
         assert PerformanceEngine.max_drawdown(trades) > 0.0
 
-    def test_total_pnl_pct(self):
+    def test_total_realized_usd(self):
         trades = self._trades([0.05, -0.02, 0.03])
-        assert PerformanceEngine.total_pnl_pct(trades) == pytest.approx(0.06)
+        # Bajo F3 legacy close: closed_qty=1.0, avg=50000.
+        # gross_1 = 1.0×(52500−50000) = 2500
+        # gross_2 = 1.0×(49000−50000) = −1000
+        # gross_3 = 1.0×(51500−50000) = 1500
+        # net = gross (fees=0 known) → total_realized_usd = 2500 + (−1000) + 1500 = 3000
+        # total_return_pct = 3000/10000 = 0.3
+        assert PerformanceEngine.total_realized_usd(trades) == pytest.approx(3000.0)
+        assert PerformanceEngine.total_return_pct(trades, 10_000) == pytest.approx(0.3)
 
-    def test_pnl_usd(self):
+    def test_total_realized_usd_single_trade(self):
         trades = self._trades([0.10])
-        assert PerformanceEngine.pnl_usd(trades, 10_000.0) == pytest.approx(1_000.0)
+        # Bajo F3: closed_qty=1.0 legacy, avg=50000, exit=55000.
+        # gross = 1.0 × (55000 − 50000) = 5000.
+        # total_realized_usd = 5000 (fees=0 en paper).
+        assert PerformanceEngine.total_realized_usd(trades) == pytest.approx(5000.0)
+        assert PerformanceEngine.total_return_pct(trades, 10_000) == pytest.approx(0.5)
 
     def test_equity_curve_starts_at_one(self):
         trades = self._trades([0.05, -0.02])
-        curve = PerformanceEngine.equity_curve(trades)
-        assert curve[0] == 1.0
+        curve = PerformanceEngine.equity_curve(trades, capital_usd=10_000)
+        assert curve[0] == pytest.approx(10_000.0)
         assert len(curve) == 3  # punto inicial + un punto por trade (2 trades → 3 puntos)
 
     def test_equity_curve_empty(self):
-        assert PerformanceEngine.equity_curve([]) == [1.0]
+        assert PerformanceEngine.equity_curve([], capital_usd=10_000) == [10_000.0]
 
     def test_profit_factor_no_losses(self):
         s = PerformanceEngine.summarize(self._trades([0.05, 0.03]))
@@ -243,6 +258,7 @@ class TestPerformanceEngine:
         assert s.winning_trades == 3
         assert s.losing_trades == 2
         assert s.win_rate == pytest.approx(0.6)
-        assert s.pnl_usd is not None
+        assert s.total_realized_usd is not None
+        assert s.total_return_pct is not None
         assert s.max_drawdown >= 0.0
         assert "Performance(" in str(s)

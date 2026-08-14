@@ -286,7 +286,12 @@ def run_ccxt_async(factory, op):
 
 
 def map_ccxt_order(raw: Any) -> "OrderState":
-    """Mapea una orden cruda CCXT a OrderState de dominio."""
+    """Mapea una orden cruda CCXT a OrderState de dominio.
+
+    fees: CCXT reporta comisiones en ``fee`` (singular) o ``fees`` (lista).
+    Se suma el coste de todas las entradas cuando estén disponibles; si el
+    exchange no las reporta, fees=None (sin información de costes).
+    """
     ccxt_status = raw.get("status")  # 'open' | 'closed' | 'canceled' | 'rejected'
     status = OrderStatus.SUBMITTED
     if ccxt_status in ("closed", "filled"):
@@ -295,11 +300,22 @@ def map_ccxt_order(raw: Any) -> "OrderState":
         status = OrderStatus.CANCELLED
     elif ccxt_status in ("rejected", "expired"):
         status = OrderStatus.REJECTED
+
+    fees: Optional[float] = None
+    fee_entry = raw.get("fee")
+    if isinstance(fee_entry, dict) and fee_entry.get("cost") is not None:
+        fees = float(fee_entry["cost"])
+    elif isinstance(raw.get("fees"), list):
+        costs = [float(f["cost"]) for f in raw["fees"] if isinstance(f, dict) and f.get("cost") is not None]
+        if costs:
+            fees = sum(costs)
+
     return OrderState(
         order_id=raw.get("id"),
         status=status,
         filled_qty=raw.get("filled"),
         fill_price=raw.get("average"),
+        fees=fees,
     )
 
 
@@ -447,6 +463,8 @@ class TradingCompositionRoot:
             guard=self._guard,
             exchange=self._trading.exchange,
             market_type=self._trading.market_type,
+            portfolio=self._portfolio,
+            stop_loss=risk_config.stop_loss,
         )
         return TradingRuntime(engine=engine, portfolio=self._portfolio, tracker=tracker)
 
@@ -485,7 +503,7 @@ class TradingCompositionRoot:
             config=risk_config,
             capital_usd=self._trading.capital_usd,
         )
-        executor = PaperExecutor()
+        executor = PaperExecutor(capital_usd=self._trading.capital_usd)
         oms = OMS(
             risk_manager=risk_manager,
             executor=executor,
@@ -500,6 +518,8 @@ class TradingCompositionRoot:
             guard=self._guard,
             exchange=self._trading.exchange,
             market_type=self._trading.market_type,
+            portfolio=self._portfolio,
+            stop_loss=risk_config.stop_loss,
         )
         return TradingRuntime(engine=engine, portfolio=self._portfolio, tracker=tracker)
 

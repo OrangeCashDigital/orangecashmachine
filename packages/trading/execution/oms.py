@@ -13,12 +13,64 @@ Gestionar el ciclo de vida completo de las órdenes:
 No genera señales, no accede a exchanges directamente.
 
 Ciclo correcto de posiciones (importante)
------------------------------------------
+------------------------------------------
   _open_positions = posiciones HELD (abiertas y tenidas).
   submit()  → record_open() SOLO si BUY (abre la posición y la mantiene)
   _fill()   → record_close() SOLO si SELL (cierra la posición realizada)
   _reject() → record_close() SOLO si era BUY (revertir: no se mantuvo abierta)
   cancel()  → record_close() SOLO si era BUY (revertir: no se completó)
+
+S1 — integridad de P&L y fills reales
+--------------------------------------
+  - execute() retorna OrderResult (no bool): el OMS propaga el fill real del
+    exchange (fill_price, filled_qty, fees) vía OrderState.
+  - `_entry_positions` (symbol → (open_qty, avg_entry)) es la fuente de la
+    entrada real como weighted average cost (ADR-0025/F4b): el P&L realizado
+    del SELL se calcula contra ese avg (determinista, INV-04), no contra
+    signal.price (criterio G — la vía paralela Order.pnl_pct fue eliminada) y
+    no contra la última entrada (last-entry-wins eliminado).
+  - record_close(pnl_pct) recibe el P&L real; el drawdown-halt del RiskManager
+    se computa sobre él (criterio F). Un cierre parcial reduce la qty abierta
+    preservando el avg; la posición se da por cerrada a qty = 0.
+
+F1 — Execution Quantity / SELL sizing (ADR-0025/0026/0027)
+-----------------------------------------------------------
+  - La cantidad económica canónica es la de la posición (Position.quantity,
+    SSOT en PortfolioService; `_entry_positions` es su espejo local para las
+    órdenes que pasan por este OMS, alimentado por los mismos fills).
+  - En submit(), un SELL deriva su cantidad REQUESTED de esa posición:
+      target = signal.quantity (TARGET del productor) si lo hay, si no la
+               cantidad abierta local (cierre completo);
+      clamp  = min(target, cantidad abierta local) cuando la local es > 0
+               (INV-08: NUNCA se pide más de lo disponible).
+  - Si no hay cantidad económica disponible (ni local ni TARGET) el SELL se
+    RECHAZA (return None, patrón existente de rechazo) — fail-closed, nunca
+    se vende de una posición desconocida.
+  - El TARGET de la señal solo lo produce el TradingEngine (stop-loss, leído
+    del snapshot del portfolio — la SSOT); cuando el OMS no tiene espejo local
+    (p. ej. tras un restart) confía en ese TARGET. Sin TARGET y sin local →
+    rechazo.
+  - Un fill parcial reduce la cantidad económica disponible (remaining en
+    `_entry_positions` y en la posición del portfolio), así el siguiente SELL
+    nunca vuelve a pedir la cantidad original (requested ≠ executed no
+    contamina el sizing posterior).
+  - fill_price UNKNOWN (exchange sin average): NO se sustituye por
+    signal.price (INV-10, ADR-0026). La cantidad ejecutada SÍ se contabiliza
+    (reduce la disponible); el P&L queda UNKNOWN y se loguea.
+
+F2 — Risk basado en exposición económica real (ADR-0025/0026/0027)
+------------------------------------------------------------------
+  - El OMS alimenta el espejo económico de RiskManager con los mismos fills
+    que su espejo local `_entry_positions` (record_position): la cantidad
+    ejecutada real y el WAC. Así Risk representa la exposición económica real
+    (qty × avg_entry), no signal.quantity/requested/size_pct.
+  - Un cierre PARCIAL (remaining > 0) reduce la cantidad/exposición pero NO
+    cierra la posición: el conteo de posiciones HELD de Risk solo decrementa
+    en cierre completo (record_close(close_position=remaining <= 0)).
+  - BUY con fill_price UNKNOWN: la cantidad ejecutada se registra en Risk con
+    precio UNKNOWN (INV-F2-06: nunca exposición 0).
+  - SELL sin entrada WAC (posición desconocida): se limpia el espejo de Risk
+    y el conteo decrementa (máx. 0) — semántica held-position preservada.
 
 SafeOps
 -------
@@ -42,6 +94,8 @@ from shared.contracts.boundaries import (
     SignalProtocol,
 )  # DIP — execution depende de abstraccion
 from trading.execution.order import Order, OrderSide, OrderStatus
+from trading.execution.settlement import FeeStatus, Settlement
+from trading.execution.transport import OrderResult, OrderState
 from trading.risk.manager import RiskManager
 
 # ---------------------------------------------------------------------------
@@ -55,15 +109,22 @@ class OrderExecutor(Protocol):
     Contrato mínimo del executor de órdenes.
 
     PaperExecutor  → loguea sin tocar dinero real.
-    LiveExecutor   → llama al exchange via CCXT (futuro).
+    LiveExecutor   → llama al exchange via CCXT.
+
+    execute() retorna OrderResult (S1): expone el estado real del exchange
+    (order_id, fill_price, filled_qty, fees) para que el OMS propague el
+    fill real — antes devolvía bool y el OMS rellenaba con signal.price.
     """
 
-    def execute(self, order: Order) -> bool:
+    def execute(self, order: Order) -> OrderResult:
         """
-        Ejecuta la orden.
+        Ejecuta la orden y retorna el resultado con el estado del exchange.
 
-        Returns True si fue aceptada, False si rechazada.
-        No lanza excepciones — errores se capturan internamente.
+        Returns
+        -------
+        OrderResult con accepted (bool) y, si procede, state (OrderState) con
+        el fill confirmado. No lanza excepciones — errores se capturan
+        internamente.
         """
         ...
 
@@ -107,6 +168,13 @@ class OMS:
 
         self._orders: dict[str, Order] = {}
         self._open: dict[str, Order] = {}
+        # symbol → (open_qty, avg_entry) — acumulador WAC de la entrada real
+        # (ADR-0025/F4b). Sustituye a `_entry_prices` (last-entry-wins): la
+        # entrada media de una posición multi-entry es el weighted average
+        # cost, determinista (INV-04) y preservado en cierres parciales. El
+        # P&L realizado del SELL se calcula contra este avg, no contra
+        # signal.price ni contra la última entrada (criterio G).
+        self._entry_positions: dict[str, tuple[float, float]] = {}
         self._lock = threading.RLock()
         self._log = logger.bind(component="OMS")
 
@@ -150,11 +218,35 @@ class OMS:
                 raw_side,
             )
             return None
+
+        # F1 (ADR-0025/0026/0027) — sizing de la orden de reducción/cierre.
+        # Para una posición existente, la cantidad REQUESTED de un SELL se
+        # deriva de la cantidad económica disponible (Position.quantity, SSOT;
+        # `_entry_positions` es el espejo local), NUNCA de signal.quantity/
+        # requested/size_pct cuando difieran. El TARGET de la señal solo lo
+        # produce el TradingEngine (stop-loss, leído del snapshot del
+        # portfolio). Clamp INV-08: nunca se pide más de lo disponible. Un
+        # SELL sin cantidad (ni local ni TARGET) se rechaza — fail-closed.
+        target_qty: Optional[float] = getattr(signal, "quantity", None)
+        if raw_side == "sell":
+            with self._lock:
+                available, _ = self._entry_positions.get(signal.symbol, (0.0, 0.0))
+            if available > 0.0:
+                target_qty = min(target_qty if target_qty is not None else available, available)
+            if target_qty is None or target_qty <= 0.0:
+                self._log.warning(
+                    "SELL sin cantidad económica disponible — rechazado | symbol={} requested={}",
+                    signal.symbol,
+                    getattr(signal, "quantity", None),
+                )
+                return None
+
         order = Order(
             symbol=signal.symbol,
             side=OrderSide(raw_side),
             size_pct=decision.size_pct,
             signal=signal,  # type: ignore[arg-type]  # SignalProtocol satisface Signal estructuralmente
+            quantity=target_qty,
         )
 
         with self._lock:
@@ -188,19 +280,20 @@ class OMS:
 
         # Enviar al executor
         try:
-            accepted = self._executor.execute(order)
+            result = self._executor.execute(order)
         except Exception as exc:
             self._log.error(
                 "executor.execute falló | order={} error={}",
                 order.order_id,
                 exc,
             )
-            accepted = False
+            result = OrderResult(accepted=False, reason=f"{type(exc).__name__}: {exc}")
 
-        if accepted:
-            self._fill(order)
+        if result.accepted:
+            self._fill(order, result.state)
         else:
-            self._reject(order, reason="executor_rejected", revert_open=True)
+            reason = result.reason or "executor_rejected"
+            self._reject(order, reason=reason, revert_open=True)
 
         return order
 
@@ -219,7 +312,7 @@ class OMS:
 
         # Revertir la posición HELD que abrió ese BUY pendiente (si la había).
         if order.side == OrderSide.BUY:
-            self._risk.record_close(pnl_pct=0.0)
+            self._risk.record_close(pnl_usd=None)
         self._log.info("Order cancelled | {}", order_id)
         return True
 
@@ -272,29 +365,166 @@ class OMS:
     # Private
     # ------------------------------------------------------------------
 
-    def _fill(self, order: Order) -> None:
-        """Transiciona a FILLED. record_open ya fue llamado en submit.
+    def _fill(self, order: Order, state: Optional[OrderState] = None) -> None:
+        """Transiciona a FILLED con el fill real del exchange. record_open ya
+        fue llamado en submit.
 
         Semántica held-position (ADR-0003/B-03): `risk._open_positions` cuenta
         posiciones TENIDAS. submit() abre solo si BUY. Aquí un SELL (cerrar la
         posición abierta por un BUY previo) hace record_close. Sin este cierre,
         el contador fuga y `max_open_positions` se agota tras el primer BUY→SELL.
+
+        S1 — propagación del fill real: el precio/cantidad/costes provienen del
+        OrderState devuelto por el executor (exchange), NO de signal.price.
+        En paper, el state trae fill_price = signal.price (fill al precio de
+        señal). El P&L realizado del SELL se calcula contra el weighted average
+        cost del BUY que abrió la posición (self._entry_positions, ADR-0025),
+        no contra signal.price.
+
+        F1 — fill_price UNKNOWN: si el executor no reporta el precio económico
+        del fill, NO se sustituye por signal.price (INV-10, ADR-0026): el
+        precio queda UNKNOWN y el WAC/P&L no se inventan. La cantidad
+        ejecutada (filled_qty) SÍ se contabiliza: reduce la cantidad económica
+        disponible (la invariante F1 es de cantidad). El P&L UNKNOWN se loguea
+        y la contabilidad de cierre usa el patrón existente (record_close 0.0).
         """
+        fill_price = state.fill_price if state is not None else None
+        filled_qty = state.filled_qty if state is not None else None
+        fees = state.fees if state is not None else None
+
         order.transition(
             OrderStatus.FILLED,
-            fill_price=order.signal.price,
+            fill_price=fill_price,
+            filled_qty=filled_qty,
+            fees=fees,
         )
         with self._lock:
             self._open.pop(order.order_id, None)
 
-        if order.side == OrderSide.SELL:
-            self._risk.record_close(pnl_pct=0.0)
+        if order.side == OrderSide.BUY:
+            # ADR-0025/F4b — acumular WAC (qty, avg). La cantidad viene del
+            # fill real (filled_qty). Si el executor no la reporta, no se
+            # inventa: se loguea y no se acumula (INV-01). Igual con el
+            # precio: sin fill_price no hay avg (INV-10), no se usa
+            # signal.price.
+            if filled_qty is not None and filled_qty > 0:
+                with self._lock:
+                    # `fill_price or 0.0` solo alimenta el default de prev_avg,
+                    # que solo se usa cuando prev_qty == 0 (else → fill_price).
+                    prev_qty, prev_avg = self._entry_positions.get(order.symbol, (0.0, fill_price or 0.0))
+                if fill_price is not None and fill_price > 0:
+                    new_qty = prev_qty + filled_qty
+                    new_avg = (prev_qty * prev_avg + filled_qty * fill_price) / new_qty if prev_qty > 0 else fill_price
+                    with self._lock:
+                        self._entry_positions[order.symbol] = (new_qty, new_avg)
+                    # F2 — espejo económico real en Risk: cantidad ejecutada + WAC.
+                    self._risk.record_position(order.symbol, new_qty, new_avg)
+                else:
+                    self._log.warning(
+                        "BUY fill sin fill_price — WAC NO acumulado (precio UNKNOWN, INV-10) | {} symbol={}",
+                        order.order_id,
+                        order.symbol,
+                    )
+                    # F2 (INV-F2-06): la cantidad ejecutada se registra con
+                    # precio UNKNOWN (nunca exposición 0); el avg queda None.
+                    self._risk.record_position(order.symbol, prev_qty + filled_qty, None)
+            else:
+                self._log.warning(
+                    "BUY fill sin filled_qty — no se acumula WAC | {} symbol={}",
+                    order.order_id,
+                    order.symbol,
+                )
+        elif order.side == OrderSide.SELL:
+            with self._lock:
+                entry = self._entry_positions.get(order.symbol)
+            if entry is not None:
+                prev_qty, avg = entry
+                # F1 (INV-08): defensiva — la cantidad cerrada nunca supera lo
+                # mantenido, aunque el exchange reporte un fill mayor.
+                closed_qty = min(filled_qty, prev_qty) if filled_qty is not None else prev_qty
+                remaining = prev_qty - closed_qty
+                with self._lock:
+                    if remaining > 0:
+                        # Cierre parcial: se reduce qty y se preserva el WAC.
+                        self._entry_positions[order.symbol] = (remaining, avg)
+                    else:
+                        self._entry_positions.pop(order.symbol, None)
+                # F2 (INV-F2-02/03): un cierre parcial reduce la cantidad y la
+                # exposición pero NO cierra la posición — el conteo de posiciones
+                # HELD solo decrementa en cierre completo (remaining <= 0). El
+                # espejo económico de Risk refleja la cantidad restante real.
+                self._risk.record_position(order.symbol, remaining if remaining > 0 else None, avg)
+                if fill_price is not None and avg > 0:
+                    # --- settlement canónico ---
+                    settlement = Settlement.compute(
+                        order_id=order.order_id,
+                        symbol=order.symbol,
+                        closed_qty=closed_qty,
+                        avg_entry_price=avg,
+                        exit_price=fill_price,
+                        fee_amount_usd=fees,
+                        fee_currency=None,  # GAP F7: fee_currency no disponible en F3
+                        fee_status=FeeStatus.KNOWN if fees is not None else FeeStatus.UNKNOWN,
+                    )
+                    order.settlement = settlement
+                    # P&L monetario neto: puede ser None si fee_status UNKNOWN
+                    net_realized_usd = settlement.net_realized_usd
+                    self._risk.record_close(
+                        pnl_usd=net_realized_usd,
+                        close_position=remaining <= 0,
+                    )
+                    self._log.debug(
+                        "SELL realizó P&L | {} pnl_usd={:+.2f} gross={:+.2f} net={:+.2f} "
+                        "avg={:.2f} exit={:.2f} closed_qty={} remaining={} fee_status={}",
+                        order.order_id,
+                        net_realized_usd,
+                        settlement.gross_realized_usd,
+                        net_realized_usd,
+                        avg,
+                        fill_price,
+                        closed_qty,
+                        remaining,
+                        settlement.fee_status,
+                    )
+                else:
+                    # SELL sin precio real: P&L UNKNOWN, no se inventa.
+                    # settlement None: downstream consumirá condicionalmente.
+                    order.settlement = None
+                    net_realized_usd = None
+                    self._risk.record_close(
+                        pnl_usd=net_realized_usd,
+                        close_position=remaining <= 0,
+                    )
+                    self._log.warning(
+                        "SELL fill sin fill_price — P&L UNKNOWN, no se inventa | "
+                        "{} symbol={} closed_qty={} remaining={}",
+                        order.order_id,
+                        order.symbol,
+                        closed_qty,
+                        remaining,
+                    )
+            else:
+                # SELL sin BUY previo (posición desconocida) — sin entrada WAC.
+                # F2: si Risk aún rastrea el símbolo (p. ej. BUY con precio
+                # UNKNOWN que OMS no acumuló), se limpia: la posición se da
+                # por cerrada; el conteo held-position decrementa (máx. 0).
+                # P&L: sin entrada WAC, P&L UNKNOWN; settlement None.
+                order.settlement = None
+                self._risk.record_close(pnl_usd=None, close_position=True)
+                self._risk.record_position(order.symbol, None, None)
+                self._log.debug(
+                    "SELL sin entrada WAC registrada | {} avg=None exit={}",
+                    order.order_id,
+                    fill_price,
+                )
 
         self._log.info(
-            "Order FILLED | {} {} @ {:.2f}",
+            "Order FILLED | {} {} @ {} qty={} fees={}",
             order.order_id,
             order.symbol,
             order.fill_price,
+            filled_qty,
+            fees,
         )
         if self._on_fill:
             try:
@@ -319,7 +549,7 @@ class OMS:
             self._open.pop(order.order_id, None)
 
         if revert_open and order.side == OrderSide.BUY:
-            self._risk.record_close(pnl_pct=0.0)
+            self._risk.record_close(pnl_usd=None)
 
         self._log.warning(
             "Order REJECTED | {} reason={}",

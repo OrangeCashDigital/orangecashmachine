@@ -19,16 +19,21 @@ Ver docs/audits/2026-08-composition-root-audit.md, hallazgo 2.2.
 B-15 (H-09) — observabilidad del cierre de posición
 ---------------------------------------------------
 El SELL path captura el retorno de `portfolio.close_position(buy_order_id)`.
-Si devuelve None (cierre no confirmado por SafeOps), se emite
-`logger.critical` con symbol, sell_order_id y buy_order_id para que una
-posición fantasma —TradeTracker considera cerrada mientras
+Si devuelve una porción cerrada `None` (cierre no confirmado por SafeOps),
+se emite `logger.critical` con symbol, sell_order_id y buy_order_id para que
+una posición fantasma —TradeTracker considera cerrada mientras
 PortfolioService/PositionStore puede retenerla— sea visible en operación.
 
 Limitación conocida (contrato actual, no se cambia): `close_position`
-devuelve None tanto si la posición no existía como si falló la persistencia;
-el log no distingue ambos casos. La alerta se emite en ambos porque en el
-SELL path cualquiera de los dos implica divergencia entre tracking y estado
-persistido.
+devuelve porción `None` tanto si la posición no existía como si falló la
+persistencia; el log no distingue ambos casos. La alerta se emite en ambos
+porque en el SELL path cualquiera de los dos implica divergencia entre
+tracking y estado persistido.
+
+ADR-0025 (F4a/F4b): `close_position` devuelve (closed, remaining). `closed`
+trae la porción cerrada con su cantidad y WAC al cierre (datos para el
+realized P&L); `remaining > 0` indica un cierre parcial, en cuyo caso la
+posición queda abierta y el mapeo symbol→buy_order_id se conserva.
 
 La unificación de ownership del estado de posiciones (múltiples fuentes de
 verdad: TradeTracker._open_positions vs PortfolioService) queda FUERA de
@@ -39,7 +44,7 @@ Principios: SRP . DRY . SSOT . DIP
 
 from __future__ import annotations
 
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from loguru import logger
 
@@ -57,17 +62,23 @@ class SupportsPositionSync(Protocol):
         order_id: str,
         symbol: str,
         side: str,
-        entry_price: float,
+        avg_entry: float,
         size_pct: float,
         entry_at,
+        quantity: Optional[float],
     ) -> None: ...
 
-    def close_position(self, order_id: str) -> Any:
-        """Any admite PortfolioService (devuelve Optional[PositionSnapshot])
-        sin acoplar trading->portfolio. El retorno se captura en
-        build_fill_sync para detectar cierres no confirmados (B-15/H-09):
-        `None` = cierre no confirmado -> divergencia potencial entre
-        TradeTracker y PortfolioService (Posición fantasma)."""
+    def close_position(
+        self,
+        order_id: str,
+        quantity: Optional[float] = None,
+    ) -> tuple[Any, float]:
+        """Devuelve (closed, remaining): la porción cerrada (con cantidad y
+        WAC al cierre, ADR-0025) y la cantidad restante tras el cierre
+        (0.0 en cierre completo). `closed` es None si el cierre no se
+        confirmó — el caller lo captura para detectar divergencias
+        (B-15/H-09). Any admite PortfolioService sin acoplar
+        trading->portfolio."""
 
 
 def build_fill_sync(
@@ -98,25 +109,37 @@ def build_fill_sync(
     def on_fill_composite(order) -> None:
         """Callback OMS -> TradeTracker + PortfolioService.
 
+        ADR-0025 (F4a/F4b): la posición se asienta con la cantidad y el
+        precio económicamente ejecutados del fill real (order.filled_qty y
+        order.fill_price), nunca signal.price. La clave de la posición es la
+        pierna de apertura: `open_order_ids[symbol]` se fija con la PRIMERA
+        BUY (setdefault) y se conserva mientras la posición esté abierta;
+        las BUY posteriores se fusionan en la misma posición (WAC). El
+        mapeo se elimina solo cuando el cierre deja la posición a 0.
+
         1. TradeTracker -- siempre primero (analytics independiente de portfolio).
         2. Portfolio    -- sincroniza estado de posicion abierta/cerrada.
         """
         tracker.on_fill(order)
 
         if order.side == OrderSide.BUY:
-            open_order_ids[order.symbol] = order.order_id
+            open_order_ids.setdefault(order.symbol, order.order_id)
             portfolio.open_position(
                 order_id=order.order_id,
                 symbol=order.symbol,
                 side="long",
-                entry_price=order.fill_price,
+                avg_entry=order.fill_price,
                 size_pct=order.size_pct,
                 entry_at=order.fill_timestamp,
+                quantity=order.filled_qty,
             )
         elif order.side == OrderSide.SELL:
-            buy_order_id = open_order_ids.pop(order.symbol, None)
+            buy_order_id = open_order_ids.get(order.symbol)
             if buy_order_id is not None:
-                closed = portfolio.close_position(buy_order_id)
+                closed, remaining = portfolio.close_position(
+                    buy_order_id,
+                    quantity=order.filled_qty,
+                )
                 # B-15 (H-09): cierre no confirmado -> riesgo de posición
                 # fantasma. PortfolioService devuelve None tanto si la
                 # posición no existía como si falló la persistencia (SafeOps);
@@ -134,6 +157,8 @@ def build_fill_sync(
                         order.order_id,
                         buy_order_id,
                     )
+                elif remaining <= 0.0:
+                    open_order_ids.pop(order.symbol, None)
             else:
                 logger.warning(
                     "on_fill_composite | SELL sin BUY previo registrado | symbol={} sell_order_id={}",

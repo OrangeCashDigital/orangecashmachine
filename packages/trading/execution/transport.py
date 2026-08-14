@@ -66,12 +66,16 @@ class OrderState:
 
     Se usa tanto como respuesta de submit() (estado inmediato) como de
     fetch_state() (reconciliación).
+
+    fees: coste total del fill en moneda de cotización (USD), cuando el
+    exchange lo reporte. None si no hay información de costes (paper).
     """
 
     order_id: Optional[str] = None
     status: OrderStatus = OrderStatus.SUBMITTED
     filled_qty: Optional[float] = None
     fill_price: Optional[float] = None
+    fees: Optional[float] = None
     error: Optional[str] = None
 
     @property

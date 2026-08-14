@@ -45,22 +45,30 @@ class PositionSnapshot:
     """
     Estado puntual de una posición abierta.
 
+    ADR-0025 (F4a/F4b): la unidad de la posición es la cantidad económica
+    (``quantity``), no el notional% (``size_pct``). ``avg_entry`` es el
+    weighted average entry cost: en multi-entry se acumula como
+    ``avg = Σ(qty_i × price_i) / Σqty_i`` y se preserva en cierres parciales.
+
     Campos
     ------
     symbol       : par normalizado  (e.g. "BTC/USDT")
     exchange     : exchange de origen
     side         : "long" | "short"
-    entry_price  : precio de entrada (fill_price del BUY)
-    size_pct     : % del capital asignado
+    quantity     : cantidad económicamente ejecutada y mantenida (unidades base)
+    avg_entry    : weighted average entry cost (fill real; nunca signal.price)
+    size_pct     : % del capital asignado (pierna de apertura en multi-entry)
     entry_at     : timestamp UTC de apertura
-    order_id     : correlación con Order.order_id
-    current_price: precio actual (para PnL no realizado); None si no disponible
+    order_id     : correlación con Order.order_id de la pierna de apertura
+    current_price: mark/valuation price (para PnL no realizado); None si no
+                   disponible. Nunca sustituye al execution price (ADR-0025 Q-C).
     """
 
     symbol: str
     exchange: str
     side: str  # "long" | "short"
-    entry_price: float
+    quantity: float  # > 0 — cantidad ejecutada real (INV-01)
+    avg_entry: float  # > 0 — weighted average entry cost (INV-04)
     size_pct: float  # ∈ (0.0, 1.0]
     entry_at: datetime
     order_id: str
@@ -69,31 +77,52 @@ class PositionSnapshot:
     def __post_init__(self) -> None:
         if self.side not in ("long", "short"):
             raise ValueError(f"PositionSnapshot.side debe ser 'long' o 'short', recibido: {self.side!r}")
+        if self.quantity <= 0.0:
+            raise ValueError(f"PositionSnapshot.quantity debe ser positivo (ejecutado real), recibido: {self.quantity}")
+        if self.avg_entry <= 0.0:
+            raise ValueError(f"PositionSnapshot.avg_entry debe ser positivo, recibido: {self.avg_entry}")
         if not (0.0 < self.size_pct <= 1.0):
             raise ValueError(f"PositionSnapshot.size_pct debe estar en (0, 1], recibido: {self.size_pct}")
-        if self.entry_price <= 0.0:
-            raise ValueError(f"PositionSnapshot.entry_price debe ser positivo, recibido: {self.entry_price}")
+
+    @property
+    def cost_basis(self) -> float:
+        """Base de coste en moneda quote: ``quantity × avg_entry`` (sin fees)."""
+        return self.quantity * self.avg_entry
 
     @property
     def unrealized_pnl_pct(self) -> Optional[float]:
         """
-        PnL no realizado si current_price está disponible.
+        PnL no realizado (pct) si current_price está disponible.
 
-        Long:  (current - entry) / entry
-        Short: (entry - current) / entry
+        Long:  (current - avg_entry) / avg_entry
+        Short: (avg_entry - current) / avg_entry
         """
-        if self.current_price is None or self.entry_price <= 0:
+        if self.current_price is None or self.avg_entry <= 0:
             return None
         if self.side == "long":
-            return (self.current_price - self.entry_price) / self.entry_price
-        return (self.entry_price - self.current_price) / self.entry_price
+            return (self.current_price - self.avg_entry) / self.avg_entry
+        return (self.avg_entry - self.current_price) / self.avg_entry
+
+    @property
+    def unrealized_pnl_usd(self) -> Optional[float]:
+        """
+        PnL no realizado en USD si current_price está disponible.
+
+        Long:  quantity × (current - avg_entry)
+        Short: quantity × (avg_entry - current)
+        """
+        if self.current_price is None:
+            return None
+        if self.side == "long":
+            return self.quantity * (self.current_price - self.avg_entry)
+        return self.quantity * (self.avg_entry - self.current_price)
 
     def __str__(self) -> str:
         pnl = self.unrealized_pnl_pct
         pnl_str = f" upnl={pnl:+.2%}" if pnl is not None else ""
         return (
             f"Position({self.side.upper()} {self.symbol}@{self.exchange}"
-            f" entry={self.entry_price:.4f} size={self.size_pct:.1%}{pnl_str})"
+            f" qty={self.quantity:.6f} avg={self.avg_entry:.4f} size={self.size_pct:.1%}{pnl_str})"
         )
 
 

@@ -144,10 +144,11 @@ class TestAssembleRedisDeshabilitado:
             order_id="probe-exchange",
             symbol="BTC/USDT",
             side="long",
-            entry_price=50_000.0,
+            avg_entry=50_000.0,
             size_pct=0.1,
+            quantity=1.0,
         )
-        position = root.portfolio_service.close_position("probe-exchange")
+        position, _ = root.portfolio_service.close_position("probe-exchange")
         assert position is not None
         # exchange no es publico (self._exchange); se verifica ya arriba,
         # de forma indirecta, via el exchange heredado por la posicion

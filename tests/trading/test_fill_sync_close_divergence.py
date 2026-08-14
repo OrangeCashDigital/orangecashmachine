@@ -6,22 +6,23 @@ tests/trading/test_fill_sync_close_divergence.py
 B-15 (H-09): observabilidad de cierre de posición no confirmado.
 
 El SELL path de `build_fill_sync` debe capturar el retorno de
-`portfolio.close_position(buy_order_id)` y, cuando sea None (cierre no
-confirmado por SafeOps), emitir una alerta CRITICAL identificando symbol,
-sell_order_id y buy_order_id — sin lanzar y sin cambiar el contrato SafeOps.
+`portfolio.close_position(buy_order_id)` y, cuando la porción cerrada sea
+None (cierre no confirmado por SafeOps), emitir una alerta CRITICAL
+identificando symbol, sell_order_id y buy_order_id — sin lanzar y sin
+cambiar el contrato SafeOps.
 
 Cobertura
 ---------
-A. Caso normal    : close_position() confirma (retorna no-None) → sin alerta.
-B. Caso de fallo  : close_position() retorna None → alerta de divergencia.
-C. SafeOps         : un fill cuyo close_position() devuelve None NO propaga
-                     excepción desde fill_sync.
+A. Caso normal    : close_position() confirma (porción no-None) → sin alerta.
+B. Caso de fallo  : close_position() devuelve porción None → alerta.
+C. SafeOps         : un fill cuyo close_position() devuelve porción None NO
+                     propaga excepción desde fill_sync.
 D. Captura de logs : se usa un fake de loguru (patrón del proyecto, ver
                      tests/market_data/test_quality_consumer_wiring.py),
                      no una búsqueda frágil de cadena de texto.
 
-El contrato de `close_position` no se modifica: None sigue siendo
-indistinguible entre "posición no existía" y "fallo de persistencia";
+El contrato (ADR-0025/F4b) devuelve (closed, remaining): `closed` None sigue
+siendo indistinguible entre "posición no existía" y "fallo de persistencia";
 en el SELL path ambos implican divergencia (ver documentación en fill_sync).
 """
 
@@ -105,9 +106,9 @@ def test_normal_close_confirmed_no_critical_alert(monkeypatch: pytest.MonkeyPatc
         def open_position(self, **kwargs) -> None:
             pass
 
-        def close_position(self, order_id):
-            # Cierre confirmado → retorna la posición (no None)
-            return _ClosedPosition(order_id)
+        def close_position(self, order_id, quantity=None):
+            # Cierre confirmado → devuelve (porción cerrada, remaining=0)
+            return _ClosedPosition(order_id), 0.0
 
     tracker, portfolio = _TrackerStub(), _Portfolio()
     on_fill = build_fill_sync(tracker, portfolio)
@@ -131,9 +132,9 @@ def test_unconfirmed_close_emits_critical_alert(
         def open_position(self, **kwargs) -> None:
             pass
 
-        def close_position(self, order_id):
-            # SafeOps: retorna None (no confirmado) sin lanzar
-            return None
+        def close_position(self, order_id, quantity=None):
+            # SafeOps: retorna (None, 0.0) (no confirmado) sin lanzar
+            return None, 0.0
 
     on_fill = build_fill_sync(_TrackerStub(), _Portfolio())
     on_fill(_order(OrderSide.BUY, order_id="buy-1"))
@@ -159,8 +160,8 @@ def test_unconfirmed_close_does_not_raise(monkeypatch: pytest.MonkeyPatch) -> No
         def open_position(self, **kwargs) -> None:
             pass
 
-        def close_position(self, order_id):
-            return None
+        def close_position(self, order_id, quantity=None):
+            return None, 0.0
 
     on_fill = build_fill_sync(_TrackerStub(), _Portfolio())
     on_fill(_order(OrderSide.BUY, order_id="buy-1"))
@@ -181,8 +182,8 @@ def test_lone_sell_preserves_warning_not_critical(monkeypatch: pytest.MonkeyPatc
         def open_position(self, **kwargs) -> None:
             pass
 
-        def close_position(self, order_id):
-            return None
+        def close_position(self, order_id, quantity=None):
+            return None, 0.0
 
     on_fill = build_fill_sync(_TrackerStub(), _Portfolio())
     on_fill(_order(OrderSide.SELL, order_id="sell-1"))  # sin BUY previo
@@ -204,8 +205,8 @@ def test_tracker_real_still_syncs_on_fill(monkeypatch: pytest.MonkeyPatch) -> No
         def open_position(self, **kwargs) -> None:
             pass
 
-        def close_position(self, order_id):
-            return None
+        def close_position(self, order_id, quantity=None):
+            return None, 0.0
 
     tracker = TradeTracker(exchange="bybit")
     on_fill = build_fill_sync(tracker, _Portfolio())

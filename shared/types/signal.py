@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Optional
 
 # SignalType re-exporta SignalDirection desde shared.enums (BC-45: el SSOT del
 # vocabulario de dominio vive en la raíz del kernel; types solo re-expone).
@@ -53,6 +54,18 @@ class Signal:
     metadata    : datos adicionales de la estrategia (sin schema fijo).
                   Dict mutable — por convención no se muta tras construcción.
 
+    quantity (F1, ADR-0025/0026/0027)
+    ---------------------------------
+    Cantidad TARGET pedida por el productor de la señal — SOLO un objetivo
+    de tamaño, NUNCA la cantidad económica asentada. Para un SELL/cierre
+    debe estar ya derivada de Position.quantity (p. ej. el stop-loss del
+    TradingEngine la toma del snapshot del portfolio, la SSOT); el OMS la
+    clampa contra su posición económica local (nunca se pide más de lo
+    disponible). Para un BUY, un quantity explícito pide ese tamaño en
+    unidades base en lugar del sizing por capital (size_pct).
+    La cantidad ejecutada real es SIEMPRE Order.filled_qty (fill del
+    exchange), nunca este campo.
+
     Inmutabilidad
     -------------
     frozen=True: la dataclass es inmutable — reasignar cualquier atributo
@@ -69,6 +82,7 @@ class Signal:
     timestamp: datetime
     confidence: float = 1.0
     metadata: dict = field(default_factory=dict)
+    quantity: Optional[float] = None
 
     def __post_init__(self) -> None:
         """Fail-fast: invariantes de dominio validadas en construcción."""
@@ -80,6 +94,8 @@ class Signal:
             raise ValueError("Signal.symbol no puede estar vacío")
         if not self.timeframe:
             raise ValueError("Signal.timeframe no puede estar vacío")
+        if self.quantity is not None and self.quantity <= 0.0:
+            raise ValueError(f"Signal.quantity debe ser > 0 cuando se especifica, recibido: {self.quantity}")
 
     @property
     def signal(self) -> "SignalType":

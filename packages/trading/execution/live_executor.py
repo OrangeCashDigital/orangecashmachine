@@ -20,12 +20,14 @@ Este módulo NO importa market_data ni ccxt (BC-50): opera contra el port
 se inyecta desde trading/bootstrap/composition_root (único punto autorizado).
 
 Reconciliación de fills (ADR-0016/R10)
----------------------------------------
+--------------------------------------
 Tras submit, el executor consulta el estado real del exchange (fetch_state)
 y solo da la orden por aceptada si se confirma FILLED. Si NO se confirma
 (timeout, still open, error), NO llena internamente — política fail-closed:
 sin fill confirmado, sin countdown de posición (B-03). El caller (OMS) trata
-un retorno False como REJECTED y reverte el open.
+un retorno accepted=False como REJECTED y revierte el open. S1: execute()
+retorna el OrderResult completo (accepted + OrderState) para propagar el
+fill real (fill_price, filled_qty, fees) al OMS.
 
 Kill switch / reintentos
 ------------------------
@@ -108,18 +110,21 @@ class LiveExecutor:
     # OrderExecutor Protocol
     # ------------------------------------------------------------------
 
-    def execute(self, order: Order) -> bool:
-        """Envía la orden por el transport, reconcilia y decide True/False.
+    def execute(self, order: Order) -> OrderResult:
+        """Envía la orden por el transport, reconcilia y devuelve el resultado.
 
-        SafeOps: nunca lanza — errores capturados y devueltos como False.
+        S1: retorna el OrderResult completo (no solo el bool accepted) para que
+        el OMS propague el fill real del exchange (OrderState.fill_price,
+        filled_qty, fees).
+
+        SafeOps: nunca lanza — errores capturados y devueltos como rejected.
         """
         try:
-            result = self._submit(order)
+            return self._submit(order)
         except Exception as exc:
             self._log.error("execute: error inesperado | order={} error={}", order.order_id, exc)
             self._record_failure()
-            return False
-        return result.accepted
+            return OrderResult(accepted=False, reason=f"{type(exc).__name__}: {exc}")
 
     # ------------------------------------------------------------------
     # Private
@@ -134,10 +139,20 @@ class LiveExecutor:
         return None
 
     def _notional_qty(self, order: Order) -> float:
-        """Convierte size_pct → qty (unità base) usando el precio de señal.
+        """Cantidad REQUESTED para el exchange.
 
-        notional_usd = capital * size_pct;  qty = notional / precio.
+        F1 (Execution Quantity): si la orden lleva `quantity` (SELL/cierre —
+        el OMS la deriva de la cantidad económica de la posición y la clampa:
+        nunca se pide más de lo disponible), se usa esa cantidad exacta —
+        NO el sizing por capital ni signal.price.
+
+        Sin quantity (BUY por asignación): notional_usd = capital * size_pct;
+        qty = notional / precio de señal.
         """
+        if order.quantity is not None:
+            if order.quantity <= 0:
+                raise ValueError(f"LiveExecutor: order.quantity inválido {order.quantity}")
+            return float(order.quantity)
         price = float(order.signal.price)
         if price <= 0:
             raise ValueError(f"LiveExecutor: precio de señal inválido {price}")

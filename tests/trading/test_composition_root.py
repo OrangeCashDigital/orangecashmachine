@@ -55,8 +55,8 @@ class _FakePortfolio:
     def open_position(self, **kwargs) -> None:
         pass
 
-    def close_position(self, order_id) -> None:
-        pass
+    def close_position(self, order_id, quantity=None):
+        return None, 0.0
 
     def snapshot(self):
         from portfolio.models.position import PortfolioState

@@ -91,65 +91,181 @@ class PortfolioService:
         order_id: str,
         symbol: str,
         side: str,
-        entry_price: float,
+        avg_entry: float,
         size_pct: float,
+        quantity: Optional[float],
         entry_at: Optional[datetime] = None,
     ) -> None:
         """
-        Registra apertura de posición.
+        Registra apertura (o ampliación) de posición.
 
         Llamar desde OMS.on_fill cuando side == BUY.
+
+        ADR-0025 (F4a/F4b):
+        - ``quantity`` es la cantidad económicamente ejecutada del fill real
+          (INV-01); nunca la cantidad pedida ni size_pct.
+        - ``avg_entry`` es el fill real del leg (nunca signal.price, INV-10).
+        - Multi-entry: si ya hay una posición abierta para el mismo
+          symbol+side, se acumula en un único weighted average cost
+          (qty += qty_i, basis += qty_i×price_i, avg = basis/qty). La clave
+          de la posición (order_id/entry_at/size_pct) queda la de la pierna
+          de apertura. Limitación documentada: la posición se agrega por
+          símbolo; no se rastrea por lotes (WAC, ADR-0025).
+
         SafeOps: nunca lanza — errores logueados.
         """
+        if quantity is None or quantity <= 0:
+            self._log.error(
+                "open_position: quantity debe ser > 0 (ejecutado real) | order={} qty={}",
+                order_id,
+                quantity,
+            )
+            return
         try:
+            existing = next(
+                (p for p in self._store.all() if p.symbol == symbol and p.side == side),
+                None,
+            )
+            if existing is not None:
+                new_qty = existing.quantity + quantity
+                new_avg = (existing.quantity * existing.avg_entry + quantity * avg_entry) / new_qty
+                position = PositionSnapshot(
+                    symbol=existing.symbol,
+                    exchange=existing.exchange,
+                    side=existing.side,
+                    quantity=new_qty,
+                    avg_entry=new_avg,
+                    size_pct=existing.size_pct,
+                    entry_at=existing.entry_at,
+                    order_id=existing.order_id,
+                    current_price=existing.current_price,
+                )
+                self._store.save(position)
+                self._log.info(
+                    "position_merged | {} {} qty={:.6f} avg={:.4f} size={:.1%} order={}",
+                    side.upper(),
+                    symbol,
+                    position.quantity,
+                    position.avg_entry,
+                    position.size_pct,
+                    existing.order_id,
+                )
+                return
             position = PositionSnapshot(
                 symbol=symbol,
                 exchange=self._exchange,
                 side=side,
-                entry_price=entry_price,
+                quantity=quantity,
+                avg_entry=avg_entry,
                 size_pct=size_pct,
                 entry_at=entry_at or datetime.now(timezone.utc),
                 order_id=order_id,
             )
             self._store.save(position)
             self._log.info(
-                "position_opened | {} {} @ {:.4f} size={:.1%} order={}",
+                "position_opened | {} {} qty={:.6f} avg={:.4f} size={:.1%} order={}",
                 side.upper(),
                 symbol,
-                entry_price,
-                size_pct,
+                position.quantity,
+                position.avg_entry,
+                position.size_pct,
                 order_id,
             )
         except Exception as exc:
             self._log.error("open_position_error | order={} err={}", order_id, exc)
 
-    def close_position(self, order_id: str) -> Optional[PositionSnapshot]:
+    def close_position(
+        self,
+        order_id: str,
+        quantity: Optional[float] = None,
+    ) -> tuple[Optional[PositionSnapshot], float]:
         """
-        Cierra una posición por order_id.
+        Cierra (total o parcialmente) una posición por order_id.
 
         Llamar desde OMS.on_fill cuando side == SELL.
 
+        ADR-0025 (F4a/F4b): un cierre parcial reduce ``quantity`` en la
+        cantidad realmente cerrada, preserva ``avg_entry`` (WAC) y mantiene
+        la posición abierta con su cost basis coherente; la posición se
+        elimina solo cuando la cantidad restante llega a 0.
+
+        Parameters
+        ----------
+        order_id : key de apertura de la posición (order_id del BUY).
+        quantity : cantidad a cerrar en unidades base. None = cierre completo
+                   (comportamiento legacy).
+
         Returns
         -------
-        PositionSnapshot cerrada, o None si no existía.
-        SafeOps: nunca lanza.
+        (closed, remaining) — la porción cerrada (con quantity = cantidad
+        cerrada y avg_entry = WAC al cierre, datos para el realized P&L
+        `closed_qty × (exit − avg)`), y la cantidad restante tras el cierre
+        (0.0 en cierre completo). `closed` es None si la posición no existía
+        o la persistencia falló (SafeOps).
         """
         try:
             position = self._store.get(order_id)
             if position is None:
                 self._log.warning("close_position_not_found | order={}", order_id)
-                return None
-            self._store.delete(order_id)
-            self._log.info(
-                "position_closed | {} {} order={}",
-                position.side.upper(),
-                position.symbol,
-                order_id,
+                return (None, 0.0)
+            if quantity is not None and quantity > position.quantity:
+                self._log.warning(
+                    "close_position: qty a cerrar excede la posición — cierre completo | "
+                    "order={} close_qty={:.6f} pos_qty={:.6f}",
+                    order_id,
+                    quantity,
+                    position.quantity,
+                )
+            closed_qty = position.quantity if quantity is None else min(quantity, position.quantity)
+            remaining = position.quantity - closed_qty
+
+            closed = PositionSnapshot(
+                symbol=position.symbol,
+                exchange=position.exchange,
+                side=position.side,
+                quantity=closed_qty,
+                avg_entry=position.avg_entry,
+                size_pct=position.size_pct,
+                entry_at=position.entry_at,
+                order_id=position.order_id,
+                current_price=position.current_price,
             )
-            return position
+            if remaining <= 1e-12:
+                self._store.delete(order_id)
+                self._log.info(
+                    "position_closed | {} {} qty={:.6f} avg={:.4f} order={}",
+                    position.side.upper(),
+                    position.symbol,
+                    closed_qty,
+                    position.avg_entry,
+                    order_id,
+                )
+            else:
+                updated = PositionSnapshot(
+                    symbol=position.symbol,
+                    exchange=position.exchange,
+                    side=position.side,
+                    quantity=remaining,
+                    avg_entry=position.avg_entry,
+                    size_pct=position.size_pct,
+                    entry_at=position.entry_at,
+                    order_id=position.order_id,
+                    current_price=position.current_price,
+                )
+                self._store.save(updated)
+                self._log.info(
+                    "position_partially_closed | {} {} closed_qty={:.6f} remaining={:.6f} avg={:.4f} order={}",
+                    position.side.upper(),
+                    position.symbol,
+                    closed_qty,
+                    remaining,
+                    position.avg_entry,
+                    order_id,
+                )
+            return (closed, remaining)
         except Exception as exc:
             self._log.error("close_position_error | order={} err={}", order_id, exc)
-            return None
+            return (None, 0.0)
 
     # ------------------------------------------------------------------
     # Consulta — solo lectura, retorna inmutables

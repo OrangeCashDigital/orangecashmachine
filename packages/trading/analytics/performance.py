@@ -10,19 +10,28 @@ Diseño
 Funciones puras + PerformanceSummary inmutable.
 Sin estado, sin I/O, sin dependencias externas más allá de math.
 
-Métricas implementadas
------------------------
-  total_pnl_pct   : suma de pnl_pct de todos los trades
-  pnl_usd         : total_pnl_pct * capital_usd
-  win_rate        : trades ganadores / total trades
-  avg_win_pct     : promedio de pnl_pct en trades ganadores
-  avg_loss_pct    : promedio de pnl_pct en trades perdedores
-  profit_factor   : gross_profit / gross_loss
-  sharpe_ratio    : media(returns) / std(returns) * sqrt(periods/año)
-  max_drawdown    : máxima caída desde pico en equity curve
-  avg_duration_s  : duración media de trades en segundos
+F3 — semántica canónica de P&L (ADR-0025/0026/0027)
+---------------------------------------------------
+El realized P&L primario es MONETARIO y quantity-aware:
 
-Principios: SOLID · KISS · DRY · SafeOps
+    realized_pnl_usd = closed_qty * (exit_price - WAC)
+
+Por tanto:
+
+  total_realized_usd : Σ de realized P&L en USD (neto si las fees son
+                       conocidas, bruto si fee_status es UNKNOWN — UNKNOWN
+                       nunca se asume como 0).
+  total_return_pct   : total_realized_usd / capital_usd — DERIVADO de una
+                       base monetaria coherente (el capital), no una suma
+                       lineal de porcentajes de trades de distinto tamaño.
+
+Las métricas por-trade (win_rate, avg_win/avg_loss, profit_factor, sharpe)
+siguen siendo porcentuales por trade — son DERIVADAS y comparativas, no una
+fuente económica alternativa.
+
+La equity curve es MONETARIA: capital base + Σ acumulado de realized P&L USD.
+
+Principios: SOLID · KISS · DRY · SafeOps · ADR-0025/0026/0027
 """
 
 from __future__ import annotations
@@ -51,8 +60,9 @@ class PerformanceSummary:
     winning_trades: int
     losing_trades: int
 
-    total_pnl_pct: float  # suma acumulada
-    pnl_usd: Optional[float]  # None si capital_usd no se provee
+    # P&L monetario primario (F3, ADR-0025/0026)
+    total_realized_usd: Optional[float]  # Σ realized P&L USD
+    total_return_pct: Optional[float]  # total_realized_usd / capital_usd
 
     win_rate: Optional[float]  # None si total_trades == 0
     avg_win_pct: Optional[float]
@@ -68,8 +78,12 @@ class PerformanceSummary:
         wr = f"{self.win_rate:.1%}" if self.win_rate is not None else "N/A"
         sr = f"{self.sharpe_ratio:.2f}" if self.sharpe_ratio is not None else "N/A"
         mdd = f"{self.max_drawdown:.2%}"
-        pnl = f"{self.total_pnl_pct:+.2%}"
-        return f"Performance(trades={self.total_trades} pnl={pnl} win_rate={wr} sharpe={sr} max_dd={mdd})"
+        usd = f"{self.total_realized_usd:+.2f}" if self.total_realized_usd is not None else "N/A"
+        ret = f"{self.total_return_pct:+.2%}" if self.total_return_pct is not None else "N/A"
+        return (
+            f"Performance(trades={self.total_trades} realized_usd={usd}"
+            f" return={ret} win_rate={wr} sharpe={sr} max_dd={mdd})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +99,7 @@ class PerformanceEngine:
     Uso:
         summary = PerformanceEngine.summarize(trades, capital_usd=10_000)
         sr      = PerformanceEngine.sharpe_ratio(trades)
-        mdd     = PerformanceEngine.max_drawdown(trades)
+        mdd     = PerformanceEngine.max_drawdown(trades, capital_usd=10_000)
     """
 
     # ------------------------------------------------------------------
@@ -108,8 +122,8 @@ class PerformanceEngine:
                 total_trades=0,
                 winning_trades=0,
                 losing_trades=0,
-                total_pnl_pct=0.0,
-                pnl_usd=0.0 if capital_usd is not None else None,
+                total_realized_usd=0.0 if capital_usd is not None else None,
+                total_return_pct=None,
                 win_rate=None,
                 avg_win_pct=None,
                 avg_loss_pct=None,
@@ -121,9 +135,12 @@ class PerformanceEngine:
 
         winners = [t for t in trades if t.is_winner]
         losers = [t for t in trades if not t.is_winner]
-        returns = [t.pnl_pct for t in trades]
 
-        total_pnl = sum(returns)
+        # P&L monetario primario (F3): neto si fees conocidas, bruto si
+        # UNKNOWN — UNKNOWN nunca se asume como 0 (ADR-0026).
+        total_realized_usd = sum(t.pnl_usd if t.pnl_usd is not None else t.gross_realized_usd for t in trades)
+        total_return_pct = total_realized_usd / capital_usd if capital_usd and capital_usd > 0 else None
+
         win_rate = len(winners) / len(trades)
         avg_win = sum(t.pnl_pct for t in winners) / len(winners) if winners else None
         avg_loss = sum(t.pnl_pct for t in losers) / len(losers) if losers else None
@@ -136,14 +153,14 @@ class PerformanceEngine:
             total_trades=len(trades),
             winning_trades=len(winners),
             losing_trades=len(losers),
-            total_pnl_pct=total_pnl,
-            pnl_usd=total_pnl * capital_usd if capital_usd is not None else None,
+            total_realized_usd=total_realized_usd,
+            total_return_pct=total_return_pct,
             win_rate=win_rate,
             avg_win_pct=avg_win,
             avg_loss_pct=avg_loss,
             profit_factor=profit_factor,
             sharpe_ratio=PerformanceEngine.sharpe_ratio(trades, periods_per_year=periods_per_year),
-            max_drawdown=PerformanceEngine.max_drawdown(trades),
+            max_drawdown=PerformanceEngine.max_drawdown(trades, capital_usd=capital_usd),
             avg_duration_s=(sum(t.duration_s for t in trades) / len(trades)),
         )
 
@@ -181,30 +198,68 @@ class PerformanceEngine:
         return (excess / std_r) * math.sqrt(periods_per_year)
 
     @staticmethod
-    def max_drawdown(trades: list[TradeRecord]) -> float:
+    def equity_curve(
+        trades: list[TradeRecord],
+        capital_usd: Optional[float] = None,
+    ) -> list[float]:
+        """
+        Curva de equity MONETARIA (F3).
+
+        Punto inicial = capital_usd (o 0.0 si no se provee capital).
+        Cada siguiente punto = equity anterior + realized P&L del trade
+        (neto si fees conocidas, bruto si UNKNOWN).
+
+        Retorna [capital_usd] si no hay trades.
+        """
+        curve: list[float] = []
+        equity = capital_usd if capital_usd is not None else 0.0
+        curve.append(round(equity, 6))
+        for trade in trades:
+            pnl = trade.pnl_usd if trade.pnl_usd is not None else trade.gross_realized_usd
+            equity += pnl
+            curve.append(round(equity, 6))
+        return curve
+
+    @staticmethod
+    def max_drawdown(
+        trades: list[TradeRecord],
+        capital_usd: Optional[float] = None,
+    ) -> float:
         """
         Máxima caída desde pico en la equity curve.
 
-        Calcula el drawdown sobre la curva de retornos acumulados.
-        Retorna 0.0 si no hay trades o equity solo sube.
+        Retorna 0.0 si no hay trades o el equity solo sube.
 
         Valor siempre >= 0 (magnitud, no negativo).
+
+        - Si capital_usd se provee: usa la equity curve MONETARIA (F3),
+          drawdown relativo a la equity acumulada.
+        - Si no se provee capital: fallback normalizado sobre pnl_pct por
+          trade (compounding desde 1.0). Es una métrica COMPARATIVA, no una
+          fuente económica de realized P&L (el primario es total_realized_usd).
         """
         if not trades:
             return 0.0
 
-        # Equity curve: capital normalizado a 1.0
-        equity = 1.0
-        peak = 1.0
-        max_dd = 0.0
+        if capital_usd is not None and capital_usd > 0:
+            curve = PerformanceEngine.equity_curve(trades, capital_usd=capital_usd)
+        else:
+            # Fallback normalizado (métrica comparativa, no económica).
+            curve = [1.0]
+            equity = 1.0
+            for trade in trades:
+                equity *= 1.0 + trade.pnl_pct
+                curve.append(equity)
 
-        for trade in trades:
-            equity *= 1.0 + trade.pnl_pct
+        peak = curve[0]
+        max_dd = 0.0
+        for equity in curve[1:]:
             if equity > peak:
                 peak = equity
-            drawdown = (peak - equity) / peak
-            if drawdown > max_dd:
-                max_dd = drawdown
+            if peak > 0:
+                drawdown = (peak - equity) / peak
+                if drawdown > max_dd:
+                    max_dd = drawdown
 
         return max_dd
 
@@ -216,26 +271,17 @@ class PerformanceEngine:
         return sum(1 for t in trades if t.is_winner) / len(trades)
 
     @staticmethod
-    def total_pnl_pct(trades: list[TradeRecord]) -> float:
-        """Suma acumulada de pnl_pct. 0.0 si no hay trades."""
-        return sum(t.pnl_pct for t in trades)
+    def total_realized_usd(trades: list[TradeRecord]) -> float:
+        """
+        P&L realizado total en USD (F3, ADR-0025/0026).
+
+        Σ de realized P&L en USD: neto si las fees son conocidas; si el
+        fee_status es UNKNOWN se usa el gross (nunca se asume fee 0).
+        """
+        return sum(t.pnl_usd if t.pnl_usd is not None else t.gross_realized_usd for t in trades)
 
     @staticmethod
-    def pnl_usd(trades: list[TradeRecord], capital_usd: float) -> float:
-        """P&L total en USD dado un capital base."""
-        return PerformanceEngine.total_pnl_pct(trades) * capital_usd
-
-    @staticmethod
-    def equity_curve(trades: list[TradeRecord]) -> list[float]:
-        """
-        Curva de equity normalizada a 1.0.
-
-        Útil para visualización o cálculos posteriores.
-        Retorna [1.0] si no hay trades.
-        """
-        curve = [1.0]
-        equity = 1.0
-        for trade in trades:
-            equity *= 1.0 + trade.pnl_pct
-            curve.append(round(equity, 6))
-        return curve
+    def total_return_pct(trades: list[TradeRecord], capital_usd: float) -> float:
+        """Rendimiento total derivado: total_realized_usd / capital_usd."""
+        total = PerformanceEngine.total_realized_usd(trades)
+        return total / capital_usd if capital_usd and capital_usd > 0 else 0.0

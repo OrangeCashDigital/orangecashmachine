@@ -252,10 +252,13 @@ def log_cycle_result(
             "  Win rate        : {}",
             f"{summary.win_rate:.1%}" if summary.win_rate is not None else "N/A",
         )
-        logger.info("  PnL total       : {:+.2%}", summary.total_pnl_pct)
         logger.info(
-            "  PnL USD         : {:+.2f}",
-            summary.pnl_usd if summary.pnl_usd is not None else 0.0,
+            "  Return total    : {}",
+            f"{summary.total_return_pct:+.2%}" if summary.total_return_pct is not None else "N/A",
+        )
+        logger.info(
+            "  Realized PnL USD: {:+.2f}",
+            summary.total_realized_usd if summary.total_realized_usd is not None else 0.0,
         )
         if extra_performance:
             logger.info(

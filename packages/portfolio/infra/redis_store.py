@@ -59,7 +59,8 @@ def _serialize(pos: PositionSnapshot) -> str:
             "symbol": pos.symbol,
             "exchange": pos.exchange,
             "side": pos.side,
-            "entry_price": pos.entry_price,
+            "quantity": pos.quantity,
+            "avg_entry": pos.avg_entry,
             "size_pct": pos.size_pct,
             "entry_at": pos.entry_at.isoformat(),
             "current_price": pos.current_price,
@@ -72,6 +73,11 @@ def _deserialize(raw: str) -> Optional[PositionSnapshot]:
     JSON string → PositionSnapshot.
 
     SafeOps: retorna None si el JSON es inválido o faltan campos.
+
+    ADR-0027 (migración): una posición persistida en formato anterior a
+    F4a/F4b (sin quantity/avg_entry) NO se deserializa — se trata como
+    inexistente y se loggea. No se inventa una cantidad: la cantidad
+    económica de una posición persistida sin ella es UNKNOWN (INV-09).
     """
     try:
         data = json.loads(raw)
@@ -80,7 +86,8 @@ def _deserialize(raw: str) -> Optional[PositionSnapshot]:
             symbol=data["symbol"],
             exchange=data["exchange"],
             side=data["side"],
-            entry_price=float(data["entry_price"]),
+            quantity=float(data["quantity"]),
+            avg_entry=float(data["avg_entry"]),
             size_pct=float(data["size_pct"]),
             entry_at=datetime.fromisoformat(data["entry_at"]),
             current_price=data.get("current_price"),

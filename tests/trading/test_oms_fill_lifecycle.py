@@ -21,16 +21,31 @@ from typing import Optional
 
 from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderSide
+from trading.execution.transport import OrderResult, OrderState, OrderStatus
 from trading.risk.manager import RiskManager
 from trading.risk.models import RiskConfig
 from trading.strategies.base import Signal
 
 
 class _AcceptingExecutor:
-    """OrderExecutor que acepta (fill) toda orden — sin I/O."""
+    """OrderExecutor que acepta (fill) toda orden — sin I/O.
 
-    def execute(self, order: Order) -> bool:
-        return True
+    S1: execute() retorna OrderResult (contrato nuevo) — fill al precio de señal.
+    F1: reporta filled_qty (1.0) para que el BUY acumule entrada WAC y el SELL
+    pueda dimensionarse contra la posición económica.
+    """
+
+    def execute(self, order: Order) -> OrderResult:
+        return OrderResult(
+            accepted=True,
+            state=OrderState(
+                order_id=order.order_id,
+                status=OrderStatus.FILLED,
+                fill_price=order.signal.price,
+                filled_qty=1.0,
+                fees=0.0,
+            ),
+        )
 
 
 def _risk_cfg() -> RiskConfig:
@@ -76,7 +91,12 @@ def test_sell_fill_closes_opened_position() -> None:
 
 
 def test_lone_sell_does_not_open_a_position() -> None:
-    """SELL sin BUY previo no debe crear ninguna posición HELD."""
+    """SELL sin BUY previo no debe crear ninguna posición HELD.
+
+    F1: un SELL sin posición económica disponible se RECHAZA en submit
+    (fail-closed, return None) — nunca se vende de una posición desconocida.
+    """
     risk, oms = _new_oms()
-    _submit(oms, OrderSide.SELL)
+    order = _submit(oms, OrderSide.SELL)
+    assert order is None, "SELL sin posición debe rechazarse en submit (F1)"
     assert risk.open_positions == 0, "SELL no abre posición (ni cierra una inexistente)"

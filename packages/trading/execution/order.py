@@ -10,6 +10,14 @@ Ciclo de vida:
                       ↘ REJECTED
                       ↘ CANCELLED
 
+P&L (criterio G / S1)
+---------------------
+Order NO calcula P&L. La vía paralela ``pnl_pct`` que comparaba
+``fill_price`` contra ``signal.price`` fue eliminada (S1) — usaba el precio
+de señal como entrada implícita y divergía del P&L real. El P&L realizado
+se calcula únicamente en TradeTracker/TradeRecord desde los fills reales
+(entry_order.fill_price vs exit fill_price), SSOT del dominio.
+
 SafeOps
 -------
 - Transiciones de estado validadas — grafo explícito, no se puede retroceder.
@@ -25,11 +33,14 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from shared.types.signal import (
     Signal,
 )  # DIP — order depende de domain, no de strategies
+
+if TYPE_CHECKING:
+    from trading.execution.settlement import Settlement
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -92,21 +103,37 @@ class Order:
     # Identidad
     symbol: str
     side: OrderSide
-    size_pct: float  # % del capital, rango (0.0, 1.0]
+    size_pct: float  # % del capital, rango (0, 1]
     signal: Signal
     order_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # Cantidad TARGET pedida al exchange (F1): para SELL/cierre el OMS la
+    # deriva de la cantidad económica disponible (Position.quantity) y la
+    # clampa — NUNCA se pide más de lo disponible. None = sizing por capital
+    # (size_pct × capital / precio). Es REQUESTED, nunca la ejecutada (la
+    # ejecutada es filled_qty, del fill real del exchange).
+    quantity: Optional[float] = None
 
     # Estado — mutable via transition()
     status: OrderStatus = OrderStatus.PENDING
     fill_price: Optional[float] = None
     fill_timestamp: Optional[datetime] = None
     reject_reason: Optional[str] = None
+    filled_qty: Optional[float] = None
+    fees: Optional[float] = None
+    # Settlement canónico calculado por OMS._fill al llenar una orden SELL.
+    # Es la única vía de P&L realizada; downstream consumidores (TradeTracker,
+    # TradeRecord, RiskManager, PerformanceEngine) deben usarlo y no recalcular
+    # P&L de manera distinta. None cuando el fill no produce cierre económico
+    # (BUY, SELL sin entrada WAC, precio UNKNOWN, etc.).
+    settlement: Optional["Settlement"] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         """Validación de invariantes en construcción."""
         if not (0.0 < self.size_pct <= 1.0):
             raise ValueError(f"Order.size_pct debe estar en (0, 1], recibido: {self.size_pct}")
+        if self.quantity is not None and self.quantity <= 0.0:
+            raise ValueError(f"Order.quantity debe ser > 0 cuando se especifica, recibido: {self.quantity}")
 
     # ------------------------------------------------------------------
     # State machine
@@ -119,6 +146,8 @@ class Order:
         kwargs aceptados:
           fill_price      (float)    — para FILLED
           fill_timestamp  (datetime) — para FILLED
+          filled_qty      (float)    — para FILLED (cantidad ejecutada real)
+          fees            (float)    — para FILLED (coste del fill en USD)
           reject_reason   (str)      — para REJECTED
 
         Lanza ValueError si la transición no es válida.
@@ -133,8 +162,18 @@ class Order:
         self.status = new_status
 
         if new_status == OrderStatus.FILLED:
-            self.fill_price = kwargs.get("fill_price", self.signal.price)
+            # F1: fill_price se fija SOLO cuando el caller lo provee. Si el
+            # fill carece de precio económico (state sin fill_price), queda
+            # None (UNKNOWN) — NUNCA se sustituye por signal.price (INV-10,
+            # ADR-0026). El caller (OMS._fill) aplica la política UNKNOWN.
+            self.fill_price = kwargs.get("fill_price")
             self.fill_timestamp = kwargs.get("fill_timestamp", datetime.now(timezone.utc))
+            filled_qty = kwargs.get("filled_qty")
+            if filled_qty is not None:
+                self.filled_qty = filled_qty
+            fees = kwargs.get("fees")
+            if fees is not None:
+                self.fees = fees
         elif new_status == OrderStatus.REJECTED:
             self.reject_reason = kwargs.get("reject_reason", "unknown")
 
@@ -154,28 +193,9 @@ class Order:
             OrderStatus.CANCELLED,
         )
 
-    @property
-    def pnl_pct(self) -> Optional[float]:
-        """
-        P&L aproximado de la orden si está filled.
-
-        Assumption: sistema opera posiciones long únicamente.
-          - BUY  → apertura de posición, P&L no calculable aquí
-                   (requiere precio de cierre futuro).
-          - SELL → cierre de posición; compara fill_price contra
-                   signal.price (precio de entrada implícito).
-
-        Para soporte de short selling, añadir position_side al Order.
-        """
-        if self.status != OrderStatus.FILLED or self.fill_price is None:
-            return None
-        if self.side == OrderSide.SELL:
-            entry = self.signal.price
-            return (self.fill_price - entry) / entry if entry > 0 else None
-        return None
-
     def __repr__(self) -> str:
+        qty = f" qty={self.quantity}" if self.quantity is not None else ""
         return (
             f"Order(id={self.order_id!r}, {self.side.value} {self.symbol}"
-            f" size={self.size_pct:.1%} status={self.status.value})"
+            f" size={self.size_pct:.1%}{qty} status={self.status.value})"
         )

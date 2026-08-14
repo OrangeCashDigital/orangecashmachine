@@ -5,14 +5,17 @@ tests/trading/test_live_executor.py
 
 Guard R9/R10 / F3-B12 (ADR-0016): LiveExecutor sobre OrderTransport.
 
-R9  (positivo):  un fill confirmado por el exchange → execute() True, se
-                 registra success en el guard.
-R10 (negativo):  fallo de transporte → orden rechazada (execute() False), y
-                 la reconciliación NO confirma fill → fail-closed (sin
-                 countdown de posición vía OMS).
+R9  (positivo):  un fill confirmado por el exchange → execute() accepted=True,
+                 se registra success en el guard.
+R10 (negativo):  fallo de transporte → orden rechazada (accepted=False), y la
+                 reconciliación NO confirma fill → fail-closed (sin countdown
+                 de posición vía OMS).
+
+S1: execute() retorna OrderResult (no bool) — se aserta sobre `.accepted` y se
+puede inspeccionar el OrderState del fill real.
 
 Se cubren además:
-  - kill switch activo bloquea el submit (execute() False, sin I/O).
+  - kill switch activo bloquea el submit (accepted=False, sin I/O).
   - convergencia de reintentos con backoff ante error transitorio.
   - PaperTransport y un transport fake validan el flujo orden→fill→estado.
 """
@@ -109,7 +112,7 @@ def test_filled_confirmed_transport_accepts() -> None:
     t = _FakeTransport(submit_state=OrderState(order_id="e1", status=OrderStatus.FILLED, filled_qty=0.02))
     exe = _make_executor(t)
 
-    assert exe.execute(_order()) is True
+    assert exe.execute(_order()).accepted is True
     assert len(t.submitted) == 1
     assert t.submitted[0][0] == "BTC/USDT"
     assert t.submitted[0][1] == "buy"
@@ -132,7 +135,7 @@ def test_submit_error_rejects_and_guard_records_error() -> None:
     t = _FakeTransport(submit_error=RuntimeError("network"))
     exe = _make_executor(t, guard=guard)
 
-    assert exe.execute(_order()) is False
+    assert exe.execute(_order()).accepted is False
     assert guard.summary()["total_errors"] == 1
 
 
@@ -144,7 +147,7 @@ def test_reconciliation_unconfirmed_rejects() -> None:
     )
     exe = _make_executor(t)
 
-    assert exe.execute(_order()) is False
+    assert exe.execute(_order()).accepted is False
     assert t.fetch_ids == ["e1"]
 
 
@@ -154,7 +157,7 @@ def test_kill_switch_blocks_without_io() -> None:
     t = _FakeTransport()
     exe = _make_executor(t, guard=guard)
 
-    assert exe.execute(_order()) is False
+    assert exe.execute(_order()).accepted is False
     assert t.submitted == []  # sin I/O: kill switch aborta antes del submit
 
 
@@ -185,7 +188,7 @@ def test_transient_error_then_success() -> None:
         max_retries=2,
         backoff_s=0.0,
     )
-    assert exe.execute(_order()) is True
+    assert exe.execute(_order()).accepted is True
 
 
 # ── invariantes de construcción ──────────────────────────────────────────────
