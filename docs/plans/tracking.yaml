@@ -1032,7 +1032,7 @@ hallazgos:
     hallazgo_informe: H-09
     fase: F4
     prioridad: ALTA
-    estado: PARCIAL
+    estado: EN_CURSO
     estado_auditoria: CONFIRMADO
     evidencia: "Verificado en F0 2026-07-29: estado de posicion repartido en 3 representaciones mutables: open_order_ids (fill_sync.py:75), _open_positions (analytics/trade_tracker.py:58) y PortfolioService.store; riesgo real: close_position (portfolio_service.py:126-152) traga excepcion (except->None, nunca lanza) y fill_sync descarta el retorno (protocolo fill_sync.py:46-49, rama SELL :96-98) -> cierre puede fallar en silencio sin propagacion"
     solucion: "[PARCIAL] Mitigacion de observabilidad implementada (2026-08-12): el SELL path de build_fill_sync captura el retorno de close_position() y, si es None (cierre no confirmado por SafeOps), emite logger.critical 'POSITION_CLOSE_UNCONFIRMED' con symbol, sell_order_id y buy_order_id — el fallo silencioso de cierre ahora es visible en operacion, sin cambiar el contrato SafeOps ni hacer que el flujo lance. La unificacion definitiva del estado de posicion en PortfolioService (unico dueño mutable, ADR-0006; fill_sync/TradeTracker consumen eventos) queda PENDIENTE — decision arquitectonica no resuelta (ADR-0021 pendiente de redactar)"
