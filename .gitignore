@@ -64,3 +64,8 @@ coverage.json
 # Salidas de verificación empírica — evidencia viva, no versionable.
 # SI la evidencia debe persistirse, ir a un doc en docs/audits/ (como f26c).
 artifacts/
+docs/*.zip
+docs/Untitled_2.py
+docs/data.py
+docs/knowledge/courses/
+docs/knowledge/**/*.pdf

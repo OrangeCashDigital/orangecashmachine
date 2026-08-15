@@ -1,0 +1,25 @@
+# docs/knowledge/mappings/ocm-domains.yaml
+# Cobertura NO verificada salvo que se indique lo contrario.
+# Valores: PRIMARY / SECONDARY / CONTEXTUAL / NONE / UNVERIFIED
+
+domains:
+  market-data:
+    market-microstructure-in-practice-2e: UNVERIFIED
+    trading-and-exchanges-harris: UNVERIFIED
+    data-quality-engineering-financial-services: UNVERIFIED
+  trading:
+    trading-and-exchanges-harris: UNVERIFIED
+    trading-chaos-castellano: UNVERIFIED
+  portfolio:
+    afml-lopez-de-prado: UNVERIFIED
+  research:
+    afml-lopez-de-prado: UNVERIFIED
+  risk:
+    NONE: true
+  architecture:
+    NONE: true
+
+note: >
+  Ningún dominio fue verificado por inspección de contenido más allá de la
+  identificación bibliográfica básica. Todos los valores son UNVERIFIED hasta
+  revisión manual explícita.

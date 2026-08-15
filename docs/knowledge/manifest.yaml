@@ -1,0 +1,484 @@
+# docs/knowledge/manifest.yaml
+# Entrada principal para agentes. NO usar docs/Libros_Referencia/ directamente.
+# status: needs_verification / needs_attribution_review / needs_provenance_review /
+#         needs_legal_review / historical / non_normative / active
+# authority: TIER_0 (código/ADR) > TIER_1 (referencia técnica primaria) >
+#            TIER_2 (secundaria) > TIER_3 (histórica/exploratoria) > TIER_4 (contextual)
+
+resources:
+
+  - id: afml-lopez-de-prado
+    title: "Advances in Financial Machine Learning (SSRN preprint)"
+    authors: null              # needs_verification — mencionado como "Dr. Lopez de Prado" en el cuerpo, no confirmado vía portada
+    publication_year: null     # needs_verification
+    type: paper
+    pages: 61                  # pdfinfo confirmado: Acrobat Distiller 11.0, CreationDate 2018-01-18
+    path: papers/advances-in-financial-machine-learning-ssrn-preprint.pdf
+    status: needs_verification
+    authority: TIER_2
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      Confirmado vía watermark interno "Electronic copy available at:
+      https://ssrn.com/abstract=3104847". Es el preprint SSRN, NO el libro
+      completo publicado por Wiley. El libro completo no está presente en el corpus.
+    provenance: unknown
+
+  - id: trading-chaos-castellano
+    title: "Trading Chaos (adaptación en castellano)"
+    authors: null              # needs_verification — atribuido a Bill Williams solo por filename
+    publication_year: null
+    type: historical
+    pages: null
+    path: books/historical/trading-chaos-castellano.pdf
+    status: needs_attribution_review
+    authority: TIER_3
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      Filename y contenido (índice en español) confirman que es una traducción/
+      adaptación, no el texto original en inglés de Bill Williams. Búsqueda de
+      traductor/editorial/ISBN/copyright en el cuerpo del texto no arrojó resultados.
+      NO se presenta como edición oficial de Bill Williams.
+    provenance: unknown
+
+  - id: data-quality-engineering-financial-services
+    title: "Data Quality Engineering in Financial Services"
+    authors: "Buzzelli, Brian (lista de autores incompleta — needs_verification)"
+    publication_year: 2022     # inferido de CreationDate del PDF, no de portada — needs_verification
+    type: book
+    pages: 177
+    path: books/financial-data-quality/data-quality-engineering-in-financial-services.pdf
+    status: needs_verification
+    authority: TIER_1
+    ocm_domains: [data-quality, financial-data-engineering]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      Metadata interna (Antenna House PDF Output Library, pipeline editorial
+      real, no Calibre) sugiere PDF genuino. Author truncado con ";" final —
+      posible lista de autores incompleta.
+    provenance: unknown
+
+  - id: financial-data-engineering-khraisha
+    title: "Financial Data Engineering"
+    authors: "Tamer Khraisha"
+    publication_year: null
+    type: book
+    pages: 144
+    path: books/data-engineering/financial-data-engineering-khraisha.pdf
+    status: needs_verification
+    authority: TIER_2
+    ocm_domains: [financial-data-engineering, data-engineering]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      Generado vía Calibre con CreationDate igual a la fecha de esta sesión de
+      auditoría; Title contiene placeholder sin rellenar "(for . .)". Metadata
+      de portada NO confiable — pendiente inspección visual de portada real.
+    provenance: unknown
+
+  - id: fundamentals-of-data-engineering-reis-housley
+    title: "Fundamentals of Data Engineering"
+    authors: "Joe Reis, Matt Housley"   # confirmado vía metadata interna del PDF (pdfinfo)
+    publication_year: null
+    type: book
+    pages: 445                 # pdfinfo confirmado
+    path: books/data-engineering/fundamentals-of-data-engineering-reis-housley.pdf
+    status: needs_legal_review
+    authority: TIER_1
+    ocm_domains: [data-engineering]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      Filename contiene explícitamente "(Z-Library)". Se conserva como alerta
+      de provenance/legal review. No se afirma legalidad ni ilegalidad del archivo.
+    provenance: "filename indica Z-Library; no investigado más allá de esto"
+
+  - id: market-microstructure-in-practice-2e
+    title: "Market Microstructure In Practice (Second Edition)"
+    authors: "Charles-Albert Lehalle, Sophie Laruelle"   # needs_verification — filename Author field tenía "Sophie Laruelle" duplicado
+    publication_year: null
+    type: book
+    pages: 339
+    path: books/market-microstructure/market-microstructure-in-practice-2e.pdf
+    status: needs_verification
+    authority: TIER_1
+    ocm_domains: [market-microstructure, market-data]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      Generado vía Calibre, Custom Metadata: no, CreationDate igual a fecha de
+      esta sesión de auditoría. Metadata de portada no confiable hasta verificación visual.
+    provenance: unknown
+
+  - id: trading-and-exchanges-harris
+    title: "Trading and Exchanges: Market Microstructure for Practitioners (Draft Copy)"
+    authors: "Larry Harris"
+    publication_year: 2002     # confirmado en portada: "Draft: March 1, 2002", "©2002 Oxford University Press"
+    type: historical
+    pages: null
+    path: books/historical/trading-and-exchanges-harris-draft-2002.pdf
+    status: historical
+    authority: TIER_2
+    ocm_domains: [market-microstructure, trading]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      CONFIRMADO vía portada: "Draft Copy", "Draft: March 1, 2002". Es un draft
+      pre-publicación, NO necesariamente idéntico a la edición final de Oxford
+      University Press (2003 según registros externos, no verificado aquí).
+    provenance: unknown
+
+  - id: high-frequency-trading-aldridge
+    title: "High-Frequency Trading: A Practical Guide to Algorithmic Strategies and Trading Systems"
+    authors: "Irene Aldridge"   # confirmado vía portada y copyright page
+    publication_year: 2010      # confirmado vía copyright page "© 2010 by Irene Aldridge"
+    type: book
+    pages: 355                  # pdfinfo confirmado
+    path: books/market-microstructure/high-frequency-trading-aldridge-2010.pdf
+    status: active
+    authority: TIER_2
+    ocm_domains: [market-microstructure, trading, quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      NON_AUTHORITATIVE (research_reference) — libro como fuente de conocimiento,
+      NO autoridad arquitectónica. Editorial Wiley (Hoboken) confirmada en portada.
+      Cubre microestructura, execution, event/stat arb, backtesting, HFT.
+      RELEVANCE: HIGH. Relacionado con market-microstructure-in-practice-2e y
+      trading-and-exchanges-harris.
+    provenance: unknown
+
+  - id: mastering-financial-pattern-recognition-kaabar
+    title: "Mastering Financial Pattern Recognition: Finding & Back-Testing Candlestick Patterns with Python"
+    authors: "Sofien Kaabar"    # confirmado vía portada y copyright page
+    publication_year: 2023      # confirmado vía copyright page "© 2023 Sofien Kaabar"
+    type: book
+    pages: 291                  # pdfinfo confirmado
+    path: books/technical-analysis/mastering-financial-pattern-recognition-kaabar-2023.pdf
+    status: active
+    authority: TIER_2
+    ocm_domains: [quant-research, trading]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      NON_AUTHORITATIVE (research_reference) — libro como fuente de conocimiento,
+      NO autoridad arquitectónica. Editorial O'Reilly confirmada en copyright page.
+      Patrones de velas + backtesting con Python. RELEVANCE: MEDIUM.
+    provenance: unknown
+
+  - id: probabilistic-ml-finance-kanungo
+    title: "Probabilistic Machine Learning for Finance and Investing: A Primer to Generative AI with Python"
+    authors: "Deepak K. Kanungo"   # confirmado vía portada y copyright page
+    publication_year: 2023         # confirmado vía copyright page "© 2023 Hedged Capital L.L.C."
+    type: book
+    pages: 267                     # pdfinfo confirmado
+    path: books/machine-learning/probabilistic-ml-finance-investing-kanungo-2023.pdf
+    status: active
+    authority: TIER_2
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      NON_AUTHORITATIVE (research_reference) — libro como fuente de conocimiento,
+      NO autoridad arquitectónica. Editorial O'Reilly confirmada en copyright page.
+      ML probabilístico/generativo para finanzas. RELEVANCE: MEDIUM.
+    provenance: unknown
+
+  - id: cryptocurrency-concepts-liebowitz
+    title: "Cryptocurrency Concepts, Technology, and Applications"
+    authors: "Jay Liebowitz (editor)"   # confirmado vía metadata del PDF
+    publication_year: 2023              # confirmado vía "First edition published 2023" CRC Press
+    type: book
+    pages: 284                          # pdfinfo confirmado
+    path: books/cryptoassets/cryptocurrency-concepts-technology-applications-liebowitz-2023.pdf
+    status: active
+    authority: TIER_3
+    ocm_domains: [market-data, quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      NON_AUTHORITATIVE (conceptual_reference) — libro como fuente de conocimiento,
+      NO autoridad arquitectónica. Editorial CRC Press / Taylor & Francis (1st ed.
+      2023) confirmada. Volumen editado: blockchain, NFTs, crime, regulation, CBDC,
+      Bitcoin. ISBN 9781032324418 (del filename, no verificado en portada interna).
+      RELEVANCE: MEDIUM.
+    provenance: unknown
+
+  - id: trading-systems-and-methods-kaufman
+    title: "Trading Systems and Methods"
+    authors: "Perry J. Kaufman"   # confirmado vía metadata interna del PDF
+    publication_year: 2013        # metadata CreationDate 2013-03-24; coincide con 5ª ed. Wiley
+    type: book
+    pages: null
+    path: books/trading-systems/trading-systems-and-methods-kaufman-2013.pdf
+    status: needs_verification
+    authority: TIER_2
+    ocm_domains: [trading, quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: >
+      NON_AUTHORITATIVE (research_reference) — libro como fuente de conocimiento,
+      NO autoridad arquitectónica. Editorial Wiley (metadata "John Wiley & Sons,
+      Inc.") confirmada vía Info dict del PDF. Identificado originalmente como
+      TSaM.pdf en docs/knowledge/. ADVERTENCIA: PDF truncado/corrupto — sin
+      trailer/xref/EOF (pdfinfo y pdftotext no pueden leerlo); requiere
+      re-extracción antes de uso. ~1100 páginas estimadas (1574 objetos /Page),
+      no verificado. Reference for systematic trading methods, strategy design,
+      quantitative/systematic research and evaluation. Non-authoritative; does
+      not define OCM architecture or current technology/exchange behavior.
+      RELEVANCE: HIGH.
+    provenance: unknown
+
+  # --- Oxford Saïd Business School: 18 archivos de curso ---
+  # Ver courses/oxford-said-algorithmic-trading/ — entradas individuales omitidas
+  # por brevedad; todas comparten:
+  #   type: course_material, authority: TIER_4, status: active,
+  #   ocm_domains: [quant-research], ocm_domains_status: inherited_unverified
+
+  # --- Oxford Saïd Business School — Algorithmic Trading (18 archivos) ---
+  # Carpeta origen: Oxford_Said_Bussines_School (typo original)
+  # Carpeta destino: courses/oxford-said-algorithmic-trading/ (solo se corrige el typo)
+
+  - id: oxford-m1u1-lesson
+    title: "OXF ALG M1U1 Lesson"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U1 Lesson.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 1 — lección."
+    provenance: unknown
+
+  - id: oxford-m1u1-video1-transcript
+    title: "OXF ALG M1U1 Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U1 Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 1 — transcript de video 1."
+    provenance: unknown
+
+  - id: oxford-m1u2-notes
+    title: "OXF ALG M1U2 Notes"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U2 Notes.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 2 — notas."
+    provenance: unknown
+
+  - id: oxford-m1u2-video1-transcript
+    title: "OXF ALG M1U2 Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U2 Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 2 — transcript de video 1."
+    provenance: unknown
+
+  - id: oxford-m1u2-video2-transcript
+    title: "OXF ALG M1U2 Video 2 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U2 Video 2 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 2 — transcript de video 2."
+    provenance: unknown
+
+  - id: oxford-m1u3-notes
+    title: "OXF ALG M1U3 Notes"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U3 Notes.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 3 — notas."
+    provenance: unknown
+
+  - id: oxford-m1u3-video1-transcript
+    title: "OXF ALG M1U3 Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U3 Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 3 — transcript de video 1."
+    provenance: unknown
+
+  - id: oxford-m1u4-infographic-transcript
+    title: "OXF ALG M1U4 Infographic Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U4 Infographic Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 4 — transcript de infografía."
+    provenance: unknown
+
+  - id: oxford-m1u4-video1-transcript
+    title: "OXF ALG M1U4 Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M1U4 Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 1, Unidad 4 — transcript de video 1."
+    provenance: unknown
+
+  - id: oxford-m2u1-lesson-interactive-infographic1-transcript
+    title: "OXF ALG M2U1 Lesson Interactive Infographic 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U1 Lesson Interactive Infographic 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 1 — transcript de infografía interactiva 1."
+    provenance: unknown
+
+  - id: oxford-m2u1-lesson
+    title: "OXF ALG M2U1 Lesson"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U1 Lesson.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 1 — lección."
+    provenance: unknown
+
+  - id: oxford-m2u1-video1-transcript
+    title: "OXF ALG M2U1 Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U1 Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 1 — transcript de video 1."
+    provenance: unknown
+
+  - id: oxford-m2u2-video1-transcript
+    title: "OXF ALG M2U2 Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U2 Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 2 — transcript de video 1."
+    provenance: unknown
+
+  - id: oxford-m2u2-video-set-video2-transcript
+    title: "OXF ALG M2U2 Video set Video 2 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U2 Video set Video 2 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 2 — set de video, transcript de video 2."
+    provenance: unknown
+
+  - id: oxford-m2u2-video-set-video3-transcript
+    title: "OXF ALG M2U2 Video set Video 3 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U2 Video set Video 3 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 2 — set de video, transcript de video 3."
+    provenance: unknown
+
+  - id: oxford-m2u3-notes-video1-transcript
+    title: "OXF ALG M2U3 Notes Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U3 Notes Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 3 — transcript de video 1 de las notas."
+    provenance: unknown
+
+  - id: oxford-m2u3-notes
+    title: "OXF ALG M2U3 Notes"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U3 Notes.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 3 — notas."
+    provenance: unknown
+
+  - id: oxford-m2u3-video1-transcript
+    title: "OXF ALG M2U3 Video 1 Transcript"
+    authors: null
+    publication_year: null
+    type: course_material
+    pages: null
+    path: courses/oxford-said-algorithmic-trading/OXF ALG M2U3 Video 1 Transcript.pdf
+    status: active
+    authority: TIER_4
+    ocm_domains: [quant-research]
+    ocm_domains_status: inherited_unverified
+    notes: "Módulo 2, Unidad 3 — transcript de video 1."
+    provenance: unknown

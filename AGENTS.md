@@ -121,3 +121,43 @@ infrastructure are hybrid during migration. Key facts:
 - `mypy` → typing contracts
 - `pytest` → runtime and integration behavior
 - `import-linter` BC-09 → technology governance (domain no importa frameworks de infra/datos)
+
+## Knowledge Base
+
+1. Empieza siempre por `docs/knowledge/manifest.yaml`.
+2. No recorras ciegamente todos los PDFs de `docs/knowledge/`.
+3. Respeta `status` — metadata `needs_verification` no es un hecho confirmado.
+4. Respeta `authority` — un TIER_3/TIER_4 no es autoridad técnica normativa.
+5. No cites metadata no verificada como si fuera confirmada.
+6. Distingue fuentes primarias (TIER_1) de históricas/draft (TIER_2/TIER_3).
+7. Usa la KB como referencia, no como autoridad arquitectónica.
+8. Ante conflicto entre la KB y código/ADR, el código/ADR gana siempre.
+
+### Gobernanza de la KB (política normativa)
+
+La Knowledge Base informa el razonamiento; NO gobierna OCM. Jerarquía de autoridad (mayor → menor):
+
+- código y comportamiento ejecutable/tests;
+- contratos e invariantes arquitectónicos (import-linter, ports, BC-NN);
+- ADRs y decisiones arquitectónicas aprobadas;
+- documentación oficial de las tecnologías/versiones en uso;
+- documentación interna y Knowledge Base;
+- literatura externa, libros, papers y referencias históricas.
+
+Si una fuente de menor autoridad contradice una de mayor autoridad, prevalece la mayor.
+
+**Libro ≠ contrato.** Un libro/paper/material externo no es un BC-NN, ni un ADR, ni un contrato; no modifica la arquitectura ni autoriza una implementación. Puede motivar una propuesta; el cambio formal pasa por su mecanismo (ADR/contrato/BC).
+
+**Documentación oficial primero.** Para comportamiento actual, API, configuración, compatibilidad, límites, seguridad o versión de una dependencia, la doc oficial de la tecnología prevalece sobre libros/históricos. Los libros son fundamentos conceptuales, no SSOT del comportamiento vigente.
+
+**Conocimiento ≠ evidencia de trading.** Una afirmación externa sobre estrategias, indicadores, patrones, alpha o microestructura es conocimiento/hipótesis, no evidencia de edge en OCM. Promover una hipótesis a estrategia candidata exige investigación reproducible y evidencia.
+
+**Flujo de consulta.** fuente externa → conocimiento/hipótesis → verificación contra autoridades superiores → investigación/validación → evidencia → decisión formal (si cambia arquitectura/contrato) → implementación. Nunca saltarse pasos.
+
+**Gaps.** Si la KB no cubre un asunto, declara el gap explícitamente; no rellenes con inferencias presentadas como hechos. Para tecnología actual, consulta la doc oficial.
+
+**Trazabilidad.** Conserva la procedencia (fuente, contexto, fecha/versión/estado) cuando el sistema documental lo permita. Distingue: conocimiento externo / evidencia de research de OCM / decisión arquitectónica aprobada.
+
+**No-sobrediseño.** La literatura no justifica introducir abstracciones, BCs, servicios, capas o patrones nuevos "por analogía". Toda complejidad nueva exige necesidad concreta + autoridad arquitectónica.
+
+**Estado/vigencia.** Fuentes históricas, antiguas, no verificadas o potencialmente desactualizadas no se presentan como conocimiento operativo vigente. Diferencia referencia histórica/conceptual de documentación vigente.
