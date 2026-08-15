@@ -2243,6 +2243,116 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+- id: B-MD-008
+  hallazgo_informe: B-MD-008
+  fase: F3
+  prioridad: CRITICA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'OMS.cancel() es local-only: packages/trading/execution/oms.py:300-318
+    (transición CANCELLED + pop de _open + record_close, sin llamada al exchange);
+    OrderTransport no tiene cancel (transport.py:96-128); CCXTAdapter no expone cancel_order
+    (ccxt_adapter.py:405 create_order, :462 fetch_order); OMS.cancel() sin callers
+    (grep F-BMD8-04). Carrera CANCEL vs FILL: CANCELLED terminal (order.py:64-74),
+    fill_sync solo en FILLED (fill_sync.py:109). Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
+    F-BMD8-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §3'
+  solucion: 'Diseño conceptual A-MD-004 (propuesto, no implementado): exponer cancel_order
+    en CCXTAdapter, extender OrderTransport con cancel(symbol, exchange_order_id),
+    estado transitorio CANCELLING que resuelve por confirmación del exchange (fill
+    SIEMPRE prevalece), loop manage_open_orders, callbacks al flujo de fill existente
+    (B-12). Reutilizar OMS._fill/WAC/settlement para ALREADY_FILLED. Independiente
+    de la cadena B-MD-003→002→004'
+  pruebas:
+  - 'verificación: rg de callers de OMS.cancel() = 0; protocolo sin método cancel'
+  - 'pendiente: test integración sandbox/mock cancel → confirmación exchange → estado
+    final'
+  - 'pendiente: test carrera cancel vs fill (fill prevalece)'
+  adr_relacionado: A-MD-004 (propuesta de diseño, no escrita)
+  riesgo_residual: 'Alto — sin cancel real, una orden en vuelo no se puede detener
+    en el exchange; divergencia CANCEL/FILL silenciosa (CANCELLED terminal, sin reconciliación
+    periódica). Mitigado parcialmente por market-only y fail-closed de submit (B-12)'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
+        F-BMD8-01..05
+    backlog:
+      estado: HECHO
+      referencia: B-MD-008 en tracking.yaml
+    adr:
+      estado: PENDIENTE
+      referencia: A-MD-004 propuesta en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
+    implementacion:
+      estado: PENDIENTE
+      referencia: null
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: líneas de código verificadas contra HEAD adf941a 2026-08-15
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+- id: B-MD-009
+  hallazgo_informe: B-MD-009
+  fase: F3
+  prioridad: CRITICA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'No existe fetch_balance/balance en todo el repo (grep F-BMD9-01);
+    RiskManager valida contra capital_usd configurado (manager.py:115, sizing :394-401,
+    drawdown :374-386); PortfolioService.capital_usd configurado (portfolio_service.py:63-80,281-284);
+    PositionStore SSOT BC-43 solo en portfolio bootstrap. Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
+    F-BMD9-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §4-6'
+  solucion: 'Diseño conceptual A-MD-005 (propuesto, no implementado): Portfolio como
+    dueño del estado patrimonial (posiciones via PositionStore BC-43 + saldo derivado
+    via reconciler); adapter CCXT fetch_balance en composition root de portfolio;
+    gate en arranque/restart + loop periódico + tras fill/error; RiskManager consume
+    saldo con frescura (B-MD-001) vía port, nunca segunda fuente; discrepancia material
+    → bloquear órdenes + alerta (nunca auto-corregir posiciones). Independiente de
+    la cadena B-MD-003→002→004'
+  pruebas:
+  - 'verificación: rg fetch_balance|get_balance|balance en packages/+apps/ = solo
+    rebalance (falso positivo)'
+  - 'pendiente: test integración fetch_balance real → portfolio materializa → risk
+    consume'
+  - 'pendiente: test política de discrepancia (bloqueo ante discrepancia material)'
+  adr_relacionado: A-MD-005 (propuesta de diseño, no escrita)
+  riesgo_residual: 'Alto — sizing/drawdown contra capital configurado, no real; si
+    el saldo real difiere (fees, transferencias, fills externos), exposición y decisiones
+    incorrectas; divergencia silenciosa (no hay consulta al exchange)'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
+        F-BMD9-01..05
+    backlog:
+      estado: HECHO
+      referencia: B-MD-009 en tracking.yaml
+    adr:
+      estado: PENDIENTE
+      referencia: A-MD-005 propuesta en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
+    implementacion:
+      estado: PENDIENTE
+      referencia: null
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: líneas de código verificadas contra HEAD adf941a 2026-08-15
+    cierre:
+      estado: PENDIENTE
+      referencia: null
 - id: B-22
   hallazgo_informe: H-13
   fase: F5
