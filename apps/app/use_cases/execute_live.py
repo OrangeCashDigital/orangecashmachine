@@ -62,8 +62,9 @@ class LiveEngineResources:
     de ciclo, excepcion, o senal SIGINT/SIGTERM.
 
     exchange_client, kafka_producer y metrics_server son placeholders para
-    cuando esos recursos existan de verdad -- hoy LiveExecutor es un stub
-    sin conexion real al exchange (ver trading/execution/live_executor.py),
+    cuando esos recursos existan de verdad -- el transporte real de
+    LiveExecutor se inyecta desde composition_root (CCXT via
+    trading/bootstrap/composition_root.py, IS_STUB=False desde F3/B-12);
     no hay producer Kafka en el camino de live trading, y no hay
     metrics_server dedicado. Se declaran ahora para que shutdown() no deba
     reescribirse cuando aparezcan -- solo hay que poblarlos aqui.

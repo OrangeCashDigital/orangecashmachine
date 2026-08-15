@@ -208,13 +208,16 @@ uv run live --capital 10000 --symbol BTC/USDT --timeframe 1h \
   --strategy ema_crossover --fast 9 --slow 21
 ```
 
-> **Estado actual (honestidad con el repositorio):** el modo `live` **todavía no envía
-> órdenes reales**. `LiveExecutor` es un *stub* que simula el envío (no hay conexión CCXT
-> activa todavía) — ver hallazgo **H-01** en [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md)
+> **Estado actual (honestidad con el repositorio):** `uv run live` opera en modo **paper**
+> por defecto (`--mode paper`, sin órdenes reales; ADR-0016). Con `--mode live` y
+> credenciales del exchange configuradas, `LiveExecutor` **sí envía órdenes de mercado
+> reales** a través de CCXT (`IS_STUB=False`; F3/B-12 cerrado 2026-08-07) con
+> reconciliación de fills fail-closed (ADR-0016). El estado vigente de cada hallazgo y
+> pendiente se consulta siempre en [`docs/plans/tracking.yaml`](docs/plans/tracking.yaml)
+> (fuente operativa por máquina); el historial del hallazgo H-01 y su resolución están en
+> [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md)
 > y el roadmap en [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md)
-> (fases F1/F3). Esta sección describe la **visión**; el estado vigente se consulta siempre
-> en esas fuentes. La decisión de arquitectura asociada (LiveExecutor real + reconciliación
-> de fills) está propuesta como la **ADR correspondiente** en el Plan Maestro.
+> (fase F3).
 >
 > **SafeOps:** `live` exige `--capital` explícito (sin default). Revisa la configuración
 > de riesgo en `config/risk/` antes de ejecutar.
@@ -313,8 +316,10 @@ Estos principios están formalizados en
 
 **Limitaciones conocidas** (se resuelven en el roadmap, no son defectos del README):
 
-- El modo `live` aún usa un **LiveExecutor stub** que no envía órdenes reales (ver
-  [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md) H-01 y el roadmap de la fase F3 en
+- El modo `live` envía **órdenes reales** con `--mode live` y credenciales configuradas
+  (`IS_STUB=False`, F3/B-12 cerrado); por defecto arranca en paper (ADR-0016). La
+  reconciliación de fills es fail-closed por orden (ver
+  [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md) H-01, ya resuelto, y la fase F3 en
   [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md)).
 - El **estado real y la trazabilidad** de cada hallazgo/pendiente se mantienen en
   [`docs/plans/tracking.yaml`](docs/plans/tracking.yaml) (fuente operativa por máquina);
