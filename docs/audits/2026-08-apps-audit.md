@@ -290,7 +290,7 @@ compartidas; `mypy apps/` re-ejecutado = **7 errores en 3 ficheros** (exacto).
 | # | Severidad | Decisión | Área | Hallazgo | Evidencia |
 |---|---|---|---|---|---|
 | H1 | **Alto** | Corregir | SSOT · DIP | `TradingConfig`/`RiskConfig` se reconstruyen desde `argparse.Namespace` ignorando `AppConfig.trading`/`risk`; el `AppConfig` cargado se descarta en un bridge CLI→Namespace | `execute_live.py:126-186`, `execute_paper.py:144-199`, `live_hydra.py:127-156`, `paper_hydra.py:128-142` |
-| H2 | Medio | **No corregir** | DIP · Clean | `research` importa adaptadores concretos (`IcebergStorageFactory`, `GoldReader`) en lugar de `StorageFactoryPort`/`FeatureSource` | `research/data/data_access.py:40-41,69` |
+| H2 | Medio | **Corregido (F-1, 2026-08-14)** | DIP · Clean | `research` importaba adaptadores concretos (`IcebergStorageFactory`, `GoldReader`) en lugar de `StorageFactoryPort`/`FeatureSource` | `research/data/data_access.py:40-41,69` → resuelto vía composition root + BC-55 |
 | H3 | Medio | **No corregir** | Clean · KISS | `SyntheticDataSource` (test-double numpy/pandas) vive en la capa de aplicación y decide el `FeatureSource` en runtime | `app/use_cases/execute_paper.py:71-136,208-222` |
 | H4 | **Medio** | Corregir | SSOT · Fail-Fast | `getattr(args, "min_order_usd", 10.0)` silencioso; paper ignora `config.risk.order.min_order_usd` mientras live lo usa | `execute_paper.py:196`, `execute_live.py:183`, `live_hydra.py:148`, `paper_hydra.py:128-153` |
 | H5 | Medio | **No corregir** (documentar) | Resiliencia | Rate limit por `request.client.host` colapsa todos los clientes tras un reverse proxy (sin `X-Forwarded-For`) | `api/middleware/rate_limit.py:43-44`, `api/main.py:112-117` |
@@ -349,43 +349,117 @@ Que los use cases consuman directamente objetos tipados `TradingConfig` y `RiskC
 
 ### H2 — (Medio) `research` depende de adaptadores concretos, no de puertos (DIP)
 
-**Decisión: No corregir (deuda aceptable).** Según el criterio de *Research* del
+**Decisión inicial: No corregir (deuda aceptable).** Según el criterio de *Research* del
 marco, no se aplica el mismo nivel de abstracción a `apps/research` sin beneficio
 claro. `IcebergStorageFactory` actúa como el de-facto composition root del paquete
 de notebooks; inyectar `StorageFactoryPort`/`FeatureSource` añadiría abstracción
 sin un consumidor que la justifique. Revisar solo si `research` pasa a ser servicio.
 
-**Evidencia concreta.**
+**Estado 2026-08-14 (F-1): RESUELTO.** La deuda se pagó con la Opción C de la
+auditoría F-1: composition root real de research + data_access sobre contracts.
 
-`apps/research/data/data_access.py:40-41` importa:
+**Evidencia concreta (histórica, pre-F-1).**
+
+`apps/research/data/data_access.py:40-41` importaba:
 
 ```python
 from market_data.adapters.outbound.storage.gold_reader import GoldReader
 from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 ```
 
-y `:69` instancia `_storage_factory = IcebergStorageFactory()` a nivel de módulo.
+y `:69` instanciaba `_storage_factory = IcebergStorageFactory()` a nivel de módulo.
 
 Existen puertos que cumplen exactamente este contrato:
 
 - `OHLCVStorage` / `StorageFactoryPort` — `packages/market_data/ports/outbound/storage.py:37,270`.
 - `FeatureSource` — `shared/contracts/boundaries.py:31` (implementado estructuralmente por `GoldReader`).
 
-`import-linter` **no** prohíbe este import (BC-20 solo fija la dirección: research no importa trading/portfolio/app/api/infrastructure), por lo que es un hueco DIP/Clean, no una violación de contrato.
+`import-linter` **no** prohibía este import (BC-20 solo fija la dirección: research no importa trading/portfolio/app/api/infrastructure), por lo que era un hueco DIP/Clean, no una violación de contrato.
 
-**Impacto técnico.**
+**Impacto técnico (histórico).**
 
-- `research` queda acoplado al detalle de implementación del backend de storage. Un cambio de backend (p. ej. un nuevo factory Iceberg con catálogo) rompe `research` aunque su contrato no cambie.
-- Los tests actuales se ven obligados a patchear la **instancia concreta** (`_storage_factory.get_storage`, `tests/research/test_data_access.py:93`), acoplados a internos del módulo.
+- `research` quedaba acoplado al detalle de implementación del backend de storage. Un cambio de backend (p. ej. un nuevo factory Iceberg con catálogo) rompía `research` aunque su contrato no cambiara.
+- Los tests se veían obligados a patchear la **instancia concreta** (`_storage_factory.get_storage`, `tests/research/test_data_access.py:93`), acoplados a internos del módulo.
 
-**Solución propuesta.**
+**Solución aplicada (F-1, 2026-08-14).**
 
-Inyectar `StorageFactoryPort`/`FeatureSource` como dependencias de `data_access` (parámetros opcionales con las implementaciones por defecto), o exponer un mini composition root para `research`. En el caso de los tests, pasar un fake que implemente el `Protocol` en vez de patchear el concreto.
+1. `apps/research/data/composition_root.py` (nuevo) — único punto de research que
+   conoce los adapters concretos (`IcebergStorageFactory`, `GoldReader`); expone
+   `build_storage_factory()` (→ `StorageFactoryPort`) y `build_feature_reader()`
+   (→ `FeatureReaderPort`).
+2. `apps/research/data/data_access.py` — deja de importar adapters concretos;
+   depende de `StorageFactoryPort` (canónico, `market_data.ports.outbound.storage_factory`)
+   y `FeatureReaderPort`; el singleton module-level de concreto se sustituye por un
+   seam tipado contra el port con default del composition root; se elimina el acceso
+   a `_storage_factory._cache`.
+3. `tests/research/test_data_access.py` — sustituye patches de la instancia concreta
+   por fakes de `StorageFactoryPort`/`FeatureReaderPort` inyectados en el seam.
+4. `architecture/importlinter.toml` — nuevo **BC-55**: research importa
+   `market_data.adapters`/`market_data.infrastructure` SOLO desde
+   `research/data/composition_root.py` (verificado: detecta violación artificial).
+
+**Arquitectura resultante.**
+
+```
+research.data.data_access          (importa ports + composition_root)
+        ↓  StorageFactoryPort / FeatureReaderPort
+research.data.composition_root     (único importador de adapters concretos)
+        ↓
+IcebergStorageFactory / GoldReader (market_data.adapters)
+```
 
 **Justificación.**
 
-- Mejora testabilidad (se mockea el contrato, no la instancia) y desacopla del backend. Es coherente con el resto del repo, donde `application` depende de `ports` y solo los composition roots instancian concretos.
-- **Clasificación:** mejora futura. Para un paquete de notebooks el tradeoff (instancia concreta en módulo) es defendible; no bloquea.
+- Restaura DIP: research depende de contracts, no de implementaciones; los tests
+  mockean el contrato. Coherente con el resto del repo (application→ports, y solo
+  los composition roots instancian concretos — patrón BC-38/BC-50).
+- **Clasificación previa:** mejora futura para paquete de notebooks. La decisión de
+  pagarla (2026-08-14) se tomó al formalizar research como consumidor del gold layer
+  con composition root propio.
+
+---
+
+### Corolario F-6 — (2026-08-14) Imports dinámicos de `market_data` fuera del composition root de trading
+
+**Estado: RESUELTO (extensión de contratos de arquitectura).** Complementa la frontera
+BC-50 (trading importa `market_data` solo desde `trading/bootstrap/composition_root.py`)
+cubriendo el hueco de los imports **dinámicos** con literal string, que el grafo estático
+de import-linter y el test AST de BC-50 no veían.
+
+**Qué se añadió.** Detector AST en `tests/architecture/test_import_contracts.py`:
+`_dynamic_market_data_targets()` recorre los nodos de cada archivo de `packages/trading/`
+y detecta `importlib.import_module("market_data.adapters...")`,
+`importlib.import_module("market_data.infrastructure...")`, `__import__("market_data.adapters...")`
+y `__import__("market_data.infrastructure...")` **solo cuando el primer argumento es un
+literal string** (`ast.Constant`), en cualquier archivo de trading salvo el composition
+root autorizado. Los tests de la clase `TestDynamicMarketDataDetector` (6 casos) demuestran:
+detección de los 4 patrones, no-detección de imports internos legítimos de trading
+(`registry.py` → `trading.strategies.ema_crossover`), no-detección de stdlib, y exclusión
+explícita del composition root autorizado.
+
+**Fuera de alcance (documentado en el propio detector).** Nombres dinámicos construidos con
+variables o f-strings no se detectan — requeriría análisis semántico con ejecución, pertenece
+a otro nivel de análisis. No se amplió el detector a esos casos para no introducir falsos
+positivos.
+
+---
+
+### Deuda técnica registrada — (2026-08-14) `StorageFactoryPort` duplicado
+
+**No corregida (fuera de alcance de F-1).** Existen dos definiciones del mismo port:
+
+- `packages/market_data/ports/outbound/storage_factory.py:40` — **canónica real**, usada por
+  6 consumidores (`main.py`, `resample_ohlcv.py`, `adapters/outbound/storage/__init__.py`,
+  `apps/research/data/*`, tests).
+- `packages/market_data/ports/outbound/storage.py:270` — **duplicado sin consumidores**,
+  semánticamente idéntico.
+
+**Riesgo de mantener ambas:** dos "SSOT" del mismo contrato; si una evoluciona sin la otra,
+el chequeo estructural (`isinstance`/runtime_checkable) y el tipado divergen silenciosamente.
+
+**Decisión.** Consolidar la definición en `storage_factory.py` y eliminar la duplicada de
+`storage.py` toca contratos de import y archivos no necesarios para F-1. Queda como deuda
+técnica documentada; se consolidará en un refactor propio.
 
 ---
 
