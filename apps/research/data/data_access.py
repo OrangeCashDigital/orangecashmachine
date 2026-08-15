@@ -7,8 +7,11 @@ API de acceso a datos OHLCV y features para research y backtesting.
 
 Fuente de datos
 ---------------
-• OHLCV    → IcebergStorageFactory → OHLCVStorage (tabla silver.ohlcv)
-• Features → GoldLoader (parquet gold/features/)
+• OHLCV    → StorageFactoryPort → OHLCVStorage (tabla silver.ohlcv)
+• Features → FeatureReaderPort (parquet gold/features/)
+
+Implementaciones resueltas por research.data.composition_root (F-1): los
+adapters concretos (IcebergStorageFactory / GoldReader) viven SOLO allí.
 
 Uso
 ---
@@ -22,7 +25,8 @@ Principios
 ----------
 • KISS    — API simple: get_ohlcv(symbol, timeframe)
 • SafeOps — errores explícitos, nunca silenciosos
-• Cache   — gestionado por IcebergStorageFactory (DIP · SSOT)
+• DIP     — data_access depende de ports (StorageFactoryPort / FeatureReaderPort);
+            la implementación concreta la decide el composition root
 • SSOT    — polars como único dtype de retorno; sin conversiones implícitas
 """
 
@@ -37,13 +41,15 @@ if TYPE_CHECKING:
 
 import polars as pl
 from loguru import logger
-from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
-from market_data.adapters.outbound.storage.iceberg_factory import IcebergStorageFactory
 from market_data.domain.exceptions import (
     DataNotFoundError,
     DataReadError,
     MarketDataLoaderError,
 )
+from market_data.ports.outbound.feature_reader import FeatureReaderPort
+from market_data.ports.outbound.storage_factory import StorageFactoryPort
+
+from research.data.composition_root import build_feature_reader, build_storage_factory
 
 __all__ = [
     "get_ohlcv",
@@ -66,7 +72,10 @@ from ocm.config.env_vars import (
 _DEFAULT_EXCHANGE: str = os.environ.get(_OCM_EXCHANGE, "kucoin")
 _DEFAULT_MARKET_TYPE: str = os.environ.get(_OCM_MARKET_TYPE, "spot")
 
-_storage_factory = IcebergStorageFactory()
+# Seam de inyección (F-1): research depende de StorageFactoryPort, no del
+# adaptador concreto. El default lo resuelve el composition root; los tests
+# sustituyen la instancia del módulo (port, no concreto) por un fake.
+_storage_factory: StorageFactoryPort = build_storage_factory()
 
 
 def _get_storage(
@@ -78,11 +87,6 @@ def _get_storage(
     storage = _storage_factory.get_storage(exchange=exc, market_type=mkt)
     logger.debug("Storage resolved | exchange={} market_type={}", exc, mkt)
     return storage
-
-
-def _reset_storage(exchange: Optional[str] = None) -> None:
-    _storage_factory._cache.clear()
-    logger.debug("Storage cache reset | scope={}", exchange or "all")
 
 
 def _parse_utc(value: Optional[str]) -> Optional[datetime]:
@@ -214,14 +218,14 @@ def get_ohlcv_dict(
     )
 
 
-_gold_cache: Dict[str, GoldLoader] = {}
+_gold_cache: Dict[str, FeatureReaderPort] = {}
 
 
-def _get_gold_loader(exchange: Optional[str] = None) -> GoldLoader:
+def _get_gold_loader(exchange: Optional[str] = None) -> FeatureReaderPort:
     key = (exchange or _DEFAULT_EXCHANGE).lower()
     if key not in _gold_cache:
-        _gold_cache[key] = GoldLoader(exchange=key)
-        logger.debug("GoldLoader initialized | exchange={}", key)
+        _gold_cache[key] = build_feature_reader(exchange=key)
+        logger.debug("GoldReader initialized | exchange={}", key)
     return _gold_cache[key]
 
 

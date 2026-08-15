@@ -815,6 +815,32 @@ type = "forbidden"
 source_modules = ["research"]
 forbidden_modules = ["trading", "portfolio", "app", "api", "infrastructure"]
 
+[[tool.importlinter.contracts]]
+# F-1: research importa market_data SOLO a través de contracts (ports) y de su
+# propio composition root (research.data.composition_root). Los adapters y la
+# infraestructura concreta de market_data son detalles que research no debe
+# conocer — la implementación la decide composition_root (DIP).
+#
+# allow_indirect_imports=true: solo se evalúan imports DIRECTOS desde research
+# hacia market_data.adapters/infrastructure. data_access importa ports y
+# composition_root (vía investigación transitiva habría falso positivo: research
+# → composition_root → adapters es el flujo LEGÍTIMO de wiring).
+#
+# EXCEPCIÓN ÚNICA: research/data/composition_root.py — único módulo autorizado
+# a importar adapters concretos (patrón BC-38/BC-50; ver F-1).
+name = "BC-55: research imports market_data adapters/infrastructure only from research/data/composition_root"
+type = "forbidden"
+source_modules = ["research"]
+forbidden_modules = [
+    "market_data.adapters",
+    "market_data.infrastructure",
+]
+allow_indirect_imports = true
+ignore_imports = [
+    "research.data.composition_root -> market_data.adapters.outbound.storage.gold_reader",
+    "research.data.composition_root -> market_data.adapters.outbound.storage.iceberg_factory",
+]
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 7 — tests: contratos del harness Kafka
 # ─────────────────────────────────────────────────────────────────────────────
