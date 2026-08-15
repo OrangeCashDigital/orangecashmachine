@@ -42,6 +42,50 @@ def _python_files(path: Path) -> list[Path]:
     return [f for f in path.rglob("*.py") if "test_" not in f.name]
 
 
+def _dynamic_market_data_targets(filepath: Path) -> list[str]:
+    """
+    Detecta imports DINÁMICOS con argumento literal hacia market_data.
+
+    Cubre exactamente (F-6):
+      · importlib.import_module("market_data.adapters...")
+      · importlib.import_module("market_data.infrastructure...")
+      · __import__("market_data.adapters...")
+      · __import__("market_data.infrastructure...")
+
+    Solo cuando el primer argumento es un LITERAL string (ast.Constant).
+    Nombres construidos con variables/f-strings son indetectables de forma
+    estática fiable — fuera del alcance del detector (evita falsos positivos
+    y análisis estático imposible, ver F-6).
+
+    Devuelve la lista de targets dinámicos market_data detectados.
+    """
+    try:
+        tree = ast.parse(filepath.read_text())
+    except SyntaxError:
+        return []
+    targets: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        is_dynamic_import = (
+            (isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name))
+            and fn.value.id == "importlib"
+            and fn.attr == "import_module"
+        ) or (isinstance(fn, ast.Name) and fn.id == "__import__")
+        if not is_dynamic_import:
+            continue
+        if not node.args:
+            continue
+        arg = node.args[0]
+        if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
+            continue  # no literal — fuera de alcance (F-6)
+        target = arg.value
+        if target == "market_data" or target.startswith("market_data."):
+            targets.append(target)
+    return targets
+
+
 def _imports_in(filepath: Path) -> list[str]:
     """Extrae todos los módulos importados de un archivo .py."""
     try:
@@ -319,6 +363,104 @@ class TestTradingCompositionRoot:
         )
         assert TradingRuntime.__dataclass_params__.frozen is True
         assert hasattr(TradingRuntime, "__slots__") or TradingRuntime.__dataclass_params__.slots is True
+
+    def test_no_dynamic_market_data_imports_outside_composition_root(self):
+        """
+        F-6: ningún import DINÁMICO con literal hacia market_data fuera del
+        composition root.
+
+        import-linter y el test estático de BC-50 solo ven imports en el grafo
+        de nivel de módulo. Un `importlib.import_module("market_data.adapters..."
+        )` con literal string en otro archivo de trading bypasearía esa frontera
+        sin que el grafo estático lo detecte. Este detector AST lo cierra.
+
+        Alcance (deliberadamente acotado, F-6):
+          · importlib.import_module("market_data...")
+          · __import__("market_data...")
+          · solo cuando el argumento es un LITERAL string
+        Nombres dinámicos construidos con variables/f-strings NO se detectan
+        (análisis estático imposible sin ejecución) — fuera de alcance.
+
+        Legítimo y NO dispara el detector: trading/strategies/registry.py usa
+        importlib.import_module("trading.strategies.ema_crossover") — módulo
+        interno de trading, no market_data.
+        """
+        allowed = TRADING_BOOTSTRAP / "composition_root.py"
+        violations: list[str] = []
+        for f in _python_files(TRADING):
+            if f == allowed:
+                continue  # el composition root es el punto autorizado (BC-50)
+            for target in _dynamic_market_data_targets(f):
+                violations.append(f"{f.relative_to(ROOT)}: importlib/__import__ {target}")
+        assert not violations, (
+            "trading usa import DINÁMICO de market_data fuera del composition root (F-6):\n"
+            + "\n".join(f"  {v}" for v in violations)
+            + "\n\nMover el acoplamiento a trading.bootstrap.composition_root "
+            "(ADP: único punto autorizado a tocar market_data)."
+        )
+
+
+class TestDynamicMarketDataDetector:
+    """
+    F-6: tests de regresión del detector de imports dinámicos con literal.
+
+    Demuestran los casos del contrato F-6 sin depender del estado del repo:
+      2. importlib.import_module("market_data.adapters...") → detectado
+      3. __import__("market_data.infrastructure...") → detectado
+      5. imports no relacionados (trading.* / stdlib) → NO detectados
+      6. nombres dinámicos no literales (variable / f-string) → fuera de alcance
+
+    (El caso 1 — import normal prohibido — lo cubre BC-50 y el caso 4 — patrón
+    permitido en el CR — lo cubre la exclusión del escáner, ver
+    test_no_dynamic_market_data_imports_outside_composition_root.)
+    """
+
+    def _write(self, tmp_path: Path, src: str) -> Path:
+        f = tmp_path / "sample.py"
+        f.write_text(src)
+        return f
+
+    def test_detects_importlib_import_module_market_data_adapters(self, tmp_path):
+        f = self._write(
+            tmp_path,
+            'import importlib\nimportlib.import_module("market_data.adapters.outbound.storage.iceberg_factory")\n',
+        )
+        assert _dynamic_market_data_targets(f) == ["market_data.adapters.outbound.storage.iceberg_factory"]
+
+    def test_detects_builtin_import_market_data_infrastructure(self, tmp_path):
+        f = self._write(tmp_path, '__import__("market_data.infrastructure.redis.redis_stream")\n')
+        assert _dynamic_market_data_targets(f) == ["market_data.infrastructure.redis.redis_stream"]
+
+    def test_detects_top_level_market_data_module(self, tmp_path):
+        f = self._write(tmp_path, 'importlib.import_module("market_data")\n')
+        assert _dynamic_market_data_targets(f) == ["market_data"]
+
+    def test_ignores_non_market_data_import_module(self, tmp_path):
+        f = self._write(
+            tmp_path,
+            'import importlib\nimportlib.import_module("trading.strategies.ema_crossover")\n__import__("os")\n',
+        )
+        assert _dynamic_market_data_targets(f) == []
+
+    def test_ignores_dynamic_non_literal_names(self, tmp_path):
+        f = self._write(
+            tmp_path,
+            "import importlib\n"
+            'mod = "market_data.adapters.outbound.storage.iceberg_factory"\n'
+            "importlib.import_module(mod)\n"
+            'importlib.import_module(f"market_data.adapters.{suffix}")\n',
+        )
+        assert _dynamic_market_data_targets(f) == []
+
+    def test_scan_excludes_authorized_composition_root(self, tmp_path):
+        """
+        Caso 4: el escáner de trading excluye explícitamente el composition root
+        autorizado (BC-50/ADP) — mismo patrón, punto permitido.
+        """
+        allowed = TRADING_BOOTSTRAP / "composition_root.py"
+        scanned = [f for f in _python_files(TRADING) if f != allowed]
+        assert allowed not in scanned
+        assert scanned  # la lista de escaneo no está vacía (no test trivial)
 
 
 class TestLiveExecutorFailClosed:
