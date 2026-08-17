@@ -24,7 +24,7 @@ repos:
         pass_filenames: false
       - id: import-linter
         name: Import-linter (arquitectura)
-        entry: uv run lint-imports --config architecture/importlinter.toml
+        entry: uv run lint-imports --config architecture_linter/importlinter.toml
         language: system
         pass_filenames: false
       - id: mypy-shared

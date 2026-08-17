@@ -27,7 +27,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 TRACKING = ROOT / "docs" / "plans" / "tracking.yaml"
-CONFIG = ROOT / "architecture" / "importlinter.toml"
+CONFIG = ROOT / "architecture_linter" / "importlinter.toml"
 CI = ROOT / ".github" / "workflows" / "ocm-ci.yml"
 
 MIN_CONTRACTS = 49

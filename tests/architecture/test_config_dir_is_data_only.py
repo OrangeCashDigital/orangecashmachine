@@ -15,7 +15,7 @@ de lo que import-linter hace para fronteras entre paquetes Python —
 pero import-linter no puede expresarlo porque config/ no es un
 paquete importable (no tiene __init__.py). De ahí que este contrato
 viva como test explícito en vez de como contrato en
-architecture/importlinter.toml.
+architecture_linter/importlinter.toml.
 """
 
 from __future__ import annotations

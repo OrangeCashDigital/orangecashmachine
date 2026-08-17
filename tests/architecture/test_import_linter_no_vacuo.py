@@ -21,9 +21,9 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-CONFIG = ROOT / "architecture" / "importlinter.toml"
+CONFIG = ROOT / "architecture_linter" / "importlinter.toml"
 
-# Baseline F2.1 — SSOT de contratos BC-NN en architecture/importlinter.toml.
+# Baseline F2.1 — SSOT de contratos BC-NN en architecture_linter/importlinter.toml.
 MIN_CONTRACTS_KEPT = 49
 
 

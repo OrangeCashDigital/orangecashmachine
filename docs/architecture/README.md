@@ -103,4 +103,4 @@ patrón ya validado por market-data:
 - ADR-0003 — interfaz angosta `TradingCompositionRoot`
 - ADR-0006 — portfolio posee el estado de posiciones
 - ADR-0012 — `TradingEngine` como runtime puro
-- `architecture/importlinter.toml` — contratos BC-12, BC-13, BC-36, BC-43, BC-44, BC-50
+- `architecture_linter/importlinter.toml` — contratos BC-12, BC-13, BC-36, BC-43, BC-44, BC-50

@@ -36,7 +36,7 @@ jobs:
       - name: Check architecture contracts (no-vacuo)
         run: |
           set -euo pipefail
-          out="$(uv run lint-imports --config architecture/importlinter.toml)"
+          out="$(uv run lint-imports --config architecture_linter/importlinter.toml)"
           echo "$out"
           grep -q "kept" <<<"$out"
           n=$(grep -oP '\d+(?=\s+kept)' <<<"$out")

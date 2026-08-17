@@ -348,10 +348,10 @@ packages = [
 
 # =============================================================================
 # Arquitectura
-# Los contratos de import-linter viven en architecture/importlinter.toml,
+# Los contratos de import-linter viven en architecture_linter/importlinter.toml,
 # NO en este archivo — ver architecture/README.md. Esta separación es
 # deliberada (SRP/desacoplamiento): pyproject.toml declara QUÉ se instala,
 # architecture/ declara QUÉ PUEDE DEPENDER DE QUÉ (bounded contexts, DIP
 # entre capas). Mezclar ambas cosas en un solo archivo violaría SSOT.
-# Invocación: uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports(config_filename='architecture/importlinter.toml'))"
+# Invocación: uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports(config_filename='architecture_linter/importlinter.toml'))"
 # =============================================================================

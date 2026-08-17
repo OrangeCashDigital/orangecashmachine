@@ -3,7 +3,7 @@
 tests/market_data/test_layer_contracts.py
 
 BC-09 (domain no importa frameworks de infra/datos) está gobernado por
-import-linter en architecture/importlinter.toml.
+import-linter en architecture_linter/importlinter.toml.
 
 F-022 (twin-import, docs/audits/2026-08-08-streaming-canary-audit.md):
 el pythonpath incluye "." — packages/ es importable como packages.* y

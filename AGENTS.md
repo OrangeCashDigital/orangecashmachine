@@ -7,7 +7,7 @@ Clean/Hexagonal with bounded contexts and 49 import-linter contracts (BC-NN; bas
 
     uv sync                           # prod deps
     uv sync --group dev               # dev deps (import-linter, mypy, ruff, bandit)
-    uv run lint-imports --config architecture/importlinter.toml  # ARCH CONTRACTS — GATE: broken = blocked merge
+    uv run lint-imports --config architecture_linter/importlinter.toml  # ARCH CONTRACTS — GATE: broken = blocked merge
     uv run pytest tests/ -x -q        # tests, fail-fast
     uv run pytest tests/ -x -q -m integration  # integration tests (need infra)
     uv run ruff check .               # lint
@@ -15,6 +15,9 @@ Clean/Hexagonal with bounded contexts and 49 import-linter contracts (BC-NN; bas
     uv run mypy .                     # type check (excludes tests/, .venv/)
     uv run bandit -r apps ocm packages shared infrastructure   # security audit
     uv run ocm --cfg job              # validate/print Hydra config (no main.py at root)
+    uv run python -m architecture_linter --root .  # Architecture Governance Linter (AST, stdlib-only)
+    uv run python -m architecture_linter --root . --json  # salida JSON para CI (exit 1 si hay FAIL/PARTIAL)
+    uv run pytest tests/architecture_linter/ -q        # tests del linter (por regla + golden contra OCM real)
     uv run ocm-api                    # FastAPI gateway (experimental)
     uv run live                       # live trading — ⚠️ capital real
     uv run paper                      # paper trading
@@ -48,6 +51,21 @@ If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
   `portfolio.bootstrap.composition_root`.
 - shared/ may only import stdlib and approved 3rd-party libs.
 
+## Architecture Governance Linter (`architecture_linter/`)
+
+Herramienta independiente (stdlib-only, sin imports de OCM) que detecta
+violaciones arquitectónicas por AST en 10 invariantes (ARCH-001..010). No
+sustituye a import-linter (BC-NN) ni a los guards de `scripts/`; los
+complementa. Detalles en `docs/audits/2026-08-16-architecture-linter.md`.
+
+- Config: `architecture_linter/architecture_linter.toml` (severidad, allowlist por
+  símbolo). Sin config → defaults y todas las reglas activas.
+- `ARCH-009` reproduce el contrato de capas BC-08 de `architecture_linter/importlinter.toml`
+  (incluye `ignore_imports`); no inventa capas.
+- El linter NO analiza `architecture_linter/` ni `tests/` (roots configurados:
+  `packages, shared, apps, ocm`).
+- Exit codes: 0 = sin FAIL/PARTIAL; 1 = hay FAIL/PARTIAL; 2 = error de ejecución.
+
 ## Active migration: pandas → polars
 
 Domain is 100% framework-agnostic (zero pandas/polars imports). Application and
@@ -65,7 +83,7 @@ infrastructure are hybrid during migration. Key facts:
 
 ## Gotchas
 
-- `import-linter 2.x`: config moved to `architecture/importlinter.toml` (was `pyproject.toml`). Use `uv run lint-imports --config architecture/importlinter.toml`. NEVER `python -m importlinter` (no `__main__.py` in 2.6) and never bare `uv run lint-imports` without `--config` (pyproject.toml no longer has `[tool.importlinter]`, fails with "Could not read any configuration").
+- `import-linter 2.x`: config moved to `architecture_linter/importlinter.toml` (was `pyproject.toml`). Use `uv run lint-imports --config architecture_linter/importlinter.toml`. NEVER `python -m importlinter` (no `__main__.py` in 2.6) and never bare `uv run lint-imports` without `--config` (pyproject.toml no longer has `[tool.importlinter]`, fails with "Could not read any configuration").
 - CI bug (fix en `ocm-ci.yml`) — el job config-validation ejecutaba `OCM_VALIDATE_ONLY=1 uv run python main.py` (no existe main.py en la raíz). Ahora es `OCM_VALIDATE_ONLY=true uv run python -m app.cli.main`. Nota: `OCM_VALIDATE_ONLY` usa `BOOL_TRUE` = {true, yes, on} (`ocm/config/layers/coercion.py`) — `1` NO activa validate-only.
 - E402 allowed only in files explicitly listed in pyproject.toml per-file-ignores (composition roots, entrypoints, tests). Not a global ignore.
 - `type: ignore` requires an explanatory comment (non-default).
@@ -80,7 +98,7 @@ infrastructure are hybrid during migration. Key facts:
 - CD workflow is a placeholder (`workflow_dispatch` only, no automation).
 - `uv run ocm --cfg job` exposes secrets in stdout (Hydra DictConfig pre-Pydantic). Never pipe to logs in production.
 - Config validation: `OCM_VALIDATE_ONLY=true uv run python -m app.cli.main` — validates Hydra+Pydantic bootstrap and exits.
-- Structural invariants beyond import-linter: `tests/architecture/` (import contracts, kafka contracts) and `tests/market_data/test_layer_contracts.py` (placeholder — BC-09 gobernado por import-linter). These supplement, not replace, the import-linter contracts in `architecture/importlinter.toml`.
+- Structural invariants beyond import-linter: `tests/architecture/` (import contracts, kafka contracts) and `tests/market_data/test_layer_contracts.py` (placeholder — BC-09 gobernado por import-linter). These supplement, not replace, the import-linter contracts in `architecture_linter/importlinter.toml`.
 
 ## Package remapping (hatchling)
 
@@ -100,7 +118,7 @@ infrastructure are hybrid during migration. Key facts:
 - `packages/portfolio/` = position management + rebalance.
 - `apps/api/` = FastAPI gateway, experimental. `apps/app/` = CLI entrypoints.
 - `apps/research/` = read-only gold layer consumer for notebooks. Importable as package `research` (root_packages de importlinter); no expone ruta CLI.
-- `pyproject.toml` = SSOT for build, deps, tools. BC-NN contracts live in `architecture/importlinter.toml`.
+- `pyproject.toml` = SSOT for build, deps, tools. BC-NN contracts live in `architecture_linter/importlinter.toml`.
 - `config/` = Hydra YAML (layered: base→env→exchange→pipeline→CLI→env vars).
 - Import graph: `uv run pydeps <package> --max-bacon 4` (pydeps en grupo dev)
 
@@ -112,7 +130,7 @@ infrastructure are hybrid during migration. Key facts:
 - Never commit: `.coverage`, `.venv`, `.pytest_cache`, `uv.lock` changes without real dep change.
 - Never `git push --force` on main.
 - Run before push (domain logic changes):
-  `uv run ruff check . && uv run lint-imports --config architecture/importlinter.toml && uv run pytest tests/ -q`
+  `uv run ruff check . && uv run lint-imports --config architecture_linter/importlinter.toml && uv run pytest tests/ -q`
 
 ## Tool ownership
 

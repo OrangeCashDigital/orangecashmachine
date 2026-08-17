@@ -5,7 +5,7 @@ documenta, respalda y decide arquitectura en OCM.
 
 ## 1. Archivos y artefactos críticos
 
-- architecture/importlinter.toml
+- architecture_linter/importlinter.toml
 - **/bootstrap/composition_root.py de cada bounded context
 - ocm/config/schema.py
 - shared/contracts/boundaries.py
@@ -18,7 +18,7 @@ hasta estar committeado a git.
 ## 2. Cuándo un cambio requiere ADR
 
 - Cambiar la firma del constructor de cualquier Composition Root.
-- Agregar o eliminar un contrato de architecture/importlinter.toml.
+- Agregar o eliminar un contrato de architecture_linter/importlinter.toml.
 - Cambiar quién es dueño de un estado mutable compartido.
 - Documentar y posponer deuda técnica en vez de resolverla ya.
 

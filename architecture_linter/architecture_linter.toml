@@ -1,0 +1,27 @@
+# Configuración del Architecture Governance Linter de OCM.
+# No modifica reglas: ajusta activación, severidad, roots y excepciones justificadas.
+
+[linter]
+roots = ["packages", "shared", "apps", "ocm"]
+exclude_dirs = [".venv", "__pycache__", ".git", ".pytest_cache"]
+
+# Todas las reglas activas por defecto; para limitar, descomentar:
+# enabled_rules = ["ARCH-001", "ARCH-002", ...]
+
+# Severidades ajustables por regla.
+[linter.severity]
+# "ARCH-001" = "warning"
+
+# Excepciones justificadas por símbolo (no por fichero entero).
+# CompositionRoot: permitido por diseño — cada bounded context tiene su propio
+# Composition Root (ADR-0003/BC-17), por lo que el homónimo es esperado.
+# RiskConfig / ConfigurationError / CursorStore: homónimos por BC intencionales —
+# cada bounded context define su propio modelo de configuración/error/estado con
+# responsabilidades distintas (verificado manualmente; informe 2026-08-16).
+[linter.allow]
+"ARCH-007" = [
+    "CompositionRoot",
+    "RiskConfig",
+    "ConfigurationError",
+    "CursorStore",
+]

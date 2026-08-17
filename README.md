@@ -92,11 +92,11 @@ flowchart TB
 
 Las fronteras entre módulos están protegidas por **contratos import-linter** que se
 ejecutan como gate del CI — una violación rompe el pipeline antes de llegar a review.
-La lista completa vive en [`architecture/importlinter.toml`](architecture/importlinter.toml).
+La lista completa vive en [`architecture_linter/importlinter.toml`](architecture_linter/importlinter.toml).
 
 La calidad del Shared Kernel está gobernada por automatización (ADR-0010): contratos
 BC-46/47/48, verificación de SSOT de literales (`scripts/check_ssot_enums.py`),
-métricas de salud (`scripts/metrics_report.py` → `architecture/metrics.json`),
+métricas de salud (`scripts/metrics_report.py`, genera `architecture/metrics.json` bajo demanda — artifact, no versionado),
 `pip-audit` (vulnerabilidades) y hooks de pre-commit (import-linter, mypy, SSOT).
 
 El ensamblaje de dependencias ocurre en **Composition Roots** (uno por bounded context),
@@ -345,7 +345,7 @@ Estos principios están formalizados en
 | [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADRs canónicos — fuente canónica de decisiones por BC (directorio `ADR-NNNN-*.md`; ver su contenido actual, no rangos fijos) |
 | [`docs/architecture/GOVERNANCE.md`](docs/architecture/GOVERNANCE.md) | Gobernanza de la arquitectura                    |
 | [`AGENTS.md`](AGENTS.md)                  | Comandos, convenciones y *gotchas* para desarrolladores                |
-| [`architecture/importlinter.toml`](architecture/importlinter.toml) | Contratos de frontera verificados              |
+| [`architecture_linter/importlinter.toml`](architecture_linter/importlinter.toml) | Contratos de frontera verificados              |
 
 ---
 
@@ -367,7 +367,7 @@ Estos principios están formalizados en
 
    ```bash
    uv run ruff check .
-   uv run lint-imports --config architecture/importlinter.toml
+   uv run lint-imports --config architecture_linter/importlinter.toml
    uv run pytest tests/ -q -m "not integration"
    uv run mypy .
    uv run bandit .

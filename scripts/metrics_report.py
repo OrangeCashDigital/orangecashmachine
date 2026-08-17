@@ -19,7 +19,7 @@ def _run(cmd: list[str]) -> str:
 
 
 def _contracts() -> tuple[int, int]:
-    out = _run(["uv", "run", "lint-imports", "--config", "architecture/importlinter.toml"])
+    out = _run(["uv", "run", "lint-imports", "--config", "architecture_linter/importlinter.toml"])
     m = re.search(r"Contracts: (\d+) kept, (\d+) broken\.", out)
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 

@@ -1,9 +1,9 @@
 # =============================================================================
-# architecture/importlinter.toml — SSOT ejecutable de contratos de arquitectura
+# architecture_linter/importlinter.toml — SSOT ejecutable de contratos de arquitectura
 # OrangeCashMachine
 #
 # Invocación correcta:
-#   uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports(config_filename='architecture/importlinter.toml'))"
+#   uv run python -c "from importlinter.cli import lint_imports; exit(lint_imports(config_filename='architecture_linter/importlinter.toml'))"
 #
 # Este archivo reemplaza a [tool.importlinter] en pyproject.toml (movido aquí
 # para separar configuración de proyecto de reglas arquitectónicas).
