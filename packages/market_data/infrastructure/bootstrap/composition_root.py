@@ -313,10 +313,15 @@ class CompositionRoot:
         def get_source(source_id: str) -> PollingSourcePort:
             return factory[source_id](resolve_provider_api_key(source_id.upper()))
 
+        from market_data.infrastructure.observability.metrics_adapter import (
+            PrometheusExternalMetrics,
+        )
+
         return ExternalIngestionOrchestrator(
             sources=sources,
             get_source=get_source,
             publisher=publisher,
+            metrics=PrometheusExternalMetrics(),
         )
 
     @classmethod

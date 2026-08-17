@@ -11,4 +11,4 @@
 #
 # Importar siempre desde el submódulo:
 #   from market_data.ports.outbound.storage import OHLCVStorage
-#   from market_data.ports.inbound.event_consumer import EventConsumerPort
+#   from market_data.ports.inbound.trades_source import TradesSourceProtocol

@@ -230,9 +230,29 @@ class ExchangeCircuitOpenError(ExchangeAdapterError):
 
     Transitorio: el breaker se cerrará tras reset_timeout.
     Fail-fast: mientras esté abierto, las llamadas se rechazan inmediatamente.
+
+    Lleva el estado del breaker en el momento de la excepción para que
+    application coordine el cooldown sin consultar al adapter (DIP):
+    - ``exchange_id``          : exchange cuyo breaker está abierto.
+    - ``cooldown_remaining_ms``: tiempo restante hasta que el breaker se cierre.
+    - ``fail_counter``         : número de fallos consecutivos registrados.
     """
 
     is_transient: bool = True
+
+    def __init__(
+        self,
+        exchange_id: str,
+        *,
+        cooldown_remaining_ms: float = 0.0,
+        fail_counter: int = 0,
+    ) -> None:
+        self.exchange_id = exchange_id
+        self.cooldown_remaining_ms = cooldown_remaining_ms
+        self.fail_counter = fail_counter
+        super().__init__(
+            f"Circuit open for {exchange_id!r} (fails={fail_counter}, cooldown={cooldown_remaining_ms:.0f}ms)"
+        )
 
 
 # ===========================================================================

@@ -44,6 +44,7 @@ from market_data.ports.inbound.external.polling import (
 from market_data.ports.outbound.external_publisher import (
     ExternalEventPublisherPort,
 )
+from market_data.ports.outbound.metrics import ExternalMetricsPort, NullExternalMetrics
 
 __all__ = [
     "ExternalSourceRuntime",
@@ -102,10 +103,12 @@ class ExternalIngestionOrchestrator:
         sources: list[ExternalSourceRuntime],
         get_source: Callable[[str], PollingSourcePort],
         publisher: ExternalEventPublisherPort,
+        metrics: ExternalMetricsPort | None = None,
     ) -> None:
         self._sources = [s for s in sources if s.enabled]
         self._get_source = get_source
         self._publisher = publisher
+        self._metrics: ExternalMetricsPort = metrics or NullExternalMetrics()
         self._stop_event = asyncio.Event()
         self._last_processed: dict[str, int] = {}
         self._source_instances: dict[str, PollingSourcePort] = {}
@@ -157,6 +160,7 @@ class ExternalIngestionOrchestrator:
 
         while not self._stop_event.is_set():
             cycle_start = asyncio.get_running_loop().time()
+            self._metrics.cycles_total_inc(cfg.source_id, cfg.metric)
             try:
                 events = await self._run_cycle(cfg, self._source_for(cfg.source_id))
                 for event in events:
@@ -173,9 +177,11 @@ class ExternalIngestionOrchestrator:
                 raise
             except ExternalRateLimitError as exc:
                 log.warning("rate_limit_hit — backoff largo | {}", exc)
+                self._metrics.errors_total_inc(cfg.source_id, cfg.metric, "rate_limit")
                 await self._sleep_until_stop(cfg.backoff_cap_s)
             except Exception as exc:  # noqa: BLE001 — error de fuente, backoff
                 log.warning("source_error | {}", exc)
+                self._metrics.errors_total_inc(cfg.source_id, cfg.metric, "transient")
                 await self._retry_cycle(cfg, log)
 
             elapsed = asyncio.get_running_loop().time() - cycle_start
@@ -187,8 +193,10 @@ class ExternalIngestionOrchestrator:
         source: PollingSourcePort,
     ) -> list[ExternalMetricEvent]:
         """Un ciclo completo de adquisición + normalización + publicación."""
+        cycle_start = asyncio.get_running_loop().time()
         request = PollingRequest(metric=cfg.metric, symbols=list(cfg.symbols) or None)
         result = await source.fetch(request)
+        self._metrics.fetches_total_inc(cfg.source_id, cfg.metric)
         fetched_at_ms = int(result.fetched_at.timestamp() * 1000)
         events = normalize(
             source.source_id,
@@ -199,6 +207,12 @@ class ExternalIngestionOrchestrator:
         )
         for event in events:
             await self._publisher.publish(cfg.topic, event)
+        self._metrics.events_published_inc(cfg.source_id, cfg.metric, count=len(events))
+        self._metrics.cycle_duration_observe(
+            cfg.source_id,
+            cfg.metric,
+            duration_ms=int((asyncio.get_running_loop().time() - cycle_start) * 1000),
+        )
         return events
 
     async def _retry_cycle(

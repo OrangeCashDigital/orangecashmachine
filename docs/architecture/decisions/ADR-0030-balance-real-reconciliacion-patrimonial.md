@@ -1,9 +1,9 @@
-# ADR-0030 (PROPUESTA): Balance real y reconciliación patrimonial — Portfolio como dueño del estado financiero (B-MD-009)
+# ADR-0030: Balance real y reconciliación patrimonial — Portfolio como dueño del estado financiero (B-MD-009)
 
-> **ESTADO: PROPUESTA** — borrador de diseño para decisión humana. NO aprobado. NO implementado. Ningún contrato cambia hasta su aceptación formal (proceso ADR + tracking.yaml).
+> **ESTADO: ACEPTADA** — decisión aprobada por el owner el 2026-08-16. NO implementada todavía: los contratos cambian solo cuando la implementación (tracking B-MD-009, cadena `implementacion`) se ejecute y los gates pasen.
 > **Corresponde a:** A-MD-005 (etiqueta interna en tracking.yaml, B-MD-009), diseño conceptual en `docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md` §4-6.
 
-**Estado:** Propuesto
+**Estado:** Aceptado
 **Fecha:** 2026-08-15
 **Bounded context(s) afectado(s):** portfolio (patrimonio/reconciliación), trading (risk consume), market_data (adapter CCXT)
 
@@ -110,7 +110,7 @@ Si el owner prefiriera una sola ADR, el costo sería: menor granularidad de deci
 | BC responsable | portfolio (patrimonio/reconciliación), trading (risk consume vía port), market_data (adapter CCXT) |
 | Bloquea LIVE | Sí (P1) — sizing/exposición contra capital configurado, no real |
 | Fase | F3 |
-| ADR | ADR-0030 (esta propuesta; etiqueta A-MD-005 en tracking.yaml) |
+| ADR | ADR-0030 (esta ADR; etiqueta A-MD-005 en tracking.yaml) |
 
 ## Implementation Roadmap (conceptual — no implementado)
 

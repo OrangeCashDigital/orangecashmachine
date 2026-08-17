@@ -1923,7 +1923,7 @@ hallazgos:
     es visible en operacion, sin cambiar el contrato SafeOps ni hacer que el flujo
     lance. La unificacion definitiva del estado de posicion en PortfolioService (unico
     dueño mutable, ADR-0006; fill_sync/TradeTracker consumen eventos) queda PENDIENTE
-    — decision arquitectonica no resuelta (ADR-0021 pendiente de redactar)'
+    — decision arquitectonica no resuelta (ADR-0021 en PROPUESTA 2026-08-16)'
   pruebas:
   - 'test (mitigacion): SELL fill cuyo close_position() devuelve None -> logger.critical
     con symbol/sell_order_id/buy_order_id (tests/trading/test_fill_sync_close_divergence.py)'
@@ -1933,7 +1933,7 @@ hallazgos:
   - 'PENDIENTE (raiz): un solo dueño mutable; cierre no falla silenciosamente'
   - 'PENDIENTE (raiz): close_position propaga excepción — no debe atrapar y devolver
     None; fill_sync no debe descartar el retorno'
-  adr_relacionado: ADR-0006; ADR-0021 (pendiente de redactar)
+  adr_relacionado: ADR-0006; ADR-0021 (PROPUESTA, 2026-08-16)
   riesgo_residual: 'Medio: el fallo de cierre ya es observable (log critico), pero
     sigue siendo silencioso a nivel de estado (Ningún destino se corrige automaticamente);
     la posicion fantasma puede persistir hasta reconciliacion manual. Ademas, el contrato
@@ -1950,7 +1950,7 @@ hallazgos:
       referencia: B-15 en tracking v2
     adr:
       estado: PENDIENTE
-      referencia: ADR-0021
+      referencia: 'ADR-0021 escrita (PROPUESTA, 2026-08-16): docs/architecture/decisions/ADR-0021-estado-posicion-unico-dueno.md'
     implementacion:
       estado: PARCIAL
       referencia: mitigacion de observabilidad en fill_sync.py (2026-08-12); unificar
@@ -2256,7 +2256,7 @@ hallazgos:
     (grep F-BMD8-04). Carrera CANCEL vs FILL: CANCELLED terminal (order.py:64-74),
     fill_sync solo en FILLED (fill_sync.py:109). Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
     F-BMD8-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §3'
-  solucion: 'Diseño conceptual A-MD-004 (propuesto, no implementado): exponer cancel_order
+  solucion: 'Diseño ADR-0029 (ACEPTADA 2026-08-16, no implementado): exponer cancel_order
     en CCXTAdapter, extender OrderTransport con cancel(symbol, exchange_order_id),
     estado transitorio CANCELLING que resuelve por confirmación del exchange (fill
     SIEMPRE prevalece), loop manage_open_orders, callbacks al flujo de fill existente
@@ -2267,7 +2267,7 @@ hallazgos:
   - 'pendiente: test integración sandbox/mock cancel → confirmación exchange → estado
     final'
   - 'pendiente: test carrera cancel vs fill (fill prevalece)'
-  adr_relacionado: A-MD-004 (propuesta de diseño, no escrita)
+  adr_relacionado: ADR-0029 (ACEPTADA, 2026-08-16; etiqueta A-MD-004)
   riesgo_residual: 'Alto — sin cancel real, una orden en vuelo no se puede detener
     en el exchange; divergencia CANCEL/FILL silenciosa (CANCELLED terminal, sin reconciliación
     periódica). Mitigado parcialmente por market-only y fail-closed de submit (B-12)'
@@ -2281,8 +2281,8 @@ hallazgos:
       estado: HECHO
       referencia: B-MD-008 en tracking.yaml
     adr:
-      estado: PENDIENTE
-      referencia: A-MD-004 propuesta en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
+      estado: HECHO
+      referencia: 'ADR-0029 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0029-cancelacion-real-gestion-ordenes-abiertas.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md'
     implementacion:
       estado: PENDIENTE
       referencia: null
@@ -2309,7 +2309,7 @@ hallazgos:
     drawdown :374-386); PortfolioService.capital_usd configurado (portfolio_service.py:63-80,281-284);
     PositionStore SSOT BC-43 solo en portfolio bootstrap. Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
     F-BMD9-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §4-6'
-  solucion: 'Diseño conceptual A-MD-005 (propuesto, no implementado): Portfolio como
+  solucion: 'Diseño ADR-0030 (ACEPTADA 2026-08-16, no implementado): Portfolio como
     dueño del estado patrimonial (posiciones via PositionStore BC-43 + saldo derivado
     via reconciler); adapter CCXT fetch_balance en composition root de portfolio;
     gate en arranque/restart + loop periódico + tras fill/error; RiskManager consume
@@ -2322,7 +2322,7 @@ hallazgos:
   - 'pendiente: test integración fetch_balance real → portfolio materializa → risk
     consume'
   - 'pendiente: test política de discrepancia (bloqueo ante discrepancia material)'
-  adr_relacionado: A-MD-005 (propuesta de diseño, no escrita)
+  adr_relacionado: ADR-0030 (ACEPTADA, 2026-08-16; etiqueta A-MD-005)
   riesgo_residual: 'Alto — sizing/drawdown contra capital configurado, no real; si
     el saldo real difiere (fees, transferencias, fills externos), exposición y decisiones
     incorrectas; divergencia silenciosa (no hay consulta al exchange)'
@@ -2336,8 +2336,8 @@ hallazgos:
       estado: HECHO
       referencia: B-MD-009 en tracking.yaml
     adr:
-      estado: PENDIENTE
-      referencia: A-MD-005 propuesta en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
+      estado: HECHO
+      referencia: 'ADR-0030 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0030-balance-real-reconciliacion-patrimonial.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md'
     implementacion:
       estado: PENDIENTE
       referencia: null

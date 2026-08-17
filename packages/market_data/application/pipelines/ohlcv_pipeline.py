@@ -56,6 +56,7 @@ from market_data.application.pipelines._worker_pool import run_worker_pool
 from market_data.application.strategies.backfill import BackfillStrategy
 from market_data.application.strategies.incremental import IncrementalStrategy
 from market_data.application.strategies.repair import RepairStrategy
+from market_data.domain.exceptions import ExchangeCircuitOpenError
 from market_data.domain.policies.base import (
     PairResult,
     PipelineMode,
@@ -67,7 +68,6 @@ from market_data.ports.outbound.gap_registry import GapRegistryPort
 from market_data.ports.outbound.historical_fetcher import HistoricalFetcherPort
 from market_data.ports.outbound.metrics import MetricsPort
 from market_data.ports.outbound.quality_pipeline import QualityPipelinePort
-from market_data.ports.outbound.resilience import ExchangeCircuitOpenError
 from market_data.ports.outbound.state import CursorStorePort
 
 # ==============================================================================

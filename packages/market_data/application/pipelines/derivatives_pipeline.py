@@ -37,6 +37,7 @@ from market_data.ports.inbound.pipeline_trigger import PipelineTriggerPort
 # Dependencias concretas eliminadas del application layer (DIP — BC-05/BC-08).
 # Se inyectan desde market_data.factories.pipeline_factory (composition root).
 from market_data.ports.outbound.exchange_client import ExchangeClientPort
+from market_data.ports.outbound.fetcher import DerivativesFetcherPort
 
 # ---------------------------------------------------------------------------
 # Types
@@ -127,7 +128,7 @@ class DerivativesPipeline(PipelineTriggerPort):
         symbols: List[str],
         datasets: List[str],
         exchange_client: "ExchangeClientPort",
-        fetchers: "dict[str, object]",  # obligatorio — inyectar desde factory (DIP)
+        fetchers: "dict[str, DerivativesFetcherPort]",  # obligatorio — inyectar desde factory (DIP)
         market_type: str = "swap",
         dry_run: bool = False,
         max_concurrency: int = 4,
@@ -166,7 +167,7 @@ class DerivativesPipeline(PipelineTriggerPort):
 
         # DIP: fetchers inyectados desde ConcretePipelineFactory.
         # DerivativesPipeline no conoce implementaciones concretas (Clean Architecture).
-        self._fetchers: dict[str, object] = fetchers
+        self._fetchers: dict[str, DerivativesFetcherPort] = fetchers
 
     async def run(self, mode: DerivativesPipelineMode = "incremental") -> DerivativesSummary:
         """
@@ -237,7 +238,7 @@ class DerivativesPipeline(PipelineTriggerPort):
                 duration_ms=0,
             )
         try:
-            rows = await fetcher.fetch_symbol(symbol)  # type: ignore[attr-defined]
+            rows = await fetcher.fetch_symbol(symbol)
             duration_ms = int((time.monotonic() - start) * 1000)
             self._log.info(
                 "  [{}/{}] {}/{} | rows={} duration={}ms",

@@ -13,7 +13,7 @@ backend. Las implementaciones concretas deben satisfacer estructuralmente
 cada Protocol (runtime_checkable: isinstance() funciona sin herencia).
 
 ISP — Un Protocol por responsabilidad. OHLCVStorage no contamina a
-TradesStoragePort; BronzeStoragePort no contamina a StorageFactoryPort.
+TradesStoragePort; DerivatesStoragePort no contamina a StorageFactoryPort.
 
 SafeOps — Lecturas: retornar None / DataFrame vacío, nunca lanzar.
           Escrituras: pueden lanzar — son operaciones críticas.
@@ -219,45 +219,6 @@ class DerivativesStoragePort(Protocol):
         -------
         int si hay datos, None si no hay datos.
         """
-        ...
-
-
-# =========================================================================== #
-# Bronze layer                                                                 #
-# =========================================================================== #
-
-
-@runtime_checkable
-class BronzeStoragePort(Protocol):
-    """
-    Contrato de persistencia de candles crudas (Bronze layer).
-
-    Implementación canónica
-    -----------------------
-    market_data.infrastructure.storage.bronze.BronzeStorage
-    """
-
-    def append(
-        self,
-        df: pl.DataFrame,
-        symbol: str,
-        timeframe: str,
-        run_id: Optional[str] = None,
-    ) -> None:
-        """
-        Persiste un batch de candles crudas en Bronze (append-only).
-
-        Parameters
-        ----------
-        df        : DataFrame con columnas OHLCV.
-        symbol    : Par de trading normalizado.
-        timeframe : Intervalo canónico.
-        run_id    : Correlación con EventPayload para trazabilidad.
-        """
-        ...
-
-    def get_last_timestamp(self, symbol: str, timeframe: str) -> int | None:
-        """Timestamp en ms del último registro. None si no hay datos."""
         ...
 
 

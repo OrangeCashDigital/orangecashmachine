@@ -102,7 +102,7 @@ class KafkaBronzeWriter:
     Parámetros
     ----------
     consumer         : KafkaConsumerPort — fuente de mensajes
-    bronze_storage   : BronzeStoragePort — escritura Bronze (DIP)
+    bronze_storage   : BronzeStorage — escritura Bronze (DIP)
     dlq_producer     : KafkaProducerPort opcional — mensajes no procesables
     dedup_store      : DeduplicationStoreProtocol opcional — L2 durable
                        (p.ej. RedisCursorStore). None → solo L1 en memoria

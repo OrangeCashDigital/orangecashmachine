@@ -124,56 +124,7 @@ class TradesSourceProtocol(Protocol):
         ...
 
 
-# ---------------------------------------------------------------------------
-# OrderBookSourceProtocol — contrato del stream L2
-# ---------------------------------------------------------------------------
-
-
-@runtime_checkable
-class OrderBookSourceProtocol(Protocol):
-    """
-    Contrato async del stream L2 de order book.
-
-    Produce tuplas (snapshot | delta) — el consumer construye el estado
-    del libro sobre ellas.
-
-    Implementaciones previstas
-    --------------------------
-    RESTOrderBookPoller   — snapshot periódico via fetch_order_book() (hoy)
-    WebSocketBookStream   — snapshot + delta via cryptofeed (futuro)
-
-    Ciclo de vida
-    -------------
-    Igual que TradesSourceProtocol — start implícito en __aiter__,
-    stop() SafeOps, is_running para health checks.
-    """
-
-    def __aiter__(self) -> "AsyncIterator[object]":
-        """Retorna el iterador. Produce OrderBookSnapshot | OrderBookDelta."""
-        ...
-
-    async def __anext__(self) -> object:
-        """
-        Retorna el siguiente evento del libro.
-
-        Type: OrderBookSnapshot | OrderBookDelta.
-        Lanza StopAsyncIteration al finalizar.
-        """
-        ...
-
-    async def stop(self) -> None:
-        """SafeOps: nunca lanza."""
-        ...
-
-    @property
-    def is_running(self) -> bool: ...
-
-    @property
-    def source_id(self) -> str: ...
-
-
 __all__ = [
     "TradesSourceProtocol",
-    "OrderBookSourceProtocol",
     "TradeSource",
 ]

@@ -1,9 +1,9 @@
-# ADR-0029 (PROPUESTA): Cancelación real de órdenes y resolución determinista CANCEL/FILL (B-MD-008)
+# ADR-0029: Cancelación real de órdenes y resolución determinista CANCEL/FILL (B-MD-008)
 
-> **ESTADO: PROPUESTA** — borrador de diseño para decisión humana. NO aprobado. NO implementado. Ningún contrato cambia hasta su aceptación formal (proceso ADR + tracking.yaml).
+> **ESTADO: ACEPTADA** — decisión aprobada por el owner el 2026-08-16. NO implementada todavía: los contratos cambian solo cuando la implementación (tracking B-MD-008, cadena `implementacion`) se ejecute y los gates pasen.
 > **Corresponde a:** A-MD-004 (etiqueta interna en tracking.yaml, B-MD-008), diseño conceptual en `docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md` §3.
 
-**Estado:** Propuesto
+**Estado:** Aceptado
 **Fecha:** 2026-08-15
 **Bounded context(s) afectado(s):** trading (execution), market_data (adapter CCXT)
 
@@ -137,7 +137,7 @@ Si el owner prefiriera una sola ADR, el costo sería: menor granularidad de deci
 | BC responsable | trading (execution) — dominio/port/loop; market_data (adapter CCXT en composition root) |
 | Bloquea LIVE | Sí (P1) — sin cancel real no hay control sobre órdenes en vuelo |
 | Fase | F3 |
-| ADR | ADR-0029 (esta propuesta; etiqueta A-MD-004 en tracking.yaml) |
+| ADR | ADR-0029 (esta ADR; etiqueta A-MD-004 en tracking.yaml) |
 
 ## Implementation Roadmap (conceptual — no implementado)
 
