@@ -42,6 +42,7 @@ from datetime import datetime, timezone  # stdlib — MIN_TIMESTAMP sin polars
 
 import polars as pl
 from loguru import logger
+from pandera.api.polars.types import PolarsData
 from pandera.errors import SchemaError, SchemaErrors
 from pandera.polars import Check, Column, DataFrameSchema
 
@@ -77,7 +78,7 @@ REQUIRED_COLUMNS: tuple[str, ...] = ("timestamp", *NUMERIC_COLUMNS)
 # ==========================================================
 
 
-def _check_ohlc_relationship(df: pl.DataFrame) -> bool:
+def _check_ohlc_relationship(data: PolarsData) -> bool:
     """
     Verifica las relaciones lógicas entre columnas OHLC.
 
@@ -87,6 +88,7 @@ def _check_ohlc_relationship(df: pl.DataFrame) -> bool:
 
     Nota: vectorizado sobre todo el DataFrame, O(n) sin loops.
     """
+    df = data.lazyframe.collect()
     low = df["low"]
     high = df["high"]
     open_ = df["open"]
@@ -98,14 +100,14 @@ def _check_ohlc_relationship(df: pl.DataFrame) -> bool:
     return bool((low_valid & high_valid).all())
 
 
-def _check_timestamp_monotonic(df: pl.DataFrame) -> bool:
+def _check_timestamp_monotonic(data: PolarsData) -> bool:
     """
     Verifica que los timestamps estén en orden estrictamente creciente.
 
     Rechaza series con nulls o flatlines temporales que indicarían
     datos duplicados o feeds con errores.
     """
-    ts = df["timestamp"]
+    ts = data.lazyframe.collect()["timestamp"]
 
     if ts.null_count() > 0:
         return False
@@ -116,7 +118,7 @@ def _check_timestamp_monotonic(df: pl.DataFrame) -> bool:
     return ts.is_sorted()
 
 
-def _check_no_duplicate_timestamps(df: pl.DataFrame) -> bool:
+def _check_no_duplicate_timestamps(data: PolarsData) -> bool:
     """
     Verifica que no existan timestamps duplicados.
 
@@ -125,7 +127,7 @@ def _check_no_duplicate_timestamps(df: pl.DataFrame) -> bool:
 
     Los duplicados son síntoma de doble ingestión o bugs en el fetcher.
     """
-    return bool(df["timestamp"].is_unique().all())
+    return bool(data.lazyframe.collect()["timestamp"].is_unique().all())
 
 
 # ==========================================================
@@ -163,8 +165,8 @@ def make_grid_alignment_check(timeframe: str) -> Check | None:
     except InvalidTimeframeError:
         return None
 
-    def _check(df: pl.DataFrame) -> bool:
-        ts_ms = df["timestamp"].dt.timestamp("ms")
+    def _check(data: PolarsData) -> bool:
+        ts_ms = data.lazyframe.collect()["timestamp"].dt.timestamp("ms")
         return bool((ts_ms % tf_ms == 0).all())
 
     return Check(
@@ -190,7 +192,7 @@ OHLCV_SCHEMA: DataFrameSchema = DataFrameSchema(
             coerce=True,
             checks=[
                 Check(
-                    lambda s: s >= MIN_TIMESTAMP,
+                    lambda data: bool((data.lazyframe.collect()[data.key] >= MIN_TIMESTAMP).all()),
                     element_wise=False,
                     error=f"Timestamp before market origin ({MIN_TIMESTAMP.date()})",
                 ),
