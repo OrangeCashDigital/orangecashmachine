@@ -69,3 +69,5 @@ docs/Untitled_2.py
 docs/data.py
 docs/knowledge/courses/
 docs/knowledge/**/*.pdf
+deploy/monitoring/grafana/provisioning/
+deploy/monitoring/grafana/dashboards/
