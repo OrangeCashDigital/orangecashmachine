@@ -107,9 +107,9 @@ class GoldTransformer:
 
         Fail-Soft: vacío in → vacío out, nunca lanza excepción.
         """
-        # ACL: aceptar pd.DataFrame de callers legacy — convertir una vez
         if isinstance(df, pd.DataFrame):
             df = pl.from_pandas(df)
+
         if df is None or df.is_empty():
             logger.warning(
                 "GoldTransformer: empty input | {}/{} exchange={}",

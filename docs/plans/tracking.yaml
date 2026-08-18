@@ -2598,6 +2598,53 @@ f2_6d_decision_escalabilidad:
       referencia: F2.6d en tracking v2
     backlog:
       estado: HECHO
+
+f2_6e_topologia_kafka_por_bounded_context:
+  estado: HECHO
+  fecha_cierre: '2026-08-18'
+  bloqueado_por: f2_6d_decision_escalabilidad
+  entregable: Decision arquitectonica de topologia Kafka por etapas (broker unico hoy)
+  contexto: 'Propuesta externa recibida: 3 brokers Kafka fisicos separados por bounded
+    context (market-data-broker-01, trading-broker-01, portfolio-broker-01), presentada
+    como tabla de "rol conceptual / responsabilidad". Evaluada contra evidencia real
+    de OCM, no contra la analogia en abstracto.'
+  evidencia:
+  - 'Hardware real: orangehouse i5-3330 (4 cores), 5.5GiB RAM total, ~2.7GiB libres
+    en idle con Prometheus/Grafana/Loki/Alertmanager ya detenidos por falta de margen'
+  - 'Broker actual limitado a 1 CPU / 1GiB (docker-compose.yml); bajo carga de test
+    suite Kafka (no produccion): 39.85% CPU, 447MiB/1GiB RAM -- con margen'
+  - 'Topics reales en el broker: 2 (ohlcv.raw, ocm.dlq) de 25 definidos como SSOT en
+    shared/kafka/topics.py -- la mayoria de los topics de trading/portfolio aun no
+    emiten trafico real'
+  - 'ADR-0024: trading y portfolio son NIVEL 2 (bounded contexts embebidos, sin
+    proceso HTTP propio) -- no hay procesos separados que un broker por-BC pudiera
+    aislar hoy'
+  - 'F2_6D ya midio empiricamente el volumen real (138.5 msg/s, 0.00% CPU prod, 40.4MB
+    RAM, p99 33.8ms) muy por debajo de los umbrales de invalidacion de F2.6a (>50-100
+    simbolos, >50% CPU sostenido, p99>500ms, lag creciente)'
+  decision: 'Topologia Kafka de OCM en etapas, ganada por evidencia y no anticipada
+    por diseno aspiracional (principio No-sobrediseno, AGENTS.md): (1) HOY -- un solo
+    broker, un solo servidor, topics ya bien organizados por bounded context via
+    naming (shared/kafka/topics.py, SSOT existente); (2) MANANA, si OCM crece --
+    cluster multi-broker (particionado/replicado), evaluado solo cuando la telemetria
+    real cruce los umbrales de invalidacion de F2.6a; (3) MAS ADELANTE, solo si hay
+    necesidad real medida -- evaluar topologia por-bounded-context (brokers fisicos
+    separados u otro esquema de aislamiento) contra el volumen y contencion real en
+    ese momento, no antes. La propuesta original (3 brokers separados por BC) se
+    RECHAZA para el estado actual: contradice F2_6D_decision_escalabilidad vigente y
+    no hay carga real que aislar (2/25 topics activos, trading/portfolio aun NIVEL 2).'
+  prerequisito_reapertura: 'Esta decision se re-evalua unicamente si una re-medicion
+    con la misma metodologia de F2.6c cruza alguno de los umbrales de invalidacion
+    de F2.6a -- no por analogia con arquitecturas de terceros ni por preferencia de
+    diseno.'
+  riesgo_residual: Ninguno conocido -- decision reversible, ligada a umbrales medibles
+    ya definidos en F2.6a/F2.6d, no a un plazo fijo.
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: Evaluacion 2026-08-18, sesion de auditoria KAF-001
+    backlog:
+      estado: HECHO
       referencia: F2.6 sub-secuencia a-d en PLAN-Maestro-Ingenieria.md §F2.6
     adr:
       estado: NO_APLICA
