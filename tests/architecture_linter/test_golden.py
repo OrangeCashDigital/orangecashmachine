@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-001": Status.FAIL,  # multiple position owners (trading + portfolio)
     "ARCH-002": Status.FAIL,  # divergencia semántica WAC vs reemplazo/pop
-    "ARCH-003": Status.PARTIAL,  # reconciliación puntual submit-time, sin loop periódico
+    "ARCH-003": Status.PASS,  # gate de reconciliación submit-time e inicio de ciclo (ADR-0029, manage_open_orders)
     "ARCH-004": Status.FAIL,  # sin balance real; sizing contra capital_usd
     "ARCH-005": Status.FAIL,  # cadena de freshness rota en niveles 3–6
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)

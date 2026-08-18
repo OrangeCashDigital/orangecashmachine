@@ -348,18 +348,18 @@ class TestTradingCompositionRoot:
             "(ADP: GoldReader es el único contacto trading→market_data)."
         )
 
-    def test_trading_runtime_exposes_exactly_three_fields(self):
+    def test_trading_runtime_exposes_exactly_five_fields(self):
         """
-        SSOT (forense §2 + ADR-0003 enmendado): TradingRuntime es exactamente
-        (engine, portfolio, tracker) — sin estado oculto adicional.
+        SSOT (forense §2 + ADR-0003 enmendado + ADR-0029): TradingRuntime es
+        (engine, portfolio, tracker, oms, transport).
         """
         import dataclasses
 
         from trading.bootstrap.composition_root import TradingRuntime
 
         fields = [f.name for f in dataclasses.fields(TradingRuntime)]
-        assert fields == ["engine", "portfolio", "tracker"], (
-            f"TradingRuntime debe ser exactamente (engine, portfolio, tracker) — actual: {fields}"
+        assert fields == ["engine", "portfolio", "tracker", "oms", "transport"], (
+            f"TradingRuntime debe ser exactamente (engine, portfolio, tracker, oms, transport) — actual: {fields}"
         )
         assert TradingRuntime.__dataclass_params__.frozen is True
         assert hasattr(TradingRuntime, "__slots__") or TradingRuntime.__dataclass_params__.slots is True
