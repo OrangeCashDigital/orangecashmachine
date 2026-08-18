@@ -3,6 +3,16 @@
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
 Clean/Hexagonal with bounded contexts and 49 import-linter contracts (BC-NN; baseline F2.1, verificada en CI).
 
+## ⚠️ Autonomous Agent Audit & Compliance Protocol
+
+**OBLIGATORIO:** Cualquier encargo de auditoría (ej. *"audita la repo"*, *"haz una auditoría"*), revalidación de findings o control de cumplimiento **debe seguir estrictamente** el protocolo formal definido en [`docs/governance/AUDIT_PROTOCOL.md`](docs/governance/AUDIT_PROTOCOL.md).
+
+- **Principio Read-Only:** Durante una auditoría está prohibido modificar código, tests, CI, ADRs o tracking. La escritura se restringe a `docs/audits/`.
+- **Control FAIL $\neq$ Finding Nuevo:** Todo fallo detectado (ej. por `architecture_linter`) debe contrastarse obligatoriamente contra `tracking.yaml`, ADRs y auditorías históricas. Si ya está registrado, se clasifica como `REVALIDADO`, nunca como `NUEVO`.
+- **Modelo de Fuentes y Jerarquía:** Las fuentes externas de conocimiento (libros, papers, notas) no son normas. Toda obligación requiere la cadena de adopción: `Conocimiento` → `Decisión Humana` → `ADR / Governance` → `Control`.
+- **Orden de Descubrimiento:** Plan Maestro (`docs/PLAN-Maestro-Ingenieria.md`) → Governance (`docs/architecture/GOVERNANCE.md`) → Tracking (`docs/plans/tracking.yaml`) → ADRs → CI/Linters.
+- **Tooling mecánico primero:** Antes de emitir juicios, ejecuta `uv run python scripts/audit_validator.py` (reglas M1..M20, ver AUDIT_PROTOCOL §Q). El LLM solo juzga donde no hay validación mecánica. Comando canónico de cada control: AUDIT_PROTOCOL §R.
+
 ## Commands
 
     uv sync                           # prod deps
