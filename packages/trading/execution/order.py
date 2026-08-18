@@ -8,7 +8,16 @@ Modelos de dominio del OMS: Order, OrderSide, OrderStatus.
 Ciclo de vida:
   PENDING → SUBMITTED → FILLED
                       ↘ REJECTED
-                      ↘ CANCELLED
+                      ↘ CANCELLING → CANCELLED   (confirmado por exchange)
+                                   → FILLED       (fill prevalece — vía OMS._fill)
+                                   → REJECTED     (cancel rechazado / not found concluyente)
+
+CANCELLING (ADR-0029 / B-MD-008)
+--------------------------------
+Estado transitorio: el estado local NUNCA decreta CANCELLED sin confirmación
+del exchange. CANCELLED y FILLED siguen siendo terminales (no se relaja el
+grafo). Si un fill real llega durante CANCELLING, el flujo OMS._fill existente
+lo aplica y la orden termina en FILLED — el fill SIEMPRE prevalece.
 
 P&L (criterio G / S1)
 ---------------------
@@ -55,6 +64,7 @@ class OrderSide(str, Enum):
 class OrderStatus(str, Enum):
     PENDING = "pending"
     SUBMITTED = "submitted"
+    CANCELLING = "cancelling"  # transitorio — resolución CANCEL/FILL (ADR-0029)
     FILLED = "filled"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
@@ -64,6 +74,12 @@ class OrderStatus(str, Enum):
 _VALID_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
     OrderStatus.PENDING: {OrderStatus.SUBMITTED, OrderStatus.CANCELLED},
     OrderStatus.SUBMITTED: {
+        OrderStatus.FILLED,
+        OrderStatus.REJECTED,
+        OrderStatus.CANCELLING,
+        OrderStatus.CANCELLED,
+    },
+    OrderStatus.CANCELLING: {
         OrderStatus.FILLED,
         OrderStatus.REJECTED,
         OrderStatus.CANCELLED,
@@ -183,7 +199,13 @@ class Order:
 
     @property
     def is_open(self) -> bool:
-        return self.status in (OrderStatus.PENDING, OrderStatus.SUBMITTED)
+        # CANCELLING es transitorio y visible: la orden sigue viva hasta la
+        # resolución determinista CANCEL/FILL (ADR-0029).
+        return self.status in (
+            OrderStatus.PENDING,
+            OrderStatus.SUBMITTED,
+            OrderStatus.CANCELLING,
+        )
 
     @property
     def is_terminal(self) -> bool:

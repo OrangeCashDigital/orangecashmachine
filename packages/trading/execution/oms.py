@@ -18,7 +18,8 @@ Ciclo correcto de posiciones (importante)
   submit()  → record_open() SOLO si BUY (abre la posición y la mantiene)
   _fill()   → record_close() SOLO si SELL (cierra la posición realizada)
   _reject() → record_close() SOLO si era BUY (revertir: no se mantuvo abierta)
-  cancel()  → record_close() SOLO si era BUY (revertir: no se completó)
+  request_cancel() → CANCELLING; resolve_cancel() con estado del exchange:
+      CANCELLED → record_close() SOLO si era BUY (revertir: no se completó)
 
 S1 — integridad de P&L y fills reales
 --------------------------------------
@@ -95,7 +96,13 @@ from shared.contracts.boundaries import (
 )  # DIP — execution depende de abstraccion
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.execution.settlement import FeeStatus, Settlement
-from trading.execution.transport import OrderResult, OrderState
+from trading.execution.transport import (
+    OrderResult,
+    OrderState,
+)
+from trading.execution.transport import (
+    OrderStatus as ExchangeStatus,
+)
 from trading.risk.manager import RiskManager
 
 # ---------------------------------------------------------------------------
@@ -297,24 +304,88 @@ class OMS:
 
         return order
 
-    def cancel(self, order_id: str) -> bool:
+    def request_cancel(self, order_id: str) -> bool:
         """
-        Cancela una orden por ID.
+        Solicita la cancelación de una orden (ADR-0029, B-MD-008 paso 4).
 
-        Returns True si fue cancelada, False si no existe o ya es terminal.
+        Transiciona SUBMITTED → CANCELLING (idempotente: no-op si la orden no
+        existe, ya es terminal o ya está en CANCELLING). El estado final lo
+        resuelve `resolve_cancel()` contra el estado real del exchange — NUNCA
+        se decreta CANCELLED sin confirmación (fail-closed).
+
+        Returns True si la orden quedó (o ya estaba) en CANCELLING.
         """
         with self._lock:
             order = self._orders.get(order_id)
             if order is None or order.is_terminal:
                 return False
-            order.transition(OrderStatus.CANCELLED)
-            self._open.pop(order_id, None)
-
-        # Revertir la posición HELD que abrió ese BUY pendiente (si la había).
-        if order.side == OrderSide.BUY:
-            self._risk.record_close(pnl_usd=None)
-        self._log.info("Order cancelled | {}", order_id)
+            if order.status == OrderStatus.CANCELLING:
+                return True  # idempotente — ya en transición
+            if order.status != OrderStatus.SUBMITTED:
+                return False
+            order.transition(OrderStatus.CANCELLING)
+        self._log.info("Order CANCELLING requested | {}", order_id)
         return True
+
+    def resolve_cancel(self, order_id: str, state: Optional[OrderState]) -> OrderStatus:
+        """
+        Resuelve la carrera CANCEL/FILL de una orden en CANCELLING (ADR-0029).
+
+        Regla determinista: el fill SIEMPRE prevalece sobre el cancel.
+
+        - state.status == FILLED   → aplica el flujo _fill existente (WAC,
+          settlement, fill_sync, portfolio) → FILLED terminal.
+        - state.status == CANCELLED → CANCELLED definitivo; revierte la
+          posición HELD (record_close).
+        - state.status == REJECTED → REJECTED (cancel rechazado / not found
+          concluyente).
+        - state.status == ERROR / timeout / sin confirmación → permanece
+          CANCELLING (fail-closed: no se da por cancelada ni llenada).
+
+        Returns el estado resultante de la orden (domain status).
+        """
+        with self._lock:
+            order = self._orders.get(order_id)
+            if order is None:
+                return OrderStatus.CANCELLED  # sin tracking local → no-op
+        if order.status != OrderStatus.CANCELLING:
+            return order.status  # ya resuelta o no transitoria — no-op
+
+        if state is None or state.status == ExchangeStatus.ERROR:
+            # Sin confirmación recuperable del exchange → permanece transitorio.
+            self._log.warning(
+                "cancel sin confirmación — permanece CANCELLING | {} error={}",
+                order_id,
+                state.error if state is not None else "sin estado",
+            )
+            return OrderStatus.CANCELLING
+
+        if state.status == ExchangeStatus.FILLED:
+            # El fill real prevalece — reutiliza OMS._fill (SSOT de asentamiento).
+            self._fill(order, state)
+            return OrderStatus.FILLED
+
+        if state.status == ExchangeStatus.REJECTED:
+            # Cancel rechazado / orden no cancelable de forma concluyente.
+            self._reject(order, reason=state.error or "cancel_rejected", revert_open=True)
+            return OrderStatus.REJECTED
+
+        if state.status == ExchangeStatus.CANCELLED:
+            with self._lock:
+                order.transition(OrderStatus.CANCELLED)
+                self._open.pop(order_id, None)
+            if order.side == OrderSide.BUY:
+                self._risk.record_close(pnl_usd=None)
+            self._log.info("Order CANCELLED (confirmado) | {}", order_id)
+            return OrderStatus.CANCELLED
+
+        # Otros estados (SUBMITTED/open, sin decisión) → permanece CANCELLING.
+        self._log.warning(
+            "cancel: estado exchange sin decisión final — permanece CANCELLING | {} status={}",
+            order_id,
+            state.status.value,
+        )
+        return OrderStatus.CANCELLING
 
     # ------------------------------------------------------------------
     # State inspection

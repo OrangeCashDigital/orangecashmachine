@@ -123,6 +123,17 @@ class OrderTransport(Protocol):
         """
         ...
 
+    def cancel(self, symbol: str, exchange_order_id: str) -> OrderState:
+        """Cancela una orden en el exchange (ADR-0029, B-MD-008).
+
+        SafeOps: nunca lanza. Si el cancel no se puede confirmar (timeout/red),
+        retorna ERROR — el caller NO declara CANCELLED sin confirmación
+        (fail-closed). El ack de cancel es asíncrono en el exchange: el estado
+        final (cancelado vs ejecutado) lo confirma fetch_state/WS; el caller es
+        quien resuelve la carrera CANCEL/FILL (el fill SIEMPRE prevalece).
+        """
+        ...
+
     def close(self) -> None:
         """Cierra recursos del transporte. SafeOps: nunca lanza."""
         ...
@@ -153,6 +164,10 @@ class PaperTransport:
     def fetch_state(self, exchange_order_id: str) -> OrderState:
         # Papel no mantiene estado persistente; cualquier id es del ciclo actual.
         return OrderState(order_id=exchange_order_id, status=OrderStatus.FILLED)
+
+    def cancel(self, symbol: str, exchange_order_id: str) -> OrderState:
+        # Sin I/O: el papel confirma el cancel inmediatamente (ADR-0029).
+        return OrderState(order_id=exchange_order_id, status=OrderStatus.CANCELLED)
 
     def close(self) -> None:
         return None

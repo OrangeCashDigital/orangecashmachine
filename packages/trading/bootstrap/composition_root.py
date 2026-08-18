@@ -201,7 +201,7 @@ class _GoldFeatureSource:
 
 
 class _BybitTransport:
-    """Adapta CCXTAdapter al port OrderTransport (submit + fetch_state).
+    """Adapta CCXTAdapter al port OrderTransport (submit + fetch_state + cancel).
 
     Vive aquí —no en trading/execution— para concentrar el acoplamiento a
     market_data en un solo archivo auditable (BC-50, mismo criterio que
@@ -246,6 +246,21 @@ class _BybitTransport:
     def fetch_state(self, exchange_order_id: str) -> "OrderState":
         try:
             raw = run_ccxt_async(self._factory, lambda a: a.fetch_order(exchange_order_id))
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            return OrderState(
+                order_id=exchange_order_id,
+                status=OrderStatus.ERROR,
+                error=error,
+            )
+        return map_ccxt_order(raw)
+
+    def cancel(self, symbol: str, exchange_order_id: str) -> "OrderState":
+        try:
+            raw = run_ccxt_async(
+                self._factory,
+                lambda a: a.cancel_order(exchange_order_id, symbol=symbol),
+            )
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             return OrderState(
