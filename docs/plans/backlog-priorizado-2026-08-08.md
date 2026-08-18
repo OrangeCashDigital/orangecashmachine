@@ -119,6 +119,38 @@ ya visibles (logs, métricas), no de *corrupción silenciosa en curso*. Si F-009
 
 ---
 
+### F-032 / B-47 — KafkaConfig.bootstrap_servers (Pydantic) no es leído por el runtime real (2026-08-18)
+- **Severidad:** P3 | **Estado:** DETECTADO — no bloqueante, mitigado parcialmente
+- `IntegrationsConfig.kafka.bootstrap_servers` (schema.py:565-570) es un campo
+  Pydantic documentado como configuración de Kafka, pero `KafkaProducerAdapter.from_env()`
+  y `KafkaConsumerAdapter._broker()` leen `KAFKA_BOOTSTRAP_SERVERS` directamente vía
+  `os.environ` (env_vars.py), sin pasar nunca por `AppConfig`. El campo Pydantic
+  no tiene ningún caller real — es efectivamente decorativo.
+- **Hallazgo colateral (RESUELTO 2026-08-18):** el default de `KafkaConfig.bootstrap_servers`
+  divergía del default real (`"localhost:9092"` vs `"kafka:9092"` en producer/consumer).
+  Corregido: ambos ahora usan `"kafka:9092"`, con comentario SSOT explicando la
+  limitación en el propio código.
+- **Riesgo:** bajo — no afecta el comportamiento en runtime (el valor real siempre
+  viene de `KAFKA_BOOTSTRAP_SERVERS`), pero puede inducir a error a quien lea
+  `AppConfig.integrations.kafka.bootstrap_servers` esperando que sea la fuente de
+  verdad operativa.
+- **Remediación pendiente (no aplicada — requiere decisión de arquitectura):**
+  A) eliminar el campo de `KafkaConfig` y documentar que `env_vars.py` es la
+  única fuente; B) refactorizar `KafkaProducerAdapter`/`KafkaConsumerAdapter`
+  para recibir `bootstrap_servers` inyectado desde `AppConfig` vía composition
+  root (`pipeline_factory.py`), alineando con el patrón ya usado por
+  `RedisConfig`/`PostgresConfig`. Opción B es la consistente con el resto del
+  código pero requiere tocar el composition root — fuera de alcance de un fix
+  puntual.
+- **Contexto:** detectado durante auditoría manual de configuración Kafka
+  (2026-08-18), junto con secretos reales expuestos en `.env`/`.env.example`
+  (`GRAFANA_PASSWORD`/`KAFKA_UI_PASSWORD` compartían valor débil — rotados) y
+  ausencia de test directo para `KafkaConsumerAdapter` (remediado: nuevo
+  `tests/market_data/infrastructure/kafka/test_consumer_adapter.py`, 19 tests,
+  mismo patrón que `test_producer_adapter.py` de F-013/F-014/F-015/F-019).
+
+---
+
 ## 🔵 Documentation / hygiene
 
 ### F-012 / H-27 / B-28 — Timeouts con claims de p99/SLA sin fuente verificable

@@ -2284,8 +2284,8 @@ hallazgos:
       estado: HECHO
       referencia: 'ADR-0029 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0029-cancelacion-real-gestion-ordenes-abiertas.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md'
     implementacion:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: manage_open_orders implementado en oms.py:653-725; llamado desde execute_live.py:225; exchange_order_id poblado en order.py:140; ADR-0029 ACEPTADA 2026-08-16
     tests:
       estado: PENDIENTE
       referencia: null
