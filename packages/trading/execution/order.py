@@ -137,6 +137,13 @@ class Order:
     reject_reason: Optional[str] = None
     filled_qty: Optional[float] = None
     fees: Optional[float] = None
+    # ID real de la orden en el exchange (Bybit/CCXT) — distinto de order_id
+    # (UUID interno de OCM). Poblado por OMS.submit() a partir del OrderState
+    # devuelto por el executor, en cuanto está disponible (aunque la orden
+    # aún no esté FILLED). Prerrequisito para manage_open_orders (B-MD-008
+    # paso 5, ADR-0029): sin este ID, transport.cancel()/fetch_state() no
+    # tienen con qué operar sobre una orden SUBMITTED/CANCELLING.
+    exchange_order_id: Optional[str] = None
     # Settlement canónico calculado por OMS._fill al llenar una orden SELL.
     # Es la única vía de P&L realizada; downstream consumidores (TradeTracker,
     # TradeRecord, RiskManager, PerformanceEngine) deben usarlo y no recalcular

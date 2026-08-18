@@ -262,3 +262,66 @@ def test_resolve_cancel_noop_for_unknown_or_resolved() -> None:
     order.transition(OrderStatus.FILLED, fill_price=50_000.0, filled_qty=1.0)
     assert oms.resolve_cancel(order.order_id, OrderState(status=ExchangeStatus.CANCELLED)) == OrderStatus.FILLED
     assert order.status == OrderStatus.FILLED
+
+
+# ----------------------------------------------------------------------
+# exchange_order_id (prerrequisito manage_open_orders, ADR-0029 paso 5)
+# ----------------------------------------------------------------------
+
+
+def test_submit_captures_exchange_order_id_on_fill() -> None:
+    """submit() propaga result.state.order_id a Order.exchange_order_id."""
+    risk = RiskManager(config=_risk_cfg())
+
+    class _FillingExecutor:
+        def execute(self, order: Order) -> OrderResult:
+            state = OrderState(
+                order_id="exch-12345",
+                status=ExchangeStatus.FILLED,
+                fill_price=50_000.0,
+                filled_qty=0.01,
+                fees=0.5,
+            )
+            return OrderResult(accepted=True, state=state)
+
+    oms = OMS(risk_manager=risk, executor=_FillingExecutor())
+    order = oms.submit(_sg(OrderSide.BUY))
+
+    assert order is not None
+    assert order.exchange_order_id == "exch-12345"
+    assert order.status == OrderStatus.FILLED
+
+
+def test_submit_captures_exchange_order_id_even_when_rejected() -> None:
+    """Captura el ID aunque accepted=False (reconciliación no confirmada) —
+    el executor pudo haber creado la orden en el exchange antes de fallar
+    la reconciliación; sin el ID, manage_open_orders no podría verificarla."""
+    risk = RiskManager(config=_risk_cfg())
+
+    class _UnconfirmedExecutor:
+        def execute(self, order: Order) -> OrderResult:
+            state = OrderState(order_id="exch-67890", status=ExchangeStatus.SUBMITTED)
+            return OrderResult(accepted=False, reason="reconciliation_no_confirmed", state=state)
+
+    oms = OMS(risk_manager=risk, executor=_UnconfirmedExecutor())
+    order = oms.submit(_sg(OrderSide.BUY))
+
+    assert order is not None
+    assert order.exchange_order_id == "exch-67890"
+    assert order.status == OrderStatus.REJECTED
+
+
+def test_submit_exchange_order_id_none_when_no_state() -> None:
+    """Sin OrderState (p.ej. excepción antes del transport), el campo queda
+    None — no se inventa un ID."""
+    risk = RiskManager(config=_risk_cfg())
+
+    class _NoStateExecutor:
+        def execute(self, order: Order) -> OrderResult:
+            return OrderResult(accepted=False, reason="transport_error")
+
+    oms = OMS(risk_manager=risk, executor=_NoStateExecutor())
+    order = oms.submit(_sg(OrderSide.BUY))
+
+    assert order is not None
+    assert order.exchange_order_id is None

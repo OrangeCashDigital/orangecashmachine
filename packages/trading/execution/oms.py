@@ -296,6 +296,13 @@ class OMS:
             )
             result = OrderResult(accepted=False, reason=f"{type(exc).__name__}: {exc}")
 
+        # Captura del ID real de exchange en cuanto esté disponible — incluso
+        # si accepted=False (p.ej. reconciliación no confirmada): el executor
+        # ya pudo haber creado la orden en el exchange. Sin esto,
+        # manage_open_orders (ADR-0029 paso 5) no tiene ID sobre el que operar.
+        if result.state is not None and result.state.order_id:
+            order.exchange_order_id = result.state.order_id
+
         if result.accepted:
             self._fill(order, result.state)
         else:
