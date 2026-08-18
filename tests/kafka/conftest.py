@@ -20,6 +20,10 @@ import uuid
 from typing import List
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from loguru import logger
+
+from shared.kafka.schemas.ohlcv import EventPayload
+from shared.kafka.serializer import deserialize
 
 # =============================================================================
 # Configuración — SSOT del harness
@@ -179,28 +183,92 @@ async def _drain(
     consumer: AIOKafkaConsumer,
     *,
     expected: int,
+    expected_ids: set[str] | None = None,
     timeout_s: float = _DRAIN_TIMEOUT_S,
 ) -> List:
     """
-    Drena hasta `expected` mensajes o timeout.
+    Drena mensajes de un consumer hasta cumplir la condición de parada
+    o timeout.
 
-    USO RESTRINGIDO: solo para test_A donde se necesita contar el total
-    de mensajes recibidos (100 eventos de replay). Para verificar un
-    mensaje específico, usar find_event() — CONTRACT R-03.
+    CONTRACT R-05 (fix KAF-001): cuando `expected_ids` se provee, la
+    condición de parada es "todos los event_id encontrados", NO un tope
+    de conteo bruto de mensajes. Esto es obligatorio cuando el topic
+    puede contener mensajes de ejecuciones previas (sin limpieza entre
+    test runs, KAFKA_LOG_RETENTION_HOURS=168): un tope de conteo bruto
+    puede agotarse consumiendo basura histórica antes de alcanzar los
+    mensajes relevantes de esta ejecución — causa raíz de KAF-001.
+
+    Si `expected_ids` es None, preserva el comportamiento legado
+    (tope de conteo bruto) para callers que no necesitan filtrar por
+    event_id.
 
     Returns:
-        Lista de ConsumerRecord recibidos (puede ser < expected si hay timeout).
+        Si `expected_ids` es provisto: únicamente los ConsumerRecord cuyo
+        event_id está en `expected_ids`, a lo sumo UNO por event_id (el
+        primero recibido) — puede ser incompleto si hay timeout, nunca
+        contaminado con mensajes ajenos al contrato, y nunca duplicado
+        aunque el mismo event_id llegue más de una vez físicamente
+        (redelivery legítimo o residuo histórico).
+        Si `expected_ids` es None: todos los ConsumerRecord recibidos,
+        tope de conteo bruto (comportamiento legado, puede ser menor a
+        `expected` si hay timeout).
     """
     collected: List = []
+    matched: List = []
+    found_ids: set[str] = set()
+    skipped_unparseable = 0
     deadline = time.monotonic() + timeout_s
-    while len(collected) < expected and time.monotonic() < deadline:
+
+    def _done() -> bool:
+        if expected_ids is not None:
+            return found_ids.issuperset(expected_ids)
+        return len(collected) >= expected
+
+    while not _done() and time.monotonic() < deadline:
         raw = await consumer.getmany(
             timeout_ms=_POLL_TIMEOUT_MS,
             max_records=expected,
         )
         for _tp, records in raw.items():
             collected.extend(records)
-    return collected
+            if expected_ids is None:
+                continue
+            for r in records:
+                try:
+                    evt = deserialize(r.value, EventPayload)
+                except (ValueError, KeyError, TypeError):
+                    # CONTRACT R-04: mensaje no parseable. Cubre json
+                    # inválido y SchemaVersionError (ValueError, ver
+                    # shared/kafka/schemas/_base.py), y KeyError/TypeError
+                    # porque EventPayload.from_dict()/KafkaOHLCVBar.from_dict()
+                    # indexan el dict directamente (p.ej. data["bars"]) sin
+                    # .get() — cualquier payload con forma distinta (basura
+                    # histórica del topic, formato legado, otro schema)
+                    # puede llegar por cualquiera de estas tres rutas.
+                    # Se descarta y se cuenta para observabilidad; no se
+                    # propaga el error.
+                    skipped_unparseable += 1
+                    continue
+                # CONTRACT R-05b: found_ids ya es la fuente de verdad de
+                # "¿este event_id ya fue satisfecho?" (usada por _done() vía
+                # issuperset). Sin el guard "not in found_ids", una segunda
+                # aparición física del mismo event_id (p.ej. basura histórica
+                # residual, o un redelivery legítimo at-least-once si el
+                # productor reintenta) se re-agregaba a matched, rompiendo
+                # la igualdad estricta que exige el contrato de expected_ids
+                # (a lo sumo un ConsumerRecord por event_id esperado).
+                if evt.event_id in expected_ids and evt.event_id not in found_ids:
+                    found_ids.add(evt.event_id)
+                    matched.append(r)
+
+    if skipped_unparseable:
+        logger.debug(f"_drain: {skipped_unparseable} mensajes descartados por fallo de deserialización (CONTRACT R-04)")
+
+    # CONTRACT R-05: con expected_ids, el contrato de retorno es "solo los
+    # records que matchean" — collected mezclaría basura histórica del
+    # topic con los eventos reales de esta ejecución (causa raíz de KAF-001
+    # invertida: falso positivo de conteo en vez de falso negativo).
+    return matched if expected_ids is not None else collected
 
 
 # =============================================================================

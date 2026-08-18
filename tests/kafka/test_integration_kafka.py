@@ -111,16 +111,87 @@ async def test_A_replay_100_events_no_loss():
     c2 = await _raw_consumer(group_id, TOPIC_OHLCV_RAW)
     try:
         await c2.seek_to_beginning()
-        replayed = await _drain(c2, expected=100)
+        # CONTRACT R-05 (fix KAF-001): expected_ids evita que _drain() se
+        # detenga tras consumir basura histórica del topic antes de
+        # alcanzar los 100 eventos de esta ejecución.
+        replayed = await _drain(c2, expected=100, expected_ids=expected_ids)
     finally:
         await c2.stop()
 
     assert len(replayed) >= 100, f"Replay: esperados ≥100, recibidos {len(replayed)}. Posible pérdida."
 
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_R05_drain_filters_historical_garbage_by_expected_ids():
+    """
+    R-05 regression guard (H-25, fix KAF-001).
+
+    _drain(expected_ids=...) debe retornar EXACTAMENTE los records cuyo
+    event_id está en expected_ids — nunca contaminado con mensajes
+    ajenos del topic (KAFKA_LOG_RETENTION_HOURS=168 permite basura
+    histórica de ejecuciones previas).
+
+    A diferencia de test_A_replay_100_events_no_loss (que solo verifica
+    len(replayed) >= 100, insensible a contaminación por diseño), este
+    test usa igualdad estricta: produce "ruido" con event_ids ajenos
+    ANTES de los eventos reales, y confirma que el ruido no aparece en
+    el resultado — ni por conteo ni por identidad.
+    """
+    group_id = _unique_group("r05-guard")
+
+    # CONTRACT R-05c: event_id debe ser único POR EJECUCIÓN, no solo por
+    # test. IDs deterministas (sin run_id) colisionan con basura histórica
+    # de corridas anteriores si el topic no se purga entre ellas — causa
+    # raíz real de KAF-001 (no era topología ni _drain fabricando records).
+    run_id = uuid.uuid4().hex[:8]
+    noise = [_make_event(event_id=f"r05-noise-{i:04d}-{run_id}") for i in range(20)]
+    real_events = [_make_event(event_id=f"r05-real-{i:04d}-{run_id}") for i in range(5)]
+    expected_ids = {e.event_id for e in real_events}
+
+    # ── 1. Producir ruido + eventos reales, en ese orden ──────────────────
+    p = await _raw_producer()
+    try:
+        for e in noise + real_events:
+            await p.send_and_wait(TOPIC_OHLCV_RAW, value=serialize(e))
+        await p.flush()
+    finally:
+        await p.stop()
+
+    # ── 2. Drenar filtrando por expected_ids ───────────────────────────────
+    c = await _raw_consumer(group_id, TOPIC_OHLCV_RAW)
+    try:
+        await c.seek_to_beginning()
+        result = await _drain(c, expected=len(real_events), expected_ids=expected_ids)
+    finally:
+        await c.stop()
+
+    # ── 3. Igualdad estricta: ni de más (ruido) ni de menos (pérdida) ──────
+    result_ids = sorted(deserialize(r.value, EventPayload).event_id for r in result)
+    print(f"\nDEBUG R05: expected_ids={sorted(expected_ids)}")
+    print(f"DEBUG R05: result_ids={result_ids}")
+    print(f"DEBUG R05: duplicates={[x for x in result_ids if result_ids.count(x) > 1]}")
+    print(
+        f"DEBUG R05: offsets={[(deserialize(r.value, EventPayload).event_id, r.offset, r.partition) for r in result]}"
+    )
+
+    assert len(result) == len(real_events), (
+        f"_drain con expected_ids debe retornar exactamente "
+        f"{len(real_events)} records, recibidos {len(result)}. "
+        f"Si es mayor: contaminación con ruido histórico (regresión "
+        f"del bug original de H-25 — return collected en vez de matched). "
+        f"Si es menor: pérdida real de eventos."
+    )
+
     # CONTRACT R-03: verificar por presencia en set, no por posición.
-    # El topic contiene mensajes de otros tests — ignorar los no parseables.
+    # NOTA: `result` ya es exactamente el conjunto matcheado por _drain()
+    # (CONTRACT R-05, ver conftest.py) — este bloque es redundante con la
+    # igualdad estricta ya afirmada arriba, pero se conserva como doble
+    # verificación explícita por presencia (no por conteo).
+    # FIX: `replayed` no existía en este scope (NameError, F821) — la
+    # variable correcta es `result`, la que retorna _drain().
     replayed_ids = set()
-    for r in replayed:
+    for r in result:
         try:
             replayed_ids.add(deserialize(r.value, EventPayload).event_id)
         except Exception:
