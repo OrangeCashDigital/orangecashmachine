@@ -134,6 +134,17 @@ class OrderTransport(Protocol):
         """
         ...
 
+    def fetch_open_orders(self) -> list[OrderState]:
+        """Lista las ordenes abiertas en el exchange (ADR-0029, paso 5).
+
+        Autoridad recuperable para detectar ordenes huerfanas: una orden
+        que el exchange acepto pero que OCM perdio (timeout de submit,
+        crash, reinicio). SafeOps: nunca lanza — si falla, retorna lista
+        vacia (el caller no debe asumir "no hay ordenes abiertas" como
+        garantia; ver manage_open_orders para la politica ante error).
+        """
+        ...
+
     def close(self) -> None:
         """Cierra recursos del transporte. SafeOps: nunca lanza."""
         ...
@@ -168,6 +179,12 @@ class PaperTransport:
     def cancel(self, symbol: str, exchange_order_id: str) -> OrderState:
         # Sin I/O: el papel confirma el cancel inmediatamente (ADR-0029).
         return OrderState(order_id=exchange_order_id, status=OrderStatus.CANCELLED)
+
+    def fetch_open_orders(self) -> list[OrderState]:
+        # Papel no mantiene estado persistente entre ordenes (submit()
+        # siempre resuelve a FILLED en el mismo ciclo) — nunca hay ordenes
+        # abiertas que reconciliar.
+        return []
 
     def close(self) -> None:
         return None

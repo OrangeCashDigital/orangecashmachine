@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     from portfolio.services.rebalance_service import RebalanceSignal
     from trading.analytics.trade_tracker import TradeTracker
     from trading.engine import TradingEngine
+    from trading.execution.oms import OMS
 
     from ocm.config.schema import ExchangeConfig, TradingConfig
     from ocm.config.schema import RiskConfig as AppRiskConfig
@@ -86,11 +87,19 @@ class TradingRuntime:
                   el constructor — el root no crea estado propio).
     - tracker   : TradeTracker de ejecución (fills/órdenes), conectado vía
                   ``build_fill_sync``.
+    - oms       : OMS del ciclo — expuesto para manage_open_orders (ADR-0029
+                  paso 5), que corre como gate de reconciliación al inicio
+                  de cada ciclo (execute_live.execute(), antes de run_once()).
+    - transport : OrderTransport real (None en modo paper via assemble_paper,
+                  que usa PaperExecutor sin transport). Solo assemble_live
+                  con exchange_config construye un transport reconciliable.
     """
 
     engine: "TradingEngine"
     portfolio: "PortfolioService"
     tracker: "TradeTracker"
+    oms: "OMS"
+    transport: Optional["OrderTransport"] = None
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +278,17 @@ class _BybitTransport:
                 error=error,
             )
         return map_ccxt_order(raw)
+
+    def fetch_open_orders(self) -> list["OrderState"]:
+        try:
+            raw_list = run_ccxt_async(self._factory, lambda a: a.fetch_open_orders())
+        except Exception as exc:
+            self._log.warning(
+                "fetch_open_orders fallo — reconciliacion no puede confirmar huerfanas | {}",
+                exc,
+            )
+            return []
+        return [map_ccxt_order(raw) for raw in raw_list]
 
     def close(self) -> None:
         return None
@@ -481,7 +501,13 @@ class TradingCompositionRoot:
             portfolio=self._portfolio,
             stop_loss=risk_config.stop_loss,
         )
-        return TradingRuntime(engine=engine, portfolio=self._portfolio, tracker=tracker)
+        return TradingRuntime(
+            engine=engine,
+            portfolio=self._portfolio,
+            tracker=tracker,
+            oms=oms,
+            transport=transport,
+        )
 
     def assemble_paper(
         self,
@@ -536,7 +562,13 @@ class TradingCompositionRoot:
             portfolio=self._portfolio,
             stop_loss=risk_config.stop_loss,
         )
-        return TradingRuntime(engine=engine, portfolio=self._portfolio, tracker=tracker)
+        return TradingRuntime(
+            engine=engine,
+            portfolio=self._portfolio,
+            tracker=tracker,
+            oms=oms,
+            transport=None,
+        )
 
     def assemble_rebalance(
         self,

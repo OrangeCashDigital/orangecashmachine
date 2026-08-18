@@ -99,6 +99,7 @@ from trading.execution.settlement import FeeStatus, Settlement
 from trading.execution.transport import (
     OrderResult,
     OrderState,
+    OrderTransport,
 )
 from trading.execution.transport import (
     OrderStatus as ExchangeStatus,
@@ -643,3 +644,81 @@ class OMS:
     def __repr__(self) -> str:
         s = self.summary()
         return f"OMS(open={s['open']} filled={s['filled']} rejected={s['rejected']} halted={self._risk.is_halted})"
+
+
+# ---------------------------------------------------------------------------
+# manage_open_orders — gate de reconciliacion (ADR-0029, B-MD-008 paso 5)
+# ---------------------------------------------------------------------------
+
+
+def manage_open_orders(oms: "OMS", transport: "OrderTransport") -> None:
+    """Reconcilia el estado local del OMS contra el exchange (ADR-0029).
+
+    NO es un loop de proceso: OCM opera one-shot por ciclo (execute_live.py
+    no tiene while/sleep — el "loop" es el reinicio externo del proceso,
+    igual que paper_hydra.py). Por eso esta funcion corre como GATE al
+    inicio de cada ciclo (execute_live.execute(), antes de run_once()), no
+    como tarea en background: "arranque" = cada invocacion del proceso.
+
+    Dos responsabilidades separadas (F-SUB-01/F-SUB-02, auditoria 2026-08-18):
+
+    1. Resolver ordenes CANCELLING pendientes (SUBMITTED es estado
+       test-only — F-SUB-01, nunca persiste en el flujo real; solo
+       CANCELLING puede sobrevivir entre ciclos si el proceso murio
+       durante una cancelacion en curso). Reusa resolve_cancel — misma
+       logica de la carrera CANCEL/FILL, no se duplica.
+    2. Detectar huerfanas (F-SUB-02): ordenes que el exchange reporta
+       abiertas via fetch_open_orders() pero que el OMS no reconoce
+       (perdidas por timeout de create_order, crash, reinicio previo).
+       Politica (NautilusTrader/Hummingbot, F-SUB-03): NUNCA se inventa
+       un reject ni se cancela automaticamente ante lo desconocido — solo
+       se alerta. Decidir que hacer con una huerfana es una decision de
+       negocio fuera del alcance de esta reconciliacion mecanica.
+
+    SafeOps: no lanza. Un fallo de transporte se loguea y la funcion
+    retorna — el ciclo sigue (fail-soft a nivel gate, consistente con
+    execute_live.execute() que nunca deja que un fallo de reconciliacion
+    tumbe el ciclo completo).
+    """
+    log = logger.bind(component="manage_open_orders")
+
+    # 1. Resolver CANCELLING pendientes de ciclos anteriores.
+    cancelling = [o for o in oms.open_orders if o.status == OrderStatus.CANCELLING]
+    for order in cancelling:
+        if not order.exchange_order_id:
+            log.warning(
+                "orden CANCELLING sin exchange_order_id — no se puede reconciliar | {}",
+                order.order_id,
+            )
+            continue
+        try:
+            state = transport.fetch_state(order.exchange_order_id)
+        except Exception as exc:
+            log.warning(
+                "fetch_state fallo durante reconciliacion CANCELLING | {} id={} err={}",
+                order.order_id,
+                order.exchange_order_id,
+                exc,
+            )
+            continue
+        oms.resolve_cancel(order.order_id, state)
+
+    # 2. Detectar huerfanas — comparar lo que el exchange reporta abierto
+    # contra lo que el OMS reconoce localmente.
+    try:
+        exchange_open = transport.fetch_open_orders()
+    except Exception as exc:
+        log.warning("fetch_open_orders fallo — huerfanas no verificables | {}", exc)
+        return
+
+    known_exchange_ids = {o.exchange_order_id for o in oms.all_orders if o.exchange_order_id}
+    for state in exchange_open:
+        if state.order_id and state.order_id not in known_exchange_ids:
+            # Politica: alerta, NUNCA auto-cancelar ni inventar estado local
+            # (F-SUB-03 / NautilusTrader "unknown -> mantener in-flight").
+            log.error(
+                "ORDEN HUERFANA detectada — el exchange la reporta abierta pero "
+                "OCM no la reconoce | exchange_order_id={} status={}",
+                state.order_id,
+                state.status.value,
+            )

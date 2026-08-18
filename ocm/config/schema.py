@@ -566,7 +566,9 @@ class KafkaConfig(StrictBaseModel):
     """Configuración de Kafka (streaming — future-ready)."""
 
     enabled: bool = False
-    bootstrap_servers: str = "localhost:9092"
+    # SSOT: alineado con KAFKA_BOOTSTRAP_SERVERS en env_vars.py — producer.py/
+    # consumer.py leen esa env var directamente, este campo no se usa en runtime real.
+    bootstrap_servers: str = "kafka:9092"
 
     # coerce_env_strings eliminado — ver RedisConfig (mismo principio). (DRY, SRP)
 

@@ -74,6 +74,8 @@ class LiveEngineResources:
     portfolio: PortfolioService
     tracker: "TradeTracker"
     redis_client: Any
+    oms: Any = None
+    transport: Optional[Any] = None
     exchange_client: Optional[Any] = None
     kafka_producer: Optional[Any] = None
     metrics_server: Optional[Any] = None
@@ -170,6 +172,8 @@ def build_live_engine(
         portfolio=runtime.portfolio,
         tracker=runtime.tracker,
         redis_client=None,
+        oms=runtime.oms,
+        transport=runtime.transport,
     )
 
 
@@ -220,6 +224,22 @@ def execute(
 
     logger.info("Engine live listo | {}", resources.engine)
     logger.info("Portfolio | {}", resources.portfolio)
+
+    if resources.oms is not None and resources.transport is not None:
+        from trading.execution.oms import manage_open_orders
+
+        try:
+            manage_open_orders(resources.oms, resources.transport)
+        except Exception as exc:
+            # SafeOps: gate fail-soft -- un fallo de reconciliacion no debe
+            # tumbar el ciclo (ADR-0029). manage_open_orders ya loguea
+            # internamente sus propios fallos de transporte; este catch es
+            # defensa adicional ante un error inesperado no contemplado ahi.
+            logger.warning(
+                "manage_open_orders fallo inesperado -- ciclo continua | {} -- {}",
+                type(exc).__name__,
+                exc,
+            )
 
     try:
         engine_result = resources.engine.run_once()

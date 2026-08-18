@@ -92,6 +92,7 @@ _FETCH_TRADES_TIMEOUT = 15.0
 _CREATE_ORDER_TIMEOUT = 15.0
 _FETCH_ORDER_TIMEOUT = 10.0
 _CANCEL_ORDER_TIMEOUT = 10.0
+_FETCH_OPEN_ORDERS_TIMEOUT = 10.0
 
 
 class CCXTAdapter(ExchangeAdapter):
@@ -540,6 +541,48 @@ class CCXTAdapter(ExchangeAdapter):
             except ccxt.AuthenticationError as exc:
                 raise ExchangeAdapterError(
                     f"Authentication failed for {self._exchange_id} on cancel_order: {exc}"
+                ) from exc
+
+    async def fetch_open_orders(
+        self,
+        symbol: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista las órdenes abiertas en el exchange (ADR-0029, B-MD-008 paso 5).
+
+        Autoridad recuperable para reconstruir estado tras un timeout de
+        create_order, un crash o un reinicio: sin este método el sistema no
+        tiene forma de descubrir una orden que el exchange acepto pero que
+        OCM perdio localmente (huerfana). symbol=None lista todas — no todos
+        los exchanges lo soportan sin symbol (Bybit UTA: si.
+        """
+        client = await self._get_client()
+        async with self._limiter.slot():
+
+            async def _call():
+                return await asyncio.wait_for(
+                    client.fetch_open_orders(symbol),
+                    timeout=_FETCH_OPEN_ORDERS_TIMEOUT,
+                )
+
+            try:
+                _t0 = time.perf_counter()
+                result = await self._resilience.retry_call(_call)
+                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+                return result
+            except RetryExhaustedError as exc:
+                self._throttle.record_error(error_type=exc.error_type)
+                if exc.error_type == "rate_limit":
+                    self._throttle.record_rate_limit_hit()
+                raise
+            except ExchangeCircuitOpenError:
+                self._handle_circuit_open("fetch_open_orders")
+                raise
+            except asyncio.TimeoutError as exc:
+                self._throttle.record_error(error_type="timeout")
+                raise ExchangeAdapterError(f"fetch_open_orders timeout after {_FETCH_OPEN_ORDERS_TIMEOUT}s") from exc
+            except ccxt.AuthenticationError as exc:
+                raise ExchangeAdapterError(
+                    f"Authentication failed for {self._exchange_id} on fetch_open_orders: {exc}"
                 ) from exc
 
     # ----------------------------------------------------------
