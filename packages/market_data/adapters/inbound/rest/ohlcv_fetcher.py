@@ -28,7 +28,6 @@ from loguru import logger
 if TYPE_CHECKING:
     from market_data.ports.outbound.transformer import OHLCVTransformerPort
 
-import pandas as pd
 
 from ocm.observability import bind_pipeline
 
@@ -40,6 +39,8 @@ if TYPE_CHECKING:
     from ocm.runtime.state.factories import LatenessCalibrationStore
 
 import time
+
+import polars as pl
 
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
@@ -257,13 +258,13 @@ from market_data.domain.exceptions import (  # noqa: E402
 class DownloadResult:
     symbol: str
     timeframe: str
-    df: pd.DataFrame
+    df: pl.DataFrame
     chunks: int = 0
     total_rows: int = 0
 
     @property
     def has_data(self) -> bool:
-        return not self.df.empty
+        return not self.df.is_empty()
 
 
 # ==========================================================
@@ -330,7 +331,7 @@ class HistoricalFetcherAsync:
         timeframe: str,
         start_date: Optional[str] = None,
         limit: int = DEFAULT_CHUNK_LIMIT,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         self._validate_inputs(symbol, timeframe, limit)
         self._validate_market(symbol, self._market_type)
 
@@ -338,7 +339,7 @@ class HistoricalFetcherAsync:
 
         if not result.has_data:
             self._log.bind(symbol=symbol, timeframe=timeframe).info("No new data")
-            return pd.DataFrame(columns=list(OHLCV_COLUMNS))
+            return pl.DataFrame(schema=list(OHLCV_COLUMNS))
 
         self._log.bind(
             symbol=symbol,
@@ -404,7 +405,7 @@ class HistoricalFetcherAsync:
             )
             _pair_overlap = self._overlap
 
-        collected: List[pd.DataFrame] = []
+        collected: List[pl.DataFrame] = []
         for chunk_idx in range(MAX_CHUNKS_PER_RUN):
             # Startup jitter: solo en el primer chunk de cada par.
             # Segunda línea de defensa contra thundering herd — actúa
@@ -452,7 +453,7 @@ class HistoricalFetcherAsync:
             )
             df = _sanitize_dataframe(df)
 
-            if df.empty:
+            if df.is_empty():
                 break
 
             collected.append(df)
@@ -495,13 +496,12 @@ class HistoricalFetcherAsync:
                 break
 
         if not collected:
-            return DownloadResult(symbol, timeframe, pd.DataFrame())
+            return DownloadResult(symbol, timeframe, pl.DataFrame())
 
         combined = (
-            pd.concat(collected, ignore_index=True)
-            .sort_values("timestamp")
-            .drop_duplicates(subset="timestamp", keep="last")
-            .reset_index(drop=True)
+            pl.concat(collected, how="vertical_relaxed")
+            .sort("timestamp")
+            .unique(subset=["timestamp"], keep="last", maintain_order=True)
         )
 
         return DownloadResult(
@@ -695,12 +695,14 @@ class HistoricalFetcherAsync:
 # ==========================================================
 
 
-def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:
-    df = pd.DataFrame(raw, columns=list(OHLCV_COLUMNS))
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-    return df
+def _raw_to_dataframe(raw: List[list]) -> pl.DataFrame:
+    return pl.DataFrame(raw, schema=list(OHLCV_COLUMNS), orient="row").with_columns(
+        pl.from_epoch(pl.col("timestamp"), time_unit="ms")
+        .dt.replace_time_zone("UTC")
+        .dt.cast_time_unit("us")
+        .alias("timestamp")
+    )
 
 
-def _sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.dropna(subset=["timestamp"])
-    return df.sort_values("timestamp")
+def _sanitize_dataframe(df: pl.DataFrame) -> pl.DataFrame:
+    return df.filter(pl.col("timestamp").is_not_null()).sort("timestamp")

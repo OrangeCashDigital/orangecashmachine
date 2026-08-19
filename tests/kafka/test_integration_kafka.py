@@ -111,23 +111,79 @@ async def test_A_replay_100_events_no_loss():
     c2 = await _raw_consumer(group_id, TOPIC_OHLCV_RAW)
     try:
         await c2.seek_to_beginning()
-        replayed = await _drain(c2, expected=100)
+        # CONTRACT R-05 (fix KAF-001): expected_ids evita que _drain() se
+        # detenga tras consumir basura histórica del topic antes de
+        # alcanzar los 100 eventos de esta ejecución.
+        replayed = await _drain(c2, expected=100, expected_ids=expected_ids)
     finally:
         await c2.stop()
 
     assert len(replayed) >= 100, f"Replay: esperados ≥100, recibidos {len(replayed)}. Posible pérdida."
 
-    # CONTRACT R-03: verificar por presencia en set, no por posición.
-    # El topic contiene mensajes de otros tests — ignorar los no parseables.
-    replayed_ids = set()
-    for r in replayed:
-        try:
-            replayed_ids.add(deserialize(r.value, EventPayload).event_id)
-        except Exception:
-            pass
 
-    missing = expected_ids - replayed_ids
-    assert not missing, f"Eventos perdidos en replay: {missing}"
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_R05_drain_filters_historical_garbage_by_expected_ids():
+    """
+    R-05 regression guard (H-25, fix KAF-001).
+
+    _drain(expected_ids=...) debe retornar EXACTAMENTE los records cuyo
+    event_id está en expected_ids — nunca contaminado con mensajes
+    ajenos del topic (KAFKA_LOG_RETENTION_HOURS=168 permite basura
+    histórica de ejecuciones previas).
+
+    A diferencia de test_A_replay_100_events_no_loss (que solo verifica
+    len(replayed) >= 100, insensible a contaminación por diseño), este
+    test usa igualdad estricta: produce "ruido" con event_ids ajenos
+    ANTES de los eventos reales, y confirma que el ruido no aparece en
+    el resultado — ni por conteo ni por identidad.
+    """
+    group_id = _unique_group("r05-guard")
+
+    # CONTRACT R-05c: event_id debe ser único POR EJECUCIÓN, no solo por
+    # test. IDs deterministas (sin run_id) colisionan con basura histórica
+    # de corridas anteriores si el topic no se purga entre ellas — causa
+    # raíz real de KAF-001 (no era topología ni _drain fabricando records).
+    run_id = uuid.uuid4().hex[:8]
+    noise = [_make_event(event_id=f"r05-noise-{i:04d}-{run_id}") for i in range(20)]
+    real_events = [_make_event(event_id=f"r05-real-{i:04d}-{run_id}") for i in range(5)]
+    expected_ids = {e.event_id for e in real_events}
+
+    # ── 1. Producir ruido + eventos reales, en ese orden ──────────────────
+    p = await _raw_producer()
+    try:
+        for e in noise + real_events:
+            await p.send_and_wait(TOPIC_OHLCV_RAW, value=serialize(e))
+        await p.flush()
+    finally:
+        await p.stop()
+
+    # ── 2. Drenar filtrando por expected_ids ───────────────────────────────
+    c = await _raw_consumer(group_id, TOPIC_OHLCV_RAW)
+    try:
+        await c.seek_to_beginning()
+        result = await _drain(c, expected=len(real_events), expected_ids=expected_ids)
+    finally:
+        await c.stop()
+
+    # ── 3. Contrato R-05: identidad exacta, sin contaminación ni pérdida ──
+    #
+    # _drain(expected_ids=...) debe devolver como máximo un
+    # ConsumerRecord por event_id esperado y excluir cualquier otro evento.
+    #
+    # La propiedad observable del test es, por tanto:
+    #
+    #     returned_event_ids == expected_ids
+    #
+    # No verificamos posición ni offsets: Kafka no garantiza orden global
+    # entre particiones y esos detalles no forman parte de este contrato.
+    result_ids = {deserialize(record.value, EventPayload).event_id for record in result}
+
+    assert result_ids == expected_ids, (
+        "R-05: el replay no coincide exactamente con la ejecución actual. "
+        f"missing={sorted(expected_ids - result_ids)}, "
+        f"unexpected={sorted(result_ids - expected_ids)}"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -25,30 +25,24 @@ Migración Fase 2 — completa
 Todo el procesamiento interno opera sobre pl.DataFrame nativo.
 polars_interop.py eliminado — sin puentes intermedios.
 
-ACL en los límites públicos de transform():
-  Entrada: pd.DataFrame → pl.from_pandas()  — única conversión
-  Salida : pl.DataFrame → .to_pandas()      — única conversión
-
-Razón del patrón ACL
---------------------
-Los callers upstream (CCXT, fetchers REST) entregan pd.DataFrame.
-Los callers downstream (IcebergStorage) consumen pd.DataFrame.
-Convertir una sola vez en el borde elimina la deuda de polars_interop.py
-y satisface SSOT + SRP: ningún método interno conoce pandas.
+Contrato de entrada/salida
+--------------------------
+Los callers upstream entregan pl.DataFrame.
+Los callers downstream consumen pl.DataFrame.
+Todo el módulo opera sobre Polars nativo, sin bridges.
 
 Principios aplicados
 --------------------
 • SOLID  — SRP por método; DIP vía callbacks de observabilidad en align_to_grid
 • DRY    — columnas definidas como constantes de clase
 • KISS   — flujo lineal sin estado mutable
-• ACL    — conversión pd↔pl exclusivamente en transform()
+• Polars — DataFrame nativo de extremo a extremo
 • SafeOps — CandleValidator en try/except; nunca bloquea el pipeline
 • fail-fast — _validate_columns antes de cualquier transformación costosa
 """
 
 from __future__ import annotations
 
-import pandas as pd
 import polars as pl
 from loguru import logger
 
@@ -67,7 +61,7 @@ class OHLCVTransformer:
     Transformador profesional para datasets OHLCV.
 
     Todos los métodos privados operan sobre pl.DataFrame nativo.
-    transform() actúa como ACL: pd→pl al entrar, pl→pd al salir.
+    transform() opera exclusivamente sobre pl.DataFrame.
     """
 
     REQUIRED_COLUMNS: list[str] = [
@@ -182,7 +176,7 @@ class OHLCVTransformer:
         Alinea timestamps al grid canónico del timeframe.
 
         Delega directamente en align_to_grid (pl.DataFrame → pl.DataFrame).
-        Sin conversión pd↔pl — nativo polars end-to-end.
+        Polars nativo end-to-end.
         Si timeframe es "unknown", el paso se omite.
         """
         if timeframe == "unknown":
@@ -322,26 +316,25 @@ class OHLCVTransformer:
         return df.sort("timestamp")
 
     # ---------------------------------------------------------
-    # Transform Pipeline — ACL boundary
+    # Transform Pipeline — Polars native
     # ---------------------------------------------------------
 
     @classmethod
     def transform(
         cls,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str = "unknown",
         timeframe: str = "unknown",
         exchange: str = "unknown",
         run_id: str | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """
         Pipeline completo de transformación OHLCV.
 
-        ACL boundary
-        ------------
-        Acepta pd.DataFrame — callers upstream (CCXT, fetchers REST).
-        Retorna pd.DataFrame — callers downstream (IcebergStorage).
-        Todo el procesamiento interno es polars nativo — sin puentes.
+        Contrato Polars nativo
+        ----------------------
+        Acepta y retorna pl.DataFrame.
+        Todo el procesamiento es Polars nativo.
 
         Parameters
         ----------
@@ -354,17 +347,17 @@ class OHLCVTransformer:
 
         Returns
         -------
-        pd.DataFrame con columna quality_flag adicional.
+        pl.DataFrame con columna quality_flag adicional.
         """
-        if df is None or df.empty:
+        if df is None or df.is_empty():
             logger.warning("Received empty OHLCV dataframe")
-            return pd.DataFrame(columns=cls.REQUIRED_COLUMNS)
+            return pl.DataFrame(schema=cls.REQUIRED_COLUMNS)
 
         original_rows = len(df)
 
-        # ── ACL in: pd.DataFrame → pl.DataFrame ─────────────────────────────
-        # Única conversión de entrada — a partir de aquí todo es polars.
-        pl_df = pl.from_pandas(df)
+        # ── Entrada: Polars nativo ─────────────────────────────────────────
+        # A partir de aquí todo es Polars.
+        pl_df = df
 
         cls._validate_columns(pl_df)
 
@@ -391,7 +384,7 @@ class OHLCVTransformer:
                 exchange,
                 original_rows,
             )
-            return pd.DataFrame(columns=[*cls.REQUIRED_COLUMNS, "quality_flag"])
+            return pl.DataFrame(schema=[*cls.REQUIRED_COLUMNS, "quality_flag"])
 
         # Re-alinear quality_flag si _drop_invalid_rows eliminó filas adicionales
         if len(quality_flag) != len(pl_df):
@@ -402,7 +395,7 @@ class OHLCVTransformer:
         # ── Stage 5: re-attach quality_flag ───────────────────────────────────
         pl_df = pl_df.with_columns(quality_flag.alias("quality_flag"))
 
-        # value_counts nativo polars — DRY, sin conversión a pandas
+        # value_counts nativo Polars — DRY
         vc = pl_df["quality_flag"].value_counts()
         flag_counts = dict(zip(vc["quality_flag"].to_list(), vc["count"].to_list(), strict=True))
         logger.info(
@@ -415,6 +408,4 @@ class OHLCVTransformer:
             flag_counts,
         )
 
-        # ── ACL out: pl.DataFrame → pd.DataFrame ─────────────────────────────
-        # Única conversión de salida — backward compat con callers downstream.
-        return pl_df.to_pandas()
+        return pl_df
