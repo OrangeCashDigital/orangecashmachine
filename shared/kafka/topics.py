@@ -275,6 +275,11 @@ assert len(_ALL_TOPICS) == len(set(_ALL_TOPICS)), (
     "shared/kafka/topics.py: topics con string duplicado — colisión de nombres"
 )
 
+# Export inmutable para provisioning (scripts/provision_kafka_topics.py) y
+# cualquier consumidor que necesite enumerar todos los topics. Derivado de
+# _ALL_TOPICS, no declarado por separado (DRY, SSOT único).
+ALL_TOPICS: tuple[str, ...] = tuple(_ALL_TOPICS)
+
 _ALL_GROUPS = [
     GROUP_BRONZE_WRITER,
     GROUP_QUALITY_GATE,
@@ -318,6 +323,8 @@ __all__ = [
     "TOPIC_POSITIONS_CLOSED",
     # DLQ
     "TOPIC_DLQ",
+    # Enumeración completa (provisioning)
+    "ALL_TOPICS",
     # Consumer groups
     "GROUP_BRONZE_WRITER",
     "GROUP_QUALITY_GATE",
