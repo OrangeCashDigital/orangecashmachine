@@ -75,25 +75,40 @@ El propio test ya documenta contaminación cruzada esperada entre runs
 ("El topic contiene mensajes de otros tests — ignorar los no parseables"),
 lo que sugiere que el topic de test no usa un nombre efímero por ejecución.
 
-**Estado: AISLADO — preexistente, no relacionado a este cambio.**
+**Estado: RESUELTO.**
 
-Verificación: se alternó `KAFKA_AUTO_CREATE_TOPICS_ENABLE` a `"true"` en el
-broker real (reinicio de contenedor, no solo config), y se re-ejecutó el test
-contra un topic limpio. El test **falló igual** (1.72s, incluso más rápido),
-con el mismo patrón de pérdida total del batch. Config revertido a `"false"`
-inmediatamente después (confirmado con grep post-restart).
+Aislamiento (confirmado preexistente): se alternó `KAFKA_AUTO_CREATE_TOPICS_ENABLE`
+a `"true"` en el broker real (reinicio de contenedor), y se re-ejecutó el test.
+Falló igual — descartado como relacionado a esa config.
 
-Se observó adicionalmente un warning `Unclosed AIOKafkaProducer` en la
-ejecución con `"true"` — el producer no cerró/flusheó limpio antes de que el
-test finalizara. Esto refuerza la hipótesis de race condition
-productor/consumidor (el consumer lee antes de que el producer confirme el
-envío de los 100 mensajes) como causa raíz más probable, independiente de
-`AUTO_CREATE_TOPICS_ENABLE`.
+**Causa raíz real (dos factores, ambos necesarios):**
 
-**Acción:** flaky test registrado como deuda técnica separada, fuera de
-alcance de esta auditoría. Recomendado para sesión dedicada: revisar si el
-test usa `producer.send_and_wait()` / `flush()` antes de iniciar el consumer,
-o si falta un `await` en el fixture de setup.
+1. **Partition assignment async sin warm-up.** `c2` llamaba `seek_to_beginning()`
+   inmediatamente tras `_raw_consumer()`, antes de que el rebalance del grupo
+   completara la asignación de particiones — `seek_to_beginning()` sin
+   particiones asignadas es un no-op silencioso. Contrato R-02 del propio
+   harness (`warm_up_consumer()`) ya cubría este caso, pero `test_A` no lo
+   usaba (a diferencia de `test_B`/`test_C`, que sí). Fix: se agregó
+   `await warm_up_consumer(c2)` antes de `seek_to_beginning()`.
+
+2. **`_drain(expected=100)` se agota con basura histórica parseable.**
+   `TOPIC_OHLCV_RAW` acumula mensajes de corridas previas con el mismo schema
+   (`KafkaOHLCVBar`/`EventPayload`). `_drain()` para en cuanto junta N
+   registros *cualquiera*, sin filtrar contenido — en un replay desde el
+   inicio del topic, agotaba su cuota de 100 con basura histórica antes de
+   llegar a los eventos de la corrida actual. El comentario original del test
+   asumía que la basura sería "no parseable" y se saltearía sola, pero al
+   compartir schema, sí es parseable — solo tiene otros `event_id`.
+
+**Fix aplicado:** se agregó `drain_until_ids_found()` en `tests/kafka/conftest.py`
+(mismo patrón que `find_event()` — R-03/R-04, no toca `_drain()` para no afectar
+otros tests que dependen de su contrato actual). Lee hasta que los `event_id`
+encontrados cubren el set esperado, no hasta juntar N mensajes cualquiera.
+`test_A` fue actualizado para usar esta función en vez de `_drain()` +
+filtrado manual.
+
+**Verificación:** `test_A_replay_100_events_no_loss` → `1 passed in 8.26s`.
+Suite completa `tests/kafka/` → `214 passed in 36.21s`, cero regresiones.
 
 ---
 
