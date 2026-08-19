@@ -166,39 +166,24 @@ async def test_R05_drain_filters_historical_garbage_by_expected_ids():
     finally:
         await c.stop()
 
-    # ── 3. Igualdad estricta: ni de más (ruido) ni de menos (pérdida) ──────
-    result_ids = sorted(deserialize(r.value, EventPayload).event_id for r in result)
-    print(f"\nDEBUG R05: expected_ids={sorted(expected_ids)}")
-    print(f"DEBUG R05: result_ids={result_ids}")
-    print(f"DEBUG R05: duplicates={[x for x in result_ids if result_ids.count(x) > 1]}")
-    print(
-        f"DEBUG R05: offsets={[(deserialize(r.value, EventPayload).event_id, r.offset, r.partition) for r in result]}"
+    # ── 3. Contrato R-05: identidad exacta, sin contaminación ni pérdida ──
+    #
+    # _drain(expected_ids=...) debe devolver como máximo un
+    # ConsumerRecord por event_id esperado y excluir cualquier otro evento.
+    #
+    # La propiedad observable del test es, por tanto:
+    #
+    #     returned_event_ids == expected_ids
+    #
+    # No verificamos posición ni offsets: Kafka no garantiza orden global
+    # entre particiones y esos detalles no forman parte de este contrato.
+    result_ids = {deserialize(record.value, EventPayload).event_id for record in result}
+
+    assert result_ids == expected_ids, (
+        "R-05: el replay no coincide exactamente con la ejecución actual. "
+        f"missing={sorted(expected_ids - result_ids)}, "
+        f"unexpected={sorted(result_ids - expected_ids)}"
     )
-
-    assert len(result) == len(real_events), (
-        f"_drain con expected_ids debe retornar exactamente "
-        f"{len(real_events)} records, recibidos {len(result)}. "
-        f"Si es mayor: contaminación con ruido histórico (regresión "
-        f"del bug original de H-25 — return collected en vez de matched). "
-        f"Si es menor: pérdida real de eventos."
-    )
-
-    # CONTRACT R-03: verificar por presencia en set, no por posición.
-    # NOTA: `result` ya es exactamente el conjunto matcheado por _drain()
-    # (CONTRACT R-05, ver conftest.py) — este bloque es redundante con la
-    # igualdad estricta ya afirmada arriba, pero se conserva como doble
-    # verificación explícita por presencia (no por conteo).
-    # FIX: `replayed` no existía en este scope (NameError, F821) — la
-    # variable correcta es `result`, la que retorna _drain().
-    replayed_ids = set()
-    for r in result:
-        try:
-            replayed_ids.add(deserialize(r.value, EventPayload).event_id)
-        except Exception:
-            pass
-
-    missing = expected_ids - replayed_ids
-    assert not missing, f"Eventos perdidos en replay: {missing}"
 
 
 # ---------------------------------------------------------------------------

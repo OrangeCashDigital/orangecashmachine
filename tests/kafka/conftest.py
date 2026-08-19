@@ -219,6 +219,10 @@ async def _drain(
     skipped_unparseable = 0
     deadline = time.monotonic() + timeout_s
 
+    # `expected_ids` defines the semantic completion contract. `expected`
+    # remains only for legacy callers that do not provide event identities.
+    max_records = len(expected_ids) if expected_ids is not None else expected
+
     def _done() -> bool:
         if expected_ids is not None:
             return found_ids.issuperset(expected_ids)
@@ -227,11 +231,11 @@ async def _drain(
     while not _done() and time.monotonic() < deadline:
         raw = await consumer.getmany(
             timeout_ms=_POLL_TIMEOUT_MS,
-            max_records=expected,
+            max_records=max_records,
         )
         for _tp, records in raw.items():
-            collected.extend(records)
             if expected_ids is None:
+                collected.extend(records)
                 continue
             for r in records:
                 try:
