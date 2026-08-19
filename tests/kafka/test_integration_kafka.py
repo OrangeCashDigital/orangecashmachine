@@ -27,7 +27,7 @@ import uuid
 import pytest
 
 from shared.kafka.schemas.ohlcv import EventPayload, KafkaOHLCVBar
-from shared.kafka.serializer import deserialize, serialize
+from shared.kafka.serializer import serialize
 from shared.kafka.topics import TOPIC_DLQ, TOPIC_OHLCV_RAW
 from tests.kafka.conftest import (
     BROKER,
@@ -35,6 +35,7 @@ from tests.kafka.conftest import (
     _raw_consumer,
     _raw_producer,
     _unique_group,
+    drain_until_ids_found,
     find_event,
     warm_up_consumer,
 )
@@ -108,24 +109,25 @@ async def test_A_replay_100_events_no_loss():
         await c1.stop()
 
     # ── 3. Reiniciar + seek_to_beginning (replay explícito) ───────────────
+    # CONTRACT R-02: warm_up_consumer() ANTES de seek_to_beginning().
+    # El partition assignment es async; sin warm-up, seek_to_beginning()
+    # puede ejecutarse antes de que el consumer tenga particiones asignadas,
+    # convirtiéndose en un no-op silencioso — pérdida total del replay,
+    # no parcial. Root cause del flake documentado en
+    # docs/audits/2026-08-18-kafka-topology-audit.md.
+    # drain_until_ids_found (no _drain): el topic acumula basura histórica
+    # *parseable* de corridas previas — _drain(expected=100) agotaría su
+    # cuota con esa basura antes de llegar a los 100 eventos de esta corrida.
+    # Root cause: docs/audits/2026-08-18-kafka-topology-audit.md
     c2 = await _raw_consumer(group_id, TOPIC_OHLCV_RAW)
     try:
+        await warm_up_consumer(c2)
         await c2.seek_to_beginning()
-        replayed = await _drain(c2, expected=100)
+        replayed_ids = await drain_until_ids_found(c2, expected_ids)
     finally:
         await c2.stop()
 
-    assert len(replayed) >= 100, f"Replay: esperados ≥100, recibidos {len(replayed)}. Posible pérdida."
-
     # CONTRACT R-03: verificar por presencia en set, no por posición.
-    # El topic contiene mensajes de otros tests — ignorar los no parseables.
-    replayed_ids = set()
-    for r in replayed:
-        try:
-            replayed_ids.add(deserialize(r.value, EventPayload).event_id)
-        except Exception:
-            pass
-
     missing = expected_ids - replayed_ids
     assert not missing, f"Eventos perdidos en replay: {missing}"
 
