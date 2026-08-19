@@ -625,9 +625,15 @@ class MetricsConfig(StrictBaseModel):
 
 
 class TracingConfig(StrictBaseModel):
-    """Configuración de distributed tracing (OpenTelemetry — future-ready)."""
+    """Configuración de distributed tracing (OpenTelemetry — B-17/H-18)."""
 
     enabled: bool = False
+    # OTLP HTTP endpoint del collector/backend (p.ej. Grafana Tempo).
+    # None → exporter deshabilitado (solo spans no-exportados / testing).
+    endpoint: Optional[str] = None
+    service_name: str = "orangecashmachine"
+    # Ratio de muestreo (0.0-1.0). 1.0 = muestrear todo. B-17/G11.
+    sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
 
     # coerce_env_strings eliminado — ver RedisConfig (mismo principio). (DRY, SRP)
 

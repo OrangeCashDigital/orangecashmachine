@@ -14,4 +14,14 @@ observability:
     port: ${oc.env:METRICS_PORT,8000}
 
   tracing:
+    # B-17/H-18: OpenTelemetry + request-id propagado en consumers (G11).
+    # Default conservador: tracing desactivado.
+    # Solo entornos que lo habiliten explícitamente levantan exporter OTLP.
     enabled: false
+    # OTLP HTTP endpoint del collector/backend. SSOT del default OTLP estándar
+    # (mismo valor que opentelemetry-exporter-otlp-proto-http usa por defecto).
+    # None → exporter deshabilitado (spans internos sin exportar / testing).
+    endpoint: null
+    service_name: orangecashmachine
+    # Ratio de muestreo (0.0-1.0). 1.0 = muestrear todos los spans.
+    sample_ratio: 1.0

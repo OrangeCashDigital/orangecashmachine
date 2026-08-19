@@ -36,7 +36,6 @@ from market_data.domain.events import (
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 from market_data.ports.outbound.event_bus import EventBusPort
-from shared.utils.repo import _get_git_hash
 
 # Columnas del DataFrame OHLCV — SSOT con OHLCVChunk.candles
 _CANDLE_COLS = ("timestamp", "open", "high", "low", "close", "volume")
@@ -68,6 +67,7 @@ class QualityPipelineConsumer(BaseConsumer):
         registry=None,
         tracker,  # obligatorio — inyectar desde composition root
         checker_factory: CheckerFactory | None = None,
+        git_hash: str = "unknown",
     ) -> None:
         # Fail-fast: tracker es obligatorio.
         # QualityPipelineConsumer no puede importar infrastructure/ (DIP — BC-05).
@@ -84,6 +84,9 @@ class QualityPipelineConsumer(BaseConsumer):
         self._tracker = tracker
         # DIP: checker inyectado — default = native (backward compat)
         self._checker_factory: CheckerFactory = checker_factory or native_checker_factory
+        # git_hash inyectado por el composition root (ADR-0006, B-20) — nunca
+        # subprocess desde application/ (pureza de dominio).
+        self._git_hash = git_hash
 
     # ----------------------------------------------------------
     # BaseConsumer contract
@@ -135,7 +138,7 @@ class QualityPipelineConsumer(BaseConsumer):
             event.batch.timeframe,
             event.batch.exchange,
             0,  # rows_removed: consumer no tiene contexto de remoción upstream
-            _get_git_hash(),
+            self._git_hash,  # B-20: inyectado por el composition root
         )
         report = checker.check(pl.from_pandas(df), symbol=event.batch.symbol)
 

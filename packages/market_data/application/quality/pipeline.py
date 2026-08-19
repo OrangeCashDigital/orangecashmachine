@@ -73,7 +73,6 @@ from market_data.ports.outbound.data_quality_checker import CheckerFactory
 from market_data.ports.outbound.lineage import LineageTrackerPort
 from market_data.ports.outbound.metrics import NullQualityMetrics, QualityMetricsPort
 from market_data.ports.outbound.quality import AnomalyRegistryPort
-from shared.utils.repo import _get_git_hash
 
 # ===========================================================================
 # Resultado del pipeline
@@ -141,6 +140,7 @@ class QualityPipeline:
         metrics: Optional[QualityMetricsPort] = None,
         lineage_tracker: Optional[LineageTrackerPort] = None,
         checker_factory: Optional[CheckerFactory] = None,
+        git_hash: str = "unknown",
     ) -> None:
         self._policy = policy or default_policy
         # AnomalyRegistryPort inyectado desde pipeline_factory (Composition Root).
@@ -150,6 +150,9 @@ class QualityPipeline:
         self._lineage_tracker = lineage_tracker or _null_lineage_tracker()
         # DIP: checker inyectado — default = native (backward compat)
         self._checker_factory = checker_factory or native_checker_factory
+        # git_hash inyectado por el composition root (ADR-0006, B-20) — el
+        # dominio/application nunca ejecuta subprocess para resolverlo.
+        self._git_hash = git_hash
 
     def run(
         self,
@@ -172,12 +175,14 @@ class QualityPipeline:
         exchange     : nombre del exchange (e.g. "bybit")
         run_id       : ID de correlación para lineage (None = no registrar)
         rows_removed : velas CORRUPT eliminadas upstream (para gap scan)
-        git_hash     : hash de git del commit actual (se obtiene automáticamente si "unknown")
+        git_hash     : hash de git del commit actual — inyectado por el composition
+                       root (ADR-0006, B-20). El dominio/application NO ejecuta
+                       subprocess: si no se inyecta, se usa el valor de __init__.
         """
-        # Resolver git_hash automáticamente si no se proporciona
+        # B-20: resolver desde el valor inyectado en __init__ si run() no recibe
+        # uno explícito. Nunca subprocess desde application/ (pureza de dominio).
         if git_hash == "unknown":
-            git_hash = _get_git_hash()
-
+            git_hash = self._git_hash
         # 1. Validación de calidad
         # DIP: checker inyectado por factory
         checker = self._checker_factory(timeframe, exchange, rows_removed, git_hash)

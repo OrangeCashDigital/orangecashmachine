@@ -141,6 +141,12 @@ dependencies = [
     "structlog>=24.1.0,<25.0",
     "httpx>=0.27.0,<1.0",
     "prometheus-client>=0.20.0,<1.0",
+    # opentelemetry: B-17/H-18 — SDK + exporter OTLP HTTP. Pin>=1.28: API
+    # estable del tracer provider y propagadores W3C tracecontext. Sin techo
+    # <2.0 (compat backward). Resuelto en 1.44.0.
+    "opentelemetry-api>=1.28.0,<2.0",
+    "opentelemetry-sdk>=1.28.0,<2.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.28.0,<2.0",
 ]
 
 [project.urls]

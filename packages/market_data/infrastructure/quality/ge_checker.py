@@ -105,10 +105,14 @@ class GEChecker:
         timeframe: str,
         exchange: str,
         rows_removed: int = 0,
+        git_hash: str = "unknown",
     ) -> None:
         self._timeframe = timeframe
         self._exchange = exchange
         self._rows_removed = rows_removed
+        # B-20: inyectado por el composition root vía ge_checker_factory —
+        # el checker nunca resuelve subprocess internamente.
+        self._git_hash = git_hash
         self._context = self._build_context()
 
     # ── Port ────────────────────────────────────────────────────────────────
@@ -279,15 +283,13 @@ class GEChecker:
 
         import datetime as _dt
 
-        from shared.utils.repo import _get_git_hash
-
         return DataQualityReport(
             symbol=symbol,
             timeframe=self._timeframe,
             exchange=self._exchange,
             rows=len(df),
             checked_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
-            git_hash=_get_git_hash(),
+            git_hash=self._git_hash,
             issues=domain_issues,
         )
 
@@ -301,7 +303,6 @@ class GEChecker:
         import datetime as _dt
 
         from market_data.domain.quality.types import DataQualityReport, QualityIssue
-        from shared.utils.repo import _get_git_hash
 
         return DataQualityReport(
             symbol=symbol,
@@ -309,7 +310,7 @@ class GEChecker:
             exchange=self._exchange,
             rows=len(df),
             checked_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
-            git_hash=_get_git_hash(),
+            git_hash=self._git_hash,
             issues=[
                 QualityIssue(
                     check="ge_internal_error",
@@ -383,6 +384,7 @@ def ge_checker_factory(
     timeframe: str,
     exchange: str,
     rows_removed: int,
+    git_hash: str = "unknown",
 ) -> GEChecker:
     """
     Factory que satisface CheckerFactory type alias.
@@ -390,11 +392,15 @@ def ge_checker_factory(
     Registrar en pipeline_factory.py:
         from market_data.infrastructure.quality.ge_checker import ge_checker_factory
         pipeline = QualityPipeline(checker_factory=ge_checker_factory)
+
+    git_hash: inyectado por el composition root (B-20) — el checker nunca
+    resuelve subprocess internamente.
     """
     return GEChecker(
         timeframe=timeframe,
         exchange=exchange,
         rows_removed=rows_removed,
+        git_hash=git_hash,
     )
 
 

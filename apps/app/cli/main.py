@@ -13,7 +13,7 @@ Flujo de ejecución::
         ├── load_appconfig_from_hydra(cfg)   → AppConfig (Pydantic validado)
         ├── run_application(config, run_cfg)
         │       ├── configure_logging()
-        │       ├── setup_observability()    → MetricsRuntime (idempotente, fail-soft)
+        │       ├── setup_observability()    → MetricsRuntime + TracingRuntime (OTel, idempotente, fail-soft)
         │       ├── EnvironmentValidator.check()
         │       ├── validate_only? → sys.exit(0)
         │       └── pipeline_runner(ctx, pusher)
@@ -84,7 +84,7 @@ from ocm.config.loader.exceptions import (
     ConfigValidationError,
 )
 from ocm.config.schema import AppConfig
-from ocm.observability import bootstrap_logging, configure_logging
+from ocm.observability import bootstrap_logging, configure_logging, init_tracing
 from ocm.observability.metrics_runtime import init_metrics_runtime
 from ocm.observability.pushers import NoopPusher, PrometheusPusher
 from ocm.runtime.context import RuntimeContext
@@ -104,16 +104,24 @@ PipelineRunner = Callable[[RuntimeContext, MetricsPusherPort | None], int]
 
 
 def setup_observability(config: AppConfig, *, validate_only: bool = False) -> None:
-    """Inicializa MetricsRuntime de forma idempotente y fail-soft.
+    """Inicializa MetricsRuntime + TracingRuntime de forma idempotente y fail-soft.
 
     Args:
         config:        Configuración validada de la aplicación.
-        validate_only: Si ``True``, inicialización mínima sin exponer métricas.
+        validate_only: Si ``True``, inicialización mínima sin exponer métricas
+                       ni levantar exporter OTLP.
     """
     try:
         init_metrics_runtime(config, validate_only=validate_only)
     except Exception as exc:
         logger.warning("observability_init_failed", error=str(exc))
+
+    # B-17/H-18: OpenTelemetry + request-id propagado en consumers (G11).
+    # Fail-soft: un fallo de tracing nunca bloquea el pipeline.
+    try:
+        init_tracing(config, validate_only=validate_only)
+    except Exception as exc:
+        logger.warning("tracing_init_failed", error=str(exc))
 
 
 # ---------------------------------------------------------------------------

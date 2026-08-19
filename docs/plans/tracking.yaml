@@ -70,9 +70,10 @@ reglas:
 - id: R11
   hallazgo: H-11
   descripcion: '`subprocess` en domain (pureza de dominio)'
-  mecanismo: AST guard tipo BC-09 sobre subprocess
-  backtest: pendiente
-  activada_en_ci: false
+  mecanismo: AST guard tipo BC-09 sobre subprocess — scripts/domain_subprocess_guard.py
+    + tests/architecture/test_domain_subprocess_guard.py (positivo + negativo)
+  backtest: ok
+  activada_en_ci: true
 - id: R12
   hallazgo: AUDIT-apps-2026-08-03#H1
   descripcion: '`use_cases` tocan argparse/Namespace/constructores de config (el Namespace
@@ -84,7 +85,8 @@ reglas:
   hallazgo: AUDIT-apps-2026-08-03#H4
   descripcion: '`getattr` con default en use_cases (config tipada es la única fuente
     de verdad)'
-  mecanismo: 'Guard AST: getattr con default prohibido en app/use_cases'
+  mecanismo: |
+    Guard AST: getattr con default prohibido en app/use_cases
   backtest: ok
   activada_en_ci: true
 - id: R14
@@ -98,7 +100,8 @@ reglas:
 - id: R15
   hallazgo: AUDIT-apps-2026-08-03#H12
   descripcion: CycleRunResult redefinido (LiveRunResult/PaperRunResult duplicados)
-  mecanismo: 'Guard AST: un único CycleRunResult en app/use_cases/run_result.py'
+  mecanismo: |
+    Guard AST: un único CycleRunResult en app/use_cases/run_result.py
   backtest: ok
   activada_en_ci: true
 - id: R16
@@ -123,7 +126,8 @@ hallazgos:
   - 'test de arquitectura: uv run live no arranca sin executor real'
   - test positivo/negativo R1
   adr_relacionado: ADR-0016
-  riesgo_residual: 'Operacional: si se re-habilita antes de F3, reaparece el riesgo'
+  riesgo_residual: |
+    Operacional: si se re-habilita antes de F3, reaparece el riesgo
   fecha_cierre: '2026-08-06'
   cadena:
     hallazgo:
@@ -203,7 +207,8 @@ hallazgos:
   pruebas:
   - test round-trip BUY fill → SELL fill aserta contador
   adr_relacionado: ADR-0006
-  riesgo_residual: 'Medio: toca OMS; requiere decisión de semántica'
+  riesgo_residual: |
+    Medio: toca OMS; requiere decisión de semántica
   fecha_cierre: '2026-08-06'
   cadena:
     hallazgo:
@@ -218,7 +223,8 @@ hallazgos:
         2026-08-06)
     implementacion:
       estado: HECHO
-      referencia: 'held-position: BUY abre, SELL fill cierra (f8a1c73)'
+      referencia: |
+        held-position: BUY abre, SELL fill cierra (f8a1c73)
     tests:
       estado: HECHO
       referencia: test_oms_fill_lifecycle (R3 round-trip)
@@ -323,7 +329,8 @@ hallazgos:
   pruebas:
   - pytest --cov gateado con fail_under > 0 (40, baseline 44%)
   adr_relacionado: ADR-0020-production-gate-release
-  riesgo_residual: 'Bajo: umbral fijado sobre medición real 44%, con margen de 4pts'
+  riesgo_residual: |
+    Bajo: umbral fijado sobre medición real 44%, con margen de 4pts
   fecha_cierre: 2026-08-06
   cadena:
     hallazgo:
@@ -346,7 +353,8 @@ hallazgos:
       referencia: R5 activada_en_ci (job unit-tests --cov)
     evidencia:
       estado: HECHO
-      referencia: 'medición real F2.1: 44%'
+      referencia: |
+        medición real F2.1: 44%
     cierre:
       estado: HECHO
       referencia: validado por engineering_health_check
@@ -379,7 +387,8 @@ hallazgos:
       referencia: job security en CI + hook pre-commit + [tool.bandit]
     tests:
       estado: HECHO
-      referencia: 'bandit -ll: 0 HIGH'
+      referencia: |
+        bandit -ll: 0 HIGH
     ci:
       estado: HECHO
       referencia: R6 activada_en_ci (job security)
@@ -426,7 +435,8 @@ hallazgos:
       referencia: gate mypy completo
     evidencia:
       estado: HECHO
-      referencia: 'Success: no issues found'
+      referencia: |
+        Success: no issues found
     cierre:
       estado: HECHO
       referencia: validado por engineering_health_check
@@ -1273,7 +1283,8 @@ hallazgos:
       referencia: limpieza/consistencia de documentacion, no cambio de contrato
     implementacion:
       estado: PENDIENTE
-      referencia: 'decision de Luis: eliminar o conectar; acoplado a remediacion F-031'
+      referencia: |
+        decision de Luis: eliminar o conectar; acoplado a remediacion F-031
     tests:
       estado: PENDIENTE
       referencia: null
@@ -1290,7 +1301,7 @@ hallazgos:
   hallazgo_informe: F-028
   fase: F2
   prioridad: BAJA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: .github/workflows/gitleaks.yml existe (gacts/gitleaks@v1) pero .pre-commit-config.yaml
     no tiene hook de gitleaks; config-guard es init container Docker Compose, mecanismo
@@ -1298,11 +1309,13 @@ hallazgos:
   solucion: Agregar gitleaks como hook de pre-commit local, consistente con ruff/mypy/import-linter/bandit
     ya presentes
   pruebas:
-  - 'verificacion: pre-commit run gitleaks --all-files tras agregar el hook'
+  - 'verificacion: pre-commit run gitleaks --all-files tras agregar el hook — PASSED (2026-08-18)'
+  - 'verificacion: pre-commit validate-config .pre-commit-config.yaml — sin errores'
   adr_relacionado: null
   riesgo_residual: Bajo — deteccion tardia (en push, no en commit local) de secretos
-    accidentales
-  fecha_cierre: null
+    accidentales. Gitleaks pre-commit es deteccion local; el workflow CI (gacts/gitleaks@v1)
+    cubre push/PR en main.
+  fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
       estado: HECHO
@@ -1314,20 +1327,20 @@ hallazgos:
       estado: NO_APLICA
       referencia: agregado de hook de pre-commit, no toca contrato de codigo
     implementacion:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '.pre-commit-config.yaml — repo gitleaks/gitleaks rev v8.30.1, hook id gitleaks (2026-08-18)'
     tests:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'pre-commit run gitleaks --all-files → Passed'
     ci:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'workflow existente gacts/gitleaks@v1 (push/PR main) — no requiere cambios'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'pre-commit run gitleaks --all-files = Passed, 2026-08-18'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-18'
 - id: B-45
   hallazgo_informe: F-029
   fase: F2
@@ -1659,17 +1672,27 @@ hallazgos:
   hallazgo_informe: H-10
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: packages/market_data/adapters/inbound/websocket/onchain_producer.py:9-13
-    (imports a infra.kafka.* y market_data.domain.ports — inexistentes)
-  solucion: Eliminar el stub o implementarlo bajo ADR (topic TOPIC_ONCHAIN_RAW ya
-    existe en shared/kafka/topics.py)
+  evidencia: 'packages/market_data/adapters/inbound/websocket/onchain_producer.py:9-13
+    (imports a infra.kafka.* y market_data.domain.ports — inexistentes). CERRADO:
+    el stub fue ELIMINADO en ff67b93 (B-36/F-020, "onchain_producer.py eliminado:
+    import roto confirmado en vivo", 38 líneas) — verificable con git show --stat
+    ff67b93. Hoy rg de onchain_producer/TOPIC_ONCHAIN_RAW = 0 hits en packages/apps/ocm/shared/tests.'
+  solucion: 'Eliminar el stub o implementarlo bajo ADR (topic TOPIC_ONCHAIN_RAW ya
+    existe en shared/kafka/topics.py). RESUELTO por eliminación (B-36/F-020): módulo
+    ausente = criterio "módulo ausente o con imports válidos" cumplido. El topic
+    TOPIC_ONCHAIN_RAW sigue disponible en el SSOT si en el futuro se implementa un
+    consumidor real.'
   pruebas:
-  - módulo ausente o con imports válidos
+  - 'verificación: git show --stat ff67b93 muestra onchain_producer.py eliminado (38 ----)'
+  - 'verificación: rg onchain_producer en packages/apps/ocm/shared/tests = 0 hits'
   adr_relacionado: null
-  riesgo_residual: Bajo
-  fecha_cierre: null
+  riesgo_residual: 'Bajo — módulo ausente, no re-importable; topic TOPIC_ONCHAIN_RAW
+    permanece en SSOT (shared/kafka/topics.py) para una futura implementación real.
+    R8 (guard anti dead-stub) queda como backtest pendiente sin activar, verificado
+    por rg en esta revalidación (2026-08-18).'
+  fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
       estado: HECHO
@@ -1681,20 +1704,22 @@ hallazgos:
       estado: NO_APLICA
       referencia: null
     implementacion:
-      estado: PENDIENTE
-      referencia: eliminar/mover stub
+      estado: HECHO
+      referencia: 'eliminado el stub en ff67b93 (B-36/F-020); 38 líneas menos en
+        adapters/inbound/websocket/onchain_producer.py'
     tests:
-      estado: PENDIENTE
-      referencia: R8
+      estado: HECHO
+      referencia: 'verificación rg = 0 hits; suite completa 1222 passed (2026-08-18)'
     ci:
-      estado: PENDIENTE
-      referencia: R8 activada_en_ci
+      estado: NO_APLICA
+      referencia: 'R8 no activada_en_ci; guard por rg confirmado en revalidación 2026-08-18'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'git show --stat ff67b93; rg onchain_producer = 0 (2026-08-18, HEAD a4d8298)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'B-11 cerrado 2026-08-18 — stub eliminado por B-36/F-020, revalidado
+        en auditoría Kafka replay/topología'
 - id: B-12
   hallazgo_informe: H-01
   fase: F3
@@ -1950,7 +1975,8 @@ hallazgos:
       referencia: B-15 en tracking v2
     adr:
       estado: PENDIENTE
-      referencia: 'ADR-0021 escrita (PROPUESTA, 2026-08-16): docs/architecture/decisions/ADR-0021-estado-posicion-unico-dueno.md'
+      referencia: |
+        ADR-0021 escrita (PROPUESTA, 2026-08-16): docs/architecture/decisions/ADR-0021-estado-posicion-unico-dueno.md
     implementacion:
       estado: PARCIAL
       referencia: mitigacion de observabilidad en fill_sync.py (2026-08-12); unificar
@@ -2029,16 +2055,25 @@ hallazgos:
   hallazgo_informe: H-18
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: ocm/observability/ (logger multi-sink, Prometheus, Loki) sin módulo de
-    tracing; sin OpenTelemetry en pyproject
+  evidencia: 'Implementado 2026-08-18: OpenTelemetry SDK + exporter OTLP HTTP
+    (opentelemetry-api/sdk/exporter-otlp-proto-http 1.44.0) en pyproject.toml/uv.lock;
+    ocm/observability/tracing.py v0.2.0 (TracingRuntime fail-soft idempotente,
+    init_tracing desde setup_observability, propagadores W3C tracecontext+baggage);
+    request-id propagado en consumers vía BaseConsumer._traced_handle (span
+    <Consumer>.handle con event_id como request.id + attrs exchange/symbol/timeframe);
+    TracingConfig ampliado (endpoint/service_name/sample_ratio) en schema+structured+metrics.yaml.'
   solucion: OpenTelemetry + request-id propagado en consumers
   pruebas:
-  - test de propagación de contexto
+  - 'test: propagación de contexto G11 — tests/ocm/observability/test_tracing.py
+    (14 tests: fail-soft, idempotencia, span attrs, request-id en loguru, G11 end-to-end)'
   adr_relacionado: null
-  riesgo_residual: Bajo
-  fecha_cierre: null
+  riesgo_residual: 'Bajo — tracing disabled por defecto; activarlo requiere
+    endpoint OTLP explícito (config/observability/metrics.yaml). Sin backend OTLP
+    los spans se crean no-recording sin exportar. request-id en logs es
+    independiente del exporter (siempre activo vía trace_event).'
+  fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2050,20 +2085,21 @@ hallazgos:
       estado: NO_APLICA
       referencia: null
     implementacion:
-      estado: PENDIENTE
-      referencia: OTel + request-id
+      estado: HECHO
+      referencia: '2026-08-18: tracing.py v0.2.0 + BaseConsumer._traced_handle +
+        init_tracing en setup_observability + TracingConfig ampliado'
     tests:
-      estado: PENDIENTE
-      referencia: propagación contexto
+      estado: HECHO
+      referencia: 'tests/ocm/observability/test_tracing.py (14 tests) — G11 propagación de contexto'
     ci:
-      estado: PENDIENTE
-      referencia: G11
+      estado: HECHO
+      referencia: 'G11 — suite completa 1244 passed (incluye test_tracing)'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'suite completa + lint-imports 50/0 + ruff/mypy PASS (2026-08-18)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-18'
 - id: B-18
   hallazgo_informe: H-15
   fase: F4
@@ -2079,7 +2115,8 @@ hallazgos:
   pruebas:
   - test de cambio backward-compatible
   adr_relacionado: ADR-0018
-  riesgo_residual: 'Medio: formato de cable'
+  riesgo_residual: |
+    Medio: formato de cable
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -2161,7 +2198,8 @@ hallazgos:
         1054 passed (1 fallo pre-existente B-15)
     evidencia:
       estado: HECHO
-      referencia: 'Commit fix(market-data): B-19 — durable bronze deduplication'
+      referencia: |
+        Commit fix(market-data): B-19 — durable bronze deduplication
     cierre:
       estado: HECHO
       referencia: B-19 H-16 dedup durable Bronze resuelta — mark-after-write + L2
@@ -2170,15 +2208,23 @@ hallazgos:
   hallazgo_informe: H-11
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: packages/market_data/domain/quality/types.py:25,33 (subprocess git rev-parse)
+  evidencia: 'Implementado 2026-08-14 (49b63a4): _get_git_hash() movido del dominio
+    a shared/utils/repo.py (SSOT). Completado 2026-08-18: inyección de git_hash desde
+    el composition root en QualityPipeline y QualityPipelineConsumer (pipeline_factory),
+    ge_checker_factory/GEChecker reciben git_hash (firma CheckerFactory alineada),
+    application/ NO importa _get_git_hash. Guard R11 activado.'
   solucion: Inyectar git-hash como metadato desde infra/composition root
   pruebas:
-  - 'test: dominio sin subprocess'
-  adr_relacionado: null
-  riesgo_residual: Bajo
-  fecha_cierre: null
+  - 'test: dominio sin subprocess — tests/architecture/test_domain_subprocess_guard.py
+    (8 tests: positivo árbol real + negativos anti-patrón)'
+  - 'test: application/quality/pipeline.py y quality_consumer.py sin import de _get_git_hash'
+  adr_relacionado: ADR-0006
+  riesgo_residual: 'Bajo — si no se inyecta git_hash (uso directo de QualityPipeline()
+    sin composition root), el report queda con git_hash="unknown" (fail-soft documentado);
+    la inyección real en producción viene de pipeline_factory.'
+  fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2187,23 +2233,25 @@ hallazgos:
       estado: HECHO
       referencia: B-20 en tracking v2
     adr:
-      estado: NO_APLICA
-      referencia: null
+      estado: HECHO
+      referencia: ADR-0006 — dominio no depende de infraestructura (subprocess/git)
     implementacion:
-      estado: PENDIENTE
-      referencia: inyectar git-hash
+      estado: HECHO
+      referencia: '49b63a4 (2026-08-14) + 2026-08-18: inyección completa desde
+        pipeline_factory; application sin _get_git_hash; ge_checker_factory con
+        git_hash'
     tests:
-      estado: PENDIENTE
-      referencia: dominio sin subprocess (R11)
+      estado: HECHO
+      referencia: 'test_domain_subprocess_guard.py (8 tests) + suite quality'
     ci:
-      estado: PENDIENTE
-      referencia: R11 activada_en_ci
+      estado: HECHO
+      referencia: 'R11 activada_en_ci=true (job domain-guard en ocm-ci.yml)'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'guard AST PASS sobre árbol real (2026-08-18)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-18'
 - id: B-21
   hallazgo_informe: H-17
   fase: F4
@@ -2247,7 +2295,7 @@ hallazgos:
   hallazgo_informe: B-MD-008
   fase: F3
   prioridad: CRITICA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: 'OMS.cancel() es local-only: packages/trading/execution/oms.py:300-318
     (transición CANCELLED + pop de _open + record_close, sin llamada al exchange);
@@ -2256,22 +2304,23 @@ hallazgos:
     (grep F-BMD8-04). Carrera CANCEL vs FILL: CANCELLED terminal (order.py:64-74),
     fill_sync solo en FILLED (fill_sync.py:109). Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
     F-BMD8-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §3'
-  solucion: 'Diseño ADR-0029 (ACEPTADA 2026-08-16, no implementado): exponer cancel_order
-    en CCXTAdapter, extender OrderTransport con cancel(symbol, exchange_order_id),
+  solucion: 'ADR-0029 (ACEPTADA 2026-08-16) IMPLEMENTADA: cancel_order expuesto en
+    CCXTAdapter, OrderTransport extendido con cancel(symbol, exchange_order_id),
     estado transitorio CANCELLING que resuelve por confirmación del exchange (fill
-    SIEMPRE prevalece), loop manage_open_orders, callbacks al flujo de fill existente
-    (B-12). Reutilizar OMS._fill/WAC/settlement para ALREADY_FILLED. Independiente
-    de la cadena B-MD-003→002→004'
+    SIEMPRE prevalece), loop manage_open_orders (Policy A: alerta sin auto-cancel),
+    callbacks al flujo de fill existente (B-12). Reutiliza OMS._fill/WAC/settlement
+    para ALREADY_FILLED. Independiente de la cadena B-MD-003→002→004'
   pruebas:
   - 'verificación: rg de callers de OMS.cancel() = 0; protocolo sin método cancel'
-  - 'pendiente: test integración sandbox/mock cancel → confirmación exchange → estado
-    final'
-  - 'pendiente: test carrera cancel vs fill (fill prevalece)'
+  - 'tests/trading/test_oms_cancel_lifecycle.py (18 tests): submit captura exchange_order_id,
+    transiciones CANCELLING→terminales, resolve_cancel fail-closed, manage_open_orders
+    sin auto-cancel, idempotencia'
+  - 'test carrera cancel vs fill (fill prevalece): cubierto por lifecycle tests'
   adr_relacionado: ADR-0029 (ACEPTADA, 2026-08-16; etiqueta A-MD-004)
-  riesgo_residual: 'Alto — sin cancel real, una orden en vuelo no se puede detener
-    en el exchange; divergencia CANCEL/FILL silenciosa (CANCELLED terminal, sin reconciliación
-    periódica). Mitigado parcialmente por market-only y fail-closed de submit (B-12)'
-  fecha_cierre: null
+  riesgo_residual: 'Bajo — Policy A (alerta sin auto-cancel) evita divergencia
+    CANCEL/FILL; orden huérfana se detecta con log.error en manage_open_orders;
+    fail-closed de submit (B-12) y market-only mantienen la protección de capital'
+  fecha_cierre: 2026-08-18
   cadena:
     hallazgo:
       estado: HECHO
@@ -2282,22 +2331,23 @@ hallazgos:
       referencia: B-MD-008 en tracking.yaml
     adr:
       estado: HECHO
-      referencia: 'ADR-0029 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0029-cancelacion-real-gestion-ordenes-abiertas.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md'
+      referencia: |
+        ADR-0029 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0029-cancelacion-real-gestion-ordenes-abiertas.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
     implementacion:
       estado: HECHO
       referencia: manage_open_orders implementado en oms.py:653-725; llamado desde execute_live.py:225; exchange_order_id poblado en order.py:140; ADR-0029 ACEPTADA 2026-08-16
     tests:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'tests/trading/test_oms_cancel_lifecycle.py 18/18 passed; suite completa 1222 passed, 0 failed, 4 deselected (uv run pytest tests/ -x -q -m "not integration" --no-cov, 2026-08-18 HEAD a4d8298)'
     ci:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'lint-imports 50 kept / 0 broken; architecture_linter ARCH-003 PASS (gestión de órdenes abiertas presente); ruff/ruff format OK (2026-08-18)'
     evidencia:
       estado: HECHO
-      referencia: líneas de código verificadas contra HEAD adf941a 2026-08-15
+      referencia: líneas de código verificadas contra HEAD adf941a 2026-08-15; revalidado 2026-08-18 contra HEAD a4d8298
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'B-MD-008 cancelación real + gestión de órdenes abiertas cerrada 2026-08-18 — Policy A implementada, 18 lifecycle tests, suite 1222 passed, gates CI OK'
 - id: B-MD-009
   hallazgo_informe: B-MD-009
   fase: F3
@@ -2337,7 +2387,8 @@ hallazgos:
       referencia: B-MD-009 en tracking.yaml
     adr:
       estado: HECHO
-      referencia: 'ADR-0030 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0030-balance-real-reconciliacion-patrimonial.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md'
+      referencia: |
+        ADR-0030 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0030-balance-real-reconciliacion-patrimonial.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
     implementacion:
       estado: PENDIENTE
       referencia: null
@@ -2392,6 +2443,589 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+
+# ── Hallazgos de la Policy Layer (auditorías 2026-08-19) ────────────────────────
+
+- id: B-47
+  hallazgo_informe: F-PLA-01
+  fase: F2
+  prioridad: ALTA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: pyproject.toml [tool.ruff.lint] select = ["E", "F", "I"] — sin C901, PLR, SIM, DUP, ANN, TID, PT
+  solucion: Activar reglas de complejidad/duplicación en ruff (C901, PLR, SIM) o evaluar herramienta complementaria (vulture, SonarQube)
+  pruebas:
+  - 'uv run ruff check . --select E,F,I,C901,PLR,SIM,DUP → detección real'
+  adr_relacionado: null
+  riesgo_residual: |
+    Medio: gap de maintainability no cubierto por ninguna herramienta actual
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-01
+    backlog:
+      estado: PENDIENTE
+      referencia: B-47
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (strategy complexity/duplication)
+    implementacion:
+      estado: PENDIENTE
+      referencia: pendiente decisión humana
+    tests:
+      estado: PENDIENTE
+      referencia: prueba ruff C901/PLR/SIM
+    ci:
+      estado: PENDIENTE
+      referencia: quality job
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-48
+  hallazgo_informe: F-PLA-02
+  fase: F2
+  prioridad: BAJA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: pyproject.toml dev deps incluye vulture>=2.16; pre-commit y ocm-ci.yml NO invocan vulture
+  solucion: Añadir vulture a pre-commit/CI (non-blocking → blocking) para dead code detection
+  pruebas:
+  - 'uv run vulture packages ocm shared apps --min-confidence 80'
+  adr_relacionado: null
+  riesgo_residual: |
+    Bajo: dead code no detectado automáticamente
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-02
+    backlog:
+      estado: PENDIENTE
+      referencia: B-48
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (vulture enforcement)
+    implementacion:
+      estado: PENDIENTE
+      referencia: pendiente decisión humana
+    tests:
+      estado: PENDIENTE
+      referencia: vulture dry-run
+    ci:
+      estado: PENDIENTE
+      referencia: quality job / pre-commit
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-49
+  hallazgo_informe: F-PL-04 / F-PLA-05
+  fase: F2
+  prioridad: ALTA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    Plan Maestro §1:38 y §6:374 citan scripts/check_production_gates.py como veredicto binario G1..G11; ls scripts/ → NO existe
+  solucion: Implementar scripts/check_production_gates.py (veredicto binario PASS/BLOCK sobre G1..G11 con evidencia por cheque) O actualizar Plan Maestro para reflejar que engineering_health_check.py + jobs CI son el mecanismo vigente
+  pruebas:
+  - 'check_production_gates.py existe y devuelve PASS/FAIL sobre G1..G11'
+  adr_relacionado: ADR-0020
+  riesgo_residual: |
+    Alto: Production Gate no tiene veredicto binario ejecutable; debilita Policy Registry
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-04 + F-PLA-05
+    backlog:
+      estado: PENDIENTE
+      referencia: B-49
+    adr:
+      estado: HECHO
+      referencia: ADR-0020-production-gate-release
+    implementacion:
+      estado: PENDIENTE
+      referencia: script ausente
+    tests:
+      estado: PENDIENTE
+      referencia: test check_production_gates.py
+    ci:
+      estado: PENDIENTE
+      referencia: release gate
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-50
+  hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06
+  fase: F2
+  prioridad: CRITICA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 1: aiohttp 3.14.1 (PYSEC-2026-3545/3546/3547), cryptography 49.0.0 (PYSEC-2026-3552)
+  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 validando staging, o risk-accept formal (ADR + tracking)
+  pruebas:
+  - 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0'
+  adr_relacionado: null
+  riesgo_residual: |
+    Alto: superficie HTTP (aiohttp) y crypto (cryptography) sin mitigar
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02 + F-PLA-06
+    backlog:
+      estado: PENDIENTE
+      referencia: B-50
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (risk-accept o bump)
+    implementacion:
+      estado: PENDIENTE
+      referencia: pyproject.toml
+    tests:
+      estado: PENDIENTE
+      referencia: pip-audit clean
+    ci:
+      estado: PENDIENTE
+      referencia: quality job (pip-audit)
+    evidencia:
+      estado: PENDIENTE
+      referencia: exit 1 actual
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-51
+  hallazgo_informe: F-PL-06 / F-PLC-05
+  fase: F2
+  prioridad: ALTA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    tracking.yaml bloque reglas: R1..R16 con backtest + activada_en_ci (semilla SSOT); engineering_health_check.py lo valida; ADR-0020 convierte activada_en_ci en normativo
+  solucion: Evolucionar tracking.yaml reglas → policies/registry.yaml con esquema completo (id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history); extender audit_validator con M21..M25 (tests obligatorios, enforcement, dead rules, waiver expiración, ADR huérfanos)
+  pruebas:
+  - 'registry YAML parseado por audit_validator con M21..M25 verdes'
+  adr_relacionado: ADR-0020, ADR-0015
+  riesgo_residual: |
+    Medio: sin registry formal, rules no son consumibles por agente IA ni auditables
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-06 + F-PLC-05
+    backlog:
+      estado: PENDIENTE
+      referencia: B-51
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (Policy Registry YAML)
+    implementacion:
+      estado: PENDIENTE
+      referencia: tracking.yaml / policies/
+    tests:
+      estado: PENDIENTE
+      referencia: audit_validator M21..M25
+    ci:
+      estado: PENDIENTE
+      referencia: engineering-health
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-52
+  hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
+  fase: F2
+  prioridad: ALTA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Guards/tests/CI/tracking en mismo repo/rama; sin branch protection, CODEOWNERS, evidence hash, waiver, ownership; agente puede modificar guard+test+registry+CI simultáneamente (Caso B/C/D/E threat model)'
+  solucion: (1) Branch protection en main (required reviews + status checks); (2) CODEOWNERS para scripts/*_guard.py, policies/, architecture_linter/, tracking.yaml, .github/workflows/; (3) Hash de evidencia por regla (guard hash + tracking hash en artifact CI); (4) M24 (waiver+expires) + M25 (ADR huérfano) en audit_validator; (5) Separación de PRs para policy changes
+  pruebas:
+  - 'PR modificando scripts/app_layer_guard.py sin approval de CODEOWNERS → blocked'
+  - 'audit_validator M24/M25: waiver expirado → FAIL'
+  adr_relacionado: ADR-0015, ADR-0020
+  riesgo_residual: |
+    Crítico: riesgo real de captura del sistema de validación por agente IA
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
+    backlog:
+      estado: PENDIENTE
+      referencia: B-52
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (Agent privilege separation)
+    implementacion:
+      estado: PENDIENTE
+      referencia: GitHub branch protection + CODEOWNERS + CI artifact hash
+    tests:
+      estado: PENDIENTE
+      referencia: simulaciones Caso B/C/D/E
+    ci:
+      estado: PENDIENTE
+      referencia: ocm-ci.yml + branch protection
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-53
+  hallazgo_informe: F-PLA-07 / F-PLC-02
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    Búsqueda exhaustiva: 0 eval/exec, 0 pickle/yaml.load, 0 shell=True, 2 subprocess (infra), 0 os.environ en domain/app, 4 random (jitter legítimo), 3 hashlib (config hashing), 2 sqlite (parametrizados), 2 http (adapters/obs), 0 logging secrets. Bandit 0 Med/High; CodeQL PR+weekly; Gitleaks PR; Trivy PR+weekly. Sin gap material seguridad.
+  solucion: NO adoptar Semgrep como blocking; adoptar opcionalmente como non-blocking (CLI, ~500ms, reglas YAML en policies/semgrep/) para valor preventivo arquitectura (imports prohibidos, os.environ, crypto, logging secrets, APIs deprecated)
+  pruebas:
+  - 'semgrep --config=policies/semgrep/ . → 0 violations en código actual; CI job architecture verde'
+  adr_relacionado: null
+  riesgo_residual: |
+    Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-07 + F-PLC-02
+    backlog:
+      estado: PENDIENTE
+      referencia: B-53
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (Semgrep adoption)
+    implementacion:
+      estado: PENDIENTE
+      referencia: policies/semgrep/ (opcional)
+    tests:
+      estado: PENDIENTE
+      referencia: semgrep clean
+    ci:
+      estado: PENDIENTE
+      referencia: architecture job (non-blocking)
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-54
+  hallazgo_informe: F-PLA-08 / F-PLC-03 / F-PLC-08
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    F-PL-08 afirmó "SonarQube duplica ruff (complexity/duplication ya cubiertos)" — FALSO: ruff solo E/F/I.
+    SonarQube SÍ aportaría maintainability longitudinal (complexity, cognitive complexity, duplication, long methods, coupling, deuda técnica trend) pero coste operacional OrangeHouse (PostgreSQL, backup, auth, updates, 2-4h/mes, superficie ataque, no reproducible) supera valor.
+    Alternativa coste ~0: ruff extendido (C901/PLR/SIM) + vulture en CI + nightly report.
+  solucion: |
+    Confirmar no adopción SonarQube (NOT JUSTIFIED por coste, no por duplicación).
+    Estrategia maintainability: ruff extendido + vulture CI + nightly compliance report.
+  pruebas:
+    - 'uv run ruff check . --select C901,PLR,SIM,DUP → detección real; vulture en CI verde'
+  adr_relacionado: null
+  riesgo_residual: |
+    Medio: gap maintainability real (F-PLA-01) requiere mitigación ruff+vulture; SonarQube añade infra sin resolver gap
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-08 + F-PLC-03/08
+    backlog:
+      estado: PENDIENTE
+      referencia: B-54
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (SonarQube decision + complexity strategy)
+    implementacion:
+      estado: PENDIENTE
+      referencia: ruff select extendido + vulture CI
+    tests:
+      estado: PENDIENTE
+      referencia: ruff C901/PLR/SIM + vulture
+    ci:
+      estado: PENDIENTE
+      referencia: quality job
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-55
+  hallazgo_informe: F-PLC-04
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    AST Guards R11..R16: scripts + tests pos/neg + backtest + CI jobs, PERO sin Rule ID estable, scope declarativo, severity, ownership, evidence estructurada, waiver/expiración, ADR declarativo, estado (ACTIVE/DEPRECATED), reporting/compliance
+  solucion: |
+  Formalizar AST Guards como policy layer con metadatos completos: migrar R11..R16 a policies/ YAML + Semgrep rules; añadir owner, severity, enforcement, tests paths, evidence schema, waiver, expires, ADR ref, status, history; generar compliance report nightly
+  pruebas:
+  - 'registry parseable por audit_validator con M21..M25; compliance report nightly generado'
+  adr_relacionado: ADR-0015, ADR-0020
+  riesgo_residual: |
+    Medio: sin metadatos, guards son scripts operacionales, no policy layer normativa
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-04
+    backlog:
+      estado: PENDIENTE
+      referencia: B-55
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (AST Guards formalization)
+    implementacion:
+      estado: PENDIENTE
+      referencia: policies/ + audit_validator M21..M25
+    tests:
+      estado: PENDIENTE
+      referencia: guard tests pos/neg + backtest
+    ci:
+      estado: PENDIENTE
+      referencia: app-guard / domain-guard
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-56
+  hallazgo_informe: F-PLC-07
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    ocm-ci.yml jobs actuales: architecture → engineering-health → app-guard → domain-guard → trading-guards → unit-tests → security → integration-tests → config-validation → quality. Orden mezcla arquitectura/calidad/seguridad sin etapa explícita POLICY GATE binario.
+  solucion: |
+  Reordenar ocm-ci.yml a stages explícitos: FAST LOCAL (ruff/format/mypy/ssot/actionlint/shellcheck/yamllint) → ARCHITECTURE (import-linter, AST Guards/Semgrep, cycle detection, arch tests) → SECURITY (bandit, gitleaks, semgrep security) → QUALITY (pytest fail_under) → SUPPLY CHAIN (pip-audit, Trivy fs) → POLICY GATE (engineering_health + audit_validator M1..M25 + registry hash verify) → EXPENSIVE/PR (integration) → NIGHTLY (CodeQL full, Trivy full, extended dep-audit, compliance-report) → RELEASE (check_production_gates.py + compliance report firmado)
+  pruebas:
+  - 'PR con cambio en domain → architecture+security+quality+policy_gate PASS; nightly genera compliance report'
+  adr_relacionado: ADR-0020
+  riesgo_residual: |
+    Medio: CI actual no da veredicto binario único de policy; Policy Gate requiere check_production_gates.py (B-49)
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-07
+    backlog:
+      estado: PENDIENTE
+      referencia: B-56
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (CI stages + Policy Gate)
+    implementacion:
+      estado: PENDIENTE
+      referencia: .github/workflows/ocm-ci.yml + nightly.yml
+    tests:
+      estado: PENDIENTE
+      referencia: CI verde con stages
+    ci:
+      estado: PENDIENTE
+      referencia: ocm-ci.yml restructure
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-57
+  hallazgo_informe: F-PLC-10
+  fase: F4
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'ocm-cd.yml placeholder; deploy_ocm.sh inexistente; deploy manual SSH; sin artifact SHA tracking; sin health checks automatizados post-deploy; rollback no automatizado'
+  solucion: |
+  Implementar secuencia: artifact build → SHA256 digest → GHCR/registry → CD verify (digest match + config-guard + health pre-deploy) → deploy (docker compose up -d --build con tag SHA) → health-check (deadman, kafka lag, redis memory, disk) → ACCEPT / ROLLBACK (docker compose down + up -d con SHA anterior) → evidence inmutable
+  pruebas:
+  - 'Tag release → CI: Policy Gate PASS → Build artifact SHA → CD: verify SHA → deploy → health ACCEPT'
+  adr_relacionado: ADR-0020, ADR-0022
+  riesgo_residual: |
+    Alto: CD no existe; rollback manual; sin artifact identity
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-10
+    backlog:
+      estado: PENDIENTE
+      referencia: B-57
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (CD verify/deploy/rollback)
+    implementacion:
+      estado: PENDIENTE
+      referencia: deploy_ocm.sh + ocm-cd.yml + artifact SHA
+    tests:
+      estado: PENDIENTE
+      referencia: deploy/rollback simulation
+    ci:
+      estado: PENDIENTE
+      referencia: ocm-cd.yml
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-58
+  hallazgo_informe: F-PL-10
+  fase: F4
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    docker-compose.yml:237-238 monta ./deploy/monitoring/grafana/provisioning y ./dashboards; .gitignore:72-73 → ambos directorios gitignored; ls deploy/monitoring/grafana/ → provisioning/ y dashboards/ vacíos; README referencia dashboards provisionados desde deploy/ — no reproducible
+  solucion: Versionar provisioning de Grafana (dashboards JSON + datasources YAML) y quitar del .gitignore, O eliminar montajes y documentar setup manual
+  pruebas:
+  - 'deploy/monitoring/grafana/provisioning/ y dashboards/ versionados con contenido real, O montajes eliminados'
+  adr_relacionado: null
+  riesgo_residual: |
+    Medio: observabilidad no reproducible desde repo limpio
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-10
+    backlog:
+      estado: PENDIENTE
+      referencia: B-58
+    adr:
+      estado: PENDIENTE
+      referencia: ADR pendiente (Grafana provisioning)
+    implementacion:
+      estado: PENDIENTE
+      referencia: deploy/monitoring/grafana/
+    tests:
+      estado: PENDIENTE
+      referencia: docker compose up → Grafana con dashboards
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-59
+  hallazgo_informe: F-PL-11 / tracking.yaml f2_6b_streaming_entrypoint_mvp.criterios_aceptacion.systemd_reinicia_correctamente
+  fase: F2
+  prioridad: BAJA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    tracking.yaml:2573 systemd_reinicia_correctamente: NO_VERIFICADO; ADR-0022:323 "Sin unit systemd activo"; canary F2.6c arrancado manualmente
+  solucion: |
+  Verificar unidad systemd streaming (crear + test reinicio) O declarar modelo lifecycle alternativo (Docker restart: unless-stopped)
+  pruebas:
+  - 'systemctl status streaming → active; test de reinicio documentado'
+  adr_relacionado: ADR-0022
+  riesgo_residual: |
+    Medio: modelo operativo declarado (systemd supervisando streaming) no verificado
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-11 + tracking.yaml
+    backlog:
+      estado: PENDIENTE
+      referencia: B-59
+    adr:
+      estado: HECHO
+      referencia: ADR-0022
+    implementacion:
+      estado: PENDIENTE
+      referencia: unit systemd streaming
+    tests:
+      estado: PENDIENTE
+      referencia: systemd restart test
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
+- id: B-60
+  hallazgo_informe: F-PLA-03
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    .github/workflows/codeql.yml: push + pull_request main + schedule weekly; .github/workflows/trivy.yml: push + PR + schedule weekly — NO solo semanal como afirmó F-PL-08
+  solucion: |
+  Corrección documental: actualizar cualquier documento que diga "CodeQL/Trivy solo semanal/nightly" a "PR + schedule weekly"
+  pruebas:
+  - 'grep -r "semanal\|nightly" docs/ --include="*.md" | grep -i codeql → sin resultados'
+  adr_relacionado: null
+  riesgo_residual: |
+    Bajo: corrección factual sin impacto operativo
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-03
+    backlog:
+      estado: PENDIENTE
+      referencia: B-60
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: PENDIENTE
+      referencia: corrección documental
+    tests:
+      estado: PENDIENTE
+      referencia: grep docs
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
 mediciones_f0:
   fecha: '2026-08-06'
   commit: eaca97a

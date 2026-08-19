@@ -22,6 +22,14 @@ from ocm.observability.logger import (
     is_logging_configured,
     setup_logging,
 )
+from ocm.observability.tracing import (
+    TracingRuntime,
+    get_tracing_runtime,
+    init_tracing,
+    request_id,
+    trace_consumer_event,
+    trace_event,
+)
 
 __all__ = [
     "bootstrap_logging",
@@ -39,6 +47,12 @@ __all__ = [
     "get_metrics_runtime",
     "PrometheusPusher",
     "NoopPusher",
+    "TracingRuntime",
+    "init_tracing",
+    "get_tracing_runtime",
+    "trace_consumer_event",
+    "trace_event",
+    "request_id",
 ]
 
 # ── Metrics runtime + Prometheus ─────────────────────────────────────────────

@@ -151,9 +151,14 @@ class ConcretePipelineFactory:
         from market_data.infrastructure.observability.metrics import (
             QUALITY_CONSUMER_WIRING_FAILURES,
         )
+        from shared.utils.repo import _get_git_hash
 
         try:
-            consumer = QualityPipelineConsumer(bus=event_bus, tracker=lineage_tracker)
+            consumer = QualityPipelineConsumer(
+                bus=event_bus,
+                tracker=lineage_tracker,
+                git_hash=_get_git_hash(),  # B-20: inyectado desde composition root
+            )
             consumer.start()
         except Exception as exc:
             _log.warning(
@@ -255,12 +260,16 @@ class ConcretePipelineFactory:
             CursorStorePort,
         )
         from ocm.runtime.state import InMemoryCursorStore, build_cursor_store
+        from shared.utils.repo import _get_git_hash
 
         raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
         # cast: CCXTAdapter satisface ExchangeClientPort (runtime_checkable Protocol).
         exchange_client = raw_adapter
 
-        quality = QualityPipeline(registry=default_registry)
+        quality = QualityPipeline(
+            registry=default_registry,
+            git_hash=_get_git_hash(),  # B-20: inyectado desde composition root
+        )
 
         # Cursor store: Redis en producción, InMemory en degradación controlada.
         # cast a CursorStorePort: ambas implementaciones satisfacen el protocolo

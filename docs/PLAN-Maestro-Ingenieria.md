@@ -35,7 +35,7 @@
 | Registrar un hallazgo nuevo | Crear entrada `hallazgos[].id=B-NN` en tracking.yaml v2 con evidencia y estado `PENDIENTE` | §2, §7 |
 | Proponer una decisión de arquitectura | Verificar numeración: `ls docs/architecture/decisions/` → crear ADR con la plantilla `ADR-template.md` → enlazar al hallazgo | §5 |
 | Saber si algo está resuelto | Leer la cadena de trazabilidad del hallazgo en tracking.yaml (cada eslabón con `estado` y `evidencia`) | §2, §7 |
-| Verificar si el sistema es "producción-ready" | Ejecutar `scripts/check_production_gates.py` (veredicto binario PASS/FAIL) | §6 |
+| Verificar si el sistema es "producción-ready" | Ejecutar `scripts/check_production_gates.py` (veredicto binario PASS/FAIL) — **PENDIENTE: script no existe, ver B-49** | §6 |
 | Cumplir la Definition of Done | Aplicar la cadena completa de §2 y el DOD de la fase correspondiente (§4) | §2, §4 |
 
 ---
@@ -91,7 +91,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | 7 | Cambios pequeños y reversibles | Diffs imposibles de revertir | Commits atómicos (§8) | Git history con 1 cambio lógico/commit | Hooks de pre-commit siempre activos |
 | 8 | CI como puerta, no sugerencia | Merges rotos | Gates reales (fail-fast en `ocm-ci.yml`) | CI rojo bloquea merge | Ningún merge a `main` con CI rojo |
 | 9 | Umbrales tras medición | Números inventados (13% stale vs 43% real) | Medición en vivo en F0 antes de fijar umbrales | Mediciones con fecha/commit | §10: umbrales solo tras F0 |
-| 10 | Sistema que se audita solo | Madurez no medible | `scripts/check_production_gates.py` + conteo de reglas `activada_en_ci` | % de reglas gateadas (baseline F0, sube cada fase) | La métrica se recalcula en cada fase |
+| 10 | Sistema que se audita solo | Madurez no medible | `scripts/check_production_gates.py` + conteo de reglas `activada_en_ci` — **PENDIENTE: script no existe (B-49), health check F2.0 cubre coherencia** | % de reglas gateadas (baseline F0, sube cada fase) | La métrica se recalcula en cada fase |
 
 ---
 
@@ -117,7 +117,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **DOR:** F0 cerrada; fixes de crítica con test de regresión.
 - **Entregables:** reglas R1–R4 con `backtest: ok` y `activada_en_ci: true`; guard de arranque live; snapshot sin secrets; `pipeline_factory` corrige + smoke test.
 - **DOD:** `uv run live` no arranca con stub; `assemble()` construye ohlcv+trades+derivatives; round-trip BUY→SELL con contador correcto; snapshot sin `SecretStr` en claro; CI bloquea R1–R4.
-- **Criterio de salida:** `scripts/check_production_gates.py` → G1–G4 PASS.
+- **Criterio de salida:** `scripts/check_production_gates.py` → G1–G4 PASS — **PENDIENTE: script no existe (B-49), gate F1 validado por ruff + import-linter 49/49 + pytest 900 + mypy**.
 - **Cierre (B-01…B-05 HECHO):**
   - **B-01/H-01** guard fail-closed en `assemble_live` (LiveExecutor `IS_STUB`).
   - **B-02/H-02** `pipeline_factory` crea catálogo Iceberg + guard R2.
@@ -303,13 +303,13 @@ escalabilidad (solo con evidencia).
 | Fase | Hallazgos / Backlog | ADR / reglas | Nota |
 |---|---|---|---|
 | F2.0 | — | `engineering-health` (nueva) | gate previo |
-| F2.1 | B-06, B-07, B-10 (H-04, H-05, H-07, H-12, H-20, H-10) | ADR-0020, R5–R8 | contratos no-vacuos |
+| F2.1 | B-06, B-07, B-10, **B-47..B-56** (H-04, H-05, H-07, H-12, H-20, H-10; Policy Layer: ruff complexity, vulture, Production Gate, Policy Registry, AI Governance, Semgrep, SonarQube, complexity strategy) | ADR-0020, ADR-0021, ADR-0023, ADR-0024, ADR-0025, ADR-0026, R5–R8 | contratos no-vacuos + Policy Layer |
 | F2.2 | B-13 (legacy ADR 0003–0005) | ADR-0003..0015 SSOT | renaming |
 | F2.3 | trabajo relacionado a B-18 (H-15, backlog en F4) | ADR-0013, ADR-0018 | 8 schemas Kafka — prerrequisito de B-18 |
 | F2.4 | B-20, B-21 | — | tracking-consistency |
 | F2.5 | trabajo relacionado a B-18 (H-15, provenance; backlog en F4) | ADR-0017 (Protocol Discovery), ADR-0021 (ex-0017, posición) | gate normativo antes de capital |
 | F3 | B-12, B-01, B-03, B-13 (H-01, H-19, H-22) | ADR-0016 (aceptada), ADR-0011 (aceptada) | trading live — Bybit + rebalance |
-| F4 | B-15, B-16, B-17, B-18 (H-08, H-17, H-18) | ADR-0021, ADR-0018 | obs/estado |
+| F4 | B-15, B-16, B-17, B-18, **B-57, B-58** (H-08, H-17, H-18; CD, Grafana) | ADR-0021, ADR-0018, ADR-0027, ADR-0028 | obs/estado + CD |
 | F5 | B-22, H-13 | ADR-0019, ADR-0020 | escala |
 
 ---
@@ -340,14 +340,22 @@ escalabilidad (solo con evidencia).
 
 ### ADRs propuestas (estado Propuesto; se crean en su fase tras re-verificar numeración)
 
-| ADR | Tema | Fase | Enlaza hallazgos | Guard de numeración |
+> **Nota de numeración (2026-08-19):** ADRs existentes llegan a 0030. Huecos libres: 0018, 0019. Siguiente secuencial: 0031. **Guard obligatorio:** `ls docs/architecture/decisions/` al crear cada ADR — nunca asumir número.
+
+| ADR (tentativo) | Tema | Fase | Enlaza hallazgos | Guard de numeración |
 |---|---|---|---|---|
-| ADR-0016 | LiveExecutor real (Bybit) + reconciliación de fills + **semántica del contador de posiciones** (`_open_positions`) | F3 | H-01, H-03, B-01, B-03, B-12 | **Aceptada + commiteada** (2026-08-06) |
-| ADR-0017 | Protocol Discovery Framework (PDF) — metodología de descubrimiento/validación/modelado de protocolos externos; Contract Provenance como componente | F2.5 | H-15, B-18 | **Aceptada + commiteada** (2026-08-06) |
-| ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F2.3 / F4 | H-15, B-18 | Verificar al crear |
-| ADR-0019 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear |
+| ADR-0018 | Schema Registry (Avro + compatibilidad backward) | F2.3 / F4 | H-15, B-18 | Verificar al crear (hueco libre) |
+| ADR-0019 | Catálogo Iceberg remoto (REST/Nessie) | F5 | — | Verificar al crear (hueco libre) |
 | ADR-0020 | Production Gate como gate de release | F2.1 | B-06, B-07 | **Aceptada + commiteada** (2026-08-06) |
 | — | *(semántica `_open_positions` cubierta por ADR-0016)* | — | H-03, B-03 | — |
+| ADR-0031 | Policy Registry YAML (extensión tracking.yaml + M21..M25) | F2.1 | B-51, B-55, B-56 | Verificar al crear |
+| ADR-0032 | AI Agent Governance (branch protection, CODEOWNERS, evidence hash, waiver/expiración) | F2.1 | B-52, B-56 | Verificar al crear |
+| ADR-0033 | Production Gate binario (check_production_gates.py G1..G11) | F2.1 | B-49 | Verificar al crear |
+| ADR-0034 | Semgrep adoption (non-blocking, arquitectura/policy) | F2.1 | B-53 | Verificar al crear |
+| ADR-0035 | SonarQube decision (NOT JUSTIFIED — coste operacional) | F2.1 | B-54 | Verificar al crear |
+| ADR-0036 | vulture/complexity strategy (ruff C901/PLR/SIM + vulture CI) | F2.1 | B-47, B-48 | Verificar al crear |
+| ADR-0037 | Artifact digest/signature + CD verify/deploy/rollback | F4 | B-57 | Verificar al crear |
+| ADR-0038 | Grafana provisioning versionado | F4 | B-58 | Verificar al crear |
 
 ---
 
@@ -371,7 +379,7 @@ escalabilidad (solo con evidencia).
 | G10. Estado de posición único | test B-15 | verde | F4 |
 | G11. Trazabilidad activa | test B-17 | verde | F4 |
 
-- **Veredicto binario:** `scripts/check_production_gates.py` → PASS/FAIL con reporte por cheque.
+- **Veredicto binario:** `scripts/check_production_gates.py` → PASS/FAIL con reporte por cheque — **PENDIENTE: script no existe (B-49); veredicto actual: engineering_health_check.py + jobs CI (import-linter, bandit, mypy, pytest, app-guard, domain-guard, trading-guards)**.
 - **Dos modos:** `gate-dev` (todo PR a `main`) y `gate-release` (candidatos de release, manual).
 - **Regla:** FAIL en `gate-release` bloquea el merge del candidato. FAIL en `gate-dev` bloquea el PR.
 - **Mecanismo de longevidad:** un cheque solo se añade con su test+backtest; un cheque solo se **desactiva** con ADR y evidencia, nunca por conveniencia.
@@ -462,8 +470,8 @@ B-NN:
 | Umbral pendiente | Se define en | Método de medición |
 |---|---|---|
 | G6 cobertura crítica | F2 (tras F0) | `pytest --cov` sobre `trading/execution` y `storage/iceberg` (medición en vivo) |
-| `fail_under` | F2 | medición + margen (estilo "medir, luego fijar") |
-| Bandit severidad mínima | F2 | ejecutar `bandit -ll -r ...` y clasificar hallazgos reales |
+| `fail_under` | F2 | **FIJADO: 40** (baseline medido 44%, margen 4pts; subir gradualmente en PRs) |
+| Bandit severidad mínima | F2 | ejecutar `bandit -ll -r ...` y clasificar hallazgos reales — **FIJADO: sin BLOCKER (0 HIGH)** |
 | Scorecard (puntajes) | cierre de cada fase | re-ejecución de gates y mediciones |
 
 Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de commit que lo produjo.
@@ -529,5 +537,6 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (`397459e`) | **F2.0 ACTIVADO**: `scripts/engineering_health_check.py` + job CI `engineering-health` + pytest gate; valida Plan↔tracking↔ADR↔contratos↔CI (fail-fast). Decisiones F3: exchange inicial **Bybit** (único, paper→live siempre); **ADR-0011 → F4** (no bloquea F3). |
 | 2026-08-06 | (`5090245`, `e04f38d`) | **F3 motor de ejecución**: ADR-0016 aceptada; `OrderTransport` (port), `LiveExecutor` real (reconciliación fail-closed + kill switch + `_notional_qty`), `CCXTAdapter.create_order/fetch_order`, adaptador `_BybitTransport` (BC-50) en composition_root, modo `--mode paper\|live` en `uv run live`; reglas **R9–R10** activadas en CI (job `trading-guards`). Queda F3: rebalance (B-13) y polars strategies (B-14). |
 | 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
+| 2026-08-19 | (consolidación post-auditorías) | **Consolidación documental completa** tras auditorías Policy Layer (feasibility + complementary + adversarial): tracking.yaml actualizado con B-47..B-60 (Policy Layer findings); Plan Maestro corregido: check_production_gates.py marcado PENDIENTE (B-49), ruff config E/F/I only (B-47), vulture installed not enforced (B-48), CodeQL/Trivy PR+weekly (B-60), fail_under=40 baseline 44% fijado; ADRs propuestas ADR-0021..0028 añadidas; Mapa Fase↔Hallazgos extendido; §6 Production Gate y §10 Umbrales corregidos; §3 Principio 10 corregido. |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).

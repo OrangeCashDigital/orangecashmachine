@@ -499,7 +499,8 @@ services:
   #   ohlcv.raw       — velas crudas desde CCXT collectors (Bronze inbound)
   #   ohlcv.validated — velas post quality-gate              (Silver inbound)
   #   ohlcv.features  — features Gold computados             (Gold inbound)
-  #   dlq.ohlcv       — Dead Letter Queue — mensajes no procesables
+  #   ocm.dlq         — Dead Letter Queue global — mensajes no procesables
+  #                     (SSOT: shared/kafka/topics.py → TOPIC_DLQ="ocm.dlq")
   #
   # Retención: 7 días (configurable via KAFKA_LOG_RETENTION_HOURS).
   # Replicación: factor 1 (single-broker dev/prod). Escalar a 3 en multi-node.

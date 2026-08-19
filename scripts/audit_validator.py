@@ -63,6 +63,46 @@ ADR_NUMBER_RE = re.compile(r"\bADR-(\d{4})\b")
 # workflows asociados — verificados en la auditoría 2026-08-18).
 # control_id -> (comando exacto, exit code esperado, interpretación)
 # ───────────────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Canonical audit filename grammar
+#
+# REPORT:
+#   AUDIT_OCM_<slug>_<YYYY-MM-DD>.md
+#   AUDIT_OCM_<slug>_<YYYY-MM-DD>_<NN>.md
+#
+# FINDINGS REGISTER:
+#   OCM_AUDIT_FINDINGS_<YYYY-MM-DD>_<slug>.md
+#   OCM_AUDIT_FINDINGS_<YYYY-MM-DD>_<slug>_<NN>.md
+#
+# NN is required only when more than one artifact exists for the same
+# subject/date. The validator uses the filename itself as the stable
+# machine-readable identity of the artifact.
+# ──────────────────────────────────────────────────────────────────────────────
+
+CANONICAL_REPORT_FILENAME_RE = re.compile(
+    r"^AUDIT_OCM_(?P<slug>.+)_(?P<date>\d{4}-\d{2}-\d{2})"
+    r"(?:_(?P<seq>\d{2}))?\.md$"
+)
+
+CANONICAL_REGISTER_FILENAME_RE = re.compile(
+    r"^OCM_AUDIT_FINDINGS_(?P<date>\d{4}-\d{2}-\d{2})_"
+    r"(?P<slug>.+?)(?:_(?P<seq>\d{2}))?\.md$"
+)
+
+
+def parse_canonical_report_filename(name: str) -> dict[str, str] | None:
+    """Parse a canonical audit report filename."""
+    m = CANONICAL_REPORT_FILENAME_RE.fullmatch(name)
+    return m.groupdict() if m else None
+
+
+def parse_canonical_register_filename(name: str) -> dict[str, str] | None:
+    """Parse a canonical audit findings-register filename."""
+    m = CANONICAL_REGISTER_FILENAME_RE.fullmatch(name)
+    return m.groupdict() if m else None
+
+
 CANONICAL_COMMANDS: dict[str, tuple[str, int, str]] = {
     "ARCH_CONTRACTS": (
         "uv run lint-imports --config architecture_linter/importlinter.toml",
@@ -653,7 +693,34 @@ def _parse_control_summary(text: str) -> int | None:
 # Ejecución
 # ───────────────────────────────────────────────────────────────────────────
 
+
+def m21_canonical_audit_filenames(ctx: AuditContext) -> None:
+    """M21 — todos los artefactos documentales de docs/audits deben usar naming canónico."""
+    audits_dir = ROOT / "docs" / "audits"
+
+    if not audits_dir.is_dir():
+        ctx.err("M21", "no existe docs/audits/")
+        return
+
+    for path in sorted(audits_dir.glob("*.md")):
+        name = path.name
+
+        is_report = parse_canonical_report_filename(name) is not None
+        is_register = parse_canonical_register_filename(name) is not None
+
+        if is_report or is_register:
+            continue
+
+        ctx.err(
+            "M21",
+            f"{name}: nombre no canónico en docs/audits/ "
+            "(esperado AUDIT_OCM_<slug>_<YYYY-MM-DD>[_<NN>].md "
+            "o OCM_AUDIT_FINDINGS_<YYYY-MM-DD>_<slug>[_<NN>].md)",
+        )
+
+
 ALL_RULES: Sequence[tuple[str, str, object]] = [
+    ("M21", "Canonicalidad de nombres en docs/audits", m21_canonical_audit_filenames),
     ("M01", "IDs únicos", m01_unique_ids),
     ("M02", "Clasificación enum", m02_classification_enum),
     ("M03", "Severidad enum", m03_severity_enum),
