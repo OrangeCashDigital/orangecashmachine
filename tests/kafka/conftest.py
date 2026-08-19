@@ -171,6 +171,54 @@ async def find_event(
 
 
 # =============================================================================
+# drain_until_ids_found — drenar hasta encontrar un set de event_ids
+# =============================================================================
+
+
+async def drain_until_ids_found(
+    consumer: AIOKafkaConsumer,
+    target_ids: set[str],
+    *,
+    timeout_s: float = _DRAIN_TIMEOUT_S,
+) -> set[str]:
+    """
+    Lee hasta encontrar todos los target_ids o timeout.
+
+    A diferencia de _drain() — que para en cuanto junta N mensajes
+    cualquiera — esta función continúa leyendo hasta que los IDs
+    encontrados cubren target_ids, filtrando por event_id real.
+    Necesaria cuando el topic contiene basura histórica *parseable*
+    (mismo schema, otros event_ids de corridas previas) que agotaría
+    la cuota de _drain() antes de llegar a los mensajes objetivo.
+
+    Root cause documentado: docs/audits/2026-08-18-kafka-topology-audit.md
+
+    CONTRACT R-03: verificar por presencia en set, no por posición.
+    CONTRACT R-04: ignorar mensajes no parseables.
+
+    Returns:
+        Set de event_ids encontrados (subset de target_ids si hay timeout).
+    """
+    from shared.kafka.schemas.ohlcv import EventPayload
+    from shared.kafka.serializer import deserialize
+
+    found: set[str] = set()
+    deadline = time.monotonic() + timeout_s
+    while found < target_ids and time.monotonic() < deadline:
+        raw = await consumer.getmany(timeout_ms=_POLL_TIMEOUT_MS, max_records=200)
+        for _tp, records in raw.items():
+            for r in records:
+                try:
+                    evt = deserialize(r.value, EventPayload)
+                    if evt.event_id in target_ids:
+                        found.add(evt.event_id)
+                except Exception:
+                    # CONTRACT R-04: ignorar mensajes no parseables.
+                    pass
+    return found
+
+
+# =============================================================================
 # _drain — drenar hasta N mensajes o timeout
 # =============================================================================
 
@@ -217,4 +265,5 @@ __all__ = [
     "warm_up_consumer",
     "find_event",
     "_drain",
+    "drain_until_ids_found",
 ]
