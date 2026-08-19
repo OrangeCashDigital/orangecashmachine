@@ -390,9 +390,16 @@ def m05_reference_existence(ctx: AuditContext) -> None:
             for m in re.finditer(r"`([^`]+\.(?:py|yml|yaml|toml|md|json))`", ev):
                 ref = m.group(1)
                 candidate = ROOT / ref
-                if not candidate.exists():
-                    msg = f"{f.fid}: archivo referenciado inexistente: {ref} (¿sujeto del hallazgo o referencia rota?)"
-                    ctx.warn("M5", msg)
+                if candidate.exists():
+                    continue
+                # Fallback: el nombre puede citarse sin ruta completa (p.ej. `tracking.yaml`
+                # en vez de `docs/plans/tracking.yaml`). Buscar recursivamente antes de avisar.
+                basename = Path(ref).name
+                matches = list(ROOT.rglob(basename))
+                if matches:
+                    continue
+                msg = f"{f.fid}: archivo referenciado inexistente: {ref} (¿sujeto del hallazgo o referencia rota?)"
+                ctx.warn("M5", msg)
 
 
 def m06_findings_tracking(ctx: AuditContext) -> None:
