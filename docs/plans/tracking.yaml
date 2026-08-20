@@ -2626,13 +2626,13 @@ hallazgos:
   cadena:
     hallazgo:
       estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-06 + F-PLC-05
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer.md F-PL-06 + F-PLC-05
     backlog:
       estado: PENDIENTE
       referencia: B-51
     adr:
       estado: PENDIENTE
-      referencia: ADR pendiente (Policy Registry YAML)
+      referencia: ADR-0031-policy-registry-yaml
     implementacion:
       estado: PENDIENTE
       referencia: tracking.yaml / policies/
@@ -2667,13 +2667,13 @@ hallazgos:
   cadena:
     hallazgo:
       estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
     backlog:
       estado: PENDIENTE
       referencia: B-52
     adr:
       estado: PENDIENTE
-      referencia: ADR pendiente (Agent privilege separation)
+      referencia: ADR-0032-ai-agent-governance
     implementacion:
       estado: PENDIENTE
       referencia: GitHub branch protection + CODEOWNERS + CI artifact hash
