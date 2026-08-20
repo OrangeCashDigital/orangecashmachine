@@ -2580,6 +2580,13 @@ hallazgos:
   adr_relacionado: null
   riesgo_residual: |
     Medio: superficies HTTP (aiohttp) y crypto (cryptography) con riesgo aceptado hasta bump de ccxt validado en staging (fetch_ohlcv signature).
+  condicion_reevaluacion: |
+    RE-EVALUAR cuando cualquiera de:
+    1. Bump de ccxt (≥4.5.74) validado en staging (smoke test Bybit + KuCoin, CCXTAdapter) → levantar ignores PYSEC-2026-3545/3546/3547/3552
+    2. Nueva advisory High/Critical sobre aiohttp 3.14.x o cryptography 49.x que amplíe el alcance (no solo chunked-response client ni pkcs7/SMIME)
+    3. Cambio de exposición: OCM comience a aceptar EnvelopedData/pkcs7 desencriptado de terceros o a exponer aiohttp como servidor
+    4. Entrada en modo live con capital real (aiohttp hacia exchanges en path crítico) → revisar riesgo residual antes de activar
+  reevaluacion_cada: 'cada CI run de pip-audit detecta advisories nuevas; revalidación formal al tocar el pin de ccxt o antes de live con capital'
   fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
