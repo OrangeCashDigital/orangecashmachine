@@ -2,7 +2,7 @@
 """scripts/audit_validator.py — Audit Validator (sistema de auditoría OCM).
 
 Validador mecánico y determinista del sistema de auditoría de OCM.
-Implementa las reglas M1..M20 del AUDIT_PROTOCOL.md.
+Implementa las reglas M1..M26 del AUDIT_PROTOCOL.md.
 
 Principio: MACHINE CHECKS FIRST. LLM JUDGMENT SECOND.
 El LLM solo decide donde la semántica lo requiere; todo lo verificable
@@ -23,6 +23,8 @@ Exit codes: 0 = sin errores mecánicos; 1 = hay errores; 2 = error de ejecución
 from __future__ import annotations
 
 import argparse
+import ast as _ast
+import datetime as _dt
 import json
 import re
 import subprocess
@@ -726,8 +728,262 @@ def m21_canonical_audit_filenames(ctx: AuditContext) -> None:
         )
 
 
+# ───────────────────────────────────────────────────────────────────────────
+# Policy Registry (ADR-0031) — M22..M26
+# ───────────────────────────────────────────────────────────────────────────
+
+POLICY_REGISTRY_PATH = ROOT / "policies" / "registry.yaml"
+
+MECHANISM_TYPES = frozenset({"guard_script", "tool_gate", "absence_gate", "import_linter"})
+ENFORCEMENT_LEVELS = frozenset({"blocking", "warning", "informational"})
+
+
+def load_policy_registry() -> dict | None:
+    """Carga policies/registry.yaml (ADR-0031) o None si no existe/no es YAML válido."""
+    if not POLICY_REGISTRY_PATH.exists():
+        return None
+    try:
+        data = yaml.safe_load(POLICY_REGISTRY_PATH.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _registry_rules() -> list[dict]:
+    data = load_policy_registry()
+    if not data:
+        return []
+    rules = data.get("rules", [])
+    return [r for r in rules if isinstance(r, dict)]
+
+
+def _test_node_exists(selector: str) -> bool:
+    """Verifica que un selector `path::Class::method` o `path::function` exista en disco.
+
+    Determinista: AST puro, sin ejecutar pytest. Devuelve True solo si el archivo
+    y el nodo referenciado existen realmente.
+    """
+    path_part, _, rest = selector.partition("::")
+    if not path_part or not rest:
+        return False
+    file = ROOT / path_part
+    if not file.is_file():
+        return False
+    try:
+        tree = _ast.parse(file.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return False
+    if "::" in rest:
+        cls_name, _, method = rest.partition("::")
+        for node in tree.body:
+            if isinstance(node, _ast.ClassDef) and node.name == cls_name:
+                return any(
+                    m.name == method for m in node.body if isinstance(m, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+                )
+        return False
+    for node in tree.body:
+        if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and node.name == rest:
+            return True
+    return False
+
+
+def _adr_file_exists(adr: str, adrs_dir: Path) -> bool:
+    if not isinstance(adr, str) or not adr.startswith("ADR-"):
+        return False
+    return bool(list(adrs_dir.glob(f"{adr}-*.md")) or (adrs_dir / f"{adr}.md").exists())
+
+
+def _is_waiver_expired(waiver: dict) -> bool:
+    expires = waiver.get("expires")
+    if not isinstance(expires, str):
+        return False
+    try:
+        return _dt.date.fromisoformat(expires) < _dt.date.today()
+    except ValueError:
+        return False
+
+
+def _validate_rule_tests(rule: dict, ctx: AuditContext) -> None:
+    """M22 — tests obligatorios según mechanism_type (ADR-0031, renum. M22)."""
+    rid = rule.get("id", "?")
+    mech = rule.get("mechanism_type")
+    if mech not in MECHANISM_TYPES:
+        ctx.err("M22", f"{rid}: mechanism_type inválido o ausente ({mech!r}) — esperado {sorted(MECHANISM_TYPES)}")
+        return
+    tests = rule.get("tests") or {}
+    waiver = rule.get("waiver")
+    if mech in ("guard_script", "import_linter"):
+        pos, neg = tests.get("positive"), tests.get("negative")
+        missing = [side for side, val in (("positive", pos), ("negative", neg)) if not val]
+        if missing:
+            if waiver:
+                ctx.warn("M22", f"{rid}: falta {', '.join(missing)} (test) — cubierto por waiver")
+            else:
+                ctx.err("M22", f"{rid}: falta test {', '.join(missing)} obligatorio para mechanism_type {mech}")
+            return
+        for side, val in (("positive", pos), ("negative", neg)):
+            assert isinstance(val, str)
+            if not _test_node_exists(val):
+                if waiver:
+                    ctx.warn("M22", f"{rid}: test {side} no resuelve ({val}) — cubierto por waiver")
+                else:
+                    ctx.err("M22", f"{rid}: test {side} no existe en disco: {val}")
+    elif mech == "tool_gate":
+        ci = rule.get("ci") or {}
+        if not ci.get("job") or not ci.get("command"):
+            if waiver:
+                ctx.warn("M22", f"{rid}: gate de CI incompleto — cubierto por waiver")
+            else:
+                ctx.err("M22", f"{rid}: mechanism_type tool_gate exige ci.job y ci.command")
+        if not rule.get("evidence"):
+            ctx.err("M22", f"{rid}: tool_gate exige evidencia (type/path) del umbral configurado")
+    elif mech == "absence_gate":
+        if not rule.get("evidence"):
+            ctx.err("M22", f"{rid}: absence_gate exige evidencia de la ausencia (eliminación/verificación)")
+
+
+def _validate_rule_enforcement(rule: dict, ctx: AuditContext) -> None:
+    """M23 — enforcement + CI (ADR-0031, renum. M23)."""
+    rid = rule.get("id", "?")
+    enforcement = rule.get("enforcement")
+    if enforcement not in ENFORCEMENT_LEVELS:
+        levels = sorted(ENFORCEMENT_LEVELS)
+        ctx.err("M23", f"{rid}: enforcement inválido o ausente ({enforcement!r}) — esperado {levels}")
+        return
+    mech = rule.get("mechanism_type")
+    ci = rule.get("ci") or {}
+    if enforcement == "blocking" and mech != "absence_gate":
+        if not ci.get("job") or not ci.get("command"):
+            if rule.get("waiver"):
+                ctx.warn("M23", f"{rid}: enforcement blocking sin gate de CI — cubierto por waiver")
+            else:
+                ctx.err("M23", f"{rid}: enforcement blocking exige ci.job y ci.command")
+
+
+def _validate_rule_dead(rule: dict, ctx: AuditContext) -> None:
+    """M24 — regla muerta (ADR-0031, renum. M24)."""
+    rid = rule.get("id", "?")
+    status = rule.get("status")
+    mech = rule.get("mechanism_type")
+    if status == "DEPRECATED":
+        if mech != "absence_gate":
+            ctx.err("M24", f"{rid}: DEPRECATED exige mechanism_type absence_gate")
+        if rule.get("waiver"):
+            ctx.err("M24", f"{rid}: regla DEPRECATED no puede tener waiver (waiver es para reglas vivas con deuda)")
+    if status not in ("ACTIVE", "DEPRECATED"):
+        ctx.err("M24", f"{rid}: status inválido ({status!r}) — esperado ACTIVE o DEPRECATED")
+
+
+def _validate_rule_waiver(rule: dict, ctx: AuditContext, tracking_data: dict | None) -> None:
+    """M25 — semántica de waiver (ADR-0031, renum. M25)."""
+    rid = rule.get("id", "?")
+    waiver = rule.get("waiver")
+    if not waiver:
+        return
+    if not isinstance(waiver, dict):
+        ctx.err("M25", f"{rid}: waiver debe ser un mapping")
+        return
+    allowed = waiver.get("allowed")
+    expires = waiver.get("expires")
+    motivo = waiver.get("motivo")
+    adr = waiver.get("adr")
+    ticket = waiver.get("ticket")
+    if allowed is not True:
+        ctx.err("M25", f"{rid}: waiver.allowed debe ser true")
+    if not isinstance(expires, str):
+        ctx.err("M25", f"{rid}: waiver.expires obligatorio (ISO-8601 YYYY-MM-DD)")
+    elif _is_waiver_expired(waiver):
+        ctx.err("M25", f"{rid}: waiver EXPIRADO ({expires}) — se requiere FAIL")
+    else:
+        ctx.warn("M25", f"{rid}: waiver vigente hasta {expires}")
+    if not motivo:
+        ctx.err("M25", f"{rid}: waiver.motivo obligatorio")
+    if not adr:
+        ctx.err("M25", f"{rid}: waiver.adr obligatorio (ADR autorizante)")
+    elif not _adr_file_exists(str(adr), ctx.adrs_dir):
+        ctx.err("M25", f"{rid}: ADR autorizante del waiver no encontrado: {adr}")
+    if not ticket:
+        ctx.err("M25", f"{rid}: waiver.ticket obligatorio (deuda en tracking.yaml)")
+    elif tracking_data is not None:
+        tickets = [h.get("id") for h in tracking_data.get("hallazgos", []) if isinstance(h, dict)]
+        if ticket not in tickets:
+            ctx.err("M25", f"{rid}: waiver.ticket {ticket} no existe en tracking.yaml")
+
+
+def _validate_rule_adr(rule: dict, ctx: AuditContext) -> None:
+    """M26 — ADR huérfano (ADR-0031, renum. M26)."""
+    rid = rule.get("id", "?")
+    adr = rule.get("adr")
+    if adr:
+        if not isinstance(adr, str):
+            ctx.err("M26", f"{rid}: adr debe ser string (ADR-XXXX)")
+        elif not _adr_file_exists(adr, ctx.adrs_dir):
+            ctx.err("M26", f"{rid}: adr referenciado no existe: {adr}")
+
+
+def m22_policy_registry_tests(ctx: AuditContext) -> None:
+    """M22 — Policy Registry: tests obligatorios según mechanism_type (ADR-0031)."""
+    data = load_policy_registry()
+    if not data:
+        ctx.err("M22", f"no existe {POLICY_REGISTRY_PATH} o YAML inválido (ADR-0031)")
+        return
+    for rule in _registry_rules():
+        _validate_rule_tests(rule, ctx)
+
+
+def m23_policy_registry_enforcement(ctx: AuditContext) -> None:
+    """M23 — Policy Registry: enforcement + gate de CI (ADR-0031)."""
+    data = load_policy_registry()
+    if not data:
+        ctx.err("M23", f"no existe {POLICY_REGISTRY_PATH} o YAML inválido (ADR-0031)")
+        return
+    for rule in _registry_rules():
+        _validate_rule_enforcement(rule, ctx)
+
+
+def m24_policy_registry_dead(ctx: AuditContext) -> None:
+    """M24 — Policy Registry: detección de regla muerta (ADR-0031)."""
+    data = load_policy_registry()
+    if not data:
+        ctx.err("M24", f"no existe {POLICY_REGISTRY_PATH} o YAML inválido (ADR-0031)")
+        return
+    for rule in _registry_rules():
+        _validate_rule_dead(rule, ctx)
+
+
+def m25_policy_registry_waivers(ctx: AuditContext) -> None:
+    """M25 — Policy Registry: semántica de waivers (ADR-0031)."""
+    data = load_policy_registry()
+    if not data:
+        ctx.err("M25", f"no existe {POLICY_REGISTRY_PATH} o YAML inválido (ADR-0031)")
+        return
+    tracking_data = None
+    if ctx.tracking.exists():
+        try:
+            tracking_data = yaml.safe_load(ctx.tracking.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            tracking_data = None
+    for rule in _registry_rules():
+        _validate_rule_waiver(rule, ctx, tracking_data)
+
+
+def m26_policy_registry_adrs(ctx: AuditContext) -> None:
+    """M26 — Policy Registry: ADRs referenciados deben existir (ADR-0031)."""
+    data = load_policy_registry()
+    if not data:
+        ctx.err("M26", f"no existe {POLICY_REGISTRY_PATH} o YAML inválido (ADR-0031)")
+        return
+    for rule in _registry_rules():
+        _validate_rule_adr(rule, ctx)
+
+
 ALL_RULES: Sequence[tuple[str, str, object]] = [
     ("M21", "Canonicalidad de nombres en docs/audits", m21_canonical_audit_filenames),
+    ("M22", "Policy Registry: tests según mechanism_type", m22_policy_registry_tests),
+    ("M23", "Policy Registry: enforcement + CI", m23_policy_registry_enforcement),
+    ("M24", "Policy Registry: regla muerta", m24_policy_registry_dead),
+    ("M25", "Policy Registry: semántica de waivers", m25_policy_registry_waivers),
+    ("M26", "Policy Registry: ADRs existentes", m26_policy_registry_adrs),
     ("M01", "IDs únicos", m01_unique_ids),
     ("M02", "Clasificación enum", m02_classification_enum),
     ("M03", "Severidad enum", m03_severity_enum),
@@ -804,14 +1060,14 @@ def run_checks(ctx: AuditContext) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="OCM Audit Validator (M1..M20)")
+    parser = argparse.ArgumentParser(description="OCM Audit Validator (M1..M26)")
     parser.add_argument("--register", help="registro de findings (default: último OCM_AUDIT_FINDINGS_*.md)")
     parser.add_argument("--report", help="informe canónico (default: último AUDIT_OCM_FORENSIC_COMPLIANCE_*.md)")
     parser.add_argument("--tracking", help="tracking.yaml")
     parser.add_argument("--adrs", help="directorio de ADRs")
     parser.add_argument("--golden", help="test_golden.py para M11")
     parser.add_argument("--versions", action="store_true", help="imprime versiones de herramientas canónicas y sale")
-    parser.add_argument("--list-rules", action="store_true", help="imprime las reglas M1..M20 y sale")
+    parser.add_argument("--list-rules", action="store_true", help="imprime las reglas M1..M26 y sale")
     args = parser.parse_args(argv)
 
     if args.list_rules:
