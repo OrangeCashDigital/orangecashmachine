@@ -1,0 +1,25 @@
+# CODEOWNERS — OCM (ADR-0032)
+#
+# Owner real verificado: @OrangeCashDigital (cuenta de usuario, admin del repo,
+# único collaborator). No existen teams en la organización, por lo que el
+# patrón `@arquitectura` propuesto en ADR-0032 no es aplicable: el owner
+# efectivo de las rutas sagradas es el propio titular del repositorio.
+#
+# Impacto en trust model: la revisión de CODEOWNERS queda en manos de un único
+# humano (el titular). La defensa en profundidad contra captura del sistema de
+# validación descansa en: (1) branch protection con required reviews, (2) el
+# job de integridad `policy-gate` (hash de archivos protegidos), y (3) la
+# separación de PRs de policy (label `policy-change`).
+
+# Rutas sagradas de gobernanza (ADR-0032) — requieren aprobación del owner
+/scripts/*_guard.py                    @OrangeCashDigital
+/scripts/audit_validator.py            @OrangeCashDigital
+/scripts/engineering_health_check.py   @OrangeCashDigital
+/scripts/check_ssot_enums.py           @OrangeCashDigital
+/policies/                             @OrangeCashDigital
+/architecture_linter/                  @OrangeCashDigital
+/docs/plans/tracking.yaml              @OrangeCashDigital
+/docs/architecture/decisions/          @OrangeCashDigital
+/docs/governance/                      @OrangeCashDigital
+.github/workflows/                     @OrangeCashDigital
+.github/CODEOWNERS                     @OrangeCashDigital

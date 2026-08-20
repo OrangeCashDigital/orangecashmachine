@@ -82,7 +82,20 @@ Implementar **defensa en profundidad completa** (opción 3) como prioridad P0:
 
 ## Referencias
 
-- Código: `scripts/audit_validator.py` (M24/M25), `.github/workflows/ocm-ci.yml`, `.github/CODEOWNERS`
+- Código: `scripts/audit_validator.py` (M24/M25), `scripts/verify_policy_integrity.py`, `.github/workflows/ocm-ci.yml`, `.github/CODEOWNERS`
 - Hallazgos: B-52, B-56 (tracking.yaml)
 - ADRs relacionados: ADR-0015, ADR-0020, ADR-0031, ADR-0033
 - Auditorías: `AUDIT_OCM_POLICY_LAYER_COMPLEMENTARY_2026-08-19.md` (F-PLA-09, F-PLC-06/11)
+
+## Estado de implementación (2026-08-19)
+
+| Requisito | Estado | Evidencia |
+|---|---|---|
+| M24/M25 (waiver/ADR) | **Implementado** | `scripts/audit_validator.py` + `tests/architecture/test_policy_registry.py` |
+| CODEOWNERS | **Implementado** | `.github/CODEOWNERS` (owner real verificado: `@OrangeCashDigital`; el `@arquitectura` del borrador no existe — cuenta de usuario sin teams) |
+| Policy gate (hash) | **Implementado** | `scripts/verify_policy_integrity.py` + job `policy-gate` en `ocm-ci.yml` + `policies/evidence.json` |
+| Branch protection (main) | **Configurado** vía GitHub API | 10 required checks, 1 review, require_code_owner_reviews, enforce_admins, strict |
+| Separación de PRs policy | **Pendiente** | label `policy-change` + verificación en CI (requiere workflow adicional) |
+
+**Trust model del policy-gate (documentado en el script y en este ADR):**
+El manifest `policies/evidence.json` vive en el repo con los mismos privilegios que los objetos protegidos: **NO es una frontera de confianza por sí solo**. Su función real es detección (el runner de GitHub compara hashes en un entorno no modificable por el push del agente en el mismo run) y señal para revisión humana (un PR que modifica guard + manifest juntos delata captura). La frontera de confianza efectiva es la configuración de GitHub (branch protection + required reviews + CODEOWNERS), que no es versionable y no puede ser modificada por el agente desde el repo. `--update` solo se ejecuta localmente por humano, nunca en CI.
