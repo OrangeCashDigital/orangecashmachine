@@ -2763,13 +2763,20 @@ hallazgos:
     Alternativa coste ~0: ruff extendido (C901/PLR/SIM) + vulture en CI + nightly report.
   solucion: |
     PARTE 1 (HECHO): Confirmar no adopción SonarQube — NO ADOPTAR ya documentado en AUDIT_OCM_governance-integration-external_2026-08-17.md:37 (el stack ruff/mypy/bandit ya es quality gate; Sonar añadiría infraestructura sin cubrir gap).
-    PARTE 2 (PENDIENTE): Estrategia maintainability ruff extendido (C901/PLR/SIM/DUP) + vulture CI + nightly compliance report — NO implementado. Verificado 2026-08-19: `uv run ruff check . --select C901,PLR,SIM` → 344 errores en el código actual (refactor sustancial, requiere decisión sobre alcance por módulo antes de activar en CI como gate).
+    PARTE 2 (CLASIFICADO, NO refactorizado): `uv run ruff check . --select C901,PLR,SIM` → 344 errores clasificados 2026-08-19 en P0..P4. Desglose por tipo: PLR2004 magic values 155 | PLR0913 demasiados args 75 | C901 complejidad 35 | SIM simplificable 51 | resto PLR0911/0912/0915/1730 + BLE001 ~28. Distribución: packages/market_data 103, tests ~130, packages/trading 19, tooling (architecture_linter analyzers/rules 29 + ocm/runtime 8 + scripts ~14).
+    Lotes propuestos (ejecución futura, no a ciegas):
+    - B-54A (P0, trading risk/execution): 10 de 19 en trading — risk/manager.py `_validate_internal` (C901 11), engine.py `run_once`/`_run_stop_loss` (C901 11), execution/oms.py `submit` (C901 12) + PLR0913 settlement/live_executor/fill_sync/analytics. NINGUNO es bug; son complejidad de flujo de ejecución. Refactor por extracción de validators con cobertura de tests de trading.
+    - B-54B (P1, hotspots market_data): repair.py `_heal_gap`/`execute_pair` (C901 23/18), _worker_pool.py `run_worker_pool` (C901 23), ccxt_adapter.py `_initialize` (C901 13), ohlcv_pipeline `__init__` (PLR0913 20 args). Acoplados a pandas→polars; refactor tras completar migración.
+    - B-54C (P2, mecánico): SIM 51 (suppress/ternary/early-return, autofixable con ruff --fix + tests) + PLR0913 en adapters/ports a config objects.
+    - B-54D (P3, low-risk estético): PLR2004 155 magic values → constantes con nombre en domain/quality; tests y tooling.
+    DECISIÓN: NO activar ruff C901/PLR/SIM como gate CI hoy (344 errores bloquearían merge sin refactor). Activación por lote cerrado (B-54A..D) con selección incremental por directorio.
   pruebas:
     - 'decisión SonarQube NO ADOPTAR → AUDIT_OCM_governance-integration-external_2026-08-17.md:37 (HECHO)'
-    - 'GAP: ruff extendido → 344 errores (no activado en CI); vulture en dev-deps sin job CI; nightly compliance report no existe'
+    - 'CLASIFICACIÓN ruff extendido → 344 errores desglosados (P0..P4, 2026-08-19): 155 PLR2004, 75 PLR0913, 35 C901, 51 SIM, ~28 otros'
+    - 'GAP: ruff extendido NO activado en CI (344 errores, refactor por lotes pendiente); vulture en dev-deps sin job CI; nightly compliance report no existe (gated a B-57/B-59 cerrados)'
   adr_relacionado: null
   riesgo_residual: |
-    Medio: gap maintainability real (F-PLA-01) sin mitigación activa; decisión SonarQube resuelta (NO ADOPTAR). Ruff+vulture pendientes de refactor/decisión.
+    Medio: gap maintainability real (F-PLA-01) clasificado pero sin mitigación activa en CI; decisión SonarQube resuelta (NO ADOPTAR). Ruff+vulture pendientes de ejecución de lotes B-54A..D; vulture/nightly gated a cierre B-57/B-59.
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -2782,17 +2789,17 @@ hallazgos:
       estado: NO_APLICA
       referencia: 'decisión NO ADOPTAR SonarQube (gobernanza 2026-08-17)'
     implementacion:
-      estado: PENDIENTE
-      referencia: ruff select extendido + vulture CI (344 errores a gestionar)
+      estado: PARCIAL
+      referencia: 'clasificación 344 errores P0..P4 hecha (2026-08-19); ruff select extendido NO activado (gated a lotes B-54A..D)'
     tests:
       estado: PENDIENTE
-      referencia: ruff C901/PLR/SIM + vulture
+      referencia: ruff C901/PLR/SIM + vulture (por lote)
     ci:
       estado: PENDIENTE
-      referencia: quality job
+      referencia: quality job (gated a cierre B-57/B-59 para vulture/nightly)
     evidencia:
       estado: HECHO
-      referencia: 'decisión SonarQube NO ADOPTAR (2026-08-17); ruff extendido → 344 errores (2026-08-19)'
+      referencia: 'decisión SonarQube NO ADOPTAR (2026-08-17); clasificación 344 errores (2026-08-19)'
     cierre:
       estado: PENDIENTE
       referencia: null
