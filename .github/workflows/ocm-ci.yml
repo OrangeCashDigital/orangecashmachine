@@ -370,3 +370,8 @@ jobs:
 
       - name: Verify protected file integrity (ADR-0032)
         run: uv run python scripts/verify_policy_integrity.py
+
+      - name: Production gate binario (G1..G11, ADR-0033)
+        # Veredicto único PASS/BLOCK de aptitud para producción, consumible por
+        # agente IA. gate-dev excluye G10 (B-15 EN_CURSO, exige F4).
+        run: uv run python scripts/check_production_gates.py --mode gate-dev --json

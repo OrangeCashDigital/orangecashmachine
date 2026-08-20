@@ -2530,7 +2530,7 @@ hallazgos:
   hallazgo_informe: F-PL-04 / F-PLA-05
   fase: F2
   prioridad: ALTA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
     Plan Maestro §1:38 y §6:374 citan scripts/check_production_gates.py como veredicto binario G1..G11; ls scripts/ → NO existe
@@ -2538,34 +2538,33 @@ hallazgos:
   pruebas:
   - 'check_production_gates.py existe y devuelve PASS/FAIL sobre G1..G11'
   adr_relacionado: ADR-0020
-  riesgo_residual: |
-    Alto: Production Gate no tiene veredicto binario ejecutable; debilita Policy Registry
-  fecha_cierre: null
+  riesgo_residual: null
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-04 + F-PLA-05
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-49
     adr:
       estado: HECHO
       referencia: ADR-0020-production-gate-release
     implementacion:
-      estado: PENDIENTE
-      referencia: script ausente
+      estado: HECHO
+      referencia: scripts/check_production_gates.py (G1..G11 + G12 integridad, ADR-0033)
     tests:
-      estado: PENDIENTE
-      referencia: test check_production_gates.py
+      estado: HECHO
+      referencia: tests/architecture/test_check_production_gates.py
     ci:
-      estado: PENDIENTE
-      referencia: release gate
+      estado: HECHO
+      referencia: job policy-gate ejecuta --mode gate-dev (ocm-ci.yml)
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'gate-dev PASS real (G1-G9+G11); gate-release BLOCK honesto por G10/B-15 EN_CURSO'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-50
   hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06

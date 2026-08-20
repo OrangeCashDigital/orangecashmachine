@@ -1,6 +1,6 @@
 # ADR-0033: Production Gate binario (check_production_gates.py G1..G11)
 
-**Estado:** Propuesto
+**Estado:** Aceptado (2026-08-19)
 **Fecha:** 2026-08-19
 **Bounded context(s) afectado(s):** ocm (plataforma), CI/CD
 
@@ -25,7 +25,7 @@ El Plan Maestro (§1, §6, §10) y ADR-0020 documentan un **Production Gate bina
 | G6. Cobertura crítica | `pytest --cov` | `fail_under=40` (baseline 44%) | IMPLEMENTADO |
 | G7. Bandit limpio | CI `security` | sin BLOCKER (0 HIGH) | IMPLEMENTADO |
 | G8. Mypy completo | CI `quality` | sin errores | IMPLEMENTADO |
-| G9. Paridad de config | test R7 | verde | **PENDIENTE** (R7 `backtest: pendiente`, `activada_en_ci: false`) |
+| G9. Paridad de config | test R7 | verde | **IMPLEMENTADO** (R7 activada 2026-08-19, B-61 cerrado) |
 | G10. Estado de posición único | test B-15 | verde | F4 (B-15 `EN_CURSO`) |
 | G11. Trazabilidad activa | test B-17 | verde | F4 (B-17 `HECHO`) |
 
@@ -54,10 +54,10 @@ $ uv run python scripts/check_production_gates.py [--mode gate-dev|gate-release]
 - `gate-dev` mode: todos los cheques (G1..G9 + G10/G11 si F4 cerrada)
 - `gate-release` mode: estricto, todos G1..G11 obligatorios
 
-**Integración CI:**
-- Job `policy-gate` (serial, tras security+quality) ejecuta `check_production_gates.py --mode gate-dev`
-- Job `release-gate` (manual/tag) ejecuta `--mode gate-release`
-- FAIL bloquea merge (gate-dev) o release (gate-release)
+**Integración CI (implementada 2026-08-19):**
+- Job `policy-gate` (serial, tras quality/security/etc) ejecuta `verify_policy_integrity.py` (ADR-0032) + `check_production_gates.py --mode gate-dev`
+- FAIL bloquea merge
+- `--mode gate-release` queda disponible para el CD futuro (verificará G10 obligatoria cuando B-15 se cierre)
 
 ## Justificación técnica
 
