@@ -20,6 +20,11 @@
 # path del venv dependen del layout del host: ajustar User=/ExecStart/Environment
 # al host real. No activar sin verificar que la config production arranca
 # (uv run streaming --env production).
+#
+# REQUISITOS PREVIOS EN EL HOST:
+#   1. .env con BYBIT_API_KEY y BYBIT_API_SECRET reales (no vacíos)
+#   2. Kafka broker accesible en localhost:9093 (docker-compose up -d)
+#   3. uv sync --group dev ejecutado para instalar entrypoint `streaming`
 
 [Unit]
 Description=OrangeCashMachine streaming (F2.6b orderbook WS — ADR-0022)
@@ -34,6 +39,9 @@ User=orangemusic
 WorkingDirectory=/home/orangemusic/trading/orangecashmachine
 Environment=PYTHONUNBUFFERED=1
 Environment=OCM_ENV=production
+Environment=KAFKA_BOOTSTRAP_SERVERS=localhost:9093
+# Carga variables de entorno desde .env (incluye BYBIT_API_KEY, BYBIT_API_SECRET)
+EnvironmentFile=/home/orangemusic/trading/orangecashmachine/.env
 # ExecStart usa el entrypoint `streaming` del venv del proyecto (pyproject
 # [project.scripts]). Si el venv vive en otra ruta, apuntar ExecStart ahí.
 ExecStart=/home/orangemusic/trading/orangecashmachine/.venv/bin/streaming --env production
