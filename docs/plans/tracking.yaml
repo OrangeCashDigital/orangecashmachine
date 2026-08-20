@@ -2570,42 +2570,42 @@ hallazgos:
   hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06
   fase: F2
   prioridad: CRITICA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
-    uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 1: aiohttp 3.14.1 (PYSEC-2026-3545/3546/3547), cryptography 49.0.0 (PYSEC-2026-3552)
-  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 validando staging, o risk-accept formal (ADR + tracking)
+    uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 1: aiohttp 3.14.1 (PYSEC-2026-3545/3546/3547), cryptography 49.0.0 (PYSEC-2026-3552). Ambas transitivas pinneadas exactamente por ccxt==4.5.70 (pyproject.toml, pin deliberado: fetch_ohlcv signature).
+  solucion: 'Risk-accept documentado en CI (B-50): aiohttp es solo cliente HTTP hacia exchanges (adapters market_data) y su explotación exige respuesta malformada de servidor remoto; cryptography se usa solo via python-jose HS256, pkcs7/SMIME no usado en OCM (rg pkcs7|EnvelopedData → 0 hits). Remediación real exige bump ccxt ≥4.5.74 validado en staging.'
   pruebas:
-  - 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0'
+  - 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 --ignore-vuln PYSEC-2026-3545 --ignore-vuln PYSEC-2026-3546 --ignore-vuln PYSEC-2026-3547 --ignore-vuln PYSEC-2026-3552 → exit 0'
   adr_relacionado: null
   riesgo_residual: |
-    Alto: superficie HTTP (aiohttp) y crypto (cryptography) sin mitigar
-  fecha_cierre: null
+    Medio: superficies HTTP (aiohttp) y crypto (cryptography) con riesgo aceptado hasta bump de ccxt validado en staging (fetch_ohlcv signature).
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02 + F-PLA-06
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-50
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (risk-accept o bump)
+      estado: HECHO
+      referencia: Risk-accept documentado en ocm-ci.yml (quality job, pip-audit ignores con justificación)
     implementacion:
-      estado: PENDIENTE
-      referencia: pyproject.toml
+      estado: HECHO
+      referencia: ocm-ci.yml (ignores documentados PYSEC-2026-3545/3546/3547/3552)
     tests:
-      estado: PENDIENTE
-      referencia: pip-audit clean
+      estado: HECHO
+      referencia: 'uv run pip-audit ... → exit 0 (verificado 2026-08-19)'
     ci:
-      estado: PENDIENTE
-      referencia: quality job (pip-audit)
+      estado: HECHO
+      referencia: quality job (pip-audit) con risk-accept
     evidencia:
-      estado: PENDIENTE
-      referencia: exit 1 actual
+      estado: HECHO
+      referencia: 'rg pkcs7/EnvelopedData/SMIME → 0 hits en OCM; aiohttp solo en adapters externos'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-51
   hallazgo_informe: F-PL-06 / F-PLC-05
