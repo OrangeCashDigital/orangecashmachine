@@ -2755,34 +2755,35 @@ hallazgos:
   hallazgo_informe: F-PLA-08 / F-PLC-03 / F-PLC-08
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: EN_CURSO
   estado_auditoria: CONFIRMADO
   evidencia: |
     F-PL-08 afirmó "SonarQube duplica ruff (complexity/duplication ya cubiertos)" — FALSO: ruff solo E/F/I.
     SonarQube SÍ aportaría maintainability longitudinal (complexity, cognitive complexity, duplication, long methods, coupling, deuda técnica trend) pero coste operacional OrangeHouse (PostgreSQL, backup, auth, updates, 2-4h/mes, superficie ataque, no reproducible) supera valor.
     Alternativa coste ~0: ruff extendido (C901/PLR/SIM) + vulture en CI + nightly report.
   solucion: |
-    Confirmar no adopción SonarQube (NOT JUSTIFIED por coste, no por duplicación).
-    Estrategia maintainability: ruff extendido + vulture CI + nightly compliance report.
+    PARTE 1 (HECHO): Confirmar no adopción SonarQube — NO ADOPTAR ya documentado en AUDIT_OCM_governance-integration-external_2026-08-17.md:37 (el stack ruff/mypy/bandit ya es quality gate; Sonar añadiría infraestructura sin cubrir gap).
+    PARTE 2 (PENDIENTE): Estrategia maintainability ruff extendido (C901/PLR/SIM/DUP) + vulture CI + nightly compliance report — NO implementado. Verificado 2026-08-19: `uv run ruff check . --select C901,PLR,SIM` → 344 errores en el código actual (refactor sustancial, requiere decisión sobre alcance por módulo antes de activar en CI como gate).
   pruebas:
-    - 'uv run ruff check . --select C901,PLR,SIM,DUP → detección real; vulture en CI verde'
+    - 'decisión SonarQube NO ADOPTAR → AUDIT_OCM_governance-integration-external_2026-08-17.md:37 (HECHO)'
+    - 'GAP: ruff extendido → 344 errores (no activado en CI); vulture en dev-deps sin job CI; nightly compliance report no existe'
   adr_relacionado: null
   riesgo_residual: |
-    Medio: gap maintainability real (F-PLA-01) requiere mitigación ruff+vulture; SonarQube añade infra sin resolver gap
+    Medio: gap maintainability real (F-PLA-01) sin mitigación activa; decisión SonarQube resuelta (NO ADOPTAR). Ruff+vulture pendientes de refactor/decisión.
   fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-08 + F-PLC-03/08
     backlog:
-      estado: PENDIENTE
+      estado: PARCIAL
       referencia: B-54
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (SonarQube decision + complexity strategy)
+      estado: NO_APLICA
+      referencia: 'decisión NO ADOPTAR SonarQube (gobernanza 2026-08-17)'
     implementacion:
       estado: PENDIENTE
-      referencia: ruff select extendido + vulture CI
+      referencia: ruff select extendido + vulture CI (344 errores a gestionar)
     tests:
       estado: PENDIENTE
       referencia: ruff C901/PLR/SIM + vulture
@@ -2790,8 +2791,8 @@ hallazgos:
       estado: PENDIENTE
       referencia: quality job
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'decisión SonarQube NO ADOPTAR (2026-08-17); ruff extendido → 344 errores (2026-08-19)'
     cierre:
       estado: PENDIENTE
       referencia: null
