@@ -1,18 +1,22 @@
 """
-tests/architecture/test_deploy_artifacts.py — Validación de artefactos de deploy (B-57/B-59).
+tests/architecture/test_deploy_artifacts.py — Validación de artefactos de deploy (B-57/B-58/B-59).
 
-Verifica que la solución de deploy verificado (ADR-0037) y la unidad systemd del
-streaming (ADR-0022) existen y son sintácticamente válidas:
+Verifica que la solución de deploy verificado (ADR-0037), el provisioning de
+Grafana reproducible (B-58) y la unidad systemd del streaming (ADR-0022)
+existen y son sintácticamente válidos:
 
   - deploy/scripts/deploy_ocm.sh existe, es ejecutable y pasa `bash -n`
   - deploy/systemd/ocm-streaming.service existe y su sintaxis es válida
     (systemd-analyze verify — evidencia mecánica real, no simulación)
   - la unit referencia el entrypoint `streaming` registrado en pyproject
   - .github/workflows/ocm-cd.yml ya no es un placeholder
+  - el provisioning de Grafana (datasource + provider + dashboard) es válido,
+    coherente con docker-compose.yml y usa métricas OCM reales
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -24,6 +28,8 @@ DEPLOY_SH = ROOT / "deploy" / "scripts" / "deploy_ocm.sh"
 SYSTEMD_UNIT = ROOT / "deploy" / "systemd" / "ocm-streaming.service"
 CD_WORKFLOW = ROOT / ".github" / "workflows" / "ocm-cd.yml"
 PYPROJECT = ROOT / "pyproject.toml"
+GRAFANA_ROOT = ROOT / "deploy" / "monitoring" / "grafana"
+COMPOSE = ROOT / "docker-compose.yml"
 
 
 def test_deploy_script_exists_and_executable() -> None:
@@ -81,3 +87,46 @@ def test_cd_workflow_no_longer_placeholder() -> None:
     assert "workflow_dispatch" in text
     assert "deploy_ocm.sh" in text
     assert "placeholder" not in text.lower(), "ocm-cd.yml ya no debe ser placeholder"
+
+
+def test_grafana_datasource_declarative() -> None:
+    ds = GRAFANA_ROOT / "provisioning" / "datasources" / "ocm-prometheus.yaml"
+    assert ds.is_file(), "datasource declarativo debe existir (B-58)"
+    text = ds.read_text()
+    assert "prometheus" in text
+    assert "http://prometheus:9090" in text
+
+
+def test_grafana_dashboard_provider_declarative() -> None:
+    provider = GRAFANA_ROOT / "provisioning" / "dashboards" / "ocm-provider.yaml"
+    assert provider.is_file(), "provider declarativo debe existir (B-58)"
+    text = provider.read_text()
+    assert "/var/lib/grafana/dashboards" in text, "path del provider debe coincidir con el mount"
+
+
+def test_grafana_dashboard_json_valid_and_real_metrics() -> None:
+    dash = GRAFANA_ROOT / "dashboards" / "ocm_pipeline.json"
+    assert dash.is_file(), "dashboard ocm_pipeline.json debe existir (B-58)"
+    data = json.loads(dash.read_text())
+    assert data["title"] == "OCM Pipeline"
+    exprs = [
+        t["expr"]
+        for panel in data["panels"]
+        for t in panel.get("targets", [])
+    ]
+    assert any("ocm_pipeline_last_run_timestamp" in e for e in exprs)
+    assert any("ocm_kafka_events_published_total" in e for e in exprs)
+    assert any("ocm_silver_freshness_seconds" in e for e in exprs)
+
+
+def test_grafana_compose_mounts_match_versioned_files() -> None:
+    compose = COMPOSE.read_text()
+    assert "./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning" in compose
+    assert "./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards" in compose
+    assert "ocm_pipeline.json" in compose, "home dashboard del compose debe existir versionado"
+
+
+def test_grafana_provisioning_not_gitignored() -> None:
+    gitignore = (ROOT / ".gitignore").read_text()
+    assert "deploy/monitoring/grafana/provisioning/" not in gitignore
+    assert "deploy/monitoring/grafana/dashboards/" not in gitignore

@@ -1,0 +1,17 @@
+# deploy/monitoring/grafana/provisioning/datasources/ocm-prometheus.yaml
+#
+# Datasource declarativo (Grafana provisioning) — B-58/F-PL-10.
+# Apunta al Prometheus del stack docker compose (servicio `prometheus`,
+# puerto interno 9090 — red ocm_internal). Reproducible desde repo limpio:
+# docker compose up -d grafana provisiona este datasource automáticamente.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus (OCM)
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s

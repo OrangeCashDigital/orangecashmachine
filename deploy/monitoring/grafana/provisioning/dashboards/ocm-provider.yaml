@@ -1,0 +1,19 @@
+# deploy/monitoring/grafana/provisioning/dashboards/ocm-provider.yaml
+#
+# Provider declarativo de dashboards (Grafana provisioning) — B-58/F-PL-10.
+# Carga los dashboards JSON versionados desde el directorio montado
+# (/var/lib/grafana/dashboards en el contenedor → ./deploy/monitoring/grafana/dashboards).
+# Reproducible: docker compose up -d grafana provisiona los dashboards al arrancar.
+apiVersion: 1
+
+providers:
+  - name: OCM
+    orgId: 1
+    folder: OCM
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 60
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

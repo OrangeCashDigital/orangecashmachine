@@ -1,0 +1,161 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Pipeline heartbeat (vivo)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "time() - ocm_pipeline_last_run_timestamp",
+          "legendFormat": "staleness (s)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 300 },
+              { "color": "red", "value": 600 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Eventos Kafka publicados (rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "sum(rate(ocm_kafka_events_published_total[5m]))",
+          "legendFormat": "published"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "title": "Eventos Kafka fallados (rate por reason)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(ocm_kafka_events_failed_total[5m]))",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "title": "Latencia procesamiento Kafka (p99 ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 11 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(ocm_kafka_processing_latency_ms_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
+    },
+    {
+      "title": "Errores pipeline (rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 11 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "rate(ocm_pipeline_errors_total[5m])",
+          "legendFormat": "errores"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "title": "Freshness Silver (s desde último update)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "ocm_silver_freshness_seconds",
+          "legendFormat": "freshness"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 300 },
+              { "color": "red", "value": 600 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "title": "Gaps Silver (total)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "ocm_silver_gaps_total",
+          "legendFormat": "gaps"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "title": "Cobertura serie Silver",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ocm" },
+      "targets": [
+        {
+          "expr": "ocm_silver_series_coverage_ratio",
+          "legendFormat": "coverage"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.98 },
+              { "color": "red", "value": 0.95 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["ocm", "pipeline"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "OCM Pipeline",
+  "uid": "ocm-pipeline",
+  "version": 1
+}

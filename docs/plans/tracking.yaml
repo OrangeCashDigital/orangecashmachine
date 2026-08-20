@@ -2909,42 +2909,48 @@ hallazgos:
   hallazgo_informe: F-PL-10
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
     docker-compose.yml:237-238 monta ./deploy/monitoring/grafana/provisioning y ./dashboards; .gitignore:72-73 → ambos directorios gitignored; ls deploy/monitoring/grafana/ → provisioning/ y dashboards/ vacíos; README referencia dashboards provisionados desde deploy/ — no reproducible
-  solucion: Versionar provisioning de Grafana (dashboards JSON + datasources YAML) y quitar del .gitignore, O eliminar montajes y documentar setup manual
+  solucion: |
+    Versionado el provisioning de Grafana (B-58 implementado 2026-08-19):
+    - datasource declarativo: provisioning/datasources/ocm-prometheus.yaml → http://prometheus:9090
+    - provider de dashboards: provisioning/dashboards/ocm-provider.yaml → /var/lib/grafana/dashboards
+    - dashboard ocm_pipeline.json (home, coincide con GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH) con métricas OCM reales
+    - .gitignore actualizado: quitados provisioning/ y dashboards/; árbol docker huérfano → grafana_root_docker/
   pruebas:
-  - 'deploy/monitoring/grafana/provisioning/ y dashboards/ versionados con contenido real, O montajes eliminados'
+  - 'tests/architecture/test_deploy_artifacts.py → 12 passed (datasource/provider/dashboard JSON válido, mounts de compose coherentes, no gitignored)'
+  - 'JSON y YAML validados (json.load + yaml.safe_load)'
   adr_relacionado: null
   riesgo_residual: |
-    Medio: observabilidad no reproducible desde repo limpio
-  fecha_cierre: null
+    Bajo: provisioning versionado y declarativo; validación sintáctica. Resta render en Grafana real con el stack completo (GAP: requiere docker compose up grafana + prometheus/pushgateway).
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-10
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-58
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (Grafana provisioning)
+      estado: NO_APLICA
+      referencia: null
     implementacion:
-      estado: PENDIENTE
-      referencia: deploy/monitoring/grafana/
+      estado: HECHO
+      referencia: deploy/monitoring/grafana/{provisioning/datasources,provisioning/dashboards,dashboards}
     tests:
-      estado: PENDIENTE
-      referencia: docker compose up → Grafana con dashboards
+      estado: HECHO
+      referencia: tests/architecture/test_deploy_artifacts.py (12 passed)
     ci:
       estado: PENDIENTE
-      referencia: null
+      referencia: 'render en Grafana real con stack completo (GAP)'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'JSON/YAML válidos; mounts de compose verificados contra archivos versionados (2026-08-19)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-59
   hallazgo_informe: F-PL-11 / tracking.yaml f2_6b_streaming_entrypoint_mvp.criterios_aceptacion.systemd_reinicia_correctamente
