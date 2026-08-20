@@ -91,7 +91,7 @@ dependencies = [
     "numpy>=2.0,<3.0",
     "pandas>=2.3,<3.0",
     "polars[rtcompat]>=1.40.1",
-    "pyarrow>=17.0,<20.0",
+    "pyarrow>=17.0,<26.0",
 
     # ── Market data / exchange adapters (bounded context: market_data) ─────
     # ccxt: pinneado en 4.3.58 — versiones posteriores cambian la firma de
