@@ -1,0 +1,46 @@
+# OrangeCashMachine — unidad systemd del proceso streaming (F2.6b, ADR-0022)
+#
+# Supervisa apps/app/cli/streaming_hydra.py (canary ORDERBOOK websocket realtime)
+# como proceso independiente de ocm/live/paper (ADR-0022 §7). Proporciona:
+#   - arranque al boot (WantedBy=multi-user.target)
+#   - reinicio automático ante crash (Restart=on-failure) y StopWhenUnneeded
+#   - cierre ordenado: el proceso instala manejador SIGTERM/SIGINT (streaming_hydra.py
+#     registra add_signal_handler) y cierra producers vía bundle.close_all() (ADR-0022)
+#   - supervisor systemd (Process health — capa 1 de ADR-0022)
+#
+# INSTALACIÓN EN EL HOST ORANGEHOUSE (validar antes de activar):
+#   sudo install -m 644 deploy/systemd/ocm-streaming.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ocm-streaming
+#   systemctl status ocm-streaming
+#
+# El proceso requiere el entrypoint `streaming` instalado (uv sync --group dev →
+# [project.scripts] streaming = app.cli.streaming_hydra:main) y OCM_ENV apuntando
+# al entorno de producción (config cascade estándar). El usuario de servicio y el
+# path del venv dependen del layout del host: ajustar User=/ExecStart/Environment
+# al host real. No activar sin verificar que la config production arranca
+# (uv run streaming --env production).
+
+[Unit]
+Description=OrangeCashMachine streaming (F2.6b orderbook WS — ADR-0022)
+Documentation=file:/home/orangemusic/trading/orangecashmachine/docs/architecture/decisions/ADR-0022-lifecycle-proceso-realtime-feeds.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Ajustar al layout del host: usuario de servicio y path del venv real.
+User=orangemusic
+WorkingDirectory=/home/orangemusic/trading/orangecashmachine
+Environment=PYTHONUNBUFFERED=1
+Environment=OCM_ENV=production
+# ExecStart usa el entrypoint `streaming` del venv del proyecto (pyproject
+# [project.scripts]). Si el venv vive en otra ruta, apuntar ExecStart ahí.
+ExecStart=/home/orangemusic/trading/orangecashmachine/.venv/bin/streaming --env production
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

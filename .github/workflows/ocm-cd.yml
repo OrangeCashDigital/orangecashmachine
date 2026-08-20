@@ -1,12 +1,43 @@
 name: OrangeCashMachine CD
-# 🚧 Deshabilitado — deploy manual via SSH hasta que se defina deploy_ocm.sh
-# El CD anterior era para un proyecto distinto (freqtrade BOTS).
-# Re-habilitar cuando: deploy_ocm.sh esté implementado.
-on:
-  workflow_dispatch:  # solo manual, nunca automático
 
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo de deploy (check-health | deploy | rollback)"
+        required: true
+        default: "check-health"
+        type: choice
+        options:
+          - check-health
+          - deploy
+          - rollback
+
+# CD manual y explícito (nunca automático — ADR-0037). El deploy target es el
+# mismo host que ejecuta el runner (OrangeHouse single-host: Docker Compose +
+# systemd). Verificación previa al deploy: PR mergeado debe pasar el policy-gate
+# (ADR-0033) y el job quality (pip-audit risk-accept B-50).
 jobs:
-  placeholder:
+  cd-gate:
+    name: CD deploy verify (deploy_ocm.sh)
     runs-on: ubuntu-latest
     steps:
-      - run: echo "CD pendiente de implementación — ver deploy.py"
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Validate config (Hydra bootstrap)
+        run: OCM_VALIDATE_ONLY=true uv run python -m app.cli.main
+
+      - name: Deploy mode (${{ github.event.inputs.mode }})
+        run: ./deploy/scripts/deploy_ocm.sh --${{ github.event.inputs.mode }}
+        env:
+          COMPOSE_FILE: docker-compose.yml
+          COMPOSE_PROJECT: ocm
+          ENV_FILE: .env

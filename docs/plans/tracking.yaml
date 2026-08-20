@@ -2863,42 +2863,47 @@ hallazgos:
   hallazgo_informe: F-PLC-10
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: EN_CURSO
   estado_auditoria: CONFIRMADO
   evidencia: 'ocm-cd.yml placeholder; deploy_ocm.sh inexistente; deploy manual SSH; sin artifact SHA tracking; sin health checks automatizados post-deploy; rollback no automatizado'
   solucion: |
-  Implementar secuencia: artifact build → SHA256 digest → GHCR/registry → CD verify (digest match + config-guard + health pre-deploy) → deploy (docker compose up -d --build con tag SHA) → health-check (deadman, kafka lag, redis memory, disk) → ACCEPT / ROLLBACK (docker compose down + up -d con SHA anterior) → evidence inmutable
+    Implementada la secuencia de deploy verificado mínima compatible con OrangeHouse (sin infra cloud):
+    - deploy/scripts/deploy_ocm.sh (check-health/deploy/rollback; health checks de redis, pushgateway, prometheus, alertmanager, grafana, market-data; snapshot backup; ACCEPT/ROLLBACK)
+    - .github/workflows/ocm-cd.yml → workflow_dispatch real que ejecuta deploy_ocm.sh (check-health|deploy|rollback)
+    - tests/architecture/test_deploy_artifacts.py (bash -n, systemd-analyze verify, no-placeholder)
+    PENDIENTE (GAP): artifact SHA256/GHCR, CD automático por tag, health post-deploy (deadman/kafka-lag/disk), verificación en el host de producción real.
   pruebas:
-  - 'Tag release → CI: Policy Gate PASS → Build artifact SHA → CD: verify SHA → deploy → health ACCEPT'
-  adr_relacionado: ADR-0020, ADR-0022
+  - 'bash -n deploy_ocm.sh PASS; shellcheck 0 warnings; tests/architecture/test_deploy_artifacts.py 7 passed'
+  - '--check-health real contra stack parcial (kafka/zookeeper) → UNHEALTHY exit 1 (reporte honesto)'
+  adr_relacionado: ADR-0020, ADR-0022, ADR-0037 (Propuesto)
   riesgo_residual: |
-    Alto: CD no existe; rollback manual; sin artifact identity
+    Medio: deploy verificado implementado y testeado; artifact SHA y automatización CD por tag pendientes (ADR-0037 Propuesto).
   fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-10
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-57
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (CD verify/deploy/rollback)
+      estado: HECHO
+      referencia: ADR-0037-cd-verify-deploy-rollback (Propuesto — implementación parcial alineada)
     implementacion:
-      estado: PENDIENTE
-      referencia: deploy_ocm.sh + ocm-cd.yml + artifact SHA
+      estado: HECHO
+      referencia: deploy/scripts/deploy_ocm.sh + .github/workflows/ocm-cd.yml
     tests:
-      estado: PENDIENTE
-      referencia: deploy/rollback simulation
+      estado: HECHO
+      referencia: tests/architecture/test_deploy_artifacts.py (7 passed)
     ci:
-      estado: PENDIENTE
-      referencia: ocm-cd.yml
+      estado: HECHO
+      referencia: ocm-cd.yml (workflow_dispatch check-health/deploy/rollback)
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '--check-health exit 1 UNHEALTHY contra stack parcial real (2026-08-19); shellcheck 0 warnings'
     cierre:
       estado: PENDIENTE
-      referencia: null
+      referencia: 'GAP: artifact SHA/GHCR, CD por tag, health post-deploy avanzado, verificación en host real'
 
 - id: B-58
   hallazgo_informe: F-PL-10
@@ -2945,43 +2950,44 @@ hallazgos:
   hallazgo_informe: F-PL-11 / tracking.yaml f2_6b_streaming_entrypoint_mvp.criterios_aceptacion.systemd_reinicia_correctamente
   fase: F2
   prioridad: BAJA
-  estado: PENDIENTE
+  estado: EN_CURSO
   estado_auditoria: CONFIRMADO
   evidencia: |
     tracking.yaml:2573 systemd_reinicia_correctamente: NO_VERIFICADO; ADR-0022:323 "Sin unit systemd activo"; canary F2.6c arrancado manualmente
   solucion: |
-  Verificar unidad systemd streaming (crear + test reinicio) O declarar modelo lifecycle alternativo (Docker restart: unless-stopped)
+    Crear y versionar la unit systemd del streaming (deploy/systemd/ocm-streaming.service, ADR-0022 §7) con validación sintáctica (systemd-analyze verify) y test de artefacto (tests/architecture/test_deploy_artifacts.py). La ACTIVACIÓN en producción (systemctl enable --now) requiere el host OrangeHouse real y queda como GAP.
   pruebas:
-  - 'systemctl status streaming → active; test de reinicio documentado'
+  - 'deploy/systemd/ocm-streaming.service versionada; systemd-analyze verify → PASS; test_deploy_artifacts → 7 passed'
+  - 'Activación real en host: GAP (requiere acceso root al host OrangeHouse)'
   adr_relacionado: ADR-0022
   riesgo_residual: |
-    Medio: modelo operativo declarado (systemd supervisando streaming) no verificado
+    Bajo tras implementación: unit declarativa validada; resta activación y test de reinicio en el host real.
   fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-11 + tracking.yaml
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-59
     adr:
       estado: HECHO
       referencia: ADR-0022
     implementacion:
-      estado: PENDIENTE
-      referencia: unit systemd streaming
+      estado: HECHO
+      referencia: deploy/systemd/ocm-streaming.service
     tests:
-      estado: PENDIENTE
-      referencia: systemd restart test
+      estado: HECHO
+      referencia: tests/architecture/test_deploy_artifacts.py (systemd-analyze verify PASS)
     ci:
       estado: PENDIENTE
-      referencia: null
+      referencia: activación systemctl en host OrangeHouse (GAP)
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'systemd-analyze verify deploy/systemd/ocm-streaming.service → PASS (2026-08-19)'
     cierre:
       estado: PENDIENTE
-      referencia: null
+      referencia: activación + test de reinicio en host real
 
 - id: B-60
   hallazgo_informe: F-PLA-03
