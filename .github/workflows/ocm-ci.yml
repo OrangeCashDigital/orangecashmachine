@@ -18,6 +18,11 @@ jobs:
   # Comando correcto: uv run lint-imports (import-linter 2.x no tiene __main__.py)
   # Documentación: https://import-linter.readthedocs.io
   # ──────────────────────────────────────────────────────────────────────────
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STAGE 1 — FOUNDATION / FAIL-FAST (paralelo): architecture + engineering-health
+  # ══════════════════════════════════════════════════════════════════════════
+
   architecture:
     name: Architecture contracts (import-linter)
     runs-on: ubuntu-latest
@@ -52,6 +57,8 @@ jobs:
   # exit 1 si los artefactos divergen (regla suprema). Fail-fast: nada más
   # avanza si el Health Check no pasa.
   # ──────────────────────────────────────────────────────────────────────────
+
+
   engineering-health:
     name: Engineering Health Check (F2.0)
     runs-on: ubuntu-latest
@@ -78,6 +85,12 @@ jobs:
   # imports. Mypy de apps/ es el gate de tipado de la capa de aplicación
   # (complementa el mypy shared/ del job quality). Corre tras architecture.
   # ──────────────────────────────────────────────────────────────────────────
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STAGE 2 — ARCHITECTURE GUARDS (corren en paralelo tras STAGE 1)
+  # ══════════════════════════════════════════════════════════════════════════
+
   app-guard:
     name: App layer guard (AST + mypy apps)
     runs-on: ubuntu-latest
@@ -113,6 +126,8 @@ jobs:
   # bloquea reintroducción de subprocess en packages/*/domain/ (el git_hash se
   # inyecta desde el composition root — ADR-0006). Corre tras architecture.
   # ──────────────────────────────────────────────────────────────────────────
+
+
   domain-guard:
     name: Domain purity guard (R11)
     runs-on: ubuntu-latest
@@ -140,6 +155,8 @@ jobs:
   # Cada regla activa debe tener backtest=ok y activada_en_ci=true (esta job).
   # Corre tras architecture; unit-tests ya ejecuta el resto de la suite.
   # ──────────────────────────────────────────────────────────────────────────
+
+
   trading-guards:
     name: Trading guards (R9/R10)
     runs-on: ubuntu-latest
@@ -168,6 +185,44 @@ jobs:
   # No requiere Kafka/Redis reales — se excluyen vía marker `integration`
   # (SSOT del marker: pyproject.toml [tool.pytest.ini_options]).
   # ──────────────────────────────────────────────────────────────────────────
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STAGE 3 — SECURITY (en paralelo con guards/tests)
+  # ══════════════════════════════════════════════════════════════════════════
+
+  security:
+    name: Security audit (bandit)
+    runs-on: ubuntu-latest
+    needs: [architecture, engineering-health]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Bandit (R6)
+        run: uv run bandit -r apps ocm packages shared infrastructure -ll
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 2b: Integration tests
+  # Requiere Kafka real — se levanta como service container con healthcheck
+  # (dependency-satisfaction: el job espera a que Kafka esté listo antes de
+  # correr tests, sin condiciones de carrera).
+  # No usa -x: queremos ver todos los fallos de integración de una vez.
+  # ──────────────────────────────────────────────────────────────────────────
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STAGE 4 — TESTS + CONFIG (en paralelo; integration requiere Kafka)
+  # ══════════════════════════════════════════════════════════════════════════
+
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -199,32 +254,8 @@ jobs:
   # Gate de seguridad: bandit -ll sobre el código no test, umbral BLOCKER.
   # R6 activada_en_ci=true en tracking.yaml.
   # ──────────────────────────────────────────────────────────────────────────
-  security:
-    name: Security audit (bandit)
-    runs-on: ubuntu-latest
-    needs: [architecture, engineering-health]
 
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: "latest"
-
-      - name: Install dev dependencies
-        run: uv sync --group dev
-
-      - name: Bandit (R6)
-        run: uv run bandit -r apps ocm packages shared infrastructure -ll
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # JOB 2b: Integration tests
-  # Requiere Kafka real — se levanta como service container con healthcheck
-  # (dependency-satisfaction: el job espera a que Kafka esté listo antes de
-  # correr tests, sin condiciones de carrera).
-  # No usa -x: queremos ver todos los fallos de integración de una vez.
-  # ──────────────────────────────────────────────────────────────────────────
   integration-tests:
     name: Integration tests (Kafka)
     runs-on: ubuntu-latest
@@ -273,6 +304,8 @@ jobs:
   # Separado de tests — valida que Hydra/OmegaConf arranca sin errores.
   # No depende de architecture directamente (puede correr en paralelo con tests).
   # ──────────────────────────────────────────────────────────────────────────
+
+
   config-validation:
     name: Config validation (Hydra bootstrap)
     runs-on: ubuntu-latest
@@ -297,6 +330,12 @@ jobs:
   # ruff + format + mypy + SSOT + pip-audit. Corre tras architecture (fail-fast).
   # Cualquier fallo aquí impide el merge.
   # ──────────────────────────────────────────────────────────────────────────
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STAGE 5 — QUALITY GATES (ruff/mypy/SSOT/pip-audit)
+  # ══════════════════════════════════════════════════════════════════════════
+
   quality:
     name: Quality gates (ruff/mypy/SSOT/audit)
     runs-on: ubuntu-latest
@@ -364,10 +403,16 @@ jobs:
   #   solo detección, no prevención.
   #   El manifest se regenera SOLO localmente por humano (`--update`), nunca en CI.
   # ──────────────────────────────────────────────────────────────────────────
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STAGE 6 — POLICY / COMPLIANCE (veredicto binario final)
+  # ══════════════════════════════════════════════════════════════════════════
+
   policy-gate:
     name: Policy gate (integrity hash)
     runs-on: ubuntu-latest
-    needs: [quality, security, trading-guards, app-guard, domain-guard, unit-tests, config-validation]
+    needs: [quality, security, trading-guards, app-guard, domain-guard, unit-tests, integration-tests, config-validation]
 
     steps:
       - uses: actions/checkout@v4
@@ -396,6 +441,8 @@ jobs:
   # código en un mismo PR sin señal explícita de revisión de gobernanza.
   # Solo aplica a pull_request (no a push de main).
   # ──────────────────────────────────────────────────────────────────────────
+
+
   policy-change:
     name: Policy change gate (label)
     runs-on: ubuntu-latest

@@ -2845,47 +2845,50 @@ hallazgos:
   hallazgo_informe: F-PLC-07
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
-    ocm-ci.yml jobs actuales: architecture → engineering-health → app-guard → domain-guard → trading-guards → unit-tests → security → integration-tests → config-validation → quality. Orden mezcla arquitectura/calidad/seguridad sin etapa explícita POLICY GATE binario.
+    ocm-ci.yml reorganizado en 6 stages explícitos (2026-08-19): STAGE 1 FOUNDATION (architecture + engineering-health, fail-fast paralelo) → STAGE 2 ARCHITECTURE GUARDS (app-guard, domain-guard, trading-guards) → STAGE 3 SECURITY → STAGE 4 TESTS+CONFIG (unit, integration, config-validation) → STAGE 5 QUALITY → STAGE 6 POLICY/COMPLIANCE (policy-gate + policy-change). GitHub Actions no tiene stages nativos; se implementan via needs + agrupación + headers, preservando los 10 required checks (branch protection, strict=true).
   solucion: |
-  Reordenar ocm-ci.yml a stages explícitos: FAST LOCAL (ruff/format/mypy/ssot/actionlint/shellcheck/yamllint) → ARCHITECTURE (import-linter, AST Guards/Semgrep, cycle detection, arch tests) → SECURITY (bandit, gitleaks, semgrep security) → QUALITY (pytest fail_under) → SUPPLY CHAIN (pip-audit, Trivy fs) → POLICY GATE (engineering_health + audit_validator M1..M25 + registry hash verify) → EXPENSIVE/PR (integration) → NIGHTLY (CodeQL full, Trivy full, extended dep-audit, compliance-report) → RELEASE (check_production_gates.py + compliance report firmado)
+    Reordenamiento sin renombrar jobs (los required checks se casan por name: exacto). Fix de gate real: policy-gate ahora espera integration-tests — antes un fallo de integración NO bloqueaba merge (integration-tests no era required check ni dependency de policy-gate). policy-gate ya ejecuta check_production_gates.py --mode gate-dev (B-49) = veredicto binario.
+    Pendiente (evaluado en FASE 5 por separado): nightly compliance report / CodeQL full / Trivy full — se decide si implementar tras B-56/B-57.
   pruebas:
-  - 'PR con cambio en domain → architecture+security+quality+policy_gate PASS; nightly genera compliance report'
-  adr_relacionado: ADR-0020
+  - 'actionlint .github/workflows/ocm-ci.yml → exit 0 (docker rhysd/actionlint:latest)'
+  - 'python yaml.safe_load → 12 jobs, DAG acíclico, sin ciclos'
+  - '10 required checks (branch protection) preservados con nombres exactos'
+  - 'policy-gate.needs incluye integration-tests (gap de gate cerrado)'
+  adr_relacionado: ADR-0020, ADR-0033
   riesgo_residual: |
-    Medio: CI actual no da veredicto binario único de policy; Policy Gate requiere check_production_gates.py (B-49)
-  fecha_cierre: null
+    Bajo: stages explícitos implementados; nightly/release stages futuros quedan como gap separado.
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-07
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-56
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (CI stages + Policy Gate)
+      estado: HECHO
+      referencia: ADR-0020, ADR-0033 (policy gate binario)
     implementacion:
-      estado: PENDIENTE
-      referencia: .github/workflows/ocm-ci.yml + nightly.yml
+      estado: HECHO
+      referencia: .github/workflows/ocm-ci.yml (6 stages)
     tests:
-      estado: PENDIENTE
-      referencia: CI verde con stages
+      estado: HECHO
+      referencia: 'actionlint exit 0 + DAG acíclico + 10 required checks preservados'
     ci:
-      estado: PENDIENTE
-      referencia: ocm-ci.yml restructure
+      estado: HECHO
+      referencia: ocm-ci.yml restructure (policy-gate → integration-tests)
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'actionlint 0, YAML parse 12 jobs, DAG acíclico (2026-08-19)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
-
+      estado: HECHO
+      referencia: '2026-08-19'
 - id: B-57
   hallazgo_informe: F-PLC-10
-  fase: F4
+  fase: F2
   prioridad: MEDIA
   estado: EN_CURSO
   estado_auditoria: CONFIRMADO
