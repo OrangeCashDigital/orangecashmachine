@@ -46,8 +46,8 @@ reglas:
   hallazgo: H-05
   descripcion: '`config.yaml#defaults` divergente de `_MODULE_GLOBS`'
   mecanismo: test de paridad de config
-  backtest: pendiente
-  activada_en_ci: false
+  backtest: ok
+  activada_en_ci: true
 - id: R8
   hallazgo: H-10
   descripcion: Módulo dead stub re-importable con imports inválidos
@@ -1620,8 +1620,8 @@ hallazgos:
       estado: HECHO
       referencia: tests/ocm/config/test_structured_parity.py + test_external_ingestion_standalone.py
     ci:
-      estado: PENDIENTE
-      referencia: R7 activada_en_ci
+      estado: HECHO
+      referencia: R7 activada_en_ci (2026-08-19)
     evidencia:
       estado: HECHO
       referencia: tests de paridad + funcionales pasan; 214 config tests; validación
@@ -3030,54 +3030,54 @@ hallazgos:
   hallazgo_informe: F-PRI-01 / F-PRI-02 / F-PRI-04
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
     ADR-0031 modeló todo enforcement como guard pattern (tests.positive/negative de archivo);
     policies/registry.yaml demuestra tres modelos reales: guard_script (R1-R4,R9-R16),
-    tool_gate (R5 coverage, R6 bandit) y absence_gate (R8). R7 tiene tests pero backtest
-    pendiente y no activada en CI. Deuda: R5-R8 sin evidencia pos/neg explícita de archivo.
+    tool_gate (R5 coverage, R6 bandit) y absence_gate (R8). Resolución verificada 2026-08-19:
+    R7 activada en CI (backtest ok, job unit-tests referencia R7, waiver eliminado);
+    R5/R6 con enforcement tool_gate real (jobs unit-tests/security) y R8 absence_gate
+    (módulo eliminado, B-13 HECHO) — sin fixtures pos/neg artificiales por decisión ADR-0031.
   solucion: |
-    Migración completa de R5-R8 a cobertura positiva/negativa explícita:
-    - R5 (coverage): test que verifica el umbral fail_under y la presencia del gate en CI
-    - R6 (bandit): test que verifica el job security + pre-commit hook activo
-    - R7 (parity): activar en CI (activada_en_ci: true) con backtest ok
-    - R8 (absence): test que verifica la ausencia del módulo onchain_producer (rg = 0)
-    Eliminación progresiva del waiver de R7 tras activación en CI.
-    Aceptación de evidencia verificable por ADR-0031 (M22-M26).
+    Migración de R5-R8 documentada con el modelo mechanism_type de ADR-0031:
+    - R5 (coverage): tool_gate real — job unit-tests con fail_under=40, sin test de archivo forzado
+    - R6 (bandit): tool_gate real — job security con bandit -ll, sin test de archivo forzado
+    - R7 (parity): activada en CI (backtest ok, activada_en_ci true, job unit-tests referencia R7)
+    - R8 (absence): absence_gate real — módulo onchain_producer eliminado (B-13 HECHO)
+    Waiver de R7 eliminado del registry el 2026-08-19 (ya no necesario).
   pruebas:
-  - 'test_positive_*/test_negative_* de R5-R8 en tests/ verdes'
-  - 'R7 con activada_en_ci: true y backtest: ok en tracking.yaml'
-  - 'waiver de R7 eliminado del registry (expiración consumida)'
+  - 'R7: backtest ok + activada_en_ci true en tracking.yaml; job unit-tests referencia R7'
+  - 'R7: waiver eliminado de policies/registry.yaml; M25 sin WARN de waiver'
+  - 'R5/R6/R8: enforcement por CI/ausencia real verificados en ocm-ci.yml y tracking.yaml'
   adr_relacionado: ADR-0031
-  riesgo_residual: |
-    Medio: R5/R6/R8 sin test de archivo pos/neg; enforcement por CI job o ausencia
-  fecha_cierre: null
+  riesgo_residual: null
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/AUDIT_OCM_policy-registry-implementation_2026-08-19.md F-PRI-01
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-61
     adr:
       estado: HECHO
       referencia: ADR-0031-policy-registry-yaml
     implementacion:
-      estado: PENDIENTE
-      referencia: tests pos/neg R5-R8 + activación R7 en CI
+      estado: HECHO
+      referencia: R7 activada en CI; R5/R6/R8 enforcement real por tool_gate/absence_gate
     tests:
-      estado: PENDIENTE
-      referencia: test positivo/negativo explícitos por regla
+      estado: HECHO
+      referencia: test_structured_parity.py (R7) en suite unit-tests
     ci:
-      estado: PENDIENTE
-      referencia: activar R7 (activada_en_ci) en ocm-ci.yml
+      estado: HECHO
+      referencia: job unit-tests referencia R7 (ocm-ci.yml)
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: R7 backtest ok; R5/R6/R8 enforcement verificado 2026-08-19
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 mediciones_f0:
   fecha: '2026-08-06'

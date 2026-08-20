@@ -187,6 +187,8 @@ jobs:
       - name: Run unit tests with coverage gate
         # R5 (B-06/F2.1): fail_under=40 sobre el baseline real 44% (margen),
         # subiéndolo gradualmente. Un descenso por debajo rompe el CI.
+        # R7 (B-09): paridad config.yaml#defaults ↔ _MODULE_GLOBS cubierta por
+        # tests/ocm/config/test_structured_parity.py dentro de esta suite.
         run: >-
           uv run pytest tests/ -x -q -m "not integration"
           --cov=packages --cov=ocm --cov=shared --cov=apps

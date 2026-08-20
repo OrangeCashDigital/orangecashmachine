@@ -152,16 +152,10 @@ rules:
       type: backtest
       path: tests/ocm/config/test_structured_parity.py
     ci:
-      job: null
-      command: null
+      job: unit-tests
+      command: "uv run pytest tests/ -x -q -m 'not integration' --cov=packages --cov=ocm --cov=shared --cov=apps --cov-report=term"
     master_plan: F2.1
     adr: null
-    waiver:
-      allowed: true
-      expires: '2026-10-31'
-      adr: ADR-0031
-      ticket: B-61
-      motivo: "Regla con tests reales pero backtest pendiente y no activada en CI; requiere activación en ocm-ci.yml y cierre de evidencia"
     status: ACTIVE
 
   - id: R8

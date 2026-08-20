@@ -147,7 +147,7 @@ def test_absence_gate_rule_deprecated_with_evidence() -> None:
 
 
 def test_waiver_fields_are_complete_and_linked() -> None:
-    """M25 — el waiver real (R7) es explícito, temporal y enlazado a deuda real."""
+    """M25 — todo waiver presente es explícito, temporal y enlazado a deuda real."""
     for rule in av._registry_rules():
         waiver = rule.get("waiver")
         if not waiver:
@@ -346,4 +346,5 @@ def test_full_repo_policy_registry_passes() -> None:
     av.m25_policy_registry_waivers(ctx)
     av.m26_policy_registry_adrs(ctx)
     assert not ctx.errors
-    assert any("R7" in w and "waiver vigente" in w for w in ctx.warnings)
+    # Sin waivers vigentes tras la activación de R7 (B-61 cerrado 2026-08-19).
+    assert not any("waiver vigente" in w for w in ctx.warnings)
