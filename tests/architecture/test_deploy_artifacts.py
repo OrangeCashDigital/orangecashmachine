@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -53,6 +54,73 @@ def test_deploy_script_has_health_rollback_modes() -> None:
     assert "--rollback" in text
     assert "ACCEPT" in text
     assert "REJECT" in text
+
+
+def test_deploy_script_has_artifact_verify_mode() -> None:
+    # B-59: build → digest → publish → verify → deploy (ADR-0037).
+    text = DEPLOY_SH.read_text()
+    assert "--verify-artifact" in text, "deploy_ocm.sh debe exponer --verify-artifact (B-59)"
+    assert "docker image inspect" in text, "debe usar config digest (determinista)"
+    assert "refusing deploy" in text, "debe bloquear el deploy si el digest no coincide"
+
+
+def test_deploy_script_artifact_verify_positive_negative() -> None:
+    # Mecanismo real de verificación de digest: imagen local vs digest esperado.
+    # Positivo: digest coincide → ACCEPT. Negativo: digest distinto → REJECT.
+    # Skip si no hay docker o la imagen de test no existe.
+    res = subprocess.run(["docker", "version"], capture_output=True, text=True)
+    if res.returncode != 0:
+        pytest.skip("docker no disponible")
+    if subprocess.run(
+        ["docker", "image", "inspect", "ocm_market_data:latest"],
+        capture_output=True,
+    ).returncode != 0:
+        pytest.skip("imagen ocm_market_data:latest no construida localmente")
+
+    digest = subprocess.run(
+        ["docker", "image", "inspect", "ocm_market_data:latest", "--format", "{{.Id}}"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        good = Path(tmp) / "good.digest"
+        good.write_text(digest)
+        ok = subprocess.run(
+            [str(DEPLOY_SH), "--verify-artifact", str(good)],
+            capture_output=True,
+            text=True,
+        )
+        assert ok.returncode == 0, f"digest correcto debe ACCEPT:\n{ok.stdout}\n{ok.stderr}"
+
+        bad = Path(tmp) / "bad.digest"
+        bad.write_text("sha256:" + "0" * 64)
+        rej = subprocess.run(
+            [str(DEPLOY_SH), "--verify-artifact", str(bad)],
+            capture_output=True,
+            text=True,
+        )
+        assert rej.returncode == 1, "digest incorrecto debe REJECT (exit 1)"
+
+
+def test_dockerfile_builds_with_valid_uv_flag() -> None:
+    # B-59: el Dockerfile de producción no debe usar flags de uv inexistentes.
+    # Verificado 2026-08-19: `uv sync --no-dev --system` falla en uv 0.11.14
+    # (flag --system removida). El Dockerfile debe usar UV_PROJECT_ENVIRONMENT.
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    assert "--system" not in dockerfile, (
+        "Dockerfile no debe usar `uv sync --system` (flag removida en uv 0.11.14)"
+    )
+    assert "UV_PROJECT_ENVIRONMENT=/usr/local" in dockerfile, (
+        "Dockerfile debe instalar deps en /usr/local via UV_PROJECT_ENVIRONMENT"
+    )
+    assert "COPY packages ./packages" in dockerfile, (
+        "Dockerfile debe copiar packages/ para el remap editable de hatchling"
+    )
+    assert "COPY ocm ./ocm" in dockerfile
+    assert "COPY shared ./shared" in dockerfile
+    assert "COPY apps ./apps" in dockerfile
+    assert "COPY pyproject.toml README.md ." in dockerfile
 
 
 def test_systemd_unit_exists() -> None:

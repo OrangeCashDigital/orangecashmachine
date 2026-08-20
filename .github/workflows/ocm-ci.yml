@@ -476,3 +476,62 @@ jobs:
             exit 1
           fi
           echo "policy-change label presente — OK"
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STAGE 7 — BUILD / ARTIFACT (B-59, ADR-0037)
+  # Produce un artifact inmutable (imagen Docker etiquetada con el SHA del
+  # commit + sha256 del artifact) para que el CD verifique identidad antes de
+  # desplegar (build → digest → publish → verify → deploy).
+  #
+  # Design decisions (ADR-0037):
+  #   - Corre SOLO en push a main (no en PR): el artifact inmutable se genera
+  #     una vez por commit de línea base; los PR validan el código, no la imagen.
+  #   - Tag `ocm_market_data:<GIT_SHA>`: mutable → inmutable (identidad real).
+  #   - sha256 del artifact (docker save) subido como CI artifact: trazabilidad
+  #     reproducible para el deploy (deploy_ocm.sh puede verificar el digest).
+  #   - No empuja a GHCR: no requiere credenciales ni infraestructura nueva
+  #     (OrangeHouse single-host). El artifact queda en los CI artifacts.
+  #   - Job informativo: no es un required check (el gate de merge es policy-gate);
+  #     su fallo alerta del build roto antes del deploy manual.
+  # ══════════════════════════════════════════════════════════════════════════
+
+  artifact-build:
+    name: Build artifact (Docker image + SHA256)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute GIT_SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (runtime target)
+        run: |
+          docker build \
+            --build-arg GIT_SHA=${{ steps.sha.outputs.sha }} \
+            -t ocm_market_data:${{ steps.sha.outputs.sha }} \
+            --target runtime .
+
+      - name: Compute artifact digest (config digest, determinista)
+        # El config digest (docker image inspect --format '{{.Id}}') es la
+        # identidad inmutable del artifact por CONTENIDO (determinista para el
+        # mismo código). NO se usa `docker save | sha256sum`: el tar incluye
+        # metadatos variables y no es reproducible entre runs (verificado
+        # 2026-08-19: mismo latest → digests distintos).
+        run: |
+          docker image inspect ocm_market_data:${{ steps.sha.outputs.sha }} \
+            --format '{{.Id}}' > artifact.digest
+          echo "artifact_digest=$(cat artifact.digest)"
+          cat artifact.digest
+
+      - name: Upload artifact digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocm-artifact-${{ steps.sha.outputs.sha }}
+          path: artifact.digest

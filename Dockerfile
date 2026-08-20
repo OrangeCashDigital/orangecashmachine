@@ -19,9 +19,14 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY pyproject.toml .
+COPY pyproject.toml README.md .
+COPY packages ./packages
+COPY apps ./apps
+COPY ocm ./ocm
+COPY shared ./shared
 
-RUN pip install "uv==0.11.14" && uv sync --no-dev --system
+RUN pip install "uv==0.11.14" \
+    && UV_PROJECT_ENVIRONMENT=/usr/local uv sync --no-dev
 
 # Stage 2: runtime — imagen final limpia
 FROM python:3.11-slim-bookworm AS runtime

@@ -2898,13 +2898,14 @@ hallazgos:
     - deploy/scripts/deploy_ocm.sh (check-health/deploy/rollback; health checks de redis, pushgateway, prometheus, alertmanager, grafana, market-data; snapshot backup; ACCEPT/ROLLBACK)
     - .github/workflows/ocm-cd.yml → workflow_dispatch real que ejecuta deploy_ocm.sh (check-health|deploy|rollback)
     - tests/architecture/test_deploy_artifacts.py (bash -n, systemd-analyze verify, no-placeholder)
-    PENDIENTE (GAP): artifact SHA256/GHCR, CD automático por tag, health post-deploy (deadman/kafka-lag/disk), verificación en el host de producción real.
+    PENDIENTE (GAP): CD automático por tag, health post-deploy (deadman/kafka-lag/disk), verificación en el host de producción real.
   pruebas:
-  - 'bash -n deploy_ocm.sh PASS; shellcheck 0 warnings; tests/architecture/test_deploy_artifacts.py 7 passed'
+  - 'bash -n deploy_ocm.sh PASS; shellcheck 0 warnings; tests/architecture/test_deploy_artifacts.py 15 passed'
   - '--check-health real contra stack parcial (kafka/zookeeper) → UNHEALTHY exit 1 (reporte honesto)'
+  - '--verify-artifact ACCEPT/REJECT end-to-end (2026-08-19, B-59/ADR-0037)'
   adr_relacionado: ADR-0020, ADR-0022, ADR-0037 (Propuesto)
   riesgo_residual: |
-    Medio: deploy verificado implementado y testeado; artifact SHA y automatización CD por tag pendientes (ADR-0037 Propuesto).
+    Medio: deploy verificado implementado y testeado; artifact digest operativo (config digest); CD por tag y verificación en host real pendientes — requiere self-hosted runner/SSH (0 runners registrados en 2026-08-19) + root en OrangeHouse.
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -2988,13 +2989,18 @@ hallazgos:
   evidencia: |
     tracking.yaml:2573 systemd_reinicia_correctamente: NO_VERIFICADO; ADR-0022:323 "Sin unit systemd activo"; canary F2.6c arrancado manualmente
   solucion: |
-    Crear y versionar la unit systemd del streaming (deploy/systemd/ocm-streaming.service, ADR-0022 §7) con validación sintáctica (systemd-analyze verify) y test de artefacto (tests/architecture/test_deploy_artifacts.py). La ACTIVACIÓN en producción (systemctl enable --now) requiere el host OrangeHouse real y queda como GAP.
+    PARTE 1 (HECHO): unit systemd del streaming versionada (deploy/systemd/ocm-streaming.service, ADR-0022 §7), validación sintáctica systemd-analyze verify PASS + test_deploy_artifacts (15 tests).
+    PARTE 2 (HECHO, artifact digest ADR-0037): Dockerfile de producción CORREGIDO (uv sync --no-dev --system era inválido en uv 0.11.14 — build roto; ahora UV_PROJECT_ENVIRONMENT=/usr/local + COPY packages/apps/ocm/shared para el remap editable). Job artifact-build en ocm-ci.yml (push main): build + config digest {{.Id}} + upload artifact inmutable. deploy_ocm.sh --verify-artifact: verifica digest antes de deploy (ACCEPT/REJECT validado end-to-end).
+    HALLAZGOS REALES (2026-08-19): (1) docker save | sha256sum NO es determinista (tar con metadatos variables) → se usa config digest; (2) docker build NO es reproducible (pip/uv layers no deterministas) → el digest solo es verificable si build y deploy ocurren en el mismo contexto; (3) 0 self-hosted runners en OrangeHouse → ocm-cd.yml corre en GitHub-hosted runner, NO en el host de producción.
   pruebas:
-  - 'deploy/systemd/ocm-streaming.service versionada; systemd-analyze verify → PASS; test_deploy_artifacts → 7 passed'
-  - 'Activación real en host: GAP (requiere acceso root al host OrangeHouse)'
-  adr_relacionado: ADR-0022
+  - 'deploy/systemd/ocm-streaming.service versionada; systemd-analyze verify → PASS'
+  - 'test_deploy_artifacts → 15 passed (incluye --verify-artifact positivo/negativo real + Dockerfile)'
+  - 'Dockerfile: docker build --target runtime → imagen construye; import market_data OK (2026-08-19)'
+  - 'deploy_ocm.sh --verify-artifact: digest correcto → ACCEPT exit 0; incorrecto → REJECT exit 1'
+  - 'actionlint ocm-ci.yml → exit 0'
+  adr_relacionado: ADR-0022, ADR-0037
   riesgo_residual: |
-    Bajo tras implementación: unit declarativa validada; resta activación y test de reinicio en el host real.
+    Bajo tras implementación: unit declarativa validada + mecanismo de artifact digest operativo. GAPs: (a) activación systemctl real en host OrangeHouse requiere root; (b) CD real requiere self-hosted runner o SSH (0 runners registrados); (c) build no reproducible → digest verificable solo en contexto único (build+deploy en el mismo host).
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -3013,12 +3019,14 @@ hallazgos:
       estado: HECHO
       referencia: tests/architecture/test_deploy_artifacts.py (systemd-analyze verify PASS)
     ci:
-      estado: PENDIENTE
-      referencia: activación systemctl en host OrangeHouse (GAP)
+      estado: PARCIAL
+      referencia: 'artifact-build job (push main) + --verify-artifact; activación systemctl y CD real en host OrangeHouse = GAP (0 self-hosted runners, requiere root/SSH)'
     evidencia:
       estado: HECHO
-      referencia: 'systemd-analyze verify deploy/systemd/ocm-streaming.service → PASS (2026-08-19)'
+      referencia: 'systemd-analyze verify PASS + --verify-artifact ACCEPT/REJECT + docker build OK (2026-08-19)'
     cierre:
+      estado: PARCIAL
+      referencia: 'GAP: activación systemctl real + CD en host OrangeHouse (root/SSH + self-hosted runner)'
       estado: PENDIENTE
       referencia: activación + test de reinicio en host real
 

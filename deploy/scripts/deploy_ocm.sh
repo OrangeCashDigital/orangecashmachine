@@ -10,12 +10,13 @@
 # Uso:
 #   ./deploy/scripts/deploy_ocm.sh --help
 #   ./deploy/scripts/deploy_ocm.sh --check-health        # health de servicios ya levantados
+#   ./deploy/scripts/deploy_ocm.sh --verify-artifact <sha256file>  # verifica digest del artifact (B-59)
 #   ./deploy/scripts/deploy_ocm.sh --deploy              # up -d + health + ACCEPT/ROLLBACK
 #   ./deploy/scripts/deploy_ocm.sh --rollback            # down + up -d con la imagen anterior
 #
 # Exit codes:
-#   0 = deploy ACCEPTED (o --check-health todo healthy)
-#   1 = deploy REJECTED (health falló o rollback falló)
+#   0 = deploy ACCEPTED (o --check-health todo healthy, o artifact íntegro)
+#   1 = deploy REJECTED (health falló o rollback falló o digest no coincide)
 #   2 = error de uso/argumentos
 #   3 = prerequisito ausente (docker, compose, .env)
 # ============================================================
@@ -27,6 +28,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-ocm}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
 HEALTH_TIMEOUT_S="${HEALTH_TIMEOUT_S:-60}"
+ARTIFACT_IMAGE="${ARTIFACT_IMAGE:-ocm_market_data}"
 
 # ── Utils ────────────────────────────────────────────────────
 log()  { printf '[deploy] %s\n' "$*"; }
@@ -99,6 +101,43 @@ check_health() {
   return 1
 }
 
+# ── Artifact digest (B-59, ADR-0037) ─────────────────────────
+# Verifica que el artifact construido en CI (imagen Docker) existe localmente
+# y su config digest (identidad inmutable por contenido) coincide con el
+# digest referenciado por el deploy. Inmutable: build → digest → verify → deploy.
+#
+# NOTA: se usa el config digest (`docker image inspect --format '{{.Id}}'`),
+# NO `docker save | sha256sum` — el tar de docker save incluye metadatos
+# variables y NO es reproducible entre runs (verificado 2026-08-19).
+verify_artifact() {
+  # $1 = ruta al archivo digest (contenido: "sha256:<hex>")
+  local digest_file="$1"
+  [ -f "$digest_file" ] || die "archivo digest no existe: $digest_file"
+  need docker
+
+  local expected actual
+  expected="$(tr -d '[:space:]' < "$digest_file")"
+  if [[ ! "$expected" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    die "digest con formato inválido en $digest_file: $expected"
+  fi
+
+  # La imagen debe existir localmente (build del artifact previo al deploy).
+  if ! docker image inspect "$ARTIFACT_IMAGE:latest" >/dev/null 2>&1; then
+    log "artifact_verificacion veredicto=REJECT reason=imagen_no_presente image=${ARTIFACT_IMAGE}:latest"
+    fatal "no existe la imagen ${ARTIFACT_IMAGE}:latest (¿artifact no construido?)"
+  fi
+
+  actual="$(docker image inspect "$ARTIFACT_IMAGE:latest" --format '{{.Id}}')"
+
+  if [ "$expected" = "$actual" ]; then
+    log "artifact_verificacion veredicto=ACCEPT digest=$actual"
+    return 0
+  fi
+
+  log "artifact_verificacion veredicto=REJECT expected=$expected actual=$actual"
+  fatal "artifact digest NO coincide: esperado $expected, actual $actual (refusing deploy)"
+}
+
 # ── Deploy ───────────────────────────────────────────────────
 snapshot_backup() {
   local backup_dir
@@ -159,10 +198,12 @@ OrangeCashMachine deploy (ADR-0037)
 
 Uso:
   $0 --check-health     Solo health checks de servicios levantados
+  $0 --verify-artifact <sha256file>
+                        Verifica digest del artifact (imagen local vs sha256)
   $0 --deploy           up -d + health + ACCEPT/ROLLBACK (respeta .env)
   $0 --rollback         down + up -d con la imagen anterior + health
 
-Variables: COMPOSE_FILE, COMPOSE_PROJECT, ENV_FILE, HEALTH_TIMEOUT_S
+Variables: COMPOSE_FILE, COMPOSE_PROJECT, ENV_FILE, HEALTH_TIMEOUT_S, ARTIFACT_IMAGE
 EOF
   exit 2
 }
@@ -170,6 +211,7 @@ EOF
 main() {
   case "${1:-}" in
     --check-health) need curl; need docker; check_health ;;
+    --verify-artifact) [ $# -eq 2 ] || die "--verify-artifact requiere <sha256file>"; verify_artifact "$2" ;;
     --deploy)       do_deploy ;;
     --rollback)     do_rollback ;;
     --help|-h)      usage ;;
