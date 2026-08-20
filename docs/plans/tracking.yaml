@@ -2618,42 +2618,45 @@ hallazgos:
   hallazgo_informe: F-PL-06 / F-PLC-05
   fase: F2
   prioridad: ALTA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
     tracking.yaml bloque reglas: R1..R16 con backtest + activada_en_ci (semilla SSOT); engineering_health_check.py lo valida; ADR-0020 convierte activada_en_ci en normativo
-  solucion: Evolucionar tracking.yaml reglas → policies/registry.yaml con esquema completo (id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history); extender audit_validator con M21..M25 (tests obligatorios, enforcement, dead rules, waiver expiración, ADR huérfanos)
+  solucion: |
+    Implementado (ADR-0031): policies/registry.yaml con esquema completo (16 reglas; scope, severity, owner, enforcement, mechanism, mechanism_type, tests.positive/negative, evidence, ci.job/command, master_plan, adr, status; waiver/expires soportados por esquema). audit_validator extendido con M22..M26 (tests por mechanism_type, enforcement+CI, dead rule, waivers+expiración, ADR huérfanos). Engineering health valida registry.
   pruebas:
-  - 'registry YAML parseado por audit_validator con M21..M25 verdes'
-  adr_relacionado: ADR-0020, ADR-0015
+  - 'registry real parseado por audit_validator.load_policy_registry() → 16 reglas con 15 campos (2026-08-19)'
+  - 'uv run python scripts/audit_validator.py → PASS 26 reglas mecánicas (M22..M26 incluidas)'
+  - 'tests/architecture/test_policy_registry.py → M24/M25 waiver expirado→FAIL, vigente→WARN'
+  adr_relacionado: ADR-0020, ADR-0015, ADR-0031
   riesgo_residual: |
-    Medio: sin registry formal, rules no son consumibles por agente IA ni auditables
-  fecha_cierre: null
+    Bajo: esquema completo operativo; waiver/history opcionales hasta que una regla los requiera.
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer.md F-PL-06 + F-PLC-05
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-51
     adr:
       estado: HECHO
       referencia: ADR-0031-policy-registry-yaml
     implementacion:
-      estado: PENDIENTE
-      referencia: tracking.yaml / policies/
+      estado: HECHO
+      referencia: policies/registry.yaml + scripts/audit_validator.py (M22..M26)
     tests:
-      estado: PENDIENTE
-      referencia: audit_validator M21..M25
+      estado: HECHO
+      referencia: audit_validator PASS 26 reglas + test_policy_registry.py
     ci:
-      estado: PENDIENTE
-      referencia: engineering-health
+      estado: HECHO
+      referencia: engineering-health (valida registry)
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'registry parseado → 16 reglas, 15 campos (2026-08-19)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-52
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
@@ -3014,43 +3017,44 @@ hallazgos:
   hallazgo_informe: F-PLA-03
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
     .github/workflows/codeql.yml: push + pull_request main + schedule weekly; .github/workflows/trivy.yml: push + PR + schedule weekly — NO solo semanal como afirmó F-PL-08
   solucion: |
-  Corrección documental: actualizar cualquier documento que diga "CodeQL/Trivy solo semanal/nightly" a "PR + schedule weekly"
+    Corrección documental aplicada a doc normativo: PLAN-Maestro-Ingenieria.md:540 → "CodeQL/Trivy PR+weekly (B-60)". El informe F-PLA-03 documenta la corrección. Los informes de auditoría históricos (forensic compliance) se conservan como evidencia inmutable y NO se reescriben (integridad del registro de auditoría).
   pruebas:
-  - 'grep -r "semanal\|nightly" docs/ --include="*.md" | grep -i codeql → sin resultados'
+  - 'grep -rn "solo semanal\|semanal" docs/PLAN-Maestro-Ingenieria.md → sin menciones falsas (corregido a PR+weekly)'
+  - 'codeql.yml/trivy.yml → push + pull_request + schedule weekly (verificado 2026-08-19)'
   adr_relacionado: null
   riesgo_residual: |
-    Bajo: corrección factual sin impacto operativo
-  fecha_cierre: null
+    Bajo: corrección factual aplicada a doc normativo; informes históricos conservados como registro.
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-03
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-60
     adr:
       estado: NO_APLICA
       referencia: null
     implementacion:
-      estado: PENDIENTE
-      referencia: corrección documental
+      estado: HECHO
+      referencia: PLAN-Maestro-Ingenieria.md:540 (CodeQL/Trivy PR+weekly)
     tests:
-      estado: PENDIENTE
-      referencia: grep docs
+      estado: HECHO
+      referencia: grep Plan Maestro sin afirmaciones falsas
     ci:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: codeql.yml/trivy.yml (push + PR + weekly) — sin cambio
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'triggers de codeql.yml y trivy.yml verificados (2026-08-19)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-61
   hallazgo_informe: F-PRI-01 / F-PRI-02 / F-PRI-04
