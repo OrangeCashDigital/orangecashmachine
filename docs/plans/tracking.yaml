@@ -3026,6 +3026,59 @@ hallazgos:
       estado: PENDIENTE
       referencia: null
 
+- id: B-61
+  hallazgo_informe: F-PRI-01 / F-PRI-02 / F-PRI-04
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: |
+    ADR-0031 modeló todo enforcement como guard pattern (tests.positive/negative de archivo);
+    policies/registry.yaml demuestra tres modelos reales: guard_script (R1-R4,R9-R16),
+    tool_gate (R5 coverage, R6 bandit) y absence_gate (R8). R7 tiene tests pero backtest
+    pendiente y no activada en CI. Deuda: R5-R8 sin evidencia pos/neg explícita de archivo.
+  solucion: |
+    Migración completa de R5-R8 a cobertura positiva/negativa explícita:
+    - R5 (coverage): test que verifica el umbral fail_under y la presencia del gate en CI
+    - R6 (bandit): test que verifica el job security + pre-commit hook activo
+    - R7 (parity): activar en CI (activada_en_ci: true) con backtest ok
+    - R8 (absence): test que verifica la ausencia del módulo onchain_producer (rg = 0)
+    Eliminación progresiva del waiver de R7 tras activación en CI.
+    Aceptación de evidencia verificable por ADR-0031 (M22-M26).
+  pruebas:
+  - 'test_positive_*/test_negative_* de R5-R8 en tests/ verdes'
+  - 'R7 con activada_en_ci: true y backtest: ok en tracking.yaml'
+  - 'waiver de R7 eliminado del registry (expiración consumida)'
+  adr_relacionado: ADR-0031
+  riesgo_residual: |
+    Medio: R5/R6/R8 sin test de archivo pos/neg; enforcement por CI job o ausencia
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_policy-registry-implementation_2026-08-19.md F-PRI-01
+    backlog:
+      estado: PENDIENTE
+      referencia: B-61
+    adr:
+      estado: HECHO
+      referencia: ADR-0031-policy-registry-yaml
+    implementacion:
+      estado: PENDIENTE
+      referencia: tests pos/neg R5-R8 + activación R7 en CI
+    tests:
+      estado: PENDIENTE
+      referencia: test positivo/negativo explícitos por regla
+    ci:
+      estado: PENDIENTE
+      referencia: activar R7 (activada_en_ci) en ocm-ci.yml
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+
 mediciones_f0:
   fecha: '2026-08-06'
   commit: eaca97a
