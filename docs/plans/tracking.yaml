@@ -2631,7 +2631,7 @@ hallazgos:
       estado: PENDIENTE
       referencia: B-51
     adr:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: ADR-0031-policy-registry-yaml
     implementacion:
       estado: PENDIENTE
@@ -2672,7 +2672,7 @@ hallazgos:
       estado: PENDIENTE
       referencia: B-52
     adr:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: ADR-0032-ai-agent-governance
     implementacion:
       estado: PENDIENTE

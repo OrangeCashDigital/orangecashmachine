@@ -1,6 +1,6 @@
 # ADR-0032: AI Agent Governance (branch protection, CODEOWNERS, evidence hash, waiver/expiración)
 
-**Estado:** Propuesto
+**Estado:** Aceptado (2026-08-19)
 **Fecha:** 2026-08-19
 **Bounded context(s) afectado(s):** ocm (plataforma), shared, packages (todos), CI/CD
 

@@ -1,6 +1,6 @@
 # ADR-0031: Policy Registry YAML (extensión tracking.yaml + M21..M25)
 
-**Estado:** Propuesto
+**Estado:** Aceptado (2026-08-19)
 **Fecha:** 2026-08-19
 **Bounded context(s) afectado(s):** ocm (plataforma), shared, packages (todos)
 
