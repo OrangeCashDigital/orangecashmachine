@@ -1,7 +1,7 @@
 {
   "files": {
     ".github/CODEOWNERS": "e261b227fcb8321b777240aeda3a0482624107617db73fe628176b2a78031d38",
-    ".github/workflows/ocm-ci.yml": "bd80a472d6eed522cd7aa163f2701ac9206119b9e680f36d05662938cda814d3",
+    ".github/workflows/ocm-ci.yml": "66e32185021245988d4e1f417c80b0ca690d632513e4466620e0d195a2415075",
     "policies/registry.yaml": "afca4ef07aaae0a7ce279bd2ae1e2f985b0311bb781ba405b732d2d8e6ead6a5",
     "scripts/app_layer_guard.py": "f317cccff32339b1c29eb6e2f6a4b1be7d7ae5fa5c5004a5f1594d9cc8f12be4",
     "scripts/audit_validator.py": "d38a6d9f453c4568507ddd8cf33f9a9848bc65ef54058326d333937df0149ca5",

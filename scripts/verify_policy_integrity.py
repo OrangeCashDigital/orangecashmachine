@@ -96,9 +96,7 @@ def write_manifest(hashes: dict[str, str]) -> None:
         ),
         "files": hashes,
     }
-    MANIFEST_PATH.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def verify(manifest: dict | None) -> list[str]:
