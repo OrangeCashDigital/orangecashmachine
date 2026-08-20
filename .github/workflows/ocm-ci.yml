@@ -387,3 +387,45 @@ jobs:
         # Veredicto único PASS/BLOCK de aptitud para producción, consumible por
         # agente IA. gate-dev excluye G10 (B-15 EN_CURSO, exige F4).
         run: uv run python scripts/check_production_gates.py --mode gate-dev --json
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 5b: policy-change (ADR-0032 §5 — separación de PRs)
+  # Cualquier PR que toque rutas de CODEOWNERS (guards, tests de architecture,
+  # registry, tracking, ADRs, workflows) DEBE llevar el label `policy-change`.
+  # Sin label → bloqueo. Evita que cambios de policy se mezclen con cambios de
+  # código en un mismo PR sin señal explícita de revisión de gobernanza.
+  # Solo aplica a pull_request (no a push de main).
+  # ──────────────────────────────────────────────────────────────────────────
+  policy-change:
+    name: Policy change gate (label)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect policy path changes
+        id: paths
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            policy:
+              - 'scripts/*_guard.py'
+              - 'scripts/audit_validator.py'
+              - 'scripts/engineering_health_check.py'
+              - 'scripts/verify_policy_integrity.py'
+              - 'policies/**'
+              - 'tests/architecture/**'
+              - 'docs/plans/tracking.yaml'
+              - 'docs/architecture/decisions/**'
+              - 'docs/governance/**'
+              - '.github/workflows/**'
+              - '.github/CODEOWNERS'
+
+      - name: Verify policy-change label
+        if: steps.paths.outputs.policy == 'true'
+        run: |
+          if [ "${{ contains(github.event.pull_request.labels.*.name, 'policy-change') }}" != "true" ]; then
+            echo "::error::Este PR modifica rutas de policy (CODEOWNERS). Requiere el label 'policy-change' y revisión de CODEOWNERS (ADR-0032 §5)."
+            exit 1
+          fi
+          echo "policy-change label presente — OK"

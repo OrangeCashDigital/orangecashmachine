@@ -44,6 +44,7 @@ PROTECTED_FILES = [
     "scripts/domain_subprocess_guard.py",
     "scripts/audit_validator.py",
     "scripts/engineering_health_check.py",
+    "scripts/verify_policy_integrity.py",
     "policies/registry.yaml",
     ".github/workflows/ocm-ci.yml",
     ".github/CODEOWNERS",

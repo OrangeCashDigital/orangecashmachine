@@ -1,12 +1,13 @@
 {
   "files": {
-    ".github/CODEOWNERS": "7f899037fd7ac4662c0a5171361dac1ee38a04323feb650c63d09caee2535a6f",
-    ".github/workflows/ocm-ci.yml": "10b4ee86378f4d84636e00286907ef5ceb8cce7c87983f798e64f5de854f74ea",
+    ".github/CODEOWNERS": "e261b227fcb8321b777240aeda3a0482624107617db73fe628176b2a78031d38",
+    ".github/workflows/ocm-ci.yml": "bd80a472d6eed522cd7aa163f2701ac9206119b9e680f36d05662938cda814d3",
     "policies/registry.yaml": "afca4ef07aaae0a7ce279bd2ae1e2f985b0311bb781ba405b732d2d8e6ead6a5",
     "scripts/app_layer_guard.py": "f317cccff32339b1c29eb6e2f6a4b1be7d7ae5fa5c5004a5f1594d9cc8f12be4",
     "scripts/audit_validator.py": "d38a6d9f453c4568507ddd8cf33f9a9848bc65ef54058326d333937df0149ca5",
     "scripts/domain_subprocess_guard.py": "459cd395f45e90f2ad1aabf91ee16b5aae3f8613b5687c3be7f21374cd1c9e81",
-    "scripts/engineering_health_check.py": "675cab51a3238412b06d98a202bf9fdbe7e5419de1ab670e2e65822d4aef80dc"
+    "scripts/engineering_health_check.py": "675cab51a3238412b06d98a202bf9fdbe7e5419de1ab670e2e65822d4aef80dc",
+    "scripts/verify_policy_integrity.py": "bc8bd40347c0694f1bfc3d67527cefc9aa14698892d14d0a3d0dceb480f064d0"
   },
   "generated_by": "verify_policy_integrity.py --update",
   "note": "Registro de confianza de ARCHIVOS PROTEGIDOS (ADR-0032). NO es frontera de confianza por s\u00ed solo; el enforcement real es branch protection + CODEOWNERS en GitHub. Verificar solo en CI policy-gate; --update solo por humano local.",

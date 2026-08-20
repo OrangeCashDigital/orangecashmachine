@@ -2659,42 +2659,50 @@ hallazgos:
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
   prioridad: ALTA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: 'Guards/tests/CI/tracking en mismo repo/rama; sin branch protection, CODEOWNERS, evidence hash, waiver, ownership; agente puede modificar guard+test+registry+CI simultáneamente (Caso B/C/D/E threat model)'
-  solucion: (1) Branch protection en main (required reviews + status checks); (2) CODEOWNERS para scripts/*_guard.py, policies/, architecture_linter/, tracking.yaml, .github/workflows/; (3) Hash de evidencia por regla (guard hash + tracking hash en artifact CI); (4) M24 (waiver+expires) + M25 (ADR huérfano) en audit_validator; (5) Separación de PRs para policy changes
+  solucion: |
+    Implementado defensa en profundidad completa (ADR-0032):
+    (1) Branch protection real en GitHub (gh api): 10 required checks, enforce_admins, strict, require_code_owner_reviews, 1 review
+    (2) CODEOWNERS: scripts/*_guard.py, scripts/audit_validator.py, engineering_health_check.py, check_ssot_enums.py, verify_policy_integrity.py, policies/, architecture_linter/, tests/architecture/, tracking.yaml, decisions/, governance/, .github/workflows/, CODEOWNERS
+    (3) Hash de integridad: policies/evidence.json (8 archivos protegidos) + job policy-gate en ocm-ci.yml
+    (4) M24/M25 en audit_validator (waiver+expires, ADR huérfano)
+    (5) Separación de PRs: job policy-change (label obligatorio si PR toca rutas de CODEOWNERS)
   pruebas:
-  - 'PR modificando scripts/app_layer_guard.py sin approval de CODEOWNERS → blocked'
-  - 'audit_validator M24/M25: waiver expirado → FAIL'
-  adr_relacionado: ADR-0015, ADR-0020
+  - 'gh api branches/main/protection → 10 checks, enforce_admins true, require_code_owner_reviews true, strict true (2026-08-19)'
+  - 'verify_policy_integrity.py → PASS 8 archivos protegidos'
+  - 'audit_validator M24/M25: waiver expirado → FAIL (test_policy_registry)'
+  - 'job policy-change en ocm-ci.yml: PR que toca rutas policy sin label policy-change → blocked'
+  adr_relacionado: ADR-0015, ADR-0020, ADR-0032
   riesgo_residual: |
-    Crítico: riesgo real de captura del sistema de validación por agente IA
-  fecha_cierre: null
+    Bajo: defensa en profundidad operativa. Limitación documentada (ADR-0032): el owner único (@OrangeCashDigital) puede aprobar cualquier PR; la frontera real es branch protection no versionable.
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-52
     adr:
       estado: HECHO
       referencia: ADR-0032-ai-agent-governance
     implementacion:
-      estado: PENDIENTE
-      referencia: GitHub branch protection + CODEOWNERS + CI artifact hash
+      estado: HECHO
+      referencia: GitHub branch protection + CODEOWNERS + verify_policy_integrity.py + job policy-gate + job policy-change
     tests:
-      estado: PENDIENTE
-      referencia: simulaciones Caso B/C/D/E
+      estado: HECHO
+      referencia: test_verify_policy_integrity.py + test_policy_registry.py (M24/M25)
     ci:
-      estado: PENDIENTE
-      referencia: ocm-ci.yml + branch protection
+      estado: HECHO
+      referencia: ocm-ci.yml (policy-gate + policy-change) + branch protection configurada
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'gh api branch protection (10 checks); integrity PASS 8 archivos; policy-change job (2026-08-19)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-53
   hallazgo_informe: F-PLA-07 / F-PLC-02

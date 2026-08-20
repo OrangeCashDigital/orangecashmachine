@@ -16,8 +16,10 @@
 /scripts/audit_validator.py            @OrangeCashDigital
 /scripts/engineering_health_check.py   @OrangeCashDigital
 /scripts/check_ssot_enums.py           @OrangeCashDigital
+/scripts/verify_policy_integrity.py    @OrangeCashDigital
 /policies/                             @OrangeCashDigital
 /architecture_linter/                  @OrangeCashDigital
+/tests/architecture/                   @OrangeCashDigital
 /docs/plans/tracking.yaml              @OrangeCashDigital
 /docs/architecture/decisions/          @OrangeCashDigital
 /docs/governance/                      @OrangeCashDigital
