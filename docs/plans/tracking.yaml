@@ -2591,7 +2591,7 @@ hallazgos:
   cadena:
     hallazgo:
       estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02 + F-PLA-06
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18_audit.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02 + F-PLA-06
     backlog:
       estado: HECHO
       referencia: B-50

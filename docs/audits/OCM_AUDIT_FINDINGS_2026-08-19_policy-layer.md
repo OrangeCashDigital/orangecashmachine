@@ -35,7 +35,7 @@ Evidence:
 - Reglas FAIL: ARCH-001 (multi-owner posición), ARCH-002 (divergencia semántica), ARCH-004 (balance real), ARCH-005 (freshness), ARCH-007 (homónimos), ARCH-008 (stub WSTradesSource), ARCH-010 (estado mutable duplicado)
 - Reglas PASS: ARCH-003 (reconciliación órdenes), ARCH-006 (sin ports huérfanos), ARCH-009 (capas)
 - Golden fija el estado esperado con FAIL/PARTIAL (deuda legítima, no-regresión): `tests/architecture_linter/test_golden.py` — 4 passed
-- Ya registrado: F-ARCH-01..06 en `OCM_AUDIT_FINDINGS_2026-08-18.md` (misma deuda)
+- Ya registrado: F-ARCH-01..06 en `OCM_AUDIT_FINDINGS_2026-08-18_audit.md` (misma deuda)
 
 Impact:
 - No bloquea merge (el linter no es gate CI — ver F-CI-03 en registro 2026-08-18); la deuda es conocida, gobernada por golden y en backlog (B-21, ADR-0021/0030).
@@ -67,7 +67,7 @@ Evidence:
 - aiohttp 3.14.1 → PYSEC-2026-3545 (fix 3.14.3), PYSEC-2026-3546 (fix 3.14.2), PYSEC-2026-3547 (fix 3.14.2)
 - cryptography 49.0.0 → PYSEC-2026-3552 (fix 50.0.0)
 - Los 2 ignores del risk-accept documentado (2026-08-03) no cubren estas 4 vulns
-- Ya registrado: F-CI-01 en `OCM_AUDIT_FINDINGS_2026-08-18.md` (misma causa raíz)
+- Ya registrado: F-CI-01 en `OCM_AUDIT_FINDINGS_2026-08-18_audit.md` (misma causa raíz)
 
 Impact:
 - Gate de seguridad de CI rojo (merge bloqueado); superficie de red HTTP (aiohttp) y crypto (cryptography) sin mitigar ni risk-accept formal.
@@ -97,7 +97,7 @@ Source: `.github/workflows/yamllint.yml` / `deploy/monitoring/alerts.yml`
 Evidence:
 - `uvx yamllint -c .yamllint .` → exit 1
 - `deploy/monitoring/alerts.yml:66:162` — error `new-line-at-end-of-file`
-- Ya registrado: F-CI-02 en `OCM_AUDIT_FINDINGS_2026-08-18.md` (mismo archivo/línea)
+- Ya registrado: F-CI-02 en `OCM_AUDIT_FINDINGS_2026-08-18_audit.md` (mismo archivo/línea)
 
 Impact:
 - Job de CI rojo; brecha menor de higiene de archivo.
@@ -159,7 +159,7 @@ Source: `pyproject.toml`
 Evidence:
 - `pyproject.toml:100` → `ccxt==4.5.70` (valor vigente) vs comentario `:97` "pinneado en 4.3.58" (obsoleto)
 - `AGENTS.md` cita `ccxt==4.3.58` como pin
-- Ya registrado: F-GOV-02 en `OCM_AUDIT_FINDINGS_2026-08-18.md` (drift de documentación de ccxt)
+- Ya registrado: F-GOV-02 en `OCM_AUDIT_FINDINGS_2026-08-18_audit.md` (drift de documentación de ccxt)
 
 Impact:
 - Riesgo de bump incorrecto: un agente/ingeniero que confíe en el comentario fijaría 4.3.58, degradando la resolución actual.
