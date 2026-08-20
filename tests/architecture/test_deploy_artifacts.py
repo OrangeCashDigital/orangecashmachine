@@ -71,10 +71,13 @@ def test_deploy_script_artifact_verify_positive_negative() -> None:
     res = subprocess.run(["docker", "version"], capture_output=True, text=True)
     if res.returncode != 0:
         pytest.skip("docker no disponible")
-    if subprocess.run(
-        ["docker", "image", "inspect", "ocm_market_data:latest"],
-        capture_output=True,
-    ).returncode != 0:
+    if (
+        subprocess.run(
+            ["docker", "image", "inspect", "ocm_market_data:latest"],
+            capture_output=True,
+        ).returncode
+        != 0
+    ):
         pytest.skip("imagen ocm_market_data:latest no construida localmente")
 
     digest = subprocess.run(
@@ -108,9 +111,7 @@ def test_dockerfile_builds_with_valid_uv_flag() -> None:
     # Verificado 2026-08-19: `uv sync --no-dev --system` falla en uv 0.11.14
     # (flag --system removida). El Dockerfile debe usar UV_PROJECT_ENVIRONMENT.
     dockerfile = (ROOT / "Dockerfile").read_text()
-    assert "--system" not in dockerfile, (
-        "Dockerfile no debe usar `uv sync --system` (flag removida en uv 0.11.14)"
-    )
+    assert "--system" not in dockerfile, "Dockerfile no debe usar `uv sync --system` (flag removida en uv 0.11.14)"
     assert "UV_PROJECT_ENVIRONMENT=/usr/local" in dockerfile, (
         "Dockerfile debe instalar deps en /usr/local via UV_PROJECT_ENVIRONMENT"
     )
@@ -145,9 +146,7 @@ def test_systemd_unit_verify_syntax() -> None:
         capture_output=True,
         text=True,
     )
-    assert res.returncode == 0, (
-        f"systemd-analyze verify falló:\n{res.stdout}\n{res.stderr}"
-    )
+    assert res.returncode == 0, f"systemd-analyze verify falló:\n{res.stdout}\n{res.stderr}"
 
 
 def test_cd_workflow_no_longer_placeholder() -> None:
@@ -177,11 +176,7 @@ def test_grafana_dashboard_json_valid_and_real_metrics() -> None:
     assert dash.is_file(), "dashboard ocm_pipeline.json debe existir (B-58)"
     data = json.loads(dash.read_text())
     assert data["title"] == "OCM Pipeline"
-    exprs = [
-        t["expr"]
-        for panel in data["panels"]
-        for t in panel.get("targets", [])
-    ]
+    exprs = [t["expr"] for panel in data["panels"] for t in panel.get("targets", [])]
     assert any("ocm_pipeline_last_run_timestamp" in e for e in exprs)
     assert any("ocm_kafka_events_published_total" in e for e in exprs)
     assert any("ocm_silver_freshness_seconds" in e for e in exprs)
