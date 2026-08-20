@@ -1,10 +1,10 @@
 # OCM — Autonomous Agent Audit Protocol (`AUDIT_PROTOCOL.md`)
 
-**Versión:** 2.1 (Audit Tooling Determinista — M1..M20)
+**Versión:** 2.2 (Audit Tooling Determinista — M1..M26)
 **Autoridad Normativa:** Plan Maestro de Ingeniería (`docs/PLAN-Maestro-Ingenieria.md`) y Governance Oficial (`docs/architecture/GOVERNANCE.md`).  
 **Aplicabilidad:** Obligatorio para cualquier agente de IA (`Gemini`, `Claude`, `Codex`, `DeepSeek`, `OpenCode`, etc.) que reciba instrucciones de auditar el repositorio OrangeCashMachine (OCM).
 
-> **Cambio normativo (v2.1):** El sistema de auditoría añade un validador mecánico ejecutable — `scripts/audit_validator.py` (reglas M1..M20) — que debe ejecutarse ANTES de cualquier juicio de LLM (`MACHINE CHECKS FIRST. LLM JUDGMENT SECOND.`). Se definen comandos canónicos y un bloque de reproducibilidad obligatorio. Las reglas M1..M20 eliminan ambigüedad mecánica; el LLM queda restringido a las reglas L1..L4 (juicio). Ver §Q–§T.
+> **Cambio normativo (v2.1):** El sistema de auditoría añade un validador mecánico ejecutable — `scripts/audit_validator.py` (reglas M1..M26) — que debe ejecutarse ANTES de cualquier juicio de LLM (`MACHINE CHECKS FIRST. LLM JUDGMENT SECOND.`). Se definen comandos canónicos y un bloque de reproducibilidad obligatorio. Las reglas M1..M26 eliminan ambigüedad mecánica; el LLM queda restringido a las reglas L1..L4 (juicio). Ver §Q–§T.
 
 ---
 
@@ -128,7 +128,7 @@ Antes de declarar `AUDITORÍA TERMINADA`, el agente debe verificar:
 
 ## Q. Rule Classification (Clasificación de Reglas: Máquina vs LLM)
 
-### M1..M20 — Reglas MECÁNICAS (validación ejecutable en `scripts/audit_validator.py`)
+### M1..M26 — Reglas MECÁNICAS (validación ejecutable en `scripts/audit_validator.py`)
 
 | Regla | Descripción | Validación |
 |---|---|---|
@@ -152,6 +152,12 @@ Antes de declarar `AUDITORÍA TERMINADA`, el agente debe verificar:
 | M18 | Consistencia severidad | misma severidad en informe y registro |
 | M19 | Consistencia clasificación | misma clasificación en informe y registro |
 | M20 | Control counts | Σ filas de la matriz de controles = total declarado; FAIL no genera NUEVO sin dedup |
+| M21 | Naming canónico en docs/audits | todo `*.md` en `docs/audits/` cumple `AUDIT_OCM_<slug>_<date>[_<NN>].md` o `OCM_AUDIT_FINDINGS_<date>_<slug>[_<NN>].md` |
+| M22 | Policy Registry: tests según `mechanism_type` | `guard_script`/`import_linter` exigen `tests.positive`+`tests.negative` resolubles (AST); `tool_gate` exige `ci.job`+`ci.command`; `absence_gate` exige `evidence`; con waiver → WARN, sin waiver → FAIL |
+| M23 | Policy Registry: `enforcement` + CI | enum `blocking\|warning\|informational`; `blocking` exige gate de CI (`ci.job`+`ci.command`), salvo `absence_gate` |
+| M24 | Policy Registry: regla muerta | `DEPRECATED` exige `absence_gate` y prohibe waiver; `status` ∈ `ACTIVE\|DEPRECATED` |
+| M25 | Policy Registry: semántica de waiver | `allowed:true` + `expires` ISO + `motivo` + `adr` autorizante + `ticket` en `tracking.yaml`; expirado → FAIL; vigente → WARN |
+| M26 | Policy Registry: ADRs existentes | ADR referenciado en registry tiene archivo en `docs/architecture/decisions/` |
 
 **Ejecución:** `uv run python scripts/audit_validator.py [--register ...] [--report ...] [--golden ...]` — exit 0 = PASS, 1 = FAIL, 2 = error de ejecución.
 
@@ -202,7 +208,7 @@ Objetivo: `mismo commit + mismo protocolo + mismas herramientas + mismos comando
 
 ## T. Audit Tooling (Tooling de Auditoría)
 
-- **`scripts/audit_validator.py`** — validador mecánico M1..M20 (stdlib + pyyaml). Referencia de implementación: `scripts/engineering_health_check.py`.
+- **`scripts/audit_validator.py`** — validador mecánico M1..M26 (stdlib + pyyaml). Referencia de implementación: `scripts/engineering_health_check.py`.
 - **`tests/architecture/test_audit_validator.py`** — 13 tests que demuestran FAIL en cada violación y PASS en estados válidos (golden con FAIL/PARTIAL incluido).
 - El tooling NO decide política (severidad definitiva, qué paper se adopta, gate de CI). Eso queda para Decisión Humana (§N).
 
@@ -213,3 +219,4 @@ Objetivo: `mismo commit + mismo protocolo + mismas herramientas + mismos comando
 | 1.0 | 2026-08-18T21:53 | Creación del protocolo de auditoría de agentes | Base normativa |
 | 2.0 | 2026-08-18T22:06 | Knowledge Governance Integration (§B: jerarquía 5 niveles + cadena de adopción) | Jerarquía y taxonomía cerradas |
 | 2.1 | 2026-08-18 | Audit Tooling Determinista: validador M1..M20 (§Q), comandos canónicos (§R), bloque de reproducibilidad (§S), tooling (§T) | Reduce divergencia entre modelos; elimina ambigüedad mecánica |
+| 2.2 | 2026-08-19 | Policy Registry (ADR-0031): reglas M22..M26 (§Q) — tests por mechanism_type, enforcement+CI, regla muerta, semántica de waiver, ADR huérfano | Cierra gaps de enforcement del Policy Registry; renumeración por M21 ocupado |
