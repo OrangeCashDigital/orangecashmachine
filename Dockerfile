@@ -19,7 +19,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY pyproject.toml README.md .
+COPY pyproject.toml README.md ./
 COPY packages ./packages
 COPY apps ./apps
 COPY ocm ./ocm
