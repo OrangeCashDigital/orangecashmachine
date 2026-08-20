@@ -33,13 +33,22 @@ observability:
 # En producción setear como variable del sistema, no como default en YAML.
 # DEPRECATED: OCM_DATA_LAKE_PATH ya no es la variable canónica.
 
+# Exchanges: en producción se controlan por exchanges/*.yaml + override de entorno
+# (mecanismo documentado en config/env/test.yaml). El canary streaming (F2.6b)
+# consume bybit (config/market_data/feeds.yaml) y AppConfig.validate_exchanges
+# exige >=1 exchange habilitado. Credenciales via BYBIT_API_KEY/BYBIT_API_SECRET
+# (nunca en archivos) -- sin ellas, fail-fast claro en produccion (Caso B).
+exchanges:
+  bybit:
+    enabled: true
+
 integrations:
   redis:
     host: ${oc.env:REDIS_HOST,redis}
     db: ${oc.env:REDIS_DB,1}    # SSOT: alineado con base.yaml y .env
 
   kafka:
-    enabled: ${oc.env:KAFKA_ENABLED,false}
+    enabled: ${oc.env:KAFKA_ENABLED,true}     # F-031: PRODUCTION_REQUIRES_KAFKA_PUBLISHER exige true en prod
     bootstrap_servers: ${oc.env:KAFKA_BOOTSTRAP_SERVERS,kafka:9092}
 
   postgres:
