@@ -2711,42 +2711,45 @@ hallazgos:
   hallazgo_informe: F-PLA-07 / F-PLC-02
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
-    Búsqueda exhaustiva: 0 eval/exec, 0 pickle/yaml.load, 0 shell=True, 2 subprocess (infra), 0 os.environ en domain/app, 4 random (jitter legítimo), 3 hashlib (config hashing), 2 sqlite (parametrizados), 2 http (adapters/obs), 0 logging secrets. Bandit 0 Med/High; CodeQL PR+weekly; Gitleaks PR; Trivy PR+weekly. Sin gap material seguridad.
-  solucion: NO adoptar Semgrep como blocking; adoptar opcionalmente como non-blocking (CLI, ~500ms, reglas YAML en policies/semgrep/) para valor preventivo arquitectura (imports prohibidos, os.environ, crypto, logging secrets, APIs deprecated)
+    Búsqueda exhaustiva: 0 eval/exec, 0 pickle/yaml.load, 0 shell=True, 2 subprocess (infra), 0 os.environ en domain/app, 4 random (jitter legítimo), 3 hashlib (config hashing), 2 sqlite (parametrizados), 2 http (adapters/obs), 0 logging secrets. Bandit 0 Med/High; CodeQL PR+weekly; Gitleaks PR; Trivy PR+weekly. Sin gap material seguridad. Decisión previa documentada: AUDIT_OCM_governance-integration-external_2026-08-17 §Semgrep → NO ADOPTAR (redundante con architecture_linter ARCH-001..010 + CodeQL).
+  solucion: |
+    Decisión tomada (2026-08-17, gobernanza): NO ADOPTAR Semgrep ni como blocking ni non-blocking — architecture_linter (AST, stdlib-only, ARCH-001..010) ya cubre invariantes específicos de OCM y CodeQL cubre seguridad genérica; Semgrep sería un tercer motor AST redundante. Confirmado con evidencia reproducible: semgrep no está en deps ni CI, sin gap material de seguridad (búsqueda exhaustiva).
   pruebas:
-  - 'semgrep --config=policies/semgrep/ . → 0 violations en código actual; CI job architecture verde'
+  - 'AUDIT_OCM_governance-integration-external_2026-08-17.md:35 → Semgrep NO ADOPTAR (documentado)'
+  - 'rg semgrep pyproject.toml .github/workflows/ → sin adopción (0 hits)'
+  - 'búsqueda exhaustiva de patrones inseguros → sin gap material (Bandit 0 Med/High)'
   adr_relacionado: null
   riesgo_residual: |
-    Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material
-  fecha_cierre: null
+    Bajo: sin Semgrep, el espacio de invariantes AST queda cubierto por architecture_linter + CodeQL; no hay gap material de seguridad.
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-07 + F-PLC-02
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-53
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (Semgrep adoption)
+      estado: NO_APLICA
+      referencia: 'decisión NO ADOPTAR (gobernanza 2026-08-17), sin ADR'
     implementacion:
-      estado: PENDIENTE
-      referencia: policies/semgrep/ (opcional)
+      estado: HECHO
+      referencia: 'decisión NO ADOPTAR Semgrep (blocking ni non-blocking)'
     tests:
-      estado: PENDIENTE
-      referencia: semgrep clean
+      estado: HECHO
+      referencia: 'búsqueda exhaustiva patrones inseguros → sin gap material'
     ci:
-      estado: PENDIENTE
-      referencia: architecture job (non-blocking)
+      estado: HECHO
+      referencia: 'semgrep ausente de CI/deps (0 hits)'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'AUDIT_OCM_governance-integration-external_2026-08-17.md:35'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-54
   hallazgo_informe: F-PLA-08 / F-PLC-03 / F-PLC-08
@@ -2797,43 +2800,45 @@ hallazgos:
   hallazgo_informe: F-PLC-04
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: |
     AST Guards R11..R16: scripts + tests pos/neg + backtest + CI jobs, PERO sin Rule ID estable, scope declarativo, severity, ownership, evidence estructurada, waiver/expiración, ADR declarativo, estado (ACTIVE/DEPRECATED), reporting/compliance
   solucion: |
-  Formalizar AST Guards como policy layer con metadatos completos: migrar R11..R16 a policies/ YAML + Semgrep rules; añadir owner, severity, enforcement, tests paths, evidence schema, waiver, expires, ADR ref, status, history; generar compliance report nightly
+    Implementado vía ADR-0031 (B-51): R11..R16 migrados a policies/registry.yaml con metadatos completos (id, name, description, scope, severity, owner, enforcement, mechanism, mechanism_type, tests.positive/negative, evidence, ci.job/command, master_plan, adr, status ACTIVE; waiver/expires/history soportados por esquema). audit_validator M22..M26 validan el registry. Semgrep descartado (B-53). Compliance report nightly queda en B-56 (CI stages).
   pruebas:
-  - 'registry parseable por audit_validator con M21..M25; compliance report nightly generado'
-  adr_relacionado: ADR-0015, ADR-0020
+  - 'policies/registry.yaml → R11..R16 con esquema completo (verificado 2026-08-19)'
+  - 'uv run python scripts/audit_validator.py → PASS 26 reglas (M22..M26 incluidas)'
+  - 'tests/architecture/test_policy_registry.py → waiver expirado→FAIL, vigente→WARN'
+  adr_relacionado: ADR-0015, ADR-0020, ADR-0031
   riesgo_residual: |
-    Medio: sin metadatos, guards son scripts operacionales, no policy layer normativa
-  fecha_cierre: null
+    Bajo: metadatos completos en registry; compliance report nightly pendiente de B-56.
+  fecha_cierre: '2026-08-19'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-04
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-55
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (AST Guards formalization)
+      estado: HECHO
+      referencia: ADR-0031-policy-registry-yaml
     implementacion:
-      estado: PENDIENTE
-      referencia: policies/ + audit_validator M21..M25
+      estado: HECHO
+      referencia: 'R11..R16 en policies/registry.yaml con esquema completo'
     tests:
-      estado: PENDIENTE
-      referencia: guard tests pos/neg + backtest
+      estado: HECHO
+      referencia: 'audit_validator M22..M26 PASS + test_policy_registry.py'
     ci:
-      estado: PENDIENTE
-      referencia: app-guard / domain-guard
+      estado: HECHO
+      referencia: engineering-health valida registry
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'registry parseado → 16 reglas, 15 campos (2026-08-19)'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: '2026-08-19'
 
 - id: B-56
   hallazgo_informe: F-PLC-07
