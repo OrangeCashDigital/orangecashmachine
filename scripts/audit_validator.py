@@ -28,6 +28,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Sequence
 
@@ -172,6 +173,7 @@ class AuditContext:
     tracking: Path
     adrs_dir: Path
     golden: Path | None
+    registry: Path = field(default_factory=lambda: ROOT / "policies" / "registry.yaml")
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
@@ -726,8 +728,104 @@ def m21_canonical_audit_filenames(ctx: AuditContext) -> None:
         )
 
 
+def load_registry(path: Path) -> dict | None:
+    """Carga policies/registry.yaml; None si no existe o no parsea."""
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    except yaml.YAMLError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def m22_enforcement_ci_verification(ctx: AuditContext) -> None:
+    """M22 -- enforcement obligatorio + verificacion contra CI real."""
+    data = load_registry(ctx.registry)
+    if data is None:
+        ctx.err("M22", f"{ctx.registry}: no existe o no parsea")
+        return
+    for r in data.get("rules") or []:
+        rid = r.get("id", "?")
+        enforcement = r.get("enforcement")
+        if enforcement not in ("blocking", "warning", "informational"):
+            ctx.err("M22", f"{rid}: enforcement ausente o invalido ({enforcement!r})")
+            continue
+        if enforcement == "blocking":
+            ci = r.get("ci") or {}
+            job, command = ci.get("job"), ci.get("command")
+            if not job or not command:
+                ctx.err("M22", f"{rid}: enforcement=blocking requiere ci.job y ci.command")
+                continue
+            wf_dir = ROOT / ".github" / "workflows"
+            found = wf_dir.is_dir() and any(job in wf.read_text(encoding="utf-8") for wf in wf_dir.glob("*.yml"))
+            if not found:
+                ctx.err("M22", f"{rid}: ci.job {job!r} no aparece en ningun workflow de .github/workflows/")
+
+
+def m23_dead_rule_detection(ctx: AuditContext) -> None:
+    """M23 -- dead rule: evidence.path referenciado no existe en disco."""
+    data = load_registry(ctx.registry)
+    if data is None:
+        ctx.err("M23", f"{ctx.registry}: no existe o no parsea")
+        return
+    for r in data.get("rules") or []:
+        rid = r.get("id", "?")
+        ev_path = (r.get("evidence") or {}).get("path")
+        if not ev_path:
+            ctx.err("M23", f"{rid}: sin evidence.path -- sin implementacion referenciada")
+            continue
+        if not (ROOT / ev_path).exists():
+            ctx.err("M23", f"{rid}: evidence.path {ev_path!r} no existe en disco (dead rule)")
+
+
+def m24_waiver_expiration(ctx: AuditContext) -> None:
+    """M24 -- waiver con expires ISO; expirado o sin ADR -> FAIL."""
+    data = load_registry(ctx.registry)
+    if data is None:
+        ctx.err("M24", f"{ctx.registry}: no existe o no parsea")
+        return
+    today = date.today()
+    for r in data.get("rules") or []:
+        rid = r.get("id", "?")
+        waiver = r.get("waiver") or {}
+        if not waiver.get("allowed"):
+            continue
+        expires_raw = waiver.get("expires")
+        if not expires_raw:
+            ctx.err("M24", f"{rid}: waiver.allowed=true sin expires (ISO date obligatorio)")
+            continue
+        try:
+            expires = date.fromisoformat(str(expires_raw))
+        except ValueError:
+            ctx.err("M24", f"{rid}: waiver.expires {expires_raw!r} no es fecha ISO valida")
+            continue
+        if expires < today:
+            ctx.err("M24", f"{rid}: waiver expirado ({expires_raw})")
+        if not waiver.get("adr"):
+            ctx.err("M24", f"{rid}: waiver sin adr asociado")
+
+
+def m25_orphan_adr_warning(ctx: AuditContext) -> None:
+    """M25 -- ADR en related_adrs sin ninguna regla que lo referencie -> WARNING."""
+    data = load_registry(ctx.registry)
+    if data is None:
+        ctx.err("M25", f"{ctx.registry}: no existe o no parsea")
+        return
+    referenced = {r.get("adr") for r in data.get("rules") or [] if r.get("adr")}
+    for adr in data.get("related_adrs") or []:
+        if adr not in referenced:
+            ctx.warn("M25", f"{adr}: en related_adrs pero ninguna regla lo referencia")
+
+
 ALL_RULES: Sequence[tuple[str, str, object]] = [
     ("M21", "Canonicalidad de nombres en docs/audits", m21_canonical_audit_filenames),
+    ("M22", "Enforcement + verificacion CI", m22_enforcement_ci_verification),
+    ("M23", "Dead rule detection", m23_dead_rule_detection),
+    ("M24", "Waiver expiration", m24_waiver_expiration),
+    ("M25", "ADR huerfano", m25_orphan_adr_warning),
     ("M01", "IDs únicos", m01_unique_ids),
     ("M02", "Clasificación enum", m02_classification_enum),
     ("M03", "Severidad enum", m03_severity_enum),
@@ -761,6 +859,7 @@ def resolve_defaults(args: argparse.Namespace) -> AuditContext:
         tracking=Path(args.tracking) if args.tracking else ROOT / "docs" / "plans" / "tracking.yaml",
         adrs_dir=Path(args.adrs) if args.adrs else ROOT / "docs" / "architecture" / "decisions",
         golden=golden,
+        registry=Path(args.registry) if args.registry else ROOT / "policies" / "registry.yaml",
     )
 
 
@@ -810,6 +909,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--tracking", help="tracking.yaml")
     parser.add_argument("--adrs", help="directorio de ADRs")
     parser.add_argument("--golden", help="test_golden.py para M11")
+    parser.add_argument("--registry", help="policies/registry.yaml")
     parser.add_argument("--versions", action="store_true", help="imprime versiones de herramientas canónicas y sale")
     parser.add_argument("--list-rules", action="store_true", help="imprime las reglas M1..M20 y sale")
     args = parser.parse_args(argv)
