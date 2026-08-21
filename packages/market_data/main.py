@@ -519,7 +519,7 @@ async def ready() -> JSONResponse:
     )
 
 
-@app.get("/ohlcv/{exchange}/{symbol}/{timeframe}", tags=["data"])
+@app.get("/ohlcv/{exchange}/{symbol:path}/{timeframe}", tags=["data"])
 async def get_ohlcv(
     exchange: str,
     symbol: str,
