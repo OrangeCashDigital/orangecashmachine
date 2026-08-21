@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TRACKING = ROOT / "docs" / "plans" / "tracking.yaml"
 CONFIG = ROOT / "architecture_linter" / "importlinter.toml"
 CI = ROOT / ".github" / "workflows" / "ocm-ci.yml"
+REGISTRY = ROOT / "policies" / "registry.yaml"
 
 MIN_CONTRACTS = 49
 
@@ -81,29 +82,18 @@ def check_tracking_parses() -> None:
                 if st not in ESLABON_ESTADO:
                     err(f"{h.get('id', '?')}: cadena.{slot}.estado={st!r} fuera de enum")
 
-    for r in data.get("reglas", []):
-        if r.get("backtest") not in {"ok", "pendiente", "fail"}:
-            err(f"{r.get('id', '?')}: backtest={r.get('backtest')!r} no válido")
-        if not isinstance(r.get("activada_en_ci"), bool):
-            err(f"{r.get('id', '?')}: activada_en_ci={r.get('activada_en_ci')!r} no bool")
+    # NOTA (ADR-0031): validación de reglas migrada a check_registry_parses().
+    # tracking.yaml ya no es SSOT de reglas -- ver policies/registry.yaml.
 
 
 # ---------------------------------------------------------------------------
 # 2. Coherencia interna y trazabilidad de referencias
 # ---------------------------------------------------------------------------
 def check_coherence(data: dict) -> None:
-    backlog_ids = {h["id"] for h in data.get("hallazgos", [])}
 
-    for r in data.get("reglas", []):
-        rid = r.get("id", "?")
-        if r.get("backtest") == "ok" and r.get("activada_en_ci") is not True:
-            err(f"{rid}: backtest=ok exige activada_en_ci=true")
-        if r.get("activada_en_ci") is True and r.get("backtest") != "ok":
-            err(f"{rid}: activada_en_ci=true exige backtest=ok")
-
-        hid = r.get("hallazgo", "")
-        if str(hid).startswith("B-") and hid not in backlog_ids:
-            err(f"{rid}: referencia hallazgo {hid} inexistente en backlog")
+    # NOTA (ADR-0031): coherencia backtest<->activada_en_ci retirada de aqui
+    # -- ver check_registry_parses(). La referencia regla->hallazgo NO tiene
+    # equivalente en registry.yaml (gap conocido, registrar finding).
 
     for h in data.get("hallazgos", []):
         bid = h.get("id", "?")
@@ -149,22 +139,63 @@ def check_import_contracts() -> None:
 # ---------------------------------------------------------------------------
 # 4. Cada gate de CI está respaldado por una regla activa del tracker
 # ---------------------------------------------------------------------------
-def check_ci_gates_mapped(data: dict) -> None:
-    active = [r.get("id", "?") for r in data.get("reglas", []) if r.get("activada_en_ci")]
-    if not active:
-        err("tracking.yaml: no hay reglas con activada_en_ci=true")
+def load_registry() -> dict:
+    try:
+        data = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        err(f"policies/registry.yaml no es YAML valido: {exc}")
+        return {}
+    if not isinstance(data, dict):
+        err("policies/registry.yaml no es un mapeo raiz")
+        return {}
+    return data
+
+
+REGISTRY_STATUS = {"ACTIVE", "DEPRECATED"}
+REGISTRY_ENFORCEMENT = {"blocking", "warning", "informational"}
+REGISTRY_ACTIVE_ENFORCEMENT = {"blocking", "warning"}
+
+
+def check_registry_parses(registry: dict) -> None:
+    for r in registry.get("rules", []):
+        rid = r.get("id", "?")
+        status = r.get("status")
+        enforcement = r.get("enforcement")
+        if status not in REGISTRY_STATUS:
+            err(f"{rid}: status={status!r} fuera de enum {sorted(REGISTRY_STATUS)}")
+        if enforcement not in REGISTRY_ENFORCEMENT:
+            err(f"{rid}: enforcement={enforcement!r} fuera de enum {sorted(REGISTRY_ENFORCEMENT)}")
+        if status == "ACTIVE" and enforcement in REGISTRY_ACTIVE_ENFORCEMENT:
+            ci = r.get("ci") or {}
+            if not ci.get("job"):
+                err(f"{rid}: ACTIVE + enforcement={enforcement} exige ci.job")
+
+
+def check_registry_ci_gates(registry: dict) -> None:
+    active_rules = [
+        r
+        for r in registry.get("rules", [])
+        if r.get("status") == "ACTIVE" and r.get("enforcement") in REGISTRY_ACTIVE_ENFORCEMENT
+    ]
+    if not active_rules:
+        err("policies/registry.yaml: no hay reglas ACTIVE con enforcement blocking/warning")
         return
     if not CI.exists():
         err(f"ocm-ci.yml no existe ({CI})")
         return
 
-    ci_text = CI.read_text(encoding="utf-8")
-    referenced: set[str] = set()
-    for rid in active:
-        if re.search(rf"\b{re.escape(rid)}\b", ci_text):
-            referenced.add(rid)
-    if not referenced:
-        err("ocm-ci.yml no referencia ninguna regla activa del tracker")
+    try:
+        ci_data = yaml.safe_load(CI.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        err(f"ocm-ci.yml no es YAML valido: {exc}")
+        return
+    ci_jobs = set((ci_data.get("jobs") or {}).keys())
+
+    for r in active_rules:
+        rid = r.get("id", "?")
+        job = (r.get("ci") or {}).get("job")
+        if job not in ci_jobs:
+            err(f"{rid}: ci.job={job!r} no existe como job real en ocm-ci.yml")
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +211,13 @@ def main() -> int:
             print_errors()
         return 1
 
+    registry = load_registry()
+
     check_tracking_parses()
     check_coherence(data)
     check_import_contracts()
-    check_ci_gates_mapped(data)
+    check_registry_parses(registry)
+    check_registry_ci_gates(registry)
 
     if errors:
         print(f"[EngineeringHealth] FAIL — {len(errors)} incoherencia(s):")

@@ -1,0 +1,36 @@
+[Unit]
+Description=OrangeCashMachine Market Data Platform Service (HTTP API & Ingestion Engine)
+Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0024-direccion-microservicios-market-data-trading-portfolio.md
+After=network-online.target
+Wants=network-online.target
+PartOf=ocm-market-data.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=${OCM_USER}
+WorkingDirectory=${OCM_REPO_ROOT}
+Environment=PYTHONUNBUFFERED=1
+Environment=OCM_ENV=${OCM_ENV}
+Environment=MARKET_DATA_HOST=0.0.0.0
+Environment=MARKET_DATA_PORT=${OCM_MARKET_DATA_PORT}
+Environment=KAFKA_BOOTSTRAP_SERVERS=${OCM_KAFKA_BOOTSTRAP}
+Environment=REDIS_HOST=${OCM_REDIS_HOST}
+Environment=REDIS_PORT=${OCM_REDIS_PORT}
+EnvironmentFile=${OCM_REPO_ROOT}/.env
+ExecStart=${OCM_VENV_PATH}/bin/python -m market_data.main
+Restart=on-failure
+RestartSec=15
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Hardening de proceso
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=${OCM_REPO_ROOT}/logs ${OCM_REPO_ROOT}/data_platform
+
+[Install]
+WantedBy=ocm-market-data.target

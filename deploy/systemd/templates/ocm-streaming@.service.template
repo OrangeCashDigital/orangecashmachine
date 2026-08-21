@@ -1,0 +1,33 @@
+[Unit]
+Description=OrangeCashMachine Streaming Feeds — %i (WebSocket Orderbook Canary)
+Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0022-lifecycle-proceso-realtime-feeds.md
+After=network-online.target
+Wants=network-online.target
+PartOf=ocm-market-data.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=${OCM_USER}
+WorkingDirectory=${OCM_REPO_ROOT}
+Environment=PYTHONUNBUFFERED=1
+Environment=OCM_ENV=${OCM_ENV}
+Environment=KAFKA_BOOTSTRAP_SERVERS=${OCM_KAFKA_BOOTSTRAP}
+Environment=PUSHGATEWAY_URL=${OCM_PUSHGATEWAY_URL}
+EnvironmentFile=${OCM_REPO_ROOT}/.env
+ExecStart=${OCM_VENV_PATH}/bin/streaming --env ${OCM_ENV} --exchange %i
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Hardening de proceso
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=${OCM_REPO_ROOT}/logs
+
+[Install]
+WantedBy=ocm-market-data.target

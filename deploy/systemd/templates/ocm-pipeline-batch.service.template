@@ -1,0 +1,23 @@
+[Unit]
+Description=OrangeCashMachine Batch Market Data Ingestion Pipeline (OHLCV Batch)
+Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0013-modelo-unificado-ingestion-datos.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${OCM_USER}
+WorkingDirectory=${OCM_REPO_ROOT}
+Environment=PYTHONUNBUFFERED=1
+Environment=OCM_ENV=${OCM_ENV}
+Environment=KAFKA_BOOTSTRAP_SERVERS=${OCM_KAFKA_BOOTSTRAP}
+EnvironmentFile=${OCM_REPO_ROOT}/.env
+ExecStart=${OCM_VENV_PATH}/bin/ocm env=${OCM_ENV}
+TimeoutStopSec=300
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=${OCM_REPO_ROOT}/logs ${OCM_REPO_ROOT}/data_platform

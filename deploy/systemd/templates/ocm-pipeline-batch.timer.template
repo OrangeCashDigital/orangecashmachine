@@ -1,0 +1,12 @@
+[Unit]
+Description=OrangeCashMachine Batch Market Data Ingestion Timer (Scheduled 15m)
+Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0013-modelo-unificado-ingestion-datos.md
+PartOf=ocm-market-data.target
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=ocm-market-data.target

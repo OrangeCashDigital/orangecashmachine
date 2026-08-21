@@ -1,0 +1,7 @@
+[Unit]
+Description=OrangeCashMachine Market Data Platform Services Target
+Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0014-diseno-interno-market-data.md
+Wants=ocm-streaming@bybit.service ocm-market-data.service ocm-pipeline-batch.timer
+
+[Install]
+WantedBy=multi-user.target
