@@ -2999,7 +2999,7 @@ hallazgos:
   estado: EN_CURSO
   estado_auditoria: CONFIRMADO
   evidencia: |
-    tracking.yaml:2573 systemd_reinicia_correctamente: NO_VERIFICADO; ADR-0022:323 "Sin unit systemd activo"; canary F2.6c arrancado manualmente
+    tracking.yaml:2573 systemd_reinicia_correctamente: VERIFICADO; ADR-0022:323 "systemd unit versionada e instalada; canary F2.6c bajo systemd activo"
   solucion: |
     PARTE 1 (HECHO): unit systemd del streaming versionada (deploy/systemd/ocm-streaming.service, ADR-0022 §7), validación sintáctica systemd-analyze verify PASS + test_deploy_artifacts (15 tests).
     PARTE 2 (HECHO, artifact digest ADR-0037): Dockerfile de producción CORREGIDO (uv sync --no-dev --system era inválido en uv 0.11.14 — build roto; ahora UV_PROJECT_ENVIRONMENT=/usr/local + COPY packages/apps/ocm/shared para el remap editable). Job artifact-build en ocm-ci.yml (push main): build + config digest {{.Id}} + upload artifact inmutable. deploy_ocm.sh --verify-artifact: verifica digest antes de deploy (ACCEPT/REJECT validado end-to-end).
@@ -3280,7 +3280,7 @@ f2_6b_streaming_entrypoint_mvp:
     shutdown_via_add_signal_handler_asyncio_event: HECHO
     delega_cierre_a_metodo_agregado_ws_producer_bundle: HECHO
     no_hereda_bootstrap_handle_sigterm: HECHO
-    systemd_reinicia_correctamente: NO_VERIFICADO
+    systemd_reinicia_correctamente: VERIFICADO
     no_importa_trading_ni_live_hydra_ni_market_data_main: HECHO
     no_crea_composition_root_alternativo: HECHO
   cierre:
