@@ -198,7 +198,7 @@ class AuditContext:
 def parse_findings(text: str) -> list[Finding]:
     """Parse del registro de findings (`## F-XXX — título` + fichas de campo)."""
     out: list[Finding] = []
-    blocks = re.split(r"^## (F-\S+)", text, flags=re.MULTILINE)
+    blocks = re.split(r"^(?:#{1,3}) (F-\S+)", text, flags=re.MULTILINE)
     # blocks = [prefacio, id1, cuerpo1, id2, cuerpo2, ...]
     for i in range(1, len(blocks), 2):
         fid = blocks[i].strip()

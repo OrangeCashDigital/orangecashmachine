@@ -14,26 +14,26 @@ Cerrar la brecha entre la verificación declarativa (templates, linters, tests) 
 
 ## 2. Hallazgos y Correcciones de Runtime (Bugs Críticos)
 
-### F-RT-01 (CRÍTICO): Crash de calidad en `QualityPipeline` por bridge `pl.from_pandas` redundante
+^## F-RT-01 (CRÍTICO): Crash de calidad en `QualityPipeline` por bridge `pl.from_pandas` redundante
 - **Síntoma:** El loop de ingesta fallaba en cada iteración con `TypeError: expected pandas DataFrame or Series, got 'DataFrame'`, resultando en `rows=0` para Bybit y Kucoin.
 - **Causa:** `QualityPipeline.run()` asumía recibir `pd.DataFrame` y realizaba `pl.from_pandas(df)` internamente. Sin embargo, los tres strategies (`incremental`, `backfill`, `repair`) ya entregaban `pl.DataFrame` (polars nativo).
 - **Fix:** Se refactorizó `QualityPipeline` a polars nativo (`run`, `_scan_and_emit_gaps`, `_record_lineage` aceptan `pl.DataFrame`), eliminando el import de pandas y las conversiones internas.
 - **Evidencia Commit:** `61da7a9`
 - **Evidencia Runtime:** De `rows=0` con TypeError a `rows=499` (Bybit) y `rows=1500` (Kucoin), `error=None`.
 
-### F-RT-02 (ALTO): Mismatch en `PrometheusPipelineMetrics` (`rows_ingested_inc` no implementado)
+^## F-RT-02 (ALTO): Mismatch en `PrometheusPipelineMetrics` (`rows_ingested_inc` no implementado)
 - **Síntoma:** `AttributeError: 'PrometheusPipelineMetrics' object has no attribute 'rows_ingested_inc'` al finalizar el ciclo de ingesta incremental.
 - **Causa:** El adaptador `PrometheusPipelineMetrics` no implementaba el método `rows_ingested_inc()` declarado en el puerto `MetricsPort`.
 - **Fix:** Se implementó `rows_ingested_inc(exchange, timeframe, delta)` en `PrometheusPipelineMetrics` utilizando el contador `ROWS_INGESTED` con el centinela `symbol="*"`.
 - **Evidencia Commit:** `7ce7c2b`
 - **Evidencia Runtime:** Ingesta finaliza con `last_result=success` sin excepciones.
 
-### F-RT-03 (ALTO): Error de permisos en el catálogo Iceberg por ruta relativa `/app` en `.env`
+^## F-RT-03 (ALTO): Error de permisos en el catálogo Iceberg por ruta relativa `/app` en `.env`
 - **Síntoma:** `PermissionError: [Errno 13] Permission denied: '/app'` en el startup de `KafkaBronzeWriter`.
 - **Causa:** `.env` configuraba `OCM_STORAGE__DATA_LAKE__PATH=/app/data_platform/data_lake` (orientado a contenedores Docker).
 - **Fix:** Se comentó la variable en `.env` para permitir la resolución SSOT al default YAML (`data_platform/data_lake` relativo a la raíz del repositorio).
 
-### F-RT-04 (MEDIO): HTTP 404 en endpoint `/ohlcv` para símbolos con `/` (ej. `BTC/USDT`)
+^## F-RT-04 (MEDIO): HTTP 404 en endpoint `/ohlcv` para símbolos con `/` (ej. `BTC/USDT`)
 - **Síntoma:** Peticiones HTTP `/ohlcv/bybit/BTC%2FUSDT/1m` retornaban `404 Not Found`.
 - **Causa:** `uvicorn` decodifica `%2F` a `/` antes del enrutamiento de FastAPI, produciendo 4 segmentos de ruta que no matcheaban `{symbol}`.
 - **Fix:** Se cambió el convertidor de ruta en `market_data/main.py` a `{symbol:path}`.
