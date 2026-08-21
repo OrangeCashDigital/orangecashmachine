@@ -4,7 +4,8 @@
 # ==============================================================================
 # Uso:
 #   ./deploy/scripts/install_systemd.sh --verify-only   # solo render + verify
-#   ./deploy/scripts/install_systemd.sh                 # render + verify + install + reload
+#   ./deploy/scripts/install_systemd.sh                 # system: install + daemon-reload
+#   ./deploy/scripts/install_systemd.sh --user          # user unit (~/.config/systemd/user)
 #
 # Requiere: deploy/host.env (cp deploy/host.env.example deploy/host.env)
 # ==============================================================================
@@ -15,7 +16,18 @@ TEMPLATE_DIR="${REPO_ROOT}/deploy/systemd/templates"
 HOST_ENV="${REPO_ROOT}/deploy/host.env"
 RENDER_DIR="${REPO_ROOT}/deploy/systemd/rendered"
 INSTALL_ONLY=false
-[[ "${1:-}" == "--verify-only" ]] && INSTALL_ONLY=true
+USER_MODE=false
+for arg in "${@:-}"; do
+    case "${arg}" in
+        --verify-only) INSTALL_ONLY=true ;;
+        --user) USER_MODE=true ;;
+    esac
+done
+
+DEST_DIR="/etc/systemd/system"
+if ${USER_MODE}; then
+    DEST_DIR="${HOME}/.config/systemd/user"
+fi
 
 [[ -f "${HOST_ENV}" ]] || { echo "ERROR: falta ${HOST_ENV} (cp host.env.example host.env)"; exit 1; }
 
@@ -39,6 +51,10 @@ for tpl in "${TEMPLATE_DIR}"/*.template; do
     name="$(basename "${tpl}" .template)"
     out="${RENDER_DIR}/${name}"
     render "${tpl}" "${out}"
+    if ${USER_MODE}; then
+        # User= y multi-user.target no aplican al user manager de systemd
+        sed -i '/^User=/d; s/^WantedBy=multi-user.target/WantedBy=default.target/' "${out}"
+    fi
     UNITS+=("${out}")
 done
 
@@ -54,9 +70,15 @@ if ${INSTALL_ONLY}; then
 fi
 
 for u in "${UNITS[@]}"; do
-    install -m 644 "${u}" "/etc/systemd/system/$(basename "${u}")"
-    echo "[install-systemd] instalado: /etc/systemd/system/$(basename "${u}")"
+    mkdir -p "${DEST_DIR}"
+    install -m 644 "${u}" "${DEST_DIR}/$(basename "${u}")"
+    echo "[install-systemd] instalado: ${DEST_DIR}/$(basename "${u}")"
 done
 
-systemctl daemon-reload
-echo "[install-systemd] daemon-reload OK"
+if ${USER_MODE}; then
+    systemctl --user daemon-reload
+    echo "[install-systemd] user daemon-reload OK"
+else
+    systemctl daemon-reload
+    echo "[install-systemd] daemon-reload OK"
+fi
