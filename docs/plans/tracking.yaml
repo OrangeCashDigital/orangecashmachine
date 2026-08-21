@@ -4,6 +4,11 @@ baseline:
   fecha: '2026-08-06'
   informe_base: docs/audits/2026-08-auditoria-integral.md
   plan_maestro: PLAN-Maestro-Ingenieria.md
+# DEPRECADO (ADR-0031, 2026-08-19): este bloque ya NO es SSOT de reglas.
+# El SSOT vigente es policies/registry.yaml, consumido por
+# scripts/engineering_health_check.py y scripts/audit_validator.py (M22-M26).
+# Se conserva aqui solo por compatibilidad historica -- no editar como fuente
+# de verdad. Ver docs/architecture/decisions/ADR-0031-policy-registry-yaml.md
 reglas:
 - id: R1
   hallazgo: H-01
