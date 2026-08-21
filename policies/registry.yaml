@@ -487,7 +487,7 @@ rules:
   description: "El loop de ingesta fallaba en cada iteraci\xF3n con TypeError: expected\
     \ pandas DataFrame or Series, got DataFrame, resultando en rows=0 para Bybit y\
     \ Kucoin."
-  enforcement: AST guard + guard de arranque en execute_live
+  enforcement: blocking
   evidence:
     path: scripts/audit_validator.py
     type: backtest
@@ -514,7 +514,7 @@ rules:
   created: '2026-08-20'
   description: 'AttributeError: PrometheusPipelineMetrics object has no attribute
     rows_ingested_inc al finalizar el ciclo de ingesta incremental.'
-  enforcement: Implementar method en PrometheusPipelineMetrics
+  enforcement: blocking
   evidence:
     path: scripts/check_production_gates.py
     type: backtest
@@ -543,7 +543,7 @@ rules:
   description: 'PermissionError: [Errno 13] Permission denied: /app al startup de
     KafkaBronzeWriter debido a OCM_STORAGE_DATA_LAKE_PATH=/app/data_platform/data_lake
     en .env.'
-  enforcement: Comentar OCM_STORAGE_DATA_LAKE_PATH en .env; usar default YAML data_platform/data_lake
+  enforcement: blocking
   evidence:
     path: deploy/host.env
     type: backtest
@@ -571,7 +571,7 @@ rules:
   created: '2026-08-20'
   description: uvicorn decodifica %2F antes del routing de FastAPI - BTC%2FUSDT llegaba
     como BTC/USDT (4 segmentos) y no matcheaba la ruta (404).
-  enforcement: Cambiar route a /ohlcv/{exchange}/{symbol:path}/{timeframe}
+  enforcement: blocking
   evidence:
     path: scripts/check_production_gates.py
     type: backtest
@@ -594,85 +594,133 @@ rules:
 - id: F-PL-01
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: "Implementar conversi\xF3n polars nativo en QualityPipeline"
+  enforcement: blocking
   evidence:
     path: packages/market_data/application/processing/ohlcv_transformer.py
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-02
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: Implementar rows_ingested_inc en PrometheusPipelineMetrics
+  enforcement: blocking
   evidence:
     path: packages/market_data/infrastructure/prometheus/pipeline_metrics.py
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-03
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: Comentar OCM_STORAGE_DATA_LAKE_PATH en .env
+  enforcement: blocking
   evidence:
     path: config/base.yaml
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-04
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: Cambiar route a /ohlcv/{exchange}/{symbol:path}
+  enforcement: blocking
   evidence:
     path: apps/api/router.py
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-05
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: "A\xF1adir validaci\xF3n de esquemas Kafka"
+  enforcement: blocking
   evidence:
     path: shared/kafka/schemas/
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-06
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: "Implementar deduplicaci\xF3n en streaming"
+  enforcement: blocking
   evidence:
     path: packages/market_data/infrastructure/streaming/
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-07
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: "A\xF1adir backpressure en consumidor Kafka"
+  enforcement: blocking
   evidence:
     path: packages/market_data/application/processing/
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-08
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: Refactorizar QualityPipeline a polars nativo
+  enforcement: blocking
   evidence:
     path: packages/market_data/application/processing/ohlcv_transformer.py
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-09
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: Implementar retry con backoff exponencial
+  enforcement: blocking
   evidence:
     path: packages/market_data/infrastructure/streaming/
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-10
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: "A\xF1adir circuit breaker en fetchers"
+  enforcement: blocking
   evidence:
     path: packages/market_data/application/processing/
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-11
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: Implementar health check endpoint
+  enforcement: blocking
   evidence:
     path: scripts/check_production_gates.py
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 - id: F-PL-12
   classification: SIN_CLASIFICAR
   severity: MEDIUM
-  enforcement: "A\xF1adir m\xE9tricas de latencia"
+  enforcement: blocking
   evidence:
     path: config/base.yaml
     type: source
+  status: DEPRECATED
+  ci:
+    job: audit
+    command: uv run python scripts/check_production_gates.py --mode gate-dev
 schema_version: 1

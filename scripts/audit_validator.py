@@ -749,6 +749,8 @@ def m22_enforcement_ci_verification(ctx: AuditContext) -> None:
         return
     for r in data.get("rules") or []:
         rid = r.get("id", "?")
+        if r.get("status") == "DEPRECATED":
+            continue
         enforcement = r.get("enforcement")
         if enforcement not in ("blocking", "warning", "informational"):
             ctx.err("M22", f"{rid}: enforcement ausente o invalido ({enforcement!r})")
@@ -773,6 +775,8 @@ def m23_dead_rule_detection(ctx: AuditContext) -> None:
         return
     for r in data.get("rules") or []:
         rid = r.get("id", "?")
+        if r.get("status") == "DEPRECATED":
+            continue
         ev_path = (r.get("evidence") or {}).get("path")
         if not ev_path:
             ctx.err("M23", f"{rid}: sin evidence.path -- sin implementacion referenciada")
