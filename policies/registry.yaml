@@ -59,7 +59,7 @@ rules:
   mechanism: import-linter forbid / AST guard + smoke test assemble()
   mechanism_type: import_linter
   modified: '2026-08-19'
-  name: Import de catálogo inexistente prohibido
+  name: "Import de cat\xE1logo inexistente prohibido"
   owner: market_data
   scope: market_data
   severity: HIGH
@@ -72,8 +72,8 @@ rules:
     command: uv run pytest tests/trading/test_oms_fill_lifecycle.py -q --no-cov
     job: unit-tests
   created: '2026-08-19'
-  description: Prohibir `record_open()` sin `record_close()` en el flujo de fill (fuga
-    de posición HELD).
+  description: "Prohibir `record_open()` sin `record_close()` en el flujo de fill\
+    \ (fuga de posici\xF3n HELD)."
   enforcement: blocking
   evidence:
     path: .github/workflows/ocm-ci.yml
@@ -85,7 +85,7 @@ rules:
     date: '2026-08-19'
   id: R3
   master_plan: F2.1
-  mechanism: AST guard sobre trading.execution.oms + test round-trip BUY→SELL
+  mechanism: "AST guard sobre trading.execution.oms + test round-trip BUY\u2192SELL"
   mechanism_type: guard_script
   modified: '2026-08-19'
   name: record_open sin record_close en flujo de fill
@@ -101,7 +101,7 @@ rules:
     command: uv run pytest tests/ocm/config/test_snapshot_redaction.py -q --no-cov
     job: unit-tests
   created: '2026-08-19'
-  description: El snapshot de config jamás contiene el valor de un SecretStr.
+  description: "El snapshot de config jam\xE1s contiene el valor de un SecretStr."
   enforcement: blocking
   evidence:
     path: .github/workflows/ocm-ci.yml
@@ -113,7 +113,7 @@ rules:
     date: '2026-08-19'
   id: R4
   master_plan: F2.1
-  mechanism: test unit de serialización de snapshot
+  mechanism: "test unit de serializaci\xF3n de snapshot"
   mechanism_type: guard_script
   modified: '2026-08-19'
   name: SecretStr redactado en snapshot de config
@@ -130,8 +130,8 @@ rules:
       --cov=shared --cov=apps --cov-report=term
     job: unit-tests
   created: '2026-08-19'
-  description: Cobertura crítica por debajo del umbral bloquea CI (fail_under=40 sobre
-    baseline 44%).
+  description: "Cobertura cr\xEDtica por debajo del umbral bloquea CI (fail_under=40\
+    \ sobre baseline 44%)."
   enforcement: blocking
   evidence:
     path: pyproject.toml
@@ -143,10 +143,10 @@ rules:
     date: '2026-08-19'
   id: R5
   master_plan: F2.1
-  mechanism: CI fail_under sobre módulos críticos (pytest --cov)
+  mechanism: "CI fail_under sobre m\xF3dulos cr\xEDticos (pytest --cov)"
   mechanism_type: tool_gate
   modified: '2026-08-19'
-  name: Umbral de cobertura crítica
+  name: "Umbral de cobertura cr\xEDtica"
   owner: platform
   scope: platform
   severity: MEDIUM
@@ -200,7 +200,7 @@ rules:
   mechanism: test de paridad de config
   mechanism_type: guard_script
   modified: '2026-08-19'
-  name: Paridad config.yaml#defaults ↔ _MODULE_GLOBS
+  name: "Paridad config.yaml#defaults \u2194 _MODULE_GLOBS"
   owner: platform
   scope: platform
   severity: MEDIUM
@@ -213,8 +213,8 @@ rules:
     command: null
     job: null
   created: '2026-08-19'
-  description: Módulo dead stub re-importable con imports inválidos está prohibido;
-    resuelto por eliminación del stub (B-13).
+  description: "M\xF3dulo dead stub re-importable con imports inv\xE1lidos est\xE1\
+    \ prohibido; resuelto por eliminaci\xF3n del stub (B-13)."
   enforcement: informational
   evidence:
     nota: 'B-13 HECHO 2026-08-18: onchain_producer.py eliminado (ff67b93); rg onchain_producer
@@ -228,10 +228,10 @@ rules:
     date: '2026-08-19'
   id: R8
   master_plan: F2.1
-  mechanism: ausencia del módulo (verificación rg/git); stub eliminado en ff67b93
+  mechanism: "ausencia del m\xF3dulo (verificaci\xF3n rg/git); stub eliminado en ff67b93"
   mechanism_type: absence_gate
   modified: '2026-08-19'
-  name: Prohibición de módulos dead-stub re-importables
+  name: "Prohibici\xF3n de m\xF3dulos dead-stub re-importables"
   owner: market_data
   scope: market_data
   severity: LOW
@@ -243,7 +243,8 @@ rules:
       --no-cov
     job: trading-guards
   created: '2026-08-19'
-  description: Orden live sin camino de reconciliación de fills está prohibida (fail-closed).
+  description: "Orden live sin camino de reconciliaci\xF3n de fills est\xE1 prohibida\
+    \ (fail-closed)."
   enforcement: blocking
   evidence:
     path: .github/workflows/ocm-ci.yml
@@ -255,11 +256,11 @@ rules:
     date: '2026-08-19'
   id: R9
   master_plan: F2.1
-  mechanism: LiveExecutor reconcilia fills contra el exchange (OrderTransport.fetch_state)
-    — fail-closed
+  mechanism: "LiveExecutor reconcilia fills contra el exchange (OrderTransport.fetch_state)\
+    \ \u2014 fail-closed"
   mechanism_type: guard_script
   modified: '2026-08-19'
-  name: Reconciliación de fills fail-closed
+  name: "Reconciliaci\xF3n de fills fail-closed"
   owner: trading
   scope: trading
   severity: HIGH
@@ -273,7 +274,7 @@ rules:
       --no-cov
     job: trading-guards
   created: '2026-08-19'
-  description: '`size_pct` crudo en orden live sin conversión a qty está prohibido.'
+  description: "`size_pct` crudo en orden live sin conversi\xF3n a qty est\xE1 prohibido."
   enforcement: blocking
   evidence:
     path: .github/workflows/ocm-ci.yml
@@ -288,7 +289,7 @@ rules:
   mechanism: LiveExecutor._notional_qty + test_transport_mapping (AST/unit) en trading-guards
   mechanism_type: guard_script
   modified: '2026-08-19'
-  name: Conversión size_pct → qty
+  name: "Conversi\xF3n size_pct \u2192 qty"
   owner: trading
   scope: trading
   severity: HIGH
@@ -302,8 +303,8 @@ rules:
       "not integration" --no-cov
     job: domain-guard
   created: '2026-08-19'
-  description: '`subprocess` en domain está prohibido (pureza de dominio; git_hash
-    inyectado desde composition root).'
+  description: "`subprocess` en domain est\xE1 prohibido (pureza de dominio; git_hash\
+    \ inyectado desde composition root)."
   enforcement: blocking
   evidence:
     path: scripts/domain_subprocess_guard.py
@@ -315,7 +316,7 @@ rules:
     date: '2026-08-19'
   id: R11
   master_plan: F2.1
-  mechanism: AST guard tipo BC-09 sobre subprocess — scripts/domain_subprocess_guard.py
+  mechanism: "AST guard tipo BC-09 sobre subprocess \u2014 scripts/domain_subprocess_guard.py"
   mechanism_type: guard_script
   modified: '2026-08-19'
   name: Pureza de dominio (sin subprocess)
@@ -345,7 +346,7 @@ rules:
     date: '2026-08-19'
   id: R12
   master_plan: F2.1
-  mechanism: Guard AST en app/use_cases + BC-53 (forbidden app.use_cases → argparse)
+  mechanism: "Guard AST en app/use_cases + BC-53 (forbidden app.use_cases \u2192 argparse)"
   mechanism_type: guard_script
   modified: '2026-08-19'
   name: use_cases sin argparse/Namespace/constructores de config
@@ -362,8 +363,8 @@ rules:
       --no-cov
     job: app-guard
   created: '2026-08-19'
-  description: '`getattr` con default en use_cases está prohibido (config tipada es
-    la única fuente de verdad).'
+  description: "`getattr` con default en use_cases est\xE1 prohibido (config tipada\
+    \ es la \xFAnica fuente de verdad)."
   enforcement: blocking
   evidence:
     path: scripts/app_layer_guard.py
@@ -375,7 +376,7 @@ rules:
     date: '2026-08-19'
   id: R13
   master_plan: F2.1
-  mechanism: Guard AST — getattr con default prohibido en app/use_cases
+  mechanism: "Guard AST \u2014 getattr con default prohibido en app/use_cases"
   mechanism_type: guard_script
   modified: '2026-08-19'
   name: Sin getattr con default en use_cases
@@ -423,8 +424,8 @@ rules:
       --no-cov
     job: app-guard
   created: '2026-08-19'
-  description: CycleRunResult no se redefine (LiveRunResult/PaperRunResult duplicados
-    están prohibidos).
+  description: "CycleRunResult no se redefine (LiveRunResult/PaperRunResult duplicados\
+    \ est\xE1n prohibidos)."
   enforcement: blocking
   evidence:
     path: scripts/app_layer_guard.py
@@ -436,10 +437,10 @@ rules:
     date: '2026-08-19'
   id: R15
   master_plan: F2.1
-  mechanism: Guard AST — un único CycleRunResult en app/use_cases/run_result.py
+  mechanism: "Guard AST \u2014 un \xFAnico CycleRunResult en app/use_cases/run_result.py"
   mechanism_type: guard_script
   modified: '2026-08-19'
-  name: Un único CycleRunResult
+  name: "Un \xFAnico CycleRunResult"
   owner: architecture
   scope: application
   severity: HIGH
@@ -466,8 +467,8 @@ rules:
     date: '2026-08-19'
   id: R16
   master_plan: F2.1
-  mechanism: Guard AST — SILENT_PATHS SSOT en api/middleware/__init__.py + exclusión
-    temprana
+  mechanism: "Guard AST \u2014 SILENT_PATHS SSOT en api/middleware/__init__.py + exclusi\xF3\
+    n temprana"
   mechanism_type: guard_script
   modified: '2026-08-19'
   name: SILENT_PATHS SSOT en api/middleware
@@ -483,8 +484,9 @@ rules:
     command: uv run python scripts/audit_validator.py
     job: audit
   created: '2026-08-20'
-  description: 'El loop de ingesta fallaba en cada iteración con TypeError: expected
-    pandas DataFrame or Series, got DataFrame, resultando en rows=0 para Bybit y Kucoin.'
+  description: "El loop de ingesta fallaba en cada iteraci\xF3n con TypeError: expected\
+    \ pandas DataFrame or Series, got DataFrame, resultando en rows=0 para Bybit y\
+    \ Kucoin."
   enforcement: AST guard + guard de arranque en execute_live
   evidence:
     path: scripts/audit_validator.py
@@ -551,9 +553,9 @@ rules:
     date: '2026-08-20'
   id: F-RT-03
   master_plan: F2.1
-  mechanism_type: configuración
+  mechanism_type: "configuraci\xF3n"
   modified: '2026-08-20'
-  name: Error de permisos en catálogo Iceberg por ruta relativa /app
+  name: "Error de permisos en cat\xE1logo Iceberg por ruta relativa /app"
   owner: market_data
   scope: market_data
   severity: HIGH
@@ -589,4 +591,88 @@ rules:
   tests:
     negative: ' anterior retornaba 404'
     positive: curl -s https://localhost:8001/ohlcv/bybit/BTC%2FUSDT/1m?limit=2
+- id: F-PL-01
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: "Implementar conversi\xF3n polars nativo en QualityPipeline"
+  evidence:
+    path: packages/market_data/application/processing/ohlcv_transformer.py
+    type: source
+- id: F-PL-02
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: Implementar rows_ingested_inc en PrometheusPipelineMetrics
+  evidence:
+    path: packages/market_data/infrastructure/prometheus/pipeline_metrics.py
+    type: source
+- id: F-PL-03
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: Comentar OCM_STORAGE_DATA_LAKE_PATH en .env
+  evidence:
+    path: config/base.yaml
+    type: source
+- id: F-PL-04
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: Cambiar route a /ohlcv/{exchange}/{symbol:path}
+  evidence:
+    path: apps/api/router.py
+    type: source
+- id: F-PL-05
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: "A\xF1adir validaci\xF3n de esquemas Kafka"
+  evidence:
+    path: shared/kafka/schemas/
+    type: source
+- id: F-PL-06
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: "Implementar deduplicaci\xF3n en streaming"
+  evidence:
+    path: packages/market_data/infrastructure/streaming/
+    type: source
+- id: F-PL-07
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: "A\xF1adir backpressure en consumidor Kafka"
+  evidence:
+    path: packages/market_data/application/processing/
+    type: source
+- id: F-PL-08
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: Refactorizar QualityPipeline a polars nativo
+  evidence:
+    path: packages/market_data/application/processing/ohlcv_transformer.py
+    type: source
+- id: F-PL-09
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: Implementar retry con backoff exponencial
+  evidence:
+    path: packages/market_data/infrastructure/streaming/
+    type: source
+- id: F-PL-10
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: "A\xF1adir circuit breaker en fetchers"
+  evidence:
+    path: packages/market_data/application/processing/
+    type: source
+- id: F-PL-11
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: Implementar health check endpoint
+  evidence:
+    path: scripts/check_production_gates.py
+    type: source
+- id: F-PL-12
+  classification: SIN_CLASIFICAR
+  severity: MEDIUM
+  enforcement: "A\xF1adir m\xE9tricas de latencia"
+  evidence:
+    path: config/base.yaml
+    type: source
 schema_version: 1
