@@ -116,9 +116,11 @@ class PrometheusPipelineMetrics:
             FETCH_CHUNK_ERRORS_TOTAL,
             FETCH_CHUNKS_TOTAL,
             PIPELINE_ERRORS,
+            ROWS_INGESTED,
         )
 
         self._active_pairs = ACTIVE_PAIRS
+        self._rows_ingested = ROWS_INGESTED
         self._candle_delay_ms = CANDLE_DELAY_MS
         self._fetch_aborts_total = FETCH_ABORTS_TOTAL
         self._fetch_chunk_duration = FETCH_CHUNK_DURATION
@@ -154,6 +156,10 @@ class PrometheusPipelineMetrics:
 
     def fetch_aborts_inc(self, exchange: str) -> None:
         self._fetch_aborts_total.labels(exchange=exchange).inc()
+
+    def rows_ingested_inc(self, exchange: str, timeframe: str, delta: int = 1) -> None:
+        # MetricsPort no lleva symbol — se usa "*" como sentinela de agregado.
+        self._rows_ingested.labels(exchange=exchange, symbol="*", timeframe=timeframe).inc(delta)
 
     def pipeline_errors_inc(self, exchange: str, error_type: str) -> None:
         self._pipeline_errors.labels(
