@@ -1,0 +1,420 @@
+schema_version: 1
+adr: ADR-0031
+created: '2026-08-19'
+modified: '2026-08-19'
+related_adrs:
+  - ADR-0006
+  - ADR-0015
+  - ADR-0016
+  - ADR-0020
+rules:
+  - id: R1
+    name: LiveExecutor stub bloquea live trading
+    description: "Bloquear `uv run live` con LiveExecutor stub (guard fail-closed en assemble_live)."
+    scope: cross-cutting
+    severity: HIGH
+    owner: trading
+    enforcement: blocking
+    mechanism: AST guard + guard de arranque en execute_live
+    mechanism_type: guard_script
+    tests:
+      positive: tests/architecture/test_import_contracts.py::TestLiveExecutorFailClosed::test_executor_declares_stub_flag
+      negative: tests/architecture/test_import_contracts.py::TestLiveExecutorFailClosed::test_stub_means_true_flag
+    evidence:
+      type: backtest
+      path: .github/workflows/ocm-ci.yml
+    ci:
+      job: architecture
+      command: uv run pytest tests/architecture/test_import_contracts.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0016
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R2
+    name: Import de catálogo inexistente prohibido
+    description: "Prohibir import de `market_data.infrastructure.storage.catalog` inexistente; usar iceberg.catalog real."
+    scope: market_data
+    severity: HIGH
+    owner: market_data
+    enforcement: blocking
+    mechanism: import-linter forbid / AST guard + smoke test assemble()
+    mechanism_type: import_linter
+    tests:
+      positive: tests/architecture/test_import_contracts.py::TestCompositionRoot::test__build_catalog_imports_iceberg_get_catalog_not_stale_path
+      negative: tests/architecture/test_import_contracts.py::TestCompositionRoot::test__build_catalog_does_not_import_legacy_path
+    evidence:
+      type: backtest
+      path: architecture_linter/importlinter.toml
+    ci:
+      job: architecture
+      command: uv run pytest tests/architecture/test_import_contracts.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: null
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R3
+    name: record_open sin record_close en flujo de fill
+    description: "Prohibir `record_open()` sin `record_close()` en el flujo de fill (fuga de posición HELD)."
+    scope: trading
+    severity: HIGH
+    owner: trading
+    enforcement: blocking
+    mechanism: AST guard sobre trading.execution.oms + test round-trip BUY→SELL
+    mechanism_type: guard_script
+    tests:
+      positive: tests/trading/test_oms_fill_lifecycle.py::test_buy_fill_keeps_position_open
+      negative: tests/trading/test_oms_fill_lifecycle.py::test_sell_fill_closes_opened_position
+    evidence:
+      type: backtest
+      path: .github/workflows/ocm-ci.yml
+    ci:
+      job: unit-tests
+      command: uv run pytest tests/trading/test_oms_fill_lifecycle.py -q --no-cov
+    master_plan: F2.1
+    adr: null
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R4
+    name: SecretStr redactado en snapshot de config
+    description: El snapshot de config jamás contiene el valor de un SecretStr.
+    scope: platform
+    severity: HIGH
+    owner: security
+    enforcement: blocking
+    mechanism: test unit de serialización de snapshot
+    mechanism_type: guard_script
+    tests:
+      positive: tests/ocm/config/test_snapshot_redaction.py::test_snapshot_does_not_contain_secret_value
+      negative: tests/ocm/config/test_snapshot_redaction.py::test_snapshot_preserves_non_secret_fields
+    evidence:
+      type: backtest
+      path: .github/workflows/ocm-ci.yml
+    ci:
+      job: unit-tests
+      command: uv run pytest tests/ocm/config/test_snapshot_redaction.py -q --no-cov
+    master_plan: F2.1
+    adr: null
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R5
+    name: Umbral de cobertura crítica
+    description: Cobertura crítica por debajo del umbral bloquea CI (fail_under=40 sobre baseline 44%).
+    scope: platform
+    severity: MEDIUM
+    owner: platform
+    enforcement: blocking
+    mechanism: CI fail_under sobre módulos críticos (pytest --cov)
+    mechanism_type: tool_gate
+    tests: {}
+    evidence:
+      type: ci_log
+      path: pyproject.toml
+    ci:
+      job: unit-tests
+      command: uv run pytest tests/ -x -q -m "not integration" --cov=packages --cov=ocm --cov=shared --cov=apps --cov-report=term
+    master_plan: F2.1
+    adr: null
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R6
+    name: Bandit sin hallazgos BLOCKER
+    description: Bandit fuera de CI o con hallazgos Med/High bloquea (job security + pre-commit bandit -ll).
+    scope: platform
+    severity: HIGH
+    owner: security
+    enforcement: blocking
+    mechanism: CI job security + pre-commit bandit -ll
+    mechanism_type: tool_gate
+    tests: {}
+    evidence:
+      type: ci_log
+      path: .github/workflows/ocm-ci.yml
+    ci:
+      job: security
+      command: uv run bandit -r apps ocm packages shared infrastructure -ll
+    master_plan: F2.1
+    adr: null
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R7
+    name: Paridad config.yaml#defaults ↔ _MODULE_GLOBS
+    description: "`config.yaml#defaults` no debe divergir de `_MODULE_GLOBS`."
+    scope: platform
+    severity: MEDIUM
+    owner: platform
+    enforcement: warning
+    mechanism: test de paridad de config
+    mechanism_type: guard_script
+    tests:
+      positive: tests/ocm/config/test_structured_parity.py::test_module_globs_match_config_yaml_defaults
+      negative: tests/ocm/config/test_structured_parity.py::test_declared_modules_exist_on_disk
+    evidence:
+      type: backtest
+      path: tests/ocm/config/test_structured_parity.py
+    ci:
+      job: unit-tests
+      command: "uv run pytest tests/ -x -q -m 'not integration' --cov=packages --cov=ocm --cov=shared --cov=apps --cov-report=term"
+    master_plan: F2.1
+    adr: null
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R8
+    name: Prohibición de módulos dead-stub re-importables
+    description: Módulo dead stub re-importable con imports inválidos está prohibido; resuelto por eliminación del stub (B-13).
+    scope: market_data
+    severity: LOW
+    owner: market_data
+    enforcement: informational
+    mechanism: ausencia del módulo (verificación rg/git); stub eliminado en ff67b93
+    mechanism_type: absence_gate
+    tests: {}
+    evidence:
+      type: artifact_hash
+      path: docs/plans/tracking.yaml
+      nota: "B-13 HECHO 2026-08-18: onchain_producer.py eliminado (ff67b93); rg onchain_producer = 0 hits"
+    ci:
+      job: null
+      command: null
+    master_plan: F2.1
+    adr: null
+    status: DEPRECATED
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R9
+    name: Reconciliación de fills fail-closed
+    description: Orden live sin camino de reconciliación de fills está prohibida (fail-closed).
+    scope: trading
+    severity: HIGH
+    owner: trading
+    enforcement: blocking
+    mechanism: LiveExecutor reconcilia fills contra el exchange (OrderTransport.fetch_state) — fail-closed
+    mechanism_type: guard_script
+    tests:
+      positive: tests/trading/test_live_executor.py::test_filled_confirmed_transport_accepts
+      negative: tests/trading/test_live_executor.py::test_reconciliation_unconfirmed_rejects
+    evidence:
+      type: backtest
+      path: .github/workflows/ocm-ci.yml
+    ci:
+      job: trading-guards
+      command: uv run pytest tests/trading/test_live_executor.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0016
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R10
+    name: Conversión size_pct → qty
+    description: "`size_pct` crudo en orden live sin conversión a qty está prohibido."
+    scope: trading
+    severity: HIGH
+    owner: trading
+    enforcement: blocking
+    mechanism: LiveExecutor._notional_qty + test_transport_mapping (AST/unit) en trading-guards
+    mechanism_type: guard_script
+    tests:
+      positive: tests/trading/test_transport_mapping.py::test_closed_maps_to_filled
+      negative: tests/trading/test_transport_mapping.py::test_unknown_status_defaults_submitted
+    evidence:
+      type: backtest
+      path: .github/workflows/ocm-ci.yml
+    ci:
+      job: trading-guards
+      command: uv run pytest tests/trading/test_transport_mapping.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0016
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R11
+    name: Pureza de dominio (sin subprocess)
+    description: "`subprocess` en domain está prohibido (pureza de dominio; git_hash inyectado desde composition root)."
+    scope: cross-cutting
+    severity: HIGH
+    owner: trading
+    enforcement: blocking
+    mechanism: AST guard tipo BC-09 sobre subprocess — scripts/domain_subprocess_guard.py
+    mechanism_type: guard_script
+    tests:
+      positive: tests/architecture/test_domain_subprocess_guard.py::TestMasterPositive::test_domain_is_clean_on_real_tree
+      negative: tests/architecture/test_domain_subprocess_guard.py::TestNegativeImportSubprocess::test_plain_import_detected
+    evidence:
+      type: backtest
+      path: scripts/domain_subprocess_guard.py
+    ci:
+      job: domain-guard
+      command: uv run pytest tests/architecture/test_domain_subprocess_guard.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0006
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R12
+    name: use_cases sin argparse/Namespace/constructores de config
+    description: "`use_cases` no tocan argparse/Namespace/constructores de config (el Namespace muere en el borde CLI)."
+    scope: application
+    severity: HIGH
+    owner: architecture
+    enforcement: blocking
+    mechanism: Guard AST en app/use_cases + BC-53 (forbidden app.use_cases → argparse)
+    mechanism_type: guard_script
+    tests:
+      positive: tests/architecture/test_app_layer_guard.py::TestNoArgparseInUseCases::test_positive_real_tree
+      negative: tests/architecture/test_app_layer_guard.py::TestNoArgparseInUseCases::test_negative_import
+    evidence:
+      type: backtest
+      path: scripts/app_layer_guard.py
+    ci:
+      job: app-guard
+      command: uv run pytest tests/architecture/test_app_layer_guard.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0015
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R13
+    name: Sin getattr con default en use_cases
+    description: "`getattr` con default en use_cases está prohibido (config tipada es la única fuente de verdad)."
+    scope: application
+    severity: HIGH
+    owner: architecture
+    enforcement: blocking
+    mechanism: Guard AST — getattr con default prohibido en app/use_cases
+    mechanism_type: guard_script
+    tests:
+      positive: tests/architecture/test_app_layer_guard.py::TestNoGetattrDefaultInUseCases::test_positive_real
+      negative: tests/architecture/test_app_layer_guard.py::TestNoGetattrDefaultInUseCases::test_negative_positional_default
+    evidence:
+      type: backtest
+      path: scripts/app_layer_guard.py
+    ci:
+      job: app-guard
+      command: uv run pytest tests/architecture/test_app_layer_guard.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0015
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R14
+    name: Scaffolding CLI en una sola fuente
+    description: Scaffolding de CLI (sigterm, logger.remove, helpers, main) vive solo en app/cli/_bootstrap.py.
+    scope: application
+    severity: HIGH
+    owner: architecture
+    enforcement: blocking
+    mechanism: Guard AST de _bootstrap (una sola fuente + must-import + complejidad) + BC-54
+    mechanism_type: guard_script
+    tests:
+      positive: tests/architecture/test_app_layer_guard.py::TestNoSigtermOutsideBootstrap::test_positive_real
+      negative: tests/architecture/test_app_layer_guard.py::TestNoSigtermOutsideBootstrap::test_negative
+    evidence:
+      type: backtest
+      path: scripts/app_layer_guard.py
+    ci:
+      job: app-guard
+      command: uv run pytest tests/architecture/test_app_layer_guard.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0015
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R15
+    name: Un único CycleRunResult
+    description: CycleRunResult no se redefine (LiveRunResult/PaperRunResult duplicados están prohibidos).
+    scope: application
+    severity: HIGH
+    owner: architecture
+    enforcement: blocking
+    mechanism: Guard AST — un único CycleRunResult en app/use_cases/run_result.py
+    mechanism_type: guard_script
+    tests:
+      positive: tests/architecture/test_app_layer_guard.py::TestRunResultSingleSource::test_positive_real
+      negative: tests/architecture/test_app_layer_guard.py::TestRunResultSingleSource::test_negative_redefined
+    evidence:
+      type: backtest
+      path: scripts/app_layer_guard.py
+    ci:
+      job: app-guard
+      command: uv run pytest tests/architecture/test_app_layer_guard.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0015
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+
+  - id: R16
+    name: SILENT_PATHS SSOT en api/middleware
+    description: SILENT_PATHS vive solo en api/middleware/__init__.py; probes se excluyen antes de procesar.
+    scope: application
+    severity: MEDIUM
+    owner: architecture
+    enforcement: blocking
+    mechanism: Guard AST — SILENT_PATHS SSOT en api/middleware/__init__.py + exclusión temprana
+    mechanism_type: guard_script
+    tests:
+      positive: tests/architecture/test_app_layer_guard.py::TestSilentPathsSingleSource::test_positive_real
+      negative: tests/architecture/test_app_layer_guard.py::TestSilentPathsSingleSource::test_negative_redefined_outside
+    evidence:
+      type: backtest
+      path: scripts/app_layer_guard.py
+    ci:
+      job: app-guard
+      command: uv run pytest tests/architecture/test_app_layer_guard.py -q -m "not integration" --no-cov
+    master_plan: F2.1
+    adr: ADR-0015
+    status: ACTIVE
+    created: '2026-08-19'
+    modified: '2026-08-19'
+    history:
+      - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
