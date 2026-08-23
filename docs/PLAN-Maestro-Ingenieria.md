@@ -83,7 +83,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | # | Principio | ¿Qué problema evita? | ¿Mecanismo automático? | ¿Evidencia? | ¿Cómo previene la regresión? |
 |---|---|---|---|---|---|
 | 1 | Trazabilidad completa | Defectos huérfanos | Cadena de §2 + tracking.yaml v2 | Backlog con cadena por hallazgo | Job `tracking-consistency` en CI |
-| 2 | Automatización > disciplina | "Recordar revisar X" falla | import-linter (49 BC), AST guards (`tests/architecture/`), mypy, bandit, CI gates | Comando que da FAIL ante la violación | Las reglas son propiedad del repo, se ejecutan en cada PR |
+| 2 | Automatización > disciplina | "Recordar revisar X" falla | import-linter (50 BC), AST guards (`tests/architecture/`), mypy, bandit, CI gates | Comando que da FAIL ante la violación | Las reglas son propiedad del repo, se ejecutan en cada PR |
 | 3 | Evidencia verificable | "Mejoramos" sin demostrarlo | Cada objetivo = cheque medible (no intención) | Salida del cheque + fecha + commit | Cualquier afirmación sin cheque se marca **No verificado** |
 | 4 | ADR para decisiones | Arquitectura implícita | Plantilla `ADR-template.md` + guard de numeración | ADR con estado; enlace en yaml | Guard de numeración en cada creación |
 | 5 | DOR/DOD por tarea | Trabajo "en progreso" infinito | Criterios de entrada/salida por fase (§4) | Estado en yaml + cheque del DOD | DoD con comando verificable |
@@ -135,8 +135,8 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Objetivo:** validar automáticamente la **coherencia** entre Plan Maestro ↔ `tracking` ↔ ADR ↔ contratos de arquitectura ↔ CI, antes de cada ejecución del resto de F2.
 - **Entregables:** job CI `engineering-health` que comprueba en una sola pasada:
   1. YAML de `tracking.yaml` válido; enums del propio tracker; `fase` coherente con `estado`.
-  2. Artefactos normativos: ADRs activos referenciados; contratos de arquitectura **>= 49** en vivo.
-  3. No-vacío de `lint-imports`: salida **sin** `"Could not find…"` y conteo de contratos exigido (≥49).
+  2. Artefactos normativos: ADRs activos referenciados; contratos de arquitectura **>= 50** en vivo.
+  3. No-vacío de `lint-imports`: salida **sin** `"Could not find…"` y conteo de contratos exigido (≥50).
   4. CI mapea a reglas: cada gate en `ocm-ci.yml` corresponde a una regla con `activada_en_ci: true`.
 - **DOD:** `engineering-health` devuelve `PASS` **solo** cuando Plan↔tracking↔ADR↔contratos↔CI están alineados; `FAIL` bloquea el resto.
 - **Criterio de salida:** job verde en CI, respaldado por un primer check de prueba en `tests/` y tracking sincronizado.
@@ -146,8 +146,9 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Objetivo:** calidad automática y gateada (H-04, H-05, H-07, H-12, H-20, H-10); en particular **no-vacuo** el `contract-linter`: hoy un `--config` roto devuelve **salida 0** (falso verde).
 - **DOR:** F2.0 verde; F1 cerrada; CI verde en `main`.
 - **Entregables:** `fail_under` sobre medición en vivo; bandit en CI+pre-commit; Docker endurecido (`.dockerignore`, HEALTHCHECK, bindings); paridad de config; reglas R5–R8 activas.
-- **DOD:** `fail_under > 0`; bandit `-ll` sin BLOCKER; mypy completo verde (o fallo documentado); `docker build` sin `.env` horneado; paridad config verde; `lint-imports` falla si el conteo de contratos baja de `49`.
+- **DOD:** `fail_under > 0`; bandit `-ll` sin BLOCKER; mypy completo verde (o fallo documentado); `docker build` sin `.env` horneado; paridad config verde; `lint-imports` falla si el conteo de contratos baja de `50`.
 - **Criterio de salida:** G5–G9 PASS; ADR-0020 (Production Gate como gate de release) aceptada.
+- **Avance (2026-08-23):** audit_validator.py implementa M22–M25 (ADR-0031); policies/registry.yaml creado (PR #19). Contratos: 50 KEPT.
 
 #### F2.2 — Gobernanza documental (ADR única SSOT)
 
@@ -170,7 +171,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 - **Objetivo:** registrar la salud del proyecto en el SSOT operativo (`tracking.yaml`), candidato de los ítems #2/#3 de la nueva auditoría.
 - **DOR:** F2.0 cerrado.
-- **Entregables:** bloque `Engineering Health` en tracking (contratos 49, snapshot, comandos) sin duplicar el mapa del Plan; nota que documenta los `return True` benignos en OMS/`rebalance`.
+- **Entregables:** bloque `Engineering Health` en tracking (contratos 50, snapshot, comandos) sin duplicar el mapa del Plan; nota que documenta los `return True` benignos en OMS/`rebalance`.
 - **DOD:** `tracking-consistency` valida el bloque en el snapshot; Plan↔tracking coherentes.
 - **Criterio de salida:** job `tracking-consistency` verde (SSOT); G5/G6 documentados.
 
@@ -277,7 +278,7 @@ escalabilidad (solo con evidencia).
 - **Objetivo:** trading live **real** (H-01 resolución, H-19, H-22). Sin gobernanza aquí; la calidad se mantiene vía F2.0.
 - **DOR:** F2.0 verde (Health Check CI); **ADR-0016 aceptada y commiteada** (Bybit, paper→live). ADR-0011 (rebalance) — originalmente movida a F4 para no bloquear el motor; **resuelta durante F3** (Aceptada 2026-08-07, B-13 HECHO).
 - **Entregables:** `LiveExecutor` real sobre `OrderTransport` (create_order + reconciliación fail-closed + kill switch; reglas **R9–R10 activadas en CI**, job `trading-guards`); `RebalanceService.rebalance()` cableado; strategies a polars.
-- **Avance:** [x] motor de ejecución (B-12 **HECHO** 2026-08-07, evidencia reproducible en tracking.yaml: `uv run pytest tests/trading/test_live_executor.py tests/trading/test_transport_mapping.py -q -m "not integration" --no-cov` → 14 passed; paper|live via `--mode`) · [x] rebalance (B-13: `RebalancePort` + `assemble_rebalance()` delegando en el port inyectado, wireado en `apps/app/use_cases/execute_live.py` y `execute_paper.py`; ADR-0011 **Aceptada** 2026-08-07) · [x] polars strategies (B-14, migrado a polars, evidencia: cero `import pandas` residual, 23 tests).
+- **Avance:** [x] motor de ejecución (B-12 **HECHO** 2026-08-07, evidencia reproducible en tracking.yaml: `uv run pytest tests/trading/test_live_executor.py tests/trading/test_transport_mapping.py -q -m "not integration" --no-cov` → 14 passed; paper|live via `--mode`) · [x] rebalance (B-13: `RebalancePort` + `assemble_rebalance()` delegando en el port inyectado, wireado en `apps/app/use_cases/execute_live.py` y `execute_paper.py`; ADR-0011 **Aceptada** 2026-08-07) · [x] polars strategies (B-14, migrado a polars, evidencia: cero `import pandas` residual, 23 tests) · [x] **pandas→polars completo** (PR #19, 2026-08-23: `pandas_to_domain.py` → `dataframe_to_domain.py`, pandas eliminado de deps, 0 imports/0 `.to_pandas()`, 50 contratos KEPT).
 - **DOD:** test de integración orden→fill→estado en sandbox/mock; `uv run live` real (o deshabilitado explícitamente en prod); rebalance end-to-end.
 - **Criterio de salida:** G10–G11 candidatos; prueba de reconciliación documentada.
 
@@ -497,7 +498,7 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | N1 | Plan Maestro | Especificación normativa del cambio; fases + DOR/DOD | `docs/PLAN-Maestro-Ingenieria.md` | SSOT documental |
 | N2 | tracking.yaml | SSOT operativo del backlog y hallazgos | `docs/plans/tracking.yaml` | SSOT de `fase`/`estado` |
 | N3 | ADRs | Decisiones de arquitectura (activo) | `docs/architecture/decisions/ADR-*.md` | único SSOT, sin legacy |
-| N4 | Contratos de arquitectura | Boundaries/capas (BC-NN) | `architecture/importlinter.toml` | gate CI, ≥ 49 en vivo |
+| N4 | Contratos de arquitectura | Boundaries/capas (BC-NN) | `architecture/importlinter.toml` | gate CI, ≥ 50 en vivo |
 | N5 | Contratos de código | Guards AST / invariantes | `tests/architecture/` | gate CI |
 | N6 | CI | Puerta del cambio | `.github/workflows/ocm-ci.yml` | fail-fast |
 | N7 | Auditorías | Fotografías históricas (inmutables) | `docs/audits/` | no se editan |
@@ -538,5 +539,6 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (`5090245`, `e04f38d`) | **F3 motor de ejecución**: ADR-0016 aceptada; `OrderTransport` (port), `LiveExecutor` real (reconciliación fail-closed + kill switch + `_notional_qty`), `CCXTAdapter.create_order/fetch_order`, adaptador `_BybitTransport` (BC-50) en composition_root, modo `--mode paper\|live` en `uv run live`; reglas **R9–R10** activadas en CI (job `trading-guards`). Queda F3: rebalance (B-13) y polars strategies (B-14). |
 | 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
 | 2026-08-19 | (consolidación post-auditorías) | **Consolidación documental completa** tras auditorías Policy Layer (feasibility + complementary + adversarial): tracking.yaml actualizado con B-47..B-60 (Policy Layer findings); Plan Maestro corregido: check_production_gates.py marcado PENDIENTE (B-49), ruff config E/F/I only (B-47), vulture installed not enforced (B-48), CodeQL/Trivy PR+weekly (B-60), fail_under=40 baseline 44% fijado; ADRs propuestas ADR-0021..0028 añadidas; Mapa Fase↔Hallazgos extendido; §6 Production Gate y §10 Umbrales corregidos; §3 Principio 10 corregido. |
+| 2026-08-23 | (`c392f8f`, PR #19) | **pandas→polars MIGRATION COMPLETE**: `pandas_to_domain.py` → `dataframe_to_domain.py`; pandas eliminado de `pyproject.toml`; 0 imports, 0 `.to_pandas()` en todo el repo; `pandera` (polars mode) para schema validation; contratos 49→50 KEPT; audit_validator M22–M25 implementado (ADR-0031); `policies/registry.yaml` creado; ccxt 4.3.58→4.5.74 (CVE fixes). AGENTS.md §"Active migration" → "COMPLETE". |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).

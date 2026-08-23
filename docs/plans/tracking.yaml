@@ -1895,16 +1895,20 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Strategies migradas a polars: base.py/ema_crossover.py sin pandas; engine.py
-    = punto único de conversión (pl.from_pandas)'
-  solucion: Migrar a polars + añadir contrato de tecnología
+  evidencia: 'pandas→polars MIGRATION COMPLETE (PR #19, 2026-08-23): 0 imports pandas,
+    0 .to_pandas(), pandas eliminado de pyproject.toml; `pandas_to_domain.py` → `dataframe_to_domain.py`;
+    pandera (polars mode) para schema validation; contratos 49→50 KEPT; 1248 tests,
+    55% cobertura.'
+  solucion: Migrar todas las capas a polars + eliminar pandas de dependencias + renombrar
+    pandas_to_domain → dataframe_to_domain
   pruebas:
-  - test estrategia con polars (23 tests trading/strategies pass; suite trading 85
-    pass)
+  - 'test estrategia con polars (23 tests trading/strategies pass; suite completa 1248
+    pass)'
+  - 'verificación: grep -rn "import pandas" packages/shared/apps/ocm = 0 hits'
+  - 'verificación: grep pandas pyproject.toml = solo comentario (migración completada)'
   adr_relacionado: null
-  riesgo_residual: 'Bajo: load_features (gold_reader/execute_paper) aún entrega pandas;
-    engine convierte en el límite'
-  fecha_cierre: '2026-08-06'
+  riesgo_residual: 'Ninguno: pandas eliminado completamente del repo y dependencias'
+  fecha_cierre: '2026-08-23'
   cadena:
     hallazgo:
       estado: HECHO
@@ -1917,19 +1921,24 @@ hallazgos:
       referencia: null
     implementacion:
       estado: HECHO
-      referencia: base.py + ema_crossover.py a polars; engine pl.from_pandas en límite
+      referencia: 'PR #19 (c392f8f): pandas_to_domain.py → dataframe_to_domain.py;
+        pandas eliminado de pyproject.toml; 0 imports/0 .to_pandas(); todas las capas
+        polars-native'
     tests:
       estado: HECHO
-      referencia: test_ema_crossover/test_base_strategy polars (23 pass)
+      referencia: 'suite completa 1248 passed (1248 vs 900 baseline F0); ruff/mypy/import-linter
+        50/0 KEPT'
     ci:
       estado: HECHO
-      referencia: suite trading 85 pass; ruff/mypy/import-linter verdes
+      referencia: 'import-linter 50 KEPT; ruff/mypy PASS; coverage 55%'
     evidencia:
       estado: HECHO
-      referencia: pandas fuera de trading.strategies; cero import pandas residual
+      referencia: '0 pandas imports verificados post-merge; pyproject.toml sin pandas
+        en deps; contratos 50 KEPT'
     cierre:
       estado: HECHO
-      referencia: validado por engineering_health_check
+      referencia: 'B-14 cerrado 2026-08-23 — migración pandas→polars completa (PR #19,
+        c392f8f)'
 - id: B-15
   hallazgo_informe: H-09
   fase: F4
