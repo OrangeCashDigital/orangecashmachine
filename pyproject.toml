@@ -99,7 +99,7 @@ dependencies = [
     # Sincronizar el pin con aioresilience al actualizar cualquiera de las dos.
     "pybreaker==1.4.1",
     # ── Mensajería / streaming ───────────────────────────────────────────────
-    "redis>=7.4.0,<8.0",  # techo <8.0 deliberado: 8.0 cambia RESP2→RESP3 por defecto (breaking)
+    "redis>=7.4.0,<9.0",  # techo <8.0 deliberado: 8.0 cambia RESP2→RESP3 por defecto (breaking)
     "aiokafka>=0.11.0,<1.0",
     # ── Storage / data lakehouse ─────────────────────────────────────────────
     # pyiceberg: <1.0 — API pública no estabilizada en 1.x todavía.
