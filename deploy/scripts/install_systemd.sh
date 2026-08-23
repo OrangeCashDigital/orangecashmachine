@@ -33,6 +33,7 @@ fi
 
 # Exportar variables del host para envsubst (lista explícita en render())
 set -a
+# shellcheck source=deploy/host.env
 source "${HOST_ENV}"
 set +a
 

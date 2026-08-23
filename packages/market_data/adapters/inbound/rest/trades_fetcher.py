@@ -210,7 +210,7 @@ class TradesFetcher:
 
             # Avanzar cursor antes de escribir (fail-safe: si write falla
             # el cursor no avanza → reintentará en el próximo run)
-            page_max_ts = int(df["timestamp"].max())
+            page_max_ts = int(df["timestamp"].max())  # type: ignore[arg-type]
 
             rows = self._storage.append(df)
             total_rows += rows

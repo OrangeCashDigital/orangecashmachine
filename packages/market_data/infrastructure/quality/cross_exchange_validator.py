@@ -171,7 +171,7 @@ class CrossExchangeValidator:
                     description=f"{n} velas con divergencia de precio >{_PRICE_DIVERGENCE_PCT * 100:.1f}%",
                     affected_rows=n,
                     details={
-                        "max_div_pct": round(float(div.max() * 100), 3),
+                        "max_div_pct": round(float(div.max()) * 100, 3),  # type: ignore[arg-type]  # type: ignore[arg-type]
                         "threshold_pct": _PRICE_DIVERGENCE_PCT * 100,
                     },
                 )
