@@ -19,7 +19,6 @@ Fail-soft — errores en _process() logueados, nunca propagados al bus
 
 from __future__ import annotations
 
-import pandas as pd
 import polars as pl
 from loguru import logger
 
@@ -124,7 +123,7 @@ class QualityPipelineConsumer(BaseConsumer):
         Fail-fast: si el DataFrame está vacío, salir temprano.
         """
         df = self._to_dataframe(event)
-        if df.empty:
+        if df.is_empty():
             logger.debug(
                 "QualityPipelineConsumer: empty batch — skipping | exchange={} symbol={} timeframe={}",
                 event.batch.exchange,
@@ -140,7 +139,7 @@ class QualityPipelineConsumer(BaseConsumer):
             0,  # rows_removed: consumer no tiene contexto de remoción upstream
             self._git_hash,  # B-20: inyectado por el composition root
         )
-        report = checker.check(pl.from_pandas(df), symbol=event.batch.symbol)
+        report = checker.check(df, symbol=event.batch.symbol)
 
         # --- Lineage record ---
         run_id = event.batch.run_id or self._tracker.new_run_id()
@@ -182,13 +181,16 @@ class QualityPipelineConsumer(BaseConsumer):
     # ----------------------------------------------------------
 
     @staticmethod
-    def _to_dataframe(event: OHLCVBatchReceived) -> pd.DataFrame:
+    def _to_dataframe(event: OHLCVBatchReceived) -> pl.DataFrame:
         """Convierte OHLCVChunk a DataFrame OHLCV estándar."""
         if event.batch.is_empty:
-            return pd.DataFrame(columns=_CANDLE_COLS)
-        return pd.DataFrame(
+            return pl.DataFrame(schema=dict.fromkeys(_CANDLE_COLS, pl.Float64))
+        _schema = dict(
+            zip(_CANDLE_COLS, [pl.Int64, pl.Float64, pl.Float64, pl.Float64, pl.Float64, pl.Float64], strict=True)
+        )
+        return pl.DataFrame(
             [c.to_tuple() for c in event.batch.candles],
-            columns=_CANDLE_COLS,
+            schema=_schema,
         )
 
 

@@ -16,9 +16,9 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
-import pandas as pd
 import polars as pl
 
 from market_data.application.pipeline.runtime import (
@@ -363,8 +363,8 @@ class RepairStrategy(StrategyMixin):
             log.debug("Healing gap")
 
             tf_ms = timeframe_to_ms(timeframe)
-            gap_start = pd.Timestamp(gap.start_ms, unit="ms", tz="UTC")
-            gap_end = pd.Timestamp(gap.end_ms, unit="ms", tz="UTC")
+            gap_start = datetime.fromtimestamp(gap.start_ms / 1000, tz=timezone.utc)
+            gap_end = datetime.fromtimestamp(gap.end_ms / 1000, tz=timezone.utc)
 
             collected_raw: list = []
             _quirks = get_quirks(ctx.exchange_id)
@@ -452,8 +452,8 @@ class RepairStrategy(StrategyMixin):
             if df.is_empty():
                 _log.bind(symbol=symbol, timeframe=timeframe).warning(
                     "Gap heal: df vacio tras filtro — marcando irrecuperable",
-                    gap_start=str(gap_start),
-                    gap_end=str(gap_end),
+                    gap_start=gap_start.isoformat(),
+                    gap_end=gap_end.isoformat(),
                     collected_raw=len(collected_raw),
                 )
                 raise NoDataAvailableError(

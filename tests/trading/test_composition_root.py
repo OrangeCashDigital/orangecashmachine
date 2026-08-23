@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 tests/trading/test_composition_root.py
-=======================================
+=====================================
 
 Tests unitarios de TradingCompositionRoot (Fase B, auditoría 2026-08-03).
 
@@ -25,7 +25,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import numpy as np
-import pandas as pd
+import polars as pl
 import pytest
 from portfolio.services.rebalance_service import RebalanceService
 from trading.analytics.trade_tracker import TradeTracker
@@ -290,14 +290,18 @@ def test_assemble_paper_returns_runtime_without_guard() -> None:
 # aquí probando el sistema real: root → assemble_paper() → TradingEngine.run_once().
 
 
-def _make_crossover_df() -> pd.DataFrame:
+def _make_crossover_df() -> pl.DataFrame:
     """DataFrame con golden cross garantizado en la última vela."""
     n = 50
     close = np.full(n, 40_000.0)
     close[-1] = 60_000.0
-    return pd.DataFrame(
+    from datetime import datetime, timedelta, timezone
+
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end = start + timedelta(hours=n - 1)
+    return pl.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "timestamp": pl.datetime_range(start, end, interval="1h", time_zone="UTC", eager=True),
             "open": close,
             "high": close + 100,
             "low": close - 100,

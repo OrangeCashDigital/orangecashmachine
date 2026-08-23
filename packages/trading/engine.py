@@ -157,7 +157,7 @@ class TradingEngine:
 
         # Cargar datos
         df = self._load_data()
-        if df is None or (hasattr(df, "empty") and df.empty):
+        if df is None or (hasattr(df, "empty") and df.empty) or (hasattr(df, "is_empty") and df.is_empty()):
             result.skipped = True
             result.skip_reason = "no_data"
             self._log.warning(
@@ -168,10 +168,10 @@ class TradingEngine:
             )
             return result
 
-        # Punto único de conversión al framework de estrategias (polars).
-        # SSOT: packages/trading/strategies consumen pl.DataFrame; la fuente
-        # (FeatureSource.load_features) aún entrega pandas en algunos adapters.
-        df = pl.from_pandas(df)
+        # Punto único de validación del tipo de DataFrame.
+        # SSOT: packages/trading/strategies consumen pl.DataFrame nativo.
+        if not isinstance(df, pl.DataFrame):
+            raise TypeError(f"TradingEngine espera pl.DataFrame, recibió {type(df).__name__}")
 
         # S1 — stop-loss: evaluar posiciones abiertas contra el close actual
         # ANTES de procesar señales de la estrategia. Conecta la configuración

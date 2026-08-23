@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-import pandas as pd
+import polars as pl
 from loguru import logger
 
 _PRICE_DIVERGENCE_PCT = 0.005
@@ -77,8 +77,8 @@ class CrossExchangeReport:
 class CrossExchangeValidator:
     def validate(
         self,
-        df_a: pd.DataFrame,
-        df_b: pd.DataFrame,
+        df_a: pl.DataFrame,
+        df_b: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange_a: str,
@@ -92,9 +92,12 @@ class CrossExchangeValidator:
             overlap_rows=0,
             checked_at=datetime.now(timezone.utc).isoformat(),
         )
-        ts_a = pd.to_datetime(df_a["timestamp"], utc=True)
-        ts_b = pd.to_datetime(df_b["timestamp"], utc=True)
-        common = set(ts_a.dt.floor("min")) & set(ts_b.dt.floor("min"))
+
+        # Ensure timestamp is datetime
+        ts_a = df_a["timestamp"].dt.truncate("1m")
+        ts_b = df_b["timestamp"].dt.truncate("1m")
+
+        common = set(ts_a.to_list()) & set(ts_b.to_list())
         if len(common) < _MIN_OVERLAP_ROWS:
             report.issues.append(
                 CrossExchangeIssue(
@@ -105,6 +108,7 @@ class CrossExchangeValidator:
                 )
             )
             return report
+
         merged = self._align_dataframes(df_a, df_b)
         report.overlap_rows = len(merged)
         self._check_price_divergence(merged, report)
@@ -114,13 +118,11 @@ class CrossExchangeValidator:
         return report
 
     @staticmethod
-    def _align_dataframes(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
+    def _align_dataframes(df_a: pl.DataFrame, df_b: pl.DataFrame) -> pl.DataFrame:
         """Alinea dos DataFrames por timestamp (floor min). Separado de validate() por SRP."""
-        a = df_a.copy()
-        a["_ts"] = pd.to_datetime(a["timestamp"], utc=True).dt.floor("min")
-        b = df_b.copy()
-        b["_ts"] = pd.to_datetime(b["timestamp"], utc=True).dt.floor("min")
-        return a.merge(b, on="_ts", suffixes=("_a", "_b"))
+        a = df_a.with_columns(pl.col("timestamp").dt.truncate("1m").alias("_ts"))
+        b = df_b.with_columns(pl.col("timestamp").dt.truncate("1m").alias("_ts"))
+        return a.join(b, on="_ts", suffix="_b").rename({col: f"{col}_a" for col in a.columns if col != "_ts"})
 
     @staticmethod
     def _log_result(
@@ -153,7 +155,7 @@ class CrossExchangeValidator:
             )
 
     @staticmethod
-    def _check_price_divergence(merged: pd.DataFrame, report: CrossExchangeReport) -> None:
+    def _check_price_divergence(merged: pl.DataFrame, report: CrossExchangeReport) -> None:
         mid_a = (merged["high_a"] + merged["low_a"]) / 2
         mid_b = (merged["high_b"] + merged["low_b"]) / 2
         avg = (mid_a + mid_b) / 2
@@ -176,7 +178,7 @@ class CrossExchangeValidator:
             )
 
     @staticmethod
-    def _check_volume_divergence(merged: pd.DataFrame, report: CrossExchangeReport) -> None:
+    def _check_volume_divergence(merged: pl.DataFrame, report: CrossExchangeReport) -> None:
         vol_a = merged["volume_a"]
         vol_b = merged["volume_b"]
         avg = (vol_a + vol_b) / 2
@@ -195,9 +197,9 @@ class CrossExchangeValidator:
             )
 
     @staticmethod
-    def _check_timestamp_gaps(ts_a: pd.Series, ts_b: pd.Series, report: CrossExchangeReport) -> None:
-        only_a = len(set(ts_a.dt.floor("min")) - set(ts_b.dt.floor("min")))
-        only_b = len(set(ts_b.dt.floor("min")) - set(ts_a.dt.floor("min")))
+    def _check_timestamp_gaps(ts_a: pl.Series, ts_b: pl.Series, report: CrossExchangeReport) -> None:
+        only_a = len(set(ts_a.to_list()) - set(ts_b.to_list()))
+        only_b = len(set(ts_b.to_list()) - set(ts_a.to_list()))
         if only_a > 0 or only_b > 0:
             report.issues.append(
                 CrossExchangeIssue(

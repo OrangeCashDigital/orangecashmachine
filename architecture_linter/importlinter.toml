@@ -238,7 +238,7 @@ forbidden_modules = [
     "pyiceberg", "redis", "ccxt", "sqlalchemy", "boto3",
     "cryptofeed", "websockets",
     "polars", "pandera", "loguru",
-    "pandas", "numpy", "prometheus_client",
+    "numpy", "prometheus_client",
     "requests", "httpx", "aiohttp", "pyarrow",
 ]
 

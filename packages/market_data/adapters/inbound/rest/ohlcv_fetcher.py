@@ -28,7 +28,9 @@ from loguru import logger
 if TYPE_CHECKING:
     from market_data.ports.outbound.transformer import OHLCVTransformerPort
 
-import pandas as pd
+import time
+
+import polars as pl
 
 from ocm.observability import bind_pipeline
 
@@ -38,8 +40,6 @@ if TYPE_CHECKING:
     # nunca en import time, preservando la inicialización diferida
     # y evitando conexiones Redis en tests (SafeOps · DIP).
     from ocm.runtime.state.factories import LatenessCalibrationStore
-
-import time
 
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
@@ -257,13 +257,13 @@ from market_data.domain.exceptions import (  # noqa: E402
 class DownloadResult:
     symbol: str
     timeframe: str
-    df: pd.DataFrame
+    df: pl.DataFrame
     chunks: int = 0
     total_rows: int = 0
 
     @property
     def has_data(self) -> bool:
-        return not self.df.empty
+        return not self.df.is_empty()
 
 
 # ==========================================================
@@ -330,7 +330,7 @@ class HistoricalFetcherAsync:
         timeframe: str,
         start_date: Optional[str] = None,
         limit: int = DEFAULT_CHUNK_LIMIT,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         self._validate_inputs(symbol, timeframe, limit)
         self._validate_market(symbol, self._market_type)
 
@@ -338,7 +338,7 @@ class HistoricalFetcherAsync:
 
         if not result.has_data:
             self._log.bind(symbol=symbol, timeframe=timeframe).info("No new data")
-            return pd.DataFrame(columns=list(OHLCV_COLUMNS))
+            return pl.DataFrame(schema=dict.fromkeys(OHLCV_COLUMNS, pl.Float64))
 
         self._log.bind(
             symbol=symbol,
@@ -404,7 +404,7 @@ class HistoricalFetcherAsync:
             )
             _pair_overlap = self._overlap
 
-        collected: List[pd.DataFrame] = []
+        collected: List[pl.DataFrame] = []
         for chunk_idx in range(MAX_CHUNKS_PER_RUN):
             # Startup jitter: solo en el primer chunk de cada par.
             # Segunda línea de defensa contra thundering herd — actúa
@@ -452,12 +452,13 @@ class HistoricalFetcherAsync:
             )
             df = _sanitize_dataframe(df)
 
-            if df.empty:
+            if df.is_empty():
                 break
 
             collected.append(df)
 
-            last_ts = int(df["timestamp"].max().timestamp() * 1000)
+            max_ts = df["timestamp"].max()
+            last_ts = int(max_ts.timestamp() * 1000)  # type: ignore[union-attr]
 
             # candle_delay_ms: tiempo entre cierre esperado del candle y ahora.
             # Fuente empírica para calibrar lateness por exchange.
@@ -495,14 +496,9 @@ class HistoricalFetcherAsync:
                 break
 
         if not collected:
-            return DownloadResult(symbol, timeframe, pd.DataFrame())
+            return DownloadResult(symbol, timeframe, pl.DataFrame(schema=dict.fromkeys(OHLCV_COLUMNS, pl.Float64)))
 
-        combined = (
-            pd.concat(collected, ignore_index=True)
-            .sort_values("timestamp")
-            .drop_duplicates(subset="timestamp", keep="last")
-            .reset_index(drop=True)
-        )
+        combined = pl.concat(collected, how="vertical").sort("timestamp").unique(subset=["timestamp"], keep="last")
 
         return DownloadResult(
             symbol=symbol,
@@ -695,12 +691,31 @@ class HistoricalFetcherAsync:
 # ==========================================================
 
 
-def _raw_to_dataframe(raw: List[list]) -> pd.DataFrame:
-    df = pd.DataFrame(raw, columns=list(OHLCV_COLUMNS))
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+def _raw_to_dataframe(raw: List[list]) -> pl.DataFrame:
+    df = pl.DataFrame(
+        {
+            "timestamp": [r[0] for r in raw],
+            "open": [float(r[1]) for r in raw],
+            "high": [float(r[2]) for r in raw],
+            "low": [float(r[3]) for r in raw],
+            "close": [float(r[4]) for r in raw],
+            "volume": [float(r[5]) for r in raw],
+        },
+        schema={
+            "timestamp": pl.Int64,
+            "open": pl.Float64,
+            "high": pl.Float64,
+            "low": pl.Float64,
+            "close": pl.Float64,
+            "volume": pl.Float64,
+        },
+    )
+    df = df.with_columns(
+        pl.col("timestamp").cast(pl.Datetime("ms")).dt.replace_time_zone("UTC").dt.cast_time_unit("us")
+    )
     return df
 
 
-def _sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.dropna(subset=["timestamp"])
-    return df.sort_values("timestamp")
+def _sanitize_dataframe(df: pl.DataFrame) -> pl.DataFrame:
+    df = df.drop_nulls(subset=["timestamp"])
+    return df.sort("timestamp")

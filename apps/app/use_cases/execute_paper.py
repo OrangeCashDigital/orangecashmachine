@@ -78,7 +78,7 @@ class SyntheticDataSource:
         from datetime import datetime, timedelta, timezone
 
         import numpy as np
-        import pandas as pd
+        import polars as pl
 
         rng = np.random.default_rng(self._SEED)  # reproducible, no muta global state
         n = 100
@@ -87,7 +87,7 @@ class SyntheticDataSource:
         close = base + np.cumsum(rng.normal(50, 200, n))
         close = np.maximum(close, 1.0)
 
-        df = pd.DataFrame(
+        df = pl.DataFrame(
             {
                 "timestamp": dates,
                 "open": close * 0.999,
@@ -98,14 +98,27 @@ class SyntheticDataSource:
             }
         )
 
-        df["return_1"] = df["close"].pct_change()
-        df["log_return"] = np.log(df["close"] / df["close"].shift(1))
-        df["volatility_20"] = df["log_return"].rolling(20, min_periods=5).std()
-        df["high_low_spread"] = (df["high"] - df["low"]) / df["close"]
-        tp = (df["high"] + df["low"] + df["close"]) / 3
-        df["vwap"] = (tp * df["volume"]).rolling(20, min_periods=5).sum() / df["volume"].rolling(
-            20, min_periods=5
-        ).sum()
+        df = df.with_columns(
+            [
+                pl.col("close").pct_change().alias("return_1"),
+                (pl.col("close").log() - pl.col("close").shift(1).log()).alias("log_return"),
+                pl.col("close").log().rolling_std(window_size=20, min_samples=5).alias("volatility_20"),
+                ((pl.col("high") - pl.col("low")) / pl.col("close")).alias("high_low_spread"),
+                ((pl.col("high") + pl.col("low") + pl.col("close")) / 3).alias("tp"),
+            ]
+        )
+        df = df.with_columns(
+            [
+                (pl.col("tp") * pl.col("volume")).rolling_sum(window_size=20, min_samples=5).alias("tpv"),
+                pl.col("volume").rolling_sum(window_size=20, min_samples=5).alias("vol_sum"),
+            ]
+        )
+        df = df.with_columns(
+            [
+                (pl.col("tpv") / pl.col("vol_sum")).alias("vwap"),
+            ]
+        )
+        df = df.drop(["tp", "tpv", "vol_sum"])
 
         logger.debug(
             "[DRY-RUN] SyntheticDataSource | rows={} symbol={} tf={} seed={}",

@@ -439,7 +439,7 @@ class ResamplePipeline:
             )
 
             # Carga sincrónica en hilo executor para no bloquear el event loop.
-            # IcebergStorage.load_ohlcv es síncrono (scan Iceberg + to_pandas).
+            # IcebergStorage.load_ohlcv es síncrono (scan Iceberg + to_polars).
             loop = asyncio.get_event_loop()
             df_1m = await loop.run_in_executor(
                 None,

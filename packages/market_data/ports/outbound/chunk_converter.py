@@ -7,9 +7,9 @@ Puerto OUTBOUND: conversión de DataFrame OHLCV a OHLCVChunk del dominio.
 
 Responsabilidad
 ---------------
-Definir el contrato de conversión pandas → dominio.
+Definir el contrato de conversión DataFrame → dominio.
 Desacopla las strategies (application layer) del ACL concreto
-(adapters/pandas_to_domain.py) — DIP.
+(adapters/inbound/dataframe_to_domain.py) — DIP.
 
 Implementación canónica
 -----------------------
@@ -60,8 +60,8 @@ class OHLCVChunkConverterPort(Protocol):
         Parameters
         ----------
         df           : DataFrame con columnas [timestamp, open, high,
-                       low, close, volume]. timestamp puede ser
-                       pd.Timestamp o int epoch ms.
+                       low, close, volume]. timestamp debe ser
+                       int epoch ms o Datetime("us", "UTC").
         exchange     : Identificador del exchange ("bybit", "kucoin", …).
         symbol       : Par en formato canónico ("BTC/USDT").
         timeframe    : Resolución canónica ("1m", "1h", …).

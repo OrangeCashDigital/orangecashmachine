@@ -22,12 +22,10 @@ Principio: patch where it's used, at the exact point of injection.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
-import numpy as np
-import pandas as pd
 import polars as pl
 import pytest
 import research.data.data_access as data_access
@@ -49,11 +47,15 @@ from research.data.data_access import (
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_ohlcv_df(n: int = 10) -> pd.DataFrame:
+def _make_ohlcv_df(n: int = 10) -> pl.DataFrame:
+    from datetime import datetime, timezone
+
+    import numpy as np
+
     rng = np.random.default_rng(0)
-    return pd.DataFrame(
+    return pl.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "timestamp": [datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(hours=i) for i in range(n)],
             "open": rng.uniform(40_000, 50_000, n),
             "high": rng.uniform(50_000, 55_000, n),
             "low": rng.uniform(38_000, 40_000, n),
@@ -63,17 +65,21 @@ def _make_ohlcv_df(n: int = 10) -> pd.DataFrame:
     )
 
 
-def _make_features_df(n: int = 10) -> pd.DataFrame:
+def _make_features_df(n: int = 10) -> pl.DataFrame:
     df = _make_ohlcv_df(n)
-    df["return_1"] = df["close"].pct_change()
-    df["log_return"] = np.log(df["close"] / df["close"].shift(1))
-    df["volatility_20"] = df["log_return"].rolling(5).std()
-    df["high_low_spread"] = (df["high"] - df["low"]) / df["close"]
-    df["vwap"] = df["close"]
+    df = df.with_columns(
+        [
+            pl.col("close").pct_change().alias("return_1"),
+            (pl.col("close").log() - pl.col("close").shift(1).log()).alias("log_return"),
+            pl.col("close").log().rolling_std(window_size=5, min_samples=2).alias("volatility_20"),
+            ((pl.col("high") - pl.col("low")) / pl.col("close")).alias("high_low_spread"),
+            pl.col("close").alias("vwap"),
+        ]
+    )
     return df
 
 
-def _make_storage(df: pd.DataFrame | None = None) -> MagicMock:
+def _make_storage(df: pl.DataFrame | None = None) -> MagicMock:
     """OHLCVStorage mock — load_ohlcv retorna df por defecto."""
     m = MagicMock()
     m.load_ohlcv.return_value = df if df is not None else _make_ohlcv_df()
@@ -109,7 +115,7 @@ class _FakeFeatureReader:
     load_features devuelve el DataFrame inyectado o lanza el error inyectado.
     """
 
-    def __init__(self, df: pd.DataFrame | None = None, exc: Optional[Exception] = None) -> None:
+    def __init__(self, df: pl.DataFrame | None = None, exc: Optional[Exception] = None) -> None:
         self._df = df
         self._exc = exc
 
@@ -122,7 +128,7 @@ class _FakeFeatureReader:
         as_of: Optional[str] = None,
         columns: Optional[list] = None,
         exchange: Optional[str] = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         if self._exc is not None:
             raise self._exc
         return self._df if self._df is not None else _make_features_df()
@@ -182,7 +188,7 @@ def test_get_ohlcv_returns_dataframe():
 
 
 def test_get_ohlcv_raises_data_not_found_when_empty():
-    _inject_factory(_make_storage(pd.DataFrame()))
+    _inject_factory(_make_storage(pl.DataFrame()))
     with pytest.raises(DataNotFoundError):
         get_ohlcv("BTC/USDT", "1h", exchange="bybit")
 

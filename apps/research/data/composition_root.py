@@ -68,9 +68,6 @@ def build_feature_reader(exchange: Optional[str] = None) -> FeatureReaderPort:
     -------
     FeatureReaderPort : lector de features Gold (hoy GoldReader).
 
-    Nota de tipos (duck-typed): GoldReader devuelve pd.DataFrame mientras el
-    port declara pl.DataFrame. Es compatible estructuralmente en runtime —
-    data_access normaliza la frontera pandas→polars en _ensure_polars(). El
-    cast documenta esa equivalencia sin tocar market_data.
+    GoldReader devuelve pl.DataFrame nativo — coincide con el port.
     """
     return cast(FeatureReaderPort, GoldReader(exchange=exchange))

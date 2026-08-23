@@ -12,7 +12,7 @@ Capas permitidas para importar
 -------------------------------
   domain/          → value objects, tipos, contratos
   ports/outbound/  → puertos abstractos (MetricsPort, OHLCVPublisherPort)
-  adapters/        → mappers ACL (pandas_to_domain)
+  adapters/        → mappers ACL (dataframe_to_domain)
   ocm/             → plataforma OCM (bind_pipeline, encoding)
 
 Lo que NO importa (DIP)
@@ -25,9 +25,9 @@ Principios: SRP · DIP · SafeOps · KISS
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Optional
 
-import pandas as pd
 import polars as pl
 
 from market_data.application.pipeline.runtime import (
@@ -89,7 +89,7 @@ class BackfillStrategy(StrategyMixin):
 
         log.info(
             "Backfill origin",
-            origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
+            origin=datetime.fromtimestamp(origin_ms / 1000, tz=timezone.utc).isoformat(),
         )
 
         start_ms = await self._resolve_backfill_start(symbol, timeframe, ctx, origin_ms)
@@ -97,8 +97,8 @@ class BackfillStrategy(StrategyMixin):
         if start_ms < origin_ms:
             log.info(
                 "Backfill completo — ya se alcanzó el origen o start_date",
-                oldest=pd.Timestamp(start_ms, unit="ms", tz="UTC").isoformat(),
-                origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
+                oldest=datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc).isoformat(),
+                origin=datetime.fromtimestamp(origin_ms / 1000, tz=timezone.utc).isoformat(),
                 start_date=ctx.start_date,
             )
             result.skipped = True
@@ -152,7 +152,7 @@ class BackfillStrategy(StrategyMixin):
                     timeframe=timeframe,
                 ).debug(
                     "Origin cache hit",
-                    origin=pd.Timestamp(ts_ms, unit="ms", tz="UTC").isoformat(),
+                    origin=datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).isoformat(),
                 )
                 return ts_ms
         except Exception as _cache_exc:
@@ -184,7 +184,7 @@ class BackfillStrategy(StrategyMixin):
                     timeframe=timeframe,
                 ).info(
                     "Origin discovery: since=1 no soportado — usando fallback",
-                    returned_origin=pd.Timestamp(origin_ms, unit="ms", tz="UTC").isoformat(),
+                    returned_origin=datetime.fromtimestamp(origin_ms / 1000, tz=timezone.utc).isoformat(),
                 )
                 origin_ms = get_origin_fallback_ms(ctx.exchange_id, ctx.market_type)
 
@@ -238,7 +238,7 @@ class BackfillStrategy(StrategyMixin):
         # Kappa: cursor Redis es SSOT. Sin cursor → cold start desde now.
         # El fallback a Silver (get_oldest_timestamp) fue eliminado —
         # el productor REST no consulta el lago para resolver su posición.
-        now_ms = int(pd.Timestamp.utcnow().timestamp() * 1000)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         effective_origin = max(start_date_ms, origin_ms)
         _log.bind(
             exchange=ctx.exchange_id,
@@ -246,7 +246,7 @@ class BackfillStrategy(StrategyMixin):
             timeframe=timeframe,
         ).info(
             "Backfill cold start — paginando desde now hacia origin",
-            effective_origin=pd.Timestamp(effective_origin, unit="ms", tz="UTC").isoformat(),
+            effective_origin=datetime.fromtimestamp(effective_origin / 1000, tz=timezone.utc).isoformat(),
         )
         return now_ms
 
@@ -278,7 +278,7 @@ class BackfillStrategy(StrategyMixin):
             if origin_ms is None:
                 raise ValueError("start_date='auto' requiere origin_ms — llamar después de _discover_origin().")
             return origin_ms
-        return int(pd.Timestamp(start_date, tz="UTC").value // 1_000_000)
+        return int(datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc).timestamp() * 1000)
 
     async def _paginate_backward(
         self,
@@ -308,11 +308,7 @@ class BackfillStrategy(StrategyMixin):
             if current_end <= effective_origin_pg:
                 log.info(
                     "Backfill: paginacion completa — origen alcanzado",
-                    effective_origin=pd.Timestamp(
-                        effective_origin_pg,
-                        unit="ms",
-                        tz="UTC",
-                    ).isoformat(),
+                    effective_origin=datetime.fromtimestamp(effective_origin_pg / 1000, tz=timezone.utc).isoformat(),
                 )
                 break
 
@@ -333,8 +329,8 @@ class BackfillStrategy(StrategyMixin):
             log.debug(
                 "Backfill chunk",
                 chunk=chunks + 1,
-                range_start=pd.Timestamp(chunk_start, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
-                range_end=pd.Timestamp(current_end, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
+                range_start=datetime.fromtimestamp(chunk_start / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                range_end=datetime.fromtimestamp(current_end / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M"),
             )
 
             try:
@@ -361,7 +357,7 @@ class BackfillStrategy(StrategyMixin):
             if not raw:
                 log.warning(
                     "Empty chunk — advancing cursor defensively",
-                    chunk_start=pd.Timestamp(chunk_start, unit="ms", tz="UTC").strftime("%Y-%m-%d %H:%M"),
+                    chunk_start=datetime.fromtimestamp(chunk_start / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M"),
                 )
                 current_end = chunk_start
                 self._update_backfill_cursor(symbol, timeframe, current_end, ctx)
@@ -465,7 +461,7 @@ class BackfillStrategy(StrategyMixin):
                         "Backfill chunk save failed — cursor NO avanzado, abortando",
                         error=str(exc),
                         chunk=chunks + 1,
-                        oldest=pd.Timestamp(oldest_in_chunk, unit="ms", tz="UTC").isoformat(),
+                        oldest=datetime.fromtimestamp(oldest_in_chunk / 1000, tz=timezone.utc).isoformat(),
                     )
                     raise
             else:
@@ -486,7 +482,7 @@ class BackfillStrategy(StrategyMixin):
                 chunk=chunks,
                 rows_chunk=len(df),
                 total_rows=total_rows,
-                oldest=pd.Timestamp(current_end, unit="ms", tz="UTC").strftime("%Y-%m-%d"),
+                oldest=datetime.fromtimestamp(current_end / 1000, tz=timezone.utc).strftime("%Y-%m-%d"),
             )
 
             if current_end <= effective_origin_pg:

@@ -31,9 +31,10 @@ Principios: DIP · SRP · KISS · SafeOps · Fail-Fast en load, Fail-Soft en met
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-import pandas as pd
+import polars as pl
 from loguru import logger
 from pyiceberg.expressions import And, EqualTo
 
@@ -134,7 +135,7 @@ class GoldReader:
         as_of: Optional[str] = None,
         columns: Optional[List[str]] = None,
         exchange: Optional[str] = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """
         Carga features Gold para un símbolo/timeframe desde Iceberg.
 
@@ -151,7 +152,7 @@ class GoldReader:
                 selected_fields=tuple(columns) if columns else _BASE_COLS,
                 **({"snapshot_id": snap_id} if snap_id is not None else {}),
             )
-            df = scan.to_arrow().to_pandas()
+            df = scan.to_polars()
         except VersionNotFoundError:
             raise
         except Exception as exc:
@@ -159,11 +160,10 @@ class GoldReader:
                 f"Gold Iceberg read failed | {exch}/{symbol}/{market_type}/{timeframe} | {exc}"
             ) from exc
 
-        if df is None or df.empty:
+        if df is None or df.is_empty():
             raise DataNotFoundError(f"No Gold data | {exch}/{symbol}/{market_type}/{timeframe}")
 
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-        df = df.sort_values("timestamp").reset_index(drop=True)
+        df = df.sort("timestamp")
 
         logger.info(
             "Gold features loaded | {}/{}/{}/{} rows={} snap={}",
@@ -294,7 +294,10 @@ class GoldReader:
         v000003 → VersionNotFoundError (formato legacy incompatible)
         """
         if as_of is not None:
-            target_ms = int(pd.Timestamp(as_of, tz="UTC").timestamp() * 1000)
+            target_dt = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+            if target_dt.tzinfo is None:
+                target_dt = target_dt.replace(tzinfo=timezone.utc)
+            target_ms = int(target_dt.timestamp() * 1000)
             try:
                 _tbl = self._get_table()
                 history = _tbl.history()

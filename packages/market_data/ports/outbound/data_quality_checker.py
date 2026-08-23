@@ -1,36 +1,35 @@
 # -*- coding: utf-8 -*-
 """
 market_data/ports/outbound/data_quality_checker.py
-====================================================
+==================================================
 
-Puerto OUTBOUND: contrato de validación de calidad de datos.
+Puerto OUTBOUND: contrato de validacion de calidad de datos.
 
 Responsabilidad
 ---------------
-Desacoplar quality/pipeline.py de cualquier implementación concreta
-(DataQualityChecker nativo, Great Expectations, Soda, etc.).
+Desacoplar quality/pipeline.py de cualquier implementacion concreta
+(DataQualityChecker nativo, Soda, etc.).
 
 Principios
 ----------
-DIP  — pipeline depende de abstracción, no de GE ni de implementación concreta
-ISP  — interfaz mínima: solo lo que QualityPipeline necesita
+DIP  — pipeline depende de abstraccion, no de implementacion concreta
+ISP  — interfaz minima: solo lo que QualityPipeline necesita
 OCP  — nuevas implementaciones sin modificar este contrato
 BC-31 — quality/ importa este port, nunca infrastructure/
 
 CheckerFactory
 --------------
-Callable que recibe los parámetros de runtime (timeframe, exchange,
+Callable que recibe los parametros de runtime (timeframe, exchange,
 rows_removed) y retorna una instancia lista para ejecutar.
 
-    factory: CheckerFactory = lambda tf, ex, rr: GEChecker(tf, ex, rr)
+    factory: CheckerFactory = native_checker_factory
     checker = factory("1h", "bybit", 0)
     report  = checker.check(df, symbol="BTC/USDT")
 
 SSOT de implementaciones
 ------------------------
-- Nativo (legacy):  market_data.quality.validators.data_quality.DataQualityChecker
-- GE (producción):  market_data.infrastructure.quality.ge_checker.GEChecker
-- Null (tests):     NullChecker (este módulo)
+- Nativo (produccion):  market_data.application.quality.data_quality.DataQualityChecker
+- Null (tests):         NullChecker (este modulo)
 """
 
 from __future__ import annotations
@@ -41,19 +40,18 @@ import polars as pl
 
 if TYPE_CHECKING:
     # Solo para type checkers — evita import circular en runtime.
-    # SSOT real: market_data.quality.validators.data_quality.DataQualityReport
+    # SSOT real: market_data.domain.quality.types.DataQualityReport
     from market_data.domain.quality.types import DataQualityReport
 
 
 @runtime_checkable
 class DataQualityCheckerPort(Protocol):
     """
-    Contrato mínimo de un validador de calidad de datos.
+    Contrato minimo de un validador de calidad de datos.
 
     Implementaciones
     ----------------
-    market_data.quality.validators.data_quality.DataQualityChecker  (nativo)
-    market_data.infrastructure.quality.ge_checker.GEChecker          (GE)
+    market_data.application.quality.data_quality.DataQualityChecker  (nativo)
 
     SafeOps
     -------
@@ -77,13 +75,13 @@ class DataQualityCheckerPort(Protocol):
 
         Returns
         -------
-        DataQualityReport con issues detectados. Lista vacía = sin problemas.
+        DataQualityReport con issues detectados. Lista vacia = sin problemas.
         """
         ...
 
 
 # ---------------------------------------------------------------------------
-# Factory type alias — único punto de configuración del checker concreto
+# Factory type alias — unico punto de configuracion del checker concreto
 # ---------------------------------------------------------------------------
 
 CheckerFactory = Callable[
@@ -102,20 +100,17 @@ Uso en QualityPipeline:
 Uso en tests:
     factory = lambda tf, ex, rr, gh: MockChecker(expected_report)
 
-Uso en producción (GE):
-    factory = ge_checker_factory  # infrastructure/quality/ge_checker.py
-
-Uso en producción (nativo):
+Uso en produccion (nativo):
     factory = native_checker_factory  # application/quality/data_quality.py
 """
 
 
 class NullChecker:
     """
-    Implementación vacía de DataQualityCheckerPort.
+    Implementacion vacia de DataQualityCheckerPort.
 
     Siempre retorna DataQualityReport limpio (sin issues).
-    Útil en dry_run o tests que no necesitan validar calidad.
+    Util en dry_run o tests que no necesitan validar calidad.
 
     SafeOps: nunca lanza excepciones.
     """

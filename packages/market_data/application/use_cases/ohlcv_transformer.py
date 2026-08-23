@@ -20,35 +20,23 @@ Pipeline aplicado
 8. Validación formal de schema (pandera·polars)
 9. Re-attach quality_flag
 
-Migración Fase 2 — completa
-----------------------------
-Todo el procesamiento interno opera sobre pl.DataFrame nativo.
-polars_interop.py eliminado — sin puentes intermedios.
-
-ACL en los límites públicos de transform():
-  Entrada: pd.DataFrame → pl.from_pandas()  — única conversión
-  Salida : pl.DataFrame → .to_pandas()      — única conversión
-
-Razón del patrón ACL
---------------------
-Los callers upstream (CCXT, fetchers REST) entregan pd.DataFrame.
-Los callers downstream (IcebergStorage) consumen pd.DataFrame.
-Convertir una sola vez en el borde elimina la deuda de polars_interop.py
-y satisface SSOT + SRP: ningún método interno conoce pandas.
+Migración completa a Polars — sin ACL Pandas
+---------------------------------------------
+Todo el procesamiento opera sobre pl.DataFrame nativo.
+Los callers upstream (fetchers REST) entregan pl.DataFrame.
+Los callers downstream (IcebergStorage) consumen pl.DataFrame.
 
 Principios aplicados
 --------------------
 • SOLID  — SRP por método; DIP vía callbacks de observabilidad en align_to_grid
 • DRY    — columnas definidas como constantes de clase
 • KISS   — flujo lineal sin estado mutable
-• ACL    — conversión pd↔pl exclusivamente en transform()
 • SafeOps — CandleValidator en try/except; nunca bloquea el pipeline
 • fail-fast — _validate_columns antes de cualquier transformación costosa
 """
 
 from __future__ import annotations
 
-import pandas as pd
 import polars as pl
 from loguru import logger
 
@@ -328,24 +316,18 @@ class OHLCVTransformer:
     @classmethod
     def transform(
         cls,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str = "unknown",
         timeframe: str = "unknown",
         exchange: str = "unknown",
         run_id: str | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """
         Pipeline completo de transformación OHLCV.
 
-        ACL boundary
-        ------------
-        Acepta pd.DataFrame — callers upstream (CCXT, fetchers REST).
-        Retorna pd.DataFrame — callers downstream (IcebergStorage).
-        Todo el procesamiento interno es polars nativo — sin puentes.
-
         Parameters
         ----------
-        df        : DataFrame OHLCV crudo (CCXT format).
+        df        : DataFrame OHLCV crudo (formato CCXT) — pl.DataFrame nativo.
         symbol    : Par de trading (para data quality reporting).
         timeframe : Intervalo temporal (para detección de gaps y grid).
         exchange  : Exchange fuente (para trazabilidad).
@@ -354,36 +336,32 @@ class OHLCVTransformer:
 
         Returns
         -------
-        pd.DataFrame con columna quality_flag adicional.
+        pl.DataFrame con columna quality_flag adicional.
         """
-        if df is None or df.empty:
+        if df is None or df.is_empty():
             logger.warning("Received empty OHLCV dataframe")
-            return pd.DataFrame(columns=cls.REQUIRED_COLUMNS)
+            return pl.DataFrame(schema={col: pl.Float64 for col in cls.REQUIRED_COLUMNS})
 
         original_rows = len(df)
 
-        # ── ACL in: pd.DataFrame → pl.DataFrame ─────────────────────────────
-        # Única conversión de entrada — a partir de aquí todo es polars.
-        pl_df = pl.from_pandas(df)
-
-        cls._validate_columns(pl_df)
+        cls._validate_columns(df)
 
         # ── Stage 1: tipos y estructura básica ────────────────────────────────
-        pl_df = cls._convert_types(pl_df)
-        pl_df = cls._remove_duplicates(pl_df)
-        pl_df = cls._align_to_grid(pl_df, timeframe, exchange, symbol)
+        df = cls._convert_types(df)
+        df = cls._remove_duplicates(df)
+        df = cls._align_to_grid(df, timeframe, exchange, symbol)
 
         # ── Stage 2: clasificación por vela ───────────────────────────────────
         # quality_flag se detach antes de pandera (strict=True rechaza cols extra)
         # y se re-attach en Stage 5.
-        pl_df, quality_flag = cls._validate_and_classify(pl_df, symbol, timeframe, exchange)
+        df, quality_flag = cls._validate_and_classify(df, symbol, timeframe, exchange)
 
         # ── Stage 3: limpieza residual + orden ────────────────────────────────
-        pl_df = cls._drop_invalid_rows(pl_df)
-        pl_df = cls._sort(pl_df)
+        df = cls._drop_invalid_rows(df)
+        df = cls._sort(df)
 
         # ── Stage 4: validación formal de schema (pandera·polars) ─────────────
-        if pl_df.is_empty():
+        if df.is_empty():
             logger.warning(
                 "OHLCV transform | {}/{} exchange={} — all {} rows rejected (corrupt/invalid)",
                 symbol,
@@ -391,30 +369,28 @@ class OHLCVTransformer:
                 exchange,
                 original_rows,
             )
-            return pd.DataFrame(columns=[*cls.REQUIRED_COLUMNS, "quality_flag"])
+            return pl.DataFrame(schema={col: pl.Float64 for col in [*cls.REQUIRED_COLUMNS, "quality_flag"]})
 
         # Re-alinear quality_flag si _drop_invalid_rows eliminó filas adicionales
-        if len(quality_flag) != len(pl_df):
-            quality_flag = pl.Series("quality_flag", ["clean"] * len(pl_df), dtype=pl.Utf8)
+        if len(quality_flag) != len(df):
+            quality_flag = pl.Series("quality_flag", ["clean"] * len(df), dtype=pl.Utf8)
 
-        pl_df = validate_ohlcv(pl_df, timeframe=timeframe)
+        df = validate_ohlcv(df, timeframe=timeframe)
 
         # ── Stage 5: re-attach quality_flag ───────────────────────────────────
-        pl_df = pl_df.with_columns(quality_flag.alias("quality_flag"))
+        df = df.with_columns(quality_flag.alias("quality_flag"))
 
         # value_counts nativo polars — DRY, sin conversión a pandas
-        vc = pl_df["quality_flag"].value_counts()
+        vc = df["quality_flag"].value_counts()
         flag_counts = dict(zip(vc["quality_flag"].to_list(), vc["count"].to_list(), strict=True))
         logger.info(
             "OHLCV transformed | {}/{} exchange={} rows={}/{} quality_flag_counts={}",
             symbol,
             timeframe,
             exchange,
-            len(pl_df),
+            len(df),
             original_rows,
             flag_counts,
         )
 
-        # ── ACL out: pl.DataFrame → pd.DataFrame ─────────────────────────────
-        # Única conversión de salida — backward compat con callers downstream.
-        return pl_df.to_pandas()
+        return df
