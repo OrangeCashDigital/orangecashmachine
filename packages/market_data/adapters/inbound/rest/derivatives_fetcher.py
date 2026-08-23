@@ -42,10 +42,6 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.state import AsyncCursorStorePort
     from market_data.ports.outbound.storage import DerivativesStoragePort
 
-if TYPE_CHECKING:
-    pass
-
-import pandas as pd
 import polars as pl
 from loguru import logger
 
@@ -71,7 +67,7 @@ MAX_BACKOFF_SECONDS: float = 20.0
 # ---------------------------------------------------------------------------
 
 
-def _parse_funding_rate(raw: Dict[str, Any]) -> pd.DataFrame:
+def _parse_funding_rate(raw: Dict[str, Any]) -> pl.DataFrame:
     """
     Convierte respuesta CCXT fetch_funding_rate a DataFrame normalizado.
 
@@ -82,19 +78,21 @@ def _parse_funding_rate(raw: Dict[str, Any]) -> pd.DataFrame:
     rate = raw.get("fundingRate")
 
     if ts_ms is None or rate is None:
-        return pd.DataFrame()
+        return pl.DataFrame(schema={"timestamp": pl.Datetime("us", "UTC"), "funding_rate": pl.Float64})
 
-    return pd.DataFrame(
-        [
-            {
-                "timestamp": pd.Timestamp(int(ts_ms), unit="ms", tz="UTC"),
-                "funding_rate": float(rate),
-            }
-        ]
+    return pl.DataFrame(
+        {
+            "timestamp": [int(ts_ms)],
+            "funding_rate": [float(rate)],
+        },
+        schema={
+            "timestamp": pl.Datetime("us", "UTC"),
+            "funding_rate": pl.Float64,
+        },
     )
 
 
-def _parse_open_interest(raw: Dict[str, Any]) -> pd.DataFrame:
+def _parse_open_interest(raw: Dict[str, Any]) -> pl.DataFrame:
     """
     Convierte respuesta CCXT fetch_open_interest a DataFrame normalizado.
 
@@ -105,15 +103,17 @@ def _parse_open_interest(raw: Dict[str, Any]) -> pd.DataFrame:
     oi = raw.get("openInterest")
 
     if ts_ms is None or oi is None:
-        return pd.DataFrame()
+        return pl.DataFrame(schema={"timestamp": pl.Datetime("us", "UTC"), "open_interest": pl.Float64})
 
-    return pd.DataFrame(
-        [
-            {
-                "timestamp": pd.Timestamp(int(ts_ms), unit="ms", tz="UTC"),
-                "open_interest": float(oi),
-            }
-        ]
+    return pl.DataFrame(
+        {
+            "timestamp": [int(ts_ms)],
+            "open_interest": [float(oi)],
+        },
+        schema={
+            "timestamp": pl.Datetime("us", "UTC"),
+            "open_interest": pl.Float64,
+        },
     )
 
 
@@ -178,11 +178,11 @@ class _BaseDerivativesFetcher:
             return 0
 
         df = self._parse(raw)
-        if df.empty:
+        if df.is_empty():
             return 0
 
         # Dedup por cursor: si el timestamp ya está almacenado, skip
-        snapshot_ts_ms = int(df["timestamp"].iloc[0].timestamp() * 1000)
+        snapshot_ts_ms = int(df["timestamp"].dt.timestamp("ms")[0])
         last_ts_ms = await self._resolve_cursor(symbol)
 
         if last_ts_ms is not None and snapshot_ts_ms <= last_ts_ms:
@@ -195,9 +195,9 @@ class _BaseDerivativesFetcher:
 
         # Añadir symbol antes de escribir (DerivativesStorage._normalize
         # añade exchange y market_type, pero symbol viene del fetcher)
-        df["symbol"] = symbol
+        df = df.with_columns(pl.lit(symbol).alias("symbol"))
 
-        rows = self._storage.upsert(pl.from_pandas(df))
+        rows = self._storage.upsert(df)
         await self._update_cursor(symbol, snapshot_ts_ms)
         return rows
 
@@ -208,7 +208,7 @@ class _BaseDerivativesFetcher:
     async def _fetch_raw(self, symbol: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
-    def _parse(self, raw: Dict[str, Any]) -> pd.DataFrame:
+    def _parse(self, raw: Dict[str, Any]) -> pl.DataFrame:
         raise NotImplementedError
 
     # ------------------------------------------------------------------
@@ -287,7 +287,7 @@ class FundingRateFetcher(_BaseDerivativesFetcher):
         client = await self._client._get_client()
         return await client.fetch_funding_rate(symbol)
 
-    def _parse(self, raw: Dict[str, Any]) -> pd.DataFrame:
+    def _parse(self, raw: Dict[str, Any]) -> pl.DataFrame:
         return _parse_funding_rate(raw)
 
 
@@ -302,7 +302,7 @@ class OpenInterestFetcher(_BaseDerivativesFetcher):
         client = await self._client._get_client()
         return await client.fetch_open_interest(symbol)
 
-    def _parse(self, raw: Dict[str, Any]) -> pd.DataFrame:
+    def _parse(self, raw: Dict[str, Any]) -> pl.DataFrame:
         return _parse_open_interest(raw)
 
 

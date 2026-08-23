@@ -21,7 +21,7 @@ Uso
 ---
   cache = TimestampCacheService(cursor_store=redis_cursor)
   ts = cache.get(symbol="BTC/USDT", timeframe="1m")  # L1 o L2
-  cache.set(symbol="BTC/USDT", timeframe="1m", ts=pd.Timestamp(...))
+  cache.set(symbol="BTC/USDT", timeframe="1m", ts=datetime(2024, 1, 1, tzinfo=timezone.utc))
   cache.invalidate(symbol="BTC/USDT", timeframe="1m")
   cache.invalidate_all()
 

@@ -40,7 +40,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-import pandas as pd
+import polars as pl
 import pytest
 from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.models.position import PortfolioState, PositionSnapshot
@@ -135,7 +135,7 @@ class _CloseDataSource:
         self._close = close
 
     def load_features(self, exchange, symbol, timeframe, market_type="spot", **kwargs):
-        return pd.DataFrame(
+        return pl.DataFrame(
             {
                 "timestamp": [_NOW],
                 "open": [self._close],

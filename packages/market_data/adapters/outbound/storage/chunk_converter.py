@@ -17,7 +17,7 @@ class PassthroughChunkConverter:
         chunk_index: int = 0,
         total_chunks: Optional[int] = None,
     ) -> object:
-        from market_data.adapters.inbound.pandas_to_domain import ohlcv_df_to_chunk
+        from market_data.adapters.inbound.dataframe_to_domain import ohlcv_df_to_chunk
 
         return ohlcv_df_to_chunk(
             df=df,

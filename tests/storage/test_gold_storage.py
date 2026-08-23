@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 tests/storage/test_gold_storage.py
-====================================
+==================================
 
 Tests unitarios de GoldStorage y GoldLoader.
 
 Estrategia de aislamiento
---------------------------
+-------------------------
 • GoldStorage: dry_run=True — verifica lógica sin escribir en Iceberg.
 • GoldLoader:  tests de construcción e invariantes de interfaz sin I/O real.
 • Build completo (Silver→features→Gold) requiere Iceberg poblado — queda
@@ -24,7 +24,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pandas as pd
 import polars as pl
 import pytest
 from market_data.adapters.outbound.storage.gold_reader import GoldReader as GoldLoader
@@ -49,18 +48,17 @@ from market_data.infrastructure.storage.gold.transformer import (
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
-def _make_silver_df(n: int = 30, seed: int = 0) -> pd.DataFrame:
-    """DataFrame OHLCV sintético que simula salida de IcebergStorage.
-
-    Pandas por defecto: _prepare_gold_df y varios tests la llaman
-    directamente y siguen operando en pandas. La conversión a polars
-    ocurre únicamente donde se simula silver.load_ohlcv() (ver mock
-    más abajo), que es el único boundary real."""
+def _make_silver_df(n: int = 30, seed: int = 0) -> pl.DataFrame:
+    """DataFrame OHLCV sintético que simula salida de IcebergStorage."""
     rng = np.random.default_rng(seed)
     close = rng.uniform(40_000, 50_000, n)
-    return pd.DataFrame(
+    from datetime import datetime, timedelta, timezone
+
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end = start + timedelta(hours=n - 1)
+    return pl.DataFrame(
         {
-            "timestamp": pd.date_range("2024-01-01", periods=n, freq="1h", tz="UTC"),
+            "timestamp": pl.datetime_range(start, end, interval="1h", time_zone="UTC", eager=True),
             "open": close + rng.uniform(-200, 200, n),
             "high": close + rng.uniform(100, 500, n),
             "low": close - rng.uniform(100, 500, n),
@@ -104,7 +102,7 @@ def test_build_dry_run_returns_dataframe_with_features(gold):
         "snapshot_id": 12345,
         "timestamp_ms": 1_700_000_000_000,
     }
-    mock_silver.load_ohlcv.return_value = pl.from_pandas(silver_df)
+    mock_silver.load_ohlcv.return_value = silver_df
 
     with patch(
         "market_data.infrastructure.storage.gold.gold_storage.IcebergStorage",
@@ -201,7 +199,7 @@ def test_prepare_gold_df_timestamp_is_microseconds_utc():
         silver_snapshot_id=0,
         silver_snapshot_ms=0,
     )
-    assert str(result["timestamp"].dtype) == "datetime64[us, UTC]"
+    assert result["timestamp"].dtype == pl.Datetime("us", "UTC")
 
 
 def test_prepare_gold_df_run_id_empty_string_when_none():

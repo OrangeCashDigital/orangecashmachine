@@ -1,19 +1,19 @@
 """
-market_data/adapters/pandas_to_domain.py
+market_data/adapters/inbound/dataframe_to_domain.py
 =========================================
 
-Adapter/Anti-Corruption Layer entre pandas (externo) y el dominio OHLCV.
+Adapter/Anti-Corruption Layer entre un DataFrame tabular externo y el dominio OHLCV.
 
 Responsabilidad
 ---------------
-Traducir pd.DataFrame (formato tabular externo) a objetos de dominio
+Traducir pl.DataFrame (formato tabular externo) a objetos de dominio
 (OHLCVChunk, Candle) con validación completa.
 
 Clean Architecture
 ------------------
 Este adapter está en la frontera entre infraestructura y dominio.
-- pandas CONSUME dominio (importa domain.value_objects)
-- el dominio NO conoce pandas (no importa este módulo)
+- este adapter consume el dominio (importa domain.value_objects)
+- el dominio NO conoce este adapter ni Polars
 
 Principios: SRP · Fail-Fast · SafeOps · DIP · KISS · SSOT
 """
@@ -69,7 +69,7 @@ def ohlcv_df_to_chunk(
     Parameters
     ----------
     df : DataFrame con columnas [timestamp, open, high, low, close, volume].
-         timestamp puede ser pd.Timestamp o int epoch ms.
+         timestamp puede ser pl.Datetime o int epoch ms.
     """
     # ── Fail-Fast: validar columnas ──────────────────────────────────────────
     missing = _REQUIRED_COLUMNS - set(df.columns)

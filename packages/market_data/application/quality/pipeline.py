@@ -46,7 +46,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 # terceros
-import pandas as pd
 import polars as pl
 from loguru import logger
 
@@ -92,7 +91,7 @@ class QualityPipelineResult:
     tier   : DataTier resultante (CLEAN / FLAGGED / REJECTED)
     """
 
-    df: pd.DataFrame
+    df: pl.DataFrame
     report: DataQualityReport
     policy: PolicyResult
     tier: DataTier
@@ -156,7 +155,7 @@ class QualityPipeline:
 
     def run(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange: str,
@@ -169,7 +168,9 @@ class QualityPipeline:
 
         Parameters
         ----------
-        df           : DataFrame Silver a evaluar
+        df           : DataFrame Silver a evaluar (polars nativo — sin
+                       conversión interna; los strategies ya migrados
+                       entregan pl.DataFrame en el boundary ACL)
         symbol       : par de trading (e.g. "BTC/USDT")
         timeframe    : intervalo (e.g. "1h")
         exchange     : nombre del exchange (e.g. "bybit")
@@ -184,9 +185,9 @@ class QualityPipeline:
         if git_hash == "unknown":
             git_hash = self._git_hash
         # 1. Validación de calidad
-        # DIP: checker inyectado por factory
+        # DIP: checker inyectado por factory — polars nativo, sin bridge
         checker = self._checker_factory(timeframe, exchange, rows_removed, git_hash)
-        report = checker.check(pl.from_pandas(df), symbol=symbol)
+        report = checker.check(df, symbol=symbol)
         result = self._policy.evaluate(report)
 
         # 2. Gap scan post-ingesta
@@ -204,7 +205,7 @@ class QualityPipeline:
 
     def _scan_and_emit_gaps(
         self,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         timeframe: str,
         symbol: str,
         exchange: str,
@@ -216,7 +217,7 @@ class QualityPipeline:
         Descuenta rows_removed para no contar gaps pipeline-induced
         como gaps reales de fuente.
         """
-        gaps_raw = scan_gaps(pl.from_pandas(df), timeframe)
+        gaps_raw = scan_gaps(df, timeframe)
         gaps = gaps_raw[rows_removed:] if rows_removed > 0 else gaps_raw
         if not gaps:
             return
@@ -313,7 +314,7 @@ class QualityPipeline:
         run_id: Optional[str],
         tier: DataTier,
         result: PolicyResult,
-        df: pd.DataFrame,
+        df: pl.DataFrame,
         symbol: str,
         timeframe: str,
         exchange: str,

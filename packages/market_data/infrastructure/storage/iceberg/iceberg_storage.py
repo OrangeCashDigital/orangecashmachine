@@ -267,7 +267,7 @@ class IcebergStorage:
         # Polars.to_arrow() marca columnas nullable=True por defecto — el
         # schema Iceberg exige required=True en todos los campos OHLCV base.
         # .cast() fuerza el schema exacto (tipos + nullability), igual que
-        # antes hacía pa.Table.from_pandas(..., schema=...) explícitamente.
+        # antes hacía pa.Table.from_pandas(..., schema=...) — ahora usa pa.table.
         self._table.append(prepared.to_arrow().cast(self._table.schema().as_arrow()))
 
         # Invalidar cache L1/L2 tras escritura exitosa (SSOT: _ts_cache)

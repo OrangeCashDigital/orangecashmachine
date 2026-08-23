@@ -37,7 +37,6 @@ if TYPE_CHECKING:
     from market_data.ports.outbound.state import AsyncCursorStorePort
     from market_data.ports.outbound.storage import TradesStoragePort
 
-import pandas as pd
 import polars as pl
 from loguru import logger
 
@@ -63,14 +62,24 @@ _MAX_BACKOFF_S = 15.0
 # ---------------------------------------------------------------------------
 
 
-def _parse_trades(raw: list) -> pd.DataFrame:
+def _parse_trades(raw: list) -> pl.DataFrame:
     """
     Convierte respuesta CCXT ``fetch_trades`` a DataFrame normalizado.
 
     Filtra registros sin trade_id o timestamp (SafeOps).
     """
     if not raw:
-        return pd.DataFrame()
+        return pl.DataFrame(
+            schema={
+                "trade_id": pl.Utf8,
+                "timestamp": pl.Int64,
+                "symbol": pl.Utf8,
+                "side": pl.Utf8,
+                "price": pl.Float64,
+                "amount": pl.Float64,
+                "cost": pl.Float64,
+            }
+        )
 
     records = []
     for t in raw:
@@ -90,7 +99,19 @@ def _parse_trades(raw: list) -> pd.DataFrame:
             }
         )
 
-    return pd.DataFrame(records) if records else pd.DataFrame()
+    if not records:
+        return pl.DataFrame(
+            schema={
+                "trade_id": pl.Utf8,
+                "timestamp": pl.Int64,
+                "symbol": pl.Utf8,
+                "side": pl.Utf8,
+                "price": pl.Float64,
+                "amount": pl.Float64,
+                "cost": pl.Float64,
+            }
+        )
+    return pl.DataFrame(records)
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +199,7 @@ class TradesFetcher:
         while pages_read < _MAX_PAGES:
             df = await self._fetch_page_with_retry(symbol, last_ts_ms)
 
-            if df.empty:
+            if df.is_empty():
                 self._log.debug(
                     "fetch_symbol done (vacío) | symbol={} pages={} rows={}",
                     symbol,
@@ -189,9 +210,9 @@ class TradesFetcher:
 
             # Avanzar cursor antes de escribir (fail-safe: si write falla
             # el cursor no avanza → reintentará en el próximo run)
-            page_max_ts = int(df["timestamp"].max())
+            page_max_ts = int(df["timestamp"].max())  # type: ignore[arg-type]
 
-            rows = self._storage.append(pl.from_pandas(df))
+            rows = self._storage.append(df)
             total_rows += rows
             pages_read += 1
 
@@ -262,11 +283,11 @@ class TradesFetcher:
         self,
         symbol: str,
         since_ms: Optional[int],
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Fetcha una página delegando retry a _retry.retry_async (DRY)."""
         from market_data.adapters.inbound.rest._retry import retry_async
 
-        async def _call() -> pd.DataFrame:
+        async def _call() -> pl.DataFrame:
             raw = await self._client.fetch_trades(
                 symbol,
                 since=since_ms,

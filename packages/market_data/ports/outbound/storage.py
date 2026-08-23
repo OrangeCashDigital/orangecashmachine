@@ -101,7 +101,7 @@ class OHLCVStorage(Protocol):
 
         Returns
         -------
-        pd.Timestamp (tz=UTC) si hay datos, None si no hay datos.
+        datetime (tz=UTC) si hay datos, None si no hay datos.
         """
         ...
 

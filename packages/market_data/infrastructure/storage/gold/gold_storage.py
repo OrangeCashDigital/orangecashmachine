@@ -34,9 +34,9 @@ SRP   — GoldStorage orquesta; GoldTransformer transforma.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List, Optional
 
-import pandas as pd
 import polars as pl
 import pyarrow as pa
 from loguru import logger
@@ -142,10 +142,10 @@ class GoldStorage:
         symbol: str,
         market_type: str,
         timeframe: str,
-        start: Optional[pd.Timestamp] = None,
-        end: Optional[pd.Timestamp] = None,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
         run_id: Optional[str] = None,
-    ) -> Optional[pd.DataFrame]:
+    ) -> Optional[pl.DataFrame]:
         """
         Lee Silver (Iceberg), calcula features y hace overwrite en Gold.
 
@@ -155,12 +155,12 @@ class GoldStorage:
         Parameters
         ----------
         exchange / symbol / market_type / timeframe : identidad del dataset.
-        start / end : filtro temporal opcional sobre Silver.
+        start / end : filtro temporal opcional sobre Silver (datetime UTC).
         run_id      : correlación con el run de ingestión.
 
         Returns
         -------
-        pd.DataFrame con features, o None si Silver está vacío o falla.
+        pl.DataFrame con features, o None si Silver está vacío o falla.
         """
         # DIP: usar silver_storage inyectado o crear lazy (compatibilidad).
         # Preferir inyección explícita desde el composition root.
@@ -206,13 +206,8 @@ class GoldStorage:
             )
             return None
 
-        # ACL: silver.load_ohlcv() ya es pl.DataFrame nativo (OHLCVStorage port
-        # migrado). Boundary único de conversión — el resto del pipeline Gold
-        # (_prepare_gold_df, pa.Table.from_pandas) sigue en pandas por ahora.
-        df = df_pl.to_pandas()
-
         # ── Limpiar timestamps NaN antes de feature engineering ───────────────
-        nan_ts = df["timestamp"].isna().sum()
+        nan_ts = df_pl["timestamp"].is_null().sum()
         if nan_ts > 0:
             logger.warning(
                 "Gold build: {} timestamps NaN eliminados | {}/{}/{}/{}",
@@ -222,15 +217,15 @@ class GoldStorage:
                 market_type,
                 timeframe,
             )
-            df = df.dropna(subset=["timestamp"]).reset_index(drop=True)
+            df_pl = df_pl.drop_nulls(subset=["timestamp"])
 
         # ── Feature engineering — GoldTransformer (estático, sin estado) ──────
-        df = GoldTransformer.transform(
-            pl.from_pandas(df),
+        df_pl = GoldTransformer.transform(
+            df_pl,
             symbol=symbol,
             timeframe=timeframe,
             exchange=exchange,
-        ).to_pandas()
+        )
 
         # ── DRY RUN ───────────────────────────────────────────────────────────
         if self._dry_run:
@@ -240,14 +235,14 @@ class GoldStorage:
                 symbol,
                 market_type,
                 timeframe,
-                len(df),
+                len(df_pl),
                 run_id,
             )
-            return df
+            return df_pl
 
         # ── Preparar DataFrame para Iceberg ───────────────────────────────────
         prepared = _prepare_gold_df(
-            df,
+            df_pl,
             exchange=exchange,
             symbol=symbol,
             market_type=market_type,
@@ -260,10 +255,9 @@ class GoldStorage:
 
         # ── Overwrite atómico — reemplaza solo este dataset ───────────────────
         self._table.overwrite(
-            pa.Table.from_pandas(
+            pa.table(
                 prepared,
                 schema=self._table.schema().as_arrow(),
-                preserve_index=False,
             ),
             overwrite_filter=_dataset_filter(
                 exchange,
@@ -286,11 +280,11 @@ class GoldStorage:
             symbol,
             market_type,
             timeframe,
-            len(df),
-            len(df.columns),
+            len(df_pl),
+            len(df_pl.columns),
             _snap_id,
         )
-        return df
+        return df_pl
 
     def build_all(
         self,
@@ -399,7 +393,7 @@ def _dataset_filter(
 
 
 def _prepare_gold_df(
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     exchange: str,
     symbol: str,
     market_type: str,
@@ -408,7 +402,7 @@ def _prepare_gold_df(
     engineer_version: str,
     silver_snapshot_id: int,
     silver_snapshot_ms: int,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """
     Prepara el DataFrame para escritura en Iceberg:
     - Timestamp a microsegundos UTC.
@@ -416,19 +410,21 @@ def _prepare_gold_df(
     - Rellena features ausentes con None (columnas nullable en schema).
     - Reordena al orden canónico _GOLD_COLS.
     """
-    df = df.copy()
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).astype("datetime64[us, UTC]")
-    df["exchange"] = exchange
-    df["market_type"] = market_type
-    df["symbol"] = symbol
-    df["timeframe"] = timeframe
-    df["run_id"] = run_id or ""
-    df["engineer_version"] = engineer_version
-    df["silver_snapshot_id"] = silver_snapshot_id
-    df["silver_snapshot_ms"] = silver_snapshot_ms
+    df = df.with_columns(
+        [
+            pl.lit(exchange).alias("exchange"),
+            pl.lit(market_type).alias("market_type"),
+            pl.lit(symbol).alias("symbol"),
+            pl.lit(timeframe).alias("timeframe"),
+            pl.lit(run_id or "").alias("run_id"),
+            pl.lit(engineer_version).alias("engineer_version"),
+            pl.lit(silver_snapshot_id).alias("silver_snapshot_id"),
+            pl.lit(silver_snapshot_ms).alias("silver_snapshot_ms"),
+        ]
+    )
 
     for col in _GOLD_COLS:
         if col not in df.columns:
-            df[col] = None
+            df = df.with_columns(pl.lit(None).alias(col))
 
-    return df[_GOLD_COLS].reset_index(drop=True)
+    return df.select(_GOLD_COLS)

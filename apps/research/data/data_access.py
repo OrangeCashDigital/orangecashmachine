@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from market_data.ports.outbound.storage import OHLCVStorage
@@ -96,19 +96,6 @@ def _parse_utc(value: Optional[str]) -> Optional[datetime]:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _ensure_polars(df: object, *, source: str) -> pl.DataFrame:
-    if isinstance(df, pl.DataFrame):
-        return df
-    if hasattr(df, "columns") and hasattr(df, "to_dict"):
-        logger.debug("ACL boundary: pandas -> polars | source={}", source)
-        # Duck-typed (sin dependencia directa de pandas en research): el check
-        # de shape ya validó el contrato pd.DataFrame, el cast es solo para mypy.
-        return pl.from_pandas(cast(Any, df))
-    raise DataReadError(
-        f"Tipo de retorno inesperado desde {source}: {type(df)!r} — se esperaba pl.DataFrame o pd.DataFrame"
-    )
-
-
 def get_ohlcv(
     symbol: str,
     timeframe: str,
@@ -139,8 +126,6 @@ def get_ohlcv(
         raise DataNotFoundError(
             f"No data | {symbol}/{timeframe} exchange={exchange or _DEFAULT_EXCHANGE} start={start} end={end}"
         )
-
-    df = _ensure_polars(df, source="OHLCVStorage.load_ohlcv")
 
     if df.is_empty():
         raise DataNotFoundError(
@@ -249,16 +234,13 @@ def get_features(
     mkt = (market_type or _DEFAULT_MARKET_TYPE).lower()
     exc = (exchange or _DEFAULT_EXCHANGE).lower()
 
-    raw_df = loader.load_features(
+    df = loader.load_features(
         exchange=exc,
         symbol=symbol,
         market_type=mkt,
         timeframe=timeframe,
         version=version,
     )
-    # Frontera pandas -> polars (SSOT de conversión en _ensure_polars):
-    # variable propia para que mypy infiera pl.DataFrame tras el ACL.
-    df = _ensure_polars(raw_df, source="GoldLoader.load_features")
 
     start_dt = _parse_utc(start)
     end_dt = _parse_utc(end)
