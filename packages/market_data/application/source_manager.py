@@ -254,8 +254,7 @@ class TradesSourceManager:
 
     def _advance_cursor(self, trade) -> None:
         """Cursor monotónico — solo avanza, nunca retrocede."""
-        if trade.timestamp_ms > self._cursor_ms:
-            self._cursor_ms = trade.timestamp_ms
+        self._cursor_ms = max(self._cursor_ms, trade.timestamp_ms)
 
     # ------------------------------------------------------------------ #
     # SafeOps                                                              #
