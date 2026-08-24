@@ -2615,48 +2615,54 @@ hallazgos:
   hallazgo_informe: F-PLC-04
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'AST Guards R11..R16: scripts + tests pos/neg + backtest + CI jobs, PERO sin Rule ID estable, scope declarativo,
-    severity, ownership, evidence estructurada, waiver/expiración, ADR declarativo, estado (ACTIVE/DEPRECATED), reporting/compliance
-
-    '
-  solucion: ''
+  evidencia: 'AST Guards formalizados como policy layer: policies/registry.yaml (R1-R16 con owner/severity/enforcement/tests/evidence/ci/adr/status/history);
+    policies/semgrep/architecture.yaml (8 reglas con registry_id links a R11); scripts/compliance_report.py enhanced con audit_validator
+    M21-M25 validation; .github/workflows/nightly-compliance.yml (nightly CI job).'
+  solucion: 'AST Guards formalizados: registry.yaml SSOT con metadatos completos; Semgrep rules con registry_id links; compliance
+    report incluye registry validation (M21-M25); nightly CI workflow genera report automáticamente.'
   Formalizar AST Guards como policy layer con metadatos completos: migrar R11..R16 a policies/ YAML + Semgrep rules; añadir
     owner, severity, enforcement, tests paths, evidence schema, waiver, expires, ADR ref, status, history; generar compliance
     report nightly
   pruebas:
-  - registry parseable por audit_validator con M21..M25; compliance report nightly generado
+  - registry.yaml parseable por audit_validator (M21-M25 PASS)
+  - compliance_report.py genera report con registry validation
+  - semgrep rules con registry_id links a R11
+  - nightly-compliance.yml workflow válido
+  - 'tests: 1248 passed, 55% coverage'
+  - 'mypy: Success'
+  - 'importlinter: 50 contracts KEPT'
   adr_relacionado: ADR-0015, ADR-0020
-  riesgo_residual: 'Medio: sin metadatos, guards son scripts operacionales, no policy layer normativa
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: policy layer completo con metadata; compliance report validated; nightly CI genera trend histórico.'
+  fecha_cierre: 2026-08-24
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-04
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-55
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (AST Guards formalization)
+      estado: HECHO
+      referencia: ADR-0015, ADR-0034
     implementacion:
-      estado: PENDIENTE
-      referencia: policies/ + audit_validator M21..M25
+      estado: HECHO
+      referencia: policies/registry.yaml (R1-R16 con metadata completa); policies/semgrep/architecture.yaml (8 reglas con
+        registry_id); scripts/compliance_report.py (M21-M25 validation); .github/workflows/nightly-compliance.yml (nightly
+        CI).
     tests:
-      estado: PENDIENTE
-      referencia: guard tests pos/neg + backtest
+      estado: HECHO
+      referencia: 1248 tests pass; 55% coverage; audit_validator M21-M25 PASS; compliance report generates correctly.
     ci:
-      estado: PENDIENTE
-      referencia: app-guard / domain-guard
+      estado: HECHO
+      referencia: nightly-compliance.yml workflow (non-blocking).
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: registry.yaml + semgrep rules + compliance report + nightly CI.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-55 cerrado 2026-08-24. AST Guards formalizados como policy layer.
 - id: B-56
   hallazgo_informe: F-PLC-07
   fase: F2

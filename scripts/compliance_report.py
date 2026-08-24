@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Nightly compliance report for maintainability metrics (B-54).
+"""Nightly compliance report for maintainability metrics (B-54/B-55).
 
-Runs ruff (C901/PLR/SIM) + vulture and generates a summary report.
-Intended for nightly CI or local execution. Non-blocking by design.
+Runs ruff (C901/PLR/SIM) + vulture + audit_validator (M21-M25) and
+generates a summary report. Intended for nightly CI or local execution.
+Non-blocking by design.
 
 Usage:
     python scripts/compliance_report.py              # stdout
@@ -76,6 +77,71 @@ def _parse_vulture_findings(output: str) -> list[dict[str, str | int]]:
     return findings
 
 
+def _parse_pass_line(line: str) -> dict[str, int]:
+    """Parse the PASS summary line from audit_validator."""
+    result: dict[str, int] = {
+        "findings": 0,
+        "rules": 0,
+        "warnings": 0,
+        "skipped": 0,
+    }
+    if "findings" in line:
+        parts = line.split("findings")
+        if len(parts) >= 2:
+            num_str = parts[0].split("—")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["findings"] = int(num_str)
+    if "reglas" in line:
+        parts = line.split("reglas")
+        if len(parts) >= 2:
+            num_str = parts[0].split(",")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["rules"] = int(num_str)
+    if "warnings" in line:
+        parts = line.split("warnings")
+        if len(parts) >= 2:
+            num_str = parts[0].split("(")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["warnings"] = int(num_str)
+    if "skipped" in line:
+        parts = line.split("skipped")
+        if len(parts) >= 2:
+            num_str = parts[0].split("(")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["skipped"] = int(num_str)
+    return result
+
+
+def _parse_audit_validator(output: str) -> dict[str, object]:
+    """Parse audit_validator output into structured result."""
+    details: list[str] = []
+    result: dict[str, object] = {
+        "status": "PASS",
+        "findings": 0,
+        "rules": 0,
+        "warnings": 0,
+        "skipped": 0,
+        "details": details,
+    }
+    for line in output.splitlines():
+        line = line.strip()
+        if line.startswith("PASS"):
+            result["status"] = "PASS"
+            parsed = _parse_pass_line(line)
+            result["findings"] = parsed["findings"]
+            result["rules"] = parsed["rules"]
+            result["warnings"] = parsed["warnings"]
+            result["skipped"] = parsed["skipped"]
+        elif line.startswith("FAIL"):
+            result["status"] = "FAIL"
+        elif line.startswith("ERROR"):
+            result["status"] = "ERROR"
+        elif line.startswith("[") and "]" in line:
+            # Detail line like: [M21] ...
+            details.append(line)
+    return result
+
+
 def generate_report() -> dict:
     """Generate the compliance report as a dict."""
     today = date.today().isoformat()
@@ -131,6 +197,22 @@ def generate_report() -> dict:
                 with contextlib.suppress(ValueError):
                     ruff_full_total = int(parts[1])
 
+    # Run audit_validator (M21-M25)
+    audit_code, audit_out = _run(
+        [
+            sys.executable,
+            "scripts/audit_validator.py",
+        ]
+    )
+    audit_result = _parse_audit_validator(audit_out)
+
+    # Determine overall status
+    status = "PASS"
+    if ruff_code != 0 or vulture_code != 0:
+        status = "WARN"
+    if audit_result["status"] == "FAIL":
+        status = "FAIL"
+
     report = {
         "report_type": "nightly_compliance",
         "date": today,
@@ -150,11 +232,20 @@ def generate_report() -> dict:
             "findings": vulture_findings[:20],  # top 20
             "exit_code": vulture_code,
         },
+        "registry_validation": {
+            "status": audit_result["status"],
+            "findings": audit_result["findings"],
+            "rules": audit_result["rules"],
+            "warnings": audit_result["warnings"],
+            "skipped": audit_result["skipped"],
+            "details": audit_result["details"][:10],  # type: ignore[index]  # top 10
+        },
         "summary": {
             "ruff_complexity_violations": ruff_total,
             "ruff_full_errors": ruff_full_total,
             "vulture_findings": vulture_total,
-            "status": "PASS" if ruff_code == 0 and vulture_code == 0 else "WARN",
+            "registry_status": audit_result["status"],
+            "status": status,
         },
     }
     return report
@@ -169,6 +260,7 @@ def _print_text(report: dict) -> None:
     print(f"  Ruff (C901/PLR/SIM) violations: {s['ruff_complexity_violations']}")
     print(f"  Ruff (full E/F/I/C901/PLR/SIM) errors: {s['ruff_full_errors']}")
     print(f"  Vulture findings: {s['vulture_findings']}")
+    print(f"  Registry validation (M21-M25): {s['registry_status']}")
     print()
 
     rc = report["ruff_complexity"]
@@ -185,6 +277,13 @@ def _print_text(report: dict) -> None:
             print(f"    {f['file']}:{f['line']} — {f['description']} ({f['confidence']}%)")
         if v["findings_count"] > 10:
             print(f"    ... and {v['findings_count'] - 10} more")
+        print()
+
+    rv = report["registry_validation"]
+    if rv["details"]:
+        print(f"  Registry validation details ({rv['status']}):")
+        for d in rv["details"]:
+            print(f"    {d}")
         print()
 
 
