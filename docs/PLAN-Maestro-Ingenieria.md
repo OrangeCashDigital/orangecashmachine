@@ -148,7 +148,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Entregables:** `fail_under` sobre medición en vivo; bandit en CI+pre-commit; Docker endurecido (`.dockerignore`, HEALTHCHECK, bindings); paridad de config; reglas R5–R8 activas.
 - **DOD:** `fail_under > 0`; bandit `-ll` sin BLOCKER; mypy completo verde (o fallo documentado); `docker build` sin `.env` horneado; paridad config verde; `lint-imports` falla si el conteo de contratos baja de `50`.
 - **Criterio de salida:** G5–G9 PASS; ADR-0020 (Production Gate como gate de release) aceptada.
-- **Avance (2026-08-23):** audit_validator.py implementa M22–M25 (ADR-0031); policies/registry.yaml creado (PR #19). Contratos: 50 KEPT.
+- **Avance (2026-08-23):** audit_validator.py implementa M22–M25 (ADR-0031); policies/registry.yaml creado (PR #19). Contratos: 50 KEPT. **B-47 cerrado:** ruff select activa C901/PLR/SIM; 79 violaciones baseline. **B-48 cerrado:** vulture pre-commit+CI (non-blocking); baseline 23 false positives.
 
 #### F2.2 — Gobernanza documental (ADR única SSOT)
 
@@ -540,5 +540,6 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
 | 2026-08-19 | (consolidación post-auditorías) | **Consolidación documental completa** tras auditorías Policy Layer (feasibility + complementary + adversarial): tracking.yaml actualizado con B-47..B-60 (Policy Layer findings); Plan Maestro corregido: check_production_gates.py marcado PENDIENTE (B-49), ruff config E/F/I only (B-47), vulture installed not enforced (B-48), CodeQL/Trivy PR+weekly (B-60), fail_under=40 baseline 44% fijado; ADRs propuestas ADR-0021..0028 añadidas; Mapa Fase↔Hallazgos extendido; §6 Production Gate y §10 Umbrales corregidos; §3 Principio 10 corregido. |
 | 2026-08-23 | (`c392f8f`, PR #19) | **pandas→polars MIGRATION COMPLETE**: `pandas_to_domain.py` → `dataframe_to_domain.py`; pandas eliminado de `pyproject.toml`; 0 imports, 0 `.to_pandas()` en todo el repo; `pandera` (polars mode) para schema validation; contratos 49→50 KEPT; audit_validator M22–M25 implementado (ADR-0031); `policies/registry.yaml` creado; ccxt 4.3.58→4.5.74 (CVE fixes). AGENTS.md §"Active migration" → "COMPLETE". |
+| 2026-08-23 | (B-47, B-48) | **B-47 CERRADO**: ruff select activa C901/PLR/SIM; ignore PLR2004/0913/0912/0911/0915; 79 violaciones baseline; 12 auto-fix. **B-48 CERRADO**: vulture pre-commit (non-blocking) + CI (continue-on-error); baseline 23 false positives (TYPE_CHECKING imports, Protocol params). |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
