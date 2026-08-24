@@ -331,3 +331,8 @@ jobs:
         # ecdsa 0.19.2 transitiva de python-jose (PYSEC-2026-1325). Actualizar junto
         # al pin de pyarrow (<20.0) o python-jose cuando se valide en staging.
         run: uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325
+
+      - name: Production gates (code-level, G1/G2/G3/G10/G11)
+        # B-49: veredicto binario PASS/BLOCK sobre gates de nivel código.
+        # gate-dev ejecuta los 11 gates (infra incluida); gate-ci solo code-level.
+        run: uv run python scripts/check_production_gates.py --mode gate-ci

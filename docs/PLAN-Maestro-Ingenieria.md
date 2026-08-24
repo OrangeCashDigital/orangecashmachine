@@ -35,7 +35,7 @@
 | Registrar un hallazgo nuevo | Crear entrada `hallazgos[].id=B-NN` en tracking.yaml v2 con evidencia y estado `PENDIENTE` | §2, §7 |
 | Proponer una decisión de arquitectura | Verificar numeración: `ls docs/architecture/decisions/` → crear ADR con la plantilla `ADR-template.md` → enlazar al hallazgo | §5 |
 | Saber si algo está resuelto | Leer la cadena de trazabilidad del hallazgo en tracking.yaml (cada eslabón con `estado` y `evidencia`) | §2, §7 |
-| Verificar si el sistema es "producción-ready" | Ejecutar `scripts/check_production_gates.py` (veredicto binario PASS/FAIL) — **PENDIENTE: script no existe, ver B-49** | §6 |
+| Verificar si el sistema es "producción-ready" | Ejecutar `scripts/check_production_gates.py` (veredicto binario PASS/FAIL) — **B-49: script bugfixed + gate-ci mode (G1/G2/G3/G10/G11); CI integrado** | §6 |
 | Cumplir la Definition of Done | Aplicar la cadena completa de §2 y el DOD de la fase correspondiente (§4) | §2, §4 |
 
 ---
@@ -91,7 +91,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | 7 | Cambios pequeños y reversibles | Diffs imposibles de revertir | Commits atómicos (§8) | Git history con 1 cambio lógico/commit | Hooks de pre-commit siempre activos |
 | 8 | CI como puerta, no sugerencia | Merges rotos | Gates reales (fail-fast en `ocm-ci.yml`) | CI rojo bloquea merge | Ningún merge a `main` con CI rojo |
 | 9 | Umbrales tras medición | Números inventados (13% stale vs 43% real) | Medición en vivo en F0 antes de fijar umbrales | Mediciones con fecha/commit | §10: umbrales solo tras F0 |
-| 10 | Sistema que se audita solo | Madurez no medible | `scripts/check_production_gates.py` + conteo de reglas `activada_en_ci` — **PENDIENTE: script no existe (B-49), health check F2.0 cubre coherencia** | % de reglas gateadas (baseline F0, sube cada fase) | La métrica se recalcula en cada fase |
+| 10 | Sistema que se audita solo | Madurez no medible | `scripts/check_production_gates.py` + conteo de reglas `activada_en_ci` — **B-49: script bugfixed + gate-ci mode; health check F2.0 cubre coherencia** | % de reglas gateadas (baseline F0, sube cada fase) | La métrica se recalcula en cada fase |
 
 ---
 
@@ -117,7 +117,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **DOR:** F0 cerrada; fixes de crítica con test de regresión.
 - **Entregables:** reglas R1–R4 con `backtest: ok` y `activada_en_ci: true`; guard de arranque live; snapshot sin secrets; `pipeline_factory` corrige + smoke test.
 - **DOD:** `uv run live` no arranca con stub; `assemble()` construye ohlcv+trades+derivatives; round-trip BUY→SELL con contador correcto; snapshot sin `SecretStr` en claro; CI bloquea R1–R4.
-- **Criterio de salida:** `scripts/check_production_gates.py` → G1–G4 PASS — **PENDIENTE: script no existe (B-49), gate F1 validado por ruff + import-linter 49/49 + pytest 900 + mypy**.
+- **Criterio de salida:** `scripts/check_production_gates.py` → G1–G4 PASS — **B-49: script bugfixed + gate-ci mode; G1/G2/G3 PASS en CI**.
 - **Cierre (B-01…B-05 HECHO):**
   - **B-01/H-01** guard fail-closed en `assemble_live` (LiveExecutor `IS_STUB`).
   - **B-02/H-02** `pipeline_factory` crea catálogo Iceberg + guard R2.
@@ -380,7 +380,7 @@ escalabilidad (solo con evidencia).
 | G10. Estado de posición único | test B-15 | verde | F4 |
 | G11. Trazabilidad activa | test B-17 | verde | F4 |
 
-- **Veredicto binario:** `scripts/check_production_gates.py` → PASS/FAIL con reporte por cheque — **PENDIENTE: script no existe (B-49); veredicto actual: engineering_health_check.py + jobs CI (import-linter, bandit, mypy, pytest, app-guard, domain-guard, trading-guards)**.
+- **Veredicto binario:** `scripts/check_production_gates.py` → PASS/FAIL con reporte por cheque — **B-49: gate-ci mode (G1/G2/G3/G10/G11) integrado en CI; gate-dev para infra completa**.
 - **Dos modos:** `gate-dev` (todo PR a `main`) y `gate-release` (candidatos de release, manual).
 - **Regla:** FAIL en `gate-release` bloquea el merge del candidato. FAIL en `gate-dev` bloquea el PR.
 - **Mecanismo de longevidad:** un cheque solo se añade con su test+backtest; un cheque solo se **desactiva** con ADR y evidencia, nunca por conveniencia.
@@ -540,5 +540,6 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
 | 2026-08-19 | (consolidación post-auditorías) | **Consolidación documental completa** tras auditorías Policy Layer (feasibility + complementary + adversarial): tracking.yaml actualizado con B-47..B-60 (Policy Layer findings); Plan Maestro corregido: check_production_gates.py marcado PENDIENTE (B-49), ruff config E/F/I only (B-47), vulture installed not enforced (B-48), CodeQL/Trivy PR+weekly (B-60), fail_under=40 baseline 44% fijado; ADRs propuestas ADR-0021..0028 añadidas; Mapa Fase↔Hallazgos extendido; §6 Production Gate y §10 Umbrales corregidos; §3 Principio 10 corregido. |
 | 2026-08-23 | (`c392f8f`, PR #19) | **pandas→polars MIGRATION COMPLETE**: `pandas_to_domain.py` → `dataframe_to_domain.py`; pandas eliminado de `pyproject.toml`; 0 imports, 0 `.to_pandas()` en todo el repo; `pandera` (polars mode) para schema validation; contratos 49→50 KEPT; audit_validator M22–M25 implementado (ADR-0031); `policies/registry.yaml` creado; ccxt 4.3.58→4.5.74 (CVE fixes). AGENTS.md §"Active migration" → "COMPLETE". |
+| 2026-08-23 | (B-49) | **B-49 CERRADO**: check_production_gates.py bugfixed (_evaluate_gate KeyError, _pytest_pass --no-cov); gate-ci mode (G1/G2/G3/G10/G11) integrado en CI; 6/11 gates PASS en dev (infra gates BLOCK expected). |
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
