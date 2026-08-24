@@ -28,13 +28,13 @@ from unittest.mock import MagicMock, patch
 
 import polars as pl
 import pytest
-import research.data.data_access as data_access
 from market_data.domain.exceptions import (
     DataNotFoundError,
     DataReadError,
 )
 from market_data.ports.outbound.feature_reader import FeatureReaderPort
 from market_data.ports.outbound.storage_factory import StorageFactoryPort
+from research.data import data_access
 from research.data.composition_root import build_storage_factory
 from research.data.data_access import (
     get_features,
@@ -304,9 +304,8 @@ def test_get_features_returns_dataframe():
 
 def test_get_features_propagates_data_not_found():
     fake = _FakeFeatureReader(exc=DataNotFoundError("no data"))
-    with patch.object(data_access, "build_feature_reader", return_value=fake):
-        with pytest.raises(DataNotFoundError):
-            get_features("BTC/USDT", "1h", exchange="bybit")
+    with patch.object(data_access, "build_feature_reader", return_value=fake), pytest.raises(DataNotFoundError):
+        get_features("BTC/USDT", "1h", exchange="bybit")
 
 
 def test_get_features_filters_by_start_date():
