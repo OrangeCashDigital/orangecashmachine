@@ -159,10 +159,10 @@ GATES: Dict[str, dict] = {
 
 
 def _pytest_pass() -> bool:
-    """Si pytest está disponible, ejecuta un subconjunto rápido."""
+    """Si pytest está disponible, ejecuta un subconjunto rápido (sin coverage)."""
     try:
         r = subprocess.run(
-            ["uv", "run", "pytest", "-q", "--tb=short", "tests/market_data/"],
+            ["uv", "run", "pytest", "-q", "--tb=short", "--no-cov", "tests/market_data/"],
             capture_output=True,
             text=True,
             timeout=120,
@@ -478,7 +478,7 @@ def print_gates(gates: Dict[str, dict], mode: str) -> int:
     for gate_name, gate_def in gates.items():
         # Modo dev: verify lo esencial; modo release: verify completo
         # Aquí ejecutamos todos, pero en modo release podríamos ser más estrictos
-        result = _evaluate_gate(gate_def)
+        result = _evaluate_gate(gate_name, gate_def)
         _print_gate(gate_name, result)
         if result.status == "BLOCK":
             all_pass = False
@@ -491,16 +491,16 @@ def print_gates(gates: Dict[str, dict], mode: str) -> int:
         return 1
 
 
-def _evaluate_gate(gate_def: dict) -> GateResult:
+def _evaluate_gate(gate_name: str, gate_def: dict) -> GateResult:
     """Evalúa un gate individual usando sus pass_conditions."""
     try:
         condition = gate_def["pass_conditions"]
         if condition():
-            return GateResult(gate=gate_def["gate"], status="PASS", evidence=gate_def["evidencia"], blocking_reason="")
+            return GateResult(gate=gate_name, status="PASS", evidence=gate_def["evidencia"], blocking_reason="")
     except Exception:
         pass
     return GateResult(
-        gate=list(gate_def.keys())[0],
+        gate=gate_name,
         status="BLOCK",
         evidence=gate_def["evidencia"],
         blocking_reason=gate_def["blocking_reason"],
@@ -512,17 +512,32 @@ def _evaluate_gate(gate_def: dict) -> GateResult:
 # ---------------------------------------------------------------------------
 
 
+# Gates de nivel código (ejecutables en CI sin infraestructura runtime).
+CODE_LEVEL_GATES = {"G1", "G2", "G3", "G10", "G11"}
+
+
 def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Production Readiness Gates (G1–G11)")
-    parser.add_argument("--mode", choices=["gate-dev", "gate-release"], default="gate-dev", help="Modo de ejecución")
+    parser.add_argument(
+        "--mode",
+        choices=["gate-dev", "gate-release", "gate-ci"],
+        default="gate-dev",
+        help="gate-ci: solo gates de nivel código (G1,G2,G3,G10,G11); "
+        "gate-dev: todos; gate-release: todos (futuro: más estricto)",
+    )
     args = parser.parse_args()
 
     print(f"\n{'=' * 60}")
     print(f"Production Gates — mode: {args.mode}")
     print(f"{'=' * 60}\n")
-    result = print_gates(GATES, args.mode)
+
+    if args.mode == "gate-ci":
+        ci_gates = {k: v for k, v in GATES.items() if k in CODE_LEVEL_GATES}
+        result = print_gates(ci_gates, args.mode)
+    else:
+        result = print_gates(GATES, args.mode)
     return result
 
 
