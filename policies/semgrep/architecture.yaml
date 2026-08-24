@@ -1,0 +1,135 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Semgrep rules — Architecture invariants (ADR-0034, B-53)
+#
+# NON-BLOCKING: violations are reported but do not block merge.
+# Rules migrate R11..R16 from AST Guards to declarative YAML.
+# ──────────────────────────────────────────────────────────────────────────
+
+rules:
+  # ── Cross-layer import prohibitions ──────────────────────────────────────
+  - id: domain-no-import-infra
+    pattern: from market_data.infrastructure import $X
+    paths:
+      include:
+        - packages/market_data/domain/**
+    message: |
+      Domain layer must not import infrastructure (BC-09 / R11).
+      Use ports (ports/outbound/) instead.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      rule: R11
+      source: ADR-0034
+
+  - id: domain-no-import-adapters
+    pattern: from market_data.adapters import $X
+    paths:
+      include:
+        - packages/market_data/domain/**
+    message: |
+      Domain layer must not import adapters (BC-09 / R11).
+      Use ports instead.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      rule: R11
+      source: ADR-0034
+
+  - id: domain-no-import-application
+    pattern: from market_data.application import $X
+    paths:
+      include:
+        - packages/market_data/domain/**
+    message: |
+      Domain layer must not import application (BC-09).
+      Domain is the innermost layer.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      rule: R11
+      source: ADR-0034
+
+  # ── os.environ in domain/application ────────────────────────────────────
+  - id: domain-no-os-environ
+    pattern: os.environ[$KEY]
+    paths:
+      include:
+        - packages/market_data/domain/**
+        - packages/market_data/application/**
+    message: |
+      Direct os.environ access in domain/application layers.
+      Use config (Hydra) instead.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      rule: R11
+      source: ADR-0034
+
+  # ── subprocess outside infrastructure ───────────────────────────────────
+  - id: application-no-subprocess
+    pattern: subprocess.run(...)
+    paths:
+      include:
+        - packages/market_data/application/**
+        - packages/market_data/domain/**
+    message: |
+      subprocess.run() outside infrastructure layer (R11).
+      Move to infrastructure or use asyncio.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      rule: R11
+      source: ADR-0034
+
+  # ── Filesystem in domain ────────────────────────────────────────────────
+  - id: domain-no-open
+    pattern: open(...)
+    paths:
+      include:
+        - packages/market_data/domain/**
+    message: |
+      Direct filesystem access in domain layer.
+      Use ports/outbound/storage instead.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      rule: R11
+      source: ADR-0034
+
+  # ── Specific libraries in domain ────────────────────────────────────────
+  - id: domain-no-ccxt
+    pattern: import ccxt
+    paths:
+      include:
+        - packages/market_data/domain/**
+    message: |
+      Domain must not import ccxt directly (BC-09).
+      Use exchange port/adapter.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: architecture
+      rule: R11
+      source: ADR-0034
+
+  # ── Deprecated pandas patterns ──────────────────────────────────────────
+  - id: pandas-no-append
+    pattern: $DF.append(...)
+    paths:
+      include:
+        - packages/**
+        - apps/**
+    message: |
+      pandas.DataFrame.append is deprecated (removed in 2.0).
+      Use pd.concat() instead.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: deprecation
+      source: ADR-0034
