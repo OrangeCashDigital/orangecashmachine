@@ -1,0 +1,48 @@
+# Grafana Provisioning - Datasources
+# Version: 1.0.0
+# Provisioned: Automatically on container startup
+
+apiVersion: 1
+datasources:
+  # Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    version: 1
+    basicAuth:
+      name: admin
+      password: admin
+    # JsonBODY configuration for the datasource is not required
+    # for Prometheus as it uses standard URL configuration.
+    isSaved: true
+    secureJsonFields: []
+    jsonData:
+      # Time interval for queries
+      interval: 1s
+      # Logo URL
+      logoUrl: https://grafana.com/logo.png
+      # Default region for metrics
+      region: us-east-1
+      # Embed tags
+      embedTags: []
+      # List of all supported encryption modes.
+      securityProtocol: "none"
+  # Alertmanager datasource
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    isDefault: false
+    version: 1
+    basicAuth:
+      name: admin
+      password: admin
+    isSaved: true
+    jsonData:
+      # Time interval for queries
+      interval: 1s
+# ==============================================================================
+# End of Datasources
+# ==============================================================================

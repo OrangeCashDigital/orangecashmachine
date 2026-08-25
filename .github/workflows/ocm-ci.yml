@@ -226,7 +226,7 @@ jobs:
   integration-tests:
     name: Integration tests (Kafka)
     runs-on: ubuntu-latest
-    needs: [architecture, engineering-health]
+    needs: [policy-gate]
 
     services:
       kafka:
@@ -331,3 +331,53 @@ jobs:
         # ecdsa 0.19.2 transitiva de python-jose (PYSEC-2026-1325). Actualizar junto
         # al pin de pyarrow (<20.0) o python-jose cuando se valide en staging.
         run: uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325
+
+      - name: Vulture dead code detection (non-blocking)
+        # B-48/B-54: dead code detection. Non-blocking until baseline is clean.
+        # Baseline: 23 false positives (TYPE_CHECKING imports, Protocol params,
+        # signal handler params). Block when baseline reaches 0.
+        continue-on-error: true
+        run: uv run vulture packages ocm shared apps --min-confidence 80
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 5: POLICY GATE (B-56 / F-PLC-07)
+  # Etapa explícita de validación de política. Corre DESPUÉS de todos los
+  # gates anteriores y ANTES de integration-tests. Verifica:
+  #   - engineering_health (coherencia normativa)
+  #   - audit_validator M1..M25 (políticas mecanizadas)
+  # Fail-fast: cualquier fallo aquí bloquea el merge.
+  #
+  # CI Stage Ordering (B-56):
+  #   FAST LOCAL → ARCHITECTURE → ARCHITECTURE GUARDS → SECURITY → QUALITY
+  #   → SUPPLY CHAIN → POLICY GATE → EXPENSIVE/PR (integration)
+  # ──────────────────────────────────────────────────────────────────────────
+  policy-gate:
+    name: Policy gate (engineering_health + audit_validator)
+    runs-on: ubuntu-latest
+    needs:
+      - architecture
+      - engineering-health
+      - app-guard
+      - domain-guard
+      - trading-guards
+      - unit-tests
+      - security
+      - config-validation
+      - quality
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Engineering health check (F2.0)
+        run: uv run python scripts/engineering_health_check.py
+
+      - name: Audit validator (M1..M25)
+        run: uv run python scripts/audit_validator.py
