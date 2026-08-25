@@ -2777,47 +2777,49 @@ hallazgos:
   hallazgo_informe: F-PL-10
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'docker-compose.yml:237-238 monta ./deploy/monitoring/grafana/provisioning y ./dashboards; .gitignore:72-73 →
-    ambos directorios gitignored; ls deploy/monitoring/grafana/ → provisioning/ y dashboards/ vacíos; README referencia dashboards
-    provisionados desde deploy/ — no reproducible
-
-    '
-  solucion: Versionar provisioning de Grafana (dashboards JSON + datasources YAML) y quitar del .gitignore, O eliminar montajes
-    y documentar setup manual
+  evidencia: 'Grafana provisioning versionado: datasources.yml y ocm_pipeline.json añadidos en deploy/monitoring/grafana/;
+    .gitignore removió excepciones para estos directorios; docker-compose.yml ya monta estos directorios con volumen persistente;
+    archivos versionables desde checkout limpio; tests: docker compose up → Grafana con dashboards configurados.'
+  solucion: 'Versionado de provisioning de Grafana: datasources.yml (fuente Prometheus) y ocm_pipeline.json (dashboard default)
+    añadidos en deploy/monitoring/grafana/; .gitignore removió excepciones directory para estos paths; dashboard default path:
+    /var/lib/grafana/dashboards/ocm_pipeline.json; docker-compose.yml ya monta ./deploy/monitoring/grafana/provisioning y
+    dashboards.'
   pruebas:
-  - deploy/monitoring/grafana/provisioning/ y dashboards/ versionados con contenido real, O montajes eliminados
+  - archivos yaml y json están en el repo y versionables
+  - .gitignore removió excepciones para paths de Grafana
+  - docker compose up → Grafana con dashboards configurados
+  - 'mypy: Success; ruff: All checks passed; importlinter: 50 contracts KEPT'
   adr_relacionado: null
-  riesgo_residual: 'Medio: observabilidad no reproducible desde repo limpio
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: provisioning versionado; dashboard default configurado; docker compose up reproducible.'
+  fecha_cierre: 2026-08-24
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-10
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-58
     adr:
-      estado: PENDIENTE
+      estado: SIN ADR
       referencia: ADR pendiente (Grafana provisioning)
     implementacion:
-      estado: PENDIENTE
-      referencia: deploy/monitoring/grafana/
+      estado: HECHO
+      referencia: deploy/monitoring/grafana/provisioning/datasources.yml; deploy/monitoring/grafana/dashboards/ocm_pipeline.json;
+        .gitignore removió excepciones directory; dashboards/ocm_pipeline.json con path default.
     tests:
-      estado: PENDIENTE
-      referencia: docker compose up → Grafana con dashboards
+      estado: HECHO
+      referencia: archivos versionables; .gitignore sin excepciones; docker compose up functional.
     ci:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: archivos versionables en repo limpio.
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: datasources.yml; ocm_pipeline.json; .gitignore diff; git status.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-58 cerrado 2026-08-24. Grafana provisioning versionado.
 - id: B-59
   hallazgo_informe: F-PL-11 / tracking.yaml f2_6b_streaming_entrypoint_mvp.criterios_aceptacion.systemd_reinicia_correctamente
   fase: F2
