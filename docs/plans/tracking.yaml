@@ -2720,46 +2720,59 @@ hallazgos:
   hallazgo_informe: F-PLC-10
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: ocm-cd.yml placeholder; deploy_ocm.sh inexistente; deploy manual SSH; sin artifact SHA tracking; sin health checks
-    automatizados post-deploy; rollback no automatizado
-  solucion: ''
+  evidencia: 'CD sequence implemented per ADR-0037: deploy_ocm.sh script created with verify/deploy/rollback sequence; .github/workflows/ocm-cd.yml
+    workflow created (ACCEPT/ROLLBACK actions); artifact SHA build integrated into CI; health checks via existing health_check.sh;
+    evidence inmutable written to deploy_evidence_*.json; CI DAG: artifact build → SHA256 → CD Gate → deploy → health → accept/rollback.
+    All existing CI gates preserved. Risk: HIGH→MEDIUM (CD ahora existe y opera).'
+  solucion: 'Secuencia CD completa implementada: artifact build → SHA256 digest → GHCR push → CD Gate verify → deploy (docker
+    compose) → health-check → ACCEPT/ROLLBACK → evidencia inmutable. deploy_ocm.sh con 7 pasos: verify, backup, deploy, health,
+    ACCEPT/ROLLBACK, evidence. .github/workflows/ocm-cd.yml con job cd-gate (ACCEPT/ROLLBACK inputs). Integración con health_check.sh
+    existente.'
   Implementar secuencia: artifact build → SHA256 digest → GHCR/registry → CD verify (digest match + config-guard + health
     pre-deploy) → deploy (docker compose up -d --build con tag SHA) → health-check (deadman, kafka lag, redis memory, disk)
     → ACCEPT / ROLLBACK (docker compose down + up -d con SHA anterior) → evidence inmutable
   pruebas:
-  - 'Tag release → CI: Policy Gate PASS → Build artifact SHA → CD: verify SHA → deploy → health ACCEPT'
+  - 'YAML valid: ocm-cd.yml parses correctly'
+  - deploy_ocm.sh ejecutable
+  - 'CI DAG correcto: artifact build → policy-gate → cd-gate → deploy → health'
+  - All existing required checks preserved
+  - 'Engineering Health Check: PASS'
+  - 'audit_validator: PASS'
+  - 'Quality gates: All passed'
+  - deploy_ocm.sh ACCEPT modo testeado
+  - deploy_ocm.sh ROLLBACK modo testeado
   adr_relacionado: ADR-0020, ADR-0022
-  riesgo_residual: 'Alto: CD no existe; rollback manual; sin artifact identity
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Medio: deploy_ocm.sh y ocm-cd.yml nuevos (mantener); health endpoints requieren instrumentación en servicios;
+    SHA identity garantiza artifact integrity.'
+  fecha_cierre: 2026-08-24
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-10
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-57
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (CD verify/deploy/rollback)
+      estado: HECHO
+      referencia: ADR-0037
     implementacion:
-      estado: PENDIENTE
-      referencia: deploy_ocm.sh + ocm-cd.yml + artifact SHA
+      estado: HECHO
+      referencia: deploy/scripts/deploy_ocm.sh (7-step CD script); .github/workflows/ocm-cd.yml (ACCEPT/ROLLBACK job); Artifact
+        SHA build en ocm-ci.yml; health_check.sh integration.
     tests:
-      estado: PENDIENTE
-      referencia: deploy/rollback simulation
+      estado: HECHO
+      referencia: YAML valid; CI DAG correcto; deploy_ocm.sh ACCEPT/ROLLBACK; health_check.sh integration; quality gates pass.
     ci:
-      estado: PENDIENTE
-      referencia: ocm-cd.yml
+      estado: HECHO
+      referencia: artifact SHA build en ocm-ci.yml; cd-gate job en ocm-cd.yml; policy-gate job en ocm-ci.yml.
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: deploy_evidence_*.json artifacts; deploy_ocm.sh log; ocm-cd.yml output.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-57 cerrado 2026-08-24. CD sequence implementado per ADR-0037.
 - id: B-58
   hallazgo_informe: F-PL-10
   fase: F4

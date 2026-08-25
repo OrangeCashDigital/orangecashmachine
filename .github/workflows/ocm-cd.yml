@@ -1,12 +1,81 @@
 name: OrangeCashMachine CD
-# 🚧 Deshabilitado — deploy manual via SSH hasta que se defina deploy_ocm.sh
-# El CD anterior era para un proyecto distinto (freqtrade BOTS).
-# Re-habilitar cuando: deploy_ocm.sh esté implementado.
+
 on:
-  workflow_dispatch:  # solo manual, nunca automático
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform (ACCEPT|ROLLBACK)'
+        required: true
+        default: 'ACCEPT'
+      artifact_sha:
+        description: 'Artifact SHA to deploy'
+        required: false
 
 jobs:
-  placeholder:
+  cd-gate:
+    name: CD Gate (verify/deploy/rollback)
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.determine_status.outputs.status }}
+      evidence: ${{ steps.determine_status.outputs.evidence }}
+
     steps:
-      - run: echo "CD pendiente de implementación — ver deploy.py"
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Validate artifact SHA
+        run: |
+          if [[ -z "${{ github.event.inputs.artifact_sha }}" ]]; then
+            echo "::error::Artifact SHA is required"
+            exit 1
+          fi
+          echo "ARTIFACT_SHA=${{ github.event.inputs.artifact_sha }}" >> $GITHUB_ENV
+
+      - name: Run deploy script (ACCEPT)
+        if: github.event.inputs.action == 'ACCEPT'
+        env:
+          ARTIFACT_SHA: ${{ env.ARTIFACT_SHA }}
+        run: |
+          chmod +x deploy/scripts/deploy_ocm.sh
+          ./deploy/scripts/deploy_ocm.sh ACCEPT
+
+      - name: Run deploy script (ROLLBACK)
+        if: github.event.inputs.action == 'ROLLBACK'
+        env:
+          ARTIFACT_SHA: ${{ env.ARTIFACT_SHA }}
+        run: |
+          chmod +x deploy/scripts/deploy_ocm.sh
+          ./deploy/scripts/deploy_ocm.sh ROLLBACK
+
+      - name: Determine deployment status
+        id: determine_status
+        run: |
+          # Read evidence file if it exists
+          EVIDENCE_FILE="${{ github.workspace }}/deploy_evidence_${ARTIFACT_SHA}.json"
+          if [[ -f "${EVIDENCE_FILE}" ]]; then
+            STATUS="ACCEPT"
+            EVIDENCE="$(cat "${EVIDENCE_FILE}")"
+          else
+            STATUS="ROLLBACK"
+            EVIDENCE="No evidence file found"
+          fi
+          echo "status=${STATUS}" >> $GITHUB_OUTPUT
+          echo "evidence=${EVIDENCE}" >> $GITHUB_OUTPUT
+
+      - name: Output deployment status
+        run: |
+          echo "Deployment status: ${{ steps.determine_status.outputs.status }}"
+          echo "Evidence: ${{ steps.determine_status.outputs.evidence }}"
