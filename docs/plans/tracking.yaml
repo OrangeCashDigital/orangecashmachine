@@ -2802,7 +2802,7 @@ hallazgos:
       estado: HECHO
       referencia: B-58
     adr:
-      estado: SIN ADR
+      estado: NO_APLICA
       referencia: ADR pendiente (Grafana provisioning)
     implementacion:
       estado: HECHO
