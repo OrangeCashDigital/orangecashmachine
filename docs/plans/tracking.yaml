@@ -3115,3 +3115,12 @@ f2_6d_decision_escalabilidad:
     cierre:
       estado: HECHO
       referencia: F2.6d cerrada 2026-08-10; F2.6 como fase completa (a-d) queda cerrada
+# ──────────────────────────────────────────────────────────────────────────
+# DEPRECATED (B-51, 2026-08-23):
+# El bloque  ya NO es la fuente de verdad (SSOT) para las reglas
+# R1-R16. El SSOT canónico es policies/registry.yaml (esquema completo:
+# id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history).
+# Este bloque se conserva temporalmente por compatibilidad con consumidores
+# existentes (engineering_health_check.py). Su eliminación/migración completa
+# requiere un trabajo posterior.
+# ──────────────────────────────────────────────────────────────────────────
