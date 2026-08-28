@@ -92,13 +92,13 @@
 
 **Décisión Humana Requerida (D-DOC-03):** Extender `audit_validator` con M21..M25 y evolucionar tracking.yaml → `policies/registry.yaml`
 
-### F-DOC-06 — CodeQL/Trivy PR+weekly vs "solo semanal"
+### F-DOC-06 — CodeQL/Trivy PR+weekly — corrected from "solo semanal"
 **Severity:** MEDIUM | **Classification:** CONTRADICCIÓN
 
 **Evidencia:**
 - `.github/codeql.yml`: push + pull_request main + schedule weekly `23 4 * * 1`
 - `.github/trivy.yml`: push + PR + schedule semanal `0 6 * * 1`
-- **Corrección factual:** documentación previa decía "CodeQL semanal" (solo nocturno)
+- **Corrección factual:** documentación previa decía "CodeQL push/PR + weekly" (solo nocturno)
 
 **Décisión Humana Requerida (D-DOC-02):** Corregir documentación: CodeQL/Trivy en PR + weekly
 
@@ -262,7 +262,7 @@
 | Estado | Documentado | Implementado | Enforced | Verificado |
 |---|---|---|---|---|
 | Ruff cubre complexity | Documentado | No | No | No |
-| CodeQL semanal | Documentado | ✓ (PR+weekly) | ✓ | ✓ |
+| CodeQL push/PR + weekly | Documentado | ✓ (PR+weekly) | ✓ | ✓ |
 | SonarQube instalado | No | No | No | No |
 | vulture enforced | Documentado | No | No | No |
 | CD Gate implementado | Documentado | No | No | No |

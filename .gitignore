@@ -71,3 +71,4 @@ docs/knowledge/courses/
 docs/knowledge/**/*.pdf
 deploy/monitoring/grafana/provisioning/
 deploy/monitoring/grafana/dashboards/
+deploy/systemd/rendered/
