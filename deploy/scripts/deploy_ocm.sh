@@ -243,7 +243,8 @@ rollback() {
 write_evidence() {
     log "INFO" "Writing deployment evidence..."
     local evidence_file="${DEPLOY_DIR}/deploy_evidence_${ARTIFACT_SHA}.json"
-    local timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    local timestamp
+    timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
     # Build evidence JSON (without sensitive values)
     cat > "${evidence_file}" <<EOF
