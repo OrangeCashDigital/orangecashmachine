@@ -1,0 +1,25 @@
+[Unit]
+Description=OrangeCashMachine streaming service (realtime feeds via WebSocket)
+Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0022-lifecycle-proceso-realtime-feeds.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${OCM_HOST_USER}
+WorkingDirectory=${OCM_REPO_ROOT}
+EnvironmentFile=${OCM_REPO_ROOT}/deploy/host.env
+ExecStart=${OCM_REPO_ROOT}/.venv/bin/python -m app.cli.streaming_hydra
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+# SafeOps
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=${OCM_REPO_ROOT}/data_platform ${OCM_REPO_ROOT}/logs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
