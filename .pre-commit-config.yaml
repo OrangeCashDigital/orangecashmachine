@@ -46,6 +46,12 @@ repos:
         entry: uv run bandit -r apps ocm packages shared infrastructure -ll
         language: system
         pass_filenames: false
+      - id: yamllint
+        name: Lint YAML files
+        entry: uvx yamllint -c .yamllint .
+        language: system
+        pass_filenames: false
+        types: [yaml]
       - id: pytest-pre-push
         name: Pytest (suite completa, sin integration)
         entry: uv run pytest tests/ -x -q -m "not integration"
