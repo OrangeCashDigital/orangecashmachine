@@ -43,8 +43,16 @@ _PROMOTED_STATES = frozenset({"PROTOCOL", "DOCUMENTATION", "UPSTREAM_LIBRARY", "
 # ---------------------------------------------------------------------------
 PROVIDENCE: dict[str, tuple[str, str, str]] = {
     # --- PROTOCOL (tráfico observado) ---
-    "OrderBookSnapshotPayload": ("PROTOCOL", "wired", "WS Bybit observado (cryptofeed); ver test_schemas_orderbook.py"),
-    "OrderBookDeltaPayload": ("PROTOCOL", "wired", "WS Bybit observado (cryptofeed); ver test_schemas_orderbook.py"),
+    "OrderBookSnapshotPayload": (
+        "PROTOCOL",
+        "wired",
+        "WS Bybit v2 (cryptofeed); u/seq/cts del raw; P0: docs/audits/p0_bybit/evidence/",
+    ),
+    "OrderBookDeltaPayload": (
+        "PROTOCOL",
+        "wired",
+        "WS Bybit v2 atómico multinivel (cryptofeed); u/seq/cts del raw; P0: docs/audits/p0_bybit/evidence/",
+    ),
     # --- UPSTREAM_LIBRARY (esquema unificado CCXT) ---
     "KafkaOHLCVBar": ("UPSTREAM_LIBRARY", "wired", "CCXT fetch_ohlcv tuple (timestamp,o,h,l,c,v)"),
     "EventPayload": ("UPSTREAM_LIBRARY", "wired", "CCXT OHLCV cuesco; envoltura interna"),
