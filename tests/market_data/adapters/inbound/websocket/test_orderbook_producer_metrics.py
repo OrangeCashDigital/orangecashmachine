@@ -151,9 +151,9 @@ class TestDeltaMetrics:
             exchange="bybit",
             symbol="BTC-USDT-PERP",
             timestamp_ms=1786450000001,
-            side="bid",
-            price="64800.0",
-            size="0",
+            bids=[("64800.0", "0")],
+            asks=[("64801.0", "1.5")],
+            update_id=500,
         )
         assert _counter_delta("ocm_kafka_events_published_total", _published_labels(), before_pub) == 1.0
 
@@ -166,9 +166,9 @@ class TestDeltaMetrics:
             exchange="bybit",
             symbol="BTC-USDT-PERP",
             timestamp_ms=1786450000001,
-            side="ask",
-            price="64801.0",
-            size="0",
+            bids=[("64801.0", "0")],
+            asks=[],
+            update_id=501,
         )
         after = _counter_value("ocm_kafka_events_failed_total", _failed_labels())
         assert after - before == 1.0

@@ -29,7 +29,7 @@ Uso
     await stream.stop()
 
 Verificado contra cryptofeed 2.4.1 (source real de exchanges/bybit.py)
-------------------------------------------------------------------------
+-----------------------------------------------------------------------
 - book.delta es None en el snapshot inicial; en updates incrementales es
   {BID: [[price, size], ...], ASK: [[price, size], ...]} — listas crudas
   tal como las manda el exchange (BID='bid', ASK='ask').
@@ -38,6 +38,16 @@ Verificado contra cryptofeed 2.4.1 (source real de exchanges/bybit.py)
   forma más simple y confiable de extraer el snapshot completo.
 - book.book.bids / .asks son SortedDict sin .items(); no iterar
   directamente, usar to_dict() del wrapper completo en su lugar.
+- book.raw es el mensaje Bybit v5 JSON completo (ver _book en bybit.py:
+  book_callback(..., raw=msg, ...)). De ahí extraemos u/seq/cts:
+      u   → msg['data']['u']        (token de continuidad monótono)
+      seq → msg['data']['seq']
+      cts → msg['cts']
+  Ver _bybit_sequence(). Estas son FUENTES DE EVIDENCIA del Discovery
+  Profile de Bybit (ADR-0017 §83-89) — documentado en el perfil.
+- El delta v2 se emite como UN mensaje atómico multinivel (bids+asks del
+  mismo mensaje), NO aplanado nivel a nivel (D-7a). La atomicidad del
+  mensaje Bybit se preserva.
 
 Principios: SRP · DIP · ACL · SafeOps · Kappa
 """
@@ -177,12 +187,15 @@ class CryptofeedOrderBookStream:
         """
         symbol: str = book.symbol
         delta = getattr(book, "delta", None)
+        raw = getattr(book, "raw", None)
         exchange_ts = getattr(book, "timestamp", None)
 
         if exchange_ts is not None:
             timestamp_ms = int(exchange_ts)  # ya en ms para Bybit
         else:
             timestamp_ms = int(receipt_timestamp * 1000)  # segundos -> ms
+
+        update_id, cross_seq, cts_ms = self._bybit_sequence(raw)
 
         if delta is None:
             # Snapshot inicial — extraer via to_dict() del wrapper, que ya
@@ -199,31 +212,72 @@ class CryptofeedOrderBookStream:
                     asks=asks,
                     depth=self._max_depth,
                     checksum=getattr(book, "checksum", None),
+                    update_id=update_id,
+                    cross_seq=cross_seq,
+                    cts_ms=cts_ms,
                 )
             except Exception as exc:
                 self._log.bind(symbol=symbol, error=str(exc)).warning("snapshot_dispatch_failed")
             return
 
         # Delta incremental: {BID: [[price, size], ...], ASK: [[price, size], ...]}
-        for side_key, side_label in (("bid", "bid"), ("ask", "ask")):
-            for price, size in delta.get(side_key, []):
-                try:
-                    await self._on_delta(
-                        exchange=self._exchange,
-                        symbol=symbol,
-                        timestamp_ms=timestamp_ms,
-                        side=side_label,
-                        price=str(price),
-                        size=str(size),
-                    )
-                except Exception as exc:
-                    self._log.bind(symbol=symbol, error=str(exc)).warning("delta_dispatch_failed")
+        # Emitimos UN delta atómico multinivel por mensaje (schema v2, D-7a).
+        # No aplanamos nivel por nivel: la atomicidad del mensaje Bybit se
+        # preserva. "0" como size = eliminar el nivel (lo decide el dominio).
+        # Bybit ya ordena b DESC / a ASC, así que preservamos el orden del
+        # exchange (canónico) sin re-ordenar.
+        bids = self._levels_from_pairs(delta.get("bid", []))
+        asks = self._levels_from_pairs(delta.get("ask", []))
+        try:
+            await self._on_delta(
+                exchange=self._exchange,
+                symbol=symbol,
+                timestamp_ms=timestamp_ms,
+                bids=bids,
+                asks=asks,
+                update_id=update_id,
+                cross_seq=cross_seq,
+                cts_ms=cts_ms,
+            )
+        except Exception as exc:
+            self._log.bind(symbol=symbol, error=str(exc)).warning("delta_dispatch_failed")
+
+    @staticmethod
+    def _bybit_sequence(raw: Any) -> tuple[int, int | None, int | None]:
+        """
+        Extrae (u, seq, cts) del mensaje Bybit crudo (libre de librería vendor).
+
+        cryptofeed pasa el mensaje JSON completo como ``book.raw`` (Bybit v5):
+            { "topic": ..., "type": ..., "ts": ..., "cts": ...,
+              "data": { "s": ..., "b": [...], "a": [...], "u": ..., "seq": ... } }
+        Devolvemos: (update_id='u', cross_seq='seq', cts_ms='cts').
+        Si raw no está disponible (otro exchange o versión de librería), se
+        devuelve (0, None, None) — fail-soft, sin cascada.
+        """
+        if not raw:
+            return 0, None, None
+        data = raw.get("data") if isinstance(raw, dict) else None
+        update_id = int(data.get("u", 0)) if isinstance(data, dict) else 0
+        cross_seq = int(data["seq"]) if isinstance(data, dict) and data.get("seq") is not None else None
+        cts = raw.get("cts")
+        cts_ms = int(cts) if cts is not None else None
+        return update_id, cross_seq, cts_ms
 
     @staticmethod
     def _sorted_levels(price_size_map: dict, descending: bool) -> list[tuple[str, str]]:
         """Convierte {price: size} en lista ordenada de (price_str, size_str)."""
         items = sorted(price_size_map.items(), key=lambda kv: kv[0], reverse=descending)
         return [(str(price), str(size)) for price, size in items]
+
+    @staticmethod
+    def _levels_from_pairs(pairs: list) -> list[tuple[str, str]]:
+        """Convierte [[price, size], ...] crudo de cryptofeed en [(price_str, size_str), ...].
+
+        Preserva el orden recibido (Bybit ya emite b DESC / a ASC). Los valores
+        pueden ser Decimal (parse_float=Decimal en cryptofeed) → se convierten a
+        str exacto para preservar precisión (D-7c).
+        """
+        return [(str(price), str(size)) for price, size in pairs]
 
     def __repr__(self) -> str:
         return f"CryptofeedOrderBookStream(exchange={self._exchange!r}, symbols={self._symbols!r})"

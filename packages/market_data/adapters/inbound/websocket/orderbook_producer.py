@@ -8,8 +8,9 @@ OrderBookKafkaProducer — productor real WS → Kafka.
 Cadena
 ------
   CryptofeedOrderBookStream
-      → on_snapshot(OrderBookSnapshot) → OrderBookSnapshotPayload → orderbook.raw
-      → on_delta(OrderBookDelta)       → OrderBookDeltaPayload    → orderbook.raw
+      → on_snapshot(...) → OrderBookSnapshotPayload (v2, u/seq/cts) → orderbook.raw
+      → on_delta(...)    → OrderBookDeltaPayload (v2, multinivel atómico, u/seq/cts)
+                           → orderbook.raw
 
 DIP
 ---
@@ -134,9 +135,16 @@ class OrderBookKafkaProducer:
         asks: list,
         depth: int = 0,
         checksum: int | None = None,
+        update_id: int = 0,
+        cross_seq: int | None = None,
+        cts_ms: int | None = None,
     ) -> None:
         """
-        Serializa y publica un snapshot L2 completo.
+        Serializa y publica un snapshot L2 completo (schema v2).
+
+        update_id/cross_seq/cts_ms son los campos 'u'/'seq'/'cts' de Bybit.
+        update_id es el token de continuidad que el BookBuilder usa como base
+        de la detección de gaps.
 
         SafeOps: captura cualquier excepción — el stream no debe morir
         porque el producer falle en un mensaje.
@@ -156,6 +164,9 @@ class OrderBookKafkaProducer:
                 asks=asks,
                 depth=depth,
                 checksum=checksum,
+                update_id=update_id,
+                cross_seq=cross_seq,
+                cts_ms=cts_ms,
             )
             key = make_symbol_key(exchange, symbol)
             with timer() as t:
@@ -181,12 +192,18 @@ class OrderBookKafkaProducer:
         exchange: str,
         symbol: str,
         timestamp_ms: int,
-        side: str,
-        price: str,
-        size: str,
+        bids: list,
+        asks: list,
+        update_id: int = 0,
+        cross_seq: int | None = None,
+        cts_ms: int | None = None,
     ) -> None:
         """
-        Serializa y publica un delta incremental.
+        Serializa y publica un delta incremental ATÓMICO multinivel (schema v2).
+
+        bids/asks son las listas crudas (price_str, size_str) del mensaje Bybit.
+        Un mensaje wire = un delta atómico completo (D-7a). update_id es el
+        token de continuidad monótono para gap detection (D-7b).
 
         SafeOps: captura cualquier excepción.
 
@@ -201,9 +218,11 @@ class OrderBookKafkaProducer:
                 exchange=exchange,
                 symbol=symbol,
                 timestamp_ms=timestamp_ms,
-                side=side,  # type: ignore[arg-type]
-                price=price,
-                size=size,
+                update_id=update_id,
+                cross_seq=cross_seq,
+                cts_ms=cts_ms,
+                bids=list(bids),
+                asks=list(asks),
             )
             key = make_symbol_key(exchange, symbol)
             with timer() as t:
@@ -216,7 +235,7 @@ class OrderBookKafkaProducer:
             self._metrics.event_published(exchange=exchange)
             self._metrics.event_processed(exchange=exchange, latency_ms=t.elapsed_ms)
             self._log.bind(exchange=exchange, symbol=symbol).debug(
-                "orderbook_delta_published | side={} price={}", side, price
+                "orderbook_delta_published | update_id={} bids={} asks={}", update_id, len(bids), len(asks)
             )
         except Exception as exc:
             self._metrics.event_failed(exchange=exchange, reason="write_error")
