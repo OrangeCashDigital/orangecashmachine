@@ -44,6 +44,7 @@ from ocm.config.env_vars import (
 # define KafkaProducerPort. Importar desde shared cumple BC-01 y elimina el
 # acoplamiento entre el port del producer y el adapter del consumer.
 from shared.kafka.topics import (
+    GROUP_BOOK_BUILDER,
     GROUP_BRONZE_WRITER,
     GROUP_EXECUTION,
     GROUP_FEATURES,
@@ -53,6 +54,7 @@ from shared.kafka.topics import (
     TOPIC_OHLCV_FEATURES,
     TOPIC_OHLCV_RAW,
     TOPIC_OHLCV_VALIDATED,
+    TOPIC_ORDERBOOK_RAW,
     TOPIC_ORDERS_FILLED,
     TOPIC_SIGNALS_APPROVED,
     TOPIC_SIGNALS_RAW,
@@ -206,6 +208,23 @@ class KafkaConsumerAdapter:
             group_id=GROUP_PORTFOLIO,
             bootstrap_servers=_broker(),
             auto_offset_reset="earliest",
+            session_timeout_ms=_session_timeout(),
+            heartbeat_interval_ms=_heartbeat(),
+        )
+
+    @classmethod
+    def for_book_builder(cls) -> "KafkaConsumerAdapter":
+        """
+        orderbook.raw → BookBuilder → book.snapshot / book.delta.
+
+        Consume el topic de order book crudo (schema v2) y reconstruye el
+        estado L2. auto_offset_reset desde SSOT env var (earliest por defecto).
+        """
+        return cls(
+            topics=[TOPIC_ORDERBOOK_RAW],
+            group_id=GROUP_BOOK_BUILDER,
+            bootstrap_servers=_broker(),
+            auto_offset_reset=_offset_reset(),
             session_timeout_ms=_session_timeout(),
             heartbeat_interval_ms=_heartbeat(),
         )
