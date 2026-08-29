@@ -50,6 +50,9 @@ if TYPE_CHECKING:
     from market_data.infrastructure.bootstrap.pipeline_factory import (
         ConcretePipelineFactory,
     )
+    from market_data.infrastructure.kafka.book_builder_consumer import (
+        BookBuilderConsumer,
+    )
     from market_data.ports.inbound.external.polling import PollingSourcePort
     from ocm.config.schema import AppConfig
     from shared.enums import DataSource
@@ -386,6 +389,58 @@ class CompositionRoot:
                 ),
                 source=source,
             ),
+        )
+
+    @classmethod
+    def build_book_builder_consumer(
+        cls,
+        config: "AppConfig",
+    ) -> "BookBuilderConsumer":
+        """Build the BookBuilderConsumer stream processor (orderbook.raw → book.*).
+
+        Wiring:
+          BookBuilder (application, DIP)
+          + KafkaConsumerAdapter.for_book_builder()
+          + KafkaProducerAdapter (for book.snapshot / book.delta output)
+          + KafkaMetrics
+
+        Fail-Fast: si bootstrap_servers está vacío lanza ValueError.
+        SafeOps: consumer y producer no conectan aquí — lo hacen en start().
+
+        Args:
+            config: AppConfig con integrations.kafka configurado.
+
+        Returns:
+            BookBuilderConsumer listo para start() → run().
+        """
+        from market_data.application.processing.book_builder import BookBuilder
+        from market_data.infrastructure.kafka.book_builder_consumer import (
+            BookBuilderConsumer,
+        )
+        from market_data.infrastructure.kafka.consumer import KafkaConsumerAdapter
+        from market_data.infrastructure.kafka.metrics import KafkaMetrics
+        from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+
+        bootstrap_servers = config.integrations.kafka.bootstrap_servers
+        if not bootstrap_servers:
+            raise ValueError("build_book_builder_consumer: integrations.kafka.bootstrap_servers no puede ser vacío")
+
+        builder = BookBuilder(viewport=50, stale_ms=2_000)
+
+        consumer = KafkaConsumerAdapter.for_book_builder()
+
+        producer = KafkaProducerAdapter(
+            bootstrap_servers=bootstrap_servers,
+            client_id="ocm-book-builder",
+        )
+
+        metrics = KafkaMetrics(topic="orderbook.raw")
+
+        return BookBuilderConsumer(
+            consumer=consumer,
+            producer=producer,
+            builder=builder,
+            metrics=metrics,
         )
 
     def __repr__(self) -> str:

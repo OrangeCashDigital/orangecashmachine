@@ -230,6 +230,31 @@ async def _run_streaming(
             # Fuera del hilo principal (tests) — fallback por asyncio sleep.
             logger.debug("signal_handler_unavailable | {}", sig)
 
+    # ── BookBuilderConsumer (orderbook.raw → book.snapshot / book.delta) ─────
+    # Se ensambla y ejecuta como tarea en background dentro del mismo proceso.
+    # DIP: el composition root inyecta BookBuilder (application) en
+    # BookBuilderConsumer (infrastructure) via BookBuilderPort.
+    book_consumer = None
+    book_consumer_task: asyncio.Task[None] | None = None
+    try:
+        from market_data.infrastructure.bootstrap.composition_root import (
+            CompositionRoot as _CR,
+        )
+
+        book_consumer = _CR.build_book_builder_consumer(config)
+        await book_consumer.start()
+        book_consumer_task = asyncio.create_task(book_consumer.run(), name="book-builder-consumer")
+        logger.info("book_builder_consumer_started | topic=orderbook.raw → book.snapshot/book.delta")
+    except Exception as exc:
+        logger.warning("book_builder_consumer_init_failed | {}", exc)
+        if book_consumer is not None:
+            try:
+                await book_consumer.stop()
+            except Exception as stop_exc:
+                logger.warning("book_builder_consumer_partial_stop_failed | {}", stop_exc)
+        book_consumer = None
+        book_consumer_task = None
+
     try:
         await bundle.start_all()
         await stream.start()
@@ -248,9 +273,19 @@ async def _run_streaming(
         return 1
     finally:
         # Shutdown ordenado (ADR-0022): stop event → stream.stop() → close_all().
+        if book_consumer_task is not None:
+            book_consumer_task.cancel()
+            try:
+                await book_consumer_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                logger.warning("book_builder_consumer_shutdown_error | {}", exc)
+        if book_consumer is not None:
+            await book_consumer.stop()
         await stream.stop()
         await bundle.close_all()
-        logger.info("streaming_closed | producers cerrados")
+        logger.info("streaming_closed | producers y book_builder_consumer cerrados")
 
 
 def main(argv: list[str] | None = None) -> int:
