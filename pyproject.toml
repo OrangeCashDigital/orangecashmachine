@@ -69,7 +69,7 @@ dependencies = [
     # pyyaml: pinneado en 6.0.2 — Hydra 1.3.x requiere exactamente esta API
     # de yaml.safe_load con soporte de anchors. 6.1 cambió el comportamiento
     # de merge keys (<<) que se usan en config/. Desbloquear con Hydra 2.x.
-    "pyyaml==6.0.2",
+    "pyyaml==6.0.3",
     "python-dotenv>=1.0,<3.0",
     "hydra-core>=1.3.2,<2.0",
     # ── Validación / calidad de datos ───────────────────────────────────────
@@ -99,7 +99,7 @@ dependencies = [
     # Sincronizar el pin con aioresilience al actualizar cualquiera de las dos.
     "pybreaker==1.4.1",
     # ── Mensajería / streaming ───────────────────────────────────────────────
-    "redis>=7.4.0,<8.0",  # techo <8.0 deliberado: 8.0 cambia RESP2→RESP3 por defecto (breaking)
+    "redis>=7.4.0,<9.0",  # techo <8.0 deliberado: 8.0 cambia RESP2→RESP3 por defecto (breaking)
     "aiokafka>=0.11.0,<1.0",
     # ── Storage / data lakehouse ─────────────────────────────────────────────
     # pyiceberg: <1.0 — API pública no estabilizada en 1.x todavía.
@@ -120,7 +120,7 @@ dependencies = [
     # loguru: pinneado en 0.7.2 — API de sink Loki acoplada a esta versión.
     # Structlog también depende del record format de loguru. Actualizar con ambos.
     "loguru==0.7.2",
-    "structlog>=24.1.0,<25.0",
+    "structlog>=24.1.0,<27.0",
     "httpx>=0.27.0,<1.0",
     "prometheus-client>=0.20.0,<1.0",
     # opentelemetry: B-17/H-18 — SDK + exporter OTLP HTTP. Pin>=1.28: API
@@ -137,7 +137,7 @@ Repository = "https://github.com/orangemusic/orangecashmachine"
 [project.optional-dependencies]
 docs = [
     "sphinx>=7.0,<8.0",
-    "sphinx-autodoc-typehints>=1.22,<2.0",
+    "sphinx-autodoc-typehints>=1.22,<4.0",
 ]
 # ci: sin entradas propias por ahora — pre-commit vive en dependency-groups.dev
 # (evita duplicación de SSOT entre optional-dependencies y dependency-groups).

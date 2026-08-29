@@ -19,7 +19,7 @@ Clasificación (taxonomía del protocolo de auditoría de OCM):
 Deduplicación (regla §H):
 - F-PLA-01 es NUEVO: **el hallazgo de que ruff solo habilita E/F/I** (no C901 complexity, PLR, SIM, DUP) contradice la afirmación de F-PL-08 de que "SonarQube duplicaría ruff (complexity/duplication ya cubiertos)".
 - F-PLA-02 es NUEVO: vulture instalado pero nunca ejecutado en CI/pre-commit (dead code detection no enforced).
-- F-PLA-03 es CONTRADICCIÓN con F-PL-08: CodeQL se ejecuta en PR (no solo semanal como afirmó la auditoría previa).
+- F-PLA-03 es SIN CONTRADICCIÓN con F-PL-08: CodeQL se ejecuta en push/PR + weekly.
 - F-PLA-04 REVALIDA F-PL-07 (HashiCorp: confirmado no introducir, sin necesidad demostrable).
 - F-PLA-05 es NUEVO: check_production_gates.py ausente (ya señalado F-PL-04, aquí se extiende al Policy Gate completo).
 - F-PLA-06 REVALIDA F-PL-02 (pip-audit 4 vulns activas).
@@ -106,7 +106,7 @@ Source: .github/workflows/codeql.yml
 
 Evidence:
 - `.github/workflows/codeql.yml` triggers: `push: branches: ["main"]` + `pull_request: branches: ["main"]` + `schedule: cron '23 4 * * 1'`
-- Es decir: CodeQL corre en **cada push/PR a main** Y semanal — no solo semanal como afirmó la auditoría previa ("CodeQL semanal", F-PL-08)
+- Es decir: CodeQL corre en **cada push/PR a main** Y push/PR + weekly — no solo semanal como afirmó la auditoría previa ("CodeQL semanal", F-PL-08)
 - build-mode: none (sin compilación) → análisis de dataflow disponible en PR
 - Trivy: `.github/workflows/trivy.yml` triggers push + PR + schedule semanal — igualmente en PR
 

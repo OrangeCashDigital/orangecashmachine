@@ -520,7 +520,7 @@ Ver registro `docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementa
 |---|---|---|---|
 | F-PLA-01 | HIGH | NUEVO | Ruff solo E/F/I: complexity/duplication NO cubiertas |
 | F-PLA-02 | LOW | NUEVO | vulture instalado pero nunca ejecutado |
-| F-PLA-03 | MEDIUM | CONTRADICCIÓN | CodeQL/Trivy en PR (no solo semanal) |
+| F-PLA-03 | MEDIUM | SIN CONTRADICCIÓN | CodeQL/Trivy en push/PR + weekly |
 | F-PLA-04 | MEDIUM | REVALIDADO | HashiCorp: confirmado no introducir |
 | F-PLA-05 | HIGH | NUEVO | Policy Gate binario inexistente |
 | F-PLA-06 | CRITICAL | REVALIDADO | pip-audit 4 vulns (F-PL-02) |
@@ -568,7 +568,7 @@ Todos con: F-ID, severity, classification, title, description, evidence, impact,
 |---|---|---|---|
 | F-PLA-01 | HIGH | NUEVO | Ruff solo E/F/I: complexity/duplication NO cubiertas |
 | F-PLA-02 | LOW | NUEVO | vulture instalado pero nunca ejecutado |
-| F-PLA-03 | MEDIUM | CONTRADICCIÓN | CodeQL/Trivy en PR (no solo semanal) |
+| F-PLA-03 | MEDIUM | SIN CONTRADICCIÓN | CodeQL/Trivy en push/PR + weekly |
 | F-PLA-04 | MEDIUM | REVALIDADO | HashiCorp: confirmado no introducir |
 | F-PLA-05 | HIGH | NUEVO | Policy Gate binario inexistente |
 | F-PLA-06 | CRITICAL | REVALIDADO | pip-audit 4 vulns (F-PL-02) |
@@ -597,7 +597,7 @@ Controles = PASS(5) + FAIL(3) = 8
 |---|---|---|
 | D-PLA-01 | Activar C901/PLR/SIM en ruff (non-blocking) para cerrar el gap de maintainability | RECOMENDADO |
 | D-PLA-02 | vulture a CI/pre-commit (non-blocking → blocking) | RECOMENDADO |
-| D-PLA-03 | Corrección documental: CodeQL/Trivy en PR (no solo semanal) | RECOMENDADO |
+| D-PLA-03 | Corrección documental: CodeQL/Trivy en push/PR + weekly | RECOMENDADO |
 | D-PLA-04 | HashiCorp: NO introducir (F-PL-07 revalidado) | REVALIDADO |
 | D-PLA-05 | Implementar check_production_gates.py (G1..G11, veredicto binario) | REQUERIDO |
 | D-PLA-06 | Bump aiohttp/cryptography (pip-audit 4 vulns) | REQUERIDO |
