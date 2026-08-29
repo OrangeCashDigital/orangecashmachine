@@ -243,8 +243,10 @@ Traceability:
 
 def test_full_repo_audit_validator_passes() -> None:
     """El validador pasa contra el repo real (registro canónico + informe)."""
-    report = sorted((ROOT / "docs" / "audits").glob("AUDIT_OCM_FORENSIC_COMPLIANCE_*.md"))[-1]
-    register = sorted((ROOT / "docs" / "audits").glob("OCM_AUDIT_FINDINGS_*.md"))[-1]
+    audits_dir = ROOT / "docs" / "audits"
+    register = sorted(audits_dir.glob("OCM_AUDIT_FINDINGS_*.md"))[-1]
+    report = av._matching_report_for_register(audits_dir, register)
+    assert report is not None, f"sin informe emparejado para {register.name}"
     ctx = av.AuditContext(
         register=register,
         report=report,
@@ -254,3 +256,66 @@ def test_full_repo_audit_validator_passes() -> None:
     )
     code = av.run_checks(ctx)
     assert code == 0
+
+
+class TestMatchingReportForRegister:
+    """M17 -- vinculo registro<->informe: 'Fuente primaria' declarada
+    tiene prioridad sobre el fallback por nombre de archivo (regresion
+    2026-08-29: un slug con punto extra rompia el fallback y el rename
+    del archivo lo escondia en vez de arreglarlo)."""
+
+    def test_usa_fuente_primaria_declarada_cuando_existe(self, tmp_path):
+        av = _load_module()
+        audits = tmp_path / "docs" / "audits"
+        audits.mkdir(parents=True)
+        report = audits / "AUDIT_OCM_algo_2026-08-28.md"
+        report.write_text("# informe\n", encoding="utf-8")
+        register = audits / "OCM_AUDIT_FINDINGS_2026-08-28_algo.md"
+        register.write_text(
+            "# registro\n\n**Fuente primaria:** `docs/audits/"
+            + report.name
+            + "`\n",
+            encoding="utf-8",
+        )
+        assert av._matching_report_for_register(audits, register) == report
+
+    def test_fuente_primaria_declarada_pero_inexistente_no_usa_fallback_de_nombre(
+        self, tmp_path
+    ):
+        av = _load_module()
+        audits = tmp_path / "docs" / "audits"
+        audits.mkdir(parents=True)
+        (audits / "AUDIT_OCM_algo_2026-08-28.md").write_text(
+            "# informe distinto\n", encoding="utf-8"
+        )
+        register = audits / "OCM_AUDIT_FINDINGS_2026-08-28_algo.md"
+        register.write_text(
+            "# registro\n\n**Fuente primaria:** `docs/audits/AUDIT_OCM_NO_EXISTE.md`\n",
+            encoding="utf-8",
+        )
+        assert av._declared_report_for_register(register) is None
+
+    def test_sin_fuente_primaria_usa_fallback_por_slug_fecha(self, tmp_path):
+        av = _load_module()
+        audits = tmp_path / "docs" / "audits"
+        audits.mkdir(parents=True)
+        report = audits / "AUDIT_OCM_algo_2026-08-28.md"
+        report.write_text("# informe\n", encoding="utf-8")
+        register = audits / "OCM_AUDIT_FINDINGS_2026-08-28_algo.md"
+        register.write_text("# registro sin fuente primaria\n", encoding="utf-8")
+        assert av._matching_report_for_register(audits, register) == report
+
+    def test_slug_con_punto_extra_no_rompe_via_fuente_primaria(self, tmp_path):
+        av = _load_module()
+        audits = tmp_path / "docs" / "audits"
+        audits.mkdir(parents=True)
+        report = audits / "AUDIT_OCM_data-plane-streaming_2026-08-28.md"
+        report.write_text("# informe\n", encoding="utf-8")
+        register = audits / "OCM_AUDIT_FINDINGS_2026-08-28_data-plane-streaming.yaml.md"
+        register.write_text(
+            "# registro\n\n**Fuente primaria:** `docs/audits/"
+            + report.name
+            + "`\n",
+            encoding="utf-8",
+        )
+        assert av._matching_report_for_register(audits, register) == report

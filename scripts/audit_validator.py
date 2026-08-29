@@ -853,9 +853,53 @@ ALL_RULES: Sequence[tuple[str, str, object]] = [
 ]
 
 
+FUENTE_PRIMARIA_RE = re.compile(r"\*\*Fuente primaria:\*\*\s*`([^`]+)`")
+
+
+def _declared_report_for_register(register_path):
+    """Lee el campo explicito 'Fuente primaria' del propio registro."""
+    try:
+        text = register_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = FUENTE_PRIMARIA_RE.search(text)
+    if not m:
+        return None
+    candidate = register_path.parent / Path(m.group(1)).name
+    return candidate if candidate.is_file() else None
+
+
+def _matching_report_for_register(audits_dir, register_path):
+    """Prioridad: 1) 'Fuente primaria' declarada (autoritativa);
+    2) fallback por convencion slug+fecha, solo para registros
+    que no la declaran."""
+    declared = _declared_report_for_register(register_path)
+    if declared:
+        return declared
+    parsed = parse_canonical_register_filename(register_path.name)
+    if not parsed:
+        return None
+    name = f"AUDIT_OCM_{parsed['slug']}_{parsed['date']}.md"
+    candidate = audits_dir / name
+    return candidate if candidate.is_file() else None
+
+
 def resolve_defaults(args: argparse.Namespace) -> AuditContext:
     register = Path(args.register) if args.register else _latest(ROOT / "docs" / "audits", "OCM_AUDIT_FINDINGS_")
-    report = Path(args.report) if args.report else _latest(ROOT / "docs" / "audits", "AUDIT_OCM_FORENSIC_COMPLIANCE_")
+    report = (
+        Path(args.report)
+        if args.report
+        else (
+            _matching_report_for_register(
+                ROOT / "docs" / "audits",
+                register,
+            )
+            or _latest(
+                ROOT / "docs" / "audits",
+                "AUDIT_OCM_FORENSIC_COMPLIANCE_",
+            )
+        )
+    )
     golden = Path(args.golden) if args.golden else ROOT / "tests" / "architecture_linter" / "test_golden.py"
     return AuditContext(
         register=register,
