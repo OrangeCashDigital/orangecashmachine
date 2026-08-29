@@ -308,3 +308,93 @@ class TestApplyBusinessRulesFailFast:
         with pytest.raises(ConfigRuleViolation) as exc_info:
             apply_business_rules(cfg)
         assert exc_info.value.rule == "PRODUCTION_DRY_RUN"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AppConfig.validate_exchanges — F-DPL-01/B-59: acepta feeds de market-data
+# como alternativa a exchanges de trading (streaming-only, sin credenciales)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _app_config_with(
+    *,
+    exchanges: list[ExchangeConfig] | None = None,
+    feeds: dict[str, "ExchangeFeedEntryConfig"] | None = None,
+    environment_name: str = "development",
+) -> AppConfig:
+    """AppConfig real variando exchanges/feeds, sin pasar por _minimal_app_config
+    (que siempre trae un exchange habilitado)."""
+    from ocm.config.schema import ExchangeFeedEntryConfig, FeedsConfig
+
+    return AppConfig(
+        environment=EnvironmentConfig(name=environment_name),
+        exchanges=exchanges or [],
+        feeds=FeedsConfig(feeds=feeds or {}),
+        pipeline=PipelineConfig(),
+        integrations=IntegrationsConfig(kafka=KafkaConfig(enabled=True)),
+        safety=SafetyConfig(
+            dry_run=(environment_name != "production"),
+            max_backfill_days=30,
+            require_confirmation=True,
+        ),
+    )
+
+
+class TestValidateExchangesMarketDataFeeds:
+    def test_solo_trading_exchange_habilitado_pasa(self) -> None:
+        cfg = _app_config_with(
+            exchanges=[
+                ExchangeConfig(
+                    name="bybit",
+                    enabled=True,
+                    markets=MarketsConfig(
+                        spot=MarketConfig(enabled=True, symbols=["BTC/USDT"]),
+                    ),
+                )
+            ],
+            feeds={},
+        )
+        assert cfg.exchanges
+
+    def test_solo_market_data_feed_habilitado_pasa(self) -> None:
+        """Caso real de F-DPL-01: streaming --env production sin exchanges
+        de trading, solo con un feed publico habilitado."""
+        from ocm.config.schema import ExchangeFeedEntryConfig
+
+        cfg = _app_config_with(
+            exchanges=[],
+            feeds={"bybit": ExchangeFeedEntryConfig(enabled=True, symbols=["BTC/USDT"])},
+        )
+        assert not cfg.exchanges
+        assert cfg.feeds.feeds["bybit"].enabled
+
+    def test_ningun_exchange_ni_feed_habilitado_falla(self) -> None:
+        from ocm.config.schema import ExchangeFeedEntryConfig
+
+        with pytest.raises(ValueError, match="At least one exchange must be enabled"):
+            _app_config_with(
+                exchanges=[],
+                feeds={"bybit": ExchangeFeedEntryConfig(enabled=False, symbols=["BTC/USDT"])},
+            )
+
+    def test_exchange_deshabilitado_y_sin_feeds_falla(self) -> None:
+        with pytest.raises(ValueError, match="At least one exchange must be enabled"):
+            _app_config_with(exchanges=[], feeds={})
+
+    def test_ambos_habilitados_pasa(self) -> None:
+        from ocm.config.schema import ExchangeFeedEntryConfig
+
+        cfg = _app_config_with(
+            exchanges=[
+                ExchangeConfig(
+                    name="bybit",
+                    enabled=True,
+                    markets=MarketsConfig(
+                        spot=MarketConfig(enabled=True, symbols=["BTC/USDT"]),
+                    ),
+                )
+            ],
+            feeds={"kucoin": ExchangeFeedEntryConfig(enabled=True, symbols=["ETH/USDT"])},
+        )
+        assert cfg.exchanges
+        assert cfg.feeds.feeds["kucoin"].enabled

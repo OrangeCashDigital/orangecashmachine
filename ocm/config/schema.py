@@ -860,9 +860,22 @@ class AppConfig(StrictBaseModel):
 
     @model_validator(mode="after")
     def validate_exchanges(self) -> AppConfig:
-        """Verifica que al menos un exchange esté habilitado."""
-        if not self.exchanges:
-            raise ValueError("At least one exchange must be enabled.")
+        """Verifica que al menos un exchange esté habilitado (trading o market data).
+
+        Acepta exchanges habilitados en `exchanges` (trading) O en `feeds.feeds`
+        (market data streaming público). Esto permite que el entrypoint `streaming`
+        arranque con solo feeds públicos habilitados, sin requerir credenciales
+        de trading.
+        """
+        has_trading_exchange = bool(self.exchanges)
+        has_market_data_feed = any(
+            entry.enabled for entry in self.feeds.feeds.values()
+        )
+        if not has_trading_exchange and not has_market_data_feed:
+            raise ValueError(
+                "At least one exchange must be enabled in `exchanges` (trading) "
+                "or `feeds.feeds` (market data streaming)."
+            )
         return self
 
     # ensure_log_dir eliminado del validator — side effect (IO) en schema validation
