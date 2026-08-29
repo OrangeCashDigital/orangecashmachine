@@ -52,3 +52,9 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+      - id: audit-docs-integrity
+        name: Audit docs integrity (M01-M25 audit_validator)
+        entry: uv run python scripts/audit_validator.py
+        language: system
+        pass_filenames: false
+        files: ^docs/audits/.*\.md$
