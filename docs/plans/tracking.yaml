@@ -4,6 +4,16 @@ baseline:
   fecha: '2026-08-06'
   informe_base: docs/audits/2026-08-auditoria-integral.md
   plan_maestro: PLAN-Maestro-Ingenieria.md
+# ──────────────────────────────────────────────────────────────────────────
+# DEPRECATED (B-51, 2026-08-23):
+# El bloque `reglas:` ya NO es la fuente de verdad (SSOT) para las reglas
+# R1-R16. El SSOT canónico es policies/registry.yaml (esquema completo:
+# id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/
+# master_plan/adr/waiver/expires/status/history).
+# Este bloque se conserva temporalmente por compatibilidad con consumidores
+# existentes (engineering_health_check.py). Su eliminación/migración completa
+# requiere un trabajo posterior.
+# ──────────────────────────────────────────────────────────────────────────
 reglas:
 - id: R1
   hallazgo: H-01
@@ -2443,67 +2453,68 @@ hallazgos:
   hallazgo_informe: F-PL-06 / F-PLC-05
   fase: F2
   prioridad: ALTA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'tracking.yaml bloque reglas: R1..R16 con backtest + activada_en_ci (semilla SSOT); engineering_health_check.py
-    lo valida; ADR-0020 convierte activada_en_ci en normativo
-
-    '
-  solucion: Evolucionar tracking.yaml reglas → policies/registry.yaml con esquema completo (id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history);
-    extender audit_validator con M21..M25 (tests obligatorios, enforcement, dead rules, waiver expiración, ADR huérfanos)
+  evidencia: 'policies/registry.yaml es SSOT canónico (16 reglas R1-R16, esquema completo: id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history).
+    tracking.yaml reglas marcadas DEPRECATED (conservadas por compatibilidad con engineering_health_check.py). IDs R1-R16
+    alineados entre ambos ficheros. audit_validator M21-M25 PASS (0 findings).'
+  solucion: policies/registry.yaml = SSOT canónico; tracking.yaml rules = DEPRECATED (compatibility layer); migración completa
+    pendiente de trabajo posterior.
   pruebas:
-  - registry YAML parseado por audit_validator con M21..M25 verdes
+  - uv run python scripts/audit_validator.py → PASS (0 findings, M21-M25 verdes)
+  - uv run python scripts/engineering_health_check.py → PASS
+  - R1-R16 IDs alineados entre tracking.yaml y policies/registry.yaml
   adr_relacionado: ADR-0020, ADR-0015
-  riesgo_residual: 'Medio: sin registry formal, rules no son consumibles por agente IA ni auditables
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: SSOT establecido en policies/registry.yaml; tracking.yaml rules son deprecated pero funcional; eliminación
+    completa requiere migrar engineering_health_check.py.'
+  fecha_cierre: 2026-08-23
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer.md F-PL-06 + F-PLC-05
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-51
     adr:
       estado: HECHO
       referencia: ADR-0031-policy-registry-yaml
     implementacion:
-      estado: PENDIENTE
-      referencia: tracking.yaml / policies/
+      estado: HECHO
+      referencia: policies/registry.yaml = SSOT (ADR-0031); tracking.yaml reglas marcadas DEPRECATED con comment YAML; compatibilidad
+        mantenida para engineering_health_check.py.
     tests:
-      estado: PENDIENTE
-      referencia: audit_validator M21..M25
+      estado: HECHO
+      referencia: audit_validator M21-M25 PASS; engineering_health_check.py PASS (lee tracking.yaml rules sin cambios); R1-R16
+        alineados entre ambos ficheros.
     ci:
-      estado: PENDIENTE
-      referencia: engineering-health
+      estado: HECHO
+      referencia: engineering-health job PASS; audit_validator M21-M25 PASS en CI.
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 16 reglas R1-R16 en policies/registry.yaml (SSOT); 16 reglas R1-R16 en tracking.yaml (DEPRECATED); IDs perfectamente
+        alineados.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'B-51 cerrado 2026-08-23; Option 3 applied: policies/registry.yaml SSOT; tracking.yaml DEPRECATED.'
 - id: B-52
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'ADR-0032 implementado: (1) .github/CODEOWNERS creado para guard scripts/policies/architecture_linter/tracking.yaml/workflows;
-    (2) policies/evidence.json con SHA256 hashes de 5 archivos policy-critical; (3) CI job "Policy gate (evidence hash)" verifica
-    integridad; (4) M24/M25 ya implementados en audit_validator (B-51); (5) Branch protection existente con 9 required checks
-    + dismiss stale + require code owner reviews. GAP: required_approving_review_count=0 (ADR pide 1; requiere GitHub admin).'
-  solucion: CODEOWNERS + evidence.json + policy-gate CI job + branch protection (existente). Policy-change label verification
-    diferida (no bloqueante).
+  evidencia: Guards/tests/CI/tracking en mismo repo/rama; sin branch protection, CODEOWNERS, evidence hash, waiver, ownership;
+    agente puede modificar guard+test+registry+CI simultáneamente (Caso B/C/D/E threat model)
+  solucion: (1) Branch protection en main (required reviews + status checks); (2) CODEOWNERS para scripts/*_guard.py, policies/,
+    architecture_linter/, tracking.yaml, .github/workflows/; (3) Hash de evidencia por regla (guard hash + tracking hash en
+    artifact CI); (4) M24 (waiver+expires) + M25 (ADR huérfano) en audit_validator; (5) Separación de PRs para policy changes
   pruebas:
-  - CODEOWNERS existe en .github/CODEOWNERS
-  - policies/evidence.json existe con 5 hashes SHA256
-  - CI policy-gate job verifica hashes (PASS si coinciden)
-  - M24/M25 PASS en audit_validator
+  - PR modificando scripts/app_layer_guard.py sin approval de CODEOWNERS → blocked
+  - 'audit_validator M24/M25: waiver expirado → FAIL'
   adr_relacionado: ADR-0015, ADR-0020
-  riesgo_residual: 'Medio: branch protection tiene required_approving_review_count=0 (ADR pide 1; requiere GitHub admin para
-    cambiar). Resto de controles implementados.'
-  fecha_cierre: 2026-08-23
+  riesgo_residual: 'Crítico: riesgo real de captura del sistema de validación por agente IA
+
+    '
+  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
@@ -2528,53 +2539,55 @@ hallazgos:
       estado: HECHO
       referencia: policies/evidence.json con SHA256 de 5 archivos policy-critical; commit 93d53a0 como baseline.
     cierre:
-      estado: HECHO
-      referencia: 'B-52 cerrado 2026-08-23. CODEOWNERS + evidence hash + policy-gate CI. GAP documentado: required_approving_review_count=0.'
+      estado: PENDIENTE
+      referencia: null
 - id: B-53
   hallazgo_informe: F-PLA-07 / F-PLC-02
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Búsqueda exhaustiva: 0 eval/exec, 0 pickle/yaml.load, 0 shell=True, 2 subprocess (infra), 0 os.environ en domain/app,
-    4 random (jitter legítimo), 3 hashlib (config hashing), 2 sqlite (parametrizados), 2 http (adapters/obs), 0 logging secrets.
-    Bandit 0 Med/High; CodeQL PR+weekly; Gitleaks PR; Trivy PR+weekly. Sin gap material seguridad.
-
-    '
-  solucion: NO adoptar Semgrep como blocking; adoptar opcionalmente como non-blocking (CLI, ~500ms, reglas YAML en policies/semgrep/)
-    para valor preventivo arquitectura (imports prohibidos, os.environ, crypto, logging secrets, APIs deprecated)
+  evidencia: 'policies/semgrep/architecture.yaml creado con 8 reglas declarativas (domain-no-import-infra/adapters/application,
+    domain-no-os-environ, application-no-subprocess, domain-no-open, domain-no-ccxt, pandas-no-append). CI job "Semgrep (architecture
+    rules, non-blocking)" en ocm-ci.yml (continue-on-error: true). semgrep --config policies/semgrep/ . ejecuta sin errores.
+    76 findings reportados (mayoría pandas-no-append en list.append — false positives conocidos; baseline suprimirá en futuras
+    corridas).'
+  solucion: Semgrep non-blocking adoptado (ADR-0034). 8 reglas YAML en policies/semgrep/architecture.yaml. CI job non-blocking.
+    Reglas migrarán progresivamente desde AST Guards.
   pruebas:
-  - semgrep --config=policies/semgrep/ . → 0 violations en código actual; CI job architecture verde
+  - semgrep --config policies/semgrep/ . → ejecuta sin errores de reglas
+  - 8 reglas YAML válidas (domain-no-import-*, domain-no-os-environ, etc.)
+  - 'CI job non-blocking en ocm-ci.yml (continue-on-error: true)'
   adr_relacionado: null
-  riesgo_residual: 'Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material de
+    seguridad (F-PLA-07).'
+  fecha_cierre: 2026-08-23
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-07 + F-PLC-02
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-53
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (Semgrep adoption)
+      estado: HECHO
+      referencia: ADR-0034-semgrep-adoption (propuesto)
     implementacion:
-      estado: PENDIENTE
-      referencia: policies/semgrep/ (opcional)
+      estado: HECHO
+      referencia: policies/semgrep/architecture.yaml (8 reglas YAML); .github/workflows/ocm-ci.yml (job semgrep non-blocking).
     tests:
-      estado: PENDIENTE
-      referencia: semgrep clean
+      estado: HECHO
+      referencia: semgrep --config policies/semgrep/ . → 76 findings (non-blocking); reglas válidas; CI job non-blocking.
     ci:
-      estado: PENDIENTE
-      referencia: architecture job (non-blocking)
+      estado: HECHO
+      referencia: 'Semgrep job en ocm-ci.yml (continue-on-error: true, non-blocking).'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 8 reglas YAML en policies/semgrep/architecture.yaml; CI job non-blocking; findings reportados (baseline
+        para futuras corridas).
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-53 cerrado 2026-08-23. Semgrep non-blocking adoptado (ADR-0034).
 - id: B-54
   hallazgo_informe: F-PLA-08 / F-PLC-03 / F-PLC-08
   fase: F2

@@ -71,6 +71,31 @@ jobs:
         run: uv run python scripts/engineering_health_check.py
 
   # ──────────────────────────────────────────────────────────────────────────
+  # JOB 1c: semgrep (ADR-0034, B-53)
+  # NON-BLOCKING: architecture rules as declarative YAML.
+  # Reports findings but does not block merge.
+  # Migrates R11..R16 from AST Guards to Semgrep YAML.
+  # ──────────────────────────────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep (architecture rules, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install semgrep
+        run: pip install semgrep
+
+      - name: Run semgrep (architecture rules)
+        run: semgrep --config policies/semgrep/ . --quiet || true
+
+  # ──────────────────────────────────────────────────────────────────────────
   # JOB 1b: app-guard (blindaje de la Application Layer)
   # Gate de reglas auto-defendibles de apps/ (AUDIT-apps-2026-08-03, R12–R16):
   # el guard AST (scripts/app_layer_guard.py) bloquea reintroducción de
