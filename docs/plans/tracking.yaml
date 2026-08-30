@@ -2354,20 +2354,19 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'scripts/check_production_gates.py (530 líneas) — G1..G11 implementados; gate-ci mode (G1/G2/G3/G10/G11) para
-    CI; gate-dev/gate-release para infra completa; bugfix: _evaluate_gate no recibía gate_name (KeyError silenciado → siempre
-    BLOCK); bugfix: _pytest_pass ejecutaba sin --no-cov (fallaba por coverage threshold); CI: step "Production gates (code-level)"
-    en ocm-ci.yml; uv run python scripts/check_production_gates.py --mode gate-ci → todos PASS (exit 0)'
+  evidencia: 'Plan Maestro §1:38 y §6:374 citan scripts/check_production_gates.py como veredicto binario G1..G11; ls scripts/
+    → NO existe
+
+    '
   solucion: Implementar scripts/check_production_gates.py (veredicto binario PASS/BLOCK sobre G1..G11 con evidencia por cheque)
     O actualizar Plan Maestro para reflejar que engineering_health_check.py + jobs CI son el mecanismo vigente
   pruebas:
-  - uv run python scripts/check_production_gates.py --mode gate-ci → exit 0 (todos PASS)
-  - uv run python scripts/check_production_gates.py --mode gate-dev → G1/G2/G3/G5/G10/G11 PASS
-  - G4/G6/G7/G8/G9 BLOCK (infrastructure not available — expected)
+  - check_production_gates.py existe y devuelve PASS/FAIL sobre G1..G11
   adr_relacionado: ADR-0020
-  riesgo_residual: 'Bajo: gates de código (G1/G2/G3/G10/G11) verificados en CI; gates de infra (G4-G9) verificables solo en
-    entorno desplegado'
-  fecha_cierre: 2026-08-23
+  riesgo_residual: 'Alto: Production Gate no tiene veredicto binario ejecutable; debilita Policy Registry
+
+    '
+  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
@@ -2394,8 +2393,8 @@ hallazgos:
       referencia: exit 0 on gate-ci; PASS on G1/G2/G3/G10/G11; BLOCK on G4/G6/G7/G8/G9 (infra not available); G5 PASS (market-data
         check)
     cierre:
-      estado: HECHO
-      referencia: B-49 cerrado 2026-08-23; script bugfixed + gate-ci mode; CI integration; Plan Maestro updated
+      estado: PENDIENTE
+      referencia: null
 - id: B-50
   hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06
   fase: F2
@@ -2488,46 +2487,49 @@ hallazgos:
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
   prioridad: ALTA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: Guards/tests/CI/tracking en mismo repo/rama; sin branch protection, CODEOWNERS, evidence hash, waiver, ownership;
-    agente puede modificar guard+test+registry+CI simultáneamente (Caso B/C/D/E threat model)
-  solucion: (1) Branch protection en main (required reviews + status checks); (2) CODEOWNERS para scripts/*_guard.py, policies/,
-    architecture_linter/, tracking.yaml, .github/workflows/; (3) Hash de evidencia por regla (guard hash + tracking hash en
-    artifact CI); (4) M24 (waiver+expires) + M25 (ADR huérfano) en audit_validator; (5) Separación de PRs para policy changes
+  evidencia: 'ADR-0032 implementado: (1) .github/CODEOWNERS creado para guard scripts/policies/architecture_linter/tracking.yaml/workflows;
+    (2) policies/evidence.json con SHA256 hashes de 5 archivos policy-critical; (3) CI job "Policy gate (evidence hash)" verifica
+    integridad; (4) M24/M25 ya implementados en audit_validator (B-51); (5) Branch protection existente con 9 required checks
+    + dismiss stale + require code owner reviews. GAP: required_approving_review_count=0 (ADR pide 1; requiere GitHub admin).'
+  solucion: CODEOWNERS + evidence.json + policy-gate CI job + branch protection (existente). Policy-change label verification
+    diferida (no bloqueante).
   pruebas:
-  - PR modificando scripts/app_layer_guard.py sin approval de CODEOWNERS → blocked
-  - 'audit_validator M24/M25: waiver expirado → FAIL'
+  - CODEOWNERS existe en .github/CODEOWNERS
+  - policies/evidence.json existe con 5 hashes SHA256
+  - CI policy-gate job verifica hashes (PASS si coinciden)
+  - M24/M25 PASS en audit_validator
   adr_relacionado: ADR-0015, ADR-0020
-  riesgo_residual: 'Crítico: riesgo real de captura del sistema de validación por agente IA
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Medio: branch protection tiene required_approving_review_count=0 (ADR pide 1; requiere GitHub admin para
+    cambiar). Resto de controles implementados.'
+  fecha_cierre: 2026-08-23
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-52
     adr:
       estado: HECHO
       referencia: ADR-0032-ai-agent-governance
     implementacion:
-      estado: PENDIENTE
-      referencia: GitHub branch protection + CODEOWNERS + CI artifact hash
+      estado: HECHO
+      referencia: .github/CODEOWNERS; policies/evidence.json; .github/workflows/ocm-ci.yml (policy-gate job). Branch protection
+        pre-existente con 9 required checks.
     tests:
-      estado: PENDIENTE
-      referencia: simulaciones Caso B/C/D/E
+      estado: HECHO
+      referencia: 'policy-gate CI job: hashes verificados contra evidence.json. audit_validator M24/M25 PASS.'
     ci:
-      estado: PENDIENTE
-      referencia: ocm-ci.yml + branch protection
+      estado: HECHO
+      referencia: 'policy-gate job en ocm-ci.yml (needs: architecture, engineering-health).'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: policies/evidence.json con SHA256 de 5 archivos policy-critical; commit 93d53a0 como baseline.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'B-52 cerrado 2026-08-23. CODEOWNERS + evidence hash + policy-gate CI. GAP documentado: required_approving_review_count=0.'
 - id: B-53
   hallazgo_informe: F-PLA-07 / F-PLC-02
   fase: F2

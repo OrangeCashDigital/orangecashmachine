@@ -1,0 +1,22 @@
+# ──────────────────────────────────────────────────────────────────────────
+# CODEOWNERS — AI Agent Governance (ADR-0032, B-52)
+#
+# Policy files require architecture team review before merge.
+# GitHub will automatically request reviews from @orangemusic when
+# PRs touch these files.
+# ──────────────────────────────────────────────────────────────────────────
+
+# Guard scripts — AST/CI enforcement
+/scripts/*_guard.py              @orangemusic
+
+# Policy registry — canonical SSOT for rules
+/policies/                       @orangemusic
+
+# Architecture linter — contract enforcement
+/architecture_linter/            @orangemusic
+
+# Tracking — engineering health check SSOT
+/docs/plans/tracking.yaml        @orangemusic
+
+# CI workflows — gate definitions
+.github/workflows/ocm-ci.yml     @orangemusic
