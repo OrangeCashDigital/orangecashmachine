@@ -2470,7 +2470,13 @@ hallazgos:
       referencia: 16 reglas R1-R16 en policies/registry.yaml (SSOT); 16 reglas R1-R16 en tracking.yaml (DEPRECATED); IDs perfectamente
         alineados.
     cierre:
-- id: B-52
+      estado: HECHO
+      fecha_cierre: '2026-08-23'
+      cadena:
+        hallazgo:
+          estado: HECHO
+          referencia: B-51 cerrado 2026-08-23; policies/registry.yaml = SSOT; tracking.yaml reglas DEPRECATED alineadas
+          evidence: 16 reglas R1-R16 alineadas entre policies/registry.yaml y tracking.yaml
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
   prioridad: ALTA
@@ -2589,7 +2595,12 @@ hallazgos:
       estado: HECHO
       referencia: ADR-0035/0036; 79 ruff baseline; 23 vulture baseline; compliance_report.py generates JSON + text.
     cierre:
-- id: B-55
+      estado: HECHO
+      fecha_cierre: '2026-08-24'
+      cadena:
+        hallazgo:
+          estado: HECHO
+          referencia: B-54 cerrado 2026-08-24; ruff C901/PLR/SIM + vulture CI + compliance report
   hallazgo_informe: F-PLC-04
   fase: F2
   prioridad: MEDIA
