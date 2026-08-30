@@ -79,7 +79,7 @@ dependencies = [
     # Polars es el único motor DataFrame — migración pandas completada.
     "numpy>=2.0,<3.0",
     "polars[rtcompat]>=1.40.1",
-    "pyarrow>=17.0,<20.0",
+    "pyarrow>=17.0,<26.0",
     # ── Market data / exchange adapters (bounded context: market_data) ─────
     # ccxt: pinneado en 4.3.58 — versiones posteriores cambian la firma de
     # fetch_ohlcv() y el campo default_type en exchange params (CCXTAdapter).
