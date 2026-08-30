@@ -333,7 +333,7 @@ jobs:
         run: uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325
 
       - name: Vulture dead code detection (non-blocking)
-        # B-48/B-54: dead code detection. Non-blocking until baseline is clean.
+        # B-48: dead code detection. Non-blocking until baseline is clean.
         # Baseline: 23 false positives (TYPE_CHECKING imports, Protocol params,
         # signal handler params). Block when baseline reaches 0.
         continue-on-error: true
