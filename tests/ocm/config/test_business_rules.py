@@ -33,6 +33,7 @@ from ocm.config.schema import (
     AppConfig,
     EnvironmentConfig,
     ExchangeConfig,
+    ExchangeFeedEntryConfig,
     IntegrationsConfig,
     KafkaConfig,
     MarketConfig,
@@ -319,12 +320,12 @@ class TestApplyBusinessRulesFailFast:
 def _app_config_with(
     *,
     exchanges: list[ExchangeConfig] | None = None,
-    feeds: dict[str, "ExchangeFeedEntryConfig"] | None = None,
+    feeds: dict[str, ExchangeFeedEntryConfig] | None = None,
     environment_name: str = "development",
 ) -> AppConfig:
     """AppConfig real variando exchanges/feeds, sin pasar por _minimal_app_config
     (que siempre trae un exchange habilitado)."""
-    from ocm.config.schema import ExchangeFeedEntryConfig, FeedsConfig
+    from ocm.config.schema import FeedsConfig
 
     return AppConfig(
         environment=EnvironmentConfig(name=environment_name),
@@ -359,7 +360,6 @@ class TestValidateExchangesMarketDataFeeds:
     def test_solo_market_data_feed_habilitado_pasa(self) -> None:
         """Caso real de F-DPL-01: streaming --env production sin exchanges
         de trading, solo con un feed publico habilitado."""
-        from ocm.config.schema import ExchangeFeedEntryConfig
 
         cfg = _app_config_with(
             exchanges=[],
@@ -369,7 +369,6 @@ class TestValidateExchangesMarketDataFeeds:
         assert cfg.feeds.feeds["bybit"].enabled
 
     def test_ningun_exchange_ni_feed_habilitado_falla(self) -> None:
-        from ocm.config.schema import ExchangeFeedEntryConfig
 
         with pytest.raises(ValueError, match="At least one exchange must be enabled"):
             _app_config_with(
@@ -382,7 +381,6 @@ class TestValidateExchangesMarketDataFeeds:
             _app_config_with(exchanges=[], feeds={})
 
     def test_ambos_habilitados_pasa(self) -> None:
-        from ocm.config.schema import ExchangeFeedEntryConfig
 
         cfg = _app_config_with(
             exchanges=[

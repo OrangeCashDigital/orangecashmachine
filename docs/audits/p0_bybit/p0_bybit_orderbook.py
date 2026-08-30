@@ -40,6 +40,7 @@ import time
 from collections import Counter, deque
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TextIO
 
 try:
     import websockets
@@ -64,7 +65,7 @@ class P0OrderBookObserver:
         self.outdir = outdir
         self.outdir.mkdir(parents=True, exist_ok=True)
         self.raw_path = outdir / "raw.jsonl"
-        self.rawf = None
+        self.rawf: TextIO | None = None
 
         # acumuladores
         self.msg_count = 0
@@ -83,7 +84,7 @@ class P0OrderBookObserver:
         self.latencies_ms: list[int] = []
         self.ts_series: list[int] = []
         self.cts_series: list[int] = []
-        self.timestamps = deque(maxlen=100000)
+        self.timestamps: deque[int] = deque(maxlen=100000)
         self.crossed_books = 0
 
     # -- utilidades -------------------------------------------------------
@@ -120,7 +121,7 @@ class P0OrderBookObserver:
 
     def _handle_orderbook(self, msg: dict, local_recv_ms: int) -> None:
         mtype = msg.get("type")
-        self.type_counts[mtype] += 1
+        self.type_counts[str(mtype)] += 1
         data = msg.get("data", {})
         ts = msg.get("ts")
         cts = data.get("cts")
@@ -191,7 +192,8 @@ class P0OrderBookObserver:
                                 await ws.send(json.dumps({"op": "ping"}))
                                 last_ping = time.monotonic()
                             try:
-                                text = await asyncio.wait_for(ws.recv(), timeout=HEARTBEAT_INTERVAL + 5)
+                                raw = await asyncio.wait_for(ws.recv(), timeout=HEARTBEAT_INTERVAL + 5)
+                                text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
                                 await self.on_message(text, self._ts_ms())
                             except asyncio.TimeoutError:
                                 # sin mensajes -> enviar ping preventivo
