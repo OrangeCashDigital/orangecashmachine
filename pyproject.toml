@@ -200,8 +200,14 @@ indent-style = "space"
 # lazy imports por orden de arranque). NO se ignora globalmente para no
 # enmascarar imports mal ubicados en el resto del código (fail-fast en
 # lint por default, fail-soft solo donde el propio diseño lo exige).
-select = ["E", "F", "I"]
-ignore = []
+select = ["E", "F", "I", "C901", "PLR", "SIM"]
+ignore = [
+    "PLR2004",  # magic-value-comparison — 166 violaciones; baseline conocida
+    "PLR0913",  # too-many-arguments — 75 violaciones; baseline conocida
+    "PLR0912",  # too-many-branches — 8 violaciones; baseline conocida
+    "PLR0911",  # too-many-return-statements — 7 violaciones; baseline conocida
+    "PLR0915",  # too-many-statements — 7 violaciones; baseline conocida
+]
 
 [tool.ruff.lint.per-file-ignores]
 # ── Composition roots y entrypoints ────────────────────────────────────────
@@ -235,6 +241,7 @@ ignore = []
 "apps/app/cli/*.py"                                                  = ["E402"]
 "packages/market_data/adapters/inbound/data_providers/*.py"          = ["E402"]
 "packages/market_data/ports/outbound/observability.py"                = ["E402"]
+"packages/trading/risk/stop_loss.py"                                  = ["SIM114"]
 # ── Tests — imports condicionales y fixtures con setup previo ───────────────
 "tests/**/*.py"                                                      = ["E402"]
 

@@ -73,7 +73,7 @@ def test_instantiation_without_exchange():
 
 
 def test_required_columns_contains_ohlcv():
-    assert REQUIRED_COLUMNS >= {"timestamp", "open", "high", "low", "close", "volume"}
+    assert {"timestamp", "open", "high", "low", "close", "volume"} <= REQUIRED_COLUMNS
 
 
 # ── Validación de entrada ─────────────────────────────────────────────────────
