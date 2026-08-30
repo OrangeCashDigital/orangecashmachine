@@ -2409,65 +2409,70 @@ hallazgos:
   hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06
   fase: F2
   prioridad: CRITICA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 1: aiohttp 3.14.1 (PYSEC-2026-3545/3546/3547),
-    cryptography 49.0.0 (PYSEC-2026-3552)
-
-    '
-  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 validando staging, o risk-accept formal (ADR + tracking)
+  evidencia: 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0 (No known vulnerabilities
+    found, 2 ignored). Fix ya aplicado en commit 876cf38 (2026-08-21): bump ccxt 4.5.70→4.5.74 resolvió CVEs transitivos (aiohttp
+    3.14.1→3.14.3, cryptography 49.0.0→50.0.0).'
+  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 — YA RESUELTO en 876cf38. Ambas son dependencias transitivas (aiohttp
+    vía ccxt/cryptofeed; cryptography vía python-jose). uv.lock fija versiones exactas; pip-audit en CI detecta regresiones.
   pruebas:
   - uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0
+  - 'uv run pip show aiohttp → Version: 3.14.3'
+  - 'uv run pip show cryptography → Version: 50.0.0'
   adr_relacionado: null
-  riesgo_residual: 'Alto: superficie HTTP (aiohttp) y crypto (cryptography) sin mitigar
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: versiones fijadas en uv.lock (aiohttp 3.14.3, cryptography 50.0.0); pip-audit en CI como gate de
+    regresión (exit 0 actual); pyarrow/ecdsa ignorados por risk-accept previo.'
+  fecha_cierre: 2026-08-23
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02
         + F-PLA-06
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-50
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (risk-accept o bump)
+      estado: NO_APLICA
+      referencia: 'No se requiere ADR: fix ya aplicado como efecto del bump ccxt en 876cf38. No hay risk-accept pendiente
+        (vulnerabilities mitigadas).'
     implementacion:
-      estado: PENDIENTE
-      referencia: pyproject.toml
+      estado: HECHO
+      referencia: 'commit 876cf38 (2026-08-21): bump ccxt 4.5.70→4.5.74 resolvió CVEs transitivos. aiohttp 3.14.1→3.14.3 (PYSEC-2026-3545/3546/3547);
+        cryptography 49.0.0→50.0.0 (PYSEC-2026-3552).'
     tests:
-      estado: PENDIENTE
-      referencia: pip-audit clean
+      estado: HECHO
+      referencia: pip-audit → exit 0 (No known vulnerabilities found, 2 ignored). aiohttp 3.14.3, cryptography 50.0.0 confirmados
+        en uv.lock.
     ci:
-      estado: PENDIENTE
-      referencia: quality job (pip-audit)
+      estado: HECHO
+      referencia: 'quality job → Vulnerabilidades (pip-audit) → PASS (exit 0). Comando: uv run pip-audit . --ignore-vuln PYSEC-2026-113
+        --ignore-vuln PYSEC-2026-1325'
     evidencia:
-      estado: PENDIENTE
-      referencia: exit 1 actual
+      estado: HECHO
+      referencia: 'exit 0 actual (vs exit 1 original). Fix: commit 876cf38 (2026-08-21). No hay CVEs activos para aiohttp/cryptography.'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-50 cerrado 2026-08-23. Fix preexistente (876cf38). tracking.yaml actualizado; Plan Maestro actualizado.
 - id: B-51
   hallazgo_informe: F-PL-06 / F-PLC-05
   fase: F2
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'policies/registry.yaml es SSOT canónico (16 reglas R1-R16, esquema completo: id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history).
-    tracking.yaml reglas marcadas DEPRECATED (conservadas por compatibilidad con engineering_health_check.py). IDs R1-R16
-    alineados entre ambos ficheros. audit_validator M21-M25 PASS (0 findings).'
-  solucion: policies/registry.yaml = SSOT canónico; tracking.yaml rules = DEPRECATED (compatibility layer); migración completa
-    pendiente de trabajo posterior.
+  evidencia: 'tracking.yaml bloque reglas: R1..R16 con backtest + activada_en_ci (semilla SSOT); engineering_health_check.py
+    lo valida; ADR-0020 convierte activada_en_ci en normativo
+
+    '
+  solucion: Evolucionar tracking.yaml reglas → policies/registry.yaml con esquema completo (id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history);
+    extender audit_validator con M21..M25 (tests obligatorios, enforcement, dead rules, waiver expiración, ADR huérfanos)
   pruebas:
-  - uv run python scripts/audit_validator.py → PASS (0 findings, M21-M25 verdes)
-  - uv run python scripts/engineering_health_check.py → PASS
-  - R1-R16 IDs alineados entre tracking.yaml y policies/registry.yaml
+  - registry YAML parseado por audit_validator con M21..M25 verdes
   adr_relacionado: ADR-0020, ADR-0015
-  riesgo_residual: 'Bajo: SSOT establecido en policies/registry.yaml; tracking.yaml rules son deprecated pero funcional; eliminación
-    completa requiere migrar engineering_health_check.py.'
-  fecha_cierre: 2026-08-23
+  riesgo_residual: 'Medio: sin registry formal, rules no son consumibles por agente IA ni auditables
+
+    '
+  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
@@ -2494,8 +2499,8 @@ hallazgos:
       referencia: 16 reglas R1-R16 en policies/registry.yaml (SSOT); 16 reglas R1-R16 en tracking.yaml (DEPRECATED); IDs perfectamente
         alineados.
     cierre:
-      estado: HECHO
-      referencia: 'B-51 cerrado 2026-08-23; Option 3 applied: policies/registry.yaml SSOT; tracking.yaml DEPRECATED.'
+      estado: PENDIENTE
+      referencia: null
 - id: B-52
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
@@ -2547,21 +2552,20 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'policies/semgrep/architecture.yaml creado con 8 reglas declarativas (domain-no-import-infra/adapters/application,
-    domain-no-os-environ, application-no-subprocess, domain-no-open, domain-no-ccxt, pandas-no-append). CI job "Semgrep (architecture
-    rules, non-blocking)" en ocm-ci.yml (continue-on-error: true). semgrep --config policies/semgrep/ . ejecuta sin errores.
-    76 findings reportados (mayoría pandas-no-append en list.append — false positives conocidos; baseline suprimirá en futuras
-    corridas).'
-  solucion: Semgrep non-blocking adoptado (ADR-0034). 8 reglas YAML en policies/semgrep/architecture.yaml. CI job non-blocking.
-    Reglas migrarán progresivamente desde AST Guards.
+  evidencia: 'Búsqueda exhaustiva: 0 eval/exec, 0 pickle/yaml.load, 0 shell=True, 2 subprocess (infra), 0 os.environ en domain/app,
+    4 random (jitter legítimo), 3 hashlib (config hashing), 2 sqlite (parametrizados), 2 http (adapters/obs), 0 logging secrets.
+    Bandit 0 Med/High; CodeQL PR+weekly; Gitleaks PR; Trivy PR+weekly. Sin gap material seguridad.
+
+    '
+  solucion: NO adoptar Semgrep como blocking; adoptar opcionalmente como non-blocking (CLI, ~500ms, reglas YAML en policies/semgrep/)
+    para valor preventivo arquitectura (imports prohibidos, os.environ, crypto, logging secrets, APIs deprecated)
   pruebas:
-  - semgrep --config policies/semgrep/ . → ejecuta sin errores de reglas
-  - 8 reglas YAML válidas (domain-no-import-*, domain-no-os-environ, etc.)
-  - 'CI job non-blocking en ocm-ci.yml (continue-on-error: true)'
+  - semgrep --config=policies/semgrep/ . → 0 violations en código actual; CI job architecture verde
   adr_relacionado: null
-  riesgo_residual: 'Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material de
-    seguridad (F-PLA-07).'
-  fecha_cierre: 2026-08-23
+  riesgo_residual: 'Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material
+
+    '
+  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
@@ -2586,8 +2590,8 @@ hallazgos:
       referencia: 8 reglas YAML en policies/semgrep/architecture.yaml; CI job non-blocking; findings reportados (baseline
         para futuras corridas).
     cierre:
-      estado: HECHO
-      referencia: B-53 cerrado 2026-08-23. Semgrep non-blocking adoptado (ADR-0034).
+      estado: PENDIENTE
+      referencia: null
 - id: B-54
   hallazgo_informe: F-PLA-08 / F-PLC-03 / F-PLC-08
   fase: F2
