@@ -868,9 +868,7 @@ class AppConfig(StrictBaseModel):
         de trading.
         """
         has_trading_exchange = bool(self.exchanges)
-        has_market_data_feed = any(
-            entry.enabled for entry in self.feeds.feeds.values()
-        )
+        has_market_data_feed = any(entry.enabled for entry in self.feeds.feeds.values())
         if not has_trading_exchange and not has_market_data_feed:
             raise ValueError(
                 "At least one exchange must be enabled in `exchanges` (trading) "

@@ -272,22 +272,16 @@ class TestMatchingReportForRegister:
         report.write_text("# informe\n", encoding="utf-8")
         register = audits / "OCM_AUDIT_FINDINGS_2026-08-28_algo.md"
         register.write_text(
-            "# registro\n\n**Fuente primaria:** `docs/audits/"
-            + report.name
-            + "`\n",
+            "# registro\n\n**Fuente primaria:** `docs/audits/" + report.name + "`\n",
             encoding="utf-8",
         )
         assert av._matching_report_for_register(audits, register) == report
 
-    def test_fuente_primaria_declarada_pero_inexistente_no_usa_fallback_de_nombre(
-        self, tmp_path
-    ):
+    def test_fuente_primaria_declarada_pero_inexistente_no_usa_fallback_de_nombre(self, tmp_path):
         av = _load_module()
         audits = tmp_path / "docs" / "audits"
         audits.mkdir(parents=True)
-        (audits / "AUDIT_OCM_algo_2026-08-28.md").write_text(
-            "# informe distinto\n", encoding="utf-8"
-        )
+        (audits / "AUDIT_OCM_algo_2026-08-28.md").write_text("# informe distinto\n", encoding="utf-8")
         register = audits / "OCM_AUDIT_FINDINGS_2026-08-28_algo.md"
         register.write_text(
             "# registro\n\n**Fuente primaria:** `docs/audits/AUDIT_OCM_NO_EXISTE.md`\n",
@@ -313,9 +307,7 @@ class TestMatchingReportForRegister:
         report.write_text("# informe\n", encoding="utf-8")
         register = audits / "OCM_AUDIT_FINDINGS_2026-08-28_data-plane-streaming.yaml.md"
         register.write_text(
-            "# registro\n\n**Fuente primaria:** `docs/audits/"
-            + report.name
-            + "`\n",
+            "# registro\n\n**Fuente primaria:** `docs/audits/" + report.name + "`\n",
             encoding="utf-8",
         )
         assert av._matching_report_for_register(audits, register) == report
