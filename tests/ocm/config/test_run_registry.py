@@ -113,9 +113,8 @@ def test_record_run_sqlite_fail_falls_back_to_jsonl(registry_paths, caplog):
 def test_record_run_sqlite_fail_logs_warning(registry_paths, caplog):
     import logging
 
-    with patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")):
-        with caplog.at_level(logging.WARNING):
-            _run()
+    with patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")), caplog.at_level(logging.WARNING):
+        _run()
     # loguru puede no integrarse con caplog; al menos verificamos que no lanza
     # y que el JSONL contiene la señal de fallo
     # (test de no-lanza es suficiente — la cobertura de log se verifica en test_jsonl_flag)

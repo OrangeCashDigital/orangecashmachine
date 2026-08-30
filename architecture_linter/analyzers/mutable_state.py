@@ -79,11 +79,7 @@ def _write_nodes(method: ast.FunctionDef | ast.AsyncFunctionDef, attr: str) -> l
                 target = t.value if isinstance(t, ast.Subscript) else t
                 if _is_self_attr(target, attr):
                     out.append(node)
-        elif isinstance(node, ast.AnnAssign):
-            target = node.target.value if isinstance(node.target, ast.Subscript) else node.target
-            if _is_self_attr(target, attr):
-                out.append(node)
-        elif isinstance(node, ast.AugAssign):
+        elif isinstance(node, ast.AnnAssign) or isinstance(node, ast.AugAssign):
             target = node.target.value if isinstance(node.target, ast.Subscript) else node.target
             if _is_self_attr(target, attr):
                 out.append(node)
@@ -233,10 +229,7 @@ def has_container_mutation(cls: ClassInfo, attr: str) -> bool:
             if isinstance(node, ast.Assign):
                 if any(isinstance(t, ast.Subscript) and _is_self_attr(t.value, attr) for t in node.targets):
                     return True
-            elif isinstance(node, ast.AnnAssign):
-                if isinstance(node.target, ast.Subscript) and _is_self_attr(node.target.value, attr):
-                    return True
-            elif isinstance(node, ast.AugAssign):
+            elif isinstance(node, ast.AnnAssign) or isinstance(node, ast.AugAssign):
                 if isinstance(node.target, ast.Subscript) and _is_self_attr(node.target.value, attr):
                     return True
             elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):

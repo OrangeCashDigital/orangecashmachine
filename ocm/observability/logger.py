@@ -497,7 +497,7 @@ def configure_logging(
     ]  # 16 hex chars = 64 bits — suficiente para detección de cambios
 
     with _CONFIG_LOCK:
-        if _CONFIG_HASH == new_hash:
+        if new_hash == _CONFIG_HASH:
             logger.debug("logging_reconfigure_skipped | hash={}", new_hash)
             return
 

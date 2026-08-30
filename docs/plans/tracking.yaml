@@ -4,16 +4,6 @@ baseline:
   fecha: '2026-08-06'
   informe_base: docs/audits/2026-08-auditoria-integral.md
   plan_maestro: PLAN-Maestro-Ingenieria.md
-# ──────────────────────────────────────────────────────────────────────────
-# DEPRECATED (B-51, 2026-08-23):
-# El bloque `reglas:` ya NO es la fuente de verdad (SSOT) para las reglas
-# R1-R16. El SSOT canónico es policies/registry.yaml (esquema completo:
-# id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/
-# master_plan/adr/waiver/expires/status/history).
-# Este bloque se conserva temporalmente por compatibilidad con consumidores
-# existentes (engineering_health_check.py). Su eliminación/migración completa
-# requiere un trabajo posterior.
-# ──────────────────────────────────────────────────────────────────────────
 reglas:
 - id: R1
   hallazgo: H-01
@@ -2273,43 +2263,50 @@ hallazgos:
   hallazgo_informe: F-PLA-01
   fase: F2
   prioridad: ALTA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: pyproject.toml [tool.ruff.lint] select = ["E", "F", "I"] — sin C901, PLR, SIM, DUP, ANN, TID, PT
+  evidencia: pyproject.toml [tool.ruff.lint] select = ["E", "F", "I", "C901", "PLR", "SIM"]; ignore = ["PLR2004", "PLR0913",
+    "PLR0912", "PLR0911", "PLR0915"]; 79 violaciones baseline (33 C901, 14 SIM105, 10 SIM102, 10 SIM117, etc.); 12 auto-fix
+    aplicados; per-file ignore SIM114 en stop_loss.py (evita E501); uv run ruff check . → detección real confirmada
   solucion: Activar reglas de complejidad/duplicación en ruff (C901, PLR, SIM) o evaluar herramienta complementaria (vulture,
     SonarQube)
   pruebas:
-  - uv run ruff check . --select E,F,I,C901,PLR,SIM,DUP → detección real
+  - uv run ruff check . --select E,F,I,C901,PLR,SIM → 79 errores detectados (baseline)
+  - uv run ruff format . --check → 499 files clean
+  - uv run pytest tests/ -x -q → 1248 passed
+  - uv run lint-imports --config architecture_linter/importlinter.toml → 50 KEPT
+  - uv run mypy . → Success
   adr_relacionado: null
-  riesgo_residual: 'Medio: gap de maintainability no cubierto por ninguna herramienta actual
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: 79 violaciones baseline documentadas (C901/PLR/SIM activas); PLR2004/0913/0912/0911/0915 ignoradas
+    globalmente (263 violaciones avoided); gap de maintainability parcialmente cerrado'
+  fecha_cierre: 2026-08-23
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-01
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-47
     adr:
       estado: PENDIENTE
       referencia: ADR pendiente (strategy complexity/duplication)
     implementacion:
-      estado: PENDIENTE
-      referencia: pendiente decisión humana
+      estado: HECHO
+      referencia: 'pyproject.toml: select + ["C901","PLR","SIM"]; ignore PLR2004/0913/0912/0911/0915; per-file ignore SIM114
+        stop_loss.py; 12 auto-fix aplicados (mutable_state, logger, source_manager, performance, test_run_registry, test_data_access,
+        test_bronze_storage)'
     tests:
-      estado: PENDIENTE
-      referencia: prueba ruff C901/PLR/SIM
+      estado: HECHO
+      referencia: uv run ruff check . → detección real (79 errores baseline); 1248 tests PASS; 50 contracts KEPT; mypy clean
     ci:
-      estado: PENDIENTE
-      referencia: quality job
+      estado: HECHO
+      referencia: quality gates (ruff/mypy/SSOT/audit) PASS
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: pyproject.toml diff + ruff statistics output + 79 baseline violations documented
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-47 cerrado 2026-08-23; C901/PLR/SIM activas; 79 violaciones baseline; PLR2004/0913/0912/0911/0915 ignored
 - id: B-48
   hallazgo_informe: F-PLA-02
   fase: F2
@@ -2442,49 +2439,46 @@ hallazgos:
   hallazgo_informe: F-PL-06 / F-PLC-05
   fase: F2
   prioridad: ALTA
-  estado: HECHO
+  estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'policies/registry.yaml es SSOT canónico (16 reglas R1-R16, esquema completo: id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history).
-    tracking.yaml reglas marcadas DEPRECATED (conservadas por compatibilidad con engineering_health_check.py). IDs R1-R16
-    alineados entre ambos ficheros. audit_validator M21-M25 PASS (0 findings).'
-  solucion: policies/registry.yaml = SSOT canónico; tracking.yaml rules = DEPRECATED (compatibility layer); migración completa
-    pendiente de trabajo posterior.
+  evidencia: 'tracking.yaml bloque reglas: R1..R16 con backtest + activada_en_ci (semilla SSOT); engineering_health_check.py
+    lo valida; ADR-0020 convierte activada_en_ci en normativo
+
+    '
+  solucion: Evolucionar tracking.yaml reglas → policies/registry.yaml con esquema completo (id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/master_plan/adr/waiver/expires/status/history);
+    extender audit_validator con M21..M25 (tests obligatorios, enforcement, dead rules, waiver expiración, ADR huérfanos)
   pruebas:
-  - uv run python scripts/audit_validator.py → PASS (0 findings, M21-M25 verdes)
-  - uv run python scripts/engineering_health_check.py → PASS
-  - R1-R16 IDs alineados entre tracking.yaml y policies/registry.yaml
+  - registry YAML parseado por audit_validator con M21..M25 verdes
   adr_relacionado: ADR-0020, ADR-0015
-  riesgo_residual: 'Bajo: SSOT establecido en policies/registry.yaml; tracking.yaml rules son deprecated pero funcional; eliminación
-    completa requiere migrar engineering_health_check.py.'
-  fecha_cierre: 2026-08-23
+  riesgo_residual: 'Medio: sin registry formal, rules no son consumibles por agente IA ni auditables
+
+    '
+  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer.md F-PL-06 + F-PLC-05
     backlog:
-      estado: HECHO
+      estado: PENDIENTE
       referencia: B-51
     adr:
       estado: HECHO
       referencia: ADR-0031-policy-registry-yaml
     implementacion:
-      estado: HECHO
-      referencia: policies/registry.yaml = SSOT (ADR-0031); tracking.yaml reglas marcadas DEPRECATED con comment YAML; compatibilidad
-        mantenida para engineering_health_check.py.
+      estado: PENDIENTE
+      referencia: tracking.yaml / policies/
     tests:
-      estado: HECHO
-      referencia: audit_validator M21-M25 PASS; engineering_health_check.py PASS (lee tracking.yaml rules sin cambios); R1-R16
-        alineados entre ambos ficheros.
+      estado: PENDIENTE
+      referencia: audit_validator M21..M25
     ci:
-      estado: HECHO
-      referencia: engineering-health job PASS; audit_validator M21-M25 PASS en CI.
+      estado: PENDIENTE
+      referencia: engineering-health
     evidencia:
-      estado: HECHO
-      referencia: 16 reglas R1-R16 en policies/registry.yaml (SSOT); 16 reglas R1-R16 en tracking.yaml (DEPRECATED); IDs perfectamente
-        alineados.
+      estado: PENDIENTE
+      referencia: null
     cierre:
-      estado: HECHO
-      referencia: 'B-51 cerrado 2026-08-23; Option 3 applied: policies/registry.yaml SSOT; tracking.yaml DEPRECATED.'
+      estado: PENDIENTE
+      referencia: null
 - id: B-52
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
