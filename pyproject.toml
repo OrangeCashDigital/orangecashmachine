@@ -241,7 +241,10 @@ ignore = [
 "apps/app/cli/*.py"                                                  = ["E402"]
 "packages/market_data/adapters/inbound/data_providers/*.py"          = ["E402"]
 "packages/market_data/ports/outbound/observability.py"                = ["E402"]
+# ── Trading — SIM114 en stop_loss.py causa E501 (líneas largas) ──────────
 "packages/trading/risk/stop_loss.py"                                  = ["SIM114"]
+# ── Architecture linter — análisis AST, no producción ─────────────────────
+"architecture_linter/analyzers/*.py"                                  = ["C901", "SIM101", "SIM102", "SIM103"]
 # ── Tests — imports condicionales y fixtures con setup previo ───────────────
 "tests/**/*.py"                                                      = ["E402"]
 

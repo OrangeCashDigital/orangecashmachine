@@ -126,9 +126,11 @@ def test_record_run_sqlite_fail_logs_warning(registry_paths, caplog):
 
 
 def test_record_run_both_stores_fail_does_not_raise(registry_paths):
-    with patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")):
-        with patch("builtins.open", side_effect=OSError("no space left")):
-            run_id = _run()
+    with (
+        patch.object(_rr_impl, "_ensure_db", side_effect=OSError("disk full")),
+        patch("builtins.open", side_effect=OSError("no space left")),
+    ):
+        run_id = _run()
     assert isinstance(run_id, str)  # sigue retornando run_id
 
 

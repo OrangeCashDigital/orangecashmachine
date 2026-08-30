@@ -48,6 +48,7 @@ Exports públicos
 - InterceptHandler
 """
 
+import contextlib
 import hashlib
 import json
 import logging as std_logging
@@ -504,10 +505,8 @@ def configure_logging(
         _CONFIG_HASH = new_hash
 
         if _ACTIVE_LOKI is not None:
-            try:
+            with contextlib.suppress(Exception):
                 _ACTIVE_LOKI.close()
-            except Exception:
-                pass
             _ACTIVE_LOKI = None
 
         logger.remove()
