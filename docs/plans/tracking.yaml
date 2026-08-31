@@ -2314,42 +2314,42 @@ hallazgos:
   hallazgo_informe: F-PLA-02
   fase: F2
   prioridad: BAJA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: pyproject.toml dev deps incluye vulture>=2.16; pre-commit y ocm-ci.yml NO invocan vulture
+  evidencia: vulture>=2.16 en dev deps; ocm-ci.yml (via B-54) y .pre-commit-config.yaml invocan vulture (non-blocking, --min-confidence 80)
   solucion: Añadir vulture a pre-commit/CI (non-blocking → blocking) para dead code detection
   pruebas:
   - uv run vulture packages ocm shared apps --min-confidence 80
-  adr_relacionado: null
-  riesgo_residual: 'Bajo: dead code no detectado automáticamente
+  adr_relacionado: ADR-0036 (vulture/complexity strategy)
+  riesgo_residual: 'Bajo: vulture non-blocking mientras exista baseline de 23 falsos positivos
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-30'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-02
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-48
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (vulture enforcement)
+      estado: HECHO
+      referencia: ADR-0036 (vulture/complexity strategy)
     implementacion:
-      estado: PENDIENTE
-      referencia: pendiente decisión humana
+      estado: HECHO
+      referencia: vulture CI (B-54) + pre-commit hook
     tests:
-      estado: PENDIENTE
-      referencia: vulture dry-run
+      estado: HECHO
+      referencia: uv run vulture packages ocm shared apps --min-confidence 80
     ci:
-      estado: PENDIENTE
-      referencia: quality job / pre-commit
+      estado: HECHO
+      referencia: ocm-ci.yml + .pre-commit-config.yaml (non-blocking)
     evidencia:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: null
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: vulture CI (B-54) + pre-commit hook (non-blocking, --min-confidence 80)
 - id: B-49
   hallazgo_informe: F-PL-04 / F-PLA-05
   fase: F2

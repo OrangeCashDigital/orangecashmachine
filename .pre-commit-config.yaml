@@ -52,6 +52,14 @@ repos:
         language: system
         pass_filenames: false
         types: [yaml]
+      - id: vulture-dead-code
+        name: Vulture dead code detection (non-blocking)
+        entry: >-
+          bash -c 'uv run vulture packages ocm shared apps --min-confidence 80;
+          echo "vulture: dead code scan complete (non-blocking)"'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
       - id: pytest-pre-push
         name: Pytest (suite completa, sin integration)
         entry: uv run pytest tests/ -x -q -m "not integration"
