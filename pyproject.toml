@@ -119,7 +119,7 @@ dependencies = [
     # ── Observabilidad (logging + métricas) ─────────────────────────────────
     # loguru: pinneado en 0.7.2 — API de sink Loki acoplada a esta versión.
     # Structlog también depende del record format de loguru. Actualizar con ambos.
-    "loguru==0.7.2",
+    "loguru==0.7.3",
     "structlog>=24.1.0,<27.0",
     "httpx>=0.27.0,<1.0",
     "prometheus-client>=0.20.0,<1.0",
