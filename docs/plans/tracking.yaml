@@ -2398,46 +2398,51 @@ hallazgos:
   hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06
   fase: F2
   prioridad: CRITICA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 1: aiohttp 3.14.1 (PYSEC-2026-3545/3546/3547),
-    cryptography 49.0.0 (PYSEC-2026-3552)
-
-    '
-  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 validando staging, o risk-accept formal (ADR + tracking)
+  evidencia: 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0 (No known vulnerabilities
+    found, 2 ignored). Fix ya aplicado en commit 876cf38 (2026-08-21): bump ccxt 4.5.70→4.5.74 resolvió CVEs transitivos (aiohttp
+    3.14.1→3.14.3, cryptography 49.0.0→50.0.0).'
+  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 — YA RESUELTO en 876cf38. Ambas son dependencias transitivas (aiohttp
+    vía ccxt/cryptofeed; cryptography vía python-jose). uv.lock fija versiones exactas; pip-audit en CI detecta regresiones.
   pruebas:
   - uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0
+  - 'uv run pip show aiohttp → Version: 3.14.3'
+  - 'uv run pip show cryptography → Version: 50.0.0'
   adr_relacionado: null
-  riesgo_residual: 'Alto: superficie HTTP (aiohttp) y crypto (cryptography) sin mitigar
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: versiones fijadas en uv.lock (aiohttp 3.14.3, cryptography 50.0.0); pip-audit en CI como gate de
+    regresión (exit 0 actual); pyarrow/ecdsa ignorados por risk-accept previo.'
+  fecha_cierre: '2026-08-23'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02
         + F-PLA-06
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-50
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (risk-accept o bump)
+      estado: NO_APLICA
+      referencia: 'No se requiere ADR: fix ya aplicado como efecto del bump ccxt en 876cf38. No hay risk-accept pendiente
+        (vulnerabilities mitigadas).'
     implementacion:
-      estado: PENDIENTE
-      referencia: pyproject.toml
+      estado: HECHO
+      referencia: 'commit 876cf38 (2026-08-21): bump ccxt 4.5.70→4.5.74 resolvió CVEs transitivos. aiohttp 3.14.1→3.14.3 (PYSEC-2026-3545/3546/3547);
+        cryptography 49.0.0→50.0.0 (PYSEC-2026-3552).'
     tests:
-      estado: PENDIENTE
-      referencia: pip-audit clean
+      estado: HECHO
+      referencia: pip-audit → exit 0 (No known vulnerabilities found, 2 ignored). aiohttp 3.14.3, cryptography 50.0.0 confirmados
+        en uv.lock.
     ci:
-      estado: PENDIENTE
-      referencia: quality job (pip-audit)
+      estado: HECHO
+      referencia: 'quality job → Vulnerabilidades (pip-audit) → PASS (exit 0). Comando: uv run pip-audit . --ignore-vuln PYSEC-2026-113
+        --ignore-vuln PYSEC-2026-1325'
     evidencia:
-      estado: PENDIENTE
-      referencia: exit 1 actual
+      estado: HECHO
+      referencia: 'exit 0 actual (vs exit 1 original). Fix: commit 876cf38 (2026-08-21). No hay CVEs activos para aiohttp/cryptography.'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-50 cerrado 2026-08-23. Fix preexistente (876cf38). tracking.yaml actualizado; Plan Maestro actualizado.
 - id: B-51
   hallazgo_informe: F-PL-06 / F-PLC-05
   fase: F2
