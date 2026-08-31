@@ -254,12 +254,10 @@ class PerformanceEngine:
         peak = curve[0]
         max_dd = 0.0
         for equity in curve[1:]:
-            if equity > peak:
-                peak = equity
+            peak = max(peak, equity)
             if peak > 0:
                 drawdown = (peak - equity) / peak
-                if drawdown > max_dd:
-                    max_dd = drawdown
+                max_dd = max(max_dd, drawdown)
 
         return max_dd
 

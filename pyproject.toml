@@ -200,14 +200,20 @@ indent-style = "space"
 # lazy imports por orden de arranque). NO se ignora globalmente para no
 # enmascarar imports mal ubicados en el resto del código (fail-fast en
 # lint por default, fail-soft solo donde el propio diseño lo exige).
-select = ["E", "F", "I"]
-ignore = []
+select = ["E", "F", "I", "C901", "PLR", "SIM"]
+ignore = [
+    "PLR2004",  # magic-value-comparison — 166 violaciones; baseline conocida
+    "PLR0913",  # too-many-arguments — 75 violaciones; baseline conocida
+    "PLR0912",  # too-many-branches — 8 violaciones; baseline conocida
+    "PLR0911",  # too-many-return-statements — 7 violaciones; baseline conocida
+    "PLR0915",  # too-many-statements — 7 violaciones; baseline conocida
+]
 
 [tool.ruff.lint.per-file-ignores]
 # ── Composition roots y entrypoints ────────────────────────────────────────
 # Lazy imports son intencionales: evitan circular imports en bootstrap order.
 # Paths relativos al repo root (donde está pyproject.toml).
-"packages/market_data/application/pipelines/ohlcv_pipeline.py"      = ["E402"]
+"packages/market_data/application/pipelines/ohlcv_pipeline.py"      = ["E402", "C901"]
 "ocm/config/hydra_loader.py"                                         = ["E402"]
 "ocm/config/loader/env_resolver.py"                                  = ["E402"]
 "ocm/config/loader/yaml_loader.py"                                    = ["E402"]
@@ -217,7 +223,7 @@ ignore = []
 "ocm/observability/sinks.py"                                         = ["E402"]
 "ocm/runtime/registry.py"                                            = ["E402"]
 "ocm/runtime/run_config.py"                                          = ["E402"]
-"ocm/runtime/state/gap_registry.py"                                  = ["E402"]
+"ocm/runtime/state/gap_registry.py"                                  = ["E402", "SIM105"]
 "ocm/runtime/state/lateness_calibration.py"                          = ["E402"]
 "ocm/runtime/context.py"                                             = ["E402"]
 "ocm/config/loader/snapshot.py"                                      = ["E402"]
@@ -235,9 +241,72 @@ ignore = []
 "apps/app/cli/*.py"                                                  = ["E402"]
 "packages/market_data/adapters/inbound/data_providers/*.py"          = ["E402"]
 "packages/market_data/ports/outbound/observability.py"                = ["E402"]
+# ── Trading — SIM114 en stop_loss.py causa E501 (líneas largas) ──────────
+"packages/trading/risk/stop_loss.py"                                  = ["SIM114"]
+# ── Architecture linter — análisis AST, no producción ─────────────────────
+"architecture_linter/analyzers/*.py"                                  = ["C901", "SIM101", "SIM102", "SIM103"]
+"architecture_linter/engine.py"                                      = ["C901"]
+"architecture_linter/rules/*.py"                                     = ["C901"]
+
+# ── SafeOps — try/except/pass intencional (observabilidad, limpieza) ────────
+"ocm/runtime/state/cursor_store.py"                                              = ["SIM105"]
+"packages/market_data/adapters/inbound/external/base.py"                                              = ["SIM105"]
+"packages/market_data/application/processing/grid_alignment.py"                                              = ["SIM105"]
+"packages/market_data/infrastructure/bootstrap/pipeline_factory.py"                                              = ["SIM105"]
+"packages/market_data/infrastructure/kafka/dedup.py"                                              = ["SIM105"]
+"packages/market_data/infrastructure/observability/pipeline_metrics.py"                                              = ["SIM105"]
+"packages/market_data/main.py"                                              = ["SIM105"]
+"packages/trading/bootstrap/composition_root.py"                                              = ["SIM105"]
+"tests/kafka/test_integration_kafka.py"                                              = ["SIM105"]
+
+# ── SIM103 — Return negated condition (estilo preferido, no obligatorio) ───
+"packages/market_data/domain/value_objects/candle.py"   = ["SIM103"]
+
+# ── SIM108 — Ternary operator (estilo preferido, no obligatorio) ────────
+"packages/market_data/adapters/inbound/websocket/cryptofeed_orderbook_stream.py" = ["SIM108"]
+
+# ── SIM117 — Multiple with statements (estilo preferido) ───────────────
+"tests/logging/test_setup.py"                           = ["SIM117"]
+"tests/logging/test_sinks.py"                           = ["SIM117"]
+
+# ── SIM118 — key in dict (estilo preferido) ───────────────────────────
+"ocm/config/pipeline.py"                                = ["SIM118"]
+
+# ── SIM201 — returncode != 2 (estilo preferido) ───────────────────────
+"scripts/check_production_gates.py"                     = ["SIM201"]
+
+# ── SIM102 — Single if statement (estilo preferido) ────────────────────
+"scripts/audit_validator.py"                            = ["SIM102"]
+"scripts/backtest_app_guard.py"                         = ["SIM102", "SIM108"]
+"scripts/domain_subprocess_guard.py"                    = ["SIM102", "C901"]
+"tests/architecture/test_import_contracts.py"           = ["C901", "SIM102"]
+"tests/market_data/test_layer_contracts.py"             = ["SIM102"]
+
+# ── PLR1714 — Multiple comparisons (estilo preferido) ──────────────────
+"architecture_linter/models.py"                        = ["PLR1714"]
+
+# ── SIM110 — Return any() (estilo preferido) ───────────────────────────
+"architecture_linter/rules/arch_006.py"                 = ["SIM110"]
 # ── Tests — imports condicionales y fixtures con setup previo ───────────────
 "tests/**/*.py"                                                      = ["E402"]
 
+
+
+# ── C901 — Complejidad legítima en adaptadores, pipelines, estrategias ───────
+"packages/market_data/adapters/inbound/rest/gap_recovery_fetcher.py"      = ["C901"]
+"packages/market_data/adapters/inbound/rest/ohlcv_fetcher.py"             = ["C901"]
+"packages/market_data/adapters/inbound/rest/trades_backfill_fetcher.py"   = ["C901"]
+"packages/market_data/adapters/outbound/exchange/ccxt_adapter.py"         = ["C901", "SIM103"]
+"packages/market_data/adapters/outbound/exchange/resilience.py"           = ["C901", "SIM105"]
+"packages/market_data/application/pipelines/_worker_pool.py"              = ["C901"]
+"packages/market_data/application/strategies/backfill.py"                 = ["C901"]
+"packages/market_data/application/strategies/repair.py"                   = ["C901"]
+"packages/market_data/domain/value_objects/trade_series.py"               = ["C901"]
+"packages/trading/engine.py"                                              = ["C901"]
+"packages/trading/execution/oms.py"                                       = ["C901"]
+"packages/trading/risk/manager.py"                                        = ["C901"]
+"scripts/engineering_health_check.py"                                     = ["C901"]
+"tests/ocm/config/test_invariants.py"                                     = ["C901"]
 # =============================================================================
 # tool.pytest
 # =============================================================================
