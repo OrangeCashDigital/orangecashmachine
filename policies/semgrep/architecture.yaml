@@ -1,0 +1,234 @@
+# Semgrep Architecture Rules for OrangeCashMachine
+# Non-blocking architecture rules (ADR-0034, B-53)
+# These rules complement AST guards (R11) and import-linter (BC-03/05/06/08/09)
+# with patterns not covered by static analysis of imports/AST.
+#
+# Rules:
+# 1. domain-application-no-os-environ: os.environ usage outside config layer
+# 2. application-no-subprocess: subprocess usage outside infrastructure
+# 3. domain-no-open: open() calls in domain layer
+# 4. domain-no-ccxt: ccxt imports in domain layer
+# 5. domain-application-no-md5: hashlib.md5 usage (crypto context)
+# 6. domain-no-random-crypto: random module usage in crypto context
+# 7. logging-secrets: logger calls with secrets/api_keys
+# 8. domain-no-pyiceberg: pyiceberg imports in domain layer
+#
+# All rules are WARNING severity, non-blocking.
+# Baseline: 1 finding (cursor_store.py:452 - static REDIS_PASSWORD message)
+
+rules:
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 1: os.environ outside configuration layer
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: domain-application-no-os-environ
+    message: "os.environ access detected outside configuration layer. Use ocm.config for environment variables."
+    metadata:
+      category: architecture
+      severity: WARNING
+      source: "ADR-0034, BC-09, R11"
+      rule_type: architecture
+    patterns:
+      - pattern-either:
+        - pattern: os.environ[...]
+        - pattern: os.environ.get(...)
+        - pattern: os.getenv(...)
+    languages: [python]
+    severity: WARNING
+    paths:
+      exclude:
+        - "**/ocm/config/**"
+        - "**/infrastructure/**"
+        - "**/tests/**"
+        - "**/scripts/**"
+        - "**/apps/app/cli/**"
+        - "**/adapters/**"
+        - "**/ocm/runtime/**"
+        - "**/apps/research/**"
+        - "**/packages/market_data/main.py"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 2: subprocess outside infrastructure
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: application-no-subprocess
+    message: "subprocess usage detected outside infrastructure layer. Use infrastructure layer for process execution."
+    metadata:
+      category: architecture
+      severity: WARNING
+      source: "ADR-0034, R11, BC-08"
+      rule_type: architecture
+    patterns:
+      - pattern: subprocess.run(...)
+      - pattern: subprocess.Popen(...)
+      - pattern: subprocess.call(...)
+      - pattern: subprocess.check_output(...)
+      - pattern: subprocess.check_call(...)
+    languages: [python]
+    severity: WARNING
+    paths:
+      exclude:
+        - "**/infrastructure/**"
+        - "**/scripts/**"
+        - "**/tests/**"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 3: open() in domain layer
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: domain-no-open
+    message: "open() call detected in domain layer. Domain layer should not perform I/O directly."
+    metadata:
+      category: architecture
+      severity: WARNING
+      source: "ADR-0034, BC-09"
+      rule_type: architecture
+    patterns:
+      - pattern: open(...)
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - "**/domain/**"
+      exclude:
+        - "**/tests/**"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 4: ccxt in domain layer
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: domain-no-ccxt
+    message: "ccxt import detected in domain layer. Exchange clients belong in infrastructure/adapters."
+    metadata:
+      category: architecture
+      severity: WARNING
+      source: "ADR-0034, BC-08, BC-09"
+      rule_type: architecture
+    patterns:
+      - pattern: import ccxt
+      - pattern: from ccxt import *
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - "**/domain/**"
+      exclude:
+        - "**/tests/**"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 5: hashlib.md5 in crypto context
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: domain-application-no-md5
+    message: "hashlib.md5 usage detected. MD5 is cryptographically broken. Use hashlib.sha256 or hashlib.blake2b instead."
+    metadata:
+      category: crypto
+      severity: WARNING
+      source: "ADR-0034"
+      rule_type: crypto
+    patterns:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.new("md5", ...)
+      - pattern: hashlib.new('md5', ...)
+    languages: [python]
+    severity: WARNING
+    paths:
+      exclude:
+        - "**/tests/**"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 6: random in crypto context
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: domain-no-random-crypto
+    message: "random module usage detected in potential crypto context. Use secrets or os.urandom for cryptographic randomness."
+    metadata:
+      category: crypto
+      severity: WARNING
+      source: "ADR-0034"
+      rule_type: crypto
+    patterns:
+      - pattern-either:
+        - pattern: random.random(...)
+        - pattern: random.randrange(...)
+        - pattern: random.randint(...)
+        - pattern: random.choice(...)
+        - pattern: random.choices(...)
+        - pattern: random.getrandbits(...)
+        - pattern: random.SystemRandom(...)
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - "**/domain/**"
+        - "**/application/**"
+        - "**/crypto/**"
+        - "**/security/**"
+      exclude:
+        - "**/tests/**"
+        - "**/scripts/**"
+        - "**/infrastructure/**"
+        - "**/adapters/**"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 7: logger.*api_key / secrets
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: logging-secrets
+    message: "Potential secret/api_key logging detected. Avoid logging sensitive values."
+    metadata:
+      category: secrets
+      severity: WARNING
+      source: "ADR-0034"
+      rule_type: secrets
+    patterns:
+      - pattern-either:
+        - pattern: logger.debug(..., api_key=...)
+        - pattern: logger.info(..., api_key=...)
+        - pattern: logger.warning(..., api_key=...)
+        - pattern: logger.error(..., api_key=...)
+        - pattern: logger.critical(..., api_key=...)
+        - pattern: logger.debug(..., api_secret=...)
+        - pattern: logger.info(..., api_secret=...)
+        - pattern: logger.warning(..., api_secret=...)
+        - pattern: logger.error(..., api_secret=...)
+        - pattern: logger.critical(..., api_secret=...)
+        - pattern: logger.debug(..., secret=...)
+        - pattern: logger.info(..., secret=...)
+        - pattern: logger.warning(..., secret=...)
+        - pattern: logger.error(..., secret=...)
+        - pattern: logger.critical(..., secret=...)
+        - pattern: logger.debug(..., password=...)
+        - pattern: logger.info(..., password=...)
+        - pattern: logger.warning(..., password=...)
+        - pattern: logger.error(..., password=...)
+        - pattern: logger.critical(..., password=...)
+        - pattern: logger.debug(..., token=...)
+        - pattern: logger.info(..., token=...)
+        - pattern: logger.warning(..., token=...)
+        - pattern: logger.error(..., token=...)
+        - pattern: logger.critical(..., token=...)
+        - pattern: logger.debug(..., key=...)
+        - pattern: logger.info(..., key=...)
+        - pattern: logger.warning(..., key=...)
+        - pattern: logger.error(..., key=...)
+        - pattern: logger.critical(..., key=...)
+    languages: [python]
+    severity: WARNING
+    paths:
+      exclude:
+        - "**/tests/**"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RULE 8: pyiceberg in domain layer
+  # ──────────────────────────────────────────────────────────────────────────
+  - id: domain-no-pyiceberg
+    message: "pyiceberg import detected in domain layer. Iceberg clients belong in infrastructure."
+    metadata:
+      category: architecture
+      severity: WARNING
+      source: "ADR-0034, BC-09"
+      rule_type: architecture
+    patterns:
+      - pattern: import pyiceberg
+      - pattern: from pyiceberg import *
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - "**/domain/**"
+      exclude:
+        - "**/tests/**"
