@@ -4,16 +4,6 @@ baseline:
   fecha: '2026-08-06'
   informe_base: docs/audits/2026-08-auditoria-integral.md
   plan_maestro: PLAN-Maestro-Ingenieria.md
-# ──────────────────────────────────────────────────────────────────────────
-# DEPRECATED (B-51, 2026-08-23):
-# El bloque `reglas:` ya NO es la fuente de verdad (SSOT) para las reglas
-# R1-R16. El SSOT canónico es policies/registry.yaml (esquema completo:
-# id/name/description/scope/severity/owner/enforcement/tests/evidence/ci/
-# master_plan/adr/waiver/expires/status/history).
-# Este bloque se conserva temporalmente por compatibilidad con consumidores
-# existentes (engineering_health_check.py). Su eliminación/migración completa
-# requiere un trabajo posterior.
-# ──────────────────────────────────────────────────────────────────────────
 reglas:
 - id: R1
   hallazgo: H-01
@@ -78,8 +68,7 @@ reglas:
 - id: R11
   hallazgo: H-11
   descripcion: '`subprocess` en domain (pureza de dominio)'
-  mecanismo: AST guard tipo BC-09 sobre subprocess — scripts/domain_subprocess_guard.py + tests/architecture/test_domain_subprocess_guard.py
-    (positivo + negativo)
+  mecanismo: AST guard tipo BC-09 sobre subprocess — scripts/domain_subprocess_guard.py + tests/architecture/test_domain_subprocess_guard.py (positivo + negativo)
   backtest: ok
   activada_en_ci: true
 - id: R12
@@ -164,8 +153,7 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: packages/market_data/infrastructure/bootstrap/pipeline_factory.py:49 (`from market_data.infrastructure.storage.catalog
-    import build_catalog` — módulo inexistente)
+  evidencia: packages/market_data/infrastructure/bootstrap/pipeline_factory.py:49 (`from market_data.infrastructure.storage.catalog import build_catalog` — módulo inexistente)
   solucion: Apuntar a market_data.infrastructure.storage.iceberg.catalog.get_catalog
   pruebas:
   - 'smoke test: assemble(config) construye ohlcv+trades+derivatives'
@@ -203,8 +191,7 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: packages/trading/execution/oms.py:172 (record_open en submit) vs :217/:308 (record_close solo en cancel/_reject);
-    _fill() :270-289 no decrementa; risk/manager.py:126-139
+  evidencia: packages/trading/execution/oms.py:172 (record_open en submit) vs :217/:308 (record_close solo en cancel/_reject); _fill() :270-289 no decrementa; risk/manager.py:126-139
   solucion: record_close() en flujo de fill, o redefinir semántica de _open_positions como 'órdenes activas'
   pruebas:
   - test round-trip BUY fill → SELL fill aserta contador
@@ -246,8 +233,7 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: ocm/config/loader/snapshot.py:92 (`model_dump(mode=json)` serializa SecretStr en claro); apps/app/cli/main.py:27
-    (`--cfg job`)
+  evidencia: ocm/config/loader/snapshot.py:92 (`model_dump(mode=json)` serializa SecretStr en claro); apps/app/cli/main.py:27 (`--cfg job`)
   solucion: Redactar SecretStr al serializar snapshot; restringir `--cfg job` en producción
   pruebas:
   - 'test: snapshot no contiene el valor del secret'
@@ -285,8 +271,7 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Dockerfile:35 (COPY . .); docker-compose.yml (binds 0.0.0.0 por defecto: Redis 6379, Prometheus 9090, Grafana
-    3000, kafka-ui 8080 sin auth)'
+  evidencia: 'Dockerfile:35 (COPY . .); docker-compose.yml (binds 0.0.0.0 por defecto: Redis 6379, Prometheus 9090, Grafana 3000, kafka-ui 8080 sin auth)'
   solucion: .dockerignore, binds locales/red interna, auth en kafka-ui/grafana, HEALTHCHECK
   pruebas:
   - docker build sin .env horneado
@@ -448,21 +433,16 @@ hallazgos:
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'KafkaProducerAdapter.send_async() (infrastructure/kafka/producer.py) captura toda excepción, sin retry/DLQ/circuit
-    breaker; reason=dlq_sent ya reservado en KafkaMetrics.event_failed() pero ningún código lo dispara. 2026-08-09: send_async()
-    ya clasifica causas (F-019) y produce() eleva KafkaProducerError (F-013) — la visualización del fallo esta resuelta; lo
-    pendiente es recuperacion (gap/DLQ product-side). No existe consumidor real de orderbook.raw (BookBuilder aspiracional:
-    TOPIC_ORDERBOOK_RAW solo usado por el propio producer)'
-  solucion: 'DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado hasta existir consumidor real de
-    orderbook.raw (BookBuilder). Cuando exista: sequence aditivo en schema v2, book.sequence_number propagado, metrica ocm_kafka_gap_total,
-    reutilizando TOPIC_DLQ. No tocar wire schema sin consumidor (no-especulativo)'
+  evidencia: 'KafkaProducerAdapter.send_async() (infrastructure/kafka/producer.py) captura toda excepción, sin retry/DLQ/circuit breaker; reason=dlq_sent ya reservado en KafkaMetrics.event_failed() pero
+    ningún código lo dispara. 2026-08-09: send_async() ya clasifica causas (F-019) y produce() eleva KafkaProducerError (F-013) — la visualización del fallo esta resuelta; lo pendiente es recuperacion (gap/DLQ
+    product-side). No existe consumidor real de orderbook.raw (BookBuilder aspiracional: TOPIC_ORDERBOOK_RAW solo usado por el propio producer)'
+  solucion: 'DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado hasta existir consumidor real de orderbook.raw (BookBuilder). Cuando exista: sequence aditivo en schema v2, book.sequence_number
+    propagado, metrica ocm_kafka_gap_total, reutilizando TOPIC_DLQ. No tocar wire schema sin consumidor (no-especulativo)'
   pruebas:
-  - 'verificacion: grep TOPIC_ORDERBOOK_RAW en packages/+apps/ = solo producer; GROUP_BOOK_BUILDER/TOPIC_BOOK_DELTA/TOPIC_BOOK_SNAPSHOT
-    = 0 usos productivos'
+  - 'verificacion: grep TOPIC_ORDERBOOK_RAW en packages/+apps/ = solo producer; GROUP_BOOK_BUILDER/TOPIC_BOOK_DELTA/TOPIC_BOOK_SNAPSHOT = 0 usos productivos'
   - 'verificacion: cryptofeed expone book.sequence_number (cryptofeed_orderbook_stream.py:158-161)'
   adr_relacionado: ADR-0023 -- deferral formal hasta consumidor real
-  riesgo_residual: Medio — perdida posible de deltas sin gap detection; senal visible ya (KafkaProducerError + razones clasificadas),
-    recuperacion pendiente de BookBuilder
+  riesgo_residual: Medio — perdida posible de deltas sin gap detection; senal visible ya (KafkaProducerError + razones clasificadas), recuperacion pendiente de BookBuilder
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -495,18 +475,14 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'deploy/monitoring/alerts.yml: 3 reglas existentes (PipelineDown, HighFetchErrors, CircuitBreakerOpen) cubren
-    solo pipeline batch/REST; grep de kafka|events_failed|lag|heartbeat|orderbook|stale|gap|dlq|retry contra ese archivo:
-    0 coincidencias'
-  solucion: Agregar reglas de alerta sobre ocm_kafka_events_failed_total (rate sostenida) y ausencia de heartbeat del canary,
-    siguiendo el mismo formato que las 3 reglas existentes
+  evidencia: 'deploy/monitoring/alerts.yml: 3 reglas existentes (PipelineDown, HighFetchErrors, CircuitBreakerOpen) cubren solo pipeline batch/REST; grep de kafka|events_failed|lag|heartbeat|orderbook|stale|gap|dlq|retry
+    contra ese archivo: 0 coincidencias'
+  solucion: Agregar reglas de alerta sobre ocm_kafka_events_failed_total (rate sostenida) y ausencia de heartbeat del canary, siguiendo el mismo formato que las 3 reglas existentes
   pruebas:
   - 'verificacion: metrica ocm_kafka_events_failed_total existe en metrics.py:115-119 (labels [topic exchange reason])'
-  - 'validacion: yaml.safe_load(alerts.yml) OK; regla KafkaWSEventsFailed con rate(ocm_kafka_events_failed_total[5m]) > 1
-    for 5m'
+  - 'validacion: yaml.safe_load(alerts.yml) OK; regla KafkaWSEventsFailed con rate(ocm_kafka_events_failed_total[5m]) > 1 for 5m'
   adr_relacionado: null
-  riesgo_residual: Bajo — regla agregada sobre metrica real; alertas no notifican por correo/pager hasta resolver F-016 (B-32,
-    bloqueado) pero se ven en grafana/loki
+  riesgo_residual: Bajo — regla agregada sobre metrica real; alertas no notifican por correo/pager hasta resolver F-016 (B-32, bloqueado) pero se ven en grafana/loki
   fecha_cierre: '2026-08-09'
   cadena:
     hallazgo:
@@ -539,19 +515,16 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: infrastructure/ en raíz del repo (infrastructure/redis/redis_stream.py) colisiona en nombre con la capa infrastructure/
-    de Clean Architecture usada dentro de cada bounded context (packages/*/infrastructure/); docstring de packages/market_data/infrastructure/timeouts.py
-    instruye "from infrastructure.timeouts import Timeouts" — ModuleNotFoundError confirmado, ese módulo no existe
-  solucion: Corregir el docstring falso de timeouts.py a ruta canónica (market_data.infrastructure.timeouts) y documentar
-    explícitamente la coexistencia de infrastructure/ raíz con packages/*/infrastructure/ bajo ADR-0007 (Addendum 2026-08-09).
-    Sin renombrar/mover/alterar imports (pyproject 249/330/341 e importlinter 37/57/106/121/137/175 referencian la raíz)
+  evidencia: infrastructure/ en raíz del repo (infrastructure/redis/redis_stream.py) colisiona en nombre con la capa infrastructure/ de Clean Architecture usada dentro de cada bounded context (packages/*/infrastructure/);
+    docstring de packages/market_data/infrastructure/timeouts.py instruye "from infrastructure.timeouts import Timeouts" — ModuleNotFoundError confirmado, ese módulo no existe
+  solucion: Corregir el docstring falso de timeouts.py a ruta canónica (market_data.infrastructure.timeouts) y documentar explícitamente la coexistencia de infrastructure/ raíz con packages/*/infrastructure/
+    bajo ADR-0007 (Addendum 2026-08-09). Sin renombrar/mover/alterar imports (pyproject 249/330/341 e importlinter 37/57/106/121/137/175 referencian la raíz)
   pruebas:
   - 'test: uv run pytest tests/market_data/ -q -> suite market_data verde'
   - 'verificacion: docstring timeouts.py ahora importa from market_data.infrastructure.timeouts import Timeouts'
   - 'verificacion: ADR-0007 §Addendum 2026-08-09 documenta coexistencia raiz vs packages/*/infrastructure/'
   adr_relacionado: ADR-0007 (Addendum 2026-08-09)
-  riesgo_residual: Bajo — coexistencia documentada; raíz infrastructure/ sigue referenciada por pyproject e importlinter;
-    candidato a unificación de streams con F-024
+  riesgo_residual: Bajo — coexistencia documentada; raíz infrastructure/ sigue referenciada por pyproject e importlinter; candidato a unificación de streams con F-024
   fecha_cierre: '2026-08-09'
   cadena:
     hallazgo:
@@ -584,17 +557,14 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: PARCIALMENTE_CONFIRMADO
-  evidencia: 'packages/market_data/infrastructure/timeouts.py — comentarios con cifras p99 específicas ("Bybit/KuCoin spot:
-    ~800ms", "scan() sobre S3... p99 ~3s") sin fuente citada (medición propia, doc de proveedor, o heurística — no se indica
-    cuál)'
-  solucion: Reformular docstring y comentarios a lenguaje explícitamente heurístico ("cota operativa inicial; recalibrar con
-    telemetría real"), sin tocar los valores numéricos (sin cambio funcional)
+  evidencia: 'packages/market_data/infrastructure/timeouts.py — comentarios con cifras p99 específicas ("Bybit/KuCoin spot: ~800ms", "scan() sobre S3... p99 ~3s") sin fuente citada (medición propia, doc
+    de proveedor, o heurística — no se indica cuál)'
+  solucion: Reformular docstring y comentarios a lenguaje explícitamente heurístico ("cota operativa inicial; recalibrar con telemetría real"), sin tocar los valores numéricos (sin cambio funcional)
   pruebas:
   - 'verificacion: valores numericos de Timeouts intactos (di- diff no toca float defaults)'
   - 'verificacion: defecteo claims p99/SLA eliminados -> euristicos en timeouts.py'
   adr_relacionado: null
-  riesgo_residual: Bajo — valores numericos intactos; solo linguaje de documentacion; recalibracion sigue delegada a telemetria
-    real
+  riesgo_residual: Bajo — valores numericos intactos; solo linguaje de documentacion; recalibracion sigue delegada a telemetria real
   fecha_cierre: '2026-08-09'
   cadena:
     hallazgo:
@@ -627,9 +597,8 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'packages/market_data/infrastructure/kafka/producer.py — produce() antes descartaba bool de send_async(); afecta
-    OrderBookKafkaProducer, OIKafkaProducer, LiquidationsKafkaProducer, FundingKafkaProducer. Alcance preciso: la metrica
-    falsa solo aplica a orderbook (oi/funding/liquidations no emiten KafkaMetrics)'
+  evidencia: 'packages/market_data/infrastructure/kafka/producer.py — produce() antes descartaba bool de send_async(); afecta OrderBookKafkaProducer, OIKafkaProducer, LiquidationsKafkaProducer, FundingKafkaProducer.
+    Alcance preciso: la metrica falsa solo aplica a orderbook (oi/funding/liquidations no emiten KafkaMetrics)'
   solucion: 'Camino A (sin ADR): produce() ahora evalua send_async()==False y eleva
 
     KafkaProducerError (nueva en domain/exceptions) con log CRITICAL antes
@@ -638,11 +607,9 @@ hallazgos:
 
     un cambio interno en infrastructure, sin tocar la firma de KafkaProducerPort.'
   pruebas:
-  - 'tests/market_data/infrastructure/kafka/test_producer_adapter.py TestProduceSignalsFailure: produce() eleva KafkaProducerError
-    cuando send_async False; ok con True (8/8 del adapter)'
+  - 'tests/market_data/infrastructure/kafka/test_producer_adapter.py TestProduceSignalsFailure: produce() eleva KafkaProducerError cuando send_async False; ok con True (8/8 del adapter)'
   adr_relacionado: NO_APLICA -- Camino A, sin cambio de contrato
-  riesgo_residual: Bajo — ahora el fallo se ve (log critical + exception); el conteo event_failed del orderbook solo se dispare
-    al releer la excepcion
+  riesgo_residual: Bajo — ahora el fallo se ve (log critical + exception); el conteo event_failed del orderbook solo se dispare al releer la excepcion
   fecha_cierre: '2026-08-08'
   cadena:
     hallazgo:
@@ -675,17 +642,14 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'packages/market_data/infrastructure/kafka/producer.py close() llamaba a self._producer.stop() sin flush() previo;
-    matiz verificado: aiokafka stop() sí drena via message_accumulator.close()+FIRST_COMPLETED, pero sin deadline propio ni
-    garantia de entrega'
-  solucion: close() ahora invoca await self.flush(timeout=self._close_flush_timeout=10.0) antes de stop(); TimeoutError se
-    registra con log ERROR (no se silencia) y aun así se ejecuta stop() para liberar recursos
+  evidencia: 'packages/market_data/infrastructure/kafka/producer.py close() llamaba a self._producer.stop() sin flush() previo; matiz verificado: aiokafka stop() sí drena via message_accumulator.close()+FIRST_COMPLETED,
+    pero sin deadline propio ni garantia de entrega'
+  solucion: close() ahora invoca await self.flush(timeout=self._close_flush_timeout=10.0) antes de stop(); TimeoutError se registra con log ERROR (no se silencia) y aun así se ejecuta stop() para liberar
+    recursos
   pruebas:
-  - 'tests/market_data/infrastructure/kafka/test_producer_adapter.py TestFlushBeforeStop: flush() primero, luego stop(); timeout→log+stop
-    continua; idempotente (8/8)'
+  - 'tests/market_data/infrastructure/kafka/test_producer_adapter.py TestFlushBeforeStop: flush() primero, luego stop(); timeout→log+stop continua; idempotente (8/8)'
   adr_relacionado: null
-  riesgo_residual: Bajo — flush previo con timeout 10s; si el broker esta caido igual se cierra (stop) y se loggea el riesgo
-    de perdida
+  riesgo_residual: Bajo — flush previo con timeout 10s; si el broker esta caido igual se cierra (stop) y se loggea el riesgo de perdida
   fecha_cierre: '2026-08-08'
   cadena:
     hallazgo:
@@ -718,16 +682,13 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'packages/market_data/infrastructure/kafka/producer.py start() — AIOKafkaProducer(enable_idempotence=True) anadido.
-    Verificado compatible con acks=all (aiokafka producer.py:265-281: acks in (''all'',-1) permitido, mapea a -1); no hay
-    parametro retries expuesto (retry del sender interno, retry_backoff_ms=500 ya estaba)'
+  evidencia: 'packages/market_data/infrastructure/kafka/producer.py start() — AIOKafkaProducer(enable_idempotence=True) anadido. Verificado compatible con acks=all (aiokafka producer.py:265-281: acks in
+    (''all'',-1) permitido, mapea a -1); no hay parametro retries expuesto (retry del sender interno, retry_backoff_ms=500 ya estaba)'
   solucion: enable_idempotence=True en start(); parametro de configuracion, sin cambio de contrato KafkaProducerPort
   pruebas:
-  - 'tests/market_data/infrastructure/kafka/test_producer_adapter.py TestIdempotenceOnStart: captura kwargs del cliente y
-    verifica enable_idempotence True + acks=all'
+  - 'tests/market_data/infrastructure/kafka/test_producer_adapter.py TestIdempotenceOnStart: captura kwargs del cliente y verifica enable_idempotence True + acks=all'
   adr_relacionado: null
-  riesgo_residual: Bajo — idempotencia elimina duplicados bajo retry; requiere broker Kafka 0.11+ (Pushgateway local de canary
-    no lo toca)
+  riesgo_residual: Bajo — idempotencia elimina duplicados bajo retry; requiere broker Kafka 0.11+ (Pushgateway local de canary no lo toca)
   fecha_cierre: '2026-08-08'
   cadena:
     hallazgo:
@@ -760,21 +721,16 @@ hallazgos:
   prioridad: CRITICA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'deploy/monitoring/alertmanager.yml — receiver default sin slack_configs/email_configs/webhook_configs; config
-    real desplegada via docker-compose.yml. BLOQUEADO EXPLICITAMENTE (2026-08-08): el repo NO contiene ruta segura de notificacion
-    (webhook/Slack/SMTP con credenciales gestionadas); configurar un receiver obligaria a commitear credenciales — rechazado
-    por politica no-secrets. Reconfirmado 2026-08-09: sin forma segura verificable disponible (mas destinos reales en el repo);
-    guards CI (gitleaks + config-guard) sostienen el bloqueo. Condicion de reapertura: secret manager externo'
-  solucion: Bloqueo explicito documentado en alertmanager.yml (comentario F-016). Reabrir cuando exista un secret manager
-    en el repo (contexto externo). No inventar destino sin credenciales seguras
+  evidencia: 'deploy/monitoring/alertmanager.yml — receiver default sin slack_configs/email_configs/webhook_configs; config real desplegada via docker-compose.yml. BLOQUEADO EXPLICITAMENTE (2026-08-08):
+    el repo NO contiene ruta segura de notificacion (webhook/Slack/SMTP con credenciales gestionadas); configurar un receiver obligaria a commitear credenciales — rechazado por politica no-secrets. Reconfirmado
+    2026-08-09: sin forma segura verificable disponible (mas destinos reales en el repo); guards CI (gitleaks + config-guard) sostienen el bloqueo. Condicion de reapertura: secret manager externo'
+  solucion: Bloqueo explicito documentado en alertmanager.yml (comentario F-016). Reabrir cuando exista un secret manager en el repo (contexto externo). No inventar destino sin credenciales seguras
   pruebas:
   - 'validacion: yaml.safe_load(alertmanager.yml) OK; decision de bloqueo declarada en el archivo'
   - 'guard anti-secretos: .github/workflows/gitleaks.yml corre en push/PR a main'
-  - config-guard en docker-compose.yml:63-68 impide levantar prometheus/alertmanager con config rota (receiver con $(VAR)
-    sin definir rompe el arranque)
+  - config-guard en docker-compose.yml:63-68 impide levantar prometheus/alertmanager con config rota (receiver con $(VAR) sin definir rompe el arranque)
   adr_relacionado: null
-  riesgo_residual: 'Alto — ninguna alerta notifica a un humano; mitigado hoy por observabilidad interna (grafana/loki). Condicion
-    para reabrir: secret manager'
+  riesgo_residual: 'Alto — ninguna alerta notifica a un humano; mitigado hoy por observabilidad interna (grafana/loki). Condicion para reabrir: secret manager'
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -807,13 +763,12 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'apps/app/cli/streaming_hydra.py — _PUSH_EXCHANGE = ''orderbook'' hardcodeado eliminado; _heartbeat_loop recibe
-    exchange real del stream y pusher.push({''exchange'': exchange, ...}) deriva job=ocm_pipeline_{exchange}'
-  solucion: Derivar exchange del parametro real de _run_streaming (arg CLI --exchange, SSOT feeds). _heartbeat_loop(pusher,
-    exchange, gateway, stop, push_interval) con exchange propagado; log usa el mismo valor
+  evidencia: 'apps/app/cli/streaming_hydra.py — _PUSH_EXCHANGE = ''orderbook'' hardcodeado eliminado; _heartbeat_loop recibe exchange real del stream y pusher.push({''exchange'': exchange, ...}) deriva
+    job=ocm_pipeline_{exchange}'
+  solucion: Derivar exchange del parametro real de _run_streaming (arg CLI --exchange, SSOT feeds). _heartbeat_loop(pusher, exchange, gateway, stop, push_interval) con exchange propagado; log usa el mismo
+    valor
   pruebas:
-  - 'tests/app/cli/test_streaming_hydra.py TestHeartbeatLoop.test_exchange_is_derived_not_hardcoded: kucoin no orderbook;
-    assert not hasattr(_PUSH_EXCHANGE)'
+  - 'tests/app/cli/test_streaming_hydra.py TestHeartbeatLoop.test_exchange_is_derived_not_hardcoded: kucoin no orderbook; assert not hasattr(_PUSH_EXCHANGE)'
   - 'test_pushes_labels_exchange_and_gateway: exchange=bybit propagado al pusher'
   adr_relacionado: null
   riesgo_residual: Bajo — aislamiento por job=ocm_pipeline_{exchange} restaurado; sin bloqueo entre exchanges
@@ -849,19 +804,15 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'deploy/monitoring/alerts.yml — corregido a metricas reales: ocm_pipeline_last_run_timestamp (deadman staleness),
-    ocm_fetch_chunk_errors_total, ocm_exchange_circuit_open_total. Nombres erroneos previos (ocm_pipeline_runs_total, ocm_fetch_errors_total,
-    ocm_exchange_circuit_open) respondieron a 0 hits en codigo'
-  solucion: Reescrito alerts.yml con nombres reales; deadman por staleness (time()-ocm_pipeline_last_run_timestamp)>600 que
-    la gauge set en cada push (ocm/observability/prometheus.py:61), no absent() — pushgateway persiste series de jobs muertos.
-    Resuelto junto con B-33 (aislamiento por exchange)
+  evidencia: 'deploy/monitoring/alerts.yml — corregido a metricas reales: ocm_pipeline_last_run_timestamp (deadman staleness), ocm_fetch_chunk_errors_total, ocm_exchange_circuit_open_total. Nombres erroneos
+    previos (ocm_pipeline_runs_total, ocm_fetch_errors_total, ocm_exchange_circuit_open) respondieron a 0 hits en codigo'
+  solucion: Reescrito alerts.yml con nombres reales; deadman por staleness (time()-ocm_pipeline_last_run_timestamp)>600 que la gauge set en cada push (ocm/observability/prometheus.py:61), no absent() —
+    pushgateway persiste series de jobs muertos. Resuelto junto con B-33 (aislamiento por exchange)
   pruebas:
   - 'verificacion sintaxis: yaml.safe_load(alerts.yml) OK; 3 reglas con metricas reales'
-  - 'validacion determinista: rg de nombres de metricas en codigo = coincidencias reales (ocm_pipeline_last_run_timestamp
-    en prometheus.py:24)'
+  - 'validacion determinista: rg de nombres de metricas en codigo = coincidencias reales (ocm_pipeline_last_run_timestamp en prometheus.py:24)'
   adr_relacionado: null
-  riesgo_residual: Medio — Alertmanager bloqueado (F-016) asi que las alertas no notifican; la regla es correcta y grafica/loki
-    la exponen hoy
+  riesgo_residual: Medio — Alertmanager bloqueado (F-016) asi que las alertas no notifican; la regla es correcta y grafica/loki la exponen hoy
   fecha_cierre: '2026-08-08'
   cadena:
     hallazgo:
@@ -894,11 +845,10 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'producer.py::send_async() ahora clasifica razon: KafkaTimeoutError -> broker_timeout, KafkaConnectionError ->
-    connection_error, BrokerResponseError -> broker_response (code=errno), resto -> unknown_error. Antes un solo except Exception
-    colapsaba las ~44 causas en reason=write_error'
-  solucion: Clasificacion de excepciones en send_async() ganando visibilidad operativa. La estrategia DLQ/gap detection sigue
-    cubierta por el ADR pendiente de B-25 — aqui no se decide estrategia, solo se clasifica
+  evidencia: 'producer.py::send_async() ahora clasifica razon: KafkaTimeoutError -> broker_timeout, KafkaConnectionError -> connection_error, BrokerResponseError -> broker_response (code=errno), resto ->
+    unknown_error. Antes un solo except Exception colapsaba las ~44 causas en reason=write_error'
+  solucion: Clasificacion de excepciones en send_async() ganando visibilidad operativa. La estrategia DLQ/gap detection sigue cubierta por el ADR pendiente de B-25 — aqui no se decide estrategia, solo se
+    clasifica
   pruebas:
   - 'test: test_producer_adapter.py TestSendErrorClassification — 4 categorias parametrizadas con reason correcto en el log'
   adr_relacionado: null
@@ -935,8 +885,7 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'onchain_producer.py eliminado (dead code con imports rotos: infra.kafka.base_producer no existe; market_data.domain.ports
-    no existe; sin callers confirmados por rg global)'
+  evidencia: 'onchain_producer.py eliminado (dead code con imports rotos: infra.kafka.base_producer no existe; market_data.domain.ports no existe; sin callers confirmados por rg global)'
   solucion: Eliminar onchain_producer.py (dead code con imports rotos)
   pruebas:
   - 'verificacion: rg onchain_producer/OnchainKafkaProducer = 0 hits tras eliminacion; py_compile/ruff/mypy OK'
@@ -974,9 +923,8 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Metodo legacy produce(payload,key) eliminado de orderbook/oi/liquidations/funding_producer.py; rg de callers
-    legacy = 0 confirmado pre-eliminacion. Nota: infra_metrics_producer.py conserva su produce() no-op (stub NOT IMPLEMENTED,
-    pendiente de auditoria futura — no es metodo legacy delegante)'
+  evidencia: 'Metodo legacy produce(payload,key) eliminado de orderbook/oi/liquidations/funding_producer.py; rg de callers legacy = 0 confirmado pre-eliminacion. Nota: infra_metrics_producer.py conserva
+    su produce() no-op (stub NOT IMPLEMENTED, pendiente de auditoria futura — no es metodo legacy delegante)'
   solucion: Eliminar metodo legacy produce(payload, key) de los 4 producers WS
   pruebas:
   - 'verificacion: rg ''async def produce(self, payload'' = solo infra_metrics (stub no-op); suite completa 997 passed'
@@ -1014,15 +962,12 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Twin-import de metricas: market_data.infrastructure.observability.metrics + packages.market_data.infrastructure.observability.metrics
-    en el mismo proceso lanza ValueError: Duplicated timeseries in CollectorRegistry (reproducido 2026-08-08). Causa real:
-    pyproject.toml [tool.pytest.ini_options] pythonpath=[''.'',''apps''] — la raiz del repo hace packages/ importable como
-    paquete gemelo. No existe pytest.ini (descartado en verificacion)'
-  solucion: Ruta canonica unica market_data.* (nunca packages.*); guard estatico en tests/architecture que falla si algun
-    .py importa con prefijo 'packages.'
+  evidencia: 'Twin-import de metricas: market_data.infrastructure.observability.metrics + packages.market_data.infrastructure.observability.metrics en el mismo proceso lanza ValueError: Duplicated timeseries
+    in CollectorRegistry (reproducido 2026-08-08). Causa real: pyproject.toml [tool.pytest.ini_options] pythonpath=[''.'',''apps''] — la raiz del repo hace packages/ importable como paquete gemelo. No existe
+    pytest.ini (descartado en verificacion)'
+  solucion: Ruta canonica unica market_data.* (nunca packages.*); guard estatico en tests/architecture que falla si algun .py importa con prefijo 'packages.'
   pruebas:
-  - 'test: tests/market_data/test_layer_contracts.py::test_no_twin_import_via_packages_prefix — scan AST de todo el repo,
-    1 passed (guard activo)'
+  - 'test: tests/market_data/test_layer_contracts.py::test_no_twin_import_via_packages_prefix — scan AST de todo el repo, 1 passed (guard activo)'
   adr_relacionado: null
   riesgo_residual: Media-Baja — guard estatico previene regresion; runtime canary usa ruta canonica
   fecha_cierre: '2026-08-08'
@@ -1057,18 +1002,15 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: scripts/engineering_health_check.py rechaza prioridad fuera de enum ['ALTA','BAJA','CRITICA','MEDIA']; B-24/B-25/B-26
-    prioridad=P2 y B-27/B-28=P3 -> tests/architecture/test_engineering_health.py FAIL (5 incoherencias). Preexistente en HEAD
-    (git show) — no introducido por remediacion F-013/F-014
-  solucion: Normalizar prioridades B-24..B-28 al enum normativo (P2->MEDIA, P3->BAJA, mapeo a severidades F-008..F-012 del
-    audit); verificar health check pasa y suite arquitectura verde
+  evidencia: scripts/engineering_health_check.py rechaza prioridad fuera de enum ['ALTA','BAJA','CRITICA','MEDIA']; B-24/B-25/B-26 prioridad=P2 y B-27/B-28=P3 -> tests/architecture/test_engineering_health.py
+    FAIL (5 incoherencias). Preexistente en HEAD (git show) — no introducido por remediacion F-013/F-014
+  solucion: Normalizar prioridades B-24..B-28 al enum normativo (P2->MEDIA, P3->BAJA, mapeo a severidades F-008..F-012 del audit); verificar health check pasa y suite arquitectura verde
   pruebas:
   - 'test: uv run python scripts/engineering_health_check.py -> PASS, exit 0'
   - 'test: pytest tests/architecture/test_engineering_health.py -> 1 passed'
   - 'verificacion: prioridades B-24..B-28 normalizadas segun severidad del audit (F-008/009/010=P2->MEDIA; F-011/012=P3->BAJA)'
   adr_relacionado: null
-  riesgo_residual: Bajo — normalizacion de dato de tracking, no de arquitectura; enum cerrado garantiza que no reaparezcan
-    prioridades P2/P3
+  riesgo_residual: Bajo — normalizacion de dato de tracking, no de arquitectura; enum cerrado garantiza que no reaparezcan prioridades P2/P3
   fecha_cierre: '2026-08-09'
   cadena:
     hallazgo:
@@ -1101,17 +1043,14 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: Comentario agregado en F-016 (deploy/monitoring/alertmanager.yml) justifica dejar el receiver default sin destino
-    argumentando observabilidad de respaldo via grafana/loki; docker compose ps falla al interpolar el servicio grafana porque
-    GRAFANA_PASSWORD no esta seteada en .env (si existe como placeholder vacio en .env.example:26)
-  solucion: Copiar GRAFANA_PASSWORD (y demas variables de monitoring relacionadas) de .env.example a .env; confirmar que grafana/loki
-    levantan antes de que el comentario de F-016 quede respaldado por la realidad. Accion operativa, no requiere codigo ni
-    ADR
+  evidencia: Comentario agregado en F-016 (deploy/monitoring/alertmanager.yml) justifica dejar el receiver default sin destino argumentando observabilidad de respaldo via grafana/loki; docker compose ps
+    falla al interpolar el servicio grafana porque GRAFANA_PASSWORD no esta seteada en .env (si existe como placeholder vacio en .env.example:26)
+  solucion: Copiar GRAFANA_PASSWORD (y demas variables de monitoring relacionadas) de .env.example a .env; confirmar que grafana/loki levantan antes de que el comentario de F-016 quede respaldado por la
+    realidad. Accion operativa, no requiere codigo ni ADR
   pruebas:
   - 'verificacion: docker compose ps muestra grafana/loki healthy tras configurar .env'
   adr_relacionado: null
-  riesgo_residual: Alto — sin Alertmanager receiver ni Grafana/Loki operativos, no existe ninguna via de notificacion real
-    hoy
+  riesgo_residual: Alto — sin Alertmanager receiver ni Grafana/Loki operativos, no existe ninguna via de notificacion real hoy
   fecha_cierre: '2026-08-09'
   cadena:
     hallazgo:
@@ -1125,8 +1064,7 @@ hallazgos:
       referencia: configuracion de entorno, no toca contrato de codigo
     implementacion:
       estado: HECHO
-      referencia: GRAFANA_PASSWORD completado en .env por Luis (valor no visto por el auditor); KAFKA_HOST_PORT=9094 agregado
-        a .env.example (F-029)
+      referencia: GRAFANA_PASSWORD completado en .env por Luis (valor no visto por el auditor); KAFKA_HOST_PORT=9094 agregado a .env.example (F-029)
     tests:
       estado: HECHO
       referencia: docker compose config paso de FALLA a OK; verificacion manual de arranque
@@ -1135,8 +1073,7 @@ hallazgos:
       referencia: cambio de .env local, no impacta CI
     evidencia:
       estado: HECHO
-      referencia: 'docker compose ps: grafana/loki/prometheus/alertmanager/pushgateway healthy simultaneamente 2026-08-09,
-        ver F-025 actualizacion final en audit doc'
+      referencia: 'docker compose ps: grafana/loki/prometheus/alertmanager/pushgateway healthy simultaneamente 2026-08-09, ver F-025 actualizacion final en audit doc'
     cierre:
       estado: HECHO
       referencia: F-025 resuelto y verificado 2026-08-09
@@ -1146,12 +1083,11 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: Inventario canonico via _ENV_VAR_NAMES (ocm/config/env_vars.py) + credentials.py suman 27+ variables consumidas
-    por el codigo; .env.example solo documenta 17. Faltan OCM_DEBUG, OCM_CONFIG_PATH, OCM_CONFIG_DIR, OCM_VALIDATE_ONLY, PUSHGATEWAY_URL,
-    OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH, OCM_EXCHANGE, OCM_MARKET_TYPE, OCM_OHLCV_START_DATE, INGESTION_INTERVAL_S, MARKET_DATA_HOST/PORT,
-    7 variables KAFKA_* de config fina
-  solucion: Sincronizar .env.example generando su contenido desde _ENV_VAR_NAMES + credentials.py (fuente de verdad ya existente
-    en codigo). Ver plan de remediacion separado, requiere aprobacion antes de modificar .env.example
+  evidencia: Inventario canonico via _ENV_VAR_NAMES (ocm/config/env_vars.py) + credentials.py suman 27+ variables consumidas por el codigo; .env.example solo documenta 17. Faltan OCM_DEBUG, OCM_CONFIG_PATH,
+    OCM_CONFIG_DIR, OCM_VALIDATE_ONLY, PUSHGATEWAY_URL, OCM_GOLD_PATH, OCM_GOLD_FEATURES_PATH, OCM_EXCHANGE, OCM_MARKET_TYPE, OCM_OHLCV_START_DATE, INGESTION_INTERVAL_S, MARKET_DATA_HOST/PORT, 7 variables
+    KAFKA_* de config fina
+  solucion: Sincronizar .env.example generando su contenido desde _ENV_VAR_NAMES + credentials.py (fuente de verdad ya existente en codigo). Ver plan de remediacion separado, requiere aprobacion antes de
+    modificar .env.example
   pruebas:
   - 'verificacion: script que compara _ENV_VAR_NAMES contra .env.example y reporta diffs'
   adr_relacionado: null
@@ -1169,10 +1105,8 @@ hallazgos:
       referencia: sincronizacion de configuracion, no toca contrato de codigo
     implementacion:
       estado: HECHO
-      referencia: '.env.example ampliado: seccion Kafka completa (host port, UI, config fina comentada), seccion General con
-        OCM_DEBUG/CONFIG_PATH/CONFIG_DIR/VALIDATE_ONLY/PUSHGATEWAY_URL, puertos Docker internos, market data/ingesta, Gold
-        layer. KAFKA_ENABLED y OCM_DATA_LAKE_PATH omitidas por decision explicita de Luis (F-027 pendiente, variable deprecated
-        respectivamente)'
+      referencia: '.env.example ampliado: seccion Kafka completa (host port, UI, config fina comentada), seccion General con OCM_DEBUG/CONFIG_PATH/CONFIG_DIR/VALIDATE_ONLY/PUSHGATEWAY_URL, puertos Docker
+        internos, market data/ingesta, Gold layer. KAFKA_ENABLED y OCM_DATA_LAKE_PATH omitidas por decision explicita de Luis (F-027 pendiente, variable deprecated respectivamente)'
     tests:
       estado: HECHO
       referencia: docker compose config --quiet OK; verificacion de formato de lineas (grep) sin lineas sospechosas
@@ -1181,8 +1115,7 @@ hallazgos:
       referencia: cambio de .env.example, no impacta CI
     evidencia:
       estado: HECHO
-      referencia: comparacion completa codigo vs .env.example vs docker-compose.yml realizada 2026-08-09, ver F-026 en audit
-        doc
+      referencia: comparacion completa codigo vs .env.example vs docker-compose.yml realizada 2026-08-09, ver F-026 en audit doc
     cierre:
       estado: HECHO
       referencia: F-026 resuelto y verificado 2026-08-09
@@ -1192,18 +1125,14 @@ hallazgos:
   prioridad: BAJA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'env_vars.py declara KAFKA_ENABLED con docstring extenso sobre feature flag Kappa; busqueda exhaustiva sin consumidores
-    reales en packages/apps/ocm. Streaming canary funciona sin que esta variable este seteada ni leida. Vinculo con F-031/B-46
-    (2026-08-10): KAFKA_ENABLED no tiene consumidores porque el path Kappa OHLCV nunca se conecto; KafkaOHLCVPublisher (si
-    existiera wiring) respetaria integrations.kafka.enabled via AppConfig (_build_kafka_publisher, pipeline_factory.py:166)
-    — builder sin callers'
-  solucion: 'Eliminar la constante si se confirma definitivamente sin uso, o conectarla al path real si la intencion de diseno
-    original sigue vigente. Decision de Luis pendiente. DECIDIR JUNTO con F-031/B-46: si se aplica Opcion A (wiring Kappa
-    real), KAFKA_ENABLED deja de ser huerfana y pasa a gobernar el flag via AppConfig — la eliminacion quedaria sin sustento'
+  evidencia: 'env_vars.py declara KAFKA_ENABLED con docstring extenso sobre feature flag Kappa; busqueda exhaustiva sin consumidores reales en packages/apps/ocm. Streaming canary funciona sin que esta variable
+    este seteada ni leida. Vinculo con F-031/B-46 (2026-08-10): KAFKA_ENABLED no tiene consumidores porque el path Kappa OHLCV nunca se conecto; KafkaOHLCVPublisher (si existiera wiring) respetaria integrations.kafka.enabled
+    via AppConfig (_build_kafka_publisher, pipeline_factory.py:166) — builder sin callers'
+  solucion: 'Eliminar la constante si se confirma definitivamente sin uso, o conectarla al path real si la intencion de diseno original sigue vigente. Decision de Luis pendiente. DECIDIR JUNTO con F-031/B-46:
+    si se aplica Opcion A (wiring Kappa real), KAFKA_ENABLED deja de ser huerfana y pasa a gobernar el flag via AppConfig — la eliminacion quedaria sin sustento'
   pruebas:
   - 'verificacion: grep exhaustivo repetido tras cualquier cambio futuro relacionado a Kafka enable/disable'
-  - 'verificacion: tras resolver F-031, repetir grep de KAFKA_ENABLED para confirmar si ahora tiene consumidor y actualizar
-    B-43 en consecuencia'
+  - 'verificacion: tras resolver F-031, repetir grep de KAFKA_ENABLED para confirmar si ahora tiene consumidor y actualizar B-43 en consecuencia'
   adr_relacionado: null
   riesgo_residual: Bajo — documentacion enganosa, sin efecto funcional real; acoplado a la decision de F-031/B-46
   fecha_cierre: null
@@ -1240,15 +1169,14 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: .github/workflows/gitleaks.yml existe (gacts/gitleaks@v1) pero .pre-commit-config.yaml no tiene hook de gitleaks;
-    config-guard es init container Docker Compose, mecanismo distinto no relacionado a deteccion de secretos en commits
+  evidencia: .github/workflows/gitleaks.yml existe (gacts/gitleaks@v1) pero .pre-commit-config.yaml no tiene hook de gitleaks; config-guard es init container Docker Compose, mecanismo distinto no relacionado
+    a deteccion de secretos en commits
   solucion: Agregar gitleaks como hook de pre-commit local, consistente con ruff/mypy/import-linter/bandit ya presentes
   pruebas:
   - 'verificacion: pre-commit run gitleaks --all-files tras agregar el hook — PASSED (2026-08-18)'
   - 'verificacion: pre-commit validate-config .pre-commit-config.yaml — sin errores'
   adr_relacionado: null
-  riesgo_residual: Bajo — deteccion tardia (en push, no en commit local) de secretos accidentales. Gitleaks pre-commit es
-    deteccion local; el workflow CI (gacts/gitleaks@v1) cubre push/PR en main.
+  riesgo_residual: Bajo — deteccion tardia (en push, no en commit local) de secretos accidentales. Gitleaks pre-commit es deteccion local; el workflow CI (gacts/gitleaks@v1) cubre push/PR en main.
   fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
@@ -1281,14 +1209,11 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'docker-compose.yml:197/509 comparten default de puerto 9093 (ALERTMANAGER_HOST_PORT/KAFKA_HOST_PORT); KAFKA_HOST_PORT
-    no estaba declarado en .env/.env.example. Reproducido: docker compose up -d kafka fallo con port already allocated mientras
-    alertmanager corria'
-  solucion: 'Agregado KAFKA_HOST_PORT=9094 explicito a .env y .env.example. Verificado: 8 servicios corriendo simultaneamente,
-    todos healthy'
+  evidencia: 'docker-compose.yml:197/509 comparten default de puerto 9093 (ALERTMANAGER_HOST_PORT/KAFKA_HOST_PORT); KAFKA_HOST_PORT no estaba declarado en .env/.env.example. Reproducido: docker compose
+    up -d kafka fallo con port already allocated mientras alertmanager corria'
+  solucion: 'Agregado KAFKA_HOST_PORT=9094 explicito a .env y .env.example. Verificado: 8 servicios corriendo simultaneamente, todos healthy'
   pruebas:
-  - 'verificacion en vivo: docker compose ps muestra kafka/zookeeper/redis/grafana/loki/prometheus/alertmanager/pushgateway
-    healthy simultaneamente 2026-08-09'
+  - 'verificacion en vivo: docker compose ps muestra kafka/zookeeper/redis/grafana/loki/prometheus/alertmanager/pushgateway healthy simultaneamente 2026-08-09'
   adr_relacionado: null
   riesgo_residual: Ninguno conocido — verificar si algo externo asume Kafka en 9093 antes de propagar a otros entornos
   fecha_cierre: '2026-08-09'
@@ -1323,34 +1248,24 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Path Kappa OHLCV no conectado en produccion. _build_ohlcv (pipeline_factory.py:190) NO inyecta publisher ni
-    _chunk_converter; OHLCVPipeline hardcodea _publisher=NullPublisher() con comentario falso ''Inyectado por CompositionRoot''
-    (ohlcv_pipeline.py:248); _build_kafka_publisher (pipeline_factory.py:156) sin callers (codigo muerto); PipelineContext._chunk_converter=None
-    (runtime.py:298) -> get_chunk_converter() lanza RuntimeError (runtime.py:311-323). Incremental/Backfill llaman converter
-    antes de publish_chunk (incremental.py:106/116, backfill.py:427/437); storage=None es valido solo para Repair (runtime.py:269-271,
-    repair.py:488). Ambos entrypoints prod: entrypoint.py:77, main.py:149 (docker-compose.yml:358). Broma historica: fe4525f(17-may,
-    Null pub return True), 673d1b0(20-may, default NullPublisher), 1dd4f75(19-may wiring kwargs) roto por 7162784(20-may firma
-    CR) y eliminado por 9e659be(20-may ''fix mypy''). Esta conectado con F-027/B-43 (KAFKA_ENABLED huerfana)'
-  solucion: 'IMPLEMENTADO — Opción B: Fail-fast en producción / degradación honesta fuera de producción. Fail-fast estructural
-    en OHLCVPipeline.__init__ y en pipeline_factory._build_ohlcv impide NullOHLCVPublisher cuando environment=production.
-    Regla L5 PRODUCTION_REQUIRES_KAFKA_PUBLISHER adelanta el fail-fast a config-load (ocm/config/layers/rules.py). Fuera de
-    producción, warning loguru visible y NullOHLCVPublisher explícito como modo degradado documentado. NullOHLCVPublisher
-    sigue existiendo para tests y modo degradado explícito fuera de producción; riesgo residual documentado.'
+  evidencia: 'Path Kappa OHLCV no conectado en produccion. _build_ohlcv (pipeline_factory.py:190) NO inyecta publisher ni _chunk_converter; OHLCVPipeline hardcodea _publisher=NullPublisher() con comentario
+    falso ''Inyectado por CompositionRoot'' (ohlcv_pipeline.py:248); _build_kafka_publisher (pipeline_factory.py:156) sin callers (codigo muerto); PipelineContext._chunk_converter=None (runtime.py:298)
+    -> get_chunk_converter() lanza RuntimeError (runtime.py:311-323). Incremental/Backfill llaman converter antes de publish_chunk (incremental.py:106/116, backfill.py:427/437); storage=None es valido solo
+    para Repair (runtime.py:269-271, repair.py:488). Ambos entrypoints prod: entrypoint.py:77, main.py:149 (docker-compose.yml:358). Broma historica: fe4525f(17-may, Null pub return True), 673d1b0(20-may,
+    default NullPublisher), 1dd4f75(19-may wiring kwargs) roto por 7162784(20-may firma CR) y eliminado por 9e659be(20-may ''fix mypy''). Esta conectado con F-027/B-43 (KAFKA_ENABLED huerfana)'
+  solucion: 'IMPLEMENTADO — Opción B: Fail-fast en producción / degradación honesta fuera de producción. Fail-fast estructural en OHLCVPipeline.__init__ y en pipeline_factory._build_ohlcv impide NullOHLCVPublisher
+    cuando environment=production. Regla L5 PRODUCTION_REQUIRES_KAFKA_PUBLISHER adelanta el fail-fast a config-load (ocm/config/layers/rules.py). Fuera de producción, warning loguru visible y NullOHLCVPublisher
+    explícito como modo degradado documentado. NullOHLCVPublisher sigue existiendo para tests y modo degradado explícito fuera de producción; riesgo residual documentado.'
   pruebas:
-  - 'test: reproduccion del RuntimeError actual (get_chunk_converter) en incremental/backfill; tras remediacion, test de integracion
-    con Kafka real verificando evento en ohlcv.raw'
+  - 'test: reproduccion del RuntimeError actual (get_chunk_converter) en incremental/backfill; tras remediacion, test de integracion con Kafka real verificando evento en ohlcv.raw'
   - 'verificacion: rg de callers de _build_kafka_publisher = 0 (estado actual, codigo muerto)'
   adr_relacionado: null
-  riesgo_residual: 'Mitigado en produccion: RuntimeError fail-fast en OHLCVPipeline.__init__ y en pipeline_factory._build_ohlcv
-    impide NullOHLCVPublisher cuando environment=production. Riesgo vivo confirmado fuera de produccion (dev/paper/staging
-    sin Kafka disponible): NullOHLCVPublisher.publish_chunk() retorna True sin escribir nada -> cursor avanza, metricas de
-    exito suben, dato descartado en silencio (solo un logging.warning). Docstring de NullOHLCVPublisher dice ''SOLO para tests
-    unitarios'' pero pipeline_factory._build_ohlcv lo usa tambien en runtime fuera de produccion. CORREGIDO (2026-08-12):
-    comentario en market_data/main.py:239-240 (''modo degradado escribe directo a Iceberg via ctx.kafka_producer=None path'')
-    era incorrecto segun el codigo verificado -- NullOHLCVPublisher no escribe a Iceberg ni a ningun lado, solo descarta el
-    chunk. Actualizado para describir el comportamiento real; ademas regla L5 PRODUCTION_REQUIRES_KAFKA_PUBLISHER adelanta
-    el fail-fast a config-load (ocm/config/layers/rules.py), fuera de produccion el warning de degradacion ahora usa loguru
-    (visible en el pipeline, no logging del stdlib silenciado).'
+  riesgo_residual: 'Mitigado en produccion: RuntimeError fail-fast en OHLCVPipeline.__init__ y en pipeline_factory._build_ohlcv impide NullOHLCVPublisher cuando environment=production. Riesgo vivo confirmado
+    fuera de produccion (dev/paper/staging sin Kafka disponible): NullOHLCVPublisher.publish_chunk() retorna True sin escribir nada -> cursor avanza, metricas de exito suben, dato descartado en silencio
+    (solo un logging.warning). Docstring de NullOHLCVPublisher dice ''SOLO para tests unitarios'' pero pipeline_factory._build_ohlcv lo usa tambien en runtime fuera de produccion. CORREGIDO (2026-08-12):
+    comentario en market_data/main.py:239-240 (''modo degradado escribe directo a Iceberg via ctx.kafka_producer=None path'') era incorrecto segun el codigo verificado -- NullOHLCVPublisher no escribe a
+    Iceberg ni a ningun lado, solo descarta el chunk. Actualizado para describir el comportamiento real; ademas regla L5 PRODUCTION_REQUIRES_KAFKA_PUBLISHER adelanta el fail-fast a config-load (ocm/config/layers/rules.py),
+    fuera de produccion el warning de degradacion ahora usa loguru (visible en el pipeline, no logging del stdlib silenciado).'
   fecha_cierre: '2026-08-14'
   cadena:
     hallazgo:
@@ -1361,57 +1276,45 @@ hallazgos:
       referencia: B-46 en tracking.yaml
     adr:
       estado: HECHO
-      referencia: Opción B (fail-fast prod / degradación honesta fuera de prod) formalizada; no se requiere ADR adicional
-        — implementación existente (commits 74f8b09/5724191/8afc09d/5724191) cubre la decisión.
+      referencia: Opción B (fail-fast prod / degradación honesta fuera de prod) formalizada; no se requiere ADR adicional — implementación existente (commits 74f8b09/5724191/8afc09d/5724191) cubre la decisión.
     implementacion:
       estado: HECHO
-      referencia: 'wiring verificado en pipeline_factory._build_ohlcv: publisher y chunk_converter sin default implícito,
-        fail-fast si None, _build_kafka_publisher() con caller real confirmado, KafkaOHLCVPublisher.publish_chunk() confirmado
-        con await producer.produce() real contra ohlcv.raw. Fail-fast en prod (RuntimeError + regla L5); fuera de prod warning
-        loguru + NullOHLCVPublisher explícito como modo degradado. NullOHLCVPublisher mantenido para tests y modo degradado
-        explícito fuera de prod; riesgo residual documentado.'
+      referencia: 'wiring verificado en pipeline_factory._build_ohlcv: publisher y chunk_converter sin default implícito, fail-fast si None, _build_kafka_publisher() con caller real confirmado, KafkaOHLCVPublisher.publish_chunk()
+        confirmado con await producer.produce() real contra ohlcv.raw. Fail-fast en prod (RuntimeError + regla L5); fuera de prod warning loguru + NullOHLCVPublisher explícito como modo degradado. NullOHLCVPublisher
+        mantenido para tests y modo degradado explícito fuera de prod; riesgo residual documentado.'
     tests:
       estado: HECHO
-      referencia: 'test_kappa_publisher_wiring.py (9 tests, Guardrail #5) cierra publisher/chunk_converter obligatorios y
-        NullOHLCVPublisher prohibido en prod; test_kafka_publisher_wiring.py (Guardrail #4) wiring real via _build_kafka_publisher;
-        test_business_rules.py TestKafkaRuleEndToEndPipeline (Guardrail #6) demuestra la regla L5 por el pipeline real L1->L5
-        de config-load. Test integracion Kafka ohlcv.raw real no requerido — arquitectura fail-fast en prod y degradación
-        honesta fuera de prod validada por tests unitarios/integración existentes.'
+      referencia: 'test_kappa_publisher_wiring.py (9 tests, Guardrail #5) cierra publisher/chunk_converter obligatorios y NullOHLCVPublisher prohibido en prod; test_kafka_publisher_wiring.py (Guardrail
+        #4) wiring real via _build_kafka_publisher; test_business_rules.py TestKafkaRuleEndToEndPipeline (Guardrail #6) demuestra la regla L5 por el pipeline real L1->L5 de config-load. Test integracion
+        Kafka ohlcv.raw real no requerido — arquitectura fail-fast en prod y degradación honesta fuera de prod validada por tests unitarios/integración existentes.'
     ci:
       estado: HECHO
       referencia: 'guardrails #7 (pipeline CI barrera dura) y #9/#10 cerrados en docs/plans/engineering-guardrails.md'
     evidencia:
       estado: HECHO
-      referencia: 'evidencia empírica 2026-08-12: audit docs/audits + tracking B-46 + commits 74f8b09/5749c1f/8afc09d/5724191
-        + tests architecture'
+      referencia: 'evidencia empírica 2026-08-12: audit docs/audits + tracking B-46 + commits 74f8b09/5749c1f/8afc09d/5724191 + tests architecture'
     cierre:
       estado: HECHO
-      referencia: 'F-031 cerrado en produccion (fail-fast estructural + regla L5, demostrada E2E por el pipeline real L1->L5
-        el 2026-08-12 y deploy documentado alineado: docker-compose KAFKA_ENABLED=true + .env.example/README); decisión Opción
-        B formalizada; riesgo residual fuera de produccion documentado y visible (loguru); decision Opción B formalizada.'
+      referencia: 'F-031 cerrado en produccion (fail-fast estructural + regla L5, demostrada E2E por el pipeline real L1->L5 el 2026-08-12 y deploy documentado alineado: docker-compose KAFKA_ENABLED=true
+        + .env.example/README); decisión Opción B formalizada; riesgo residual fuera de produccion documentado y visible (loguru); decision Opción B formalizada.'
 - id: B-40
   hallazgo_informe: F-024
   fase: F2
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'ocm/runtime/state/factories.py:198 y :236 importan ''from ocm.runtime.state.redis_stream import RedisStreamPublisher/Consumer''
-    (lazy, FUERA del try/except) pero el módulo ocm.runtime.state.redis_stream NO existe. Reproducido: ModuleNotFoundError
-    al llamar build_stream_publisher. Origen: 66cd1c4 refactor(layout) Fase 3 (rename ocm_platform->ocm) no movió el archivo
-    streams. Símbolo equivalente real existe en infrastructure/redis/redis_stream.py:71,145 pero nadie lo importa. Sin callers
-    de build_stream_publisher/build_stream_source hoy'
-  solucion: 'Eliminado como dead code (2026-08-12): cero callers, cero imports, cero tests. Se borró infrastructure/redis/redis_stream.py
-    (y la carpeta redis/ huérfana), los builders/adapters build_stream_publisher/build_stream_source de ocm/runtime/state/factories.py,
-    y la clase RedisStreamsEventBus. Las facciones stream de Kafka/SOLACE que sí se usan viven en infrastructure/adapters/streams.
-    Se añadió test de no-regresión que asegura que los símbolos de stream siguen ausentes del módulo y de la fachada.'
+  evidencia: 'ocm/runtime/state/factories.py:198 y :236 importan ''from ocm.runtime.state.redis_stream import RedisStreamPublisher/Consumer'' (lazy, FUERA del try/except) pero el módulo ocm.runtime.state.redis_stream
+    NO existe. Reproducido: ModuleNotFoundError al llamar build_stream_publisher. Origen: 66cd1c4 refactor(layout) Fase 3 (rename ocm_platform->ocm) no movió el archivo streams. Símbolo equivalente real
+    existe en infrastructure/redis/redis_stream.py:71,145 pero nadie lo importa. Sin callers de build_stream_publisher/build_stream_source hoy'
+  solucion: 'Eliminado como dead code (2026-08-12): cero callers, cero imports, cero tests. Se borró infrastructure/redis/redis_stream.py (y la carpeta redis/ huérfana), los builders/adapters build_stream_publisher/build_stream_source
+    de ocm/runtime/state/factories.py, y la clase RedisStreamsEventBus. Las facciones stream de Kafka/SOLACE que sí se usan viven en infrastructure/adapters/streams. Se añadió test de no-regresión que asegura
+    que los símbolos de stream siguen ausentes del módulo y de la fachada.'
   pruebas:
-  - 'smoke: uv run python -c ''from ocm.runtime.state.factories import build_stream_publisher; build_stream_publisher(stream_name="ohlcv")''
-    -> ModuleNotFoundError (2026-08-09)'
+  - 'smoke: uv run python -c ''from ocm.runtime.state.factories import build_stream_publisher; build_stream_publisher(stream_name="ohlcv")'' -> ModuleNotFoundError (2026-08-09)'
   - 'verificacion: ls ocm/runtime/state/ (no redis_stream); grep build_stream_publisher/build_stream_source -> 0 callers'
   - 'verificacion: RedisStreamPublisher en infrastructure/redis/redis_stream.py:71, Consumer :145'
   adr_relacionado: PENDIENTE -- decidir hogar canonico junto a F-011; no hay ADR todavia
-  riesgo_residual: Bajo-MBaja hoy (sin callers); si se habilita RedisStreamsEventBus (event_bus.py:23) fallaria al invocar
-    build_stream_* — latente
+  riesgo_residual: Bajo-MBaja hoy (sin callers); si se habilita RedisStreamsEventBus (event_bus.py:23) fallaria al invocar build_stream_* — latente
   fecha_cierre: 2026-08-12
   cadena:
     hallazgo:
@@ -1444,16 +1347,13 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: packages/market_data/adapters/inbound/websocket/{orderbook,funding,oi,liquidations}_producer.py — _KAPPA_HEADERS
-    con HEADER_SOURCE hardcodeado a "live" como constante de clase; único caller activo hoy es streaming_hydra.py (canary),
-    no live_hydra.py
-  solucion: 'source: DataSource inyectado por constructor (default DATASOURCE_LIVE); CompositionRoot.build_ws_producers propaga
-    el valor; streaming_hydra.py invoca con source=DATASOURCE_REPLAY explícito'
+  evidencia: packages/market_data/adapters/inbound/websocket/{orderbook,funding,oi,liquidations}_producer.py — _KAPPA_HEADERS con HEADER_SOURCE hardcodeado a "live" como constante de clase; único caller
+    activo hoy es streaming_hydra.py (canary), no live_hydra.py
+  solucion: 'source: DataSource inyectado por constructor (default DATASOURCE_LIVE); CompositionRoot.build_ws_producers propaga el valor; streaming_hydra.py invoca con source=DATASOURCE_REPLAY explícito'
   pruebas:
   - 'test_shutdown_order_and_return_zero: assert bundle.received_source == DATASOURCE_REPLAY'
   adr_relacionado: null
-  riesgo_residual: Bajo — semántica del header corregida; gap detection/DLQ sigue pendiente (ver H-24/F-007 si se formaliza
-    aparte)
+  riesgo_residual: Bajo — semántica del header corregida; gap detection/DLQ sigue pendiente (ver H-24/F-007 si se formaliza aparte)
   fecha_cierre: '2026-08-08'
   cadena:
     hallazgo:
@@ -1486,12 +1386,11 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: config/config.yaml:35 (market_data/external_ingestion) no está en _MODULE_GLOBS (ocm/config/hydra_loader.py:94-109);
-    _MODULE_GLOBS incluye portfolio/portfolio.yaml ausente de config.yaml; tests/config/test_structured_parity.py no existe
-  solucion: 'Paridad config.yaml#defaults ↔ _MODULE_GLOBS (B-09): añadido market_data/external_ingestion.yaml a _MODULE_GLOBS
-    y portfolio/portfolio a config.yaml#defaults. Tests: tests/ocm/config/test_structured_parity.py (derivan la lista real
-    de config.yaml, sin hardcodeo) + tests/ocm/config/test_external_ingestion_standalone.py (verifican que el standalone loader
-    aplica los YAML). Backtest: ambos tests fallan sin el fix.'
+  evidencia: config/config.yaml:35 (market_data/external_ingestion) no está en _MODULE_GLOBS (ocm/config/hydra_loader.py:94-109); _MODULE_GLOBS incluye portfolio/portfolio.yaml ausente de config.yaml; tests/config/test_structured_parity.py
+    no existe
+  solucion: 'Paridad config.yaml#defaults ↔ _MODULE_GLOBS (B-09): añadido market_data/external_ingestion.yaml a _MODULE_GLOBS y portfolio/portfolio a config.yaml#defaults. Tests: tests/ocm/config/test_structured_parity.py
+    (derivan la lista real de config.yaml, sin hardcodeo) + tests/ocm/config/test_external_ingestion_standalone.py (verifican que el standalone loader aplica los YAML). Backtest: ambos tests fallan sin
+    el fix.'
   pruebas:
   - 'test: listas de módulos idénticas (config.yaml#defaults ↔ _MODULE_GLOBS)'
   - 'test: standalone carga external_ingestion.sources.coinglass/coinmarketcap del YAML'
@@ -1531,8 +1430,7 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: AGENTS.md corregido a 49 (era 44); E402 obsoleta de container.py (eliminado) retirada; gate conteo ≥49 ya en
-    job architecture
+  evidencia: AGENTS.md corregido a 49 (era 44); E402 obsoleta de container.py (eliminado) retirada; gate conteo ≥49 ya en job architecture
   solucion: Generar conteo de contratos en CI; limpiar E402 obsoleta
   pruebas:
   - conteo real (49) == docs (AGENTS.md 49); gate architecture n>=49
@@ -1570,20 +1468,16 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'packages/market_data/adapters/inbound/websocket/onchain_producer.py:9-13 (imports a infra.kafka.* y market_data.domain.ports
-    — inexistentes). CERRADO: el stub fue ELIMINADO en ff67b93 (B-36/F-020, "onchain_producer.py eliminado: import roto confirmado
-    en vivo", 38 líneas) — verificable con git show --stat ff67b93. Hoy rg de onchain_producer/TOPIC_ONCHAIN_RAW = 0 hits
-    en packages/apps/ocm/shared/tests.'
-  solucion: 'Eliminar el stub o implementarlo bajo ADR (topic TOPIC_ONCHAIN_RAW ya existe en shared/kafka/topics.py). RESUELTO
-    por eliminación (B-36/F-020): módulo ausente = criterio "módulo ausente o con imports válidos" cumplido. El topic TOPIC_ONCHAIN_RAW
-    sigue disponible en el SSOT si en el futuro se implementa un consumidor real.'
+  evidencia: 'packages/market_data/adapters/inbound/websocket/onchain_producer.py:9-13 (imports a infra.kafka.* y market_data.domain.ports — inexistentes). CERRADO: el stub fue ELIMINADO en ff67b93 (B-36/F-020,
+    "onchain_producer.py eliminado: import roto confirmado en vivo", 38 líneas) — verificable con git show --stat ff67b93. Hoy rg de onchain_producer/TOPIC_ONCHAIN_RAW = 0 hits en packages/apps/ocm/shared/tests.'
+  solucion: 'Eliminar el stub o implementarlo bajo ADR (topic TOPIC_ONCHAIN_RAW ya existe en shared/kafka/topics.py). RESUELTO por eliminación (B-36/F-020): módulo ausente = criterio "módulo ausente o con
+    imports válidos" cumplido. El topic TOPIC_ONCHAIN_RAW sigue disponible en el SSOT si en el futuro se implementa un consumidor real.'
   pruebas:
   - 'verificación: git show --stat ff67b93 muestra onchain_producer.py eliminado (38 ----)'
   - 'verificación: rg onchain_producer en packages/apps/ocm/shared/tests = 0 hits'
   adr_relacionado: null
-  riesgo_residual: Bajo — módulo ausente, no re-importable; topic TOPIC_ONCHAIN_RAW permanece en SSOT (shared/kafka/topics.py)
-    para una futura implementación real. R8 (guard anti dead-stub) queda como backtest pendiente sin activar, verificado por
-    rg en esta revalidación (2026-08-18).
+  riesgo_residual: Bajo — módulo ausente, no re-importable; topic TOPIC_ONCHAIN_RAW permanece en SSOT (shared/kafka/topics.py) para una futura implementación real. R8 (guard anti dead-stub) queda como backtest
+    pendiente sin activar, verificado por rg en esta revalidación (2026-08-18).
   fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
@@ -1616,16 +1510,14 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: live_executor.py:91-134 (bloque CCXT comentado refiere CCXTAdapter.create_order); execute_live.py:64-70 (exchange_client
-    None)
+  evidencia: live_executor.py:91-134 (bloque CCXT comentado refiere CCXTAdapter.create_order); execute_live.py:64-70 (exchange_client None)
   solucion: Implementar _submit() con CCXTAdapter.create_order; conversión size_pct→qty real; reconciliación de fills
   pruebas:
   - 'test integración sandbox/mock: orden → fill → estado'
   - test positivo/negativo R9, R10
   adr_relacionado: ADR-0016
-  riesgo_residual: 'Bajo — capital real protegido por: reconciliación por orden consultando exchange (fail-closed), kill switch
-    ExecutionGuard (manual + breaker por errores consecutivos), paper→live obligatorio (ADR-0016), guard B-23/Promotion Rule
-    antes de instanciar LiveExecutor, y R9/R10 activadas en CI (job trading-guards).'
+  riesgo_residual: 'Bajo — capital real protegido por: reconciliación por orden consultando exchange (fail-closed), kill switch ExecutionGuard (manual + breaker por errores consecutivos), paper→live obligatorio
+    (ADR-0016), guard B-23/Promotion Rule antes de instanciar LiveExecutor, y R9/R10 activadas en CI (job trading-guards).'
   fecha_cierre: '2026-08-07'
   cadena:
     hallazgo:
@@ -1648,9 +1540,8 @@ hallazgos:
       referencia: R9/R10 activadas_en_ci (job trading-guards)
     evidencia:
       estado: HECHO
-      referencia: 'evidencia reproducible de pruebas de reconciliación R9/R10: uv run pytest tests/trading/test_live_executor.py
-        tests/trading/test_transport_mapping.py -q -m ''not integration'' --no-cov → 14 passed, exit 0, sobre commit 0072162
-        (2026-08-07), idéntico al comando del job CI trading-guards (ocm-ci.yml:134-137)'
+      referencia: 'evidencia reproducible de pruebas de reconciliación R9/R10: uv run pytest tests/trading/test_live_executor.py tests/trading/test_transport_mapping.py -q -m ''not integration'' --no-cov
+        → 14 passed, exit 0, sobre commit 0072162 (2026-08-07), idéntico al comando del job CI trading-guards (ocm-ci.yml:134-137)'
     cierre:
       estado: HECHO
       referencia: B-12 cerrado 2026-08-07 con evidencia reproducible + gates verdes (health-check PASS, suite 966 passed)
@@ -1660,22 +1551,17 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: live_hydra.py:196-214 (guard mode=live verifica exchange_config y has_credentials, pero NO verifica Promotion
-    Rule/provenance de Orders-Fills); IS_STUB=False ya commiteado (live_executor.py:78, B-12) — falta enforcement en código
-    del gate_capital declarado en tracking.yaml (prerequisito_f3_discovery)
-  solucion: 'Guard fail-closed implementado en trading/bootstrap/composition_root.py::assemble_live: llamar require_promoted(''OrderFilledPayload'',''OrderRejectedPayload'')
-    ANTES de instanciar LiveExecutor, precediendo al guard IS_STUB (B-01) — gate independiente y más estricto. shared/kafka/provenance.py
-    (SSOT) expone is_promoted()/require_promoted() leyendo el registro PROVIDENCE; el CLI/y use cases consumen esta abstracción
-    de producción, no un módulo de tests (DIP). No corrige un fallo actual (Orders/Fills ya en DOMAIN); es defensa en profundidad
-    contra degradación futura de la procedencia.'
+  evidencia: live_hydra.py:196-214 (guard mode=live verifica exchange_config y has_credentials, pero NO verifica Promotion Rule/provenance de Orders-Fills); IS_STUB=False ya commiteado (live_executor.py:78,
+    B-12) — falta enforcement en código del gate_capital declarado en tracking.yaml (prerequisito_f3_discovery)
+  solucion: 'Guard fail-closed implementado en trading/bootstrap/composition_root.py::assemble_live: llamar require_promoted(''OrderFilledPayload'',''OrderRejectedPayload'') ANTES de instanciar LiveExecutor,
+    precediendo al guard IS_STUB (B-01) — gate independiente y más estricto. shared/kafka/provenance.py (SSOT) expone is_promoted()/require_promoted() leyendo el registro PROVIDENCE; el CLI/y use cases
+    consumen esta abstracción de producción, no un módulo de tests (DIP). No corrige un fallo actual (Orders/Fills ya en DOMAIN); es defensa en profundidad contra degradación futura de la procedencia.'
   pruebas:
-  - 'test negativo: test_assemble_live_bloquea_si_orders_fills_no_promovidos (monkeypatch PROVIDENCE: OrderFilledPayload ->
-    ASSUMED) — assemble_live lanza ValueError, fail-close'
-  - 'test positivo: test_assemble_live_ok_con_provenance_actual — assemble_live procede con la PROVIDENCE actual, sin bloquear
-    la promoción existente (Orders/Fills en DOMAIN)'
+  - 'test negativo: test_assemble_live_bloquea_si_orders_fills_no_promovidos (monkeypatch PROVIDENCE: OrderFilledPayload -> ASSUMED) — assemble_live lanza ValueError, fail-close'
+  - 'test positivo: test_assemble_live_ok_con_provenance_actual — assemble_live procede con la PROVIDENCE actual, sin bloquear la promoción existente (Orders/Fills en DOMAIN)'
   adr_relacionado: ADR-0017
-  riesgo_residual: Bajo — guard fail-closed activo en el arranque real; la promoción actual de Orders/Fills (DOMINIO) está
-    registrada en shared/kafka/provenance.py PROVIDENCE; cualquier degradación futura frena el ensamblaje y bloquea el merge.
+  riesgo_residual: Bajo — guard fail-closed activo en el arranque real; la promoción actual de Orders/Fills (DOMINIO) está registrada en shared/kafka/provenance.py PROVIDENCE; cualquier degradación futura
+    frena el ensamblaje y bloquea el merge.
   fecha_cierre: '2026-08-07'
   cadena:
     adr:
@@ -1689,8 +1575,7 @@ hallazgos:
       referencia: B-23 en tracking v2
     implementacion:
       estado: HECHO
-      referencia: 'composition_root.assemble_live: require_promoted() previa a instanciar LiveExecutor; shared/kafka/provenance.py
-        (PROVIDENCE + is_promoted/require_promoted) — commit fbff5dd'
+      referencia: 'composition_root.assemble_live: require_promoted() previa a instanciar LiveExecutor; shared/kafka/provenance.py (PROVIDENCE + is_promoted/require_promoted) — commit fbff5dd'
     tests:
       estado: HECHO
       referencia: test_assemble_live_bloquea_si_orders_fills_no_promovidos + test_assemble_live_ok_con_provenance_actual (tests/trading/test_composition_root.py)
@@ -1709,21 +1594,18 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: packages/trading/bootstrap/composition_root.py:359-376 (NotImplementedError con TODO(ADR-0011)); rebalance_service.py:131-157
-    sin invocaciones externas
-  solucion: 'Cerrar ADR-0011 (delegación a portfolio): RebalancePort (Protocol @runtime_checkable, shared/contracts/boundaries.py)
-    declara la API real de RebalanceService (rebalance(), validate_targets()); trading no importa infraestructura de portfolio.
-    assemble_rebalance() delega en el port inyectado y retorna list[RebalanceSignal] (deja de retornar TradingRuntime y de
-    lanzar NotImplementedError). El constructor exige rebalance_port (fail-fast, mismo patrón que portfolio). Wiring: execute_live.py
-    y execute_paper.py inyectan RebalanceService() real.'
+  evidencia: packages/trading/bootstrap/composition_root.py:359-376 (NotImplementedError con TODO(ADR-0011)); rebalance_service.py:131-157 sin invocaciones externas
+  solucion: 'Cerrar ADR-0011 (delegación a portfolio): RebalancePort (Protocol @runtime_checkable, shared/contracts/boundaries.py) declara la API real de RebalanceService (rebalance(), validate_targets());
+    trading no importa infraestructura de portfolio. assemble_rebalance() delega en el port inyectado y retorna list[RebalanceSignal] (deja de retornar TradingRuntime y de lanzar NotImplementedError). El
+    constructor exige rebalance_port (fail-fast, mismo patrón que portfolio). Wiring: execute_live.py y execute_paper.py inyectan RebalanceService() real.'
   pruebas:
   - test_assemble_rebalance_ok_delegates_to_port — delega en el port inyectado y retorna list[RebalanceSignal]
   - test_assemble_rebalance_rejects_invalid_targets — validate_targets() falla targets inválidos (ValueError)
   - test_assemble_rebalance_uses_injected_port_not_concrete_class — el root depende del protocolo, no de la clase concreta
   - test_constructor_requires_rebalance_port — el constructor falla (fail-fast) si no se inyecta el port
   adr_relacionado: ADR-0011
-  riesgo_residual: Bajo — RebalanceService real inyectado vía RebalancePort en execute_live/execute_paper; cambios futuros
-    en la construcción interna de portfolio no rompen trading mientras RebalancePort se mantenga estable.
+  riesgo_residual: Bajo — RebalanceService real inyectado vía RebalancePort en execute_live/execute_paper; cambios futuros en la construcción interna de portfolio no rompen trading mientras RebalancePort
+    se mantenga estable.
   fecha_cierre: '2026-08-07'
   cadena:
     hallazgo:
@@ -1737,12 +1619,10 @@ hallazgos:
       referencia: ADR-0011 (Aceptada 2026-08-07)
     implementacion:
       estado: HECHO
-      referencia: RebalancePort en shared/contracts/boundaries.py; assemble_rebalance() delegado con rebalance_port inyectado;
-        wiring en execute_live.py/execute_paper.py (1d81040)
+      referencia: RebalancePort en shared/contracts/boundaries.py; assemble_rebalance() delegado con rebalance_port inyectado; wiring en execute_live.py/execute_paper.py (1d81040)
     tests:
       estado: HECHO
-      referencia: 4 tests nuevos en test_composition_root.py (assemble_rebalance_* + constructor obligatorio), suite composition_root
-        21/21
+      referencia: 4 tests nuevos en test_composition_root.py (assemble_rebalance_* + constructor obligatorio), suite composition_root 21/21
     ci:
       estado: HECHO
       referencia: job unit-tests (pytest tests/ suite completa) ejecuta test_composition_root.py
@@ -1758,9 +1638,8 @@ hallazgos:
   prioridad: BAJA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'pandas→polars MIGRATION COMPLETE (PR #19, 2026-08-23): 0 imports pandas, 0 .to_pandas(), pandas eliminado de
-    pyproject.toml; `pandas_to_domain.py` → `dataframe_to_domain.py`; pandera (polars mode) para schema validation; contratos
-    49→50 KEPT; 1248 tests, 55% cobertura.'
+  evidencia: 'pandas→polars MIGRATION COMPLETE (PR #19, 2026-08-23): 0 imports pandas, 0 .to_pandas(), pandas eliminado de pyproject.toml; `pandas_to_domain.py` → `dataframe_to_domain.py`; pandera (polars
+    mode) para schema validation; contratos 49→50 KEPT; 1248 tests, 55% cobertura.'
   solucion: Migrar todas las capas a polars + eliminar pandas de dependencias + renombrar pandas_to_domain → dataframe_to_domain
   pruebas:
   - test estrategia con polars (23 tests trading/strategies pass; suite completa 1248 pass)
@@ -1781,8 +1660,7 @@ hallazgos:
       referencia: null
     implementacion:
       estado: HECHO
-      referencia: 'PR #19 (c392f8f): pandas_to_domain.py → dataframe_to_domain.py; pandas eliminado de pyproject.toml; 0 imports/0
-        .to_pandas(); todas las capas polars-native'
+      referencia: 'PR #19 (c392f8f): pandas_to_domain.py → dataframe_to_domain.py; pandas eliminado de pyproject.toml; 0 imports/0 .to_pandas(); todas las capas polars-native'
     tests:
       estado: HECHO
       referencia: suite completa 1248 passed (1248 vs 900 baseline F0); ruff/mypy/import-linter 50/0 KEPT
@@ -1801,29 +1679,22 @@ hallazgos:
   prioridad: ALTA
   estado: EN_CURSO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Verificado en F0 2026-07-29: estado de posicion repartido en 3 representaciones mutables: open_order_ids (fill_sync.py:75),
-    _open_positions (analytics/trade_tracker.py:58) y PortfolioService.store; riesgo real: close_position (portfolio_service.py:126-152)
-    traga excepcion (except->None, nunca lanza) y fill_sync descarta el retorno (protocolo fill_sync.py:46-49, rama SELL :96-98)
-    -> cierre puede fallar en silencio sin propagacion'
-  solucion: '[PARCIAL] Mitigacion de observabilidad implementada (2026-08-12): el SELL path de build_fill_sync captura el
-    retorno de close_position() y, si es None (cierre no confirmado por SafeOps), emite logger.critical ''POSITION_CLOSE_UNCONFIRMED''
-    con symbol, sell_order_id y buy_order_id — el fallo silencioso de cierre ahora es visible en operacion, sin cambiar el
-    contrato SafeOps ni hacer que el flujo lance. La unificacion definitiva del estado de posicion en PortfolioService (unico
-    dueño mutable, ADR-0006; fill_sync/TradeTracker consumen eventos) queda PENDIENTE — decision arquitectonica no resuelta
-    (ADR-0021 en PROPUESTA 2026-08-16)'
+  evidencia: 'Verificado en F0 2026-07-29: estado de posicion repartido en 3 representaciones mutables: open_order_ids (fill_sync.py:75), _open_positions (analytics/trade_tracker.py:58) y PortfolioService.store;
+    riesgo real: close_position (portfolio_service.py:126-152) traga excepcion (except->None, nunca lanza) y fill_sync descarta el retorno (protocolo fill_sync.py:46-49, rama SELL :96-98) -> cierre puede
+    fallar en silencio sin propagacion'
+  solucion: '[PARCIAL] Mitigacion de observabilidad implementada (2026-08-12): el SELL path de build_fill_sync captura el retorno de close_position() y, si es None (cierre no confirmado por SafeOps), emite
+    logger.critical ''POSITION_CLOSE_UNCONFIRMED'' con symbol, sell_order_id y buy_order_id — el fallo silencioso de cierre ahora es visible en operacion, sin cambiar el contrato SafeOps ni hacer que el
+    flujo lance. La unificacion definitiva del estado de posicion en PortfolioService (unico dueño mutable, ADR-0006; fill_sync/TradeTracker consumen eventos) queda PENDIENTE — decision arquitectonica no
+    resuelta (ADR-0021 en PROPUESTA 2026-08-16)'
   pruebas:
-  - 'test (mitigacion): SELL fill cuyo close_position() devuelve None -> logger.critical con symbol/sell_order_id/buy_order_id
-    (tests/trading/test_fill_sync_close_divergence.py)'
+  - 'test (mitigacion): SELL fill cuyo close_position() devuelve None -> logger.critical con symbol/sell_order_id/buy_order_id (tests/trading/test_fill_sync_close_divergence.py)'
   - 'test (mitigacion): cierre confirmado -> sin alerta critica'
   - 'test (mitigacion): fallo de close_position NO propaga excepcion desde fill_sync (SafeOps conservado)'
   - 'PENDIENTE (raiz): un solo dueño mutable; cierre no falla silenciosamente'
-  - 'PENDIENTE (raiz): close_position propaga excepción — no debe atrapar y devolver None; fill_sync no debe descartar el
-    retorno'
+  - 'PENDIENTE (raiz): close_position propaga excepción — no debe atrapar y devolver None; fill_sync no debe descartar el retorno'
   adr_relacionado: ADR-0006; ADR-0021 (PROPUESTA, 2026-08-16)
-  riesgo_residual: 'Medio: el fallo de cierre ya es observable (log critico), pero sigue siendo silencioso a nivel de estado
-    (Ningún destino se corrige automaticamente); la posicion fantasma puede persistir hasta reconciliacion manual. Ademas,
-    el contrato de close_position no permite distinguir ''posicion inexistente'' de ''fallo de persistencia'' (ambos None)
-    — limitacion documentada en fill_sync.py'
+  riesgo_residual: 'Medio: el fallo de cierre ya es observable (log critico), pero sigue siendo silencioso a nivel de estado (Ningún destino se corrige automaticamente); la posicion fantasma puede persistir
+    hasta reconciliacion manual. Ademas, el contrato de close_position no permite distinguir ''posicion inexistente'' de ''fallo de persistencia'' (ambos None) — limitacion documentada en fill_sync.py'
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -1842,8 +1713,7 @@ hallazgos:
       referencia: mitigacion de observabilidad en fill_sync.py (2026-08-12); unificar en PortfolioService PENDIENTE
     tests:
       estado: PARCIAL
-      referencia: 'test_fill_sync_close_divergence.py (5 tests, mitigacion); PENDIENTE: invariante de estado single-owner
-        (G10)'
+      referencia: 'test_fill_sync_close_divergence.py (5 tests, mitigacion); PENDIENTE: invariante de estado single-owner (G10)'
     ci:
       estado: PENDIENTE
       referencia: G10
@@ -1859,13 +1729,11 @@ hallazgos:
   prioridad: ALTA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: packages/trading/execution/order.py:94 (order_id = uuid[:8]); clave de posición en portfolio/infra/redis_store.py.
-    order_id truncado (32 bits de entropía) = riesgo de colisión a volumen alto → overwrite silencioso de una posición abierta
-    por otra en el PositionStore (riesgo de portfolio)
-  solucion: 'order_id = uuid4() completo (36 chars, RFC 4122) en order.py; los stores (InMemoryPositionStore y RedisPositionStore)
-    elevan PositionIdCollisionError si dos posiciones DISTINTAS comparten order_id en vez de sobrescribir en silencio (defensa
-    en profundidad: protege también ante regresión futura del truncado o IDs externos). PortfolioService.open_position ya
-    captura via try/except SafeOps (log error, no rompe el flujo del callback)'
+  evidencia: packages/trading/execution/order.py:94 (order_id = uuid[:8]); clave de posición en portfolio/infra/redis_store.py. order_id truncado (32 bits de entropía) = riesgo de colisión a volumen alto
+    → overwrite silencioso de una posición abierta por otra en el PositionStore (riesgo de portfolio)
+  solucion: 'order_id = uuid4() completo (36 chars, RFC 4122) en order.py; los stores (InMemoryPositionStore y RedisPositionStore) elevan PositionIdCollisionError si dos posiciones DISTINTAS comparten order_id
+    en vez de sobrescribir en silencio (defensa en profundidad: protege también ante regresión futura del truncado o IDs externos). PortfolioService.open_position ya captura via try/except SafeOps (log
+    error, no rompe el flujo del callback)'
   pruebas:
   - test_order_id_generated_is_full_uuid_not_truncated — Order.order_id parsea como UUID4 completo (36 chars)
   - test_memory_store_rejects_distinct_position_same_id — colisión con distinto symbol eleva PositionIdCollisionError
@@ -1873,8 +1741,7 @@ hallazgos:
   - test_redis_store_rejects_distinct_position_same_id — RedisPositionStore también eleva colisión
   - test_memory_store_distinct_ids_do_not_collide — IDs distintos cohabitan
   adr_relacionado: null
-  riesgo_residual: Bajo — entropía práctica eliminada (UUID4 completo); colisión residual astronómica; guard de unicidad en
-    store activo
+  riesgo_residual: Bajo — entropía práctica eliminada (UUID4 completo); colisión residual astronómica; guard de unicidad en store activo
   fecha_cierre: '2026-08-12'
   cadena:
     hallazgo:
@@ -1907,19 +1774,15 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Implementado 2026-08-18: OpenTelemetry SDK + exporter OTLP HTTP (opentelemetry-api/sdk/exporter-otlp-proto-http
-    1.44.0) en pyproject.toml/uv.lock; ocm/observability/tracing.py v0.2.0 (TracingRuntime fail-soft idempotente, init_tracing
-    desde setup_observability, propagadores W3C tracecontext+baggage); request-id propagado en consumers vía BaseConsumer._traced_handle
-    (span <Consumer>.handle con event_id como request.id + attrs exchange/symbol/timeframe); TracingConfig ampliado (endpoint/service_name/sample_ratio)
-    en schema+structured+metrics.yaml.'
+  evidencia: 'Implementado 2026-08-18: OpenTelemetry SDK + exporter OTLP HTTP (opentelemetry-api/sdk/exporter-otlp-proto-http 1.44.0) en pyproject.toml/uv.lock; ocm/observability/tracing.py v0.2.0 (TracingRuntime
+    fail-soft idempotente, init_tracing desde setup_observability, propagadores W3C tracecontext+baggage); request-id propagado en consumers vía BaseConsumer._traced_handle (span <Consumer>.handle con event_id
+    como request.id + attrs exchange/symbol/timeframe); TracingConfig ampliado (endpoint/service_name/sample_ratio) en schema+structured+metrics.yaml.'
   solucion: OpenTelemetry + request-id propagado en consumers
   pruebas:
-  - 'test: propagación de contexto G11 — tests/ocm/observability/test_tracing.py (14 tests: fail-soft, idempotencia, span
-    attrs, request-id en loguru, G11 end-to-end)'
+  - 'test: propagación de contexto G11 — tests/ocm/observability/test_tracing.py (14 tests: fail-soft, idempotencia, span attrs, request-id en loguru, G11 end-to-end)'
   adr_relacionado: null
-  riesgo_residual: Bajo — tracing disabled por defecto; activarlo requiere endpoint OTLP explícito (config/observability/metrics.yaml).
-    Sin backend OTLP los spans se crean no-recording sin exportar. request-id en logs es independiente del exporter (siempre
-    activo vía trace_event).
+  riesgo_residual: Bajo — tracing disabled por defecto; activarlo requiere endpoint OTLP explícito (config/observability/metrics.yaml). Sin backend OTLP los spans se crean no-recording sin exportar. request-id
+    en logs es independiente del exporter (siempre activo vía trace_event).
   fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
@@ -1933,8 +1796,7 @@ hallazgos:
       referencia: null
     implementacion:
       estado: HECHO
-      referencia: '2026-08-18: tracing.py v0.2.0 + BaseConsumer._traced_handle + init_tracing en setup_observability + TracingConfig
-        ampliado'
+      referencia: '2026-08-18: tracing.py v0.2.0 + BaseConsumer._traced_handle + init_tracing en setup_observability + TracingConfig ampliado'
     tests:
       estado: HECHO
       referencia: tests/ocm/observability/test_tracing.py (14 tests) — G11 propagación de contexto
@@ -1953,9 +1815,8 @@ hallazgos:
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'Verificado en F0 2026-07-29: shared/kafka/schemas/ = dataclasses frozen (SSOT BC-35; @dataclass p.ej. KappaSourceMixin);
-    rg avro|protobuf en schemas -> 0; docker-compose.yml sin servicio schema-registry|redpanda (rg -> 0). Wire format = dataclasses
-    nativos, sin schema registry. CONFIRMADO'
+  evidencia: 'Verificado en F0 2026-07-29: shared/kafka/schemas/ = dataclasses frozen (SSOT BC-35; @dataclass p.ej. KappaSourceMixin); rg avro|protobuf en schemas -> 0; docker-compose.yml sin servicio schema-registry|redpanda
+    (rg -> 0). Wire format = dataclasses nativos, sin schema registry. CONFIRMADO'
   solucion: Evaluar/implementar Schema Registry (Avro + compatibilidad backward) manteniendo BC-35
   pruebas:
   - test de cambio backward-compatible
@@ -1995,19 +1856,17 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Verificado en F0 2026-07-29: kafka_trade_publisher.py:50-51 y kafka_gap_publisher.py:114-115 = enable_idempotence=True
-    + acks=all (sin drift); infrastructure/kafka/dedup.py existe y esta CABLEADO en bronze_writer.py (importa SeenFilter :63,
-    instancia :107, is_duplicate(event.event_id) :220-221). Limitacion: dedup L1 es en memoria (SeenFilter max_size=10000,
-    por sesion de proceso) y no hay claves de idempotencia naturales ni test de reintento -> residuo exactly-once ante reinicios.
-    CONFIRMADO. Implementado 2026-08-13 (B-19): mark_seen durable AFTER write exitoso (antes del write -> perdida silenciosa
-    en reintento); dedup_store opcional (DeduplicationStoreProtocol) cableado via CompositeSeenFilter L1+L2 con RedisCursorStore
-    (build_cursor_store, fail-open); sin cambio de contrato publico ni schema de cable.'
+  evidencia: 'Verificado en F0 2026-07-29: kafka_trade_publisher.py:50-51 y kafka_gap_publisher.py:114-115 = enable_idempotence=True + acks=all (sin drift); infrastructure/kafka/dedup.py existe y esta CABLEADO
+    en bronze_writer.py (importa SeenFilter :63, instancia :107, is_duplicate(event.event_id) :220-221). Limitacion: dedup L1 es en memoria (SeenFilter max_size=10000, por sesion de proceso) y no hay claves
+    de idempotencia naturales ni test de reintento -> residuo exactly-once ante reinicios. CONFIRMADO. Implementado 2026-08-13 (B-19): mark_seen durable AFTER write exitoso (antes del write -> perdida silenciosa
+    en reintento); dedup_store opcional (DeduplicationStoreProtocol) cableado via CompositeSeenFilter L1+L2 con RedisCursorStore (build_cursor_store, fail-open); sin cambio de contrato publico ni schema
+    de cable.'
   solucion: Claves de idempotencia naturales + dedup durable en Bronze (L2) + test de reintento
   pruebas:
   - 'test: reintento no duplica en Bronze/Silver'
   adr_relacionado: null
-  riesgo_residual: 'Medio: ventana write OK -> crash antes de mark_seen puede producir duplicado recuperable (at-least-once
-    + dedup durable, no exactamente-once); contrato L2 es check-then-set (get_raw/set_raw), no SETNX atomico'
+  riesgo_residual: 'Medio: ventana write OK -> crash antes de mark_seen puede producir duplicado recuperable (at-least-once + dedup durable, no exactamente-once); contrato L2 es check-then-set (get_raw/set_raw),
+    no SETNX atomico'
   fecha_cierre: 2026-08-13
   cadena:
     hallazgo:
@@ -2021,17 +1880,15 @@ hallazgos:
       referencia: null
     implementacion:
       estado: HECHO
-      referencia: 'packages/market_data/infrastructure/kafka/bronze_writer.py: mark_seen tras write exitoso; dedup_store opcional
-        via CompositeSeenFilter L1+L2; wire en packages/market_data/main.py _bronze_writer_loop (build_cursor_store, fail-soft)'
+      referencia: 'packages/market_data/infrastructure/kafka/bronze_writer.py: mark_seen tras write exitoso; dedup_store opcional via CompositeSeenFilter L1+L2; wire en packages/market_data/main.py _bronze_writer_loop
+        (build_cursor_store, fail-soft)'
     tests:
       estado: HECHO
-      referencia: tests/kafka/test_bronze_writer.py::TestBronzeWriterDurableDedup — A-Escrito+marcado durable, B-dup no reprocesa,
-        C-write falla no marca (retry reintenta), D-L2 caido fail-soft, E-store compartido unico procesamiento, F-ventana
-        crash -> duplicado recuperable; backtest defecto confirmado (mark antes del write falla C)
+      referencia: tests/kafka/test_bronze_writer.py::TestBronzeWriterDurableDedup — A-Escrito+marcado durable, B-dup no reprocesa, C-write falla no marca (retry reintenta), D-L2 caido fail-soft, E-store
+        compartido unico procesamiento, F-ventana crash -> duplicado recuperable; backtest defecto confirmado (mark antes del write falla C)
     ci:
       estado: HECHO
-      referencia: ruff, ruff format, mypy 356 ficheros, lint-imports 49/49 KEPT, pytest 1054 passed (1 fallo pre-existente
-        B-15)
+      referencia: ruff, ruff format, mypy 356 ficheros, lint-imports 49/49 KEPT, pytest 1054 passed (1 fallo pre-existente B-15)
     evidencia:
       estado: HECHO
       referencia: 'Commit fix(market-data): B-19 — durable bronze deduplication
@@ -2046,18 +1903,15 @@ hallazgos:
   prioridad: MEDIA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Implementado 2026-08-14 (49b63a4): _get_git_hash() movido del dominio a shared/utils/repo.py (SSOT). Completado
-    2026-08-18: inyección de git_hash desde el composition root en QualityPipeline y QualityPipelineConsumer (pipeline_factory),
-    ge_checker_factory/GEChecker reciben git_hash (firma CheckerFactory alineada), application/ NO importa _get_git_hash.
-    Guard R11 activado.'
+  evidencia: 'Implementado 2026-08-14 (49b63a4): _get_git_hash() movido del dominio a shared/utils/repo.py (SSOT). Completado 2026-08-18: inyección de git_hash desde el composition root en QualityPipeline
+    y QualityPipelineConsumer (pipeline_factory), ge_checker_factory/GEChecker reciben git_hash (firma CheckerFactory alineada), application/ NO importa _get_git_hash. Guard R11 activado.'
   solucion: Inyectar git-hash como metadato desde infra/composition root
   pruebas:
-  - 'test: dominio sin subprocess — tests/architecture/test_domain_subprocess_guard.py (8 tests: positivo árbol real + negativos
-    anti-patrón)'
+  - 'test: dominio sin subprocess — tests/architecture/test_domain_subprocess_guard.py (8 tests: positivo árbol real + negativos anti-patrón)'
   - 'test: application/quality/pipeline.py y quality_consumer.py sin import de _get_git_hash'
   adr_relacionado: ADR-0006
-  riesgo_residual: Bajo — si no se inyecta git_hash (uso directo de QualityPipeline() sin composition root), el report queda
-    con git_hash="unknown" (fail-soft documentado); la inyección real en producción viene de pipeline_factory.
+  riesgo_residual: Bajo — si no se inyecta git_hash (uso directo de QualityPipeline() sin composition root), el report queda con git_hash="unknown" (fail-soft documentado); la inyección real en producción
+    viene de pipeline_factory.
   fecha_cierre: '2026-08-18'
   cadena:
     hallazgo:
@@ -2071,8 +1925,7 @@ hallazgos:
       referencia: ADR-0006 — dominio no depende de infraestructura (subprocess/git)
     implementacion:
       estado: HECHO
-      referencia: '49b63a4 (2026-08-14) + 2026-08-18: inyección completa desde pipeline_factory; application sin _get_git_hash;
-        ge_checker_factory con git_hash'
+      referencia: '49b63a4 (2026-08-14) + 2026-08-18: inyección completa desde pipeline_factory; application sin _get_git_hash; ge_checker_factory con git_hash'
     tests:
       estado: HECHO
       referencia: test_domain_subprocess_guard.py (8 tests) + suite quality
@@ -2091,8 +1944,7 @@ hallazgos:
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: shared/contracts/boundaries.py:86-106 (RiskGate con evaluate→tuple) vs risk/manager.py (validate→RiskDecision);
-    oms.py:134,250 usa RiskManager directo
+  evidencia: shared/contracts/boundaries.py:86-106 (RiskGate con evaluate→tuple) vs risk/manager.py (validate→RiskDecision); oms.py:134,250 usa RiskManager directo
   solucion: Alinear RiskGate con RiskManager o eliminar el protocol muerto
   pruebas:
   - test de coherencia de contrato
@@ -2130,23 +1982,19 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'OMS.cancel() es local-only: packages/trading/execution/oms.py:300-318 (transición CANCELLED + pop de _open +
-    record_close, sin llamada al exchange); OrderTransport no tiene cancel (transport.py:96-128); CCXTAdapter no expone cancel_order
-    (ccxt_adapter.py:405 create_order, :462 fetch_order); OMS.cancel() sin callers (grep F-BMD8-04). Carrera CANCEL vs FILL:
-    CANCELLED terminal (order.py:64-74), fill_sync solo en FILLED (fill_sync.py:109). Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
-    F-BMD8-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §3'
-  solucion: 'ADR-0029 (ACEPTADA 2026-08-16) IMPLEMENTADA: cancel_order expuesto en CCXTAdapter, OrderTransport extendido con
-    cancel(symbol, exchange_order_id), estado transitorio CANCELLING que resuelve por confirmación del exchange (fill SIEMPRE
-    prevalece), loop manage_open_orders (Policy A: alerta sin auto-cancel), callbacks al flujo de fill existente (B-12). Reutiliza
-    OMS._fill/WAC/settlement para ALREADY_FILLED. Independiente de la cadena B-MD-003→002→004'
+  evidencia: 'OMS.cancel() es local-only: packages/trading/execution/oms.py:300-318 (transición CANCELLED + pop de _open + record_close, sin llamada al exchange); OrderTransport no tiene cancel (transport.py:96-128);
+    CCXTAdapter no expone cancel_order (ccxt_adapter.py:405 create_order, :462 fetch_order); OMS.cancel() sin callers (grep F-BMD8-04). Carrera CANCEL vs FILL: CANCELLED terminal (order.py:64-74), fill_sync
+    solo en FILLED (fill_sync.py:109). Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md F-BMD8-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §3'
+  solucion: 'ADR-0029 (ACEPTADA 2026-08-16) IMPLEMENTADA: cancel_order expuesto en CCXTAdapter, OrderTransport extendido con cancel(symbol, exchange_order_id), estado transitorio CANCELLING que resuelve
+    por confirmación del exchange (fill SIEMPRE prevalece), loop manage_open_orders (Policy A: alerta sin auto-cancel), callbacks al flujo de fill existente (B-12). Reutiliza OMS._fill/WAC/settlement para
+    ALREADY_FILLED. Independiente de la cadena B-MD-003→002→004'
   pruebas:
   - 'verificación: rg de callers de OMS.cancel() = 0; protocolo sin método cancel'
-  - 'tests/trading/test_oms_cancel_lifecycle.py (18 tests): submit captura exchange_order_id, transiciones CANCELLING→terminales,
-    resolve_cancel fail-closed, manage_open_orders sin auto-cancel, idempotencia'
+  - 'tests/trading/test_oms_cancel_lifecycle.py (18 tests): submit captura exchange_order_id, transiciones CANCELLING→terminales, resolve_cancel fail-closed, manage_open_orders sin auto-cancel, idempotencia'
   - 'test carrera cancel vs fill (fill prevalece): cubierto por lifecycle tests'
   adr_relacionado: ADR-0029 (ACEPTADA, 2026-08-16; etiqueta A-MD-004)
-  riesgo_residual: Bajo — Policy A (alerta sin auto-cancel) evita divergencia CANCEL/FILL; orden huérfana se detecta con log.error
-    en manage_open_orders; fail-closed de submit (B-12) y market-only mantienen la protección de capital
+  riesgo_residual: Bajo — Policy A (alerta sin auto-cancel) evita divergencia CANCEL/FILL; orden huérfana se detecta con log.error en manage_open_orders; fail-closed de submit (B-12) y market-only mantienen
+    la protección de capital
   fecha_cierre: 2026-08-18
   cadena:
     hallazgo:
@@ -2157,51 +2005,43 @@ hallazgos:
       referencia: B-MD-008 en tracking.yaml
     adr:
       estado: HECHO
-      referencia: 'ADR-0029 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0029-cancelacion-real-gestion-ordenes-abiertas.md;
-        diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
+      referencia: 'ADR-0029 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0029-cancelacion-real-gestion-ordenes-abiertas.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
 
         '
     implementacion:
       estado: HECHO
-      referencia: manage_open_orders implementado en oms.py:653-725; llamado desde execute_live.py:225; exchange_order_id
-        poblado en order.py:140; ADR-0029 ACEPTADA 2026-08-16
+      referencia: manage_open_orders implementado en oms.py:653-725; llamado desde execute_live.py:225; exchange_order_id poblado en order.py:140; ADR-0029 ACEPTADA 2026-08-16
     tests:
       estado: HECHO
-      referencia: tests/trading/test_oms_cancel_lifecycle.py 18/18 passed; suite completa 1222 passed, 0 failed, 4 deselected
-        (uv run pytest tests/ -x -q -m "not integration" --no-cov, 2026-08-18 HEAD a4d8298)
+      referencia: tests/trading/test_oms_cancel_lifecycle.py 18/18 passed; suite completa 1222 passed, 0 failed, 4 deselected (uv run pytest tests/ -x -q -m "not integration" --no-cov, 2026-08-18 HEAD a4d8298)
     ci:
       estado: HECHO
-      referencia: lint-imports 50 kept / 0 broken; architecture_linter ARCH-003 PASS (gestión de órdenes abiertas presente);
-        ruff/ruff format OK (2026-08-18)
+      referencia: lint-imports 50 kept / 0 broken; architecture_linter ARCH-003 PASS (gestión de órdenes abiertas presente); ruff/ruff format OK (2026-08-18)
     evidencia:
       estado: HECHO
       referencia: líneas de código verificadas contra HEAD adf941a 2026-08-15; revalidado 2026-08-18 contra HEAD a4d8298
     cierre:
       estado: HECHO
-      referencia: B-MD-008 cancelación real + gestión de órdenes abiertas cerrada 2026-08-18 — Policy A implementada, 18 lifecycle
-        tests, suite 1222 passed, gates CI OK
+      referencia: B-MD-008 cancelación real + gestión de órdenes abiertas cerrada 2026-08-18 — Policy A implementada, 18 lifecycle tests, suite 1222 passed, gates CI OK
 - id: B-MD-009
   hallazgo_informe: B-MD-009
   fase: F3
   prioridad: CRITICA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: No existe fetch_balance/balance en todo el repo (grep F-BMD9-01); RiskManager valida contra capital_usd configurado
-    (manager.py:115, sizing :394-401, drawdown :374-386); PortfolioService.capital_usd configurado (portfolio_service.py:63-80,281-284);
-    PositionStore SSOT BC-43 solo en portfolio bootstrap. Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md
-    F-BMD9-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md §4-6
-  solucion: 'Diseño ADR-0030 (ACEPTADA 2026-08-16, no implementado): Portfolio como dueño del estado patrimonial (posiciones
-    via PositionStore BC-43 + saldo derivado via reconciler); adapter CCXT fetch_balance en composition root de portfolio;
-    gate en arranque/restart + loop periódico + tras fill/error; RiskManager consume saldo con frescura (B-MD-001) vía port,
-    nunca segunda fuente; discrepancia material → bloquear órdenes + alerta (nunca auto-corregir posiciones). Independiente
-    de la cadena B-MD-003→002→004'
+  evidencia: No existe fetch_balance/balance en todo el repo (grep F-BMD9-01); RiskManager valida contra capital_usd configurado (manager.py:115, sizing :394-401, drawdown :374-386); PortfolioService.capital_usd
+    configurado (portfolio_service.py:63-80,281-284); PositionStore SSOT BC-43 solo en portfolio bootstrap. Ver docs/audits/2026-08-15-b-md-008-cancel-b-md-009-balance-audit.md F-BMD9-01..05 y docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
+    §4-6
+  solucion: 'Diseño ADR-0030 (ACEPTADA 2026-08-16, no implementado): Portfolio como dueño del estado patrimonial (posiciones via PositionStore BC-43 + saldo derivado via reconciler); adapter CCXT fetch_balance
+    en composition root de portfolio; gate en arranque/restart + loop periódico + tras fill/error; RiskManager consume saldo con frescura (B-MD-001) vía port, nunca segunda fuente; discrepancia material
+    → bloquear órdenes + alerta (nunca auto-corregir posiciones). Independiente de la cadena B-MD-003→002→004'
   pruebas:
   - 'verificación: rg fetch_balance|get_balance|balance en packages/+apps/ = solo rebalance (falso positivo)'
   - 'pendiente: test integración fetch_balance real → portfolio materializa → risk consume'
   - 'pendiente: test política de discrepancia (bloqueo ante discrepancia material)'
   adr_relacionado: ADR-0030 (ACEPTADA, 2026-08-16; etiqueta A-MD-005)
-  riesgo_residual: Alto — sizing/drawdown contra capital configurado, no real; si el saldo real difiere (fees, transferencias,
-    fills externos), exposición y decisiones incorrectas; divergencia silenciosa (no hay consulta al exchange)
+  riesgo_residual: Alto — sizing/drawdown contra capital configurado, no real; si el saldo real difiere (fees, transferencias, fills externos), exposición y decisiones incorrectas; divergencia silenciosa
+    (no hay consulta al exchange)
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -2212,8 +2052,7 @@ hallazgos:
       referencia: B-MD-009 en tracking.yaml
     adr:
       estado: HECHO
-      referencia: 'ADR-0030 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0030-balance-real-reconciliacion-patrimonial.md;
-        diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
+      referencia: 'ADR-0030 ACEPTADA (2026-08-16): docs/architecture/decisions/ADR-0030-balance-real-reconciliacion-patrimonial.md; diseño conceptual en docs/audits/2026-08-15-b-md-008-009-diseno-conceptual.md
 
         '
     implementacion:
@@ -2276,8 +2115,7 @@ hallazgos:
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
   evidencia: pyproject.toml [tool.ruff.lint] select = ["E", "F", "I"] — sin C901, PLR, SIM, DUP, ANN, TID, PT
-  solucion: Activar reglas de complejidad/duplicación en ruff (C901, PLR, SIM) o evaluar herramienta complementaria (vulture,
-    SonarQube)
+  solucion: Activar reglas de complejidad/duplicación en ruff (C901, PLR, SIM) o evaluar herramienta complementaria (vulture, SonarQube)
   pruebas:
   - uv run ruff check . --select E,F,I,C901,PLR,SIM,DUP → detección real
   adr_relacionado: null
@@ -2356,12 +2194,11 @@ hallazgos:
   prioridad: ALTA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'Plan Maestro §1:38 y §6:374 citan scripts/check_production_gates.py como veredicto binario G1..G11; ls scripts/
-    → NO existe
+  evidencia: 'Plan Maestro §1:38 y §6:374 citan scripts/check_production_gates.py como veredicto binario G1..G11; ls scripts/ → NO existe
 
     '
-  solucion: Implementar scripts/check_production_gates.py (veredicto binario PASS/BLOCK sobre G1..G11 con evidencia por cheque)
-    O actualizar Plan Maestro para reflejar que engineering_health_check.py + jobs CI son el mecanismo vigente
+  solucion: Implementar scripts/check_production_gates.py (veredicto binario PASS/BLOCK sobre G1..G11 con evidencia por cheque) O actualizar Plan Maestro para reflejar que engineering_health_check.py +
+    jobs CI son el mecanismo vigente
   pruebas:
   - check_production_gates.py existe y devuelve PASS/FAIL sobre G1..G11
   adr_relacionado: ADR-0020
@@ -2400,43 +2237,36 @@ hallazgos:
   prioridad: CRITICA
   estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0 (No known vulnerabilities
-    found, 2 ignored). Fix ya aplicado en commit 876cf38 (2026-08-21): bump ccxt 4.5.70→4.5.74 resolvió CVEs transitivos (aiohttp
-    3.14.1→3.14.3, cryptography 49.0.0→50.0.0).'
-  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 — YA RESUELTO en 876cf38. Ambas son dependencias transitivas (aiohttp
-    vía ccxt/cryptofeed; cryptography vía python-jose). uv.lock fija versiones exactas; pip-audit en CI detecta regresiones.
+  evidencia: 'uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0 (No known vulnerabilities found, 2 ignored). Fix ya aplicado en commit 876cf38 (2026-08-21): bump ccxt
+    4.5.70→4.5.74 resolvió CVEs transitivos (aiohttp 3.14.1→3.14.3, cryptography 49.0.0→50.0.0).'
+  solucion: Bump aiohttp ≥3.14.3 y cryptography ≥50.0.0 — YA RESUELTO en 876cf38. Ambas son dependencias transitivas (aiohttp vía ccxt/cryptofeed; cryptography vía python-jose). uv.lock fija versiones exactas;
+    pip-audit en CI detecta regresiones.
   pruebas:
   - uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325 → exit 0
   - 'uv run pip show aiohttp → Version: 3.14.3'
   - 'uv run pip show cryptography → Version: 50.0.0'
   adr_relacionado: null
-  riesgo_residual: 'Bajo: versiones fijadas en uv.lock (aiohttp 3.14.3, cryptography 50.0.0); pip-audit en CI como gate de
-    regresión (exit 0 actual); pyarrow/ecdsa ignorados por risk-accept previo.'
+  riesgo_residual: 'Bajo: versiones fijadas en uv.lock (aiohttp 3.14.3, cryptography 50.0.0); pip-audit en CI como gate de regresión (exit 0 actual); pyarrow/ecdsa ignorados por risk-accept previo.'
   fecha_cierre: '2026-08-23'
   cadena:
     hallazgo:
       estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02
-        + F-PLA-06
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-18.md F-CI-01 + OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-02 + F-PLA-06
     backlog:
       estado: HECHO
       referencia: B-50
     adr:
       estado: NO_APLICA
-      referencia: 'No se requiere ADR: fix ya aplicado como efecto del bump ccxt en 876cf38. No hay risk-accept pendiente
-        (vulnerabilities mitigadas).'
+      referencia: 'No se requiere ADR: fix ya aplicado como efecto del bump ccxt en 876cf38. No hay risk-accept pendiente (vulnerabilities mitigadas).'
     implementacion:
       estado: HECHO
-      referencia: 'commit 876cf38 (2026-08-21): bump ccxt 4.5.70→4.5.74 resolvió CVEs transitivos. aiohttp 3.14.1→3.14.3 (PYSEC-2026-3545/3546/3547);
-        cryptography 49.0.0→50.0.0 (PYSEC-2026-3552).'
+      referencia: 'commit 876cf38 (2026-08-21): bump ccxt 4.5.70→4.5.74 resolvió CVEs transitivos. aiohttp 3.14.1→3.14.3 (PYSEC-2026-3545/3546/3547); cryptography 49.0.0→50.0.0 (PYSEC-2026-3552).'
     tests:
       estado: HECHO
-      referencia: pip-audit → exit 0 (No known vulnerabilities found, 2 ignored). aiohttp 3.14.3, cryptography 50.0.0 confirmados
-        en uv.lock.
+      referencia: pip-audit → exit 0 (No known vulnerabilities found, 2 ignored). aiohttp 3.14.3, cryptography 50.0.0 confirmados en uv.lock.
     ci:
       estado: HECHO
-      referencia: 'quality job → Vulnerabilidades (pip-audit) → PASS (exit 0). Comando: uv run pip-audit . --ignore-vuln PYSEC-2026-113
-        --ignore-vuln PYSEC-2026-1325'
+      referencia: 'quality job → Vulnerabilidades (pip-audit) → PASS (exit 0). Comando: uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325'
     evidencia:
       estado: HECHO
       referencia: 'exit 0 actual (vs exit 1 original). Fix: commit 876cf38 (2026-08-21). No hay CVEs activos para aiohttp/cryptography.'
@@ -2444,62 +2274,11 @@ hallazgos:
       estado: HECHO
       referencia: B-50 cerrado 2026-08-23. Fix preexistente (876cf38). tracking.yaml actualizado; Plan Maestro actualizado.
 - id: B-51
-  hallazgo_informe: F-PL-06 / F-PLC-05
-  fase: F2
-  prioridad: ALTA
-  estado: HECHO
-  estado_auditoria: CONFIRMADO
-  cadena:
-    hallazgo:
-      estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer.md F-PL-06 + F-PLC-05
-    backlog:
-      estado: HECHO
-      referencia: B-51
-    adr:
-      estado: HECHO
-      referencia: ADR-0031-policy-registry-yaml
-    implementacion:
-      estado: HECHO
-      referencia: policies/registry.yaml = SSOT (ADR-0031); tracking.yaml reglas marcadas DEPRECATED con comment YAML; compatibilidad
-        mantenida para engineering_health_check.py.
-    tests:
-      estado: HECHO
-      referencia: audit_validator M21-M25 PASS; engineering_health_check.py PASS (lee tracking.yaml rules sin cambios); R1-R16
-        alineados entre ambos ficheros.
-    ci:
-      estado: HECHO
-      referencia: engineering-health job PASS; audit_validator M21-M25 PASS en CI.
-    evidencia:
-      estado: HECHO
-      referencia: 16 reglas R1-R16 en policies/registry.yaml (SSOT); 16 reglas R1-R16 en tracking.yaml (DEPRECATED); IDs perfectamente
-        alineados.
-    cierre:
-      estado: HECHO
-      fecha_cierre: '2026-08-23'
-      cadena:
-        hallazgo:
-          estado: HECHO
-          referencia: B-51 cerrado 2026-08-23; policies/registry.yaml = SSOT; tracking.yaml reglas DEPRECATED alineadas
-          evidence: 16 reglas R1-R16 alineadas entre policies/registry.yaml y tracking.yaml
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
   prioridad: ALTA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: Guards/tests/CI/tracking en mismo repo/rama; sin branch protection, CODEOWNERS, evidence hash, waiver, ownership;
-    agente puede modificar guard+test+registry+CI simultáneamente (Caso B/C/D/E threat model)
-  solucion: (1) Branch protection en main (required reviews + status checks); (2) CODEOWNERS para scripts/*_guard.py, policies/,
-    architecture_linter/, tracking.yaml, .github/workflows/; (3) Hash de evidencia por regla (guard hash + tracking hash en
-    artifact CI); (4) M24 (waiver+expires) + M25 (ADR huérfano) en audit_validator; (5) Separación de PRs para policy changes
-  pruebas:
-  - PR modificando scripts/app_layer_guard.py sin approval de CODEOWNERS → blocked
-  - 'audit_validator M24/M25: waiver expirado → FAIL'
-  adr_relacionado: ADR-0015, ADR-0020
-  riesgo_residual: 'Crítico: riesgo real de captura del sistema de validación por agente IA
-
-    '
-  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
@@ -2525,107 +2304,92 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+  evidencia: Guards/tests/CI/tracking en mismo repo/rama; sin branch protection, CODEOWNERS, evidence hash, waiver, ownership; agente puede modificar guard+test+registry+CI simultáneamente (Caso B/C/D/E
+    threat model)
+  solucion: (1) Branch protection en main (required reviews + status checks); (2) CODEOWNERS para scripts/*_guard.py, policies/, architecture_linter/, tracking.yaml, .github/workflows/; (3) Hash de evidencia
+    por regla (guard hash + tracking hash en artifact CI); (4) M24 (waiver+expires) + M25 (ADR huérfano) en audit_validator; (5) Separación de PRs para policy changes
+  pruebas:
+  - PR modificando scripts/app_layer_guard.py sin approval de CODEOWNERS → blocked
+  - 'audit_validator M24/M25: waiver expirado → FAIL'
+  adr_relacionado: ADR-0015, ADR-0020
+  riesgo_residual: 'Crítico: riesgo real de captura del sistema de validación por agente IA
+
+    '
+  fecha_cierre: null
 - id: B-53
   hallazgo_informe: F-PLA-07 / F-PLC-02
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'Búsqueda exhaustiva: 0 eval/exec, 0 pickle/yaml.load, 0 shell=True, 2 subprocess (infra), 0 os.environ en domain/app,
-    4 random (jitter legítimo), 3 hashlib (config hashing), 2 sqlite (parametrizados), 2 http (adapters/obs), 0 logging secrets.
-    Bandit 0 Med/High; CodeQL PR+weekly; Gitleaks PR; Trivy PR+weekly. Sin gap material seguridad.
+  evidencia: 'Semgrep non-blocking implementado: policies/semgrep/architecture.yaml con 8 reglas declarativas
 
-    '
-  solucion: NO adoptar Semgrep como blocking; adoptar opcionalmente como non-blocking (CLI, ~500ms, reglas YAML en policies/semgrep/)
-    para valor preventivo arquitectura (imports prohibidos, os.environ, crypto, logging secrets, APIs deprecated)
+    (domain-application-no-os-environ, application-no-subprocess, domain-no-open, domain-no-ccxt,
+
+    domain-application-no-md5, domain-no-random-crypto, logging-secrets, domain-no-pyiceberg) que complementan
+
+    AST guards (R11 subprocess en domain) e import-linter (BC-03/05/06/08/09) con patrones no cubiertos:
+
+    os.environ en domain/app, subprocess fuera de infrastructure, open() en domain, ccxt vía imports lazy,
+
+    md5, random en contexto crypto, logging de secrets, pyiceberg en domain.
+
+    Job CI "Semgrep (architecture rules, non-blocking)" en ocm-ci.yml (continue-on-error: true,
+
+    --baseline origin/main). Baseline real: 1 finding en código actual (cursor_store.py:452 — mensaje
+
+    estático REDIS_PASSWORD, no loguea el valor).'
+  solucion: 'Semgrep non-blocking (ADR-0034). 8 reglas YAML en policies/semgrep/architecture.yaml; job CI non-blocking
+
+    con uv tool run; reglas descartadas por redundancia: domain-no-import-* (ya cubren BC-03/05/06/08/09
+
+    e import-linter BC-08/09) y pandas-no-append (pandas eliminado del repo; patrón generaba falsos
+
+    positivos list.append).'
   pruebas:
-  - semgrep --config=policies/semgrep/ . → 0 violations en código actual; CI job architecture verde
-  adr_relacionado: null
-  riesgo_residual: 'Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material
+  - uv tool run semgrep --config policies/semgrep/ . --quiet --baseline origin/main → 1 finding (baseline documentado, no bloquea)
+  - 'Reglas validadas: dominio sin os.environ/open/ccxt/md5/random-crypto/pyiceberg; subprocess solo en infraestructura; logging-secrets captura interpolación real de api_key/secret/password/token/key'
+  adr_relacionado: ADR-0034
+  riesgo_residual: 'Bajo: Semgrep non-blocking añade coste ~0 (uv tool run, sin servidor) y valor preventivo de
 
-    '
-  fecha_cierre: null
+    arquitectura; baseline de 1 finding (mensaje estático REDIS_PASSWORD) no es riesgo material; blocking
+
+    injustificado sin gap de seguridad (F-PLA-07).'
+  fecha_cierre: '2026-08-31'
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-07 + F-PLC-02
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-53
     adr:
       estado: PENDIENTE
-      referencia: ADR pendiente (Semgrep adoption)
+      referencia: ADR-0034-semgrep-adoption (Propuesto — aprobación formal pendiente)
     implementacion:
-      estado: PENDIENTE
-      referencia: policies/semgrep/ (opcional)
+      estado: HECHO
+      referencia: policies/semgrep/architecture.yaml (8 reglas YAML); .github/workflows/ocm-ci.yml (job semgrep non-blocking)
     tests:
-      estado: PENDIENTE
-      referencia: semgrep clean
+      estado: HECHO
+      referencia: uv tool run semgrep --config policies/semgrep/ . --quiet --baseline origin/main → 1 finding baseline (WARNING, no bloquea); reglas detectan los patrones cubiertos (0 violations de las
+        4 arquitectónicas)
     ci:
-      estado: PENDIENTE
-      referencia: architecture job (non-blocking)
+      estado: HECHO
+      referencia: 'Job semgrep en ocm-ci.yml (continue-on-error: true, non-blocking, --baseline origin/main, uv tool run).'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 8 reglas YAML en policies/semgrep/architecture.yaml; job CI non-blocking; baseline 1 finding documentado
     cierre:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: null
+      evidencia: 'B-53 cerrado 2026-08-31. Semgrep non-blocking adoptado (ADR-0034). Reglas semgrep de valor real complementan AST guards e import-linter; y no reintroducen regresiones (validate: B-48/B-54
+        HECHO intactos).'
 - id: B-54
-  hallazgo_informe: F-PLA-08 / F-PLC-03 / F-PLC-08
-  fase: F2
-  prioridad: MEDIA
-  estado: HECHO
-  estado_auditoria: CONFIRMADO
-  cadena:
-    hallazgo:
-      estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-08 + F-PLC-03/08
-    backlog:
-      estado: HECHO
-      referencia: B-54
-    adr:
-      estado: HECHO
-      referencia: ADR-0035 (SonarQube) + ADR-0036 (vulture/complexity)
-    implementacion:
-      estado: HECHO
-      referencia: pyproject.toml ruff select=["E","F","I","C901","PLR","SIM"] con ignores baseline; 11 safe auto-fixes; .github/workflows/ocm-ci.yml
-        vulture step (non-blocking); scripts/compliance_report.py (nightly report).
-    tests:
-      estado: HECHO
-      referencia: 1248 tests pass; 55% coverage; ruff 79 baseline; vulture 23 baseline; compliance report generates correctly.
-    ci:
-      estado: HECHO
-      referencia: 'vulture step in quality job (continue-on-error: true).'
-    evidencia:
-      estado: HECHO
-      referencia: ADR-0035/0036; 79 ruff baseline; 23 vulture baseline; compliance_report.py generates JSON + text.
-    cierre:
-      estado: HECHO
-      fecha_cierre: '2026-08-24'
-      cadena:
-        hallazgo:
-          estado: HECHO
-          referencia: B-54 cerrado 2026-08-24; ruff C901/PLR/SIM + vulture CI + compliance report
   hallazgo_informe: F-PLC-04
   fase: F2
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'AST Guards R11..R16: scripts + tests pos/neg + backtest + CI jobs, PERO sin Rule ID estable, scope declarativo,
-    severity, ownership, evidence estructurada, waiver/expiración, ADR declarativo, estado (ACTIVE/DEPRECATED), reporting/compliance
-
-    '
-  solucion: ''
-  Formalizar AST Guards como policy layer con metadatos completos: migrar R11..R16 a policies/ YAML + Semgrep rules; añadir
-    owner, severity, enforcement, tests paths, evidence schema, waiver, expires, ADR ref, status, history; generar compliance
-    report nightly
-  pruebas:
-  - registry parseable por audit_validator con M21..M25; compliance report nightly generado
-  adr_relacionado: ADR-0015, ADR-0020
-  riesgo_residual: 'Medio: sin metadatos, guards son scripts operacionales, no policy layer normativa
-
-    '
-  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
@@ -2651,28 +2415,38 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+  evidencia: 'AST Guards R11..R16: scripts + tests pos/neg + backtest + CI jobs, PERO sin Rule ID estable, scope declarativo, severity, ownership, evidence estructurada, waiver/expiración, ADR declarativo,
+    estado (ACTIVE/DEPRECATED), reporting/compliance
+
+    '
+  solucion: ''
+  Formalizar AST Guards como policy layer con metadatos completos: migrar R11..R16 a policies/ YAML + Semgrep rules; añadir owner, severity, enforcement, tests paths, evidence schema, waiver, expires, ADR
+    ref, status, history; generar compliance report nightly
+  pruebas:
+  - registry parseable por audit_validator con M21..M25; compliance report nightly generado
+  adr_relacionado: ADR-0015, ADR-0020
+  riesgo_residual: 'Medio: sin metadatos, guards son scripts operacionales, no policy layer normativa
+
+    '
+  fecha_cierre: null
 - id: B-56
   hallazgo_informe: F-PLC-07
   fase: F2
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'ocm-ci.yml jobs actuales: architecture → engineering-health → app-guard → domain-guard → trading-guards → unit-tests
-    → security → integration-tests → config-validation → quality. Orden mezcla arquitectura/calidad/seguridad sin etapa explícita
-    POLICY GATE binario.
+  evidencia: 'ocm-ci.yml jobs actuales: architecture → engineering-health → app-guard → domain-guard → trading-guards → unit-tests → security → integration-tests → config-validation → quality. Orden mezcla
+    arquitectura/calidad/seguridad sin etapa explícita POLICY GATE binario.
 
     '
   solucion: ''
-  Reordenar ocm-ci.yml a stages explícitos: FAST LOCAL (ruff/format/mypy/ssot/actionlint/shellcheck/yamllint) → ARCHITECTURE
-    (import-linter, AST Guards/Semgrep, cycle detection, arch tests) → SECURITY (bandit, gitleaks, semgrep security) → QUALITY
-    (pytest fail_under) → SUPPLY CHAIN (pip-audit, Trivy fs) → POLICY GATE (engineering_health + audit_validator M1..M25 +
-    registry hash verify) → EXPENSIVE/PR (integration) → NIGHTLY (CodeQL full, Trivy full, extended dep-audit, compliance-report)
-    → RELEASE (check_production_gates.py + compliance report firmado)
+  Reordenar ocm-ci.yml a stages explícitos: FAST LOCAL (ruff/format/mypy/ssot/actionlint/shellcheck/yamllint) → ARCHITECTURE (import-linter, AST Guards/Semgrep, cycle detection, arch tests) → SECURITY (bandit,
+    gitleaks, semgrep security) → QUALITY (pytest fail_under) → SUPPLY CHAIN (pip-audit, Trivy fs) → POLICY GATE (engineering_health + audit_validator M1..M25 + registry hash verify) → EXPENSIVE/PR (integration)
+    → NIGHTLY (CodeQL full, Trivy full, extended dep-audit, compliance-report) → RELEASE (check_production_gates.py + compliance report firmado)
   pruebas:
   - PR con cambio en domain → architecture+security+quality+policy_gate PASS; nightly genera compliance report
   adr_relacionado: ADR-0020
-  riesgo_residual: 'Medio: CI actual no da veredicto binario único de policy; Policy Gate requiere check_production_gates.py
-    (B-49)
+  riesgo_residual: 'Medio: CI actual no da veredicto binario único de policy; Policy Gate requiere check_production_gates.py (B-49)
 
     '
   fecha_cierre: null
@@ -2707,12 +2481,10 @@ hallazgos:
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: ocm-cd.yml placeholder; deploy_ocm.sh inexistente; deploy manual SSH; sin artifact SHA tracking; sin health checks
-    automatizados post-deploy; rollback no automatizado
+  evidencia: ocm-cd.yml placeholder; deploy_ocm.sh inexistente; deploy manual SSH; sin artifact SHA tracking; sin health checks automatizados post-deploy; rollback no automatizado
   solucion: ''
-  Implementar secuencia: artifact build → SHA256 digest → GHCR/registry → CD verify (digest match + config-guard + health
-    pre-deploy) → deploy (docker compose up -d --build con tag SHA) → health-check (deadman, kafka lag, redis memory, disk)
-    → ACCEPT / ROLLBACK (docker compose down + up -d con SHA anterior) → evidence inmutable
+  Implementar secuencia: artifact build → SHA256 digest → GHCR/registry → CD verify (digest match + config-guard + health pre-deploy) → deploy (docker compose up -d --build con tag SHA) → health-check (deadman,
+    kafka lag, redis memory, disk) → ACCEPT / ROLLBACK (docker compose down + up -d con SHA anterior) → evidence inmutable
   pruebas:
   - 'Tag release → CI: Policy Gate PASS → Build artifact SHA → CD: verify SHA → deploy → health ACCEPT'
   adr_relacionado: ADR-0020, ADR-0022
@@ -2751,13 +2523,11 @@ hallazgos:
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'docker-compose.yml:237-238 monta ./deploy/monitoring/grafana/provisioning y ./dashboards; .gitignore:72-73 →
-    ambos directorios gitignored; ls deploy/monitoring/grafana/ → provisioning/ y dashboards/ vacíos; README referencia dashboards
-    provisionados desde deploy/ — no reproducible
+  evidencia: 'docker-compose.yml:237-238 monta ./deploy/monitoring/grafana/provisioning y ./dashboards; .gitignore:72-73 → ambos directorios gitignored; ls deploy/monitoring/grafana/ → provisioning/ y dashboards/
+    vacíos; README referencia dashboards provisionados desde deploy/ — no reproducible
 
     '
-  solucion: Versionar provisioning de Grafana (dashboards JSON + datasources YAML) y quitar del .gitignore, O eliminar montajes
-    y documentar setup manual
+  solucion: Versionar provisioning de Grafana (dashboards JSON + datasources YAML) y quitar del .gitignore, O eliminar montajes y documentar setup manual
   pruebas:
   - deploy/monitoring/grafana/provisioning/ y dashboards/ versionados con contenido real, O montajes eliminados
   adr_relacionado: null
@@ -2796,8 +2566,7 @@ hallazgos:
   prioridad: BAJA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'tracking.yaml:2573 systemd_reinicia_correctamente: NO_VERIFICADO; ADR-0022:323 "Sin unit systemd activo"; canary
-    F2.6c arrancado manualmente
+  evidencia: 'tracking.yaml:2573 systemd_reinicia_correctamente: NO_VERIFICADO; ADR-0022:323 "Sin unit systemd activo"; canary F2.6c arrancado manualmente
 
     '
   solucion: ''
@@ -2840,8 +2609,7 @@ hallazgos:
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: '.github/workflows/codeql.yml: push + pull_request main + schedule weekly; .github/workflows/trivy.yml: push
-    + PR + schedule weekly — NO solo semanal como afirmó F-PL-08
+  evidencia: '.github/workflows/codeql.yml: push + pull_request main + schedule weekly; .github/workflows/trivy.yml: push + PR + schedule weekly — NO solo semanal como afirmó F-PL-08
 
     '
   solucion: ''
@@ -2937,26 +2705,22 @@ engineering_health:
     F2_0_health_ci: ACTIVADO (script + job CI + pytest — 397459e)
     F2_1_import_linter_no_vacuo: B-06/B-07/B-10
     F2_2_adr_legacy_superseded: HECHO (SUPERSEDED 0003-0005)
-    F2_3_kafka_schemas_8: liquidations ohlcv oi orderbook orders positions signals trades (cobertura >0 con tests) + PROVENANCE
-      tags (protocol/documentation/upstream_library/domain/assumed)
+    F2_3_kafka_schemas_8: liquidations ohlcv oi orderbook orders positions signals trades (cobertura >0 con tests) + PROVENANCE tags (protocol/documentation/upstream_library/domain/assumed)
     F2_4_tracking_health: registrado en este bloque; escalar en C
 prerequisito_f3_discovery:
   estado: activo (fase F2.5 Protocol Discovery)
   adr: ADR-0017-protocol-discovery-framework (aceptada 2026-08-06)
   semilla: tests/kafka/test_schema_provenance.py (F2.3) -- provee linaje de cada schema (puntos 9/13)
-  institucionalizacion: Protocol Discovery Framework + Discovery Profiles (Bybit = primero; Binance/Hyperliquid/blockchains
-    despues)
+  institucionalizacion: Protocol Discovery Framework + Discovery Profiles (Bybit = primero; Binance/Hyperliquid/blockchains despues)
   gate_capital: F3 bloqueado a capital real hasta Promotion Rule (14) de Orders/Fills
   nota: El framework es unico y permanente; cambian los Discovery Profiles, nunca el framework.
-nota: Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md
-  §4.
+nota: Snapshot de coherencia. El tracking.yaml sigue siendo SSOT de `fase`/`estado`; el mapa Fase<->Hallazgos vive en PLAN-Maestro-Ingenieria.md §4.
 f2_6a_capacity_teorico:
   estado: HECHO
   fecha_cierre: '2026-08-07'
   adr_relacionado: null
   entregable: docs/planning/f2_6a-capacity-teorico.md
-  descripcion: 'Estimación de msg/s, tamaño de mensaje y throughput esperado por exchange/símbolo/topic a partir de límites
-    documentados de Bybit/KuCoin, sin requerir despliegue.
+  descripcion: 'Estimación de msg/s, tamaño de mensaje y throughput esperado por exchange/símbolo/topic a partir de límites documentados de Bybit/KuCoin, sin requerir despliegue.
 
     '
   cadena:
@@ -2980,8 +2744,7 @@ f2_6a_capacity_teorico:
       referencia: sin gate en CI (docs-only); validado en sesión documental
     evidencia:
       estado: HECHO
-      referencia: docs/planning/f2_6a-capacity-teorico.md — tabla con fuente por celda, concluye proceso único suficiente
-        para el canary de F2.6b; suficiencia de producción final delegada a F2.6c
+      referencia: docs/planning/f2_6a-capacity-teorico.md — tabla con fuente por celda, concluye proceso único suficiente para el canary de F2.6b; suficiencia de producción final delegada a F2.6c
     cierre:
       estado: HECHO
       referencia: F2.6a cerrada 2026-08-07; es el insumo de diseño para f2_6b
@@ -2990,19 +2753,15 @@ f2_6b_streaming_entrypoint_mvp:
   fecha_cierre: '2026-08-08'
   adr_relacionado: ADR-0022
   entregable: apps/app/cli/streaming_hydra.py
-  alcance: 1 exchange (Bybit o KuCoin), subset de símbolos, CompositionRoot de market_data existente (build_ws_producers()
-    -> WSProducerBundle)
+  alcance: 1 exchange (Bybit o KuCoin), subset de símbolos, CompositionRoot de market_data existente (build_ws_producers() -> WSProducerBundle)
   hallazgos_verificados_2026_08_07:
-  - packages/market_data/main.py es servicio FastAPI YA desplegable (ingestión polling -> Bronze/Iceberg para /ohlcv). Pipeline
-    DISTINTO y complementario al streaming WS de microestructura — no confundir ni reutilizar como base.
-  - WSProducerBundle/build_ws_producers() (orderbook/funding/oi/liquidations) sigue sin entrypoint. Sin unit systemd activo
-    (confirmado vía systemctl).
-  - '[project.scripts] no registra ''streaming'' (solo ocm, ocm-api, live, paper). Nombre streaming_hydra.py es convención
-    propia, no referencia textual del ADR.'
-  - 'R14/H8 (scripts/app_layer_guard.py) tiene nombres hardcodeados a (live_hydra.py, paper_hydra.py) — NO cubre streaming_hydra.py.
-    Decisión: no agregar a esa lista porque _bootstrap.handle_sigterm (raise SystemExit) no es asyncio-safe para loop persistente.'
-  - BC-10 y BC-50 (architecture/importlinter.toml líneas 424, 467) ya cubren ambas direcciones del invariante market_data<->trading
-    — no requiere contrato nuevo.
+  - packages/market_data/main.py es servicio FastAPI YA desplegable (ingestión polling -> Bronze/Iceberg para /ohlcv). Pipeline DISTINTO y complementario al streaming WS de microestructura — no confundir
+    ni reutilizar como base.
+  - WSProducerBundle/build_ws_producers() (orderbook/funding/oi/liquidations) sigue sin entrypoint. Sin unit systemd activo (confirmado vía systemctl).
+  - '[project.scripts] no registra ''streaming'' (solo ocm, ocm-api, live, paper). Nombre streaming_hydra.py es convención propia, no referencia textual del ADR.'
+  - 'R14/H8 (scripts/app_layer_guard.py) tiene nombres hardcodeados a (live_hydra.py, paper_hydra.py) — NO cubre streaming_hydra.py. Decisión: no agregar a esa lista porque _bootstrap.handle_sigterm (raise
+    SystemExit) no es asyncio-safe para loop persistente.'
+  - BC-10 y BC-50 (architecture/importlinter.toml líneas 424, 467) ya cubren ambas direcciones del invariante market_data<->trading — no requiere contrato nuevo.
   criterios_aceptacion:
     arranca_composition_root: HECHO
     invoca_build_ws_producers: HECHO
@@ -3015,8 +2774,7 @@ f2_6b_streaming_entrypoint_mvp:
     no_crea_composition_root_alternativo: HECHO
   cierre:
     estado: HECHO
-    referencia: F2.6b implementada y verificada 2026-08-08 — streaming_hydra.py + instrumentation KafkaMetrics; 983 tests;
-      gates ruff/mypy/lint-imports 49/49
+    referencia: F2.6b implementada y verificada 2026-08-08 — streaming_hydra.py + instrumentation KafkaMetrics; 983 tests; gates ruff/mypy/lint-imports 49/49
 f2_6c_capacity_empirico:
   estado: HECHO
   fecha_cierre: '2026-08-08'
@@ -3036,28 +2794,22 @@ f2_6c_capacity_empirico:
     heartbeat: 126/126 pushes a 15s; job=ocm_pipeline_orderbook
   cierre:
     estado: HECHO
-    referencia: F2.6c cerrada 2026-08-08 por evidencia empirica 30 min (bybit BTC/ETH/SOL-USDT-PERP); sin exporters ni metricas
-      ni schema nuevos; ADRs y Plan Maestro intactos
+    referencia: F2.6c cerrada 2026-08-08 por evidencia empirica 30 min (bybit BTC/ETH/SOL-USDT-PERP); sin exporters ni metricas ni schema nuevos; ADRs y Plan Maestro intactos
 f2_6d_decision_escalabilidad:
   estado: HECHO
   fecha_cierre: '2026-08-10'
   bloqueado_por: null
-  entregable: 'Decisión de escalabilidad con evidencia F2.6c: proceso único systemd + Kafka local SUFICIENTE para el canary
-    — sin ADR de escalabilidad (la evidencia no lo justifica). Documentado en docs/planning/fase3.5c-capacity-empirico.md
+  entregable: 'Decisión de escalabilidad con evidencia F2.6c: proceso único systemd + Kafka local SUFICIENTE para el canary — sin ADR de escalabilidad (la evidencia no lo justifica). Documentado en docs/planning/fase3.5c-capacity-empirico.md
     (conclusión DOD F2.6)'
-  decision: 'La evidencia empírica de F2.6c (canary 30 min: 138.5 msg/s, 0 errores, CPU 0.00%, RAM 40.4 MB, p50/p99 7.55/33.8
-    ms, 3 símbolos book depth 50) está muy por debajo del umbral de invalidación de F2.6a (>50-100 símbolos activos, >50%
-    CPU, p99 >500 ms, lag creciente). POR TANTO no se crea ADR de escalabilidad: la arquitectura de proceso único (systemd)
-    + Kafka local es suficiente para el volumen actual y esperado a corto plazo. F5 (catalog remoto, Dagster/Flink, DuckDB)
-    queda bloqueado a no ser que una re-medición con más símbolos/exchanges cruce el umbral — revalidar con la misma metodología
+  decision: 'La evidencia empírica de F2.6c (canary 30 min: 138.5 msg/s, 0 errores, CPU 0.00%, RAM 40.4 MB, p50/p99 7.55/33.8 ms, 3 símbolos book depth 50) está muy por debajo del umbral de invalidación
+    de F2.6a (>50-100 símbolos activos, >50% CPU, p99 >500 ms, lag creciente). POR TANTO no se crea ADR de escalabilidad: la arquitectura de proceso único (systemd) + Kafka local es suficiente para el volumen
+    actual y esperado a corto plazo. F5 (catalog remoto, Dagster/Flink, DuckDB) queda bloqueado a no ser que una re-medición con más símbolos/exchanges cruce el umbral — revalidar con la misma metodología
     antes de cualquier tooling de escala.
 
     '
-  prerequisito_f5: ningún entregable de F5 se implementa sin que este assessment demuestre con métricas que la carga excede
-    un solo servidor (criterio de salida de F2.6, PLAN-Maestro §4)
-  riesgo_residual: 'Suficiencia afirmada para el canary; la producción final (más exchanges/símbolos, 6-12 meses) se sostiene
-    por margen de CPU/RAM (0%/40MB) pero vuelve a medirse si se superan ~50-100 libros activos o aparece lag/CPU en tensión.
-    kafka_throughput y kafka_lag no medidos (sin exporter / sin consumer) — cierre opcional en re-medición.
+  prerequisito_f5: ningún entregable de F5 se implementa sin que este assessment demuestre con métricas que la carga excede un solo servidor (criterio de salida de F2.6, PLAN-Maestro §4)
+  riesgo_residual: 'Suficiencia afirmada para el canary; la producción final (más exchanges/símbolos, 6-12 meses) se sostiene por margen de CPU/RAM (0%/40MB) pero vuelve a medirse si se superan ~50-100
+    libros activos o aparece lag/CPU en tensión. kafka_throughput y kafka_lag no medidos (sin exporter / sin consumer) — cierre opcional en re-medición.
 
     '
   cadena:

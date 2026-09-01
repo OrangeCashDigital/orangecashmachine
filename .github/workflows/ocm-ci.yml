@@ -338,3 +338,40 @@ jobs:
         # signal handler params). Block when baseline reaches 0.
         continue-on-error: true
         run: uv run vulture packages ocm shared apps --min-confidence 80
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB 5: Semgrep (ADR-0034, B-53)
+  # NON-BLOCKING: reglas de arquitectura declarativas en YAML (policies/semgrep/).
+  # Detecta patrones que AST guards (R11 limita a domain) e import-linter
+  # (grafo estático) no cubren: os.environ en domain/application, subprocess
+  # fuera de infrastructure, open() en domain, ccxt lazy en domain, md5,
+  # random en contexto crypto, logging de secrets, pyiceberg en domain.
+  # Baseline actual: 1 (cursor_store.py — mensaje estático REDIS_PASSWORD,
+  # no loguea el valor). continue-on-error: true a nivel de step: findings
+  # no bloquean merge; si el comando rompe por error de reglas, el pipeline
+  # continúa y el PR revisa el log de findings.
+  # ──────────────────────────────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep (architecture rules, non-blocking)
+    runs-on: ubuntu-latest
+    needs: [architecture, engineering-health]
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Historial completo: --baseline origin/main necesita el ref completo.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Run semgrep (architecture rules, non-blocking)
+        # uv tool run: semgrep aislado del venv (no contamina deps de OCM).
+        # --baseline origin/main: solo reporta violations NUEVAS respecto a
+        # main (el finding preexistente cursor_store.py:452 ya no se repite).
+        # Non-blocking: findings y errores de reglas se reportan sin romper el
+        # pipeline (nuevas violations = WARNING; revisar en el log del job).
+        continue-on-error: true
+        run: uv tool run semgrep --config policies/semgrep/ . --quiet --baseline origin/main
