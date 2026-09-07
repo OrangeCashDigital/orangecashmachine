@@ -172,14 +172,20 @@ def run_application(
 
     setup_observability(config, validate_only=run_cfg.validate_only)
 
-    # Fail-Fast en mismatch de entorno; Fail-Soft en errores inesperados del validator
+    # Fail-Fast total (CLI-002): cualquier fallo del validator aborta el pipeline,
+    # sea un mismatch de entorno esperado o un bug interno inesperado.
     try:
         EnvironmentValidator().check(config, run_cfg)
     except EnvironmentMismatchError as exc:
         log.critical("environment_validation_failed", error=str(exc))
         return 1
     except Exception as exc:
-        log.warning("environment_validator_skipped", error=str(exc))
+        log.critical(
+            "environment_validator_unexpected_failure",
+            error=str(exc),
+            type=type(exc).__name__,
+        )
+        return 1
 
     if run_cfg.validate_only:
         log.info("validation_complete", status="ok")
@@ -298,7 +304,7 @@ def main() -> None:
     install_sigterm_handler()  # SafeOps (R14/H8): SIGTERM → KeyboardInterrupt → 130
     _reject_cfg_job_in_production()  # Guard B-04: nunca dump de config segura en prod
     try:
-        hydra_main()  # type: ignore[call-arg]
+        hydra_main()
     except KeyboardInterrupt:
         logger.warning("execution_interrupted", signal="SIGINT")
         sys.exit(130)

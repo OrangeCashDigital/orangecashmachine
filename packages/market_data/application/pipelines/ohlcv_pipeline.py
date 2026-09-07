@@ -56,7 +56,7 @@ from market_data.application.pipelines._worker_pool import run_worker_pool
 from market_data.application.strategies.backfill import BackfillStrategy
 from market_data.application.strategies.incremental import IncrementalStrategy
 from market_data.application.strategies.repair import RepairStrategy
-from market_data.domain.exceptions import ExchangeCircuitOpenError
+from market_data.domain.exceptions import ExchangeAdapterError, ExchangeCircuitOpenError
 from market_data.domain.policies.base import (
     PairResult,
     PipelineMode,
@@ -308,8 +308,35 @@ class OHLCVPipeline(PipelineTriggerPort):
         strategy = self._strategies[pipeline_mode]
         pairs = [(s, tf) for s in self.symbols for tf in self.timeframes]
         total_pairs = len(pairs)
+        pipeline_start = time.monotonic()
 
-        await self._ctx.fetcher.ensure_exchange()
+        try:
+            await self._ctx.fetcher.ensure_exchange()
+        except ExchangeAdapterError as exc:
+            # PO-01: PipelineTriggerPort.run() es fail-soft por contrato
+            # ("nunca lanza excepción"). ExchangeAdapterError es la raíz real
+            # de lo que ensure_exchange() -> reconnect() -> _initialize()
+            # puede propagar (ExchangeConnectionError transitorio,
+            # UnsupportedExchangeError permanente — is_transient discrimina
+            # sin isinstance, OCP/DIP ya existente en el dominio).
+            # No se inicia el worker pool: ningún dato se procesa como si
+            # la conexión estuviera disponible.
+            duration_ms = int((time.monotonic() - pipeline_start) * 1000)
+            self._log.bind(
+                mode=mode,
+                market=self.market_type,
+                error=str(exc),
+                error_type=type(exc).__name__,
+                is_transient=exc.is_transient,
+            ).warning("OHLCVPipeline: ensure_exchange() falló — abortando antes del worker pool")
+            summary = PipelineSummary(
+                results=[],
+                duration_ms=duration_ms,
+                mode=pipeline_mode,
+                degraded_exchanges=[self._exchange_id],
+            )
+            summary.log(self._log)
+            return summary
 
         self._log.bind(
             mode=mode,
@@ -320,8 +347,6 @@ class OHLCVPipeline(PipelineTriggerPort):
             concurrency=self.max_concurrency,
             throttle_enabled=self._throttle is not None,
         ).info("OHLCVPipeline iniciando")
-
-        pipeline_start = time.monotonic()
         results, degraded_exchanges = await self._run_worker_pool(strategy, pairs, pipeline_mode)
         duration_ms = int((time.monotonic() - pipeline_start) * 1000)
 
