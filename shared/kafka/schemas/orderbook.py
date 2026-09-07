@@ -70,7 +70,8 @@ class OrderBookSnapshotPayload(BasePayload):
     Campos
     ------
     exchange     : exchange de origen
-    symbol       : par normalizado (ej. "BTC/USDT")
+    symbol       : par normalizado (ej. "BTC/USDT" o "BTC-USDT-PERP")
+    market_type  : tipo de mercado (spot, linear, inverse, option)
     timestamp_ms : Unix epoch ms UTC del snapshot
     bids         : lista de (price_str, size_str) ordenada desc por precio
     asks         : lista de (price_str, size_str) ordenada asc por precio
@@ -80,6 +81,8 @@ class OrderBookSnapshotPayload(BasePayload):
 
     exchange: str = ""
     symbol: str = ""
+    market_type: str = "spot"
+    timeframe: str = "tick"
     timestamp_ms: int = 0
     bids: List[PriceLevel] = field(default_factory=list)
     asks: List[PriceLevel] = field(default_factory=list)
@@ -93,6 +96,8 @@ class OrderBookSnapshotPayload(BasePayload):
                 "payload_type": "snapshot",
                 "exchange": self.exchange,
                 "symbol": self.symbol,
+                "market_type": self.market_type,
+                "timeframe": self.timeframe,
                 "timestamp_ms": self.timestamp_ms,
                 "bids": list(self.bids),
                 "asks": list(self.asks),
@@ -114,6 +119,8 @@ class OrderBookSnapshotPayload(BasePayload):
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
+            market_type=str(data.get("market_type", "spot")),
+            timeframe=str(data.get("timeframe", "tick")),
             timestamp_ms=int(data["timestamp_ms"]),
             bids=[tuple(lvl) for lvl in data.get("bids", [])],
             asks=[tuple(lvl) for lvl in data.get("asks", [])],
@@ -139,6 +146,7 @@ class OrderBookDeltaPayload(BasePayload):
     ------
     exchange     : exchange de origen
     symbol       : par normalizado
+    market_type  : tipo de mercado (spot, linear, inverse, option)
     timestamp_ms : Unix epoch ms UTC del delta
     side         : "bid" | "ask"
     price        : nivel de precio afectado (str)
@@ -147,10 +155,13 @@ class OrderBookDeltaPayload(BasePayload):
 
     exchange: str = ""
     symbol: str = ""
+    market_type: str = "spot"
+    timeframe: str = "tick"
     timestamp_ms: int = 0
     side: Side = "bid"
     price: str = "0"
     size: str = "0"
+    update_id: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         base = super().to_dict()
@@ -159,10 +170,13 @@ class OrderBookDeltaPayload(BasePayload):
                 "payload_type": "delta",
                 "exchange": self.exchange,
                 "symbol": self.symbol,
+                "market_type": self.market_type,
+                "timeframe": self.timeframe,
                 "timestamp_ms": self.timestamp_ms,
                 "side": self.side,
                 "price": self.price,
                 "size": self.size,
+                "update_id": self.update_id,
             }
         )
         return base
@@ -184,10 +198,13 @@ class OrderBookDeltaPayload(BasePayload):
             occurred_at=str(data.get("occurred_at", "")),
             exchange=str(data["exchange"]),
             symbol=str(data["symbol"]),
+            market_type=str(data.get("market_type", "spot")),
+            timeframe=str(data.get("timeframe", "tick")),
             timestamp_ms=int(data["timestamp_ms"]),
             side=side,
             price=str(data["price"]),
             size=str(data["size"]),
+            update_id=int(data.get("update_id", 0)),
         )
 
 

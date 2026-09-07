@@ -287,8 +287,8 @@ async def _bronze_writer_loop() -> None:
     writer = KafkaBronzeWriter(
         consumer=consumer,
         bronze_storage=bronze,
-        dlq_producer=dlq_producer,  # type: ignore[arg-type]  # KafkaProducerAdapter implementa KafkaProducerPort
-        dedup_store=dedup_store,  # type: ignore[arg-type]  # RedisCursorStore implementa DeduplicationStoreProtocol
+        dlq_producer=dlq_producer,  # KafkaProducerAdapter implementa KafkaProducerPort
+        dedup_store=dedup_store,  # RedisCursorStore implementa DeduplicationStoreProtocol
     )
 
     try:
@@ -304,6 +304,134 @@ async def _bronze_writer_loop() -> None:
             await writer.stop()
         except Exception:
             pass
+
+
+_orderbook_writer_lock = asyncio.Lock()
+
+
+async def _orderbook_bronze_writer_loop() -> None:
+    """
+    Loop permanente del OrderbookBronzeWriter — Kappa stream processor.
+
+    Responsabilidad: consumir orderbook.raw → escribir a Bronze Iceberg
+    (tablas orderbook_snapshot y orderbook_delta).
+    Corre en paralelo al _ingestion_loop y _bronze_writer_loop —
+    son tres tareas independientes.
+
+    Ciclo de vida (con restart automático):
+      start() → run() [loop poll/process/commit] → stop() en error o CancelledError
+      Si error recuperable: log + cleanup + backoff + recreate → start() → run() ...
+
+    SafeOps:
+      - start() falla → log error + backoff + retry (no muere el proceso)
+      - Errores en run() → log + cleanup + backoff + retry
+      - CancelledError → stop() + return (shutdown limpio, NO retry)
+      - Backoff exponencial con jitter: 2s, 4s, 8s, 16s... (max 60s)
+
+    Degraded mode:
+      Si Kafka no está disponible (broker down), start() falla y se reintenta
+      con backoff.
+    """
+    async with _orderbook_writer_lock:
+        import random
+
+        log = _log.bind(component="orderbook_bronze_writer_loop")
+        log.info("orderbook_bronze_writer_loop_starting")
+
+        # Imports lazy — infra no se importa en module level (DIP · startup cost)
+        try:
+            from market_data.infrastructure.kafka.consumer import KafkaConsumerAdapter
+            from market_data.infrastructure.kafka.orderbook_bronze_writer import OrderbookBronzeWriter
+            from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
+            from market_data.infrastructure.storage.bronze.bronze_storage import (
+                BronzeStorage,
+            )
+        except ImportError as exc:
+            log.error("orderbook_bronze_writer_loop_import_error", error=str(exc))
+            return
+
+    # Configuración de backoff
+    BASE_BACKOFF_S: float = 2.0
+    MAX_BACKOFF_S: float = 60.0
+    MAX_RETRIES: int = -1  # -1 = infinito, controlado por CancelledError
+
+    retry_count = 0
+
+    while True:
+        # Construir dependencias frescas en cada intento
+        bronze = BronzeStorage()  # exchange=None → se setea por mensaje
+        consumer = KafkaConsumerAdapter.for_orderbook()
+
+        # DLQ producer — opcional, SafeOps: None = mensajes malos solo se loguean
+        dlq_producer = None
+        try:
+            dlq_producer = KafkaProducerAdapter.from_env()
+        except Exception as exc:
+            log.warning("orderbook_bronze_writer_dlq_producer_failed", error=str(exc))
+
+        # Dedup durable L2 (B-19) — RedisCursorStore satisface
+        # DeduplicationStoreProtocol (get_raw/set_raw).
+        # Fail-soft: si Redis está caído, PersistentSeenFilter opera fail-open
+        # (is_duplicate→False, mark_seen→noop) y la dedup L1 sigue activa.
+        dedup_store = None
+        try:
+            from ocm.runtime.state import build_cursor_store
+
+            dedup_store = build_cursor_store()
+            log.info("orderbook_bronze_writer_dedup_store_ready — durable L2 activo")
+        except Exception as exc:
+            log.warning(
+                "orderbook_bronze_writer_dedup_store_failed — L1 only (fail-soft)",
+                error=str(exc),
+            )
+
+        writer = OrderbookBronzeWriter(
+            consumer=consumer,
+            bronze_storage=bronze,
+            dlq_producer=dlq_producer,  # KafkaProducerAdapter implementa KafkaProducerPort
+            dedup_store=dedup_store,  # RedisCursorStore implementa DeduplicationStoreProtocol
+        )
+
+        try:
+            await writer.start()
+            log.info("orderbook_bronze_writer_loop_started — consuming orderbook.raw → Bronze (snapshot + delta)")
+            await writer.run()
+            # Si run() retorna sin excepción, fue parada limpia (stop() llamado externamente)
+            log.info("orderbook_bronze_writer_loop_stopped — writer.run() returned normally")
+            break
+
+        except asyncio.CancelledError:
+            log.info("orderbook_bronze_writer_loop_cancelled — stopping")
+            await writer.stop()
+            raise  # Propagar CancelledError — NO reintentar
+
+        except Exception as exc:
+            # Error recuperable: loguear, limpiar, backoff, reintentar
+            log.exception("orderbook_bronze_writer_loop_error — will retry", error=str(exc), retry=retry_count + 1)
+            try:
+                await writer.stop()
+            except Exception as stop_exc:
+                log.warning("orderbook_bronze_writer_stop_error_during_retry", error=str(stop_exc))
+
+            # Backoff exponencial con jitter
+            backoff = min(BASE_BACKOFF_S * (2**retry_count), MAX_BACKOFF_S)
+            jitter = random.uniform(0, backoff * 0.1)  # 0-10% jitter
+            sleep_s = backoff + jitter
+
+            log.info("orderbook_bronze_writer_retry_backoff", sleep_s=round(sleep_s, 1), retry=retry_count + 1)
+            try:
+                await asyncio.sleep(sleep_s)
+            except asyncio.CancelledError:
+                log.info("orderbook_bronze_writer_retry_cancelled_during_backoff")
+                raise  # Propagar CancelledError durante backoff
+
+            retry_count += 1
+            # Continúa el while loop → nuevo intento
+
+        # Si MAX_RETRIES > 0 y se agotó, salir (no debería ocurrir con -1)
+        if MAX_RETRIES > 0 and retry_count >= MAX_RETRIES:
+            log.error("orderbook_bronze_writer_max_retries_exceeded", retries=retry_count)
+            break
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +504,13 @@ async def _lifespan(app: FastAPI):
         name="kafka_bronze_writer",
     )
 
+    # Kappa: OrderbookBronzeWriter — consume orderbook.raw → Bronze Iceberg.
+    # Corre en paralelo al _ingestion_loop y _bronze_writer_loop — son tres tareas independientes.
+    orderbook_bronze_writer_task = asyncio.create_task(
+        _orderbook_bronze_writer_loop(),
+        name="orderbook_bronze_writer",
+    )
+
     # Kappa: FeedOrchestrator — WS feeds → Kafka trades.raw.
     # Fail-Soft: build_feed_orchestrator retorna None si feeds.yaml tiene
     # ingestion_mode=rest o no hay feeds habilitados. En ese caso no se lanza
@@ -425,18 +560,30 @@ async def _lifespan(app: FastAPI):
         guard.trigger("service_shutdown")
         guard_context.set_guard(None)
 
-        for task in (ingestion_task, bronze_writer_task, feed_orchestrator_task):
-            if task is not None and not task.done():
-                task.cancel()
-                try:
-                    # FIX C-05: shield+wait_for creaba tasks zombie.
-                    # shield() previene la cancelación pero wait_for igual
-                    # lanza TimeoutError y la task shielded sigue corriendo.
-                    # Correcto: cancel() + wait_for sin shield — la task recibe
-                    # CancelledError y puede hacer cleanup en su try/finally.
-                    await asyncio.wait_for(task, timeout=10.0)
-                except (asyncio.CancelledError, asyncio.TimeoutError):
-                    pass
+        # FIX C-05: shield+wait_for creaba tasks zombie.
+        # shield() previene la cancelación pero wait_for igual
+        # lanza TimeoutError y la task shielded sigue corriendo.
+        # Correcto: cancel() + wait_for sin shield — la task recibe
+        # CancelledError y puede hacer cleanup en su try/finally.
+        #
+        # PO-03-FOLLOWUP: el wait_for original iteraba secuencialmente
+        # sobre las 4 tasks (10s cada una → 40s peor caso, contra
+        # TimeoutStopSec=30 en systemd → SIGKILL antes de terminar cleanup).
+        # Fix: cancelar TODAS primero, luego esperar CONCURRENTEMENTE con
+        # un único wait_for — mismo comportamiento de cleanup por task,
+        # presupuesto total real de 10s en vez de 40s.
+        _all_tasks = (ingestion_task, bronze_writer_task, orderbook_bronze_writer_task, feed_orchestrator_task)
+        _pending = [task for task in _all_tasks if task is not None and not task.done()]
+        for task in _pending:
+            task.cancel()
+        if _pending:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*_pending, return_exceptions=True),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                pass
 
         _log.info(
             "service_stopped",

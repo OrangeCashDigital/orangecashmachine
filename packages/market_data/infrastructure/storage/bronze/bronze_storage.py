@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import polars as pl
 from loguru import logger
@@ -36,10 +36,26 @@ from market_data.infrastructure.storage.iceberg.catalog import (
     get_catalog,
 )
 
-# Columnas mínimas requeridas en el DataFrame de entrada
+if TYPE_CHECKING:
+    from shared.kafka.schemas.orderbook import (
+        OrderBookDeltaPayload,
+        OrderBookSnapshotPayload,
+    )
+
+# Columnas mínimas requeridas en el DataFrame de entrada para OHLCV
 REQUIRED_COLUMNS: frozenset[str] = frozenset({"timestamp", "open", "high", "low", "close", "volume"})
 
-# Orden canónico de columnas para la tabla Iceberg
+# Columnas mínimas requeridas para Orderbook Snapshot
+REQUIRED_ORDERBOOK_SNAPSHOT_COLUMNS: frozenset[str] = frozenset(
+    {"timestamp", "bids_price", "bids_size", "asks_price", "asks_size"}
+)
+
+# Columnas mínimas requeridas para Orderbook Delta
+REQUIRED_ORDERBOOK_DELTA_COLUMNS: frozenset[str] = frozenset(
+    {"timestamp", "update_id", "side", "price", "size", "action"}
+)
+
+# Orden canónico de columnas para la tabla Iceberg OHLCV Bronze
 _BRONZE_COLS = [
     "timestamp",
     "open",
@@ -52,6 +68,40 @@ _BRONZE_COLS = [
     "symbol",
     "timeframe",
     "ingestion_ts",
+    "run_id",
+]
+
+# Orden canónico de columnas para la tabla Iceberg Orderbook Snapshot Bronze
+_BRONZE_ORDERBOOK_SNAPSHOT_COLS = [
+    "timestamp",
+    "exchange",
+    "market_type",
+    "symbol",
+    "timeframe",
+    "bids_price",
+    "bids_size",
+    "asks_price",
+    "asks_size",
+    "depth",
+    "checksum",
+    "ingestion_ts",
+    "run_id",
+]
+
+# Orden canónico de columnas para la tabla Iceberg Orderbook Delta Bronze
+_BRONZE_ORDERBOOK_DELTA_COLS = [
+    "timestamp",
+    "exchange",
+    "market_type",
+    "symbol",
+    "timeframe",
+    "update_id",
+    "side",
+    "price",
+    "size",
+    "action",
+    "ingestion_ts",
+    "run_id",
 ]
 
 
@@ -170,6 +220,7 @@ class BronzeStorage:
             timeframe=timeframe,
             exchange=effective_exchange,
             market_type=self._market_type,
+            run_id=run_id,
         )
 
         # Refresh antes de cada append — garantiza snapshot actual.
@@ -194,6 +245,197 @@ class BronzeStorage:
         )
         return run_id
 
+    def append_snapshot(
+        self,
+        event: "OrderBookSnapshotPayload",
+        run_id: Optional[str] = None,
+    ) -> str:
+        """
+        Inserta un snapshot L2 del order book en bronze.orderbook_snapshot (Iceberg).
+
+        Parameters
+        ----------
+        event    : OrderBookSnapshotPayload con bids/asks completos.
+        run_id   : Correlación con Silver/Gold. Se genera si no se pasa.
+
+        Returns
+        -------
+        str
+            run_id usado — correlaciona este batch con Silver y Gold.
+
+        Raises
+        ------
+        BronzeStorageError : DataFrame vacío o columnas faltantes.
+        BronzeWriteError   : Fallo al escribir en Iceberg.
+        """
+        if run_id is None:
+            run_id = _generate_run_id()
+
+        if self._dry_run:
+            logger.info(
+                "[DRY RUN] BronzeStorage.append_snapshot skipped | {}/{} exchange={}",
+                event.symbol,
+                getattr(event, "timeframe", "orderbook"),
+                event.exchange,
+            )
+            return run_id
+
+        # Construir DataFrame desde el evento (convertir formato wire a Iceberg)
+        bids_prices = [float(p) for p, _ in event.bids] if event.bids else []
+        bids_sizes = [float(s) for _, s in event.bids] if event.bids else []
+        asks_prices = [float(p) for p, _ in event.asks] if event.asks else []
+        asks_sizes = [float(s) for _, s in event.asks] if event.asks else []
+
+        df = pl.DataFrame(
+            {
+                "timestamp": [datetime.fromtimestamp(event.timestamp_ms / 1000, tz=timezone.utc)],
+                "exchange": [event.exchange.lower()],
+                "market_type": [event.market_type.lower()],
+                "symbol": [event.symbol],
+                "timeframe": [event.timeframe or ""],
+                "bids_price": [bids_prices],
+                "bids_size": [bids_sizes],
+                "asks_price": [asks_prices],
+                "asks_size": [asks_sizes],
+                "depth": [event.depth],
+                "checksum": [event.checksum],
+            }
+        )
+
+        _validate_orderbook_snapshot_dataframe(df)
+
+        if self._dry_run:
+            logger.info(
+                "[DRY RUN] BronzeStorage.append_snapshot skipped | {}/{} exchange={} rows={}",
+                event.symbol,
+                event.timeframe or "unknown",
+                event.exchange,
+                len(df),
+            )
+            return run_id
+
+        effective_exchange = event.exchange.lower()
+        prepared = _normalize_orderbook_snapshot_df(
+            df,
+            symbol=event.symbol,
+            timeframe=event.timeframe or "",
+            exchange=effective_exchange,
+            market_type=event.market_type.lower(),
+            run_id=run_id,
+        )
+
+        # Refresh antes de cada append — garantiza snapshot actual.
+        self._table = get_catalog().load_table("bronze.orderbook_snapshot")
+        try:
+            self._table.append(prepared.to_arrow().cast(self._table.schema().as_arrow()))
+        except Exception as exc:
+            raise BronzeWriteError(f"Bronze Iceberg append_snapshot failed | {event.symbol} | {exc}") from exc
+
+        logger.debug(
+            "Bronze append_snapshot | exchange={} market_type={} symbol={} timeframe={} run_id={} rows={}",
+            event.exchange,
+            event.market_type,
+            event.symbol,
+            event.timeframe,
+            run_id,
+            len(prepared),
+        )
+        return run_id
+
+    def append_delta(
+        self,
+        event: "OrderBookDeltaPayload",
+        run_id: Optional[str] = None,
+    ) -> str:
+        """
+        Inserta un delta L2 del order book en bronze.orderbook_delta (Iceberg).
+
+        Parameters
+        ----------
+        event    : OrderBookDeltaPayload con un cambio incremental.
+        run_id   : Correlación con Silver/Gold. Se genera si no se pasa.
+
+        Returns
+        -------
+        str
+            run_id usado — correlaciona este batch con Silver y Gold.
+
+        Raises
+        ------
+        BronzeStorageError : DataFrame vacío o columnas faltantes.
+        BronzeWriteError   : Fallo al escribir en Iceberg.
+        """
+        if run_id is None:
+            run_id = _generate_run_id()
+
+        if self._dry_run:
+            logger.info(
+                "[DRY RUN] BronzeStorage.append_delta skipped | {}/{} exchange={}",
+                event.symbol,
+                getattr(event, "timeframe", "orderbook"),
+                event.exchange,
+            )
+            return run_id
+
+        # Inferir action desde size: "0" = delete, sino update
+        action = "delete" if event.size == "0" else "update"
+
+        # Construir DataFrame desde el evento
+        df = pl.DataFrame(
+            {
+                "timestamp": [datetime.fromtimestamp(event.timestamp_ms / 1000, tz=timezone.utc)],
+                "exchange": [event.exchange.lower()],
+                "market_type": [event.market_type.lower()],
+                "symbol": [event.symbol],
+                "timeframe": [event.timeframe or ""],
+                "update_id": [event.update_id],
+                "side": [event.side],
+                "price": [event.price],
+                "size": [event.size],
+                "action": [action],
+            }
+        )
+
+        _validate_orderbook_delta_dataframe(df)
+
+        if self._dry_run:
+            logger.info(
+                "[DRY RUN] BronzeStorage.append_delta skipped | {}/{} exchange={} rows={}",
+                event.symbol,
+                event.timeframe or "unknown",
+                event.exchange,
+                len(df),
+            )
+            return run_id
+
+        effective_exchange = event.exchange.lower()
+        prepared = _normalize_orderbook_delta_df(
+            df,
+            symbol=event.symbol,
+            timeframe=event.timeframe or "",
+            exchange=effective_exchange,
+            market_type=event.market_type.lower(),
+            run_id=run_id,
+        )
+
+        # Refresh antes de cada append — garantiza snapshot actual.
+        self._table = get_catalog().load_table("bronze.orderbook_delta")
+        try:
+            self._table.append(prepared.to_arrow().cast(self._table.schema().as_arrow()))
+        except Exception as exc:
+            raise BronzeWriteError(f"Bronze Iceberg append_delta failed | {event.symbol} | {exc}") from exc
+
+        logger.debug(
+            "Bronze append_delta | exchange={} market_type={} symbol={} timeframe={} run_id={} rows={}",
+            event.exchange,
+            event.market_type,
+            event.symbol,
+            event.timeframe,
+            run_id,
+            len(prepared),
+        )
+        return run_id
+
 
 # =============================================================================
 # Helpers internos
@@ -206,11 +448,12 @@ def _normalize_df(
     timeframe: str,
     exchange: str,
     market_type: str,
+    run_id: Optional[str] = None,
 ) -> pl.DataFrame:
     """
     Prepara el DataFrame para escritura en Iceberg:
     - Convierte timestamp a microsegundos UTC (pyiceberg 0.8 no soporta ns).
-    - Inyecta columnas de partición e ingestion_ts.
+    - Inyecta columnas de partición, ingestion_ts y run_id.
     - Ordena por timestamp (sin dedup — eso es responsabilidad de Silver).
     """
     ts_dtype = df.schema["timestamp"]
@@ -229,14 +472,101 @@ def _normalize_df(
         pl.lit(market_type).alias("market_type"),
         pl.lit(symbol).alias("symbol"),
         pl.lit(timeframe).alias("timeframe"),
+        pl.lit(run_id).alias("run_id"),
     )
     return df.select(_BRONZE_COLS).sort("timestamp")
+
+
+def _normalize_orderbook_snapshot_df(
+    df: pl.DataFrame,
+    symbol: str,
+    timeframe: str,
+    exchange: str,
+    market_type: str,
+    run_id: Optional[str] = None,
+) -> pl.DataFrame:
+    """
+    Prepara el DataFrame de snapshot orderbook para escritura en Iceberg:
+    - Convierte timestamp a microsegundos UTC.
+    - Inyecta columnas de partición, ingestion_ts y run_id.
+    - Ordena por timestamp.
+    """
+    ts_dtype = df.schema["timestamp"]
+    ts_expr = pl.col("timestamp")
+    if isinstance(ts_dtype, pl.Datetime) and ts_dtype.time_zone is not None:
+        ts_expr = ts_expr.dt.convert_time_zone("UTC")
+    else:
+        ts_expr = ts_expr.dt.replace_time_zone("UTC")
+
+    now_us = datetime.now(timezone.utc)
+
+    df = df.with_columns(
+        ts_expr.cast(pl.Datetime("us", "UTC")).alias("timestamp"),
+        pl.lit(now_us).cast(pl.Datetime("us", "UTC")).alias("ingestion_ts"),
+        pl.lit(exchange).alias("exchange"),
+        pl.lit(market_type).alias("market_type"),
+        pl.lit(symbol).alias("symbol"),
+        pl.lit(timeframe).alias("timeframe"),
+        pl.lit(run_id).alias("run_id"),
+    )
+    return df.select(_BRONZE_ORDERBOOK_SNAPSHOT_COLS).sort("timestamp")
+
+
+def _normalize_orderbook_delta_df(
+    df: pl.DataFrame,
+    symbol: str,
+    timeframe: str,
+    exchange: str,
+    market_type: str,
+    run_id: Optional[str] = None,
+) -> pl.DataFrame:
+    """
+    Prepara el DataFrame de delta orderbook para escritura en Iceberg:
+    - Convierte timestamp a microsegundos UTC.
+    - Inyecta columnas de partición, ingestion_ts y run_id.
+    - Ordena por timestamp.
+    """
+    ts_dtype = df.schema["timestamp"]
+    ts_expr = pl.col("timestamp")
+    if isinstance(ts_dtype, pl.Datetime) and ts_dtype.time_zone is not None:
+        ts_expr = ts_expr.dt.convert_time_zone("UTC")
+    else:
+        ts_expr = ts_expr.dt.replace_time_zone("UTC")
+
+    now_us = datetime.now(timezone.utc)
+
+    df = df.with_columns(
+        ts_expr.cast(pl.Datetime("us", "UTC")).alias("timestamp"),
+        pl.lit(now_us).cast(pl.Datetime("us", "UTC")).alias("ingestion_ts"),
+        pl.lit(exchange).alias("exchange"),
+        pl.lit(market_type).alias("market_type"),
+        pl.lit(symbol).alias("symbol"),
+        pl.lit(timeframe).alias("timeframe"),
+        pl.lit(run_id).alias("run_id"),
+    )
+    return df.select(_BRONZE_ORDERBOOK_DELTA_COLS).sort("timestamp")
 
 
 def _validate_dataframe(df: pl.DataFrame) -> None:
     if df is None or df.is_empty():
         raise BronzeStorageError("DataFrame vacío")
     missing = REQUIRED_COLUMNS - set(df.columns)
+    if missing:
+        raise BronzeStorageError(f"Missing columns: {sorted(missing)}")
+
+
+def _validate_orderbook_snapshot_dataframe(df: pl.DataFrame) -> None:
+    if df is None or df.is_empty():
+        raise BronzeStorageError("DataFrame vacío")
+    missing = REQUIRED_ORDERBOOK_SNAPSHOT_COLUMNS - set(df.columns)
+    if missing:
+        raise BronzeStorageError(f"Missing columns: {sorted(missing)}")
+
+
+def _validate_orderbook_delta_dataframe(df: pl.DataFrame) -> None:
+    if df is None or df.is_empty():
+        raise BronzeStorageError("DataFrame vacío")
+    missing = REQUIRED_ORDERBOOK_DELTA_COLUMNS - set(df.columns)
     if missing:
         raise BronzeStorageError(f"Missing columns: {sorted(missing)}")
 

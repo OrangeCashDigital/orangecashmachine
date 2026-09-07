@@ -148,9 +148,15 @@ class KafkaBronzeWriter:
         self._log.info("bronze_writer_started")
 
     async def stop(self) -> None:
-        """Detiene el loop y cierra el consumer. SafeOps."""
+        """Detiene el loop y cierra consumer + DLQ producer. SafeOps."""
         self._running = False
         await self._consumer.close()
+        if self._dlq is not None:
+            try:
+                await self._dlq.stop()  # KafkaProducerPort: stop() = flush() implícito + close
+            except Exception as exc:
+                # SafeOps: fallo cerrando el DLQ no debe impedir el shutdown.
+                self._log.warning("dlq_producer_close_error", error=str(exc))
         self._log.info("bronze_writer_stopped")
 
     # ------------------------------------------------------------------
@@ -171,7 +177,11 @@ class KafkaBronzeWriter:
             try:
                 await self._run_once()
             except asyncio.CancelledError:
-                break
+                # PO-03: re-lanzar — el caller (_bronze_writer_loop /
+                # _orderbook_bronze_writer_loop) necesita ver CancelledError
+                # para ejecutar writer.stop() → consumer.close(). Absorberla
+                # aquí (break sin raise) dejaba la conexión Kafka sin cerrar.
+                raise
             except Exception as exc:
                 # Fail-soft: loguear y continuar — no detener el loop
                 self._log.error("bronze_writer_loop_error", error=str(exc))
