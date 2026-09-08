@@ -91,6 +91,8 @@ class TestOrderBookSnapshotPayload:
             "payload_type",
             "exchange",
             "symbol",
+            "market_type",
+            "timeframe",
             "timestamp_ms",
             "bids",
             "asks",
