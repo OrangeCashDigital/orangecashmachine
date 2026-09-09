@@ -22,6 +22,8 @@ import polars as pl
 # Importar directamente desde domain.value_objects en código nuevo.
 from shared.types.signal import Signal, SignalType  # noqa: F401
 
+__all__ = ["BaseStrategy", "Signal", "SignalType"]
+
 
 class BaseStrategy(ABC):
     """

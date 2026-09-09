@@ -294,7 +294,7 @@ class RiskManager:
         with self._lock:
             return sum(1 for _, avg in self._positions.values() if avg is None)
 
-    def state(self) -> dict:
+    def state(self) -> dict[str, object]:
         """Estado observable para logging y métricas. SafeOps: nunca lanza."""
         try:
             with self._lock:

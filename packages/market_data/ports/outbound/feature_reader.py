@@ -25,7 +25,7 @@ SRP  — solo lectura; escritura Gold es responsabilidad de GoldStorage
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, List, Optional, Protocol, runtime_checkable
 
 import polars as pl
 
@@ -103,7 +103,7 @@ class FeatureReaderPort(Protocol):
         self,
         exchange: str,
         market_type: str,
-    ) -> List[Dict]:
+    ) -> List[dict[str, Any]]:
         """
         Lista datasets Gold disponibles para exchange/market_type.
 
@@ -122,7 +122,7 @@ class FeatureReaderPort(Protocol):
         timeframe: str,
         version: str = "latest",
         as_of: Optional[str] = None,
-    ) -> Optional[Dict]:
+    ) -> Optional[dict[str, Any]]:
         """
         Metadata del snapshot resuelto: identidad, lineage y estadísticas.
 

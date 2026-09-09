@@ -28,7 +28,7 @@ Principios: DIP · ISP · SRP · async-first
 
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -57,7 +57,7 @@ class KafkaProducerPort(Protocol):
         topic: str,
         value: bytes,
         key: Optional[bytes] = None,
-        headers: Optional[dict] = None,
+        headers: Optional[dict[bytes, bytes]] = None,
     ) -> None:
         """
         Encola un mensaje para publicación.

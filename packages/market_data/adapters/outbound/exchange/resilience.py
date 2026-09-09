@@ -21,7 +21,7 @@ El resilience layer NO conoce CCXT — solo ve:
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Callable, Optional, TypeVar
+from typing import Awaitable, Callable, Dict, Optional, Protocol, TypeVar, Any
 
 import aioresilience
 import ccxt.async_support as _ccxt_async
@@ -304,7 +304,8 @@ class ResilienceLayer:
             return await coro_fn()
 
         try:
-            return await policy.execute(_breaker_guard)
+            result: T = await policy.execute(_breaker_guard)
+            return result
         except AioResilienceCBError as err:
             raise CircuitBreakerOpenError(self._exchange_id) from err
         except Exception as exc:
@@ -331,13 +332,14 @@ class ResilienceLayer:
         """
         policy = self._policies.get(error_type, self._policies["network"])
         try:
-            return await policy.execute(coro_fn)
+            result: T = await policy.execute(coro_fn)
+            return result
         except Exception as exc:
             if classify_error(exc) == "unknown":
                 raise
             raise RetryExhaustedError(error_type, exc) from exc
 
-    def breaker_state(self) -> dict:
+    def breaker_state(self) -> Dict[str, Any]:
         """Estado del circuit breaker."""
         try:
             state = self._breaker.get_state()
@@ -407,7 +409,7 @@ def register_resilience_layer(exchange_id: str, layer: "ResilienceLayer") -> Non
     _layer_registry[exchange_id] = layer
 
 
-def get_breaker_state(exchange_id: str) -> dict:
+def get_breaker_state(exchange_id: str) -> Dict[str, Any]:
     """
     Retorna el estado del circuit breaker para un exchange dado.
 

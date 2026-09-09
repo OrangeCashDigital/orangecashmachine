@@ -120,7 +120,7 @@ class RedisPositionStore:
 
     def __init__(
         self,
-        redis_client,  # redis.Redis — tipado débil para no forzar import
+        redis_client: object,  # redis.Redis — tipado débil para no forzar import
         exchange: str,
         ttl_seconds: int = _TTL_DEFAULT,
     ) -> None:

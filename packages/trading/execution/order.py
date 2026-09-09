@@ -149,7 +149,7 @@ class Order:
     # TradeRecord, RiskManager, PerformanceEngine) deben usarlo y no recalcular
     # P&L de manera distinta. None cuando el fill no produce cierre económico
     # (BUY, SELL sin entrada WAC, precio UNKNOWN, etc.).
-    settlement: Optional["Settlement"] = None  # type: ignore[assignment]
+    settlement: Optional["Settlement"] = None
 
     def __post_init__(self) -> None:
         """Validación de invariantes en construcción."""
@@ -162,7 +162,7 @@ class Order:
     # State machine
     # ------------------------------------------------------------------
 
-    def transition(self, new_status: OrderStatus, **kwargs) -> None:
+    def transition(self, new_status: OrderStatus, **kwargs: object) -> None:
         """
         Avanza el estado validando la transición contra el grafo.
 

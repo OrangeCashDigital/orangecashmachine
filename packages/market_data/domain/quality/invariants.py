@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone  # stdlib — pd.Timestamp eliminado del dominio
-from typing import Dict, List
+from typing import Any, List
 
 from market_data.domain.value_objects.timeframe import timeframe_to_ms
 
@@ -75,7 +75,7 @@ class InvariantResult:
 _MAX_LAG_CANDLES = 48  # 48 velas = 2 días en 1h, 48 min en 1m
 
 
-def _check_manifest_not_empty(manifest: Dict) -> tuple[bool, str]:
+def _check_manifest_not_empty(manifest: dict[str, Any]) -> tuple[bool, str]:
     """El manifest debe tener al menos una partición."""
     partitions = manifest.get("partitions", [])
     if not partitions:
@@ -83,7 +83,7 @@ def _check_manifest_not_empty(manifest: Dict) -> tuple[bool, str]:
     return True, ""
 
 
-def _check_required_fields(manifest: Dict) -> tuple[bool, str]:
+def _check_required_fields(manifest: dict[str, Any]) -> tuple[bool, str]:
     """El manifest debe tener todos los campos requeridos."""
     required = {"symbol", "timeframe", "exchange", "version", "partitions"}
     missing = required - set(manifest.keys())
@@ -92,7 +92,7 @@ def _check_required_fields(manifest: Dict) -> tuple[bool, str]:
     return True, ""
 
 
-def _check_partition_timestamps(partition: Dict, idx: int) -> tuple[bool, str]:
+def _check_partition_timestamps(partition: dict[str, Any], idx: int) -> tuple[bool, str]:
     """min_ts debe ser anterior a max_ts en cada partición."""
     try:
         min_ts = datetime.fromisoformat(partition["min_ts"])
@@ -104,7 +104,7 @@ def _check_partition_timestamps(partition: Dict, idx: int) -> tuple[bool, str]:
         return False, f"Partición {idx}: timestamps inválidos — {exc}"
 
 
-def _check_partition_rows(partition: Dict, idx: int) -> tuple[bool, str]:
+def _check_partition_rows(partition: dict[str, Any], idx: int) -> tuple[bool, str]:
     """Cada partición debe tener al menos 1 fila."""
     rows = partition.get("rows", 0)
     if rows < 1:
@@ -112,7 +112,7 @@ def _check_partition_rows(partition: Dict, idx: int) -> tuple[bool, str]:
     return True, ""
 
 
-def _check_no_partition_overlap(partitions: List[Dict]) -> tuple[bool, str]:
+def _check_no_partition_overlap(partitions: List[dict[str, Any]]) -> tuple[bool, str]:
     """Las particiones no deben solaparse temporalmente."""
     try:
         ranges = [
@@ -130,7 +130,7 @@ def _check_no_partition_overlap(partitions: List[Dict]) -> tuple[bool, str]:
         return False, f"Error verificando solapamiento: {exc}"
 
 
-def _check_dataset_lag(manifest: Dict) -> tuple[bool, str]:
+def _check_dataset_lag(manifest: dict[str, Any]) -> tuple[bool, str]:
     """
     El dataset no debe estar demasiado desactualizado.
 
@@ -160,7 +160,7 @@ def _check_dataset_lag(manifest: Dict) -> tuple[bool, str]:
         return False, f"Error verificando lag del dataset: {exc}"
 
 
-def _check_version_is_positive(manifest: Dict) -> tuple[bool, str]:
+def _check_version_is_positive(manifest: dict[str, Any]) -> tuple[bool, str]:
     """El número de versión debe ser positivo."""
     version = manifest.get("version", 0)
     if not isinstance(version, int) or version < 1:
@@ -174,7 +174,7 @@ def _check_version_is_positive(manifest: Dict) -> tuple[bool, str]:
 
 
 def check_dataset_invariants(
-    manifest: Dict,
+    manifest: dict[str, Any],
     check_lag: bool = True,
 ) -> InvariantResult:
     """

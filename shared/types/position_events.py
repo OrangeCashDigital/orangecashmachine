@@ -34,6 +34,8 @@ from typing import Optional
 # SSOT: tipo canónico de lado de posición y validación, definidos en shared.enums.
 from shared.enums import _VALID_POSITION_SIDES, PositionSide
 
+__all__ = ["PositionOpened", "PositionClosed", "PositionSide", "_validate_position_side"]
+
 
 def _validate_position_side(side: str, caller: str) -> PositionSide:
     """

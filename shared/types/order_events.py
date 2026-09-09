@@ -33,6 +33,8 @@ from datetime import datetime, timezone
 # SSOT: tipo canónico de lado de orden y validación, definidos en shared.enums.
 from shared.enums import _VALID_ORDER_SIDES, OrderSide
 
+__all__ = ["OrderFilled", "OrderRejected", "OrderSide", "_validate_order_side"]
+
 
 def _validate_order_side(side: str, caller: str) -> OrderSide:
     """

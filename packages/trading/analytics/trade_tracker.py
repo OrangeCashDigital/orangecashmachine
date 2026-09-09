@@ -109,7 +109,7 @@ class TradeTracker:
         with self._lock:
             return self._closed[-1] if self._closed else None
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, object]:
         """Estado observable. SafeOps: nunca lanza."""
         try:
             with self._lock:

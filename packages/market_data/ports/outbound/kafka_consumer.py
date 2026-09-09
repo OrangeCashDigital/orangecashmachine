@@ -64,7 +64,7 @@ class KafkaMessage:
     key: Optional[bytes]
     value: bytes
     timestamp: int
-    headers: tuple = ()  # tuple para inmutabilidad (frozen=True)
+    headers: tuple[tuple[bytes, bytes], ...] = ()  # tuple para inmutabilidad (frozen=True)
 
 
 # ---------------------------------------------------------------------------

@@ -306,7 +306,7 @@ class PortfolioService:
         except Exception:
             return 0.0
 
-    def state(self) -> dict:
+    def state(self) -> dict[str, object]:
         """Estado observable para logging y métricas."""
         try:
             snap = self.snapshot()

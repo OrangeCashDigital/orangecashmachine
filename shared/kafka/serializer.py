@@ -70,7 +70,7 @@ def deserialize(data: bytes, payload_cls: Type[P]) -> P:
     if data is None:
         raise ValueError("deserialize: data no puede ser None")
     raw: Dict[str, Any] = json.loads(data.decode("utf-8"))
-    return payload_cls.from_dict(raw)  # type: ignore[attr-defined]
+    return payload_cls.from_dict(raw)  # type: ignore[attr-defined,no-any-return]
 
 
 # ---------------------------------------------------------------------------

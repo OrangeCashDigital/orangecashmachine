@@ -44,28 +44,28 @@ Principios: SRP . DRY . SSOT . DIP
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable, Optional, Protocol
 
 from loguru import logger
 
-from trading.execution.order import OrderSide
+from trading.execution.order import Order, OrderSide
 
 
 class SupportsOnFill(Protocol):
-    def on_fill(self, order) -> None: ...
+    def on_fill(self, order: Order) -> None: ...
 
 
 class SupportsPositionSync(Protocol):
     def open_position(
         self,
-        *,
         order_id: str,
         symbol: str,
         side: str,
         avg_entry: float,
         size_pct: float,
-        entry_at,
         quantity: Optional[float],
+        entry_at: Optional[datetime] = None,
     ) -> None: ...
 
     def close_position(
@@ -106,7 +106,7 @@ def build_fill_sync(
     """
     open_order_ids: dict[str, str] = {}
 
-    def on_fill_composite(order) -> None:
+    def on_fill_composite(order: Order) -> None:
         """Callback OMS -> TradeTracker + PortfolioService.
 
         ADR-0025 (F4a/F4b): la posición se asienta con la cantidad y el

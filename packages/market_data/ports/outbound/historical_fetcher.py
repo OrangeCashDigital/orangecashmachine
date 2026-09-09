@@ -45,7 +45,7 @@ SSOT  — única fuente de verdad del contrato de fetching histórico
 
 from __future__ import annotations
 
-from typing import AsyncIterator, List, Optional, Protocol, runtime_checkable
+from typing import AsyncIterator, Optional, Protocol, runtime_checkable
 
 import polars as pl
 
@@ -107,7 +107,7 @@ class HistoricalFetcherPort(Protocol):
         ExchangeConnectionError  : sesión caída — no recuperable sin retry.
         NoDataAvailableError     : el par no tiene datos desde since_ms.
         """
-        ...  # type: ignore[misc]  # AsyncIterator en Protocol requiere esta supresión
+        ...
 
     async def download_data(
         self,
@@ -132,7 +132,7 @@ class HistoricalFetcherPort(Protocol):
         since: Optional[int],
         limit: int = 500,
         end_ms: Optional[int] = None,
-    ) -> List[list]:
+    ) -> list[list[int | float | str]]:
         """
         Fetcha un chunk crudo de candles del exchange.
 

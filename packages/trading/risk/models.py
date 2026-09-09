@@ -84,7 +84,7 @@ class RiskConfig(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    def __init__(self, **data):
+    def __init__(self, **data: object) -> None:
         min_confidence = data.pop("min_confidence", None)
         super().__init__(**data)
         if min_confidence is not None:

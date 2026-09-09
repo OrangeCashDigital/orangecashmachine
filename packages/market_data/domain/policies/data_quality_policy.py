@@ -49,7 +49,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List
+from typing import Any, List
 
 from market_data.domain.quality.types import DataQualityReport
 
@@ -92,7 +92,7 @@ class PolicyResult:
     score: float
     reasons: List[str]
     report: DataQualityReport
-    penalty_breakdown: Dict[str, float] = field(default_factory=dict)
+    penalty_breakdown: dict[str, float] = field(default_factory=dict)
 
     @property
     def accepted(self) -> bool:
@@ -109,7 +109,7 @@ class PolicyResult:
         suffix = f" penalties=[{breakdown_str}]" if breakdown_str else ""
         return f"PolicyResult | decision={self.decision.value} score={self.score:.1f} reasons={self.reasons}{suffix}"
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "decision": self.decision.value,
             "score": round(self.score, 4),
@@ -124,7 +124,7 @@ class PolicyResult:
 # Constantes de política — SSOT
 # ===========================================================================
 
-_SCORE_WEIGHTS: Dict[str, float] = {
+_SCORE_WEIGHTS: dict[str, float] = {
     "future_timestamps": 1.0,
     "ohlc_inconsistencies": 0.9,
     "temporal_gaps": 0.5,

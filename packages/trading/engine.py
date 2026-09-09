@@ -113,7 +113,7 @@ class TradingEngine:
     def __init__(
         self,
         strategy: BaseStrategy,
-        oms,
+        oms: object,
         data_source: FeatureSource,
         guard: Optional[ExecutionGuard] = None,
         exchange: str = "bybit",
@@ -229,10 +229,10 @@ class TradingEngine:
         return result
 
     @property
-    def oms_summary(self) -> dict:
+    def oms_summary(self) -> dict[str, object]:
         return self._oms.summary()
 
-    def validate_signal(self, signal) -> "RiskDecision":
+    def validate_signal(self, signal: object) -> "RiskDecision":
         """
         Expone la validación de riesgo sin violar Law of Demeter.
 
@@ -329,11 +329,11 @@ class TradingEngine:
                 result.orders_rejected += 1
         return closes
 
-    def _last_timestamp(self):
+    def _last_timestamp(self) -> datetime:
         """Timestamp de la última vela para sellos de stop-loss."""
         return datetime.now(timezone.utc)
 
-    def _load_data(self):
+    def _load_data(self) -> Optional[pl.DataFrame]:
         try:
             return self._data_source.load_features(
                 exchange=self._exchange,
