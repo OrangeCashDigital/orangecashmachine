@@ -224,8 +224,8 @@ def _lint_imports_pass() -> bool:
             text=True,
             timeout=60,
         )
-        # "Contracts: X kept, Y broken." → PASS si broken=0
-        return "broken" not in r.stdout or "0 broken" in r.stdout
+        # "Contracts: X kept, Y broken." → PASS si returncode=0 Y broken=0
+        return r.returncode == 0 and ("broken" not in r.stdout or "0 broken" in r.stdout)
     except Exception:
         return False  # fail-closed
 
