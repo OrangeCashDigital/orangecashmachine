@@ -2318,6 +2318,53 @@ hallazgos:
 
     '
   fecha_cierre: null
+- id: B-52
+  hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
+  fase: F2
+  prioridad: ALTA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'ADR-0032 implementado: (1) .github/CODEOWNERS creado para guard scripts/policies/architecture_linter/tracking.yaml/workflows;
+    (2) policies/evidence.json con SHA256 hashes de 5 archivos policy-critical; (3) CI job "Policy gate (evidence hash)" verifica
+    integridad; (4) M24/M25 ya implementados en audit_validator (B-51); (5) Branch protection existente con 9 required checks
+    + dismiss stale + require code owner reviews. GAP: required_approving_review_count=0 (ADR pide 1; requiere GitHub admin).'
+  solucion: CODEOWNERS + evidence.json + policy-gate CI job + branch protection (existente). Policy-change label verification
+    diferida (no bloqueante).
+  pruebas:
+  - CODEOWNERS existe en .github/CODEOWNERS
+  - policies/evidence.json existe con 5 hashes SHA256
+  - CI policy-gate job verifica hashes (PASS si coinciden)
+  - M24/M25 PASS en audit_validator
+  adr_relacionado: ADR-0015, ADR-0020
+  riesgo_residual: 'Medio: branch protection tiene required_approving_review_count=0 (ADR pide 1; requiere GitHub admin para
+    cambiar). Resto de controles implementados.'
+  fecha_cierre: 2026-08-23
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
+    backlog:
+      estado: HECHO
+      referencia: B-52
+    adr:
+      estado: HECHO
+      referencia: ADR-0032-ai-agent-governance
+    implementacion:
+      estado: HECHO
+      referencia: .github/CODEOWNERS; policies/evidence.json; .github/workflows/ocm-ci.yml (policy-gate job). Branch protection
+        pre-existente con 9 required checks.
+    tests:
+      estado: HECHO
+      referencia: 'policy-gate CI job: hashes verificados contra evidence.json. audit_validator M24/M25 PASS.'
+    ci:
+      estado: HECHO
+      referencia: 'policy-gate job en ocm-ci.yml (needs: architecture, engineering-health).'
+    evidencia:
+      estado: HECHO
+      referencia: policies/evidence.json con SHA256 de 5 archivos policy-critical; commit 93d53a0 como baseline.
+    cierre:
+      estado: HECHO
+      referencia: 'B-52 cerrado 2026-08-23. CODEOWNERS + evidence hash + policy-gate CI. GAP documentado: required_approving_review_count=0.'
 - id: B-53
   hallazgo_informe: F-PLA-07 / F-PLC-02
   fase: F2

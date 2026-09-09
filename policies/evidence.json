@@ -1,0 +1,12 @@
+{
+  "_comment": "Evidence hash artifact (ADR-0032, B-52). SHA256 of policy-critical files. Updated by CI policy-gate job.",
+  "created": "2026-08-23",
+  "commit": "93d53a0",
+  "files": {
+    "scripts/app_layer_guard.py": "f317cccff32339b1c29eb6e2f6a4b1be7d7ae5fa5c5004a5f1594d9cc8f12be4",
+    "scripts/backtest_app_guard.py": "7794844fa4b46346ea18e43bf2f3489e2534ecd6b64b2541de287c59ddca55bb",
+    "scripts/domain_subprocess_guard.py": "459cd395f45e90f2ad1aabf91ee16b5aae3f8613b5687c3be7f21374cd1c9e81",
+    "policies/registry.yaml": "6b2a05948ba8f2445068c8a52a4c3d3ebc90e28462fe893467626e15b3a33291",
+    ".github/workflows/ocm-ci.yml": "841355cceda82484fc0181b4287792389e216b847bcb3245e5001978b87a2e91"
+  }
+}
