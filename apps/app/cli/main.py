@@ -6,18 +6,20 @@ Entrypoint principal de OrangeCashMachine — market data pipeline.
 
 Flujo de ejecución::
 
-    hydra_main(cfg)
-        ├── bootstrap_logging()
-        ├── resolve_explicit_env(cfg)        → str | None (BC-51: único acceso a cfg)
-        ├── RunConfig.from_env()             → RunConfig (env, debug, run_id…)
-        ├── load_appconfig_from_hydra(cfg)   → AppConfig (Pydantic validado)
-        ├── run_application(config, run_cfg)
-        │       ├── configure_logging()
-        │       ├── setup_observability()    → MetricsRuntime + TracingRuntime (OTel, idempotente, fail-soft)
-        │       ├── EnvironmentValidator.check()
-        │       ├── validate_only? → sys.exit(0)
-        │       └── pipeline_runner(ctx, pusher)
-        └── sys.exit(exit_code)
+    main()
+        ├── bootstrap_logging()              → logging mínimo desde el inicio
+        ├── install_sigterm_handler()        → SIGTERM → KeyboardInterrupt
+        ├── _reject_cfg_job_in_production()  → bloquea --cfg en producción
+        └── hydra_main()
+                ├── resolve_explicit_env(cfg)        → str | None (BC-51)
+                ├── RunConfig.from_env()             → RunConfig (env, debug, run_id...)
+                ├── load_appconfig_from_hydra(cfg)   → AppConfig (Pydantic validado)
+                └── run_application(config, run_cfg)
+                        ├── configure_logging()
+                        ├── setup_observability()    → MetricsRuntime + TracingRuntime
+                        ├── EnvironmentValidator.check()
+                        ├── validate_only? → exit 0
+                        └── pipeline_runner(ctx, pusher)
 
 Uso CLI::
 
@@ -248,8 +250,6 @@ def hydra_main(cfg: DictConfig) -> None:
         OCM_DEBUG           — activa logging verboso (true | yes | on)
         OCM_VALIDATE_ONLY   — valida config y sale sin ejecutar pipeline (true | yes | on)
     """
-    bootstrap_logging()
-
     explicit_env = resolve_explicit_env(cfg)  # único punto de acceso a cfg fuera de ocm.config
     run_cfg = RunConfig.from_env(explicit_env=explicit_env)
 
@@ -301,6 +301,7 @@ def main() -> None:
         2   — `--cfg` bloqueado en producción (B-04/H-06).
         130 — interrupción por teclado (SIGINT / Ctrl-C) o SIGTERM.
     """
+    bootstrap_logging()  # Fase 1: logging mínimo activo desde el instante cero (cubre guards y señales)
     install_sigterm_handler()  # SafeOps (R14/H8): SIGTERM → KeyboardInterrupt → 130
     _reject_cfg_job_in_production()  # Guard B-04: nunca dump de config segura en prod
     try:
