@@ -5,6 +5,7 @@ scripts/check_production_gates.py — Production Readiness Gates (G1–G11).
 Soporta:
   uv run python scripts/check_production_gates.py --mode gate-dev
   uv run python scripts/check_production_gates.py --mode gate-release
+  uv run python scripts/check_production_gates.py --mode gate-ci
 
 Produce resultados binarios por gate:
   PASS — el gate está satisfecho con evidencia suficiente.
@@ -12,7 +13,8 @@ Produce resultados binarios por gate:
 
 Regla crítica: Si un gate está incompleto, el script dice BLOCK y explica
 qué falta. No convierte automáticamente ningún gate a PASS solo porque
-existan tests parciales.
+existan tests parciales. Fail-closed por defecto: cualquier error en
+la verificación = BLOCK.
 """
 
 from __future__ import annotations
@@ -139,14 +141,17 @@ GATES: Dict[str, dict] = {
     # G10: DOCUMENTATION — audit doc coherente con código
     "G10": {
         "contrato": "Audit doc coherente con codebase + sin referencias rotas",
-        "evidencia": "Result of: python scripts/audit_validator.py --register $AUDIT",
+        "evidencia": (
+            "Result of: python scripts/audit_validator.py --register $AUDIT "
+            "+ python scripts/engineering_health_check.py"
+        ),
         "pass_conditions": lambda: _audit_doc_consistent(),
         "blocking_reason": "Doc inconsistente o referencias a files inexistentes",
     },
     # G11: GIT — commits atómicos, .env no commitado, limpieza
     "G11": {
-        "contrato": "git status limpio + .env no commitado + commits atómicos",
-        "evidencia": "Result of: git status --short; git log --oneline -5",
+        "contrato": "git status limpio + .env no commitado + commits atómicos (sin fixup/squash pendientes)",
+        "evidencia": "Result of: git status --short; git log --oneline -20",
         "pass_conditions": lambda: _git_clean_and_atomic(),
         "blocking_reason": "Modificaciones sueltas, .env commitado o historial no atómico",
     },
@@ -154,7 +159,7 @@ GATES: Dict[str, dict] = {
 
 
 # ---------------------------------------------------------------------------
-# 4. Helpers de verificación individuales
+# 4. Helpers de verificación individuales (FAIL-CLOSED: excepción = BLOCK)
 # ---------------------------------------------------------------------------
 
 
@@ -169,7 +174,7 @@ def _pytest_pass() -> bool:
         )
         return r.returncode == 0
     except Exception:
-        return True  # fallback: no bloquear si pytest no está
+        return False  # fail-closed
 
 
 def _ruff_check() -> bool:
@@ -182,7 +187,7 @@ def _ruff_check() -> bool:
         )
         return r.returncode == 0
     except Exception:
-        return True
+        return False  # fail-closed
 
 
 def _ruff_format_check() -> bool:
@@ -195,7 +200,7 @@ def _ruff_format_check() -> bool:
         )
         return r.returncode == 0
     except Exception:
-        return True
+        return False  # fail-closed
 
 
 def _mypy_pass() -> bool:
@@ -208,7 +213,7 @@ def _mypy_pass() -> bool:
         )
         return r.returncode == 0
     except Exception:
-        return True
+        return False  # fail-closed
 
 
 def _lint_imports_pass() -> bool:
@@ -222,7 +227,7 @@ def _lint_imports_pass() -> bool:
         # "Contracts: X kept, Y broken." → PASS si broken=0
         return "broken" not in r.stdout or "0 broken" in r.stdout
     except Exception:
-        return True
+        return False  # fail-closed
 
 
 def _config_validate_pass() -> bool:
@@ -235,7 +240,7 @@ def _config_validate_pass() -> bool:
         )
         return r.returncode == 0
     except Exception:
-        return True
+        return False  # fail-closed
 
 
 def _deployment_units_ok() -> bool:
@@ -257,7 +262,7 @@ def _deployment_units_ok() -> bool:
         )
         return result.returncode == 0
     except Exception:
-        return True  # fallback
+        return False  # fail-closed
 
 
 def _runtime_market_data_ok() -> bool:
@@ -427,31 +432,58 @@ def _bronze_fresh() -> bool:
 
 
 def _audit_doc_consistent() -> bool:
+    """
+    G10: Audit doc coherente con codebase + sin referencias rotas.
+    Requiere: audit_validator PASS (sin M17/M20 fatales) Y engineering_health_check PASS.
+    """
     try:
+        # 1. audit_validator sin M17/M20 fatales
         r = subprocess.run(
             ["python", "scripts/audit_validator.py", "--register", str(AUDIT)],
             capture_output=True,
             text=True,
             timeout=60,
         )
-        # Pasar si no hay M17/M20 warnings fatales y el validator pasa
-        return "warnings 0" in r.stdout.lower() or "PASS" in r.stdout
+        audit_ok = "PASS" in r.stdout and "M17" not in r.stdout and "M20" not in r.stdout
     except Exception:
-        return True
+        audit_ok = False
+
+    try:
+        # 2. engineering_health_check (Plan ↔ tracker ↔ ADR ↔ contratos ↔ CI)
+        r = subprocess.run(
+            ["python", "scripts/engineering_health_check.py"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        health_ok = r.returncode == 0 and "PASS" in r.stdout
+    except Exception:
+        health_ok = False
+
+    return audit_ok and health_ok
 
 
 def _git_clean_and_atomic() -> bool:
+    """
+    G11: git status limpio + .env no commitado + commits atómicos.
+    Verifica working tree + ausencia de .env + historial atómico (sin fixup/squash pendientes).
+    """
     try:
-        # git status debe estar limpio o tener solo cambios commiteables
+        # 1. working tree limpio
         r1 = subprocess.run(["git", "status", "--short"], cwd=str(ROOT), capture_output=True, text=True, timeout=10)
-        # NOTA: solo verifica working tree; no revisa historial de commits
-        return (
-            r1.returncode == 0
-            and not any(".env" in line for line in r1.stdout.strip().splitlines() if line.strip())
-            and not r1.returncode == 2
-        )  # exit 2 = untracked files beyond .gitignore may be OK
+        wt_clean = r1.returncode == 0 and not any(
+            ".env" in line for line in r1.stdout.strip().splitlines() if line.strip()
+        )
+
+        # 2. historial atómico: sin commits con "fixup!" o "squash!" en últimos 20
+        r2 = subprocess.run(
+            ["git", "log", "--oneline", "-20"], cwd=str(ROOT), capture_output=True, text=True, timeout=10
+        )
+        atomic_ok = r2.returncode == 0 and "fixup!" not in r2.stdout and "squash!" not in r2.stdout
+
+        return wt_clean and atomic_ok
     except Exception:
-        return True
+        return False
 
 
 # ---------------------------------------------------------------------------
