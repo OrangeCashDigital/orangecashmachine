@@ -2208,18 +2208,6 @@ hallazgos:
   riesgo_residual: 'Bajo: gates de codigo (G1/G2/G3/G10/G11) verificados en CI; gates de infra (G4-G9) verificables solo en
     entorno desplegado'
   fecha_cierre: 2026-08-23
-  evidencia: 'Plan Maestro §1:38 y §6:374 citan scripts/check_production_gates.py como veredicto binario G1..G11; ls scripts/ → NO existe
-
-    '
-  solucion: Implementar scripts/check_production_gates.py (veredicto binario PASS/BLOCK sobre G1..G11 con evidencia por cheque) O actualizar Plan Maestro para reflejar que engineering_health_check.py +
-    jobs CI son el mecanismo vigente
-  pruebas:
-  - check_production_gates.py existe y devuelve PASS/FAIL sobre G1..G11
-  adr_relacionado: ADR-0020
-  riesgo_residual: 'Alto: Production Gate no tiene veredicto binario ejecutable; debilita Policy Registry
-
-    '
-  fecha_cierre: null
   cadena:
     hallazgo:
       estado: HECHO
@@ -2229,24 +2217,22 @@ hallazgos:
       referencia: B-49
     adr:
       estado: HECHO
-    adr:
-      estado: HECHO
       referencia: ADR-0020-production-gate-release
     implementacion:
-      estado: PENDIENTE
-      referencia: script ausente
+      estado: HECHO
+      referencia: 'commit 62218c2b (2026-08-23): fail-closed helpers + G10/G11 mapping. scripts/check_production_gates.py: 530 lineas, G1..G11 implementados, gate-ci mode.'
     tests:
-      estado: PENDIENTE
-      referencia: test check_production_gates.py
+      estado: HECHO
+      referencia: 'uv run python scripts/check_production_gates.py --mode gate-ci → exit 0 (todos PASS). Tests: G1/G2/G3/G5/G10/G11 PASS; G4/G6/G7/G8/G9 BLOCK (expected).'
     ci:
-      estado: PENDIENTE
-      referencia: release gate
+      estado: HECHO
+      referencia: '.github/workflows/ocm-ci.yml: step "Production gates (code-level)" ejecuta check_production_gates.py --mode gate-ci en quality job.'
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'scripts/check_production_gates.py existe y funciona; uv run python scripts/check_production_gates.py --mode gate-ci → exit 0.'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'B-49 cerrado 2026-08-23. Implementacion completada: script + CI integration + bugfixes (fail-closed, G10/G11 mapping, returncode check).'
 - id: B-50
   hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06
   fase: F2
