@@ -375,6 +375,7 @@ jobs:
         # pipeline (nuevas violations = WARNING; revisar en el log del job).
         continue-on-error: true
         run: uv tool run semgrep --config policies/semgrep/ . --quiet --baseline origin/main
+
       - name: Production gates (code-level, G1/G2/G3/G10/G11)
         # B-49: veredicto binario PASS/BLOCK sobre gates de nivel código.
         # gate-dev ejecuta los 11 gates (infra incluida); gate-ci solo code-level.
