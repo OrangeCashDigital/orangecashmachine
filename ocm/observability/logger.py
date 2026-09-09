@@ -48,6 +48,7 @@ Exports públicos
 - InterceptHandler
 """
 
+import contextlib
 import hashlib
 import json
 import logging as std_logging
@@ -497,17 +498,15 @@ def configure_logging(
     ]  # 16 hex chars = 64 bits — suficiente para detección de cambios
 
     with _CONFIG_LOCK:
-        if _CONFIG_HASH == new_hash:
+        if new_hash == _CONFIG_HASH:
             logger.debug("logging_reconfigure_skipped | hash={}", new_hash)
             return
 
         _CONFIG_HASH = new_hash
 
         if _ACTIVE_LOKI is not None:
-            try:
+            with contextlib.suppress(Exception):
                 _ACTIVE_LOKI.close()
-            except Exception:
-                pass
             _ACTIVE_LOKI = None
 
         logger.remove()
