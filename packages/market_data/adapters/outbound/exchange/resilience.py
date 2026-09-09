@@ -21,7 +21,7 @@ El resilience layer NO conoce CCXT — solo ve:
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Callable, Optional, TypeVar
+from typing import Awaitable, Callable, Dict, Optional, Protocol, TypeVar, Any
 
 import aioresilience
 import ccxt.async_support as _ccxt_async
@@ -46,6 +46,18 @@ T = TypeVar("T")
 ErrorType = str
 
 _RETRYABLE_ERROR_TYPES: frozenset[str] = frozenset({"rate_limit", "timeout", "network"})
+
+
+class _FailureNotifier(Protocol):
+    """Subconjunto tipado de aioresilience.CircuitBreaker usado por ResilienceLayer.
+
+    ``aioresilience.CircuitBreaker.on_failure()`` carece de anotaciones de tipo
+    (mypy: [no-untyped-call]). Este Protocol declara explícitamente el contrato
+    real del método para que la llamada desde ``notify_rate_limit()`` sea
+    verificable sin acoplarse a los detalles internos del breaker.
+    """
+
+    async def on_failure(self) -> None: ...
 
 
 class RetryExhaustedError(Exception):
@@ -304,7 +316,8 @@ class ResilienceLayer:
             return await coro_fn()
 
         try:
-            return await policy.execute(_breaker_guard)
+            result: T = await policy.execute(_breaker_guard)
+            return result
         except AioResilienceCBError as err:
             raise CircuitBreakerOpenError(self._exchange_id) from err
         except Exception as exc:
@@ -331,13 +344,14 @@ class ResilienceLayer:
         """
         policy = self._policies.get(error_type, self._policies["network"])
         try:
-            return await policy.execute(coro_fn)
+            result: T = await policy.execute(coro_fn)
+            return result
         except Exception as exc:
             if classify_error(exc) == "unknown":
                 raise
             raise RetryExhaustedError(error_type, exc) from exc
 
-    def breaker_state(self) -> dict:
+    def breaker_state(self) -> Dict[str, Any]:
         """Estado del circuit breaker."""
         try:
             state = self._breaker.get_state()
@@ -377,7 +391,8 @@ class ResilienceLayer:
           no puede interrumpir el retry loop del caller.
         """
         try:
-            await self._breaker.on_failure()
+            notifier: _FailureNotifier = self._breaker
+            await notifier.on_failure()
         except Exception:
             pass  # Fail-Soft — nunca interrumpir el flujo del caller
 
@@ -407,7 +422,7 @@ def register_resilience_layer(exchange_id: str, layer: "ResilienceLayer") -> Non
     _layer_registry[exchange_id] = layer
 
 
-def get_breaker_state(exchange_id: str) -> dict:
+def get_breaker_state(exchange_id: str) -> Dict[str, Any]:
     """
     Retorna el estado del circuit breaker para un exchange dado.
 
