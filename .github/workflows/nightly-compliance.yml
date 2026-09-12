@@ -1,0 +1,36 @@
+name: Nightly Compliance Report
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC daily
+  workflow_dispatch:  # allow manual trigger
+
+jobs:
+  compliance-report:
+    name: Nightly Compliance Report
+    runs-on: ubuntu-latest
+    continue-on-error: true  # non-blocking
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Generate compliance report
+        run: uv run python scripts/compliance_report.py --json > compliance-report.json
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-report-${{ github.run_number }}
+          path: compliance-report.json
+          retention-days: 30
+
+      - name: Print summary
+        run: uv run python scripts/compliance_report.py
