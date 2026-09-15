@@ -134,6 +134,71 @@ async def test_A_replay_100_events_no_loss():
 
 # ---------------------------------------------------------------------------
 # B. No commit si Bronze falla — el evento reaparece
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_R05_drain_filters_historical_garbage_by_expected_ids():
+    """
+    R-05 regression guard (H-25, fix KAF-001).
+
+    drain_until_ids_found() debe retornar EXACTAMENTE los event_ids
+    objetivo — nunca contaminado con mensajes ajenos del topic
+    (KAFKA_LOG_RETENTION_HOURS=168 permite basura histórica de
+    ejecuciones previas).
+
+    A diferencia de test_A_replay_100_events_no_loss (que solo verifica
+    len(replayed) >= 100, insensible a contaminación por diseño), este
+    test usa igualdad estricta: produce "ruido" con event_ids ajenos
+    ANTES de los eventos reales, y confirma que el ruido no aparece en
+    el resultado — ni por conteo ni por identidad.
+    """
+    group_id = _unique_group("r05-guard")
+
+    # CONTRACT R-05c: event_id debe ser único POR EJECUCIÓN, no solo por
+    # test. IDs deterministas (sin run_id) colisionan con basura histórica
+    # de corridas anteriores si el topic no se purga entre ellas — causa
+    # raíz real de KAF-001 (no era topología ni _drain fabricando records).
+    run_id = uuid.uuid4().hex[:8]
+    noise = [_make_event(event_id=f"r05-noise-{i:04d}-{run_id}") for i in range(20)]
+    real_events = [_make_event(event_id=f"r05-real-{i:04d}-{run_id}") for i in range(5)]
+    expected_ids = {e.event_id for e in real_events}
+
+    # ── 1. Producir ruido + eventos reales, en ese orden ──────────────────
+    p = await _raw_producer()
+    try:
+        for e in noise + real_events:
+            await p.send_and_wait(TOPIC_OHLCV_RAW, value=serialize(e))
+        await p.flush()
+    finally:
+        await p.stop()
+
+    # ── 2. Drenar filtrando por expected_ids ───────────────────────────────
+    c = await _raw_consumer(group_id, TOPIC_OHLCV_RAW)
+    try:
+        await c.seek_to_beginning()
+        result_ids = await drain_until_ids_found(c, expected_ids)
+    finally:
+        await c.stop()
+
+    # ── 3. Contrato R-05: identidad exacta, sin contaminación ni pérdida ──
+    #
+    # drain_until_ids_found() debe devolver exactamente los event_ids
+    # encontrados (subset de expected_ids si hay timeout).
+    #
+    # La propiedad observable del test es:
+    #
+    #     result_ids == expected_ids
+    #
+    # No verificamos posición ni offsets: Kafka no garantiza orden global
+    # entre particiones y esos detalles no forman parte de este contrato.
+    assert result_ids == expected_ids, (
+        "R-05: el replay no coincide exactamente con la ejecución actual. "
+        f"missing={sorted(expected_ids - result_ids)}, "
+        f"unexpected={sorted(result_ids - expected_ids)}"
+    )
+
+
 # ---------------------------------------------------------------------------
 
 
