@@ -3521,4 +3521,7 @@ f2_6e_topologia_kafka_por_bounded_context:
         canary_cpu.csv, pushgateway_{10..30}min.txt)
     cierre:
       estado: HECHO
-      referencia: F2.6d cerrada 2026-08-10; F2.6 como fase completa (a-d) queda cerrada
+      referencia: >-
+        F2.6d cerrada 2026-08-10; F2.6 como fase completa (a-d) queda cerrada.
+        F2.6e (extensión documental posterior, cierre 2026-08-18) se añade como
+        decisión derivada de F2.6d sobre topología Kafka.
