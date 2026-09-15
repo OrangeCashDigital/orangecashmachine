@@ -2,7 +2,7 @@
 
 ## Estado
 
-Propuesto (auditado contra código real el 7-ago-2026).
+Aceptado (implementado, auditado contra código real el 15-sep-2026).
 
 ## Contexto
 
