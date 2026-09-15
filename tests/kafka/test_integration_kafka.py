@@ -197,6 +197,8 @@ async def test_R05_drain_filters_historical_garbage_by_expected_ids():
         f"missing={sorted(expected_ids - result_ids)}, "
         f"unexpected={sorted(result_ids - expected_ids)}"
     )
+
+
 # ---------------------------------------------------------------------------
 
 
