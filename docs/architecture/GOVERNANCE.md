@@ -72,7 +72,7 @@ CI y en el commit local. Ver ADR-0010 para la decisión completa.
 
 ### Gates de CI (`.github/workflows/ocm-ci.yml`)
 
-- `architecture` (import-linter, 43 contratos) — fail-fast, bloquea el merge si un BC-NN se rompe.
+- `architecture` (import-linter, 50 contratos) — fail-fast, bloquea el merge si un BC-NN se rompe.
 - `quality` — ruff check, ruff format, mypy . (todo el código de producción, no solo shared/), SSOT literales, pip-audit.
 
 ### Scripts de gobernanza (`scripts/`)
@@ -91,7 +91,12 @@ kafka) · BC-46 (`enums` stdlib-only) · BC-47 (`kafka` no importa dominio) · B
 ### SafeOps
 
 - `pip-audit --requirement pyproject.toml` en CI (vulnerabilidades conocidas).
-- Dependabot semanal (ecosistema `pip`).
+- Bandit `-ll` en CI (job `security`, umbral BLOCKER) + pre-commit.
+- Gitleaks en CI (push/PR a main) + pre-commit.
+- CodeQL en CI (push/PR + semanal, Python, análisis de dataflow).
+- Trivy filesystem scan en CI (push/PR + semanal, CRITICAL/HIGH).
+- Semgrep en CI (reglas de arquitectura, non-blocking).
+- Dependabot semanal (ecosistema `pip` + `github-actions`).
 - Pre-commit: ruff, import-linter, mypy shared/, SSOT — detección local antes del commit.
 
 ## 9. Series de ADR — serie canónica y serie heredada
