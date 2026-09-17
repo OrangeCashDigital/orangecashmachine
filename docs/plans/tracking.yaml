@@ -2284,7 +2284,7 @@ hallazgos:
   riesgo_residual: 'Medio: gap de maintainability no cubierto por ninguna herramienta actual
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-23'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2310,8 +2310,8 @@ hallazgos:
       estado: HECHO
       referencia: pyproject.toml diff + ruff statistics output + 79 baseline violations documented
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-47 cerrado 2026-08-23. ruff C901/PLR/SIM activado (10f4226f). PR #23 merged (8ae2d01e).
 - id: B-48
   hallazgo_informe: F-PLA-02
   fase: F2
@@ -2329,7 +2329,7 @@ hallazgos:
   riesgo_residual: 'Bajo: dead code no detectado automáticamente
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-23'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2356,8 +2356,8 @@ hallazgos:
       referencia: '23 false positives classified: signum (2), Logger, DerivativesStoragePort, OHLCVTransformerPort (2), TradesStoragePort,
         TradesFetcherPort, ttl_secs, skip_versioning (2), until, Table (2), pyiceberg (6), AppRiskConfig, RebalancePort'
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-48 cerrado 2026-08-23. vulture dead code detection añadido (48c867eb). PR #34 merged (50b6623c).
 - id: B-49
   hallazgo_informe: F-PL-04 / F-PLA-05
   fase: F2
@@ -2376,7 +2376,7 @@ hallazgos:
   riesgo_residual: 'Alto: Production Gate no tiene veredicto binario ejecutable; debilita Policy Registry
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-23'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2403,8 +2403,8 @@ hallazgos:
       referencia: exit 0 on gate-ci; PASS on G1/G2/G3/G10/G11; BLOCK on G4/G6/G7/G8/G9 (infra not available); G5 PASS (market-data
         check)
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-49 cerrado 2026-08-23. check_production_gates.py implementado (b2ffe0ba). PR #25 merged (674ffcb6).
 - id: B-50
   hallazgo_informe: F-CI-01 / F-PL-02 / F-PLA-06
   fase: F2
@@ -2472,7 +2472,7 @@ hallazgos:
   riesgo_residual: 'Medio: sin registry formal, rules no son consumibles por agente IA ni auditables
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-28'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2499,8 +2499,8 @@ hallazgos:
       referencia: 16 reglas R1-R16 en policies/registry.yaml (SSOT); 16 reglas R1-R16 en tracking.yaml (DEPRECATED); IDs perfectamente
         alineados.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-51 cerrado 2026-08-28. policies/registry.yaml = SSOT; tracking.yaml reglas DEPRECATED alineadas (44034eaa). PR #27 merged.
 - id: B-52
   hallazgo_informe: F-PLA-09 / F-PLC-06 / F-PLC-11
   fase: F2
@@ -2519,11 +2519,11 @@ hallazgos:
   riesgo_residual: 'Crítico: riesgo real de captura del sistema de validación por agente IA
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-24'
   cadena:
     hallazgo:
       estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19_policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer-complementary.md F-PLA-09 + F-PLC-06/11
     backlog:
       estado: HECHO
       referencia: B-52
@@ -2544,8 +2544,8 @@ hallazgos:
       estado: HECHO
       referencia: policies/evidence.json con SHA256 de 5 archivos policy-critical; commit 93d53a0 como baseline.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-52 cerrado 2026-08-24. ADR-0032 implementado (1822e883). CODEOWNERS + evidence.json + policy-gate CI. PR #28 merged (ea5126c7).
 - id: B-53
   hallazgo_informe: F-PLA-07 / F-PLC-02
   fase: F2
@@ -2565,7 +2565,7 @@ hallazgos:
   riesgo_residual: 'Bajo: Semgrep non-blocking añade coste ~0 y valor preventivo; blocking innecesario sin gap material
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-24'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2590,8 +2590,8 @@ hallazgos:
       referencia: 8 reglas YAML en policies/semgrep/architecture.yaml; CI job non-blocking; findings reportados (baseline
         para futuras corridas).
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-53 cerrado 2026-08-24. Semgrep non-blocking adoptado (2361cb85). PR #45 merged (89988d73).
 - id: B-54
   hallazgo_informe: F-PLA-08 / F-PLC-03 / F-PLC-08
   fase: F2
@@ -2619,7 +2619,7 @@ hallazgos:
     resolver gap
 
     '
-  fecha_cierre: null
+  fecha_cierre: '2026-08-24'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2644,8 +2644,8 @@ hallazgos:
       estado: HECHO
       referencia: ADR-0035/0036; 79 ruff baseline; 23 vulture baseline; compliance_report.py generates JSON + text.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-54 cerrado 2026-08-24. ruff C901/PLR/SIM + vulture CI + compliance report (178139b0). PR #30 merged (66ad0ea7).
 - id: B-55
   hallazgo_informe: F-PLC-04
   fase: F2
