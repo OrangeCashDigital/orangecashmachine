@@ -448,7 +448,7 @@ def _git_clean_and_atomic() -> bool:
         return (
             r1.returncode == 0
             and not any(".env" in line for line in r1.stdout.strip().splitlines() if line.strip())
-            and not r1.returncode == 2
+            and r1.returncode != 2
         )  # exit 2 = untracked files beyond .gitignore may be OK
     except Exception:
         return True
