@@ -76,6 +76,71 @@ def _parse_vulture_findings(output: str) -> list[dict[str, str | int]]:
     return findings
 
 
+def _parse_pass_line(line: str) -> dict[str, int]:
+    """Parse the PASS summary line from audit_validator."""
+    result: dict[str, int] = {
+        "findings": 0,
+        "rules": 0,
+        "warnings": 0,
+        "skipped": 0,
+    }
+    if "findings" in line:
+        parts = line.split("findings")
+        if len(parts) >= 2:
+            num_str = parts[0].split("—")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["findings"] = int(num_str)
+    if "reglas" in line:
+        parts = line.split("reglas")
+        if len(parts) >= 2:
+            num_str = parts[0].split(",")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["rules"] = int(num_str)
+    if "warnings" in line:
+        parts = line.split("warnings")
+        if len(parts) >= 2:
+            num_str = parts[0].split("(")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["warnings"] = int(num_str)
+    if "skipped" in line:
+        parts = line.split("skipped")
+        if len(parts) >= 2:
+            num_str = parts[0].split("(")[-1].strip()
+            with contextlib.suppress(ValueError):
+                result["skipped"] = int(num_str)
+    return result
+
+
+def _parse_audit_validator(output: str) -> dict[str, object]:
+    """Parse audit_validator output into structured result."""
+    details: list[str] = []
+    result: dict[str, object] = {
+        "status": "PASS",
+        "findings": 0,
+        "rules": 0,
+        "warnings": 0,
+        "skipped": 0,
+        "details": details,
+    }
+    for line in output.splitlines():
+        line = line.strip()
+        if line.startswith("PASS"):
+            result["status"] = "PASS"
+            parsed = _parse_pass_line(line)
+            result["findings"] = parsed["findings"]
+            result["rules"] = parsed["rules"]
+            result["warnings"] = parsed["warnings"]
+            result["skipped"] = parsed["skipped"]
+        elif line.startswith("FAIL"):
+            result["status"] = "FAIL"
+        elif line.startswith("ERROR"):
+            result["status"] = "ERROR"
+        elif line.startswith("[") and "]" in line:
+            # Detail line like: [M21] ...
+            details.append(line)
+    return result
+
+
 def generate_report() -> dict:
     """Generate the compliance report as a dict."""
     today = date.today().isoformat()
