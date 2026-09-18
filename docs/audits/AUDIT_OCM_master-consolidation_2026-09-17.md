@@ -736,7 +736,7 @@ Evidence:
 - `uvx yamllint -c .yamllint .` (1.38.0): 16 exp en alerts.yml
 - `F-PL-03` == `F-CI-02`
 Traceability:
-- Tracking: B-49 · ADR: ADR-0020 · Closure: OPEN
+- Tracking: NOT_TRACED · ADR: NOT_TRACED · Closure: OPEN
 
 ---
 
