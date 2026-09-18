@@ -23,10 +23,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -57,10 +57,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -84,14 +84,14 @@ jobs:
     needs: [architecture, engineering-health]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Historico completo: el backtest del guard (scripts/backtest_app_guard.py)
           # extrae snapshots pre-fix (39687e7, cdd7e7e) via git archive.
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -119,10 +119,10 @@ jobs:
     needs: [architecture, engineering-health]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -146,10 +146,10 @@ jobs:
     needs: [architecture, engineering-health]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -174,10 +174,10 @@ jobs:
     needs: [architecture, engineering-health]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -203,10 +203,10 @@ jobs:
     needs: [architecture, engineering-health]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -253,10 +253,10 @@ jobs:
           --health-start-period 15s
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -277,10 +277,10 @@ jobs:
     needs: [architecture, engineering-health]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -301,10 +301,10 @@ jobs:
     needs: [architecture, engineering-health]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 
@@ -340,17 +340,113 @@ jobs:
         run: uv run vulture packages ocm shared apps --min-confidence 80
 
   # ──────────────────────────────────────────────────────────────────────────
-  # JOB 5: POLICY GATE (B-56 / F-PLC-07)
-  # Etapa explícita de validación de política. Corre DESPUÉS de todos los
-  # gates anteriores y ANTES de integration-tests. Verifica:
-  #   - engineering_health (coherencia normativa)
-  #   - audit_validator M1..M25 (políticas mecanizadas)
-  # Fail-fast: cualquier fallo aquí bloquea el merge.
-  #
-  # CI Stage Ordering (B-56):
-  #   FAST LOCAL → ARCHITECTURE → ARCHITECTURE GUARDS → SECURITY → QUALITY
-  #   → SUPPLY CHAIN → POLICY GATE → EXPENSIVE/PR (integration)
+  # JOB 5: Semgrep (ADR-0034, B-53)
+  # NON-BLOCKING: reglas de arquitectura declarativas en YAML (policies/semgrep/).
+  # Detecta patrones que AST guards (R11 limita a domain) e import-linter
+  # (grafo estático) no cubren: os.environ en domain/application, subprocess
+  # fuera de infrastructure, open() en domain, ccxt lazy en domain, md5,
+  # random en contexto crypto, logging de secrets, pyiceberg en domain.
+  # Baseline actual: 1 (cursor_store.py — mensaje estático REDIS_PASSWORD,
+  # no loguea el valor). continue-on-error: true a nivel de step: findings
+  # no bloquean merge; si el comando rompe por error de reglas, el pipeline
+  # continúa y el PR revisa el log de findings.
   # ──────────────────────────────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep (architecture rules, non-blocking)
+    runs-on: ubuntu-latest
+    needs: [architecture, engineering-health]
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Historial completo: --baseline origin/main necesita el ref completo.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Run semgrep (architecture rules, non-blocking)
+        # uv tool run: semgrep aislado del venv (no contamina deps de OCM).
+        # --baseline origin/main: solo reporta violations NUEVAS respecto a
+        # main (el finding preexistente cursor_store.py:452 ya no se repite).
+        # Non-blocking: findings y errores de reglas se reportan sin romper el
+        # pipeline (nuevas violations = WARNING; revisar en el log del job).
+        continue-on-error: true
+        run: uv tool run semgrep --config policies/semgrep/ . --quiet --baseline origin/main
+
+      - name: Production gates (code-level, G1/G2/G3/G10/G11)
+        # B-49: veredicto binario PASS/BLOCK sobre gates de nivel código.
+        # gate-dev ejecuta los 11 gates (infra incluida); gate-ci solo code-level.
+        run: uv run python scripts/check_production_gates.py --mode gate-ci
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB: policy-gate (ADR-0032, B-52)
+  # Verifica integridad de archivos policy-critical calculando SHA256
+  # y comparando contra policies/evidence.json (artifact inmutable).
+  # FAIL si mismatch → evidencia de manipulación (Caso B/E threat model).
+  # ──────────────────────────────────────────────────────────────────────────
+  # JOB: policy-gate-evidence (ADR-0032, B-52)
+  # Verifica integridad de archivos policy-critical calculando SHA256
+  # y comparando contra policies/evidence.json (artifact inmutable).
+  # FAIL si mismatch → evidencia de manipulación (Caso B/E threat model).
+  # ──────────────────────────────────────────────────────────────────────────
+  policy-gate-evidence:
+    name: Policy gate (evidence hash)
+    runs-on: ubuntu-latest
+    needs: [architecture, engineering-health]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify policy evidence hashes
+        run: |
+          set -euo pipefail
+          echo "=== Policy Gate: Evidence Hash Verification (ADR-0032) ==="
+
+          # Calculate current SHA256 hashes
+          current_hash_app_guard=$(sha256sum scripts/app_layer_guard.py | awk '{print $1}')
+          current_hash_backtest_guard=$(sha256sum scripts/backtest_app_guard.py | awk '{print $1}')
+          current_hash_domain_guard=$(sha256sum scripts/domain_subprocess_guard.py | awk '{print $1}')
+          current_hash_registry=$(sha256sum policies/registry.yaml | awk '{print $1}')
+          current_hash_workflow=$(sha256sum .github/workflows/ocm-ci.yml | awk '{print $1}')
+
+          # Read expected hashes from evidence.json
+          expected_hash_app_guard=$(python3 -c "import json; print(json.load(open('policies/evidence.json'))['files']['scripts/app_layer_guard.py'])")
+          expected_hash_backtest_guard=$(python3 -c "import json; print(json.load(open('policies/evidence.json'))['files']['scripts/backtest_app_guard.py'])")
+          expected_hash_domain_guard=$(python3 -c "import json; print(json.load(open('policies/evidence.json'))['files']['scripts/domain_subprocess_guard.py'])")
+          expected_hash_registry=$(python3 -c "import json; print(json.load(open('policies/evidence.json'))['files']['policies/registry.yaml'])")
+          expected_hash_workflow=$(python3 -c "import json; print(json.load(open('policies/evidence.json'))['files']['.github/workflows/ocm-ci.yml'])")
+
+          # Compare
+          fail=0
+          check_hash() {
+            local file="$1" current="$2" expected="$3"
+            if [ "$current" != "$expected" ]; then
+              echo "::error::MISMATCH $file: current=$current expected=$expected"
+              fail=1
+            else
+              echo "✓ $file: OK"
+            fi
+          }
+
+          check_hash "scripts/app_layer_guard.py" "$current_hash_app_guard" "$expected_hash_app_guard"
+          check_hash "scripts/backtest_app_guard.py" "$current_hash_backtest_guard" "$expected_hash_backtest_guard"
+          check_hash "scripts/domain_subprocess_guard.py" "$current_hash_domain_guard" "$expected_hash_domain_guard"
+          check_hash "policies/registry.yaml" "$current_hash_registry" "$expected_hash_registry"
+          check_hash ".github/workflows/ocm-ci.yml" "$current_hash_workflow" "$expected_hash_workflow"
+
+          if [ "$fail" -eq 1 ]; then
+            echo ""
+            echo "::error::Policy gate FAIL — evidence hash mismatch detected (Caso B/E threat model)."
+            echo "If this is an intentional policy change, update policies/evidence.json with new hashes."
+            exit 1
+          fi
+
+          echo ""
+          echo "Policy gate PASS — all evidence hashes match."
+
   policy-gate:
     name: Policy gate (engineering_health + audit_validator)
     runs-on: ubuntu-latest
@@ -366,10 +462,10 @@ jobs:
       - quality
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 

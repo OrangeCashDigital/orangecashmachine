@@ -96,7 +96,7 @@ Findings clave de `-policy-layer.md`:
 - F-PLA-01 (NUEVO): Ruff solo habilita E/F/I (no C901/PLR/SIM/DUP), lo que
   contradice la afirmación previa de que "SonarQube duplicaría a Ruff".
 - F-PLA-02 (NUEVO): vulture instalado pero nunca ejecutado en CI/pre-commit.
-- F-PLA-03 (CONTRADICCIÓN): CodeQL se ejecuta en PR, no solo semanalmente
+- F-PLA-03 (CONTRADICCIÓN): CodeQL se ejecuta en PR, con schedule weekly
   como afirmaba la auditoría previa.
 - F-PLA-04 (REVALIDA F-PL-07): no introducir HashiCorp, sin necesidad
   demostrable.

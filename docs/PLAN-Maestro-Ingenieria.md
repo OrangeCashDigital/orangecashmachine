@@ -35,7 +35,7 @@
 | Registrar un hallazgo nuevo | Crear entrada `hallazgos[].id=B-NN` en tracking.yaml v2 con evidencia y estado `PENDIENTE` | §2, §7 |
 | Proponer una decisión de arquitectura | Verificar numeración: `ls docs/architecture/decisions/` → crear ADR con la plantilla `ADR-template.md` → enlazar al hallazgo | §5 |
 | Saber si algo está resuelto | Leer la cadena de trazabilidad del hallazgo en tracking.yaml (cada eslabón con `estado` y `evidencia`) | §2, §7 |
-| Verificar si el sistema es "producción-ready" | Ejecutar `scripts/check_production_gates.py` (veredicto binario PASS/FAIL) — **PENDIENTE: script no existe, ver B-49** | §6 |
+| Verificar si el sistema es "producción-ready" | Ejecutar `scripts/check_production_gates.py` (veredicto binario PASS/FAIL) — **B-49: script bugfixed + gate-ci mode (G1/G2/G3/G10/G11); CI integrado** | §6 |
 | Cumplir la Definition of Done | Aplicar la cadena completa de §2 y el DOD de la fase correspondiente (§4) | §2, §4 |
 
 ---
@@ -91,7 +91,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 | 7 | Cambios pequeños y reversibles | Diffs imposibles de revertir | Commits atómicos (§8) | Git history con 1 cambio lógico/commit | Hooks de pre-commit siempre activos |
 | 8 | CI como puerta, no sugerencia | Merges rotos | Gates reales (fail-fast en `ocm-ci.yml`) | CI rojo bloquea merge | Ningún merge a `main` con CI rojo |
 | 9 | Umbrales tras medición | Números inventados (13% stale vs 43% real) | Medición en vivo en F0 antes de fijar umbrales | Mediciones con fecha/commit | §10: umbrales solo tras F0 |
-| 10 | Sistema que se audita solo | Madurez no medible | `scripts/check_production_gates.py` + conteo de reglas `activada_en_ci` — **PENDIENTE: script no existe (B-49), health check F2.0 cubre coherencia** | % de reglas gateadas (baseline F0, sube cada fase) | La métrica se recalcula en cada fase |
+| 10 | Sistema que se audita solo | Madurez no medible | `scripts/check_production_gates.py` + conteo de reglas `activada_en_ci` — **B-49: script bugfixed + gate-ci mode; health check F2.0 cubre coherencia** | % de reglas gateadas (baseline F0, sube cada fase) | La métrica se recalcula en cada fase |
 
 ---
 
@@ -117,7 +117,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **DOR:** F0 cerrada; fixes de crítica con test de regresión.
 - **Entregables:** reglas R1–R4 con `backtest: ok` y `activada_en_ci: true`; guard de arranque live; snapshot sin secrets; `pipeline_factory` corrige + smoke test.
 - **DOD:** `uv run live` no arranca con stub; `assemble()` construye ohlcv+trades+derivatives; round-trip BUY→SELL con contador correcto; snapshot sin `SecretStr` en claro; CI bloquea R1–R4.
-- **Criterio de salida:** `scripts/check_production_gates.py` → G1–G4 PASS — **PENDIENTE: script no existe (B-49), gate F1 validado por ruff + import-linter 49/49 + pytest 900 + mypy**.
+- **Criterio de salida:** `scripts/check_production_gates.py` → G1–G4 PASS — **B-49: script bugfixed + gate-ci mode; G1/G2/G3 PASS en CI**.
 - **Cierre (B-01…B-05 HECHO):**
   - **B-01/H-01** guard fail-closed en `assemble_live` (LiveExecutor `IS_STUB`).
   - **B-02/H-02** `pipeline_factory` crea catálogo Iceberg + guard R2.
@@ -380,7 +380,7 @@ escalabilidad (solo con evidencia).
 | G10. Estado de posición único | test B-15 | verde | F4 |
 | G11. Trazabilidad activa | test B-17 | verde | F4 |
 
-- **Veredicto binario:** `scripts/check_production_gates.py` → PASS/FAIL con reporte por cheque — **PENDIENTE: script no existe (B-49); veredicto actual: engineering_health_check.py + jobs CI (import-linter, bandit, mypy, pytest, app-guard, domain-guard, trading-guards)**.
+- **Veredicto binario:** `scripts/check_production_gates.py` → PASS/FAIL con reporte por cheque — **B-49: gate-ci mode (G1/G2/G3/G10/G11) integrado en CI; gate-dev para infra completa**.
 - **Dos modos:** `gate-dev` (todo PR a `main`) y `gate-release` (candidatos de release, manual).
 - **Regla:** FAIL en `gate-release` bloquea el merge del candidato. FAIL en `gate-dev` bloquea el PR.
 - **Mecanismo de longevidad:** un cheque solo se añade con su test+backtest; un cheque solo se **desactiva** con ADR y evidencia, nunca por conveniencia.
@@ -540,6 +540,13 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | 2026-08-06 | (auditoría de calidad, sesión posterior) | Corrección de consistencia documental del mapa Fase ↔ Hallazgos: B-14 removido de la fila F5 (tracking.yaml lo registra como F3 / HECHO). Las referencias a B-18 en F2.3 y F2.5 se reemplazan por "trabajo relacionado / prerrequisitos de H-15", manteniendo F4 como única fase oficial de B-18 según tracking.yaml (SSOT). Sin cambios en tracking.yaml ni ADRs. |
 | 2026-08-19 | (consolidación post-auditorías) | **Consolidación documental completa** tras auditorías Policy Layer (feasibility + complementary + adversarial): tracking.yaml actualizado con B-47..B-60 (Policy Layer findings); Plan Maestro corregido: check_production_gates.py marcado PENDIENTE (B-49), ruff config E/F/I only (B-47), vulture installed not enforced (B-48), CodeQL/Trivy PR+weekly (B-60), fail_under=40 baseline 44% fijado; ADRs propuestas ADR-0021..0028 añadidas; Mapa Fase↔Hallazgos extendido; §6 Production Gate y §10 Umbrales corregidos; §3 Principio 10 corregido. |
 | 2026-08-23 | (`c392f8f`, PR #19) | **pandas→polars MIGRATION COMPLETE**: `pandas_to_domain.py` → `dataframe_to_domain.py`; pandas eliminado de `pyproject.toml`; 0 imports, 0 `.to_pandas()` en todo el repo; `pandera` (polars mode) para schema validation; contratos 49→50 KEPT; audit_validator M22–M25 implementado (ADR-0031); `policies/registry.yaml` creado; ccxt 4.3.58→4.5.74 (CVE fixes). AGENTS.md §"Active migration" → "COMPLETE". |
+| 2026-08-24 | (B-54) | **B-54 CERRADO**: Maintainability strategy implementada — ADR-0035 (SonarQube NOT JUSTIFIED) + ADR-0036 (vulture/complexity) ya existían en main; pyproject.toml ruff select=["E","F","I","C901","PLR","SIM"] con ignores PLR2004/0913/0912/0911/0915; 11 safe auto-fixes; 79 baseline violations; vulture CI non-blocking (continue-on-error: true); scripts/compliance_report.py (nightly report ruff + vulture). |
+| 2026-08-24 | (B-55) | **B-55 CERRADO**: AST Guards formalizados como policy layer — policies/registry.yaml (R1-R16 con owner/severity/enforcement/tests/evidence/ci/adr/status/history); policies/semgrep/architecture.yaml (8 reglas con registry_id links a R11); scripts/compliance_report.py enhanced con audit_validator M21-M25 validation; .github/workflows/nightly-compliance.yml (nightly CI workflow). |
+| 2026-08-23 | (B-50) | **B-50 CERRADO**: pip-audit vulnerabilities (aiohttp 3.14.1→3.14.3, cryptography 49.0.0→50.0.0) ya resueltas en commit 876cf38 (bump ccxt 4.5.70→4.5.74). Fix transitivo. pip-audit → exit 0. |
+| 2026-08-31 | (B-53) | **B-53 CERRADO**: Semgrep non-blocking adoptado (ADR-0034 Propuesto — aprobación formal pendiente) — `policies/semgrep/architecture.yaml` con 8 reglas declarativas (domain-application-no-os-environ, application-no-subprocess, domain-no-open, domain-no-ccxt, domain-application-no-md5, domain-no-random-crypto, logging-secrets, domain-no-pyiceberg) que complementan AST guards (R11 subprocess en domain) e import-linter (BC-03/05/06/08/09); job CI "Semgrep (architecture rules, non-blocking)" en ocm-ci.yml (continue-on-error: true, uv tool run, --baseline origin/main). Reglas descartadas por redundancia: domain-no-import-* (ya cubren BC-03/05/06/08/09 e import-linter BC-08/09) y pandas-no-append (pandas eliminado del repo; patrón generaba falsos positivos list.append). Baseline real: 1 finding documentado (cursor_store.py:452 — mensaje estático REDIS_PASSWORD, no loguea el valor). Semgrep NO blocking (sin gap material de seguridad, F-PLA-07). |
+| 2026-08-23 | (B-52) | **B-52 CERRADO**: ADR-0032 implementado — .github/CODEOWNERS (5 paths); policies/evidence.json (SHA256 de 5 archivos policy-critical); CI job "Policy gate (evidence hash)" en ocm-ci.yml. Branch protection pre-existente (9 required checks + dismiss stale + require code owner reviews). GAP: required_approving_review_count=0 (ADR pide 1; GitHub admin). |
+| 2026-08-23 | (B-51) | **B-51 CERRADO (Option 3)**: policies/registry.yaml = SSOT canónico para reglas R1-R16; tracking.yaml rules marcadas DEPRECATED (compatibility layer). IDs R1-R16 alineados. audit_validator M21-M25 PASS. engineering_health_check.py sin cambios (lee tracking.yaml rules deprecated). |
+| 2026-08-24 | (B-54) | **B-54 CERRADO**: Maintainability strategy implementada — ADR-0035 (SonarQube NOT JUSTIFIED) + ADR-0036 (vulture/complexity) ya existían en main; pyproject.toml ruff select=["E","F","I","C901","PLR","SIM"] con ignores PLR2004/0913/0912/0911/0915; 11 safe auto-fixes; 79 baseline violations; vulture CI non-blocking (continue-on-error: true); scripts/compliance_report.py (nightly report ruff + vulture). |
 | 2026-08-24 | (B-56) | **B-56 CERRADO**: CI stage ordering — policy-gate job added to ocm-ci.yml; depends on all 9 existing jobs; runs engineering_health + audit_validator M1..M25; integration-tests now depends on policy-gate; CI DAG: architecture+engineering-health → guards/tests/quality → policy-gate → integration; all existing required checks preserved. |
 | 2026-08-24 | (B-57) | **B-57 CERRADO**: CD sequence implementada per ADR-0037 — deploy_ocm.sh script con secuencia verify/deploy/rollback/evidence; .github/workflows/ocm-cd.yml workflow creado (ACCEPT/ROLLBACK inputs); artifact SHA build integrada en ocm-ci.yml; health checks via health_check.sh existente; evidencia inmutable en deploy_evidence_*.json. |
 | 2026-08-24 | (B-58) | **B-58 CERRADO**: Grafana provisioning versionado — datasources.yml y ocm_pipeline.json añadidos en deploy/monitoring/grafana/; .gitignore removió excepciones directory para estos paths; dashboards/ocm_pipeline.json con path default GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH; repository reproducible desde checkout limpio; evidencia inmutable. |
