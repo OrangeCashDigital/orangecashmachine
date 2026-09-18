@@ -173,6 +173,27 @@ async def _heartbeat_loop(
             continue
 
 
+async def _start_book_builder_consumer(
+    config: Any,
+) -> tuple[Any, asyncio.Task[None] | None]:
+    # Ensambla BookBuilderConsumer (orderbook.raw → book.snapshot/book.delta)
+    # via Composition Root (DIP: BookBuilder inyectado via BookBuilderPort).
+    # Degrada a none si el consumer no puede iniciarse (no bloquea el canary).
+    try:
+        from market_data.infrastructure.bootstrap.composition_root import (
+            CompositionRoot,
+        )
+
+        consumer = CompositionRoot.build_book_builder_consumer(config)
+        await consumer.start()
+        task = asyncio.create_task(consumer.run(), name="book-builder-consumer")
+        logger.info("book_builder_consumer_started | topic=orderbook.raw → book.snapshot/book.delta")
+        return consumer, task
+    except Exception as exc:
+        logger.warning("book_builder_consumer_init_failed | {}", exc)
+        return None, None
+
+
 async def _run_streaming(
     config: Any,
     run_cfg: Any,
@@ -234,26 +255,7 @@ async def _run_streaming(
     # Se ensambla y ejecuta como tarea en background dentro del mismo proceso.
     # DIP: el composition root inyecta BookBuilder (application) en
     # BookBuilderConsumer (infrastructure) via BookBuilderPort.
-    book_consumer = None
-    book_consumer_task: asyncio.Task[None] | None = None
-    try:
-        from market_data.infrastructure.bootstrap.composition_root import (
-            CompositionRoot as _CR,
-        )
-
-        book_consumer = _CR.build_book_builder_consumer(config)
-        await book_consumer.start()
-        book_consumer_task = asyncio.create_task(book_consumer.run(), name="book-builder-consumer")
-        logger.info("book_builder_consumer_started | topic=orderbook.raw → book.snapshot/book.delta")
-    except Exception as exc:
-        logger.warning("book_builder_consumer_init_failed | {}", exc)
-        if book_consumer is not None:
-            try:
-                await book_consumer.stop()
-            except Exception as stop_exc:
-                logger.warning("book_builder_consumer_partial_stop_failed | {}", stop_exc)
-        book_consumer = None
-        book_consumer_task = None
+    book_consumer, book_consumer_task = await _start_book_builder_consumer(config)
 
     try:
         await bundle.start_all()

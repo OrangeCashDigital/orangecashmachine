@@ -130,11 +130,7 @@ class P0OrderBookObserver:
         bids = data.get("b", [])
         asks = data.get("a", [])
 
-        if ts is not None:
-            self.ts_series.append(ts)
-            self.latencies_ms.append(local_recv_ms - ts)
-        if cts is not None:
-            self.cts_series.append(cts)
+        self._track_timestamps(ts, cts, local_recv_ms)
 
         if mtype == "snapshot":
             self.levels_per_snapshot.append(len(bids) + len(asks))
@@ -144,7 +140,16 @@ class P0OrderBookObserver:
         elif mtype == "delta":
             self.levels_per_delta.append(len(bids) + len(asks))
 
-        # secuencia
+        self._track_sequence(u, seq)
+
+    def _track_timestamps(self, ts: int | None, cts: int | None, local_recv_ms: int) -> None:
+        if ts is not None:
+            self.ts_series.append(ts)
+            self.latencies_ms.append(local_recv_ms - ts)
+        if cts is not None:
+            self.cts_series.append(cts)
+
+    def _track_sequence(self, u: int | None, seq: int | None) -> None:
         if u is not None:
             prev = self.u_series[-1] if self.u_series else None
             self.u_series.append(u)
