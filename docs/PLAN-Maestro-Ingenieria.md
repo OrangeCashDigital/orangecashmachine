@@ -297,6 +297,25 @@ escalabilidad (solo con evidencia).
 - **Entregables:** catalog Iceberg remoto (REST/Nessie/MinIO); streaming dedicado (Dagster/Flink) para Silver→Gold; decisión DuckDB (adoptar con ADR o eliminar).
 - **DOD:** catalog remoto en staging; pipelines fuera del feed; benchmarks documentados.
 
+### Fases siguientes — P0..P8 (consolidación 2026-09-17)
+
+> Tramo documental derivado de `docs/audits/AUDIT_OCM_master-consolidation_2026-09-17.md` (§19), que
+> agrupa por causa raíz los findings consolidados F-MC-01..F-MC-20. Requiere autorización y
+> replanificación por fase; **P5 es un GATE de validación del equipo** y bloquea cualquier decisión
+> de escala (F5) o de capital hasta su sign-off.
+
+| Fase | Ámbito | DOR (salidas clave) | Criterio de salida |
+|---|---|---|---|
+| **P0** | Estado del cluster y data plane (orderbook/snapshot/delta/trades) | doc baseline data-plane; F-MC-02 verificado | métricas verificables de producción |
+| **P1** | Readiness + crash-loop (B-59) | F-MC-03 → fail-fast + readiness pump | `systemctl` active sin crash-loop sostenido |
+| **P2** | SSOT entrypoints/units (F-MC-06/19) | run.sh=pyproject=systemd | diff limpio |
+| **P3** | Config exchanges + env L2 (F-MC-01/12) | validación lista exchange, sin cascade | config validation green |
+| **P4** | Schema v1→v2 evolución con ventana + DLQ (F-MC-04/09) | dual-read + replay/DTAP probado | reconciliación v1/v2 completa |
+| **P5** | **GATE de validación del equipo** — revisión humana de P0..P4 | sign-off Ops/QA del tramo | acta/PR de validación |
+| **P6** | Observabilidad (F-MC-08/10, B-58) | métricas streaming + dashboards | alertas operativas |
+| **P7** | ADR-0017 discovery + perfil Bybit (F-MC-05, P0) | Discovery Profile operativo | tests de gap/checksum |
+| **P8** | BookBuilder producción (ADR-0028) | schema aceptado → producer → snapshot/delta | offsets > 0 + fixture e2e |
+
 ### Mapa Fase ↔ Hallazgos (gobernanza; SSOT de estado en `tracking.yaml`)
 
 > `tracking.yaml` mantiene su `fase` por hallazgo (SS backlog). Este mapa indica qué hallazgos/backlog se resuelven en cada fase del Plan — no reasigna `fase`; es informativo.

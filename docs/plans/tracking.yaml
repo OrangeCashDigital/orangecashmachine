@@ -1289,6 +1289,9 @@ hallazgos:
   pruebas:
   - 'verificacion en vivo: docker compose ps muestra kafka/zookeeper/redis/grafana/loki/prometheus/alertmanager/pushgateway
     healthy simultaneamente 2026-08-09'
+  nota_consolidacion: 'REVALIDADO 2026-09-17 (master-consolidation): puerto Kafka sigue siendo 9094 en .env de producción;
+    pero drift residual permanece en tests/entrypoints (conftest/host.env/.env.example refs a 9093) — consolidado como F-MC-09,
+    sin cambio de estado de este hallazgo.'
   adr_relacionado: null
   riesgo_residual: Ninguno conocido — verificar si algo externo asume Kafka en 9093 antes de propagar a otros entornos
   fecha_cierre: '2026-08-09'
@@ -2801,6 +2804,9 @@ hallazgos:
     y documentar setup manual
   pruebas:
   - deploy/monitoring/grafana/provisioning/ y dashboards/ versionados con contenido real, O montajes eliminados
+  nota_consolidacion: 'REVALIDADO 2026-09-17 (master-consolidation): Grafana sigue sin dashboards/provisioning versionados;
+    pushgateway NO operativo durante el incidente de streaming del 09-17 (sin scrape). Consolidado como F-MC-10
+    (OBSERVABILITY PARTIAL) y ligado a F-RT-02/B-58 en el master report. No hay evidencia nueva que permita cierre.'
   adr_relacionado: null
   riesgo_residual: 'Medio: observabilidad no reproducible desde repo limpio
 
@@ -2838,7 +2844,11 @@ hallazgos:
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
   evidencia: 'tracking.yaml:2573 systemd_reinicia_correctamente: NO_VERIFICADO; ADR-0022:323 "Sin unit systemd activo"; canary
-    F2.6c arrancado manualmente
+    F2.6c arrancado manualmente. REVALIDADO 2026-09-17: deploy/systemd/templates/ocm-streaming.service.template y
+    deploy/systemd/rendered/ocm-streaming.service declaran After=network-online.target docker.service + Wants=network-online.target
+    pero SIN precondición activa de arranque (sin ExecStartPre, sin espera a que Kafka acepte conexiones vía
+    kafka-broker-api-versions). Sub-ítem de B-59; opciones: ExecStartPre con reintento O documentar orden de arranque en runbook
+    (docker compose up -d infra antes de systemd). Instalar no crea runbook en repo (ver AUDIT 2026-08-28 F-004/F-DPL-01).
 
     '
   solucion: ''
