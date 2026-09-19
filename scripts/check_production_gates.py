@@ -444,7 +444,7 @@ def _audit_doc_consistent() -> bool:
             text=True,
             timeout=60,
         )
-        audit_ok = "PASS" in r.stdout and "M17" not in r.stdout and "M20" not in r.stdout
+        audit_ok = "PASS" in r.stdout and "FAIL  [M17]" not in r.stdout and "FAIL  [M20]" not in r.stdout
     except Exception:
         audit_ok = False
 
