@@ -29,9 +29,9 @@ rules:
       rule_type: architecture
     patterns:
       - pattern-either:
-        - pattern: os.environ[...]
-        - pattern: os.environ.get(...)
-        - pattern: os.getenv(...)
+          - pattern: os.environ[...]
+          - pattern: os.environ.get(...)
+          - pattern: os.getenv(...)
     languages: [python]
     severity: WARNING
     paths:
@@ -143,13 +143,13 @@ rules:
       rule_type: crypto
     patterns:
       - pattern-either:
-        - pattern: random.random(...)
-        - pattern: random.randrange(...)
-        - pattern: random.randint(...)
-        - pattern: random.choice(...)
-        - pattern: random.choices(...)
-        - pattern: random.getrandbits(...)
-        - pattern: random.SystemRandom(...)
+          - pattern: random.random(...)
+          - pattern: random.randrange(...)
+          - pattern: random.randint(...)
+          - pattern: random.choice(...)
+          - pattern: random.choices(...)
+          - pattern: random.getrandbits(...)
+          - pattern: random.SystemRandom(...)
     languages: [python]
     severity: WARNING
     paths:
@@ -176,36 +176,36 @@ rules:
       rule_type: secrets
     patterns:
       - pattern-either:
-        - pattern: logger.debug(..., api_key=...)
-        - pattern: logger.info(..., api_key=...)
-        - pattern: logger.warning(..., api_key=...)
-        - pattern: logger.error(..., api_key=...)
-        - pattern: logger.critical(..., api_key=...)
-        - pattern: logger.debug(..., api_secret=...)
-        - pattern: logger.info(..., api_secret=...)
-        - pattern: logger.warning(..., api_secret=...)
-        - pattern: logger.error(..., api_secret=...)
-        - pattern: logger.critical(..., api_secret=...)
-        - pattern: logger.debug(..., secret=...)
-        - pattern: logger.info(..., secret=...)
-        - pattern: logger.warning(..., secret=...)
-        - pattern: logger.error(..., secret=...)
-        - pattern: logger.critical(..., secret=...)
-        - pattern: logger.debug(..., password=...)
-        - pattern: logger.info(..., password=...)
-        - pattern: logger.warning(..., password=...)
-        - pattern: logger.error(..., password=...)
-        - pattern: logger.critical(..., password=...)
-        - pattern: logger.debug(..., token=...)
-        - pattern: logger.info(..., token=...)
-        - pattern: logger.warning(..., token=...)
-        - pattern: logger.error(..., token=...)
-        - pattern: logger.critical(..., token=...)
-        - pattern: logger.debug(..., key=...)
-        - pattern: logger.info(..., key=...)
-        - pattern: logger.warning(..., key=...)
-        - pattern: logger.error(..., key=...)
-        - pattern: logger.critical(..., key=...)
+          - pattern: logger.debug(..., api_key=...)
+          - pattern: logger.info(..., api_key=...)
+          - pattern: logger.warning(..., api_key=...)
+          - pattern: logger.error(..., api_key=...)
+          - pattern: logger.critical(..., api_key=...)
+          - pattern: logger.debug(..., api_secret=...)
+          - pattern: logger.info(..., api_secret=...)
+          - pattern: logger.warning(..., api_secret=...)
+          - pattern: logger.error(..., api_secret=...)
+          - pattern: logger.critical(..., api_secret=...)
+          - pattern: logger.debug(..., secret=...)
+          - pattern: logger.info(..., secret=...)
+          - pattern: logger.warning(..., secret=...)
+          - pattern: logger.error(..., secret=...)
+          - pattern: logger.critical(..., secret=...)
+          - pattern: logger.debug(..., password=...)
+          - pattern: logger.info(..., password=...)
+          - pattern: logger.warning(..., password=...)
+          - pattern: logger.error(..., password=...)
+          - pattern: logger.critical(..., password=...)
+          - pattern: logger.debug(..., token=...)
+          - pattern: logger.info(..., token=...)
+          - pattern: logger.warning(..., token=...)
+          - pattern: logger.error(..., token=...)
+          - pattern: logger.critical(..., token=...)
+          - pattern: logger.debug(..., key=...)
+          - pattern: logger.info(..., key=...)
+          - pattern: logger.warning(..., key=...)
+          - pattern: logger.error(..., key=...)
+          - pattern: logger.critical(..., key=...)
     languages: [python]
     severity: WARNING
     paths:

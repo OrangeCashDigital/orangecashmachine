@@ -148,7 +148,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 - **Entregables:** `fail_under` sobre medición en vivo; bandit en CI+pre-commit; Docker endurecido (`.dockerignore`, HEALTHCHECK, bindings); paridad de config; reglas R5–R8 activas.
 - **DOD:** `fail_under > 0`; bandit `-ll` sin BLOCKER; mypy completo verde (o fallo documentado); `docker build` sin `.env` horneado; paridad config verde; `lint-imports` falla si el conteo de contratos baja de `50`.
 - **Criterio de salida:** G5–G9 PASS; ADR-0020 (Production Gate como gate de release) aceptada.
-- **Avance (2026-08-23):** audit_validator.py implementa M22–M25 (ADR-0031); policies/registry.yaml creado (PR #19). Contratos: 50 KEPT.
+- **Avance (2026-08-23):** audit_validator.py implementa M22–M25 (ADR-0031); policies/registry.yaml creado (PR #19). Contratos: 50 KEPT. **B-47 cerrado:** ruff select activa C901/PLR/SIM; 79 violaciones baseline. **B-48 cerrado:** vulture pre-commit+CI (non-blocking); baseline 23 false positives.
 
 #### F2.2 — Gobernanza documental (ADR única SSOT)
 

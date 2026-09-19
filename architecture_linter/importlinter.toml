@@ -193,6 +193,8 @@ ignore_imports = [
     "market_data.infrastructure.bootstrap.composition_root -> market_data.application.feed_orchestrator",
     # Composition Root: composition_root ensambla external_ingestion.
     "market_data.infrastructure.bootstrap.composition_root -> market_data.application.external_ingestion.orchestrator",
+    # Composition Root: composition_root ensambla BookBuilderConsumer (BC-07 DIP-safe).
+    "market_data.infrastructure.bootstrap.composition_root -> market_data.application.processing.book_builder",
     # Composition Root: pipeline_factory inyecta source_manager para gap recovery.
     "market_data.infrastructure.bootstrap.pipeline_factory -> market_data.application.source_manager",
 
