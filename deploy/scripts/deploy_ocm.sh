@@ -154,9 +154,7 @@ deploy() {
         fi
     fi
 
-    # Write current SHA
-    echo "${ARTIFACT_SHA}" > "${PREV_SHA_FILE}"
-    log "INFO" "Guardado SHA actual: ${ARTIFACT_SHA}"
+    
 
     # Deploy with docker compose
     log "INFO" "Running: docker compose -f ${COMPOSE_FILE} up -d --build ${ARTIFACT_SHA}"
@@ -284,6 +282,19 @@ case "${ACTION}" in
         log "INFO" "=== Deploy ACCEPT mode ==="
         check_artifact_identity
         check_pre_deploy_health
+        
+        # --- BUG FIX: Capture PREV_SHA before any deploy attempt ---
+        # PREV_SHA must represent the version currently deployed BEFORE this
+        # attempt, so that rollback can always restore to the correct previous version.
+        if [[ -f "${PREV_SHA_FILE}" ]]; then
+            PREV_SHA="$(cat "${PREV_SHA_FILE}")"
+            log "INFO" "Previous SHA (before deploy): ${PREV_SHA}"
+        else
+            PREV_SHA=""
+            log "INFO" "No previous SHA file found - this may be the first deploy"
+        fi
+        # ---------------------------------------------------------
+        
         deploy
         if wait_for_health; then
             log "INFO" "Health checks passed"
@@ -293,17 +304,23 @@ case "${ACTION}" in
                 write_evidence
                 log "INFO" "=== Deployment ACCEPTED ==="
                 log "INFO" "Status: ${DEPLOY_STATUS}"
+                # Only update .prev_sha after successful deploy + health
+                echo "${ARTIFACT_SHA}" > "${PREV_SHA_FILE}"
+                log "INFO" ".prev_sha updated to: ${ARTIFACT_SHA}"
                 log "INFO" "Evidence: ${DEPLOY_DIR}/deploy_evidence_${ARTIFACT_SHA}.json"
                 exit 0
             else
                 log "WARN" "Post-deploy health check issues, but continuing with ACCEPT"
                 DEPLOY_STATUS="ACCEPT"
-                write_evidence
+                # Still update .prev_sha since deploy+health passed
+                echo "${ARTIFACT_SHA}" > "${PREV_SHA_FILE}"
+                log "INFO" ".prev_sha updated to: ${ARTIFACT_SHA}"
                 log "INFO" "=== Deployment ACCEPTED (with warnings) ==="
                 exit 0
             fi
         else
             log "WARN" "Health checks timed out, attempting rollback"
+            # rollback uses PREV_SHA captured before deploy - correct behavior
             rollback
             determine_status
             write_evidence

@@ -11,11 +11,6 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     version: 1
-    basicAuth:
-      name: admin
-      password: admin
-    # JsonBODY configuration for the datasource is not required
-    # for Prometheus as it uses standard URL configuration.
     isSaved: true
     secureJsonFields: []
     jsonData:
@@ -36,10 +31,8 @@ datasources:
     url: http://alertmanager:9093
     isDefault: false
     version: 1
-    basicAuth:
-      name: admin
-      password: admin
     isSaved: true
+    secureJsonFields: []
     jsonData:
       # Time interval for queries
       interval: 1s
