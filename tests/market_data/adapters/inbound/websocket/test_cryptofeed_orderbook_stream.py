@@ -22,11 +22,12 @@ from market_data.adapters.inbound.websocket.cryptofeed_orderbook_stream import (
 
 
 class _FakeOrderBook:
-    def __init__(self, symbol, delta, timestamp, book_dict=None, checksum=None):
+    def __init__(self, symbol, delta, timestamp, book_dict=None, checksum=None, raw=None):
         self.symbol = symbol
         self.delta = delta
         self.timestamp = timestamp
         self.checksum = checksum
+        self.raw = raw
         self._book_dict = book_dict or {"bid": {}, "ask": {}}
         self.book = self
 
@@ -80,10 +81,50 @@ class TestSnapshotVsDelta:
             "BTC-USDT",
             {"bid": [["64908.5", "0"]], "ask": []},
             1785453668516,
+            raw={"data": {"u": 42, "seq": 10}, "cts": 1785453668516},
         )
         await stream._translate_and_dispatch(book, 1785453668.824)
         stream._on_snapshot.assert_not_awaited()
         stream._on_delta.assert_awaited_once()
+
+
+class TestSequenceExtraction:
+    @pytest.mark.asyncio
+    async def test_u_seq_cts_extracted_from_raw(self, stream):
+        book = _FakeOrderBook(
+            "BTC-USDT",
+            {"bid": [["64908.5", "1.0"]], "ask": [["64909.0", "2.0"]]},
+            1785453668516,
+            raw={"data": {"u": 18521288, "seq": 7961638724}, "cts": 1785453668516, "ts": 1785453668515},
+        )
+        await stream._translate_and_dispatch(book, 1785453668.824)
+        args, kwargs = stream._on_delta.call_args
+        assert kwargs["update_id"] == 18521288
+        assert kwargs["cross_seq"] == 7961638724
+        assert kwargs["cts_ms"] == 1785453668516
+
+    @pytest.mark.asyncio
+    async def test_multilevel_atomic_delta_in_single_call(self, stream):
+        book = _FakeOrderBook(
+            "BTC-USDT",
+            {"bid": [["64908.5", "1.0"], ["64900.0", "3.0"]], "ask": [["64909.0", "2.0"]]},
+            1785453668516,
+            raw={"data": {"u": 42, "seq": 10}, "cts": None},
+        )
+        await stream._translate_and_dispatch(book, 1785453668.824)
+        stream._on_delta.assert_awaited_once()
+        args, kwargs = stream._on_delta.call_args
+        assert kwargs["bids"] == [("64908.5", "1.0"), ("64900.0", "3.0")]
+        assert kwargs["asks"] == [("64909.0", "2.0")]
+
+    @pytest.mark.asyncio
+    async def test_raw_missing_defaults_to_zero(self, stream):
+        book = _FakeOrderBook("BTC-USDT", {"bid": [["64908.5", "0"]], "ask": []}, 1785453668516)
+        await stream._translate_and_dispatch(book, 1785453668.824)
+        args, kwargs = stream._on_delta.call_args
+        assert kwargs["update_id"] == 0
+        assert kwargs["cross_seq"] is None
+        assert kwargs["cts_ms"] is None
 
 
 class TestTimestampUnits:
@@ -127,9 +168,8 @@ class TestDeltaZeroSizeMeansRemoval:
         await stream._translate_and_dispatch(book, 1785453668.824)
 
         args, kwargs = stream._on_delta.call_args
-        assert kwargs["price"] == "64908.5"
-        assert kwargs["size"] == "0"
-        assert kwargs["side"] == "bid"
+        assert kwargs["bids"] == [("64908.5", "0")]
+        assert kwargs["asks"] == []
 
 
 class TestDispatchFailSoft:
