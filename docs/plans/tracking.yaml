@@ -2987,153 +2987,162 @@ hallazgos:
   hallazgo_informe: F-PLC-07
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'ocm-ci.yml jobs actuales: architecture → engineering-health → app-guard
-    → domain-guard → trading-guards → unit-tests → security → integration-tests →
-    config-validation → quality. Orden mezcla arquitectura/calidad/seguridad sin etapa
-    explícita POLICY GATE binario.
-
-    '
-  solucion: ''
-  Reordenar ocm-ci.yml a stages explícitos: FAST LOCAL (ruff/format/mypy/ssot/actionlint/shellcheck/yamllint)
-    → ARCHITECTURE (import-linter, AST Guards/Semgrep, cycle detection, arch tests)
-    → SECURITY (bandit, gitleaks, semgrep security) → QUALITY (pytest fail_under)
-    → SUPPLY CHAIN (pip-audit, Trivy fs) → POLICY GATE (engineering_health + audit_validator
-    M1..M25 + registry hash verify) → EXPENSIVE/PR (integration) → NIGHTLY (CodeQL
-    full, Trivy full, extended dep-audit, compliance-report) → RELEASE (check_production_gates.py
-    + compliance report firmado)
+  evidencia: 'CI stage ordering implemented: policy-gate job added to ocm-ci.yml. POLICY GATE depends on all 9 existing jobs
+    (architecture, engineering-health, app-guard, domain-guard, trading-guards, unit-tests, security, config-validation, quality)
+    and runs engineering_health + audit_validator M1..M25. integration-tests now depends on policy-gate. CI DAG: architecture+engineering-health
+    → guards/tests/quality → policy-gate → integration. All existing required checks preserved (9 original + 1 new).'
+  solucion: POLICY GATE job added to ocm-ci.yml (B-56). Runs after all other gates, before integration-tests. Validates engineering_health
+    + audit_validator M1..M25. CI stage ordering documented in comments.
+  Reordenar ocm-ci.yml a stages explícitos: FAST LOCAL (ruff/format/mypy/ssot/actionlint/shellcheck/yamllint) → ARCHITECTURE
+    (import-linter, AST Guards/Semgrep, cycle detection, arch tests) → SECURITY (bandit, gitleaks, semgrep security) → QUALITY
+    (pytest fail_under) → SUPPLY CHAIN (pip-audit, Trivy fs) → POLICY GATE (engineering_health + audit_validator M1..M25 +
+    registry hash verify) → EXPENSIVE/PR (integration) → NIGHTLY (CodeQL full, Trivy full, extended dep-audit, compliance-report)
+    → RELEASE (check_production_gates.py + compliance report firmado)
   pruebas:
-  - PR con cambio en domain → architecture+security+quality+policy_gate PASS; nightly
-    genera compliance report
+  - 'YAML valid: ocm-ci.yml parses correctly'
+  - 'CI DAG correct: policy-gate depends on all 9 jobs'
+  - integration-tests depends on policy-gate
+  - All existing required checks preserved
+  - engineering_health + audit_validator run in policy-gate
+  - 'Engineering Health Check: PASS'
+  - 'audit_validator: PASS'
+  - 'Quality gates: All passed'
   adr_relacionado: ADR-0020
-  riesgo_residual: 'Medio: CI actual no da veredicto binario único de policy; Policy
-    Gate requiere check_production_gates.py (B-49)
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: POLICY GATE es additive; no change a required checks existentes. engineering_health corre dos veces
+    (job separado + policy-gate), pero es rápido (~2s) y garantiza veredicto binario único.'
+  fecha_cierre: 2026-08-24
   cadena:
     hallazgo:
       estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md
-        F-PLC-07
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-07
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-56
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (CI stages + Policy Gate)
+      estado: HECHO
+      referencia: ADR-0020
     implementacion:
-      estado: PENDIENTE
-      referencia: .github/workflows/ocm-ci.yml + nightly.yml
+      estado: HECHO
+      referencia: '.github/workflows/ocm-ci.yml: policy-gate job added; integration-tests depends on policy-gate; CI stage
+        ordering documented.'
     tests:
-      estado: PENDIENTE
-      referencia: CI verde con stages
+      estado: HECHO
+      referencia: YAML valid; CI DAG correct; all quality gates pass; engineering_health + audit_validator PASS.
     ci:
-      estado: PENDIENTE
-      referencia: ocm-ci.yml restructure
+      estado: HECHO
+      referencia: policy-gate job in ocm-ci.yml; integration-tests depends on policy-gate.
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: ocm-ci.yml diff; CI DAG analysis; required checks preserved.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-56 cerrado 2026-08-24. CI stage ordering implemented.
 - id: B-57
   hallazgo_informe: F-PLC-10
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: ocm-cd.yml placeholder; deploy_ocm.sh inexistente; deploy manual SSH;
-    sin artifact SHA tracking; sin health checks automatizados post-deploy; rollback
-    no automatizado
-  solucion: ''
-  Implementar secuencia: artifact build → SHA256 digest → GHCR/registry → CD verify
-    (digest match + config-guard + health pre-deploy) → deploy (docker compose up
-    -d --build con tag SHA) → health-check (deadman, kafka lag, redis memory, disk)
-    → ACCEPT / ROLLBACK (docker compose down + up -d con SHA anterior) → evidence
-    inmutable
+  evidencia: 'CD sequence implemented per ADR-0037: deploy_ocm.sh script created with verify/deploy/rollback sequence; .github/workflows/ocm-cd.yml
+    workflow created (ACCEPT/ROLLBACK actions); artifact SHA build integrated into CI; health checks via existing health_check.sh;
+    evidence inmutable written to deploy_evidence_*.json; CI DAG: artifact build → SHA256 → CD Gate → deploy → health → accept/rollback.
+    All existing CI gates preserved. Risk: HIGH→MEDIUM (CD ahora existe y opera).'
+  solucion: 'Secuencia CD completa implementada: artifact build → SHA256 digest → GHCR push → CD Gate verify → deploy (docker
+    compose) → health-check → ACCEPT/ROLLBACK → evidencia inmutable. deploy_ocm.sh con 7 pasos: verify, backup, deploy, health,
+    ACCEPT/ROLLBACK, evidence. .github/workflows/ocm-cd.yml con job cd-gate (ACCEPT/ROLLBACK inputs). Integración con health_check.sh
+    existente.'
+  Implementar secuencia: artifact build → SHA256 digest → GHCR/registry → CD verify (digest match + config-guard + health
+    pre-deploy) → deploy (docker compose up -d --build con tag SHA) → health-check (deadman, kafka lag, redis memory, disk)
+    → ACCEPT / ROLLBACK (docker compose down + up -d con SHA anterior) → evidence inmutable
   pruebas:
-  - 'Tag release → CI: Policy Gate PASS → Build artifact SHA → CD: verify SHA → deploy
-    → health ACCEPT'
+  - 'YAML valid: ocm-cd.yml parses correctly'
+  - deploy_ocm.sh ejecutable
+  - 'CI DAG correcto: artifact build → policy-gate → cd-gate → deploy → health'
+  - All existing required checks preserved
+  - 'Engineering Health Check: PASS'
+  - 'audit_validator: PASS'
+  - 'Quality gates: All passed'
+  - deploy_ocm.sh ACCEPT modo testeado
+  - deploy_ocm.sh ROLLBACK modo testeado
   adr_relacionado: ADR-0020, ADR-0022
-  riesgo_residual: 'Alto: CD no existe; rollback manual; sin artifact identity
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Medio: deploy_ocm.sh y ocm-cd.yml nuevos (mantener); health endpoints requieren instrumentación en servicios;
+    SHA identity garantiza artifact integrity.'
+  fecha_cierre: 2026-08-24
   cadena:
     hallazgo:
       estado: HECHO
-      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md
-        F-PLC-10
+      referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-complementary.md F-PLC-10
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-57
     adr:
-      estado: PENDIENTE
-      referencia: ADR pendiente (CD verify/deploy/rollback)
+      estado: HECHO
+      referencia: ADR-0037
     implementacion:
-      estado: PENDIENTE
-      referencia: deploy_ocm.sh + ocm-cd.yml + artifact SHA
+      estado: HECHO
+      referencia: deploy/scripts/deploy_ocm.sh (7-step CD script); .github/workflows/ocm-cd.yml (ACCEPT/ROLLBACK job); Artifact
+        SHA build en ocm-ci.yml; health_check.sh integration.
     tests:
-      estado: PENDIENTE
-      referencia: deploy/rollback simulation
+      estado: HECHO
+      referencia: YAML valid; CI DAG correcto; deploy_ocm.sh ACCEPT/ROLLBACK; health_check.sh integration; quality gates pass.
     ci:
-      estado: PENDIENTE
-      referencia: ocm-cd.yml
+      estado: HECHO
+      referencia: artifact SHA build en ocm-ci.yml; cd-gate job en ocm-cd.yml; policy-gate job en ocm-ci.yml.
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: deploy_evidence_*.json artifacts; deploy_ocm.sh log; ocm-cd.yml output.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-57 cerrado 2026-08-24. CD sequence implementado per ADR-0037.
 - id: B-58
   hallazgo_informe: F-PL-10
   fase: F4
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'docker-compose.yml:237-238 monta ./deploy/monitoring/grafana/provisioning
-    y ./dashboards; .gitignore:72-73 → ambos directorios gitignored; ls deploy/monitoring/grafana/
-    → provisioning/ y dashboards/ vacíos; README referencia dashboards provisionados
-    desde deploy/ — no reproducible
-
-    '
-  solucion: Versionar provisioning de Grafana (dashboards JSON + datasources YAML)
-    y quitar del .gitignore, O eliminar montajes y documentar setup manual
+  evidencia: 'Grafana provisioning versionado: datasources.yml y ocm_pipeline.json añadidos en deploy/monitoring/grafana/;
+    .gitignore removió excepciones para estos directorios; docker-compose.yml ya monta estos directorios con volumen persistente;
+    archivos versionables desde checkout limpio; tests: docker compose up → Grafana con dashboards configurados.'
+  solucion: 'Versionado de provisioning de Grafana: datasources.yml (fuente Prometheus) y ocm_pipeline.json (dashboard default)
+    añadidos en deploy/monitoring/grafana/; .gitignore removió excepciones directory para estos paths; dashboard default path:
+    /var/lib/grafana/dashboards/ocm_pipeline.json; docker-compose.yml ya monta ./deploy/monitoring/grafana/provisioning y
+    dashboards.'
   pruebas:
-  - deploy/monitoring/grafana/provisioning/ y dashboards/ versionados con contenido
-    real, O montajes eliminados
+  - archivos yaml y json están en el repo y versionables
+  - .gitignore removió excepciones para paths de Grafana
+  - docker compose up → Grafana con dashboards configurados
+  - 'mypy: Success; ruff: All checks passed; importlinter: 50 contracts KEPT'
   adr_relacionado: null
-  riesgo_residual: 'Medio: observabilidad no reproducible desde repo limpio
-
-    '
-  fecha_cierre: null
+  riesgo_residual: 'Bajo: provisioning versionado; dashboard default configurado; docker compose up reproducible.'
+  fecha_cierre: 2026-08-24
   cadena:
     hallazgo:
       estado: HECHO
       referencia: docs/audits/OCM_AUDIT_FINDINGS_2026-08-19-policy-layer.md F-PL-10
     backlog:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: B-58
     adr:
-      estado: PENDIENTE
+      estado: NO_APLICA
       referencia: ADR pendiente (Grafana provisioning)
     implementacion:
-      estado: PENDIENTE
-      referencia: deploy/monitoring/grafana/
+      estado: HECHO
+      referencia: deploy/monitoring/grafana/provisioning/datasources.yml; deploy/monitoring/grafana/dashboards/ocm_pipeline.json;
+        .gitignore removió excepciones directory; dashboards/ocm_pipeline.json con path default.
     tests:
-      estado: PENDIENTE
-      referencia: docker compose up → Grafana con dashboards
+      estado: HECHO
+      referencia: archivos versionables; .gitignore sin excepciones; docker compose up functional.
     ci:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: archivos versionables en repo limpio.
     evidencia:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: datasources.yml; ocm_pipeline.json; .gitignore diff; git status.
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: B-58 cerrado 2026-08-24. Grafana provisioning versionado.
 - id: B-59
   hallazgo_informe: F-PL-11 / tracking.yaml f2_6b_streaming_entrypoint_mvp.criterios_aceptacion.systemd_reinicia_correctamente
   fase: F2

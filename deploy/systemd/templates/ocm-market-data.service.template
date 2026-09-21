@@ -9,6 +9,7 @@ Type=simple
 User=${OCM_HOST_USER}
 WorkingDirectory=${OCM_REPO_ROOT}
 EnvironmentFile=${OCM_REPO_ROOT}/deploy/host.env
+EnvironmentFile=${OCM_REPO_ROOT}/.env
 ExecStart=${OCM_REPO_ROOT}/.venv/bin/python -m market_data.main
 Restart=on-failure
 RestartSec=10

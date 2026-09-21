@@ -1,0 +1,65 @@
+{
+  "title": "OCM Pipeline",
+  "tags": ["ocm", "pipeline"],
+  "uid": "ocm_pipeline",
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "Prometheus Error Rate",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{status=~5..}[1m])",
+          "legendFormat": "5xx error rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "title": "Prometheus Request Duration",
+      "type": "graph",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)",
+          "legendFormat": "p50 latency"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)",
+          "legendFormat": "p95 latency"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "version": 1,
+  "links": [],
+  "annotations": {
+    "list": []
+  }
+}
