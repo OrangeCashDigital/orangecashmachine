@@ -39,7 +39,7 @@ REPOSITORIO (Git)
       ↓ envsubst + install
 DEPLOYMENT / INSTALLER
   install_systemd.sh --verify-only     render + systemd-analyze verify :64
-  install_systemd.sh --apply           render → /etc/systemd/system + daemon-reload :84
+  install_systemd.sh --apply (no existe hoy; actual: --verify-only :64) → render → /etc/systemd/system + daemon-reload
   (futuro) install.sh --check/--dry-run/--apply delegado plan:9
       ↓ source host.env + envsubst
 HOST (OrangeHouse, no VCS)
