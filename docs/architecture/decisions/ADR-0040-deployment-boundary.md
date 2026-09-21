@@ -88,7 +88,7 @@ Compatible `cualquier Debian`: `templates:9` `User=${OCM_HOST_USER}` variable, `
 
 ## 11. Relación con D1
 
-`D1` `72bd1878` ya añadió `EnvironmentFile=${OCM_REPO_ROOT}/.env` (`diff +1` cada). Esta ADR **no ejecuta `D1`** — lo documenta como `templates = SSOT` y autoriza `D1` `drift-check` `P1` antes de `enable --now`. `D1` ya resuelto, `diff 0`.
+`D1` `72bd1878` ya añadió `EnvironmentFile=${OCM_REPO_ROOT}/.env` (`diff +1` cada) — **IMPLEMENTED** (template). `D1` drift verification (`install_systemd.sh --verify-only` parity `template→rendered→installed` `P1`) — **PENDING** (no existe `drift-check` hoy, `§3-Q10` silencioso). Esta ADR **no ejecuta `D1`** — documenta `templates = SSOT` y autoriza `drift-check` `P1` antes de `enable --now`. Estado: **PARTIALLY VERIFIED**.
 
 ## 12. Qué NO decide este ADR
 
