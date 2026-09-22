@@ -70,7 +70,7 @@ async def lifespan(app: FastAPI):
         await redis_client.ping()  # type: ignore[misc]
         logger.info("api_redis_ok | url={}", settings.redis_url_sanitized)
     except Exception as exc:
-        logger.critical("api_redis_unreachable | url={} error={}", settings.redis_url, exc)
+        logger.critical("api_redis_unreachable | url={} error={}", settings.redis_url_sanitized, exc)
         # Fail-Fast: sin Redis no hay rate limiting ni estado — no arrancar
         sys.exit(1)
 
