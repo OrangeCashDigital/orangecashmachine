@@ -35,6 +35,7 @@ logs/
 .git
 docker-compose.yml
 Dockerfile
+deploy/
 dist/
 build/
 *.egg-info
