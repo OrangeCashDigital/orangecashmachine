@@ -99,6 +99,15 @@ kafka) · BC-46 (`enums` stdlib-only) · BC-47 (`kafka` no importa dominio) · B
 - Dependabot semanal (ecosistema `pip` + `github-actions`).
 - Pre-commit: ruff, import-linter, mypy shared/, SSOT — detección local antes del commit.
 
+### SafeOps — LOCAL BYPASS ≠ REPOSITORY BYPASS (M22-B)
+
+- `pre-commit` (`ruff, import-linter:50, mypy shared/, SSOT`) es **control local / feedback temprano** — puede saltarse con `git commit --no-verify` (`-n`) por diseño, no es fuente de autoridad.
+- `CI` `OrangeCashMachine CI` (`ocm-ci.yml` 13 jobs: `architecture`, `engineering-health`, `app-guard`, `domain-guard`, `trading-guards`, `unit-tests`, `integration-tests`, `config-validation`, `quality`, `semgrep` non-blocking, `policy-gate`, `security`, `Analyze`, `Scan`) es **validación autoritativa y reproducible** — no saltable vía `--no-verify`.
+- `Required Status Checks` (`Branch Protection` `main` `strict: true`, 13→14 contexts incluyendo `Policy gate (evidence hash)` tras M22-B) es **condición técnica de integración** — `PR` solo mergeable si `CI PASS`.
+- `Branch Protection` / `Rulesets` (`enforce_admins: true`, `allow_force_pushes: false`, `allow_deletions: false`) es **enforcement del repositorio** — impide `push directo a main` y `admin bypass`.
+
+**Principio:** `git commit --no-verify` puede omitir hooks locales, pero **no proporciona vía para saltar** `CI` → `Required Status Checks` → `Branch Protection` → `main`. **Git no registra de forma fiable `used_no_verify=true` en el commit** (no hay atributo `commit --no-verify` en `git log --format=fuller`), por lo que M22-B es `enforcement server-side`, no `forensics` histórica (`m22_no_verify_in_history` descartado).
+
 ## 9. Series de ADR — serie canónica y serie heredada
 
 La serie canónica vive en `docs/architecture/decisions/ADR-NNNN-*.md`
