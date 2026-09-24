@@ -20,6 +20,13 @@ El desarrollo completo de este modelo conceptual vive en
 normativo. Este ADR no repite esa explicación — solo registra las
 decisiones concretas.
 
+> **Nota de enlace (Fase 0, 2026-09-24):** este ADR es extendido — no sustituido —
+> por **ADR-0041** ("Canonical Market Data Contract", **Aceptado**). ADR-0013 sigue
+> normativo para feed/fuente/mecanismo, "Kafka como SSOT operacional" y
+> Bronze/Silver/Gold como proyecciones; ADR-0041 añade el nivel de **evento**
+> (envelope común, identidad por dataset, purpose como metadata). Ver ADR-0041 §5,
+> §5.1 y §7 (alternativas rechazadas).
+
 ## Alternativas evaluadas
 
 1. **Extender `FeedsConfig`/`FeedOrchestrator` para cubrir también
