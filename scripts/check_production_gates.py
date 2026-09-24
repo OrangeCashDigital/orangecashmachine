@@ -127,7 +127,7 @@ GATES: Dict[str, dict] = {
     # G8: TRADING — live trading bloqueado (IS_STUB=true)
     "G8": {
         "contrato": "Live trading bloqueado (IS_STUB=true), sin órdenes reales",
-        "evidencia": "Result of: revisar LiveExecutor.IS_STUB y config de risk guards",
+        "evidencia": "Result of: revisar LiveExecutor.IS_STUB (live_executor.py) y pgrep de procesos live",
         "pass_conditions": lambda: _trading_stub_blocked(),
         "blocking_reason": "Trading live no bloqueado o IS_STUB=false",
     },
@@ -374,40 +374,28 @@ def _health_check_healthy() -> bool:
 
 
 def _trading_stub_blocked() -> bool:
-    """Verifica que LiveExecutor.IS_STUB=true y no hay órdenes reales."""
-    # Revisa el IS_STUB flag en la config y que no hay órdenes en Kafka
+    """Verifica G8 (C3, Fase 0 2026-09-24): fail-closed — no se opera capital real.
+
+    Dos condiciones de nivel código (CI-safe, sin infraestructura):
+      1. `live_executor.py` declara `IS_STUB: ClassVar[bool] = True`.
+      2. No hay ningún proceso `live_hydra`/`execute_live` corriendo.
+    """
     try:
-        # Revisa IS_STUB en la config de trading
+        src = (ROOT / "packages" / "trading" / "execution" / "live_executor.py").read_text()
+        stub_ok = "IS_STUB: ClassVar[bool] = True" in src
+    except Exception:
+        stub_ok = False  # fail-closed
+    # Proceso live: if pgrep finds none → no hay proceso → trading_ok=True
+    try:
         r = subprocess.run(
-            ["grep", "-r", "IS_STUB", "packages/trading/ --include='*.py'"],
+            ["pgrep", "-af", "live_hydra|execute_live"],
             capture_output=True,
             text=True,
             timeout=10,
         )
-        stub_ok = "IS_STUB = True" in r.stdout
+        trading_ok = r.returncode != 0
     except Exception:
-        stub_ok = False
-    # Revisa que no hay órdenes en Kafka (orderbook.raw debería tener flujos pero sin trading real)
-    try:
-        r = subprocess.run(
-            [
-                "docker",
-                "exec",
-                "ocm_kafka",
-                "kafka-get-offsets",
-                "--bootstrap-server",
-                "localhost:9092",
-                "--time",
-                "-1",
-                "orderbook.raw",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        trading_ok = r.returncode == 0
-    except Exception:
-        trading_ok = False
+        trading_ok = False  # fail-closed: sin poder verificar, BLOCK
     return stub_ok and trading_ok
 
 
@@ -545,7 +533,9 @@ def _evaluate_gate(gate_name: str, gate_def: dict) -> GateResult:
 
 
 # Gates de nivel código (ejecutables en CI sin infraestructura runtime).
-CODE_LEVEL_GATES = {"G1", "G2", "G3", "G10", "G11"}
+# G8 añadido en Fase 0 (C3, 2026-09-24): trading fail-closed verificado a nivel
+# código (IS_STUB=True + sin proceso live) — gate CI requerido.
+CODE_LEVEL_GATES = {"G1", "G2", "G3", "G8", "G10", "G11"}
 
 
 def main() -> int:
@@ -556,7 +546,7 @@ def main() -> int:
         "--mode",
         choices=["gate-dev", "gate-release", "gate-ci"],
         default="gate-dev",
-        help="gate-ci: solo gates de nivel código (G1,G2,G3,G10,G11); "
+        help="gate-ci: solo gates de nivel código (G1,G2,G3,G8,G10,G11); "
         "gate-dev: todos; gate-release: todos (futuro: más estricto)",
     )
     args = parser.parse_args()
