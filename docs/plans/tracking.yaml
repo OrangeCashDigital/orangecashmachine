@@ -3534,3 +3534,76 @@ f2_6e_topologia_kafka_por_bounded_context:
         F2.6d cerrada 2026-08-10; F2.6 como fase completa (a-d) queda cerrada.
         F2.6e (extensión documental posterior, cierre 2026-08-18) se añade como
         decisión derivada de F2.6d sobre topología Kafka.
+fase0_gobernanza:
+  estado: CERRADA
+  fecha: '2026-09-24'
+  descripcion: >-
+    Fase 0 (Governance / Human Decision Gate) del Plan Maestro — cierre del
+    Human Decision Gate del renderizado del Big Pickle. Materializa en gobernanza,
+    código y CI las decisiones humanas A1 / B2 / C3 (ver ADR-0041, ADR-0042,
+    ADR-0016, ADR-0013, PLAN-Maestro-Ingenieria.md §14).
+  decision_a_canonical_contract:
+    opcion: A1
+    descripcion: >-
+      ADR-0041 aceptado como ADR independiente que EXTENDE ADR-0013 (no lo
+      sustituye). Scope B: OHLCV, OrderBook, Trades, Funding, OI, Liquidations
+      (datasets con wire). Ticker/On-chain fuera. Envelope común + identidad por
+      dataset; purpose como metadata; dedup/evolución/routing/B-S-G ALREADY
+      DECIDED; ordering UNRESOLVED (deuda documentada).
+    adr: 'ADR-0041-canonical-market-data-contract (estado: Aceptado)'
+  decision_b_adrs:
+    opcion: B2
+    descripcion: >-
+      ADR-0042 degradado a documentación + tracking (no bloquea implementación).
+      ADR-0043 (orderbook resync) KEEP SEPARATE, se mantiene Propuesto.
+      ADR-0028 (BookBuilder/MarketState) queda SIN decidir — requiere aceptar o
+      rechazar formalmente (pendiente humano).
+    adr_0042: 'ADR-0042-ohlcv-architecture (estado: Obsoleto — degradado a documentación + tracking)'
+    adr_0043: 'ADR-0043-orderbook-snapshot-resync (estado: Propuesto, KEEP SEPARATE)'
+    adr_0028: 'ADR-0028-draft-bookbuilder-marketstate (estado: SIN DECIDIR)'
+  decision_c_is_stub:
+    opcion: C3
+    descripcion: >-
+      LiveExecutor.IS_STUB = True hasta Fase 9 (fail-closed). Guard G8 pasa a
+      ser un gate CI requerido (process verification). ADR-0016 se mantiene como
+      dueño de la condición de flip (IS_STUB -> False solo con _submit real
+      commiteado + tests + R9/R10 activos); C3 es una re-aserción interina.
+    adr: ADR-0016-live-executor-real-bybit (Nota Fase 0)
+  adr_pendientes:
+    - ADR-0028 (BookBuilder/MarketState) — aceptar o rechazar formalmente (residual humano)
+  arch_pending_f6:
+    - ownership_storage: PipelineContext.storage = None — quién inyecta y bajo qué condiciones (Fase 3)
+    - orquestacion_recovery: quién invoca mode="repair" tras detección de Quality (DETECTION != RECOVERY)
+    - disparo_repair_strategy: caller explícito en runtime (hoy ningún caller)
+    - maquina_estado_recovery: LIVE/HISTORICAL/BACKFILL/REPAIR/RECONCILIATION orquestados
+  cadena:
+    conocimiento:
+      estado: HECHO
+      referencia: >-
+        Renderizado del Big Pickle (auditoría integral previa, series 2026-09-21).
+        Auditoría previa MAESTRE 2026-08-XX; modelos de referencia (Hummingbot,
+        Nautilus Timers, Freqtrade) documentados en ADR-0041 §4.
+    decision_humana:
+      estado: HECHO
+      referencia: 'Decisiones humanas 2026-09-24 vía prompt multi-choice: A=A1, B=B2, C=C3'
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0041 aceptado; ADR-0042 degradado; ADR-0016 nota C3; ADR-0013 enlace'
+    gobernanza:
+      estado: HECHO
+      referencia: 'tracking.yaml bloque fase0_gobernanza; PLAN-Maestro-Ingenieria.md §14 entrada'
+    implementacion:
+      estado: HECHO
+      referencia: 'IS_STUB = True en live_executor; guard fail-closed en composition_root'
+    tests:
+      estado: HECHO
+      referencia: 'tests/trading/test_composition_root.py + test_import_contracts.py actualizados'
+    ci:
+      estado: HECHO
+      referencia: 'job production-gates (check_production_gates.py --mode gate-ci) + G8 en CODE_LEVEL_GATES + branch protection actualizado'
+    evidencia:
+      estado: HECHO
+      referencia: 'Verificación lint-imports/ruff/mypy/tests + audit_validator + engineering_health + production gates post-commit'
+    cierre:
+      estado: HECHO
+      referencia: 'Fase 0 cerrada 2026-09-24'
