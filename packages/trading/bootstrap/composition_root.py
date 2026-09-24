@@ -479,10 +479,12 @@ class TradingCompositionRoot:
             guard=self._guard,
         )
         if executor.IS_STUB:
-            raise RuntimeError(  # Guard R1 / B-01: fail-closed
-                "assemble_live bloqueado: LiveExecutor es STUB (CCXT no activo). "
+            raise RuntimeError(  # Guard R1 / B-01: fail-closed (C3, Fase 0 2026-09-24)
+                "assemble_live bloqueado: LiveExecutor es STUB (fail-closed). "
                 "No se opera capital real con un executor simulado. "
-                "F3 (B-12) reimplementa `_submit` y pone IS_STUB=False."
+                "Decisión C3 (Fase 0, 2026-09-24): IS_STUB = True hasta que la "
+                "implementación real de `_submit` esté commiteada con tests y "
+                "R9/R10 (ADR-0016) — objetivo Fase 9 del Plan Maestro."
             )
         oms = OMS(
             risk_manager=risk_manager,
