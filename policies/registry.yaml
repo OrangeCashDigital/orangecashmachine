@@ -1,12 +1,31 @@
 schema_version: 1
 adr: ADR-0031
 created: '2026-08-19'
-modified: '2026-08-19'
+modified: '2026-09-24'
 related_adrs:
   - ADR-0006
   - ADR-0015
   - ADR-0016
   - ADR-0020
+  - ADR-0044
+# Staged Ports (ADR-0044): Port sin consumidor tolerado solo como staged legitimo con
+# gobernanza completa (ADR, fase, consumidor, tracking, owner, expiry ISO). Enforcement
+# tecnico (ARCH-006 consume registro + M26) pendiente de autorizacion.
+# MarketDataViewPort (ADR-0028 §3.6) = primer caso registrado con expires 2026-12-31
+# (decision humana 2026-09-24; solo este caso, no es duracion general).
+staged_ports:
+  - port: MarketDataViewPort
+    file: packages/market_data/ports/outbound/market_data_view.py
+    adr: ADR-0028
+    adr_section: "§3.6"
+    current_phase: F1
+    target_phase: F2
+    consumer: B-MD-004
+    tracking_item: B-MD-004
+    owner: market_data
+    expires: "2026-12-31"
+    justification: "Port de lectura publica del BookBuilder (ADR-0028 §3.6, D4) sin consumidor en Fase 1; B-MD-004 (market validity pre-envio) lo consume en Fase 2. Gobernanza: ADR-0044 (Staged Ports Gobernados)."
+    revocation: "Criterio de salida (ADR-0044 §3.5/§3.4): al cablear el consumidor B-MD-004 se retira la entrada y el Port pasa a tratamiento normal; el vencimiento sin reautorizacion tambien retira la entrada."
 rules:
   - id: R1
     name: LiveExecutor stub bloquea live trading
