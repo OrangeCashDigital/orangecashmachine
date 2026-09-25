@@ -453,26 +453,30 @@ hallazgos:
   hallazgo_informe: H-24
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: EN_PROGRESO
   estado_auditoria: CONFIRMADO
   evidencia: 'KafkaProducerAdapter.send_async() (infrastructure/kafka/producer.py)
     captura toda excepción, sin retry/DLQ/circuit breaker; reason=dlq_sent ya reservado
     en KafkaMetrics.event_failed() pero ningún código lo dispara. 2026-08-09: send_async()
     ya clasifica causas (F-019) y produce() eleva KafkaProducerError (F-013) — la
     visualización del fallo esta resuelta; lo pendiente es recuperacion (gap/DLQ product-side).
-    No existe consumidor real de orderbook.raw (BookBuilder aspiracional: TOPIC_ORDERBOOK_RAW
-    solo usado por el propio producer)'
-  solucion: 'DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado
-    hasta existir consumidor real de orderbook.raw (BookBuilder). Cuando exista: sequence
-    aditivo en schema v2, book.sequence_number propagado, metrica ocm_kafka_gap_total,
-    reutilizando TOPIC_DLQ. No tocar wire schema sin consumidor (no-especulativo)'
+    BookBuilderConsumer existe y está cableado (commit b561339f); gap detection técnico
+    implementado; publicación de OrderBookGapDetectedEvent en market.gaps (D3) y
+    corrección de idempotencia D6 (fix-dedup-u) pendientes de implementación y validación.'
+  solucion: >-
+    DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado hasta
+    existir consumidor real de orderbook.raw (BookBuilder). ADR-0023 proponía en su momento
+    sequence aditivo en schema v2 y book.sequence_number propagado (referencia histórica SOLO);
+    esa especificación queda reemplazada por ADR-0028 aceptado con revisión (2026-09-24):
+    identity/continuity por update_id (u) en schema v2 estable, sin sequence/first_update_id,
+    sin schema v3. Solución vigente para OrderBook = ADR-0028 con D2/D3/D5/D6.
+    No tocar wire schema sin consumidor (no-especulativo).
   pruebas:
   - 'verificacion: grep TOPIC_ORDERBOOK_RAW en packages/+apps/ = solo producer; GROUP_BOOK_BUILDER/TOPIC_BOOK_DELTA/TOPIC_BOOK_SNAPSHOT
     = 0 usos productivos'
   - 'verificacion: cryptofeed expone book.sequence_number (cryptofeed_orderbook_stream.py:158-161)'
-  adr_relacionado: ADR-0023 -- deferral formal hasta consumidor real
-  riesgo_residual: Medio — perdida posible de deltas sin gap detection; senal visible
-    ya (KafkaProducerError + razones clasificadas), recuperacion pendiente de BookBuilder
+  adr_relacionado: 'ADR-0023, ADR-0028'
+  riesgo_residual: "Medio — gap detection técnico existe; publicación market.gaps (D3) y corrección idempotencia (D6) pendientes de implementación y validación."
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -483,22 +487,73 @@ hallazgos:
       referencia: B-25 en tracking.yaml
     adr:
       estado: HECHO
-      referencia: ADR-0023 deferral gap detection/DLQ product-side (2026-08-09)
+      referencia: 'ADR-0023 deferral histórico (2026-08-09); ADR-0028 aceptado con revisión (2026-09-24)'
     implementacion:
-      estado: PENDIENTE
-      referencia: deferida por ADR-0023 hasta consumidor real de orderbook.raw
+      estado: EN_PROGRESO
+      referencia: 'BookBuilderConsumer cableado (b561339f); D3 market.gaps + D6 fix-dedup-u pendientes'
     tests:
       estado: NO_APLICA
-      referencia: no hay cambio de contrato hoy
+      referencia: 'sin implementación D3/D6 aún'
     ci:
       estado: NO_APLICA
       referencia: null
     evidencia:
       estado: HECHO
-      referencia: 0 consumidores de orderbook.raw; ADR-0023 firmado
+      referencia: 'BookBuilderConsumer commiteado (b561339f); ADR-0028 firmado'
     cierre:
       estado: PENDIENTE
-      referencia: deferido hasta BookBuilder consumidor
+      referencia: 'governance closure requiere D3/D6 implementados y decisión humana'
+- id: B-MD-004
+  hallazgo_informe: B-MD-004
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Consumidor futuro del port de lectura pública MarketDataViewPort
+    (ADR-0028 §3.6, D4, 2026-09-24): market validity pre-envío (is_ready,
+    spread/liquidez/depth). Frontera pública: packages/market_data/ports/outbound/market_data_view.py;
+    sin consumidor en Fase 1 (fase actual de D4); BookBuilder implementa el port
+    estructuralmente (book_builder.py). Gobernanza de fase intermedia: ADR-0044
+    (Staged Ports Gobernados).'
+  solucion: 'B-MD-004 consumirá MarketDataViewPort para validar market readiness
+    (is_ready, best_bid/best_ask, spread, depth, stale_threshold_ms) antes del
+    envío de órdenes; detalle de implementación y wiring en fase posterior con
+    autorización separada. Al cablearse el consumidor real, MarketDataViewPort deja
+    de ser staged (cierre ADR-0044 §3.5).'
+  pruebas:
+  - 'pendiente: test de consumo de MarketDataViewPort por B-MD-004 (market validity)
+    y verificación de ARCH-006/M11 pasando tras el cableado'
+  adr_relacionado: 'ADR-0028, ADR-0044'
+  riesgo_residual: "Alto — mientras B-MD-004 no exista, MarketDataViewPort no tiene
+    consumidor y ARCH-006 lo reporta como huérfano (FAIL esperado; enforcement técnico
+    de staged como PASS pendiente de la fase de implementación). Sin validación de
+    mercado (is_ready/spread/depth) antes del envío hasta cablear B-MD-004."
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: 'ADR-0028 §3.6 (D4, 2026-09-24): consumidor previsto en Fase 2'
+    backlog:
+      estado: HECHO
+      referencia: B-MD-004 en tracking.yaml
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0028 §3.6 (D4) + ADR-0044 (Staged Ports Gobernados, 2026-09-24)'
+    implementacion:
+      estado: PENDIENTE
+      referencia: null
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: 'ADR-0028 §3.6 D4; market_data_view.py existe sin consumidor; BookBuilder implementa el port'
+    cierre:
+      estado: PENDIENTE
+      referencia: null
 - id: B-26
   hallazgo_informe: H-25
   fase: F2
@@ -3560,7 +3615,7 @@ fase0_gobernanza:
       rechazar formalmente (pendiente humano).
     adr_0042: 'ADR-0042-ohlcv-architecture (estado: Obsoleto — degradado a documentación + tracking)'
     adr_0043: 'ADR-0043-orderbook-snapshot-resync (estado: Propuesto, KEEP SEPARATE)'
-    adr_0028: 'ADR-0028-draft-bookbuilder-marketstate (estado: SIN DECIDIR)'
+    adr_0028: 'ADR-0028-draft-bookbuilder-marketstate (estado: ACEPTADO CON REVISIÓN, 2026-09-24; D1-D6, ND1-ND5, C1)'
   decision_c_is_stub:
     opcion: C3
     descripcion: >-
@@ -3569,8 +3624,7 @@ fase0_gobernanza:
       dueño de la condición de flip (IS_STUB -> False solo con _submit real
       commiteado + tests + R9/R10 activos); C3 es una re-aserción interina.
     adr: ADR-0016-live-executor-real-bybit (Nota Fase 0)
-  adr_pendientes:
-    - ADR-0028 (BookBuilder/MarketState) — aceptar o rechazar formalmente (residual humano)
+  adr_pendientes: []
   arch_pending_f6:
     - ownership_storage: PipelineContext.storage = None — quién inyecta y bajo qué condiciones (Fase 3)
     - orquestacion_recovery: quién invoca mode="repair" tras detección de Quality (DETECTION != RECOVERY)
