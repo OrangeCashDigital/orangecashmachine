@@ -32,7 +32,7 @@ Principios: SSOT · SRP · Fail-Fast · KISS
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Type, TypeVar
+from typing import Any, Dict, Type, TypeVar, cast
 
 from shared.kafka.schemas._base import BasePayload
 
@@ -70,7 +70,8 @@ def deserialize(data: bytes, payload_cls: Type[P]) -> P:
     if data is None:
         raise ValueError("deserialize: data no puede ser None")
     raw: Dict[str, Any] = json.loads(data.decode("utf-8"))
-    return payload_cls.from_dict(raw)  # type: ignore[attr-defined]
+    # from_dict solo está definido en subclases de BasePayload (lifted por cls).
+    return cast(P, payload_cls.from_dict(raw))  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
