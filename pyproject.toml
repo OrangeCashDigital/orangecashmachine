@@ -349,7 +349,7 @@ show_missing = true
 # fijar fail_under un par de puntos por debajo del real (margen) y subirlo
 # gradualmente en PRs siguientes — no de un salto a 60.
 # *_COVERAGE.activada_en_ci=true en tracking.yaml (R5).
-fail_under = 40
+fail_under = 50
 
 # =============================================================================
 # tool.bandit
