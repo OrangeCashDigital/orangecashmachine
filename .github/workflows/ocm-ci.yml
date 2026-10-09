@@ -71,6 +71,38 @@ jobs:
         run: uv run python scripts/engineering_health_check.py
 
   # ──────────────────────────────────────────────────────────────────────────
+  # JOB 1aa: execution-registry-parity (ADR-0048)
+  # Gate de paridad Execution Registry ↔ consumers (pyproject/run.sh/Dockerfile/
+  # Compose/systemd/CI). Fail-closed: un registry inválido, un entrypoint
+  # inexistente, un consumer no registrado, una ref DEAD usada como activa, o un
+  # estado NO_IMPLEMENTADO ejecutado como ACTIVO rompe la pipeline. CI verifica
+  # el contrato; NO lo define (ADR-0048 §4, §9-10; autoridad → ADR-0048).
+  # ──────────────────────────────────────────────────────────────────────────
+  execution-registry-parity:
+    name: Execution Registry parity (ADR-0048)
+    runs-on: ubuntu-latest
+    needs: [architecture, engineering-health]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Install dev dependencies
+        run: uv sync --group dev
+
+      - name: Validate registry YAML + schema
+        run: |
+          set -euo pipefail
+          uv run python -c "import yaml; d=yaml.safe_load(open('config/execution_registry.yaml')); assert d and d.get('adr')=='ADR-0048'; assert len(d['entrypoints'])>=6; print('registry OK:', d['schema_version'])"
+
+      - name: Execution Registry parity tests
+        run: uv run pytest tests/architecture/test_execution_registry_parity.py -q -m "not integration" --no-cov
+
+  # ──────────────────────────────────────────────────────────────────────────
   # JOB 1b: app-guard (blindaje de la Application Layer)
   # Gate de reglas auto-defendibles de apps/ (AUDIT-apps-2026-08-03, R12–R16):
   # el guard AST (scripts/app_layer_guard.py) bloquea reintroducción de

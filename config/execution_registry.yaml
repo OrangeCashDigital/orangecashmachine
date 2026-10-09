@@ -1,0 +1,167 @@
+# ==============================================================================
+# OrangeCashMachine — Execution Registry
+# ==============================================================================
+# ESTE ARCHIVO ES EL EXECUTION REGISTRY (canónico/ejecutable de entrypoints).
+#
+# AUTORIDAD: su autoridad NO proviene de su existencia, sino de ADR-0048
+#   (docs/architecture/decisions/ADR-0048-execution-contract-and-runtime-architecture.md)
+#   y de la cadena: ADR-0048 → Execution Contract → Approved Registry Rule →
+#   Execution Registry.
+#
+# RELACIÓN CON CONSUMERS:
+#   - pyproject.toml [project.scripts]  → packaging consumer (NO SSOT arquitectónico).
+#   - run.sh                            → developer/operator convenience layer (NO SSOT).
+#   - Dockerfile / docker-compose       → deployment consumers (PUBLIC entrypoints vía -m).
+#   - systemd                           → deployment consumer (ExecStart).
+#   - CI                                → verifica/enforcea el contrato; NO lo define.
+#
+# REGLAS:
+#   - Un consumer NO puede contradecir este registro silenciosamente.
+#   - Una discrepancia entre consumer y registry DEBE fallar en validación (parity tests).
+#   - PUBLIC = entrada explícita en este registry (D5-01). Un módulo/main.py/python -m
+#     NO convierte nada en público por existir.
+# ==============================================================================
+
+schema_version: 1
+adr: ADR-0048
+created: '2026-09-28'
+modified: '2026-09-28'
+authority_chain: 'ADR-0048 → Execution Contract → Approved Registry Rule → Execution Registry'
+
+entrypoints:
+  - id: EP-001
+    entrypoint: 'app.cli.main:main'
+    rol: APPLICATION BATCH ENTRYPOINT
+    frontera: APPLICATION EXECUTION
+    modo: BATCH
+    tipo: PUBLIC
+    invocacion: 'console script: ocm'
+    registro: '[project.scripts] ocm'
+    bc: [ocm]
+    consumers: [CI config-validation, 'run.sh (ocm)', 'pyproject [project.scripts] ocm']
+    estado: ACTIVO
+    deuda: NINGUNA
+
+  - id: EP-002
+    entrypoint: 'app.cli.live_hydra:main'
+    rol: APPLICATION RUNTIME ENTRYPOINT (LIVE)
+    frontera: APPLICATION EXECUTION
+    modo: LIVE
+    tipo: PUBLIC
+    invocacion: 'console script: live'
+    registro: '[project.scripts] live'
+    bc: [trading, portfolio]
+    consumers: ['pyproject [project.scripts] live', 'run.sh (live)']
+    estado: ACTIVO
+    deuda: NINGUNA
+
+  - id: EP-003
+    entrypoint: 'app.cli.paper_hydra:main'
+    rol: APPLICATION RUNTIME ENTRYPOINT (PAPER)
+    frontera: APPLICATION EXECUTION
+    modo: PAPER
+    tipo: PUBLIC
+    invocacion: 'console script: paper'
+    registro: '[project.scripts] paper'
+    bc: [trading, portfolio]
+    consumers: ['pyproject [project.scripts] paper', 'run.sh (paper)']
+    estado: ACTIVO
+    deuda: NINGUNA
+
+  - id: EP-004
+    entrypoint: 'app.cli.streaming_hydra:main'
+    rol: APPLICATION RUNTIME ENTRYPOINT (STREAMING)
+    frontera: APPLICATION EXECUTION
+    modo: STREAMING
+    tipo: PUBLIC
+    invocacion: 'console script: streaming'
+    registro: '[project.scripts] streaming'
+    bc: [market_data]
+    consumers: ['pyproject [project.scripts] streaming', 'systemd ocm-streaming.service', 'run.sh (streaming, convenience)']
+    estado: ACTIVO
+    deuda: NINGUNA
+
+  - id: EP-005
+    entrypoint: 'api.main:serve'
+    rol: APPLICATION API ENTRYPOINT (experimental)
+    frontera: APPLICATION EXECUTION
+    modo: SERVICE
+    tipo: PUBLIC
+    invocacion: 'console script: ocm-api'
+    registro: '[project.scripts] ocm-api'
+    bc: [ocm]
+    consumers: ['pyproject [project.scripts] ocm-api']
+    estado: ACTIVO
+    deuda: >-
+      ocm-api es experimental. modo SERVICE (runtime HTTP de larga duración vía uvicorn,
+      api.main:create_app) es una extensión documental del campo modo (BATCH/STREAMING/LIVE/
+      PAPER/SERVICE) para el entrypoint API; NO crea BC ni proceso nuevo (ADR-0048 §6.1). Para
+      confirmación humana en el HUMAN ACCEPTANCE GATE final.
+
+  - id: EP-006
+    entrypoint: 'market_data.main'
+    rol: MARKET DATA SERVICE ENTRYPOINT
+    frontera: MARKET DATA SERVICE EXECUTION
+    modo: SERVICE (Market Data)
+    tipo: PUBLIC
+    invocacion: 'python -m market_data.main'
+    registro: 'Execution Registry (EP-006); invocado por Dockerfile/Compose/systemd. NO en [project.scripts] (Q2: PUBLIC ≠ console script)'
+    bc: [market_data]
+    consumers: ['Dockerfile CMD', 'docker-compose service', 'systemd ocm-market-data.service']
+    estado: ACTIVO
+    deuda: NINGUNA
+
+modes:
+  - name: BATCH
+    estado: ACTIVO
+    entrypoints: [EP-001]
+  - name: LIVE
+    estado: ACTIVO
+    entrypoints: [EP-002]
+  - name: PAPER
+    estado: ACTIVO
+    entrypoints: [EP-003]
+  - name: STREAMING
+    estado: ACTIVO
+    entrypoints: [EP-004]
+  - name: BACKTEST
+    estado: NO_IMPLEMENTADO
+    entrypoints: []
+    nota: >-
+      Modo de ejecución arquitectónico objetivo (ADR-0047 §17 / ADR-0048). NO materializado:
+      NO existe backtest.main ni implementación productiva. Capacidad objetivo, no runtime actual.
+
+  - name: SERVICE (Market Data)
+    estado: ACTIVO
+    entrypoints: [EP-006]
+
+discrepancias:
+  - id: DISP-D5-01
+    artefacto: run.sh
+    hallazgo: 'run.sh cabecera declara "SSOT idéntico a [project.scripts]" — falso (faltan ocm-api/streaming) y arquitectónicamente incorrecto (run.sh ≠ SSOT; el registry lo es).'
+    clasificacion: CONTRADICCIÓN FACTUAL / DOCUMENTAL
+    fase_resolucion: H
+    estado: RESUELTA
+    resuelto: 'Phase H (2026-09-28): claim SSOT eliminado; run.sh documentado como convenience layer (consumer) que invoca EP-001/EP-002/EP-003 del registry.'
+
+  - id: DISP-D5-02
+    artefacto: docker-compose.yml
+    hallazgo: 'refs python -m trading.main (lin 407) y python -m portfolio.main (lin 451) — módulos inexistentes (DEAD RUNTIME REFERENCES).'
+    clasificacion: ARCHITECTURAL DISCREPANCY / DEAD RUNTIME REFERENCE
+    fase_resolucion: F
+    estado: RESUELTA
+    resuelto: >-
+      Phase F (2026-09-28): bloques trading/portfolio de compose retirados (scaffolding NO
+      EJECUTABLE con refs a módulos inexistentes); se preserva comentario con trazabilidad
+      (ADR-0047 §11/§12, ADR-0048 §6.2, DISP-D5-02). trading/portfolio se ejecutan in-process
+      vía EP-002/EP-003; NO se crearon trading.main/portfolio.main.
+
+dead_references:
+  - referencia: 'python -m trading.main'
+    origen: docker-compose.yml
+    clasificacion: DEAD
+    resolucion: 'eliminar/migrar en fase F. NO crear trading.main (ADR-0047 §11).'
+  - referencia: 'python -m portfolio.main'
+    origen: docker-compose.yml
+    clasificacion: DEAD
+    resolucion: 'eliminar/migrar en fase F. NO crear portfolio.main (ADR-0047 §12).'
