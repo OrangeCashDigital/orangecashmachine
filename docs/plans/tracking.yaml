@@ -3661,3 +3661,176 @@ fase0_gobernanza:
     cierre:
       estado: HECHO
       referencia: 'Fase 0 cerrada 2026-09-24'
+d5_entrypoints_execution_model:
+  estado: DECIDIDA
+  fecha: '2026-09-28'
+  descripcion: >-
+    Modelo de ejecución/entrypoints de OCM fijado por decisión humana D5 (2026-09-28).
+    BACKTEST/LIVE/PAPER = modos del mismo dominio/aplicación OCM; trading y portfolio
+    permanecen Nivel 2 EMBEDDED; market_data Nivel 1 con runtime/service independiente.
+    Invariantes: BC≠PROCESS, BC≠ENTRYPOINT, MODE≠BC, DEPLOYMENT MECHANISM≠ARCHITECTURE.
+  decision_entries:
+  - id: D5-01
+    opcion: D
+    resolucion: >-
+      PUBLIC = registro explícito en el execution contract. La existencia de módulo,
+      main.py, main(), python -m, referencias Docker/systemd/tests NO convierte en
+      public entrypoint. INTERNAL = implementación interna no declarada como interfaz
+      de ejecución pública.
+  - id: D5-02
+    opcion: A
+    resolucion: >-
+      app.cli.main = APPLICATION BATCH ENTRYPOINT; market_data.main = MARKET DATA
+      SERVICE ENTRYPOINT. No fusionar/sustituir; coexisten en fronteras de ejecución
+      distintas.
+  - id: D5-03
+    opcion: B
+    resolucion: >-
+      market_data.main es el service entrypoint público de Market Data
+      (conceptualmente python -m market_data.main). No obliga a -m en otros entrypoints.
+      No registrar trading.main ni portfolio.main.
+  - id: D5-04
+    opcion: D
+    resolucion: >-
+      Tres capas: ADR (autoridad) → execution contract → execution registry →
+      consumers. pyproject/run.sh/Dockerfile/systemd/CI no son autoridad por existir;
+      CI verifica/aplica, no legisla.
+  execution_model:
+    diagrama: 'BACKTEST/LIVE/PAPER ↓ APPLICATION ↓ DOMAIN ↓ trading+portfolio (embedded); market_data ↓ SERVICE ↓ Kafka/Iceberg'
+    backtest_status: 'NOT YET IMPLEMENTED / PENDING DESIGN AND IMPLEMENTATION (capacidad objetivo, no runtime actual)'
+    trading: 'Nivel 2 EMBEDDED — sin trading.main (no crear como consecuencia de D5)'
+    portfolio: 'Nivel 2 EMBEDDED — sin portfolio.main (no crear como consecuencia de D5)'
+    market_data: 'Nivel 1 — runtime/service independiente (python -m market_data.main)'
+  discrepancies_registradas:
+  - id: DISP-D5-01
+    artefacto: run.sh
+    hallazgo: >-
+      pyproject.toml registra ocm/ocm-api/live/paper/streaming; run.sh expone solo
+      ocm/live/paper y su cabecera declara 'SSOT idéntico a [project.scripts]'.
+    clasificacion: CONTRADICCIÓN FACTUAL / FINDING / DEUDA DE MIGRACIÓN
+    resolucion: postergada al execution contract (NO corregida en fase D5)
+  - id: DISP-D5-02
+    artefacto: docker-compose.yml
+    hallazgo: 'referencias python -m trading.main y python -m portfolio.main — módulos inexistentes'
+    clasificacion: ARCHITECTURAL DISCREPANCY / DEAD RUNTIME REFERENCE
+    resolucion: >-
+      postergada al execution contract (NO corregir creando trading.main/portfolio.main;
+      alinear Compose con el contrato aprobado)
+  adr_relacionado: ADR-0047
+  estado_materializacion: 'ACEPTADO CON ACLARACIONES (G4.3 — 2026-09-28). Aceptación humana formal; aclaraciones documentales/arquitectónicas incorporadas en ADR-0047 §23 (separación ADR/CONTRACT/REGISTRY/IMPLEMENTATION/VALIDATION/EVIDENCE; invariantes I-ENTRY-01..12). NO autoriza implementación ni migración.'
+  scope_no_autorizado:
+  - 'NO implementación de la arquitectura todavía'
+  - 'NO modificar código funcional / Dockerfile / docker-compose / systemd / run.sh / pyproject [project.scripts]'
+  - 'NO crear/eliminar entrypoints de runtime; NO mover archivos; NO reorganizar directorios'
+  - 'NO crear trading.main / portfolio.main; NO implementar Backtest'
+  - 'NO corregir discrepancias; NO modificar contratos de arquitectura existentes'
+  cadena:
+    conocimiento:
+      estado: HECHO
+      referencia: >-
+        Análisis D5 entrypoints (D5-01..D5-11), inventario E1-E9, consumer matrix,
+        comparación industria (NautilusTrader/Hummingbot/Freqtrade) — 2026-09-27.
+    decision_humana:
+      estado: HECHO
+      referencia: 'Decisión humana D5 — 2026-09-28 (D5-01=D, D5-02=A, D5-03=B, D5-04=D)'
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0047-d5-entrypoints-execution-model (Estado textual: ACEPTADO CON ACLARACIONES; G4.3 — 2026-09-28; aclaraciones formales en §23; invariantes I-ENTRY-01..12 formalizadas)'
+    gobernanza:
+      estado: HECHO
+      referencia: 'tracking.yaml bloque d5_entrypoints_execution_model (este bloque); registry.yaml SIN CAMBIO (sin estructura para decisiones/entrypoints; ADR en related_adrs generaría WARN M25 nuevo)'
+    implementacion:
+      estado: NO_APLICA
+      referencia: 'NO autorizada en fase D5 — Human/Build Gate separado para execution contract + migración consumers'
+    tests:
+      estado: NO_APLICA
+      referencia: 'Sin cambios de tests en fase D5 (materialización documental)'
+    ci:
+      estado: NO_APLICA
+      referencia: 'Sin cambios de CI en fase D5'
+    evidencia:
+      estado: HECHO
+      referencia: 'Validación READ-ONLY post-materialización: ADR refleja D5-01=D/D5-02=A/D5-03=B/D5-04=D; audit_validator sin FAIL nuevo vs baseline; git HEAD idéntico 05317f149c'
+    cierre:
+      estado: HECHO
+      referencia: >-
+        G4.3 (2026-09-28): ACEPTADO CON ACLARACIONES. Aceptación humana formal;
+        aclaraciones incorporadas a ADR-0047 §23; contradicción ADR↔tracking
+        resuelta (estado textual del ADR ahora coherente con tracking).
+        NO autoriza implementación ni migración de consumers.
+
+adr_0048_execution_contract:
+  estado: DECIDIDA
+  fecha: '2026-09-28'
+  descripcion: >-
+    Execution Contract y Runtime Architecture materializada por ADR-0048 (mandato humano
+    2026-09-28, Q1-Q8). Autoridad: ADR-0048 → Execution Contract → Registry Rule →
+    Execution Registry (config/execution_registry.yaml, Phase B). Registry dedicado (NO
+    policies/registry.yaml). market_data.main = PUBLIC MARKET DATA SERVICE ENTRYPOINT (se
+    mantiene python -m market_data.main; NO console script nuevo). run.sh = convenience layer
+    (NO SSOT; claim eliminado en fase H). trading.main/portfolio.main = DEAD RUNTIME REFS
+    (compose, DISP-D5-02; corregir en fase F sin crear módulos). fases A-L aprobadas con gates.;
+  q1_q8:
+    q1_registry_ubicacion: 'config/execution_registry.yaml (dedicado; separado de policies/registry.yaml; sin glob Hydra)'
+    q2_market_data_script: 'PUBLIC SERVICE; mantener python -m market_data.main; NO [project.scripts] market-data'
+    q3_run_sh_ssot: 'run.sh NO es SSOT; convenience layer; eliminar claim en fase H'
+    q4_compose_dead_refs: 'trading.main/portfolio.main = DEAD RUNTIME REFERENCE; corregir fase F sin crear módulos'
+    q5_fases_a_l: 'aprobadas con gates; cada fase SOLO tras su gate'
+    q6_estado_enum: 'ACTIVE / DISCREPANCY / DEAD / NOT_IMPLEMENTED'
+    q7_roles: 'live/paper/streaming = APPLICATION RUNTIME ENTRYPOINTS; api.main = APPLICATION API ENTRYPOINT; market_data.main = SERVICE'
+    q8_authority: 'ADR-0048 → Execution Contract → Approved Registry Rule → Execution Registry'
+  adr_relacionado: ADR-0048
+  estado_materializacion: 'GATE A RESUELTO — ACEPTADO CON ACLARACIONES (G4.3 — 2026-09-28). Aceptación humana formal; aclaraciones documentales incorporadas en ADR-0048 §16 (separación ADR/CONTRACT/REGISTRY/IMPLEMENTATION/VALIDATION/EVIDENCE; invariantes I-ENTRY-01..12). Registry NO crea autoridad; CI NO crea autoridad; evidence NO crea autoridad; existencia de artefacto NO crea autoridad.'
+  scope_no_autorizado:
+  - 'Registry config/execution_registry.yaml YA materializado (Phase B) y ACEPTADO (GATE A resuelto G4.3); el ítem previo "NO creación todavía" queda obsoleto'
+  - 'NO modificar código / pyproject / run.sh / Dockerfile / docker-compose / systemd / CI / tests'
+  - 'NO corregir DISP-D5-01 / DISP-D5-02 (fases H/F)'
+  - 'NO crear trading.main / portfolio.main; NO implementar Backtest'
+  - 'NO modificar policies/registry.yaml ni related_adrs'
+  - 'NO inventar schemas/datasets de Market Data; NO big-bang'
+  cadena:
+    conocimiento:
+      estado: HECHO
+      referencia: 'Decision Pack EXECUTION-CONTRACT-DECISION-PACK-2026-09-28 (PROPUESTA) + baseline Phase 0 (docs/audit/OCM-PRE-IMPLEMENTATION-BASELINE-2026-09-28.md)'
+    decision_humana:
+      estado: HECHO
+      referencia: 'Mandato MASTER ARCHITECTURE TRANSFORMATION — 2026-09-28 (Q1-Q8 resueltos) + D5 2026-09-28'
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0048-execution-contract-and-runtime-architecture (Estado textual: ACEPTADO CON ACLARACIONES; GATE A resuelto; G4.3 — 2026-09-28; aclaraciones formales en §16; invariantes I-ENTRY-01..12 formalizadas)'
+    gobernanza:
+      estado: HECHO
+      referencia: 'tracking.yaml bloque adr_0048_execution_contract (este bloque); registry.yaml SIN CAMBIO'
+    implementacion:
+      estado: HECHO
+      referencia: >-
+        Fases B-L 2026-09-28 (autorización GATE A): B registry config/execution_registry.yaml
+        (EP-001..006, 12 campos, estados ADR-0048); C app.cli auditado (sin procesos/BC nuevos);
+        D market_data frontera auditada (sin cross-BC, domain sin pandas; deep-schemas deferidos);
+        E Dockerfile CMD→EP-006; F compose retirados trading/portfolio (DISP-D5-02 RESUELTA);
+        G systemd ExecStart→EP-004/EP-006 (diffs preexistentes preservados); H run.sh SSOT claim
+        eliminado (DISP-D5-01 RESUELTA, convenience layer); I tests paridad (18 tests);
+        J CI job execution-registry-parity (fail-closed); K legacy refs (README vigente alineado).
+    tests:
+      estado: HECHO
+      referencia: >-
+        tests/architecture/test_execution_registry_parity.py (18 passed); tests/architecture 200
+        passed (2 FAIL pre-existentes baseline: M21, B-25); tests/market_data 203 passed; import-linter
+        51 KEPT; mypy apps OK; ruff OK.
+    ci:
+      estado: HECHO
+      referencia: 'ocm-ci.yml nuevo job execution-registry-parity (valida registry schema + parity tests; fail-closed). CI verifica, no decide (ADR-0048 §18).'
+    evidencia:
+      estado: HECHO
+      referencia: >-
+        Validación Phase L 2026-09-28: audit_validator ≤ baseline (M21/M25/M20 pre-existentes);
+        architecture_linter 3 PASS/7 FAIL idéntico baseline; config validation OK; compose config
+        OK; frontend parity 18/18. HEAD sin commit (05317f149c sigue siendo base).
+    cierre:
+      estado: HECHO
+      referencia: >-
+        G4.3 (2026-09-28): GATE A RESUELTO — ACEPTADO CON ACLARACIONES. Aceptación
+        humana formal; aclaraciones incorporadas a ADR-0048 §16; contradicción
+        ADR↔tracking resuelta (estado textual del ADR ahora coherente con tracking).
+        NO autoriza implementación funcional ni migración adicional; fases B-L
+        materializadas no se reinterpretan como autorización de nuevas fases.
