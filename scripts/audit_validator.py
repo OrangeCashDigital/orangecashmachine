@@ -130,10 +130,12 @@ CANONICAL_COMMANDS: dict[str, tuple[str, int, str]] = {
     "MYPY": ("uv run mypy . --no-incremental", 0, "GATE calidad: tipado sin errores."),
     "SSOT_ENUMS": ("uv run python scripts/check_ssot_enums.py", 0, "GATE SSOT: literales solo en shared/enums.py."),
     "DEPENDENCY_AUDIT": (
-        "uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325",
+        "uv run pip-audit --ignore-vuln PYSEC-2026-113",
         0,
-        "GATE seguridad. Comando CANÓNICO = el del CI (risk-accept documentado 2026-08-03). "
-        "Sin los ignores del CI produce 6 vulns (no 4) — eso NO es un finding distinto.",
+        "GATE seguridad. Comando CANÓNICO = el del CI (risk-accept formal ADR-0054, pyarrow "
+        "PYSEC-2026-113; tracking B-61). Modo entorno real (sin ruta): 'pip-audit .' resuelve "
+        "con pip-resolve e ignora override-dependencies de uv (falso positivo). Retirar el "
+        "ignore al migrar pyarrow>=23.0.1.",
     ),
     "BANDIT": (
         "uv run bandit -r apps ocm packages shared infrastructure -ll",
