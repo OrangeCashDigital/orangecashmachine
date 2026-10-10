@@ -29,7 +29,7 @@ Principios: DIP · OCP · ISP · KISS · SafeOps
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class ExchangeAdapter(ABC):

@@ -54,7 +54,7 @@ from __future__ import annotations
 import statistics
 import time
 from collections import deque
-TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from loguru import logger
 
