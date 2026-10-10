@@ -3,6 +3,7 @@ name: ocm-context-bootstrap
 description: Build a verified Context Pack (ADRs, contracts, invariants, affected code) for OrangeCashMachine before changing code or taking architecture-relevant decisions. Use for any change under packages/, apps/, shared/, config/, policies/ or docs/architecture. Do NOT use for typos, formatting or pure-docs edits.
 compatibility: Requires git, ripgrep (rg) and uv. Read-only retrieval.
 metadata:
+  version: "1.1.0"
   adr_ref: docs/architecture/decisions/ADR-0054-persistent-engineering-context-decisions.md
 ---
 
@@ -49,6 +50,11 @@ Exhaust in order: E1 existing ADR, E2 spec/contract, E3 governance/AGENTS, E4 re
 - Missing evidence is INSUFFICIENT EVIDENCE, never inference.
 - On conflict or ambiguity: STOP, REPORT CONFLICT, DO NOT INVENT RESOLUTION.
 - Out of scope: new decisions, normative rules, tracking.yaml changes, new infrastructure.
+
+## Retrieval helper
+
+`bash .agents/skills/ocm-context-bootstrap/scripts/ctx-search.sh "<keyword>" [max]` runs the greps of steps 3-9 in one capped, read-only pass. It excludes PDFs/ZIPs/.bak, prints the Estado line of every ADR hit and flags ADR number collisions. It retrieves only: status labels come from reading each source.
+Pack template: assets/context-pack.template.md
 
 ## Maintenance
 
