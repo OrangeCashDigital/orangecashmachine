@@ -4,6 +4,9 @@ Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0022-lifecyc
 After=network-online.target docker.service
 Wants=network-online.target docker.service
 
+StartLimitIntervalSec=300s
+StartLimitBurst=5
+
 [Service]
 Type=simple
 User=${OCM_HOST_USER}
@@ -40,8 +43,6 @@ LimitNOFILE=65536
 # -----------------------------------------------------------------
 Restart=on-failure
 RestartSec=5s
-StartLimitIntervalSec=300s
-StartLimitBurst=5
 TimeoutStopSec=30
 KillSignal=SIGINT
 
