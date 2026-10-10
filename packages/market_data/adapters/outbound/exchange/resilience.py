@@ -21,7 +21,7 @@ El resilience layer NO conoce CCXT — solo ve:
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Any, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 import aioresilience
 import ccxt.async_support as _ccxt_async

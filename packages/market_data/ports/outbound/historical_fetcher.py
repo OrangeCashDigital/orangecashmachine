@@ -45,7 +45,7 @@ SSOT  — única fuente de verdad del contrato de fetching histórico
 
 from __future__ import annotations
 
-from typing import AsyncIterator, Any, Optional, Protocol, runtime_checkable
+from typing import Any, AsyncIterator, Optional, Protocol, runtime_checkable
 
 import polars as pl
 
