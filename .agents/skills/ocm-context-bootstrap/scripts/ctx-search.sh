@@ -13,5 +13,5 @@ echo "## ADR number collisions"; ls docs/architecture/decisions | sed -E 's/^(AD
 echo "## HISTORICAL (SUPERSEDED-*)"; rg -l -i -- "$kw" docs/architecture/SUPERSEDED-* 2>/dev/null | head -n "$max"
 grp "REQUIREMENTS/INVARIANTS/CONSTRAINTS" docs/DOMAIN.md docs/PLAN-Maestro-Ingenieria.md docs/plans/engineering-guardrails.md docs/plans/tracking.yaml
 grp "MEMORY (never authority; follow its source)" docs/engineering-context
-grp "RESEARCH/EVIDENCE (audits never authority)" docs/knowledge/manifest.yaml docs/proposals docs/audits docs/audit
+grp "RESEARCH/EVIDENCE (audits never authority)" docs/knowledge/manifest.yaml docs/proposals docs/audits
 grp "CODE" packages apps shared tests
