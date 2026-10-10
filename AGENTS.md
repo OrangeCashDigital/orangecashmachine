@@ -189,3 +189,8 @@ Si una fuente de menor autoridad contradice una de mayor autoridad, prevalece la
 **No-sobrediseño.** La literatura no justifica introducir abstracciones, BCs, servicios, capas o patrones nuevos "por analogía". Toda complejidad nueva exige necesidad concreta + autoridad arquitectónica.
 
 **Estado/vigencia.** Fuentes históricas, antiguas, no verificadas o potencialmente desactualizadas no se presentan como conocimiento operativo vigente. Diferencia referencia histórica/conceptual de documentación vigente.
+
+## Skills
+
+Before modifying code under packages/, apps/, shared/, config/ or policies/, load the `ocm-context-bootstrap` skill and build a Context Pack. Not required for typos, formatting or docs-only edits.
+The skill is procedural and never authority; ADR-0054 is still PROPOSED (docs/architecture/decisions/ADR-0054-persistent-engineering-context-decisions.md).
