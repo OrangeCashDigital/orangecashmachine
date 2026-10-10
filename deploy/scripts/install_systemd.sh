@@ -4,7 +4,8 @@
 # ==============================================================================
 # Uso:
 #   ./deploy/scripts/install_systemd.sh --verify-only   # solo render + verify
-#   ./deploy/scripts/install_systemd.sh                # system: install + daemon-reload
+#   ./deploy/scripts/install_systemd.sh                # system: install + daemon-reload (no arranca nada)
+#   ./deploy/scripts/install_systemd.sh --enable       # ademas: enable --now de cada unidad
 #   ./deploy/scripts/install_systemd.sh --user         # user unit (~/.config/systemd/user)
 # ==============================================================================
 set -euo pipefail
@@ -17,10 +18,12 @@ RENDER_DIR="${REPO_ROOT}/deploy/systemd/rendered"
 
 INSTALL_ONLY=false
 USER_MODE=false
+ENABLE=false
 
 for arg in "${@:-}"; do
     case "${arg}" in
         --verify-only) INSTALL_ONLY=true ;;
+        --enable) ENABLE=true ;;
         --user) USER_MODE=true ;;
     esac
 done
@@ -79,7 +82,7 @@ for tpl in "${TEMPLATE_DIR}"/*.template; do
     
     if ${USER_MODE}; then
         # User= y multi-user.target no aplican al user manager de systemd
-        sed -i '/^User=/d; s/^WantedBy=multi-user.target/WantedBy=default.target/' "${out}"
+        sed -i '/^User=/d; /^Nice=/d; /^LimitRTPRIO=/d; s/^WantedBy=multi-user.target/WantedBy=default.target/' "${out}"
     fi
     UNITS+=("${out}")
 done
@@ -117,11 +120,13 @@ else
     echo "[install-systemd] daemon-reload OK"
     
     # Activar y reiniciar los servicios para aplicar los cambios
+    if ${ENABLE}; then
     for u in "${UNITS[@]}"; do
         unit_name="$(basename "${u}")"
         echo "[install-systemd] Habilitando y reiniciando ${unit_name}..."
-        systemctl enable "${unit_name}" --now || true
+        systemctl enable "${unit_name}" --now
     done
+    fi
 fi
 
 echo "[install-systemd] PROCESO COMPLETADO CON ÉXITO."

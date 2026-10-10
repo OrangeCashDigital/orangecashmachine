@@ -30,7 +30,7 @@ PrivateTmp=true
 CPUAffinity=2 3
 
 # Prioridad de procesamiento y límites de recursos
-Nice=-20
+Nice=-5
 LimitRTPRIO=99
 LimitMEMLOCK=infinity
 LimitNOFILE=65536
