@@ -5,7 +5,7 @@ import base64
 import os
 import time
 from itertools import islice
-from typing import Iterator, Optional, Protocol, runtime_checkable
+from typing import Any, Iterator, Optional, Protocol, runtime_checkable
 
 import redis
 from loguru import logger
@@ -387,7 +387,7 @@ def _decode(value: str) -> str:
     return base64.urlsafe_b64decode(value).decode()
 
 
-def _batched(iterable: Iterator, size: int) -> Iterator[list]:
+def _batched(iterable: Iterator[Any], size: int) -> Iterator[list[Any]]:
     it = iter(iterable)
     while True:
         batch = list(islice(it, size))

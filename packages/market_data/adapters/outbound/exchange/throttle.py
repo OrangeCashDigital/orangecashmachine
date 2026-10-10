@@ -54,7 +54,7 @@ from __future__ import annotations
 import statistics
 import time
 from collections import deque
-from typing import TYPE_CHECKING, Dict, Optional
+TYPE_CHECKING, Any, Optional
 
 from loguru import logger
 
@@ -498,13 +498,13 @@ def get_throttle_state(
     exchange_id: str,
     market_type: str = "spot",
     dataset: str = "ohlcv",
-) -> dict:
+) -> dict[str, Any]:
     """
     Estado observable del throttle para logging y métricas externas.
     SafeOps: nunca lanza excepción. Todos los campos garantizados presentes.
     """
     key = f"{exchange_id}:{market_type}:{dataset}"
-    _empty: dict = {
+    _empty: dict[str, Any] = {
         "key": key,
         "concurrent": 0,
         "maximum": 0,

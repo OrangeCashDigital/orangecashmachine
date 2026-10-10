@@ -24,7 +24,7 @@ Principios: DIP · ISP · OCP · SSOT · runtime_checkable
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 import polars as pl
 
@@ -270,7 +270,7 @@ class SnapshottableStoragePort(OHLCVStorage, Protocol):
     Usado por : GoldStorage.build() para anclar lineage de Silver.
     """
 
-    def get_current_snapshot(self) -> Optional[dict]:
+    def get_current_snapshot(self) -> Optional[dict[str, Any]]:
         """
         Retorna metadatos del snapshot actual.
 

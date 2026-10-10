@@ -44,7 +44,7 @@ SafeOps
 
 import json
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -287,7 +287,7 @@ class GapRegistry:
     # Read
     # ----------------------------------------------------------
 
-    def list_pending(self, exchange: str = "") -> List[dict]:
+    def list_pending(self, exchange: str = "") -> list[dict[str, Any]]:
         """
         Lista todos los gaps pendientes. Si exchange="", devuelve todos.
 
@@ -348,7 +348,7 @@ class GapRegistry:
         symbol: str,
         timeframe: str,
         start_ms: int,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """Obtiene un gap específico por clave. None si no existe."""
         key = _gap_key(self._env, exchange, symbol, timeframe, start_ms)
         try:

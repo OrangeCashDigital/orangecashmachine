@@ -42,7 +42,7 @@ import json
 import sqlite3
 import uuid
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from loguru import logger
 
@@ -237,7 +237,7 @@ class LineageTracker:
             )
 
     @staticmethod
-    def _row_to_event(row: tuple) -> LineageEvent:
+    def _row_to_event(row: tuple[Any, ...]) -> LineageEvent:
         return LineageEvent(
             run_id=row[0],
             layer=PipelineLayer(row[1]),

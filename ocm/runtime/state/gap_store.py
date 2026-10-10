@@ -59,7 +59,7 @@ class GapStorePort(Protocol):
     def delete(self, key: str) -> bool: ...
     def exists(self, key: str) -> bool: ...
     def ttl(self, key: str) -> int: ...
-    def scan(self, cursor: int, match: str, count: int) -> tuple: ...
+    def scan(self, cursor: int, match: str, count: int) -> tuple[int, list[str]]: ...
     def pipeline(self) -> PipelinePort: ...
 
 
@@ -97,7 +97,7 @@ class RedisGapStore:
     def ttl(self, key: str) -> int:
         return int(self._client.ttl(key))
 
-    def scan(self, cursor: int, match: str, count: int) -> tuple:
+    def scan(self, cursor: int, match: str, count: int) -> tuple[int, list[str]]:
         return self._client.scan(cursor=cursor, match=match, count=count)
 
     def pipeline(self) -> PipelinePort:
@@ -146,7 +146,7 @@ class InMemoryGapStore:
     def ttl(self, key: str) -> int:
         return self._ttls.get(key, -1)
 
-    def scan(self, cursor: int, match: str, count: int) -> tuple:
+    def scan(self, cursor: int, match: str, count: int) -> tuple[int, list[str]]:
         import fnmatch
 
         keys = [k for k in self._data if fnmatch.fnmatch(k, match.replace("*", "?*"))]
@@ -165,7 +165,7 @@ class _InMemoryPipeline:
 
     def __init__(self, store: InMemoryGapStore) -> None:
         self._store = store
-        self._cmds: list = []
+        self._cmds: list[Any] = []
 
     def get(self, key: str) -> "PipelinePort":
         self._cmds.append(("get", key))
@@ -175,7 +175,7 @@ class _InMemoryPipeline:
         self._cmds.append(("set", key, value, ex))
         return self
 
-    def execute(self) -> list:
+    def execute(self) -> list[Any]:
         results = []
         for cmd in self._cmds:
             if cmd[0] == "get":

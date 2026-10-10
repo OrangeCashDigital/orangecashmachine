@@ -40,7 +40,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+Any, List, Optional
 
 from loguru import logger
 
@@ -89,7 +89,7 @@ def record_run(
     result: str,
     duration_s: float,
     run_id: Optional[str] = None,
-    extra: Optional[dict] = None,
+    extra: Optional[dict[str, Any]] = None,
 ) -> str:
     """Persiste metadata de un run.
 
@@ -184,7 +184,7 @@ def query_runs(
         conn = _ensure_db()
 
         clauses = []
-        params: list = []
+        params: list[Any] = []
         if env:
             clauses.append("env = ?")
             params.append(env)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 import polars as pl
 from loguru import logger
@@ -17,7 +18,7 @@ class CrossExchangeIssue:
     severity: str
     description: str
     affected_rows: int = 0
-    details: dict = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -50,7 +51,7 @@ class CrossExchangeReport:
             lines.append(f"  [{i.severity.upper()}] {i.check}: {i.description} (rows={i.affected_rows})")
         return chr(10).join(lines)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timeframe": self.timeframe,

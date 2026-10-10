@@ -60,10 +60,10 @@ class PipelineContext:
     cursor_store: CursorStorePort
     gap_registry: Optional[GapRegistryPort] = None
     kafka_producer: Optional[KafkaProducerPort] = None
-    credentials: dict = field(default_factory=dict)
+    credentials: dict[str, Any] = field(default_factory=dict)
     resilience: Any = None
-    symbols: list = field(default_factory=list)
-    timeframes: list = field(default_factory=list)
+    symbols: list[str] = field(default_factory=list)
+    timeframes: list[str] = field(default_factory=list)
     start_date: Optional[Any] = None
     auto_lookback_days: int = 30
     _chunk_converter: Optional[OHLCVChunkConverterPort] = None

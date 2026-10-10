@@ -52,6 +52,7 @@ from typing import AsyncIterator, Optional
 
 from loguru import logger
 
+from market_data.domain.value_objects.raw_trade import RawTrade
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
 
 # ─── Constantes ───────────────────────────────────────────────────────────────
@@ -156,7 +157,7 @@ class TradesSourceManager:
     # AsyncIterator                                                        #
     # ------------------------------------------------------------------ #
 
-    def __aiter__(self) -> AsyncIterator:
+    def __aiter__(self) -> AsyncIterator[RawTrade]:
         return self
 
     async def __anext__(self):

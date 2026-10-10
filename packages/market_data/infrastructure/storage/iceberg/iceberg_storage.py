@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import polars as pl
 import pyarrow.compute as pc
@@ -362,7 +362,7 @@ class IcebergStorage:
             )
             return None
 
-    def get_current_snapshot(self) -> Optional[dict]:
+    def get_current_snapshot(self) -> Optional[dict[str, Any]]:
         # Expone el snapshot actual sin acceso directo a _table.
         # GoldStorage usa este metodo para anclar lineage antes del build.
         # SafeOps: nunca lanza — retorna None si tabla nueva o Iceberg degradado.
@@ -462,7 +462,7 @@ class IcebergStorage:
         symbol: str,
         timeframe: str,
         version: str = "latest",
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """Retorna metadata del snapshot actual como proxy de versión."""
         try:
             assert self._table is not None, "_table no inicializado en get_current_snapshot"
@@ -489,7 +489,7 @@ class IcebergStorage:
         timeframe: str,
         since: Optional[_dt.datetime] = None,
         until: Optional[_dt.datetime] = None,
-    ) -> list:
+    ) -> list[Any]:
         """
         No-op: Iceberg no expone archivos físicos de partición.
         RepairStrategy usará scan() directamente cuando soporte Iceberg.

@@ -28,6 +28,7 @@ from typing import AsyncIterator
 
 from loguru import logger
 
+from market_data.domain.value_objects.raw_trade import RawTrade
 
 class WSTradesSource:
     """
@@ -78,7 +79,7 @@ class WSTradesSource:
     def is_running(self) -> bool:
         return self._running
 
-    def __aiter__(self) -> AsyncIterator:
+    def __aiter__(self) -> AsyncIterator[RawTrade]:
         return self
 
     async def __anext__(self):

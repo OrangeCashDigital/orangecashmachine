@@ -32,7 +32,7 @@ Principios: DIP · SRP · KISS · SafeOps · Fail-Fast en load, Fail-Soft en met
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, List, Optional
 
 import polars as pl
 from loguru import logger
@@ -207,11 +207,11 @@ class GoldReader:
         self,
         exchange: str,
         market_type: str,
-    ) -> List[Dict]:
+    ) -> list[dict[str, Any]]:
         """Datasets Gold disponibles para exchange/market_type. SafeOps: retorna [] ante error."""
         try:
-            seen: set = set()
-            result: List[Dict] = []
+            seen: set[str] = set()
+            result: list[dict[str, Any]] = []
             _tbl = self._get_table()
             for entry in _tbl.history():
                 snap = _tbl.snapshot_by_id(entry.snapshot_id)
@@ -250,7 +250,7 @@ class GoldReader:
         timeframe: str,
         version: str = "latest",
         as_of: Optional[str] = None,
-    ) -> Optional[Dict]:
+    ) -> Optional[dict[str, Any]]:
         """Metadata del snapshot resuelto. SafeOps: retorna None ante error."""
         snap_id = self._resolve_snapshot(version, as_of)
         try:

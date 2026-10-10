@@ -17,7 +17,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import polars as pl
 
@@ -319,7 +319,7 @@ class RepairStrategy(StrategyMixin):
         ctx: PipelineContext,
         symbol: str,
         timeframe: str,
-        columns_only: list | None = None,
+        columns_only: list[str] | None = None,
     ) -> Optional[pl.DataFrame]:
         """Lee datos Silver delegando al Protocol OHLCVStorage."""
         # fail-fast: storage es obligatorio para RepairStrategy
@@ -366,7 +366,7 @@ class RepairStrategy(StrategyMixin):
             gap_start = datetime.fromtimestamp(gap.start_ms / 1000, tz=timezone.utc)
             gap_end = datetime.fromtimestamp(gap.end_ms / 1000, tz=timezone.utc)
 
-            collected_raw: list = []
+            collected_raw: list[Any] = []
             _quirks = get_quirks(ctx.exchange_id)
 
             if _quirks.backward_pagination:
