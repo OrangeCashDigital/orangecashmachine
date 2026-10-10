@@ -121,11 +121,11 @@ else
     
     # Activar y reiniciar los servicios para aplicar los cambios
     if ${ENABLE}; then
-    for u in "${UNITS[@]}"; do
-        unit_name="$(basename "${u}")"
-        echo "[install-systemd] Habilitando y reiniciando ${unit_name}..."
-        systemctl enable "${unit_name}" --now
-    done
+        for u in "${UNITS[@]}"; do
+            unit_name="$(basename "${u}")"
+            echo "[install-systemd] Habilitando y reiniciando ${unit_name}..."
+            systemctl enable "${unit_name}" --now
+        done
     fi
 fi
 
