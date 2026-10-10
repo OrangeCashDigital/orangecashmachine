@@ -30,6 +30,7 @@ from loguru import logger
 
 from market_data.domain.value_objects.raw_trade import RawTrade
 
+
 class WSTradesSource:
     """
     Fuente WebSocket de trades.
