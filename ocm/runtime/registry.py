@@ -40,7 +40,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
