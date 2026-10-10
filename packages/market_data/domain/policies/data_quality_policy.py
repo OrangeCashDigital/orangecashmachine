@@ -47,6 +47,8 @@ KISS   — flujo lineal: compute_score → collect_reasons → decide
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, List
 
 from market_data.domain.quality.types import DataQualityReport
