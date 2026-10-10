@@ -28,9 +28,25 @@ from typing import Tuple
 from market_data.domain.value_objects.candle import Candle  # noqa: F401
 
 # ---------------------------------------------------------------------------
+# Instrument Identity — G1 (ADR-0049, D01–D14)
+# ---------------------------------------------------------------------------
+from market_data.domain.value_objects.contract_terms import (  # noqa: F401
+    ContractTerms,
+    MarginConvention,
+    OptionRight,
+)
+
+# ---------------------------------------------------------------------------
 # GapRange — SSOT en gap_range.py
 # ---------------------------------------------------------------------------
 from market_data.domain.value_objects.gap_range import GapRange  # noqa: F401
+from market_data.domain.value_objects.instrument_type import InstrumentType  # noqa: F401
+from market_data.domain.value_objects.lifecycle import (  # noqa: F401
+    LifecycleState,
+    assert_valid_transition,
+    is_valid_transition,
+)
+from market_data.domain.value_objects.listing_identity import ListingId  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # NormalizedTrade + Side (SSOT en normalized_trade.py)
@@ -57,16 +73,25 @@ from market_data.domain.value_objects.order_book import (  # noqa: F401
     OrderBookSnapshot,
     PriceLevel,
 )
+from market_data.domain.value_objects.provenance import (  # noqa: F401
+    Provenance,
+    ProvenanceSource,
+)
 
 # ---------------------------------------------------------------------------
 # QualityLabel — SSOT en quality_label.py
 # ---------------------------------------------------------------------------
 from market_data.domain.value_objects.quality_label import QualityLabel  # noqa: F401
+from market_data.domain.value_objects.relations import (  # noqa: F401
+    IdentityRelation,
+    RelationType,
+)
 
 # ---------------------------------------------------------------------------
 # Symbol
 # ---------------------------------------------------------------------------
 from market_data.domain.value_objects.symbol import Symbol  # noqa: F401
+from market_data.domain.value_objects.symbol_binding import SymbolBinding  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Timeframe
@@ -109,4 +134,18 @@ __all__ = [
     "PriceLevel",
     "OrderBookSnapshot",
     "OrderBookDelta",
+    # Instrument Identity (G1)
+    "InstrumentType",
+    "ContractTerms",
+    "MarginConvention",
+    "OptionRight",
+    "LifecycleState",
+    "is_valid_transition",
+    "assert_valid_transition",
+    "ListingId",
+    "ProvenanceSource",
+    "Provenance",
+    "SymbolBinding",
+    "RelationType",
+    "IdentityRelation",
 ]

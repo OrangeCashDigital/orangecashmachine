@@ -2,25 +2,51 @@
 Description=OrangeCashMachine streaming service (realtime feeds via WebSocket)
 Documentation=file:${OCM_REPO_ROOT}/docs/architecture/decisions/ADR-0022-lifecycle-proceso-realtime-feeds.md
 After=network-online.target docker.service
-Wants=network-online.target
+Wants=network-online.target docker.service
 
 [Service]
 Type=simple
 User=${OCM_HOST_USER}
 WorkingDirectory=${OCM_REPO_ROOT}
-EnvironmentFile=${OCM_REPO_ROOT}/deploy/host.env
-EnvironmentFile=${OCM_REPO_ROOT}/.env
-ExecStart=${OCM_REPO_ROOT}/.venv/bin/python -m app.cli.streaming_hydra
-Restart=on-failure
-RestartSec=10
-TimeoutStopSec=30
-KillSignal=SIGINT
 
-# SafeOps
+# Tolerancia a archivos de entorno opcionales (evita crash loops si falta host.env)
+EnvironmentFile=-${OCM_REPO_ROOT}/deploy/host.env
+EnvironmentFile=-${OCM_REPO_ROOT}/.env
+
+# Execution Contract: EP-004 app.cli.streaming_hydra = APPLICATION RUNTIME ENTRYPOINT (STREAMING)
+# (config/execution_registry.yaml; autoridad ADR-0048). systemd = deployment consumer, no SSOT.
+ExecStart=${OCM_REPO_ROOT}/.venv/bin/python -m app.cli.streaming_hydra
+
+# SafeOps & Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=${OCM_REPO_ROOT}/data_platform ${OCM_REPO_ROOT}/logs
 PrivateTmp=true
+
+# -----------------------------------------------------------------
+# 1. LOW-LATENCY & PERFORMANCE TUNING (WebSocket Priority)
+# -----------------------------------------------------------------
+# Asignar a núcleos dedicados de CPU (Ajustar según cores de orangehouse)
+CPUAffinity=2 3
+
+# Prioridad de procesamiento y límites de recursos
+Nice=-20
+LimitRTPRIO=99
+LimitMEMLOCK=infinity
+LimitNOFILE=65536
+
+# -----------------------------------------------------------------
+# 2. RESILIENCE & CIRCUIT BREAKER
+# -----------------------------------------------------------------
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=300s
+StartLimitBurst=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

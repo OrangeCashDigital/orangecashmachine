@@ -72,7 +72,7 @@ _DEFAULT_TIMEOUT_S: float = 3600.0
 
 
 async def run_worker_pool(
-    items: Sequence,
+    items: Sequence[T],
     execute_fn: Callable[..., Awaitable[T]],
     max_concurrency: int,
     exchange_id: str,
@@ -107,7 +107,7 @@ async def run_worker_pool(
     if not items:
         return [], False
 
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue[T] = asyncio.Queue()
     results: list[T] = []
     abort_event: asyncio.Event = asyncio.Event()
 

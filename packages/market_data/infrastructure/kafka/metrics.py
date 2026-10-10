@@ -90,11 +90,11 @@ class _NoOpHistogram:
 # ---------------------------------------------------------------------------
 
 
-def _make_counter(name: str, doc: str, labels: list) -> "_CounterProtocol":
+def _make_counter(name: str, doc: str, labels: list[str]) -> "_CounterProtocol":
     return Counter(name, doc, labels) if _PROMETHEUS_AVAILABLE else _NoOpCounter()
 
 
-def _make_histogram(name: str, doc: str, labels: list, buckets: list) -> "_HistogramProtocol":
+def _make_histogram(name: str, doc: str, labels: list[str], buckets: list[float]) -> "_HistogramProtocol":
     return Histogram(name, doc, labels, buckets=buckets) if _PROMETHEUS_AVAILABLE else _NoOpHistogram()
 
 

@@ -36,7 +36,7 @@ _DOTENV_LOADED_FILES: set[str] = set()
 # --------------------------------------------------
 class EnvResolver:
     @staticmethod
-    def _replace(match: re.Match) -> str:
+    def _replace(match: re.Match[str]) -> str:
         var, _, default = match.groups()
         val = os.getenv(var)
         if val is not None:

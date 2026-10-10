@@ -308,7 +308,7 @@ class ResampleUseCase:
     def _resolve_config(
         self,
         request: ResampleRequest,
-    ) -> tuple[list, list, str]:
+    ) -> tuple[list[str], list[str], str]:
         """
         Extrae símbolos, targets y source_tf desde AppConfig.
 

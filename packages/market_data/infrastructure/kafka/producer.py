@@ -154,7 +154,7 @@ class KafkaProducerAdapter:
         topic: str,
         value: bytes,
         key: Optional[bytes] = None,
-        headers: Optional[dict] = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> bool:
         """
         Publica un mensaje a Kafka.

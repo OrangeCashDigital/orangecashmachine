@@ -29,7 +29,7 @@ Principios: DIP · OCP · ISP · KISS · SafeOps
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+Any, List, Optional
 
 
 class ExchangeAdapter(ABC):
@@ -135,7 +135,7 @@ class ExchangeAdapter(ABC):
         symbol: str,
         depth: int = 20,
         market_type: Optional[str] = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Retorna snapshot L2 del order book para el símbolo dado.
 

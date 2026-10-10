@@ -88,7 +88,7 @@ class OrderBookKafkaProducer:
         """
         self._producer = producer
         self._metrics = metrics or self._make_metrics()
-        self._kappa_headers: dict = {
+        self._kappa_headers: dict[str, str] = {
             HEADER_SOURCE: source,
             HEADER_DOMAIN: "orderbook",
         }
@@ -131,8 +131,8 @@ class OrderBookKafkaProducer:
         exchange: str,
         symbol: str,
         timestamp_ms: int,
-        bids: list,
-        asks: list,
+        bids: list[tuple[str, str]],
+        asks: list[tuple[str, str]],
         depth: int = 0,
         checksum: int | None = None,
         update_id: int = 0,
@@ -192,8 +192,8 @@ class OrderBookKafkaProducer:
         exchange: str,
         symbol: str,
         timestamp_ms: int,
-        bids: list,
-        asks: list,
+        bids: list[tuple[str, str]],
+        asks: list[tuple[str, str]],
         update_id: int = 0,
         cross_seq: int | None = None,
         cts_ms: int | None = None,

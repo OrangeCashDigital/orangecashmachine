@@ -45,7 +45,7 @@ SSOT  — única fuente de verdad del contrato de fetching histórico
 
 from __future__ import annotations
 
-from typing import AsyncIterator, List, Optional, Protocol, runtime_checkable
+from typing import AsyncIterator, Any, Optional, Protocol, runtime_checkable
 
 import polars as pl
 
@@ -132,7 +132,7 @@ class HistoricalFetcherPort(Protocol):
         since: Optional[int],
         limit: int = 500,
         end_ms: Optional[int] = None,
-    ) -> List[list]:
+    ) -> list[list[Any]]:
         """
         Fetcha un chunk crudo de candles del exchange.
 

@@ -21,7 +21,7 @@ import asyncio
 import math
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional, cast
+from typing import TYPE_CHECKING, Any, List, Optional, cast
 
 from loguru import logger
 
@@ -355,7 +355,7 @@ class HistoricalFetcherAsync:
         since: Optional[int],
         limit: int = DEFAULT_CHUNK_LIMIT,
         end_ms: Optional[int] = None,
-    ) -> List[list]:
+    ) -> list[list[Any]]:
         """API pública de fetch de un chunk. Usada por BackfillStrategy."""
         return await self._fetch_chunk_with_retry(symbol, timeframe, since, limit, end_ms=end_ms)
 
@@ -584,7 +584,7 @@ class HistoricalFetcherAsync:
         since: Optional[int],
         limit: int,
         end_ms: Optional[int] = None,
-    ) -> List[list]:
+    ) -> list[list[Any]]:
         """
         Ejecuta fetch_ohlcv con una sola frontera de retry.
 
@@ -691,7 +691,7 @@ class HistoricalFetcherAsync:
 # ==========================================================
 
 
-def _raw_to_dataframe(raw: List[list]) -> pl.DataFrame:
+def _raw_to_dataframe(raw: list[list[Any]]) -> pl.DataFrame:
     df = pl.DataFrame(
         {
             "timestamp": [r[0] for r in raw],

@@ -264,13 +264,13 @@ class CryptofeedOrderBookStream:
         return update_id, cross_seq, cts_ms
 
     @staticmethod
-    def _sorted_levels(price_size_map: dict, descending: bool) -> list[tuple[str, str]]:
+    def _sorted_levels(price_size_map: dict[str, str], descending: bool) -> list[tuple[str, str]]:
         """Convierte {price: size} en lista ordenada de (price_str, size_str)."""
         items = sorted(price_size_map.items(), key=lambda kv: kv[0], reverse=descending)
         return [(str(price), str(size)) for price, size in items]
 
     @staticmethod
-    def _levels_from_pairs(pairs: list) -> list[tuple[str, str]]:
+    def _levels_from_pairs(pairs: list[list[Any]]) -> list[tuple[str, str]]:
         """Convierte [[price, size], ...] crudo de cryptofeed en [(price_str, size_str), ...].
 
         Preserva el orden recibido (Bybit ya emite b DESC / a ASC). Los valores
