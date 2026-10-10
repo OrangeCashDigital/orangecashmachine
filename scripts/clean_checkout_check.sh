@@ -17,9 +17,11 @@ trap cleanup EXIT
 
 git -C "$REPO" worktree add --detach "$WT" HEAD >/dev/null
 cd "$WT"
+# Resolve imports from THIS checkout, not from an editable install of the main tree.
+export PYTHONPATH="$WT/packages:$WT/apps:$WT${PYTHONPATH:+:$PYTHONPATH}"
 
 echo "== market_data se importa desde el checkout limpio?"
-"$PY" - <<'PYEOF' || true
+"$PY" - <<'PYEOF'
 import pathlib
 try:
     import market_data
@@ -28,7 +30,8 @@ except ImportError as exc:
 else:
     where = pathlib.Path(market_data.__file__).resolve()
     inside = pathlib.Path.cwd().resolve() in where.parents
-    print(f"{where}\n{'OK' if inside else 'WARN: resuelve FUERA del checkout limpio'}")
+    print(f"{where}\n{'OK' if inside else 'FAIL: resuelve FUERA del checkout limpio'}")
+    raise SystemExit(0 if inside else 3)
 PYEOF
 
 rc=0
