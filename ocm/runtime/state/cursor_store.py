@@ -5,7 +5,7 @@ import base64
 import os
 import time
 from itertools import islice
-from typing import Any, Iterator, Optional, Protocol, runtime_checkable
+from typing import Any, Iterator, Optional, Protocol, cast, runtime_checkable
 
 import redis
 from loguru import logger
@@ -314,7 +314,7 @@ class RedisCursorStore:
 
     def get_raw(self, key: str) -> Optional[str]:
         try:
-            return _retry(lambda: self._client.get(key))
+            return cast(Optional[str], _retry(lambda: self._client.get(key)))
         except Exception as exc:
             logger.warning("CursorStore.get_raw failed | key={} error={}", key, exc)
             return None

@@ -29,11 +29,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from trading.execution.oms import OMS
     from trading.risk.manager import RiskDecision
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import polars as pl
 from loguru import logger
@@ -41,6 +42,7 @@ from loguru import logger
 from ocm.runtime.guard import ExecutionGuard
 from shared.contracts.boundaries import (
     FeatureSource,
+    SignalProtocol,
 )  # SSOT — unica definicion del contrato
 from shared.types.signal import Signal
 from trading.execution.order import Order, OrderStatus
@@ -113,7 +115,7 @@ class TradingEngine:
     def __init__(
         self,
         strategy: BaseStrategy,
-        oms,
+        oms: OMS,
         data_source: FeatureSource,
         guard: Optional[ExecutionGuard] = None,
         exchange: str = "bybit",
@@ -206,7 +208,7 @@ class TradingEngine:
 
         # Enviar al OMS
         for signal in signals:
-            order = self._oms.submit(signal)
+            order = self._oms.submit(cast(SignalProtocol, signal))
             if order is None:
                 result.orders_rejected += 1
                 continue
@@ -313,7 +315,7 @@ class TradingEngine:
                 confidence=1.0,
                 quantity=qty,
             )
-            order = self._oms.submit(sell)
+            order = self._oms.submit(cast(SignalProtocol, sell))
             if order is None:
                 self._log.warning(
                     "STOP-LOSS SELL rechazado | {} — posición sigue abierta",

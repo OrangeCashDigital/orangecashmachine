@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -170,7 +170,7 @@ def _coerce_value(value: str) -> bool | str:
     Returns:
         True/False si es boolean semántico reconocido, str original en caso contrario.
     """
-    return _coerce_string_canonical(value)  # SSOT: coercion.py — sin duplicación de lógica
+    return cast(bool | str, _coerce_string_canonical(value))  # SSOT: coercion.py — sin duplicación de lógica
 
 
 def _count_leaves(d: dict[str, Any]) -> int:

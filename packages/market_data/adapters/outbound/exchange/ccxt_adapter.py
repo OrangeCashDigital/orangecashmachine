@@ -31,7 +31,7 @@ import asyncio
 import copy
 import random
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 import ccxt as ccxt_sync  # sync — parse8601, iso8601, inspect_required_credentials
 import ccxt.async_support as ccxt
@@ -272,7 +272,7 @@ class CCXTAdapter(ExchangeAdapter):
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
+                return cast(Dict[str, Any], result)
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -322,7 +322,7 @@ class CCXTAdapter(ExchangeAdapter):
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
+                return cast(List[List[Any]], result)
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -361,7 +361,7 @@ class CCXTAdapter(ExchangeAdapter):
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
+                return cast(List[Dict[str, Any]], result)
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -382,10 +382,10 @@ class CCXTAdapter(ExchangeAdapter):
         return (self._markets_cache or {}).get(symbol)
 
     def parse8601(self, date_str: str) -> int:
-        return ccxt_sync.Exchange.parse8601(date_str)
+        return cast(int, ccxt_sync.Exchange.parse8601(date_str))
 
     def iso8601(self, timestamp_ms: int) -> str:
-        return ccxt_sync.Exchange.iso8601(timestamp_ms)
+        return cast(str, ccxt_sync.Exchange.iso8601(timestamp_ms))
 
     async def inspect_required_credentials(self) -> Dict[str, Any]:
         if not hasattr(ccxt_sync, self._exchange_id):
@@ -444,7 +444,7 @@ class CCXTAdapter(ExchangeAdapter):
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
+                return cast(Dict[str, Any], result)
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -483,7 +483,7 @@ class CCXTAdapter(ExchangeAdapter):
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
+                return cast(Dict[str, Any], result)
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -524,7 +524,7 @@ class CCXTAdapter(ExchangeAdapter):
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
+                return cast(Dict[str, Any], result)
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -568,7 +568,7 @@ class CCXTAdapter(ExchangeAdapter):
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
+                return cast(List[Dict[str, Any]], result)
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":

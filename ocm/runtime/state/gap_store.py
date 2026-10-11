@@ -80,7 +80,7 @@ class RedisGapStore:
         self._client = client
 
     def get(self, key: str) -> Optional[bytes]:
-        return self._client.get(key)
+        return cast(Optional[bytes], self._client.get(key))
 
     def set(self, key: str, value: Any, ex: Optional[int] = None) -> None:
         self._client.set(key, value, ex=ex)
@@ -98,7 +98,7 @@ class RedisGapStore:
         return int(self._client.ttl(key))
 
     def scan(self, cursor: int, match: str, count: int) -> tuple[int, list[str]]:
-        return self._client.scan(cursor=cursor, match=match, count=count)
+        return cast(tuple[int, list[str]], self._client.scan(cursor=cursor, match=match, count=count))
 
     def pipeline(self) -> PipelinePort:
         # redis.Pipeline satisface PipelinePort estructuralmente (duck typing).

@@ -32,7 +32,7 @@ Principios: DIP · SRP · KISS · SafeOps · Fail-Fast en load, Fail-Soft en met
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, cast
 
 import polars as pl
 from loguru import logger
@@ -174,7 +174,7 @@ class GoldReader:
             len(df),
             snap_id or "latest",
         )
-        return df
+        return cast(pl.DataFrame, df)
 
     def list_versions(
         self,
@@ -304,7 +304,7 @@ class GoldReader:
                 eligible = [s for s in history if s.timestamp_ms <= target_ms]
                 if not eligible:
                     raise VersionNotFoundError(f"No Gold snapshot before as_of={as_of}")
-                return max(eligible, key=lambda s: s.timestamp_ms).snapshot_id
+                return cast(int, max(eligible, key=lambda s: s.timestamp_ms).snapshot_id)
             except VersionNotFoundError:
                 raise
             except Exception as exc:

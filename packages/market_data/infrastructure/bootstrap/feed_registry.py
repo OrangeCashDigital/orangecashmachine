@@ -11,6 +11,8 @@ is wiring / composition root concern (avoids DIP leak from application layer).
 
 from __future__ import annotations
 
+from typing import cast
+
 from market_data.ports.inbound.market_data_source import MarketDataSource
 
 # Adapter imports son LAZY — cryptofeed/ccxt solo se cargan cuando el
@@ -55,4 +57,4 @@ def get_adapter_class(exchange: str) -> type[MarketDataSource]:
         raise ValueError(f"No adapter registered for exchange {exchange!r}. Available: {available}")
     module_path, class_name = dotted.rsplit(".", 1)
     module = importlib.import_module(module_path)
-    return getattr(module, class_name)
+    return cast(type[MarketDataSource], getattr(module, class_name))

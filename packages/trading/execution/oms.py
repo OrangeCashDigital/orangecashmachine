@@ -104,7 +104,7 @@ from trading.execution.transport import (
 from trading.execution.transport import (
     OrderStatus as ExchangeStatus,
 )
-from trading.risk.manager import RiskManager
+from trading.risk.manager import RiskDecision, RiskManager
 
 # ---------------------------------------------------------------------------
 # Executor protocol
@@ -412,7 +412,7 @@ class OMS:
     def get_order(self, order_id: str) -> Optional[Order]:
         return self._orders.get(order_id)
 
-    def validate_signal(self, signal) -> object:
+    def validate_signal(self, signal) -> RiskDecision:
         """
         Expone la validación de riesgo como API pública del OMS.
 

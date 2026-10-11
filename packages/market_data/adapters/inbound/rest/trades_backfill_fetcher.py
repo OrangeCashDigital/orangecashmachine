@@ -65,7 +65,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal, InvalidOperation
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional, cast
 
 from loguru import logger
 
@@ -365,12 +365,15 @@ class TradesBackfillFetcher:
                 or []
             )
 
-        return await retry_async(
-            _call,
-            attempts=_RETRY_ATTEMPTS,
-            backoff_base=_BACKOFF_BASE,
-            backoff_cap=_MAX_BACKOFF_S,
-            context=f"TradesBackfillFetcher.fetch_trades symbol={self._symbol}",
+        return cast(
+            list[Any],
+            await retry_async(
+                _call,
+                attempts=_RETRY_ATTEMPTS,
+                backoff_base=_BACKOFF_BASE,
+                backoff_cap=_MAX_BACKOFF_S,
+                context=f"TradesBackfillFetcher.fetch_trades symbol={self._symbol}",
+            ),
         )
 
     def __repr__(self) -> str:

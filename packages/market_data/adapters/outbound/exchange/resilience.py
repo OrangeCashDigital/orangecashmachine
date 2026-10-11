@@ -21,7 +21,7 @@ El resilience layer NO conoce CCXT — solo ve:
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Awaitable, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Optional, TypeVar, cast
 
 import aioresilience
 import ccxt.async_support as _ccxt_async
@@ -304,7 +304,7 @@ class ResilienceLayer:
             return await coro_fn()
 
         try:
-            return await policy.execute(_breaker_guard)
+            return cast(T, await policy.execute(_breaker_guard))
         except AioResilienceCBError as err:
             raise CircuitBreakerOpenError(self._exchange_id) from err
         except Exception as exc:
@@ -331,7 +331,7 @@ class ResilienceLayer:
         """
         policy = self._policies.get(error_type, self._policies["network"])
         try:
-            return await policy.execute(coro_fn)
+            return cast(T, await policy.execute(coro_fn))
         except Exception as exc:
             if classify_error(exc) == "unknown":
                 raise
