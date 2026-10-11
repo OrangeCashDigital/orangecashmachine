@@ -11,7 +11,7 @@ CHECK_SKILL = REPO / ".agents" / "skills" / "ocm-context-bootstrap" / "scripts" 
 
 # Known collisions awaiting human renumbering. Remove an entry once fixed;
 # test_known_collisions_not_stale fails if an entry no longer collides.
-KNOWN_ADR_COLLISIONS = {"ADR-0054"}
+KNOWN_ADR_COLLISIONS: set[str] = set()
 
 
 def _adr_collisions() -> set[str]:

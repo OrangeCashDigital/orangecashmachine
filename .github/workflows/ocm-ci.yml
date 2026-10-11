@@ -398,7 +398,7 @@ jobs:
         run: uv run python scripts/check_ssot_enums.py
 
       - name: Vulnerabilidades (pip-audit)
-        # Risk-accept formal ADR-0054 (2026-10-08): pyarrow 19.0.1 (PYSEC-2026-113; fix
+        # Risk-accept formal ADR-0056 (2026-10-08): pyarrow 19.0.1 (PYSEC-2026-113; fix
         # 23.0.1, migración 19→23 planificada, tracking B-61). Modo ENTORNO real (sin ruta):
         # 'pip-audit .' resuelve con pip-resolve e ignora override-dependencies de uv
         # (falso positivo multidict 6.7.1). Retirar el ignore al migrar pyarrow>=23.0.1.

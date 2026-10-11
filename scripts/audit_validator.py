@@ -132,7 +132,7 @@ CANONICAL_COMMANDS: dict[str, tuple[str, int, str]] = {
     "DEPENDENCY_AUDIT": (
         "uv run pip-audit --ignore-vuln PYSEC-2026-113",
         0,
-        "GATE seguridad. Comando CANÓNICO = el del CI (risk-accept formal ADR-0054, pyarrow "
+        "GATE seguridad. Comando CANÓNICO = el del CI (risk-accept formal ADR-0056, pyarrow "
         "PYSEC-2026-113; tracking B-61). Modo entorno real (sin ruta): 'pip-audit .' resuelve "
         "con pip-resolve e ignora override-dependencies de uv (falso positivo). Retirar el "
         "ignore al migrar pyarrow>=23.0.1.",

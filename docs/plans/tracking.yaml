@@ -3292,16 +3292,16 @@ hallazgos:
       estado: PENDIENTE
       referencia: null
 - id: B-61
-  hallazgo_informe: PYSEC-2026-113 (risk-accept 2026-08-03; ADR-0054)
+  hallazgo_informe: PYSEC-2026-113 (risk-accept 2026-08-03; ADR-0056)
   fase: F2
   prioridad: MEDIA
   estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: 'pip-audit: pyarrow 19.0.1 → PYSEC-2026-113 (fix 23.0.1; CVE-2026-25087 / GHSA-rgxp-2hwp-jwgg); risk-accept formal en ADR-0054.'
-  descripcion: 'Migrar pyarrow 19.0.1 → 23.0.1 (fix PYSEC-2026-113) cuando exista ventana de testing; retirar ignore en CI (ADR-0054)'
+  evidencia: 'pip-audit: pyarrow 19.0.1 → PYSEC-2026-113 (fix 23.0.1; CVE-2026-25087 / GHSA-rgxp-2hwp-jwgg); risk-accept formal en ADR-0056.'
+  descripcion: 'Migrar pyarrow 19.0.1 → 23.0.1 (fix PYSEC-2026-113) cuando exista ventana de testing; retirar ignore en CI (ADR-0056)'
   cadena:
     origen: PYSEC-2026-113
-    adr: ADR-0054
+    adr: ADR-0056
 mediciones_f0:
   fecha: '2026-08-06'
   commit: eaca97a

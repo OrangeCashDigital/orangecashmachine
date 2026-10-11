@@ -1,4 +1,4 @@
-# ADR-0054: Risk-accept formal de PYSEC-2026-113 (pyarrow 19.0.1) por riesgo de migración 19→23
+# ADR-0056: Risk-accept formal de PYSEC-2026-113 (pyarrow 19.0.1) por riesgo de migración 19→23
 
 **Estado:** PROPUESTO
 **Fecha:** 2026-10-08
