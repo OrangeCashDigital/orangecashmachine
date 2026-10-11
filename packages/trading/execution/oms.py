@@ -86,7 +86,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import threading
-from typing import Callable, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
@@ -426,7 +426,7 @@ class OMS:
         """
         return self._risk.validate(signal)
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, Any]:
         with self._lock:
             total = len(self._orders)
             open_ = len(self._open)

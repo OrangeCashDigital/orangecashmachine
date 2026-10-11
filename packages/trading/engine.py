@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import polars as pl
 from loguru import logger
@@ -229,7 +229,7 @@ class TradingEngine:
         return result
 
     @property
-    def oms_summary(self) -> dict:
+    def oms_summary(self) -> dict[str, Any]:
         return self._oms.summary()
 
     def validate_signal(self, signal) -> "RiskDecision":
