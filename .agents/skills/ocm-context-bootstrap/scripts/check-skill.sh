@@ -9,7 +9,7 @@ dl=$(sed -n 's/^description: *//p' "$D/SKILL.md" | head -1 | wc -c)
 [ "$(wc -l < "$D/SKILL.md")" -lt 500 ] || { echo "FAIL SKILL.md >=500 lines"; fail=1; }
 for r in $(grep -o 'references/[A-Za-z0-9_.-]*\.md' "$D/SKILL.md" | sort -u); do [ -e "$D/$r" ] || { echo "MISSING $r"; fail=1; }; done
 cd "$(git -C "$D" rev-parse --show-toplevel)" || exit 2
-grep -ohE '(docs|policies|packages|apps|shared|tests|architecture_linter)/[A-Za-z0-9_./-]+' "$D"/SKILL.md "$D"/references/*.md | grep -v '000x' | sort -u | while read -r p; do p=${p%.}; [ -e "$p" ] || echo "MISSING $p"; done | grep . && fail=1
+grep -ohE '(docs|policies|config|packages|apps|shared|tests|architecture_linter)/[A-Za-z0-9_./-]+' "$D"/SKILL.md "$D"/references/*.md | grep -v '000x' | sort -u | while read -r p; do p=${p%.}; [ -e "$p" ] || echo "MISSING $p"; done | grep . && fail=1
 for s in $(grep -o 'scripts/[A-Za-z0-9_.-]*\.sh' "$D/SKILL.md" | sort -u); do [ -x "$D/$s" ] || { echo "MISSING-OR-NOT-EXEC $s"; fail=1; }; done
 for a in $(grep -o 'assets/[A-Za-z0-9_.-]*\.md' "$D/SKILL.md" | sort -u); do [ -e "$D/$a" ] || { echo "MISSING $a"; fail=1; }; done
 for f in $(cd "$D" && find scripts references assets -type f | sort); do grep -qF "$f" "$D/SKILL.md" || { echo "ORPHAN $f"; fail=1; }; done
