@@ -344,8 +344,8 @@ def _build_filter(
     No usar keyword arguments — la API de pyiceberg no los soporta.
     """
     return And(
-        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),  # type: ignore[call-arg,arg-type,misc]
-        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),  # type: ignore[call-arg,arg-type,misc]
+        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),  # type: ignore[call-arg,misc]
+        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),  # type: ignore[call-arg,misc]
     )
 
 
