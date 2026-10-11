@@ -1,0 +1,127 @@
+# OCM — Knowledge Integrity Baseline (índice derivado).
+# SSOT de metadatos: docs/knowledge/manifest.yaml.
+# Contracto: docs/knowledge/KNOWLEDGE_BASE_CONTRACT.md §Integridad.
+# Generado determinísticamente desde catálogo + contenido del corpus;
+# re-verificable en cualquier máquina con corpus idéntico.
+baseline_version: 1
+entries:
+  - id: afml-lopez-de-prado
+    basename: advances-in-financial-machine-learning-ssrn-preprint.pdf
+    sha256: "2505e09c9d778571e245677567124174d958dc80852092728c885f50f7e52431"
+    size: 782646
+  - id: cryptocurrency-concepts-liebowitz
+    basename: cryptocurrency-concepts-technology-applications-liebowitz-2023.pdf
+    sha256: "999b8aa81d7989c3b9b3eebd5e506fb132cf4db8bd74b89c1591dc6b6bc6f846"
+    size: 4848509
+  - id: data-quality-engineering-financial-services
+    basename: data-quality-engineering-in-financial-services.pdf
+    sha256: "70d9cd67c5f1cc9d64a09d8ca7dd058382995f28b9bb24dcab358018423f6de5"
+    size: 7814140
+  - id: financial-data-engineering-khraisha
+    basename: financial-data-engineering-khraisha.pdf
+    sha256: "1471e380be92351fe6c43d09e1370685577483a2c8c16b2f522c4f8d6ba1680a"
+    size: 3238122
+  - id: fundamentals-of-data-engineering-reis-housley
+    basename: fundamentals-of-data-engineering-reis-housley.pdf
+    sha256: "7c7b266be2d7aadc2136945ba7519cbb922264f1ae5f80cc5709e47243dc1e05"
+    size: 8806461
+  - id: high-frequency-trading-aldridge
+    basename: high-frequency-trading-aldridge-2010.pdf
+    sha256: "09665bdbddb76005c2024cd9fc910459d3ea55cce6f62efdaf889553604a0d11"
+    size: 13713037
+  - id: market-microstructure-in-practice-2e
+    basename: market-microstructure-in-practice-2e.pdf
+    sha256: "9bdeb707a5c3a68bef987e54b2a642e7123a1892d1d4b927599e0623001a70df"
+    size: 9411106
+  - id: mastering-financial-pattern-recognition-kaabar
+    basename: mastering-financial-pattern-recognition-kaabar-2023.pdf
+    sha256: "8a7e7fb1d5c3dbdaff7a49b320fc7b1ff0f4f315e494aa16df7c8d9688038101"
+    size: 6731650
+  - id: oxford-m1u1-lesson
+    basename: OXF ALG M1U1 Lesson.pdf
+    sha256: "f072376ed840e9751ede33375f63a6577a3c3ab2c6c0d3c7788633859b6a90cf"
+    size: 792849
+  - id: oxford-m1u1-video1-transcript
+    basename: OXF ALG M1U1 Video 1 Transcript.pdf
+    sha256: "5e224e273488e518e666fbc869cad10dc16e348b2be67615b45b3af9733cf711"
+    size: 260296
+  - id: oxford-m1u2-notes
+    basename: OXF ALG M1U2 Notes.pdf
+    sha256: "a5ada1248ad16125c6bf316f079daa0ad8f594efe93867f80ac5d8a24c791017"
+    size: 1095362
+  - id: oxford-m1u2-video1-transcript
+    basename: OXF ALG M1U2 Video 1 Transcript.pdf
+    sha256: "9307937b147dee89b13b49f3ab80024c384291be4aafa837042d2decd8000cc2"
+    size: 631751
+  - id: oxford-m1u2-video2-transcript
+    basename: OXF ALG M1U2 Video 2 Transcript.pdf
+    sha256: "2da97917787c80c25097c55d5a154abd99a0a48ef38a47bde7be418e842926a7"
+    size: 262969
+  - id: oxford-m1u3-notes
+    basename: OXF ALG M1U3 Notes.pdf
+    sha256: "2468ac2be44590ebfcef0f8b7d726b09fc292faadaa4a1495141a348fbbd1cd1"
+    size: 753462
+  - id: oxford-m1u3-video1-transcript
+    basename: OXF ALG M1U3 Video 1 Transcript.pdf
+    sha256: "0b1a0ffb571999f6727c5fdb80f7533708ba0ccbdb51bdba659a4bfccb73d9e0"
+    size: 285591
+  - id: oxford-m1u4-infographic-transcript
+    basename: OXF ALG M1U4 Infographic Transcript.pdf
+    sha256: "198e89c093c2081a06d74004a9fd33f96a82f666635c363de958d2da2a780166"
+    size: 226547
+  - id: oxford-m1u4-video1-transcript
+    basename: OXF ALG M1U4 Video 1 Transcript.pdf
+    sha256: "5a506ad1511a2e697292623b390d5a06683a3a1a1c1e1c369719112d7b94f427"
+    size: 367304
+  - id: oxford-m2u1-lesson
+    basename: OXF ALG M2U1 Lesson.pdf
+    sha256: "e5ab1302cb36887c7223d604003732b0100ef30bbe0cd36aadf0dc882047a8b8"
+    size: 1169824
+  - id: oxford-m2u1-lesson-interactive-infographic1-transcript
+    basename: OXF ALG M2U1 Lesson Interactive Infographic 1 Transcript.pdf
+    sha256: "e8caada7a09022ebe0d784e0a86e1a1b54cfbff491108ca3fb7facf70882cf14"
+    size: 484253
+  - id: oxford-m2u1-video1-transcript
+    basename: OXF ALG M2U1 Video 1 Transcript.pdf
+    sha256: "e176c1791e0d291f36eb140cb540ddd35c330e1426efc56e6da422d5c653be17"
+    size: 262718
+  - id: oxford-m2u2-video-set-video2-transcript
+    basename: OXF ALG M2U2 Video set Video 2 Transcript.pdf
+    sha256: "68ff7fbf0133d601823552111bca4a251103c8a7b836fc196857eee3261a3f30"
+    size: 307944
+  - id: oxford-m2u2-video-set-video3-transcript
+    basename: OXF ALG M2U2 Video set Video 3 Transcript.pdf
+    sha256: "e1657fbfd8cfbeb392e52dd382e5240c574525abbee1a3ffdf969d752d1124b0"
+    size: 265624
+  - id: oxford-m2u2-video1-transcript
+    basename: OXF ALG M2U2 Video 1 Transcript.pdf
+    sha256: "730cd7abc351327c5bd8bfe733be262c5cf94ffb3af3a8e083d6a5c962a04507"
+    size: 268300
+  - id: oxford-m2u3-notes
+    basename: OXF ALG M2U3 Notes.pdf
+    sha256: "ef78019ddda59e8e6be97602934dc89b27c23448d76c5ff5df878a645e9e1977"
+    size: 574524
+  - id: oxford-m2u3-notes-video1-transcript
+    basename: OXF ALG M2U3 Notes Video 1 Transcript.pdf
+    sha256: "4db24ec27bb23a2c64076d6194c638eaa9a53197f2682781743db399d5995d5b"
+    size: 306836
+  - id: oxford-m2u3-video1-transcript
+    basename: OXF ALG M2U3 Video 1 Transcript.pdf
+    sha256: "3675866ed546052db32ef3527311c3762f255d41e100ab034e6e10f1db5746c2"
+    size: 259533
+  - id: probabilistic-ml-finance-kanungo
+    basename: probabilistic-ml-finance-investing-kanungo-2023.pdf
+    sha256: "aa2a54010364b860af9f2d17bfbf48cc94b4f2031318ea8609ea14efd2344a60"
+    size: 20713114
+  - id: trading-and-exchanges-harris
+    basename: trading-and-exchanges-harris-draft-2002.pdf
+    sha256: "030f6dbdf334f365d4aa24d6773053bc858f0b6f494631492a7fd70bfe8702ac"
+    size: 620148
+  - id: trading-chaos-castellano
+    basename: trading-chaos-castellano.pdf
+    sha256: "b41af40d757c5115db3f3df62a96711b5c03e665c3cff459ba4f10921306edab"
+    size: 6839280
+  - id: trading-systems-and-methods-kaufman
+    basename: trading-systems-and-methods-kaufman-2013.pdf
+    sha256: "e9b0a230449219f7a88b7cafe4d3aeed83ac0bde66a5b820c1e5dc95032895f7"
+    size: 26880000
