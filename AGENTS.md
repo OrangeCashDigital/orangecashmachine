@@ -193,4 +193,4 @@ Si una fuente de menor autoridad contradice una de mayor autoridad, prevalece la
 ## Skills
 
 Before modifying code under packages/, apps/, shared/, config/ or policies/, load the `ocm-context-bootstrap` skill and build a Context Pack. Not required for typos, formatting or docs-only edits.
-The skill is procedural and never authority; ADR-0054 is still PROPOSED (docs/architecture/decisions/ADR-0054-persistent-engineering-context-decisions.md).
+The skill is procedural and never authority; ADR-0054 is accepted as documentation except MD-A4, which stays PROPOSED (docs/architecture/decisions/ADR-0054-persistent-engineering-context-decisions.md).

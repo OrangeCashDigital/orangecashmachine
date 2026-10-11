@@ -12,9 +12,9 @@ adr_ref: ADR-0054
 # ADR-0054 — Persistent Engineering Context decisions (index)
 
 **Summary.** The seven human decisions governing this store and the
-`ocm-context-bootstrap` skill. ADR-0054 `Estado: Propuesto` /
-`Materialización: PENDIENTE DE HUMAN REVIEW` (status PROPOSED — the lifecycle
-transition has not been authorized; do not treat the ADR document as ACEPTADO).
+`ocm-context-bootstrap` skill. ADR-0054 `Estado: Aceptado parcial` (aceptación
+documental 2026-10-11; MD-A4 permanece Propuesto, ver ADR-0055). La aceptación
+no autoriza implementación; la línea Estado del propio ADR manda sobre esta nota.
 
 | Decision | Substance |
 |---|---|

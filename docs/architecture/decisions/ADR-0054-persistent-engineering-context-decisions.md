@@ -1,6 +1,6 @@
 # ADR-0054: Decisiones de contexto de ingeniería persistente (H-CTX-1/2 + MD-A1..A5)
 
-**Estado:** Propuesto
+**Estado:** Aceptado parcial (MD-A4: Propuesto; ver ADR-0055)
 **Decisión humana asociada:** HUMAN DECISION CLOSURE + MATERIALIZATION GATE — 2026-10-08:
 H-CTX-1 = OPTION A; H-CTX-2 = OPTION B; MD-A1 = fail-closed `adr:null`;
 MD-A2 = precedencia formal de autoridad; MD-A3 = separación Evidencia/Provenance/Memoria/Autoridad/Decisión;
@@ -326,3 +326,9 @@ No se crean enlaces de trazabilidad cuya fuente no existe.
 - Auditoría: `docs/audits/AUDIT_OCM_high-impact-improvements_2026-10-07.md` (F-OCM-01, D-OCM-01)
 - Decisiones D19: `docs/audits/D19_HUMAN_DECISION_PACK_2026-09-30.md`
 - Governance: `AGENTS.md`, `docs/architecture/GOVERNANCE.md`
+
+## Registro de aceptación documental
+
+- Decisión humana del 2026-10-11: aceptación documental de H-CTX-1, H-CTX-2, MD-A1, MD-A2, MD-A3 y MD-A5.
+- MD-A4 permanece Propuesto: su relación con Q1 sigue sin aclarar por decisión humana (ver ADR-0055).
+- Esta aceptación no autoriza implementación ni concede vigencia normativa más allá de lo que cada sección declara.
