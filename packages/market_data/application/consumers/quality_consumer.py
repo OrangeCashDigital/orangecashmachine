@@ -35,6 +35,8 @@ from market_data.domain.events import (
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 from market_data.ports.outbound.event_bus import EventBusPort
+from market_data.ports.outbound.lineage import LineageTrackerPort
+from market_data.ports.outbound.quality import AnomalyRegistryPort
 
 # Columnas del DataFrame OHLCV — SSOT con OHLCVChunk.candles
 _CANDLE_COLS = ("timestamp", "open", "high", "low", "close", "volume")
@@ -63,8 +65,8 @@ class QualityPipelineConsumer(BaseConsumer):
         self,
         bus: EventBusPort,
         *,
-        registry=None,
-        tracker,  # obligatorio — inyectar desde composition root
+        registry: AnomalyRegistryPort | None = None,
+        tracker: LineageTrackerPort,  # obligatorio — inyectar desde composition root
         checker_factory: CheckerFactory | None = None,
         git_hash: str = "unknown",
     ) -> None:

@@ -62,6 +62,8 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TypeVar
 
+import loguru
+
 T = TypeVar("T")
 
 # Stagger por defecto entre workers: 50ms × N workers.
@@ -76,7 +78,7 @@ async def run_worker_pool(
     execute_fn: Callable[..., Awaitable[T]],
     max_concurrency: int,
     exchange_id: str,
-    log,
+    log: loguru.Logger,
     *,
     stagger_s: float = _DEFAULT_STAGGER_S,
     timeout_s: float = _DEFAULT_TIMEOUT_S,
