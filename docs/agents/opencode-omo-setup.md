@@ -59,3 +59,15 @@ OmO envía telemetría anónima; se desactiva con
 `OMO_SEND_ANONYMOUS_TELEMETRY=0`. No commitees `.omo/run-continuation/`,
 `.omo/*.bak.*` (ya en `.gitignore`) ni backups de tu config global, porque
 pueden contener credenciales.
+
+## Agente por defecto
+
+Con OmO, `plan` y `build` pasan a ser subagentes. Si
+`default_agent` en `~/.config/opencode/opencode.json` apunta a
+uno de ellos, `opencode run` falla con `UnknownError`
+(log: default agent is a subagent). Usa un agente principal:
+`"default_agent": "sisyphus"`.
+
+Comprueba la lista con `opencode agent list` y los permisos
+resueltos con `opencode debug agent sisyphus`. En esas reglas,
+la última que coincide gana: `*.env*` debe ir al final.
