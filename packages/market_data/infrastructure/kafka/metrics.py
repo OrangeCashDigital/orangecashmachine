@@ -38,6 +38,7 @@ Principios: SRP · optional dependency · zero overhead sin Prometheus
 from __future__ import annotations
 
 import time
+from types import TracebackType
 from typing import Protocol, runtime_checkable
 
 try:
@@ -70,18 +71,18 @@ class _HistogramProtocol(Protocol):
 
 
 class _NoOpCounter:
-    def labels(self, **_):
+    def labels(self, **_: str) -> "_NoOpCounter":
         return self
 
-    def inc(self, _=1):
+    def inc(self, _: float = 1) -> None:
         return
 
 
 class _NoOpHistogram:
-    def labels(self, **_):
+    def labels(self, **_: str) -> "_NoOpHistogram":
         return self
 
-    def observe(self, _):
+    def observe(self, _: float) -> None:
         return
 
 
@@ -193,7 +194,12 @@ class timer:
         self._start = time.perf_counter()
         return self
 
-    def __exit__(self, *_) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self._elapsed_ms = (time.perf_counter() - self._start) * 1_000
 
     @property

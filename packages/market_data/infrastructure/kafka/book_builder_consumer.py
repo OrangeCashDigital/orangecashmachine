@@ -47,7 +47,7 @@ from market_data.ports.outbound.book_builder import (
     BookBuilderPort,
     OutcomeKind,
 )
-from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort
+from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort, KafkaMessage
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from shared.kafka.schemas.orderbook import (
     OrderBookDeltaPayload,
@@ -189,7 +189,7 @@ class BookBuilderConsumer:
         await self._check_stale()
         return processed, write_errors
 
-    async def _process_message(self, msg) -> str:
+    async def _process_message(self, msg: KafkaMessage) -> str:
         """Procesa un mensaje. Retorna "written" | "handled" | "write_error"."""
         # ── Deserializar por payload_type (v2) ─────────────────────────
         try:
@@ -232,7 +232,7 @@ class BookBuilderConsumer:
 
         return await self._apply_outcome(outcome, msg)
 
-    async def _apply_outcome(self, outcome: BookBuilderOutcome, msg) -> str:
+    async def _apply_outcome(self, outcome: BookBuilderOutcome, msg: KafkaMessage) -> str:
         """Traduce un outcome del BookBuilder a publicación / métrica / skip."""
         if outcome.publishes:
             # Publicar book.snapshot / book.delta
@@ -310,7 +310,7 @@ class BookBuilderConsumer:
                 update_id=outcome.update_id,
             ).warning("book_builder_stale | {}", outcome.detail)
 
-    async def _send_to_dlq(self, msg, reason: str) -> None:
+    async def _send_to_dlq(self, msg: KafkaMessage, reason: str) -> None:
         """Envía mensaje no procesable al DLQ. SafeOps — nunca lanza."""
         _offset = getattr(msg, "offset", "unknown")
         _topic = getattr(msg, "topic", "unknown")

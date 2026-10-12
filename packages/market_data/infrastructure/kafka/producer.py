@@ -233,8 +233,8 @@ class KafkaProducerAdapter:
         self,
         topic: str,
         value: bytes,
-        key=None,
-        headers=None,
+        key: Optional[bytes] = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> None:
         """
         Método canónico de KafkaProducerPort.
