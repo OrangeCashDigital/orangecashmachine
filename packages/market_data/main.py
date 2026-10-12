@@ -38,6 +38,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Optional
 
@@ -312,7 +313,7 @@ async def _bronze_writer_loop() -> None:
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI):
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Ciclo de vida de FastAPI.
 

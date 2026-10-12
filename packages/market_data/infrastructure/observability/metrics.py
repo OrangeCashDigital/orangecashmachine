@@ -48,6 +48,8 @@ Métricas disponibles
 
 from __future__ import annotations
 
+from typing import Any
+
 # Servidor de métricas y push → infra.observability.server
 from loguru import logger as _log
 from prometheus_client import (
@@ -359,7 +361,7 @@ def record_pipeline_pair_metrics(
         )
 
 
-def record_exchange_probe_metrics(probe) -> None:
+def record_exchange_probe_metrics(probe: Any) -> None:  # ExchangeProbe duck-typed; sin tipo concreto en repo
     """
     Registra métricas Prometheus de un ExchangeProbe.
 

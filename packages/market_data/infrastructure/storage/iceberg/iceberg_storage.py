@@ -39,6 +39,7 @@ import pyarrow.compute as pc
 from loguru import logger
 from pyiceberg.expressions import (
     And,
+    BooleanExpression,
     EqualTo,
     GreaterThanOrEqual,
     LessThanOrEqual,
@@ -143,7 +144,7 @@ class IcebergStorage:
     # Helpers internos
     # =========================================================================
 
-    def _base_filter(self, symbol: str, timeframe: str):
+    def _base_filter(self, symbol: str, timeframe: str) -> BooleanExpression:
         """
         Filtro Iceberg nativo para las cuatro columnas de identidad.
 
