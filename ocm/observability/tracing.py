@@ -32,7 +32,7 @@ from __future__ import annotations
 import threading
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from loguru import logger as _log
 from opentelemetry import trace as _trace
@@ -46,8 +46,6 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-if TYPE_CHECKING:
-    pass  # no config imports (BC-26)
 # Nombre del tracer OTel para OCM — constante, no un literal suelto.
 _TRACER_NAME: str = "ocm"
 
@@ -84,8 +82,9 @@ class TracingRuntime:
         self._started = False
         self._lock = threading.Lock()
 
+    # BC-26: config type not importable in observability → Any.
     @classmethod
-    def from_config(cls, tracing_cfg: "TracingConfig") -> "TracingRuntime":
+    def from_config(cls, tracing_cfg: Any) -> "TracingRuntime":
         """Construye TracingRuntime desde TracingConfig (schema.py)."""
         return cls(
             enabled=bool(getattr(tracing_cfg, "enabled", False)),
@@ -161,7 +160,8 @@ def get_tracing_runtime() -> Optional[TracingRuntime]:
     return _runtime
 
 
-def init_tracing(cfg: "AppConfig", *, validate_only: bool = False) -> TracingRuntime:
+# BC-26: config type not importable in observability → Any.
+def init_tracing(cfg: Any, *, validate_only: bool = False) -> TracingRuntime:
     """Inicializa y arranca el TracingRuntime desde AppConfig.
 
     Llama una sola vez desde el entrypoint. Seguro llamar múltiples veces
