@@ -2,7 +2,6 @@
   "$schema": "https://opencode.ai/config.json",
   "permission": {
     "bash": {
-      "*.env*": "deny",
       "git *": "deny",
       "git status*": "allow",
       "git diff*": "allow",
@@ -11,7 +10,8 @@
       "git blame*": "allow",
       "git ls-files*": "allow",
       "git rev-parse*": "allow",
-      "git check-ignore*": "allow"
+      "git check-ignore*": "allow",
+      "*.env*": "deny"
     },
     "read": {
       "*.env": "deny",
