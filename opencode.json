@@ -17,6 +17,9 @@
       "*.env": "deny",
       "*.env.*": "deny",
       "*.env.example": "allow"
+    },
+    "skill": {
+      "ocm-context-bootstrap": "allow"
     }
   }
 }
