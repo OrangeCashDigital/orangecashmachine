@@ -202,3 +202,7 @@ The skill is procedural and never authority; ADR-0054 is accepted as documentati
 - Gate before reporting done: `uv run ruff check . && uv run lint-imports --config architecture_linter/importlinter.toml && uv run pytest tests/ -x -q`.
 - Do not run `/init-deep` or create nested AGENTS.md files.
 - No new pandas outside `adapters/` and `infrastructure/`; domain stays framework-agnostic.
+
+## Setup de agentes
+
+Guía de instalación y configuración: `docs/agents/opencode-omo-setup.md`.
