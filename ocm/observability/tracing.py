@@ -32,7 +32,7 @@ from __future__ import annotations
 import threading
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from loguru import logger as _log
 from opentelemetry import trace as _trace
@@ -46,6 +46,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
+if TYPE_CHECKING:
+    pass  # no config imports (BC-26)
 # Nombre del tracer OTel para OCM — constante, no un literal suelto.
 _TRACER_NAME: str = "ocm"
 
@@ -83,7 +85,7 @@ class TracingRuntime:
         self._lock = threading.Lock()
 
     @classmethod
-    def from_config(cls, tracing_cfg) -> "TracingRuntime":
+    def from_config(cls, tracing_cfg: "TracingConfig") -> "TracingRuntime":
         """Construye TracingRuntime desde TracingConfig (schema.py)."""
         return cls(
             enabled=bool(getattr(tracing_cfg, "enabled", False)),
@@ -159,7 +161,7 @@ def get_tracing_runtime() -> Optional[TracingRuntime]:
     return _runtime
 
 
-def init_tracing(cfg, *, validate_only: bool = False) -> TracingRuntime:
+def init_tracing(cfg: "AppConfig", *, validate_only: bool = False) -> TracingRuntime:
     """Inicializa y arranca el TracingRuntime desde AppConfig.
 
     Llama una sola vez desde el entrypoint. Seguro llamar múltiples veces
@@ -239,7 +241,7 @@ def trace_event(
 @contextmanager
 def trace_consumer_event(
     span_name: str,
-    event,
+    event: object,
     **extra_attributes: _SpanAttributeValue,
 ) -> Iterator[_trace.Span]:
     """Span OTel + request-id desde el event_id de un domain event (B-17).

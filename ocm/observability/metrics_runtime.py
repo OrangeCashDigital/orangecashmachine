@@ -63,7 +63,7 @@ class MetricsRuntime:
         self._lock = threading.Lock()
 
     @classmethod
-    def from_config(cls, metrics_cfg) -> "MetricsRuntime":
+    def from_config(cls, metrics_cfg: "MetricsConfig") -> "MetricsRuntime":
         """Construye MetricsRuntime desde MetricsConfig (schema.py)."""
         mode_str = getattr(metrics_cfg, "mode", "pull")
         try:
@@ -171,7 +171,7 @@ def get_metrics_runtime() -> Optional[MetricsRuntime]:
     return _runtime
 
 
-def init_metrics_runtime(cfg, *, validate_only: bool = False) -> MetricsRuntime:
+def init_metrics_runtime(cfg: "AppConfig", *, validate_only: bool = False) -> MetricsRuntime:
     """
     Inicializa y arranca el MetricsRuntime desde AppConfig.
 
