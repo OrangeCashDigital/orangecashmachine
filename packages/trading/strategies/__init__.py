@@ -9,7 +9,8 @@ OCP: nuevas estrategias se registran via @register_strategy en su propio
 módulo — este __init__ no necesita cambiar al añadir estrategias.
 """
 
-from trading.strategies.base import BaseStrategy, Signal, SignalType
+from shared.types.signal import Signal, SignalType
+from trading.strategies.base import BaseStrategy
 from trading.strategies.registry import (
     StrategyNotFoundError,
     StrategyRegistry,
