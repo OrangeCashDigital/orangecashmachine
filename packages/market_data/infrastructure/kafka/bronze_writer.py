@@ -242,7 +242,7 @@ class KafkaBronzeWriter:
             event: EventPayload = _shared_deserialize(msg.value, EventPayload)
         except Exception as exc:
             self._log.warning(
-                "bronze_writer_deserialize_error",
+                "bronze_writer_deserialize_error | offset={offset} | error={error}",
                 offset=msg.offset,
                 error=str(exc),
             )
@@ -293,7 +293,7 @@ class KafkaBronzeWriter:
             )
         except Exception as exc:
             self._log.error(
-                "bronze_write_error",
+                "bronze_write_error | {exchange} {symbol} {timeframe} | error={error}",
                 event_id=event.event_id,
                 exchange=event.exchange,
                 symbol=event.symbol,
