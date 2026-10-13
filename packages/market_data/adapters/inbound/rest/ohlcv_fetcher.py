@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     # El import de runtime ocurre en _LazyCalibrationStore._get() —
     # nunca en import time, preservando la inicialización diferida
     # y evitando conexiones Redis en tests (SafeOps · DIP).
-    from ocm.runtime.state.factories import LatenessCalibrationStore
+    from ocm.runtime.state import LatenessCalibrationStore
 
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
@@ -62,7 +62,11 @@ from market_data.ports.outbound.transformer import OHLCVTransformerPort
 from ocm.runtime.state import InMemoryCursorStore  # fachada pública — BC-22
 
 
-def _fetcher_metrics():
+def _fetcher_metrics() -> dict[str, Any]:
+    # Any boundary: the registry mixes Histogram (CANDLE_DELAY_MS,
+    # FETCH_CHUNK_DURATION) and Counter (FETCH_CHUNKS_TOTAL,
+    # FETCH_CHUNK_ERRORS_TOTAL); a precise union would break the
+    # differing .labels().inc()/.observe() call sites below.
     from market_data.infrastructure.observability.metrics import (
         CANDLE_DELAY_MS,
         FETCH_CHUNK_DURATION,

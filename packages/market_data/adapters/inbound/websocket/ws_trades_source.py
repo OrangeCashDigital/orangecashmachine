@@ -83,7 +83,7 @@ class WSTradesSource:
     def __aiter__(self) -> AsyncIterator[RawTrade]:
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> RawTrade:
         # TODO: implementar conexión WS real (cryptofeed / ccxt-pro)
         self._log.warning(
             "WSTradesSource no implementado — StopAsyncIteration inmediato | source_id={}",

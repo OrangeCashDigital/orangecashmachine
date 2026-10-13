@@ -183,7 +183,7 @@ class AdaptiveLimiter:
     async def __aenter__(self) -> "AdaptiveLimiter":
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: object) -> None:
         pass
 
     def state(self) -> dict[str, Any]:

@@ -377,7 +377,11 @@ class ResilienceLayer:
           no puede interrumpir el retry loop del caller.
         """
         try:
-            await self._breaker.on_failure()
+            # aioresilience ships py.typed but CircuitBreaker.on_failure is
+            # untyped upstream: bind through Any (no new # type: ignore) to
+            # keep this typed call site clean.
+            breaker: Any = self._breaker
+            await breaker.on_failure()
         except Exception:
             pass  # Fail-Soft — nunca interrumpir el flujo del caller
 
