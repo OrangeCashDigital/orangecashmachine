@@ -99,7 +99,7 @@ def _make_histogram(name: str, doc: str, labels: list[str], buckets: list[float]
     return Histogram(name, doc, labels, buckets=buckets) if _PROMETHEUS_AVAILABLE else _NoOpHistogram()
 
 
-_LATENCY_BUCKETS = [1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000]
+_LATENCY_BUCKETS: list[float] = [1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000]
 
 _events_published = _make_counter(
     "ocm_kafka_events_published_total",
