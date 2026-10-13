@@ -262,17 +262,20 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_ticker(symbol),
-                    timeout=_FETCH_TICKER_TIMEOUT,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.fetch_ticker(symbol),
+                        timeout=_FETCH_TICKER_TIMEOUT,
+                    ),
                 )
 
             try:
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return cast(Dict[str, Any], result)
+                return result
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -306,23 +309,26 @@ class CCXTAdapter(ExchangeAdapter):
 
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_ohlcv(
-                        symbol,
-                        timeframe,
-                        since=since,
-                        limit=limit,
-                        params=params,
+            async def _call() -> List[List[Any]]:
+                return cast(
+                    List[List[Any]],
+                    await asyncio.wait_for(
+                        client.fetch_ohlcv(
+                            symbol,
+                            timeframe,
+                            since=since,
+                            limit=limit,
+                            params=params,
+                        ),
+                        timeout=_FETCH_OHLCV_TIMEOUT,
                     ),
-                    timeout=_FETCH_OHLCV_TIMEOUT,
                 )
 
             try:
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return cast(List[List[Any]], result)
+                return result
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -351,17 +357,20 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_trades(symbol, since=since, limit=limit),
-                    timeout=_FETCH_TRADES_TIMEOUT,
+            async def _call() -> List[Dict[str, Any]]:
+                return cast(
+                    List[Dict[str, Any]],
+                    await asyncio.wait_for(
+                        client.fetch_trades(symbol, since=since, limit=limit),
+                        timeout=_FETCH_TRADES_TIMEOUT,
+                    ),
                 )
 
             try:
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return cast(List[Dict[str, Any]], result)
+                return result
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -427,24 +436,27 @@ class CCXTAdapter(ExchangeAdapter):
             order_params["clientOrderId"] = client_order_id
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.create_order(
-                        symbol,
-                        order_type,
-                        side,
-                        amount,
-                        price,
-                        order_params,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.create_order(
+                            symbol,
+                            order_type,
+                            side,
+                            amount,
+                            price,
+                            order_params,
+                        ),
+                        timeout=_CREATE_ORDER_TIMEOUT,
                     ),
-                    timeout=_CREATE_ORDER_TIMEOUT,
                 )
 
             try:
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return cast(Dict[str, Any], result)
+                return result
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -473,17 +485,20 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_order(order_id, symbol),
-                    timeout=_FETCH_ORDER_TIMEOUT,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.fetch_order(order_id, symbol),
+                        timeout=_FETCH_ORDER_TIMEOUT,
+                    ),
                 )
 
             try:
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return cast(Dict[str, Any], result)
+                return result
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -514,17 +529,20 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.cancel_order(order_id, symbol, params or {}),
-                    timeout=_CANCEL_ORDER_TIMEOUT,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.cancel_order(order_id, symbol, params or {}),
+                        timeout=_CANCEL_ORDER_TIMEOUT,
+                    ),
                 )
 
             try:
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return cast(Dict[str, Any], result)
+                return result
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
@@ -558,17 +576,20 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_open_orders(symbol),
-                    timeout=_FETCH_OPEN_ORDERS_TIMEOUT,
+            async def _call() -> List[Dict[str, Any]]:
+                return cast(
+                    List[Dict[str, Any]],
+                    await asyncio.wait_for(
+                        client.fetch_open_orders(symbol),
+                        timeout=_FETCH_OPEN_ORDERS_TIMEOUT,
+                    ),
                 )
 
             try:
                 _t0 = time.perf_counter()
                 result = await self._resilience.retry_call(_call)
                 self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return cast(List[Dict[str, Any]], result)
+                return result
             except RetryExhaustedError as exc:
                 self._throttle.record_error(error_type=exc.error_type)
                 if exc.error_type == "rate_limit":
