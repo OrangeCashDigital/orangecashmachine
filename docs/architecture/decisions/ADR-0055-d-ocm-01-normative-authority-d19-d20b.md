@@ -168,3 +168,47 @@ F-OCM-01 — CRITICAL · CONTRADICCIÓN (audit 10-07 L98-130); D-OCM-01 (L306).
 - docs/architecture/decisions/ADR-template.md (estructura de campos)
 - docs/architecture/decisions/ADR-0054-persistent-engineering-context-decisions.md (MD-A4 — relación sin aclarar)
 - Decisión humana D-OCM-01 Q1 = OPCIÓN A, 2026-10-08 (registro de conversación)
+
+
+---
+
+## Registro de resoluciones humanas (PHASE 11) — materialización limitada (PHASE 14)
+
+Este ADR registra, con carácter meramente aclaratorio y sin modificar otros archivos, las resoluciones humanas explícitas obtenidas en PHASE 11 para las cuestiones pendientes identificadas en PHASE 9–10.
+
+**Fecha de registro (aclaratorio):** 2026-10-12  
+**Alcance:** Exclusivamente aclaratorio. No declara vigencia normativa nueva, no autoriza implementación, no modifica estados históricos de documentos subordinados, no crea equivalencias entre documentos con nombres distintos.
+
+### Resoluciones humanas explícitas (referenciadas, no reinterpretadas)
+
+1. **P1/P2 — Procedencia documental.** Respuesta: **Opción 2**. Justificación: *"No atribuir equivalencia normativa sin evidencia explícita verificable."*  
+   **Tratamiento:** Los documentos citados y sus variantes históricas presentes en el árbol se mantienen **normativamente diferenciados** a efectos normativos hasta disponer de evidencia explícita y verificable de equivalencia (vínculo rename/alias con trazabilidad, no similitud de contenido). No se crean alias ni se declara equivalencia.
+
+2. **HD-P6-02 — Supersesión de etiquetas subordinadas.** Respuesta: **No**. Justificación: *"La evidencia examinada no muestra una cláusula explícita de sustitución."*  
+   **Tratamiento:** Q1 (ADR-0055, Opción A) **no sustituye ni elimina automáticamente** las etiquetas `HUMAN DECISION REQUIRED` presentes en INDUSTRY BOW (2026-10-03) y KB Contract para D19-01/D20b-01..06. La contradicción entre DECIDED y HUMAN DECISION REQUIRED/PENDING permanece **abierta** mientras no exista una reconciliación autorizada explícitamente. No se altera el contenido de esos documentos históricos.
+
+3. **HD-P6-03 — Alcance de U4.** Respuesta: **A**. Justificación: *"Mantener separados el modelo lógico, las garantías operativas y el diseño físico."*  
+   **Tratamiento:** U4 resuelve **únicamente el ámbito lógico** (delimitación lógica establecida: ListingIdentity + Semantic Lane, tres lanes semánticas, Transactional Outbox lógico único, eventos independientes de transporte, separación Identity/Representation/DefinitionVersion/VenueConstraints). Las **garantías operativas, el diseño físico y la causalidad cross-lane** no quedan resueltos por esta aclaración y permanecen abiertos o diferidos conforme a las respuestas siguientes.
+
+4. **HD-P6-04 — Garantías operativas por etapa.** Respuesta: **B**. Justificación: *"No inventar garantías; conservar únicamente invariantes respaldados por fuentes."*  
+   **Tratamiento:** Se **difieren explícitamente** las garantías operativas no resueltas para las etapas 1–7. No se inventan garantías. No se convierten elementos `NO ESPECIFICADO` en aprobados. Solo se reconocen invariantes respaldados por referencias verificables.
+
+5. **HD-P6-05 — Contrato semántico (evento→lane).** Respuesta: **B**. Justificación: *"Exigir asignaciones, excepciones, tratamiento ambiguo y autoridad de routing, sin inventar valores."*  
+   **Tratamiento:** Se exige una **tabla semántica explícita** (evento/clase, lane, justificación normativa con refs, excepciones, tratamiento de ambigüedad, autoridad responsable de routing, estado de validación). No se inventan eventos, asignaciones, excepciones ni autoridades. Dicha tabla debe marcar filas `PENDIENTE DE DECISIÓN HUMANA` o `NO ESPECIFICADO` cuando falte evidencia. El contrato semántico se mantiene **separado** de los detalles físicos de transporte (topics/keys/partitions/rebalance/CG/DLQ/retry/despliegue).
+
+6. **HD-P6-06 — Causalidad cross-lane.** Respuesta: **C**. Justificación: *"No asumir orden global ni declarar imposible una causalidad no especificada."*  
+   **Tratamiento:** La **causalidad cross-lane queda explícitamente no especificada y diferida**. No se asume orden global entre lanes. No se inventan reglas cross-lane. Se preserva el orden lógico por lane (ListingIdentity + Semantic Lane). La independencia de transporte se mantiene.
+
+7. **HD-P6-07 — Diferimientos físicos.** Respuesta: **A**. Justificación: *"Distinguir diferido explícitamente de no especificado, sin autorizar implementación."*  
+   **Tratamiento:** Se aceptan **únicamente** los diferimientos físicos cuyo carácter **explícitamente diferido** sea demostrable por fuentes verificables, con distinción estricta entre `DIFERIDO EXPLÍCITAMENTE` y `NO ESPECIFICADO`. Elementos meramente `NO ESPECIFICADOS` no se convierten automáticamente en aprobados. **Esta aclaración NO autoriza** diseño físico, cambios de infraestructura, GATE C, Q2 ni implementación.
+
+8. **Confirmación del bloqueo.** Respuesta: **Sí**. Justificación: *"Una resolución de preguntas no autoriza por sí sola cambios en el repositorio."*  
+   **Tratamiento:** La resolución de las cuestiones anteriores **no autoriza por sí sola** reconciliación documental adicional, GATE C, Q2 ni implementación. Cualquier fase con escrituras requiere **autorización humana explícita y delimitada** para esa fase concreta.
+
+### Reafirmaciones obligatorias
+
+- **P1/P2 diferenciados:** Se mantienen normativamente diferenciados hasta evidencia explícita y verificable (vínculo rename/alias con trazabilidad, no similitud de contenido). No se declaran equivalentes ni alias.
+- **Separación de capas:** Lógico (delimitado) vs operativo (diferido) vs físico (solo diferidos explícitos) vs semántico (requiere tabla explícita). Causalidad cross-lane diferida.
+- **Sin autorización implícita:** `IMPLEMENTATION = NOT AUTHORIZED` permanece. `GATE C: BLOCKED`. `Q2: UNAUTHORIZED`. `DOCUMENTARY RECONCILIATION` adicional no autorizada por esta aclaración.
+- **Preservación histórica:** No se modifica contenido de documentos subordinados históricos (INDUSTRY BOW, KB Contract, Pack D19, High-impact audit). Se cita con rutas exactas.
+- **Read-only discipline:** Esta materialización es **únicamente aclaratoria**. No materializa decisiones arquitectónicas nuevas, no inventa garantías, mappings ni reglas.
