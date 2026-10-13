@@ -234,7 +234,7 @@ class TradingEngine:
     def oms_summary(self) -> dict[str, Any]:
         return self._oms.summary()
 
-    def validate_signal(self, signal) -> "RiskDecision":
+    def validate_signal(self, signal: SignalProtocol) -> "RiskDecision":
         """
         Expone la validación de riesgo sin violar Law of Demeter.
 
@@ -331,11 +331,11 @@ class TradingEngine:
                 result.orders_rejected += 1
         return closes
 
-    def _last_timestamp(self):
+    def _last_timestamp(self) -> datetime:
         """Timestamp de la última vela para sellos de stop-loss."""
         return datetime.now(timezone.utc)
 
-    def _load_data(self):
+    def _load_data(self) -> Any:
         try:
             return self._data_source.load_features(
                 exchange=self._exchange,
