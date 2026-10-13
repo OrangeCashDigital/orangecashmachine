@@ -385,6 +385,17 @@ plugins                 = ["pydantic.mypy"]
 module        = ["pyiceberg.*"]
 ignore_errors = true
 
+# L13a: out-of-scope diferido a L13b/L13c (strict global intacto; errores
+# computados pero no impresos). Retirar al cerrar L13b/L13c.
+[[tool.mypy.overrides]]
+module        = ["architecture_linter.*", "api.*", "app.*"]
+ignore_errors = true
+
+# scripts/ y docs/ no son paquetes (sin __init__.py) -> módulos por basename.
+[[tool.mypy.overrides]]
+module        = ["audit_validator", "check_production_gates", "engineering_health_check", "compliance_report", "p0_bybit_orderbook"]
+ignore_errors = true
+
 # =============================================================================
 # tool.hatch — build
 # =============================================================================
