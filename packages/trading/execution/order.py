@@ -42,7 +42,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from shared.types.signal import (
     Signal,
@@ -162,7 +162,7 @@ class Order:
     # State machine
     # ------------------------------------------------------------------
 
-    def transition(self, new_status: OrderStatus, **kwargs) -> None:
+    def transition(self, new_status: OrderStatus, **kwargs: Any) -> None:
         """
         Avanza el estado validando la transición contra el grafo.
 

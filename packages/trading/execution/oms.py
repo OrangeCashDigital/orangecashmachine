@@ -412,7 +412,7 @@ class OMS:
     def get_order(self, order_id: str) -> Optional[Order]:
         return self._orders.get(order_id)
 
-    def validate_signal(self, signal) -> RiskDecision:
+    def validate_signal(self, signal: SignalProtocol) -> RiskDecision:
         """
         Expone la validación de riesgo como API pública del OMS.
 
