@@ -33,7 +33,8 @@ import redis.asyncio as aioredis
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
 from loguru import logger
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp
 
 from api.middleware import SILENT_PATHS
 
@@ -49,12 +50,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     _WINDOW_S: int = 60  # ventana deslizante en segundos
 
-    def __init__(self, app, redis_client: aioredis.Redis, rpm: int) -> None:
+    def __init__(self, app: ASGIApp, redis_client: aioredis.Redis, rpm: int) -> None:
         super().__init__(app)
         self._redis = redis_client
         self._rpm = rpm
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in SILENT_PATHS:
             return await call_next(request)
 
