@@ -304,7 +304,7 @@ class TradesFetcher:
         )
         # retry_async lanza si agota intentos — result no puede ser None aquí
         assert result is not None
-        return result
+        return cast(pl.DataFrame, result)
 
     async def _update_cursor(self, symbol: str, ts_ms: int) -> None:
         """Actualiza cursor en Redis (silencia errores — no crítico)."""

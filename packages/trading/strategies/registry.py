@@ -131,7 +131,7 @@ def register_strategy(name: str, cls: Type[BaseStrategy]) -> Type[BaseStrategy]:
 def register_strategy(
     name: str,
     cls: Union[Type[BaseStrategy], None] = None,
-) -> Union[Type[BaseStrategy], Callable]:
+) -> Union[Type[BaseStrategy], Callable[..., Type[BaseStrategy]]]:
     """
     Registra una estrategia en el StrategyRegistry global.
 

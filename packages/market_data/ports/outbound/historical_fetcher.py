@@ -107,7 +107,7 @@ class HistoricalFetcherPort(Protocol):
         ExchangeConnectionError  : sesión caída — no recuperable sin retry.
         NoDataAvailableError     : el par no tiene datos desde since_ms.
         """
-        ...  # type: ignore[misc]  # AsyncIterator en Protocol requiere esta supresión
+        ...
 
     async def download_data(
         self,

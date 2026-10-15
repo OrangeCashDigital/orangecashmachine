@@ -3302,6 +3302,235 @@ hallazgos:
   cadena:
     origen: PYSEC-2026-113
     adr: ADR-0056
+- id: F-OCM-14
+  hallazgo_informe: F-OCM-14
+  fase: F2
+  prioridad: ALTA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Cierre L13 §3 (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md): commit `46369128` entró con `--no-verify` (roto + contaminado); reparado por la sesión B en `dbd41a57`.'
+  solucion: 'Contenido reparado por la sesión B en `dbd41a57`; gates (ruff, mypy, import-linter, pytest) verdes sobre el árbol reparado.'
+  pruebas:
+  - 'uv run pytest tests/ -q -m "not integration" → verde sobre la rama reparada (cierre L13 §4)'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: contenido reparado y verificado por gates.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-14
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-14
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: dbd41a57
+    tests:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §4
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: dbd41a57
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-14
+- id: F-OCM-15
+  hallazgo_informe: F-OCM-15
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'shared/contracts/boundaries.py:61 — `SignalProtocol` con atributos anotados planos (settables) vs shared/types/signal.py:39 — `Signal` `@dataclass(frozen=True)` (inmutable); `cast(SignalProtocol, signal)` en packages/trading/engine.py:211,318; `# type: ignore[arg-type]` preexistente en packages/trading/execution/oms.py:256'
+  solucion: 'Diferido: abordar en la migración del vocabulario de señales (fuera del scope L13).'
+  pruebas:
+  - 'docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §F-OCM-15: `git log` de `shared/contracts/` y `packages/trading/` no registra commits L13b/L13c (últimos 1d81040e, 74e01799, previos)'
+  adr_relacionado: null
+  riesgo_residual: 'MEDIO: el mismatch estructural se mantiene; bajo `strict` el ignore preexistente de oms.py:256 es lícito (usado) mientras no se resuelva.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-15
+    backlog:
+      estado: PENDIENTE
+      referencia: F-OCM-15
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: PENDIENTE
+      referencia: migración del vocabulario de señales (fuera del scope L13)
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+- id: F-OCM-17
+  hallazgo_informe: F-OCM-17
+  fase: F2
+  prioridad: ALTA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Commit `20072a77` introdujo 4 anotaciones string no importables; reparado en `28f0142d` (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §3).'
+  solucion: 'Anotaciones string no importables sustituidas por tipos importables; verificado con `mypy . --no-incremental` → Success, 395 source files, 0 errores.'
+  pruebas:
+  - 'uv run mypy . --no-incremental → Success: no issues found in 395 source files'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: verificado por mypy global sin overrides.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-17
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-17
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: 28f0142d
+    tests:
+      estado: HECHO
+      referencia: uv run mypy . --no-incremental
+    ci:
+      estado: HECHO
+      referencia: .github/workflows/ocm-ci.yml (mypy gate)
+    evidencia:
+      estado: HECHO
+      referencia: 28f0142d
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-17
+- id: F-OCM-18
+  hallazgo_informe: F-OCM-18
+  fase: F2
+  prioridad: MEDIA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: '`LineageTrackerPort.record` mal tipado (`object` en vez de `LineageEvent`); reparado en `2ca899a1` (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §3).'
+  solucion: 'Firma del puerto corregida a `LineageEvent`; bajo `strict` sin supresiones.'
+  pruebas:
+  - 'uv run mypy . --no-incremental → Success: no issues found in 395 source files'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: contrato del puerto alineado con el tipo canónico.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-18
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-18
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: 2ca899a1
+    tests:
+      estado: HECHO
+      referencia: uv run mypy . --no-incremental
+    ci:
+      estado: HECHO
+      referencia: .github/workflows/ocm-ci.yml (mypy gate)
+    evidencia:
+      estado: HECHO
+      referencia: 2ca899a1
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-18
+- id: F-OCM-19
+  hallazgo_informe: F-OCM-19
+  fase: F2
+  prioridad: MEDIA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: '`run_worker_pool` con un único `TypeVar` para item y resultado (generic mal tipado); reparado en `149d3e1a` (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §3).'
+  solucion: 'Genéricos separados para item y resultado en `run_worker_pool` (packages/market_data/application/pipelines/_worker_pool.py); mypy strict sin supresiones.'
+  pruebas:
+  - 'uv run mypy . --no-incremental → Success: no issues found in 395 source files'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: tipado del pool alineado con el uso real.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-19
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-19
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: 149d3e1a
+    tests:
+      estado: HECHO
+      referencia: uv run mypy . --no-incremental
+    ci:
+      estado: HECHO
+      referencia: .github/workflows/ocm-ci.yml (mypy gate)
+    evidencia:
+      estado: HECHO
+      referencia: 149d3e1a
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-19
+- id: F-OCM-20
+  hallazgo_informe: F-OCM-20
+  fase: F2
+  prioridad: ALTA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §F-OCM-20: A.6 (retirar overrides `ignore_errors`) y el rename del artifact L13a aplicados sin autorización humana; 2 sub-agentes paralelos con `uv run` concurrente sobre `.venv` compartido (race "Uninstalled 1 package / Installed 1 package").'
+  solucion: 'Decisión humana: aceptar el estado técnico (race no corrompió `.venv`: `uv sync --check` OK, gates verdes; rename byte-idéntico) y registrar el proceso como precedente prohibido (AUDIT_OCM_L13-closure §5).'
+  pruebas:
+  - 'uv sync --check → OK; gates verdes (mypy 395/0, ruff, lint-imports 51/0, pytest 1403 passed)'
+  - 'rename byte-idéntico sin referencias en el repo (grep sin resultados)'
+  adr_relacionado: null
+  riesgo_residual: 'Proceso: reincidencia (aplicar cambios sin autorización o paralelizar sub-agentes sobre `.venv` compartido) ⇒ revert automático + F-OCM escalado (AUDIT_OCM_L13-closure §5).'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-20
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-20
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: NO_APLICA
+      referencia: null
+    tests:
+      estado: HECHO
+      referencia: uv sync --check + gates (AUDIT_OCM_L13-closure §4)
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §F-OCM-20
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §5
 mediciones_f0:
   fecha: '2026-08-06'
   commit: eaca97a

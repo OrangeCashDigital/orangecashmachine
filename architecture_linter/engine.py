@@ -10,10 +10,13 @@ from __future__ import annotations
 import ast
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from architecture_linter.analyzers.ast_walk import ModuleInfo, analyze_module, iter_py_files
 from architecture_linter.models import RuleResult
+
+if TYPE_CHECKING:
+    from architecture_linter.rules.base import Rule
 
 
 class RepoContext:
@@ -148,7 +151,7 @@ def _identifiers_in_string(s: str) -> list[str]:
     return re.findall(r"[A-Za-z_][A-Za-z0-9_]*", s)
 
 
-def _annotation_plain(node) -> Optional[str]:
+def _annotation_plain(node: ast.AST) -> Optional[str]:
     """Serializa una anotación a texto (incl. strings de future annotations)."""
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
@@ -164,7 +167,7 @@ class LinterEngine:
     def __init__(self, ctx: RepoContext) -> None:
         self.ctx = ctx
 
-    def run(self, rules: list) -> list[RuleResult]:
+    def run(self, rules: list[Rule]) -> list[RuleResult]:
         results: list[RuleResult] = []
         for rule in rules:
             if not rule.enabled:

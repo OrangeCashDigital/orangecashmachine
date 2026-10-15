@@ -15,11 +15,12 @@ Principios: DRY · SSOT
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from trading.analytics.performance import PerformanceSummary
     from trading.engine import EngineResult
+    from trading.execution.order import Order
 
 __all__ = ["CycleRunResult"]
 
@@ -35,8 +36,8 @@ class CycleRunResult:
     error: Optional[str] = None
     engine_result: Optional["EngineResult"] = None
     performance: Optional["PerformanceSummary"] = None
-    open_positions: Optional[dict] = None
-    oms_summary: Optional[dict] = None
+    open_positions: Optional[dict[str, "Order"]] = None
+    oms_summary: Optional[dict[str, Any]] = None
 
     @property
     def exit_code(self) -> int:

@@ -36,7 +36,8 @@ from typing import Any, List, Optional
 
 import polars as pl
 from loguru import logger
-from pyiceberg.expressions import And, EqualTo
+from pyiceberg.expressions import And, BooleanExpression, EqualTo
+from pyiceberg.table import Table
 
 from market_data.domain.exceptions import (
     DataNotFoundError,
@@ -94,7 +95,7 @@ class GoldReader:
 
     def __init__(self, exchange: Optional[str] = None) -> None:
         self._exchange = exchange.lower() if exchange else None
-        self._table = None  # lazy — inicializado en primer acceso real
+        self._table: Optional[Table] = None  # lazy — inicializado en primer acceso real
         logger.debug(
             "GoldReader created | backend=iceberg exchange={}",
             self._exchange or "any",
@@ -102,7 +103,7 @@ class GoldReader:
 
     # ── Lazy init ─────────────────────────────────────────────────────────────
 
-    def _get_table(self):
+    def _get_table(self) -> Table:
         """
         Inicializa el catalog Iceberg en el primer acceso. Thread-safe vía GIL.
 
@@ -150,7 +151,7 @@ class GoldReader:
             scan = self._get_table().scan(
                 row_filter=row_filter,
                 selected_fields=tuple(columns) if columns else _BASE_COLS,
-                **({"snapshot_id": snap_id} if snap_id is not None else {}),
+                snapshot_id=snap_id,
             )
             df = scan.to_polars()
         except VersionNotFoundError:
@@ -210,7 +211,7 @@ class GoldReader:
     ) -> list[dict[str, Any]]:
         """Datasets Gold disponibles para exchange/market_type. SafeOps: retorna [] ante error."""
         try:
-            seen: set[str] = set()
+            seen: set[tuple[Any, ...]] = set()
             result: list[dict[str, Any]] = []
             _tbl = self._get_table()
             for entry in _tbl.history():
@@ -336,7 +337,7 @@ def _build_filter(
     symbol: str,
     market_type: str,
     timeframe: str,
-):
+) -> BooleanExpression:
     """
     Construye el filtro Iceberg para el cuarteto (exchange, symbol, market_type, timeframe).
 
@@ -344,8 +345,8 @@ def _build_filter(
     No usar keyword arguments — la API de pyiceberg no los soporta.
     """
     return And(
-        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),  # type: ignore[call-arg,arg-type,misc]
-        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),  # type: ignore[call-arg,arg-type,misc]
+        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),  # type: ignore[call-arg,misc]
+        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),  # type: ignore[call-arg,misc]
     )
 
 

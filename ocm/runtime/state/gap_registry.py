@@ -44,7 +44,7 @@ SafeOps
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from loguru import logger
 
@@ -278,7 +278,7 @@ class GapRegistry:
             ttl = _retry(lambda: self._store.ttl(key))
             ttl = ttl if ttl > 0 else _GAP_TTL
             _retry(lambda: self._store.set(key, json.dumps(data), ex=ttl))
-            return data["repair_attempts"]
+            return cast(int, data["repair_attempts"])
         except Exception as exc:
             logger.warning("GapRegistry.increment_attempts failed | key={} error={}", key, exc)
             return -1
@@ -355,7 +355,7 @@ class GapRegistry:
             raw = _retry(lambda: self._store.get(key))
             if raw is None:
                 return None
-            return json.loads(raw)
+            return cast(dict[str, Any], json.loads(raw))
         except Exception as exc:
             logger.warning("GapRegistry.get failed | key={} error={}", key, exc)
             return None

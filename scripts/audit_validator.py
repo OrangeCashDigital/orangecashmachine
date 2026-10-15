@@ -30,7 +30,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import yaml
 
@@ -484,9 +484,9 @@ def m10_reconciliation(ctx: AuditContext) -> None:
                 ctx.err("M10", f"{key}: declarado {dcount} != parseado {actual}")
 
 
-def _parse_register_summary(text: str) -> dict | None:
+def _parse_register_summary(text: str) -> dict[str, Any] | None:
     """Parse del resumen del registro (líneas `- CLASS: N` y `total N`)."""
-    summary: dict = {"classifications": {}, "total": None}
+    summary: dict[str, Any] = {"classifications": {}, "total": None}
     found = False
     for line in text.splitlines():
         m = re.match(r"^-\s*([A-ZÁÉÍÓÚÑ_]+):\s*(\d+)", line.strip())
@@ -730,7 +730,7 @@ def m21_canonical_audit_filenames(ctx: AuditContext) -> None:
         )
 
 
-def load_registry(path: Path) -> dict | None:
+def load_registry(path: Path) -> dict[str, Any] | None:
     """Carga policies/registry.yaml; None si no existe o no parsea."""
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -858,7 +858,7 @@ ALL_RULES: Sequence[tuple[str, str, object]] = [
 FUENTE_PRIMARIA_RE = re.compile(r"\*\*Fuente primaria:\*\*\s*`([^`]+)`")
 
 
-def _declared_report_for_register(register_path):
+def _declared_report_for_register(register_path: Path) -> Path | None:
     """Lee el campo explicito 'Fuente primaria' del propio registro."""
     try:
         text = register_path.read_text(encoding="utf-8")
@@ -871,7 +871,7 @@ def _declared_report_for_register(register_path):
     return candidate if candidate.is_file() else None
 
 
-def _matching_report_for_register(audits_dir, register_path):
+def _matching_report_for_register(audits_dir: Path, register_path: Path) -> Path | None:
     """Prioridad: 1) 'Fuente primaria' declarada (autoritativa);
     2) fallback por convencion slug+fecha, solo para registros
     que no la declaran."""

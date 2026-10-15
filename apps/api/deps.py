@@ -10,14 +10,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Any
 
 import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.auth.jwt import verify_token
-from api.settings import ApiSettings, get_settings
+from api.settings import ApiSettings
+from api.settings import get_settings as get_settings  # re-export explícito (usado por api.main)
 
 _bearer = HTTPBearer(auto_error=True)
 
@@ -70,7 +71,7 @@ RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
     settings: SettingsDep,
-) -> dict:
+) -> dict[str, Any]:
     """
     Verifica el JWT Bearer token.
     Fail-Fast: 401 inmediato si el token es inválido o expirado.

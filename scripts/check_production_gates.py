@@ -23,7 +23,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 TRACKING = ROOT / "docs" / "plans" / "tracking.yaml"
@@ -72,7 +72,7 @@ class GateResult:
 # La fuente de verdad principal es el código, los tests, los arquivos
 # y el tracking.yaml. No se asume documentación = implementación.
 
-GATES: Dict[str, dict] = {
+GATES: Dict[str, Dict[str, Any]] = {
     # G1: CODE — todo el código de production pasa los checks estáticos
     "G1": {
         "contrato": "tests/ Passing + lint/mypy clean + import-linter KEPT",
@@ -492,7 +492,7 @@ def _print_gate(gate: str, result: GateResult) -> None:
     print()
 
 
-def print_gates(gates: Dict[str, dict], mode: str) -> int:
+def print_gates(gates: Dict[str, Dict[str, Any]], mode: str) -> int:
     """Ejecuta todos los gates y devuelve el código de salida (0=PASS global, 1=BLOCK)."""
     all_pass = True
     for gate_name, gate_def in gates.items():
@@ -511,7 +511,7 @@ def print_gates(gates: Dict[str, dict], mode: str) -> int:
         return 1
 
 
-def _evaluate_gate(gate_name: str, gate_def: dict) -> GateResult:
+def _evaluate_gate(gate_name: str, gate_def: Dict[str, Any]) -> GateResult:
     """Evalúa un gate individual usando sus pass_conditions."""
     try:
         condition = gate_def["pass_conditions"]

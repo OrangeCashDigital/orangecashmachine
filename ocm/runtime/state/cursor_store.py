@@ -5,7 +5,7 @@ import base64
 import os
 import time
 from itertools import islice
-from typing import Any, Iterator, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Protocol, TypeVar, cast, runtime_checkable
 
 import redis
 from loguru import logger
@@ -17,6 +17,13 @@ try:
     _PROMETHEUS_AVAILABLE = True
 except ImportError:
     _PROMETHEUS_AVAILABLE = False
+
+if TYPE_CHECKING:
+    from prometheus_client import Counter, Gauge, Histogram
+
+    from ocm.config.schema import AppConfig
+
+_T = TypeVar("_T")
 
 _DEFAULT_HOST: str = "localhost"
 _DEFAULT_PORT: int = 6379
@@ -66,7 +73,14 @@ return 0
 """
 
 
-def _make_metrics():
+def _make_metrics() -> tuple[
+    Optional[Histogram],
+    Optional[Counter],
+    Optional[Counter],
+    Optional[Counter],
+    Optional[Gauge],
+    Optional[Gauge],
+]:
     if not _PROMETHEUS_AVAILABLE:
         return None, None, None, None, None, None
     try:
@@ -89,7 +103,7 @@ def _make_metrics():
 _get_latency, _update_total, _miss_total, _error_total, _active_cursors, _cursor_lag = _make_metrics()
 
 
-async def _retry_async(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS):
+async def _retry_async(fn: Callable[[], Any], attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS) -> Any:
     """
     Versión async de _retry: usa asyncio.sleep en lugar de time.sleep.
     Evita bloquear el event loop cuando Redis está caído o lento.
@@ -101,7 +115,7 @@ async def _retry_async(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RE
     return await redis_retry_async(fn, attempts=attempts, base_ms=base_ms)
 
 
-def _retry(fn, attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS):
+def _retry(fn: Callable[[], _T], attempts: int = _RETRY_ATTEMPTS, base_ms: float = _RETRY_BASE_MS) -> _T:
     """
     Versión síncrona — solo para contextos no-async (healthcheck, tests).
     En pipelines async usar _retry_async.
@@ -314,7 +328,7 @@ class RedisCursorStore:
 
     def get_raw(self, key: str) -> Optional[str]:
         try:
-            return _retry(lambda: self._client.get(key))
+            return cast(Optional[str], _retry(lambda: self._client.get(key)))
         except Exception as exc:
             logger.warning("CursorStore.get_raw failed | key={} error={}", key, exc)
             return None
@@ -396,7 +410,7 @@ def _batched(iterable: Iterator[Any], size: int) -> Iterator[list[Any]]:
         yield batch
 
 
-def build_cursor_store_from_config(config=None) -> RedisCursorStore:
+def build_cursor_store_from_config(config: Optional[AppConfig] = None) -> RedisCursorStore:
     """
     Factory principal: construye RedisCursorStore desde AppConfig.
     Centraliza configuracion validada, cacheada y auditable (DRY).

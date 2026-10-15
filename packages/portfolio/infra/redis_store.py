@@ -40,7 +40,7 @@ from __future__ import annotations
 import json
 import threading
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -120,7 +120,7 @@ class RedisPositionStore:
 
     def __init__(
         self,
-        redis_client,  # redis.Redis — tipado débil para no forzar import
+        redis_client: Any,  # redis.Redis — tipado débil para no forzar import
         exchange: str,
         ttl_seconds: int = _TTL_DEFAULT,
     ) -> None:
