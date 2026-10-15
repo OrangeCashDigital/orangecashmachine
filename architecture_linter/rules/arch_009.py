@@ -16,9 +16,10 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from architecture_linter.engine import RepoContext
-from architecture_linter.models import Evidence, Finding, Status
+from architecture_linter.models import Evidence, Finding, Severity, Status
 from architecture_linter.rules.base import Rule
 
 IMPORTLINTER_TOML = Path("architecture_linter/importlinter.toml")
@@ -122,11 +123,11 @@ class Arch009Rule(Rule):
 
     def __init__(
         self,
-        severity=None,
-        enabled=None,
+        severity: Severity | None = None,
+        enabled: bool | None = None,
         contract: LayerContract | list[LayerContract] | None = None,
         forbidden: list[ForbiddenContract] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(severity=severity, enabled=enabled, **kwargs)
         if contract is None:

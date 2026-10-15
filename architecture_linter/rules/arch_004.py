@@ -7,6 +7,8 @@ exchange balance; no marca error solo porque existe capital_usd.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from architecture_linter.engine import RepoContext
 from architecture_linter.models import Evidence, Finding, Status
 from architecture_linter.rules.base import Rule
@@ -34,7 +36,7 @@ class Arch004Rule(Rule):
 
     def analyze(self, ctx: RepoContext) -> list[Finding]:
         # Balance real consultado — por símbolo (heurística) o por estructura
-        balance_refs: dict[str, list] = {}
+        balance_refs: dict[str, list[tuple[Path, int]]] = {}
         for sym in BALANCE_SYMBOLS:
             refs = ctx.references(sym)
             if refs:
@@ -42,13 +44,13 @@ class Arch004Rule(Rule):
 
         # Evidencia estructural: métodos que devuelven dict con valores numéricos
         # (currency → amount) en adapters/ports/infrastructure = fuente de balance
-        structural_balance: list[tuple] = []
+        structural_balance: list[tuple[Path, str, int, str]] = []
         for path, func, line, ret in ctx.dict_returns():
             if any(d in str(path) for d in ("/adapters/", "/ports/", "/infrastructure/")):
                 structural_balance.append((path, func, line, ret))
 
         # capital_usd en risk/portfolio
-        capital_refs: dict[str, list] = {}
+        capital_refs: dict[str, list[tuple[Path, int]]] = {}
         for sym in CAPITAL_SYMBOLS:
             refs = ctx.references(sym)
             if refs:
@@ -114,7 +116,7 @@ class Arch004Rule(Rule):
             )
         ]
 
-    def _ev(self, ctx: RepoContext, path, line, sym) -> Evidence:
+    def _ev(self, ctx: RepoContext, path: Path, line: int | None, sym: str) -> Evidence:
         text = ctx.text(path)
         if not text or line is None or line > len(text.splitlines()):
             return Evidence(str(path), line, sym, "")
