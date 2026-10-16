@@ -14,6 +14,7 @@ Principios: DRY · Fail-Fast · Resiliencia ante versiones de pyiceberg.
 from __future__ import annotations
 
 from loguru import logger
+from pyiceberg.catalog import Catalog
 from pyiceberg.partitioning import PartitionSpec
 from pyiceberg.schema import Schema
 
@@ -36,7 +37,7 @@ from market_data.infrastructure.storage.iceberg.schemas import (
 # ---------------------------------------------------------------------------
 
 
-def _namespace_exists(cat, namespace: str) -> bool:
+def _namespace_exists(cat: Catalog, namespace: str) -> bool:
     """Verifica si un namespace existe de forma defensiva.
 
     pyiceberg puede devolver tuplas, listas o strings según la versión.
@@ -58,7 +59,7 @@ def _namespace_exists(cat, namespace: str) -> bool:
         return False
 
 
-def _table_exists(cat, namespace: str, table: str) -> bool:
+def _table_exists(cat: Catalog, namespace: str, table: str) -> bool:
     """Verifica si una tabla existe de forma defensiva."""
     try:
         tables = cat.list_tables(namespace)

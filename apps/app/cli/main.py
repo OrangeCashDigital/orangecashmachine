@@ -298,7 +298,7 @@ def main() -> None:
     install_sigterm_handler()  # SafeOps (R14/H8): SIGTERM → KeyboardInterrupt → 130
     _reject_cfg_job_in_production()  # Guard B-04: nunca dump de config segura en prod
     try:
-        hydra_main()  # type: ignore[call-arg]
+        hydra_main()
     except KeyboardInterrupt:
         logger.warning("execution_interrupted", signal="SIGINT")
         sys.exit(130)

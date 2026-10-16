@@ -31,7 +31,7 @@ import asyncio
 import copy
 import random
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 import ccxt as ccxt_sync  # sync — parse8601, iso8601, inspect_required_credentials
 import ccxt.async_support as ccxt
@@ -262,10 +262,13 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_ticker(symbol),
-                    timeout=_FETCH_TICKER_TIMEOUT,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.fetch_ticker(symbol),
+                        timeout=_FETCH_TICKER_TIMEOUT,
+                    ),
                 )
 
             try:
@@ -306,16 +309,19 @@ class CCXTAdapter(ExchangeAdapter):
 
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_ohlcv(
-                        symbol,
-                        timeframe,
-                        since=since,
-                        limit=limit,
-                        params=params,
+            async def _call() -> List[List[Any]]:
+                return cast(
+                    List[List[Any]],
+                    await asyncio.wait_for(
+                        client.fetch_ohlcv(
+                            symbol,
+                            timeframe,
+                            since=since,
+                            limit=limit,
+                            params=params,
+                        ),
+                        timeout=_FETCH_OHLCV_TIMEOUT,
                     ),
-                    timeout=_FETCH_OHLCV_TIMEOUT,
                 )
 
             try:
@@ -351,10 +357,13 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_trades(symbol, since=since, limit=limit),
-                    timeout=_FETCH_TRADES_TIMEOUT,
+            async def _call() -> List[Dict[str, Any]]:
+                return cast(
+                    List[Dict[str, Any]],
+                    await asyncio.wait_for(
+                        client.fetch_trades(symbol, since=since, limit=limit),
+                        timeout=_FETCH_TRADES_TIMEOUT,
+                    ),
                 )
 
             try:
@@ -382,10 +391,10 @@ class CCXTAdapter(ExchangeAdapter):
         return (self._markets_cache or {}).get(symbol)
 
     def parse8601(self, date_str: str) -> int:
-        return ccxt_sync.Exchange.parse8601(date_str)
+        return cast(int, ccxt_sync.Exchange.parse8601(date_str))
 
     def iso8601(self, timestamp_ms: int) -> str:
-        return ccxt_sync.Exchange.iso8601(timestamp_ms)
+        return cast(str, ccxt_sync.Exchange.iso8601(timestamp_ms))
 
     async def inspect_required_credentials(self) -> Dict[str, Any]:
         if not hasattr(ccxt_sync, self._exchange_id):
@@ -427,17 +436,20 @@ class CCXTAdapter(ExchangeAdapter):
             order_params["clientOrderId"] = client_order_id
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.create_order(
-                        symbol,
-                        order_type,
-                        side,
-                        amount,
-                        price,
-                        order_params,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.create_order(
+                            symbol,
+                            order_type,
+                            side,
+                            amount,
+                            price,
+                            order_params,
+                        ),
+                        timeout=_CREATE_ORDER_TIMEOUT,
                     ),
-                    timeout=_CREATE_ORDER_TIMEOUT,
                 )
 
             try:
@@ -473,10 +485,13 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_order(order_id, symbol),
-                    timeout=_FETCH_ORDER_TIMEOUT,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.fetch_order(order_id, symbol),
+                        timeout=_FETCH_ORDER_TIMEOUT,
+                    ),
                 )
 
             try:
@@ -514,10 +529,13 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.cancel_order(order_id, symbol, params or {}),
-                    timeout=_CANCEL_ORDER_TIMEOUT,
+            async def _call() -> Dict[str, Any]:
+                return cast(
+                    Dict[str, Any],
+                    await asyncio.wait_for(
+                        client.cancel_order(order_id, symbol, params or {}),
+                        timeout=_CANCEL_ORDER_TIMEOUT,
+                    ),
                 )
 
             try:
@@ -558,10 +576,13 @@ class CCXTAdapter(ExchangeAdapter):
         client = await self._get_client()
         async with self._limiter.slot():
 
-            async def _call():
-                return await asyncio.wait_for(
-                    client.fetch_open_orders(symbol),
-                    timeout=_FETCH_OPEN_ORDERS_TIMEOUT,
+            async def _call() -> List[Dict[str, Any]]:
+                return cast(
+                    List[Dict[str, Any]],
+                    await asyncio.wait_for(
+                        client.fetch_open_orders(symbol),
+                        timeout=_FETCH_OPEN_ORDERS_TIMEOUT,
+                    ),
                 )
 
             try:

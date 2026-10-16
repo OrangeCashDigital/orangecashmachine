@@ -44,15 +44,16 @@ Principios: SRP . DRY . SSOT . DIP
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable, Optional, Protocol
 
 from loguru import logger
 
-from trading.execution.order import OrderSide
+from trading.execution.order import Order, OrderSide
 
 
 class SupportsOnFill(Protocol):
-    def on_fill(self, order) -> None: ...
+    def on_fill(self, order: Order) -> None: ...
 
 
 class SupportsPositionSync(Protocol):
@@ -64,7 +65,7 @@ class SupportsPositionSync(Protocol):
         side: str,
         avg_entry: float,
         size_pct: float,
-        entry_at,
+        entry_at: Optional[datetime],
         quantity: Optional[float],
     ) -> None: ...
 
@@ -84,7 +85,7 @@ class SupportsPositionSync(Protocol):
 def build_fill_sync(
     tracker: SupportsOnFill,
     portfolio: SupportsPositionSync,
-) -> Callable[[object], None]:
+) -> Callable[[Order], None]:
     """
     Construye el callback on_fill compartido entre live y paper.
 
@@ -106,7 +107,7 @@ def build_fill_sync(
     """
     open_order_ids: dict[str, str] = {}
 
-    def on_fill_composite(order) -> None:
+    def on_fill_composite(order: Order) -> None:
         """Callback OMS -> TradeTracker + PortfolioService.
 
         ADR-0025 (F4a/F4b): la posición se asienta con la cantidad y el
@@ -124,6 +125,7 @@ def build_fill_sync(
 
         if order.side == OrderSide.BUY:
             open_order_ids.setdefault(order.symbol, order.order_id)
+            assert order.fill_price is not None, "open_position: BUY fill sin fill_price"
             portfolio.open_position(
                 order_id=order.order_id,
                 symbol=order.symbol,

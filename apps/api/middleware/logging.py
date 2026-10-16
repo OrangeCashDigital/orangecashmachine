@@ -16,7 +16,7 @@ import time
 
 from fastapi import Request, Response
 from loguru import logger
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from api.middleware import SILENT_PATHS
 
@@ -24,7 +24,7 @@ from api.middleware import SILENT_PATHS
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Loguea request + response con duración. Silent para health checks."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in SILENT_PATHS:
             return await call_next(request)
 

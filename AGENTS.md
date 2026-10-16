@@ -47,7 +47,7 @@ contracts, plain `uv sync` for tests+config.
 
     ruff check --fix → ruff format
 
-If hooks modify files: `git add -u && git commit -m <msg>`. Never skip.
+If hooks modify files: stop and report. The human re-stages and commits; agents never run `git add/commit/push/reset/stash/rebase/merge`. Never skip hooks.
 
 ## Dependency direction
 
@@ -189,3 +189,20 @@ Si una fuente de menor autoridad contradice una de mayor autoridad, prevalece la
 **No-sobrediseño.** La literatura no justifica introducir abstracciones, BCs, servicios, capas o patrones nuevos "por analogía". Toda complejidad nueva exige necesidad concreta + autoridad arquitectónica.
 
 **Estado/vigencia.** Fuentes históricas, antiguas, no verificadas o potencialmente desactualizadas no se presentan como conocimiento operativo vigente. Diferencia referencia histórica/conceptual de documentación vigente.
+
+## Skills
+
+Before modifying code under packages/, apps/, shared/, config/ or policies/, load the `ocm-context-bootstrap` skill and build a Context Pack. Not required for typos, formatting or docs-only edits.
+The skill is procedural and never authority; ADR-0054 is accepted as documentation except MD-A4, which stays PROPOSED (docs/architecture/decisions/ADR-0054-persistent-engineering-context-decisions.md).
+
+## Agent rules (OpenCode / OmO)
+
+- Agents never run `git add/commit/push/reset/stash/rebase/merge`; the human commits.
+- Never read or print `.env` or secrets. Never run `uv run ocm --cfg job` (it prints secrets).
+- Gate before reporting done: `uv run ruff check . && uv run lint-imports --config architecture_linter/importlinter.toml && uv run pytest tests/ -x -q`.
+- Do not run `/init-deep` or create nested AGENTS.md files.
+- No new pandas outside `adapters/` and `infrastructure/`; domain stays framework-agnostic.
+
+## Setup de agentes
+
+Guía de instalación y configuración: `docs/agents/opencode-omo-setup.md`.

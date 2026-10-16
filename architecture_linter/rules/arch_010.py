@@ -15,7 +15,7 @@ from architecture_linter.analyzers.mutable_state import (
     find_position_stores,
 )
 from architecture_linter.engine import RepoContext
-from architecture_linter.models import Evidence, Finding, Status
+from architecture_linter.models import Evidence, Finding, OrderStore, PositionStore, Status
 from architecture_linter.rules.base import Rule
 
 
@@ -34,7 +34,7 @@ class Arch010Rule(Rule):
         orders = find_order_stores(ctx)
 
         # Clasificación por concepto
-        concept_stores: dict[str, list] = {
+        concept_stores: dict[str, list[PositionStore] | list[OrderStore]] = {
             "position": positions,
             "order": orders,
         }

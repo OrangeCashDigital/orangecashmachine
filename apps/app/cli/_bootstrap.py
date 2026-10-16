@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
+from types import FrameType
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -95,7 +96,7 @@ def setup_logging(*, debug: bool, color: str) -> None:
     )
 
 
-def handle_sigterm(signum, frame) -> None:
+def handle_sigterm(signum: int, frame: FrameType | None) -> None:
     """Traduce SIGTERM a SystemExit — dispara los finally pendientes."""
     raise SystemExit(1)
 

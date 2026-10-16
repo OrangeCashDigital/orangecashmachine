@@ -190,19 +190,26 @@ def test_assemble_live_returns_runtime_with_injected_portfolio(
     assert runtime.portfolio is portfolio  # BC-43: misma instancia inyectada
 
 
-def test_assemble_live_prefers_real_transport_when_exchange_config() -> None:
+def test_assemble_live_prefers_real_transport_when_exchange_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """F3/ADR-0016: con exchange_config, assemble_live usa transporte real.
 
     El transporte real (Bybit/CCXT) se construye desde la credencial. Sin
-    ella, usa PaperTransport (modo paper del camino live).
+    ella, usa PaperTransport (modo paper del camino live). IS_STUB se pone a
+    False de forma controlada (decisión C3, Fase 0 2026-09-24): el DEFAULT es
+    STUB=True y bloquea assemble_live (ver
+    test_assemble_live_blocks_while_executor_is_stub).
     """
     import market_data  # noqa: F401  (disponible en CI)
     from trading.execution.live_executor import LiveExecutor
+    from trading.execution.transport import PaperTransport
 
     portfolio = _FakePortfolio()
 
     # Sin credenciales reales no instanciamos ExchangeConfig completo; en
     # paper el transporte es simulado y assemble_live procede.
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
     root = TradingCompositionRoot(
         trading=_trading_config(),
         risk=_risk_config(),
@@ -214,17 +221,21 @@ def test_assemble_live_prefers_real_transport_when_exchange_config() -> None:
     assert isinstance(runtime.engine, TradingEngine)
     assert isinstance(runtime.tracker, TradeTracker)
     assert runtime.portfolio is portfolio
+    assert isinstance(runtime.transport, PaperTransport)
 
-    assert not LiveExecutor.IS_STUB, "LiveExecutor no debe ser STUB tras F3 (B-12)"
 
-
-def test_assemble_live_ok_con_provenance_actual() -> None:
+def test_assemble_live_ok_con_provenance_actual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """B-23: con PROVIDENCE actual (Orders/Fills en DOMAIN), assemble_live no bloquea.
 
     Camino feliz — confirma que el guard de la Promotion Rule (ADR-0017 §14)
     no interfiere con el estado presente del sistema. B-23 es defensa en
     profundidad para el futuro, no una corrección de un fallo actual.
+    IS_STUB=True (default, C3) se relaja controladamente para aislar B-23.
     """
+    from trading.execution.live_executor import LiveExecutor
+
     portfolio = _FakePortfolio()
     root = TradingCompositionRoot(
         trading=_trading_config(),
@@ -234,10 +245,30 @@ def test_assemble_live_ok_con_provenance_actual() -> None:
         rebalance_port=RebalanceService(),
     )
 
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
     runtime = root.assemble_live()  # no debe lanzar
 
     assert isinstance(runtime.engine, TradingEngine)
     assert runtime.portfolio is portfolio
+
+
+def test_assemble_live_blocks_while_executor_is_stub() -> None:
+    """C3 (Fase 0, 2026-09-24): el default IS_STUB=True bloquea assemble_live.
+
+    Fail-closed: sin la implementación real de `_submit` commiteada (condición
+    de flip de ADR-0016), no se ensambla un camino que toque capital real.
+    Sin monkeypatch, el guard R1/B-01 dispara RuntimeError.
+    """
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+    )
+
+    with pytest.raises(RuntimeError, match="STUB"):
+        root.assemble_live()
 
 
 def test_assemble_live_bloquea_si_orders_fills_no_promovidos(monkeypatch) -> None:

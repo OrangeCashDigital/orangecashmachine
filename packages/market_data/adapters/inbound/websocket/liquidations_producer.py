@@ -52,7 +52,7 @@ class LiquidationsKafkaProducer:
         el adapter nunca lo asume (DIP) — ver docs/audits F-008.
         """
         self._producer = producer
-        self._kappa_headers: dict = {
+        self._kappa_headers: dict[str, str] = {
             HEADER_SOURCE: source,
             HEADER_DOMAIN: "liquidations",
         }

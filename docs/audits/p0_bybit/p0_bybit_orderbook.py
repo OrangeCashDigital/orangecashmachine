@@ -40,7 +40,7 @@ import time
 from collections import Counter, deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 try:
     import websockets
@@ -119,7 +119,7 @@ class P0OrderBookObserver:
         if topic.startswith("orderbook."):
             self._handle_orderbook(msg, local_recv_ms)
 
-    def _handle_orderbook(self, msg: dict, local_recv_ms: int) -> None:
+    def _handle_orderbook(self, msg: dict[str, Any], local_recv_ms: int) -> None:
         mtype = msg.get("type")
         self.type_counts[str(mtype)] += 1
         data = msg.get("data", {})
@@ -168,7 +168,7 @@ class P0OrderBookObserver:
                     self.duplicate_seq += 1
 
     @staticmethod
-    def _is_sorted(levels: list, *, desc: bool) -> bool:
+    def _is_sorted(levels: list[Any], *, desc: bool) -> bool:
         prices = [float(lvl[0]) for lvl in levels if len(lvl) >= 2]
         if desc:
             return all(prices[i] >= prices[i + 1] for i in range(len(prices) - 1))
@@ -212,8 +212,8 @@ class P0OrderBookObserver:
         self._log("duración alcanzada; finalizando")
 
     # -- reporte ------------------------------------------------------------
-    def summarize(self) -> dict:
-        def gap_stats(deltas: list[int]) -> dict:
+    def summarize(self) -> dict[str, Any]:
+        def gap_stats(deltas: list[int]) -> dict[str, Any]:
             if not deltas:
                 return {"n": 0, "eq1": 0, "neq1": 0, "min": None, "max": None}
             return {

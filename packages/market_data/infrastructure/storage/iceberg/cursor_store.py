@@ -11,9 +11,12 @@ Depende de: ports.outbound.cache (abstracto), nunca de IcebergStorage.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    import redis
 
 
 class CursorStore:
@@ -32,7 +35,7 @@ class CursorStore:
 
     def __init__(
         self,
-        redis_client,  # redis.Redis | FakeRedis | None
+        redis_client: Optional[redis.Redis],  # redis.Redis en prod | FakeRedis en tests
         exchange: str,
         market_type: str,
         ttl_s: int = _DEFAULT_TTL_S,
@@ -61,7 +64,7 @@ class CursorStore:
         # L2: Redis
         if self._redis is not None:
             try:
-                raw = self._redis.get(self._key(symbol, timeframe))
+                raw: Any = self._redis.get(self._key(symbol, timeframe))  # redis stubs: get() -> Awaitable[Any] | Any
                 if raw is not None:
                     val = int(raw)
                     self._l1[cache_key] = val

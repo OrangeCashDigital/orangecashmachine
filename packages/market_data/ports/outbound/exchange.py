@@ -135,7 +135,7 @@ class ExchangeAdapter(ABC):
         symbol: str,
         depth: int = 20,
         market_type: Optional[str] = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Retorna snapshot L2 del order book para el símbolo dado.
 

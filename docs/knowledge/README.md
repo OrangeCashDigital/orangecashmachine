@@ -45,3 +45,17 @@ Un libro no es automáticamente TIER_1: la autoridad refleja su función dentro 
 
 Metadata no verificada (`status: needs_verification` o similar) **no debe
 convertirse en hecho** al citarla. Verifica siempre `status` antes de usar una fuente.
+
+## Contrato y validación (mecanismo)
+
+- **Contracto:** `docs/knowledge/KNOWLEDGE_BASE_CONTRACT.md` — separación
+  catálogo lógico (`docs/knowledge/`) vs corpus físico
+  (`/home/orangemusic/kb-local-only/`), identidad documental (document_id),
+  integridad, Decision Preflight, SafeOps y jerarquía de autoridad.
+- **Validador determinista:** `uv run python scripts/knowledge_integrity.py`
+  (con `--json` para salida reproducible; `--require <ids>` para preflight de
+  decisión). Baseline de integridad: `docs/knowledge/integrity.yaml`
+  (índice derivado: sha256 + size por document catalogado).
+- **Invariante:** Knowledge ≠ Evidence ≠ Analysis ≠ Recommendation ≠ Decision.
+  El mecanismo verifica disponibilidad/integridad de conocimiento; NUNCA
+  convierte evidencia o recomendación en decisión humana.

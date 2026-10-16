@@ -21,7 +21,7 @@ Principios: SRP · DIP · SSOT
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, List
 
 
 @dataclass
@@ -44,7 +44,7 @@ class QualityIssue:
     severity: str
     description: str
     affected_rows: int = 0
-    details: Dict = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -107,7 +107,7 @@ class DataQualityReport:
             parts.append(f"  [{i.severity.upper()}] {i.check}: {i.description} (rows={i.affected_rows})")
         return "\n".join(parts)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timeframe": self.timeframe,

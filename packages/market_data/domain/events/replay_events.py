@@ -91,7 +91,7 @@ class ReplayRequested(DomainEvent):
     requested_by: str = "system"
 
     # Streams válidos — SSOT local (no crear enum para un único uso — KISS)
-    _VALID_STREAMS: frozenset = field(
+    _VALID_STREAMS: frozenset[str] = field(
         default=frozenset({"ohlcv", "trades", "orderbook", "all"}),
         init=False,
         repr=False,

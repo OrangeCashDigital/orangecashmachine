@@ -25,7 +25,7 @@ Uso
 Parámetros
 ----------
 items           : secuencia de items a procesar (cualquier tipo hashable)
-execute_fn      : coroutine async (item) -> T — ejecuta un item
+    execute_fn      : coroutine async (item) -> TResult — ejecuta un item
 max_concurrency : número máximo de workers simultáneos
 exchange_id     : identificador del exchange — usado en logs y errores
 log             : logger bindeado (loguru o compatible)
@@ -38,7 +38,7 @@ on_abort        : callable opcional (item, exc) -> bool — si retorna True,
 
 Retorno
 -------
-tuple[list[T], bool]
+    tuple[list[TResult], bool]
     results  : lista de resultados en orden de completión (no determinístico)
     aborted  : True si on_abort señalizó abort durante la ejecución
 
@@ -62,7 +62,10 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TypeVar
 
-T = TypeVar("T")
+import loguru
+
+TItem = TypeVar("TItem")
+TResult = TypeVar("TResult")
 
 # Stagger por defecto entre workers: 50ms × N workers.
 # Imperceptible en pipelines pequeños, efectivo bajo carga.
@@ -72,16 +75,16 @@ _DEFAULT_TIMEOUT_S: float = 3600.0
 
 
 async def run_worker_pool(
-    items: Sequence,
-    execute_fn: Callable[..., Awaitable[T]],
+    items: Sequence[TItem],
+    execute_fn: Callable[[TItem], Awaitable[TResult]],
     max_concurrency: int,
     exchange_id: str,
-    log,
+    log: loguru.Logger,
     *,
     stagger_s: float = _DEFAULT_STAGGER_S,
     timeout_s: float = _DEFAULT_TIMEOUT_S,
-    on_abort: Callable[..., bool] | None = None,
-) -> tuple[list[T], bool]:
+    on_abort: Callable[[TItem, Exception], bool] | None = None,
+) -> tuple[list[TResult], bool]:
     """
     Ejecuta execute_fn sobre cada item con concurrencia limitada.
 
@@ -107,8 +110,8 @@ async def run_worker_pool(
     if not items:
         return [], False
 
-    queue: asyncio.Queue = asyncio.Queue()
-    results: list[T] = []
+    queue: asyncio.Queue[TItem] = asyncio.Queue()
+    results: list[TResult] = []
     abort_event: asyncio.Event = asyncio.Event()
 
     for item in items:

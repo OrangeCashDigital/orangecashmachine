@@ -417,7 +417,7 @@ hallazgos:
     errores
   pruebas:
   - CI verde con mypy completo
-  - 'mypy . --no-incremental: Success, no issues found in 356 source files (2026-08-12)'
+  - 'mypy . --no-incremental: 329 errores en 118 archivos (checked 399 source files) (2026-10-07, commit auditado 05317f14)'
   adr_relacionado: null
   riesgo_residual: 'Bajo: cobertura completa activa en CI; apps/ verificado por app-guard
     (AST + mypy apps)'
@@ -453,26 +453,30 @@ hallazgos:
   hallazgo_informe: H-24
   fase: F2
   prioridad: MEDIA
-  estado: PENDIENTE
+  estado: EN_CURSO
   estado_auditoria: CONFIRMADO
   evidencia: 'KafkaProducerAdapter.send_async() (infrastructure/kafka/producer.py)
     captura toda excepción, sin retry/DLQ/circuit breaker; reason=dlq_sent ya reservado
     en KafkaMetrics.event_failed() pero ningún código lo dispara. 2026-08-09: send_async()
     ya clasifica causas (F-019) y produce() eleva KafkaProducerError (F-013) — la
     visualización del fallo esta resuelta; lo pendiente es recuperacion (gap/DLQ product-side).
-    No existe consumidor real de orderbook.raw (BookBuilder aspiracional: TOPIC_ORDERBOOK_RAW
-    solo usado por el propio producer)'
-  solucion: 'DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado
-    hasta existir consumidor real de orderbook.raw (BookBuilder). Cuando exista: sequence
-    aditivo en schema v2, book.sequence_number propagado, metrica ocm_kafka_gap_total,
-    reutilizando TOPIC_DLQ. No tocar wire schema sin consumidor (no-especulativo)'
+    BookBuilderConsumer existe y está cableado (commit b561339f); gap detection técnico
+    implementado; publicación de OrderBookGapDetectedEvent en market.gaps (D3) y
+    corrección de idempotencia D6 (fix-dedup-u) pendientes de implementación y validación.'
+  solucion: >-
+    DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado hasta
+    existir consumidor real de orderbook.raw (BookBuilder). ADR-0023 proponía en su momento
+    sequence aditivo en schema v2 y book.sequence_number propagado (referencia histórica SOLO);
+    esa especificación queda reemplazada por ADR-0028 aceptado con revisión (2026-09-24):
+    identity/continuity por update_id (u) en schema v2 estable, sin sequence/first_update_id,
+    sin schema v3. Solución vigente para OrderBook = ADR-0028 con D2/D3/D5/D6.
+    No tocar wire schema sin consumidor (no-especulativo).
   pruebas:
   - 'verificacion: grep TOPIC_ORDERBOOK_RAW en packages/+apps/ = solo producer; GROUP_BOOK_BUILDER/TOPIC_BOOK_DELTA/TOPIC_BOOK_SNAPSHOT
     = 0 usos productivos'
   - 'verificacion: cryptofeed expone book.sequence_number (cryptofeed_orderbook_stream.py:158-161)'
-  adr_relacionado: ADR-0023 -- deferral formal hasta consumidor real
-  riesgo_residual: Medio — perdida posible de deltas sin gap detection; senal visible
-    ya (KafkaProducerError + razones clasificadas), recuperacion pendiente de BookBuilder
+  adr_relacionado: 'ADR-0023, ADR-0028'
+  riesgo_residual: "Medio — gap detection técnico existe; publicación market.gaps (D3) y corrección idempotencia (D6) pendientes de implementación y validación."
   fecha_cierre: null
   cadena:
     hallazgo:
@@ -483,22 +487,73 @@ hallazgos:
       referencia: B-25 en tracking.yaml
     adr:
       estado: HECHO
-      referencia: ADR-0023 deferral gap detection/DLQ product-side (2026-08-09)
+      referencia: 'ADR-0023 deferral histórico (2026-08-09); ADR-0028 aceptado con revisión (2026-09-24)'
     implementacion:
-      estado: PENDIENTE
-      referencia: deferida por ADR-0023 hasta consumidor real de orderbook.raw
+      estado: PARCIAL
+      referencia: 'BookBuilderConsumer cableado (b561339f); D3 market.gaps + D6 fix-dedup-u pendientes'
     tests:
       estado: NO_APLICA
-      referencia: no hay cambio de contrato hoy
+      referencia: 'sin implementación D3/D6 aún'
     ci:
       estado: NO_APLICA
       referencia: null
     evidencia:
       estado: HECHO
-      referencia: 0 consumidores de orderbook.raw; ADR-0023 firmado
+      referencia: 'BookBuilderConsumer commiteado (b561339f); ADR-0028 firmado'
     cierre:
       estado: PENDIENTE
-      referencia: deferido hasta BookBuilder consumidor
+      referencia: 'governance closure requiere D3/D6 implementados y decisión humana'
+- id: B-MD-004
+  hallazgo_informe: B-MD-004
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Consumidor futuro del port de lectura pública MarketDataViewPort
+    (ADR-0028 §3.6, D4, 2026-09-24): market validity pre-envío (is_ready,
+    spread/liquidez/depth). Frontera pública: packages/market_data/ports/outbound/market_data_view.py;
+    sin consumidor en Fase 1 (fase actual de D4); BookBuilder implementa el port
+    estructuralmente (book_builder.py). Gobernanza de fase intermedia: ADR-0044
+    (Staged Ports Gobernados).'
+  solucion: 'B-MD-004 consumirá MarketDataViewPort para validar market readiness
+    (is_ready, best_bid/best_ask, spread, depth, stale_threshold_ms) antes del
+    envío de órdenes; detalle de implementación y wiring en fase posterior con
+    autorización separada. Al cablearse el consumidor real, MarketDataViewPort deja
+    de ser staged (cierre ADR-0044 §3.5).'
+  pruebas:
+  - 'pendiente: test de consumo de MarketDataViewPort por B-MD-004 (market validity)
+    y verificación de ARCH-006/M11 pasando tras el cableado'
+  adr_relacionado: 'ADR-0028, ADR-0044'
+  riesgo_residual: "Alto — mientras B-MD-004 no exista, MarketDataViewPort no tiene
+    consumidor y ARCH-006 lo reporta como huérfano (FAIL esperado; enforcement técnico
+    de staged como PASS pendiente de la fase de implementación). Sin validación de
+    mercado (is_ready/spread/depth) antes del envío hasta cablear B-MD-004."
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: 'ADR-0028 §3.6 (D4, 2026-09-24): consumidor previsto en Fase 2'
+    backlog:
+      estado: HECHO
+      referencia: B-MD-004 en tracking.yaml
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0028 §3.6 (D4) + ADR-0044 (Staged Ports Gobernados, 2026-09-24)'
+    implementacion:
+      estado: PENDIENTE
+      referencia: null
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: 'ADR-0028 §3.6 D4; market_data_view.py existe sin consumidor; BookBuilder implementa el port'
+    cierre:
+      estado: PENDIENTE
+      referencia: null
 - id: B-26
   hallazgo_informe: H-25
   fase: F2
@@ -3236,6 +3291,246 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+- id: B-61
+  hallazgo_informe: PYSEC-2026-113 (risk-accept 2026-08-03; ADR-0056)
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'pip-audit: pyarrow 19.0.1 → PYSEC-2026-113 (fix 23.0.1; CVE-2026-25087 / GHSA-rgxp-2hwp-jwgg); risk-accept formal en ADR-0056.'
+  descripcion: 'Migrar pyarrow 19.0.1 → 23.0.1 (fix PYSEC-2026-113) cuando exista ventana de testing; retirar ignore en CI (ADR-0056)'
+  cadena:
+    origen: PYSEC-2026-113
+    adr: ADR-0056
+- id: F-OCM-14
+  hallazgo_informe: F-OCM-14
+  fase: F2
+  prioridad: ALTA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Cierre L13 §3 (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md): commit `46369128` entró con `--no-verify` (roto + contaminado); reparado por la sesión B en `dbd41a57`.'
+  solucion: 'Contenido reparado por la sesión B en `dbd41a57`; gates (ruff, mypy, import-linter, pytest) verdes sobre el árbol reparado.'
+  pruebas:
+  - 'uv run pytest tests/ -q -m "not integration" → verde sobre la rama reparada (cierre L13 §4)'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: contenido reparado y verificado por gates.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-14
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-14
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: dbd41a57
+    tests:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §4
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: dbd41a57
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-14
+- id: F-OCM-15
+  hallazgo_informe: F-OCM-15
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'shared/contracts/boundaries.py:61 — `SignalProtocol` con atributos anotados planos (settables) vs shared/types/signal.py:39 — `Signal` `@dataclass(frozen=True)` (inmutable); `cast(SignalProtocol, signal)` en packages/trading/engine.py:211,318; `# type: ignore[arg-type]` preexistente en packages/trading/execution/oms.py:256'
+  solucion: 'Diferido: abordar en la migración del vocabulario de señales (fuera del scope L13).'
+  pruebas:
+  - 'docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §F-OCM-15: `git log` de `shared/contracts/` y `packages/trading/` no registra commits L13b/L13c (últimos 1d81040e, 74e01799, previos)'
+  adr_relacionado: null
+  riesgo_residual: 'MEDIO: el mismatch estructural se mantiene; bajo `strict` el ignore preexistente de oms.py:256 es lícito (usado) mientras no se resuelva.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-15
+    backlog:
+      estado: PENDIENTE
+      referencia: F-OCM-15
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: PENDIENTE
+      referencia: migración del vocabulario de señales (fuera del scope L13)
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+- id: F-OCM-17
+  hallazgo_informe: F-OCM-17
+  fase: F2
+  prioridad: ALTA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Commit `20072a77` introdujo 4 anotaciones string no importables; reparado en `28f0142d` (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §3).'
+  solucion: 'Anotaciones string no importables sustituidas por tipos importables; verificado con `mypy . --no-incremental` → Success, 395 source files, 0 errores.'
+  pruebas:
+  - 'uv run mypy . --no-incremental → Success: no issues found in 395 source files'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: verificado por mypy global sin overrides.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-17
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-17
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: 28f0142d
+    tests:
+      estado: HECHO
+      referencia: uv run mypy . --no-incremental
+    ci:
+      estado: HECHO
+      referencia: .github/workflows/ocm-ci.yml (mypy gate)
+    evidencia:
+      estado: HECHO
+      referencia: 28f0142d
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-17
+- id: F-OCM-18
+  hallazgo_informe: F-OCM-18
+  fase: F2
+  prioridad: MEDIA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: '`LineageTrackerPort.record` mal tipado (`object` en vez de `LineageEvent`); reparado en `2ca899a1` (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §3).'
+  solucion: 'Firma del puerto corregida a `LineageEvent`; bajo `strict` sin supresiones.'
+  pruebas:
+  - 'uv run mypy . --no-incremental → Success: no issues found in 395 source files'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: contrato del puerto alineado con el tipo canónico.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-18
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-18
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: 2ca899a1
+    tests:
+      estado: HECHO
+      referencia: uv run mypy . --no-incremental
+    ci:
+      estado: HECHO
+      referencia: .github/workflows/ocm-ci.yml (mypy gate)
+    evidencia:
+      estado: HECHO
+      referencia: 2ca899a1
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-18
+- id: F-OCM-19
+  hallazgo_informe: F-OCM-19
+  fase: F2
+  prioridad: MEDIA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: '`run_worker_pool` con un único `TypeVar` para item y resultado (generic mal tipado); reparado en `149d3e1a` (docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §3).'
+  solucion: 'Genéricos separados para item y resultado en `run_worker_pool` (packages/market_data/application/pipelines/_worker_pool.py); mypy strict sin supresiones.'
+  pruebas:
+  - 'uv run mypy . --no-incremental → Success: no issues found in 395 source files'
+  adr_relacionado: null
+  riesgo_residual: 'Nulo: tipado del pool alineado con el uso real.'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-19
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-19
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: 149d3e1a
+    tests:
+      estado: HECHO
+      referencia: uv run mypy . --no-incremental
+    ci:
+      estado: HECHO
+      referencia: .github/workflows/ocm-ci.yml (mypy gate)
+    evidencia:
+      estado: HECHO
+      referencia: 149d3e1a
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-19
+- id: F-OCM-20
+  hallazgo_informe: F-OCM-20
+  fase: F2
+  prioridad: ALTA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §F-OCM-20: A.6 (retirar overrides `ignore_errors`) y el rename del artifact L13a aplicados sin autorización humana; 2 sub-agentes paralelos con `uv run` concurrente sobre `.venv` compartido (race "Uninstalled 1 package / Installed 1 package").'
+  solucion: 'Decisión humana: aceptar el estado técnico (race no corrompió `.venv`: `uv sync --check` OK, gates verdes; rename byte-idéntico) y registrar el proceso como precedente prohibido (AUDIT_OCM_L13-closure §5).'
+  pruebas:
+  - 'uv sync --check → OK; gates verdes (mypy 395/0, ruff, lint-imports 51/0, pytest 1403 passed)'
+  - 'rename byte-idéntico sin referencias en el repo (grep sin resultados)'
+  adr_relacionado: null
+  riesgo_residual: 'Proceso: reincidencia (aplicar cambios sin autorización o paralelizar sub-agentes sobre `.venv` compartido) ⇒ revert automático + F-OCM escalado (AUDIT_OCM_L13-closure §5).'
+  fecha_cierre: '2026-10-14'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md F-OCM-20
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-20
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: NO_APLICA
+      referencia: null
+    tests:
+      estado: HECHO
+      referencia: uv sync --check + gates (AUDIT_OCM_L13-closure §4)
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §F-OCM-20
+    cierre:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §5
 mediciones_f0:
   fecha: '2026-08-06'
   commit: eaca97a
@@ -3534,3 +3829,248 @@ f2_6e_topologia_kafka_por_bounded_context:
         F2.6d cerrada 2026-08-10; F2.6 como fase completa (a-d) queda cerrada.
         F2.6e (extensión documental posterior, cierre 2026-08-18) se añade como
         decisión derivada de F2.6d sobre topología Kafka.
+fase0_gobernanza:
+  estado: CERRADA
+  fecha: '2026-09-24'
+  descripcion: >-
+    Fase 0 (Governance / Human Decision Gate) del Plan Maestro — cierre del
+    Human Decision Gate del renderizado del Big Pickle. Materializa en gobernanza,
+    código y CI las decisiones humanas A1 / B2 / C3 (ver ADR-0041, ADR-0042,
+    ADR-0016, ADR-0013, PLAN-Maestro-Ingenieria.md §14).
+  decision_a_canonical_contract:
+    opcion: A1
+    descripcion: >-
+      ADR-0041 aceptado como ADR independiente que EXTENDE ADR-0013 (no lo
+      sustituye). Scope B: OHLCV, OrderBook, Trades, Funding, OI, Liquidations
+      (datasets con wire). Ticker/On-chain fuera. Envelope común + identidad por
+      dataset; purpose como metadata; dedup/evolución/routing/B-S-G ALREADY
+      DECIDED; ordering UNRESOLVED (deuda documentada).
+    adr: 'ADR-0041-canonical-market-data-contract (estado: Aceptado)'
+  decision_b_adrs:
+    opcion: B2
+    descripcion: >-
+      ADR-0042 degradado a documentación + tracking (no bloquea implementación).
+      ADR-0043 (orderbook resync) KEEP SEPARATE, se mantiene Propuesto.
+      ADR-0028 (BookBuilder/MarketState) queda SIN decidir — requiere aceptar o
+      rechazar formalmente (pendiente humano).
+    adr_0042: 'ADR-0042-ohlcv-architecture (estado: Obsoleto — degradado a documentación + tracking)'
+    adr_0043: 'ADR-0043-orderbook-snapshot-resync (estado: Propuesto, KEEP SEPARATE)'
+    adr_0028: 'ADR-0028-draft-bookbuilder-marketstate (estado: ACEPTADO CON REVISIÓN, 2026-09-24; D1-D6, ND1-ND5, C1)'
+  decision_c_is_stub:
+    opcion: C3
+    descripcion: >-
+      LiveExecutor.IS_STUB = True hasta Fase 9 (fail-closed). Guard G8 pasa a
+      ser un gate CI requerido (process verification). ADR-0016 se mantiene como
+      dueño de la condición de flip (IS_STUB -> False solo con _submit real
+      commiteado + tests + R9/R10 activos); C3 es una re-aserción interina.
+    adr: ADR-0016-live-executor-real-bybit (Nota Fase 0)
+  adr_pendientes: []
+  arch_pending_f6:
+    - ownership_storage: PipelineContext.storage = None — quién inyecta y bajo qué condiciones (Fase 3)
+    - orquestacion_recovery: quién invoca mode="repair" tras detección de Quality (DETECTION != RECOVERY)
+    - disparo_repair_strategy: caller explícito en runtime (hoy ningún caller)
+    - maquina_estado_recovery: LIVE/HISTORICAL/BACKFILL/REPAIR/RECONCILIATION orquestados
+  cadena:
+    conocimiento:
+      estado: HECHO
+      referencia: >-
+        Renderizado del Big Pickle (auditoría integral previa, series 2026-09-21).
+        Auditoría previa MAESTRE 2026-08-XX; modelos de referencia (Hummingbot,
+        Nautilus Timers, Freqtrade) documentados en ADR-0041 §4.
+    decision_humana:
+      estado: HECHO
+      referencia: 'Decisiones humanas 2026-09-24 vía prompt multi-choice: A=A1, B=B2, C=C3'
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0041 aceptado; ADR-0042 degradado; ADR-0016 nota C3; ADR-0013 enlace'
+    gobernanza:
+      estado: HECHO
+      referencia: 'tracking.yaml bloque fase0_gobernanza; PLAN-Maestro-Ingenieria.md §14 entrada'
+    implementacion:
+      estado: HECHO
+      referencia: 'IS_STUB = True en live_executor; guard fail-closed en composition_root'
+    tests:
+      estado: HECHO
+      referencia: 'tests/trading/test_composition_root.py + test_import_contracts.py actualizados'
+    ci:
+      estado: HECHO
+      referencia: 'job production-gates (check_production_gates.py --mode gate-ci) + G8 en CODE_LEVEL_GATES + branch protection actualizado'
+    evidencia:
+      estado: HECHO
+      referencia: 'Verificación lint-imports/ruff/mypy/tests + audit_validator + engineering_health + production gates post-commit'
+    cierre:
+      estado: HECHO
+      referencia: 'Fase 0 cerrada 2026-09-24'
+d5_entrypoints_execution_model:
+  estado: DECIDIDA
+  fecha: '2026-09-28'
+  descripcion: >-
+    Modelo de ejecución/entrypoints de OCM fijado por decisión humana D5 (2026-09-28).
+    BACKTEST/LIVE/PAPER = modos del mismo dominio/aplicación OCM; trading y portfolio
+    permanecen Nivel 2 EMBEDDED; market_data Nivel 1 con runtime/service independiente.
+    Invariantes: BC≠PROCESS, BC≠ENTRYPOINT, MODE≠BC, DEPLOYMENT MECHANISM≠ARCHITECTURE.
+  decision_entries:
+  - id: D5-01
+    opcion: D
+    resolucion: >-
+      PUBLIC = registro explícito en el execution contract. La existencia de módulo,
+      main.py, main(), python -m, referencias Docker/systemd/tests NO convierte en
+      public entrypoint. INTERNAL = implementación interna no declarada como interfaz
+      de ejecución pública.
+  - id: D5-02
+    opcion: A
+    resolucion: >-
+      app.cli.main = APPLICATION BATCH ENTRYPOINT; market_data.main = MARKET DATA
+      SERVICE ENTRYPOINT. No fusionar/sustituir; coexisten en fronteras de ejecución
+      distintas.
+  - id: D5-03
+    opcion: B
+    resolucion: >-
+      market_data.main es el service entrypoint público de Market Data
+      (conceptualmente python -m market_data.main). No obliga a -m en otros entrypoints.
+      No registrar trading.main ni portfolio.main.
+  - id: D5-04
+    opcion: D
+    resolucion: >-
+      Tres capas: ADR (autoridad) → execution contract → execution registry →
+      consumers. pyproject/run.sh/Dockerfile/systemd/CI no son autoridad por existir;
+      CI verifica/aplica, no legisla.
+  execution_model:
+    diagrama: 'BACKTEST/LIVE/PAPER ↓ APPLICATION ↓ DOMAIN ↓ trading+portfolio (embedded); market_data ↓ SERVICE ↓ Kafka/Iceberg'
+    backtest_status: 'NOT YET IMPLEMENTED / PENDING DESIGN AND IMPLEMENTATION (capacidad objetivo, no runtime actual)'
+    trading: 'Nivel 2 EMBEDDED — sin trading.main (no crear como consecuencia de D5)'
+    portfolio: 'Nivel 2 EMBEDDED — sin portfolio.main (no crear como consecuencia de D5)'
+    market_data: 'Nivel 1 — runtime/service independiente (python -m market_data.main)'
+  discrepancies_registradas:
+  - id: DISP-D5-01
+    artefacto: run.sh
+    hallazgo: >-
+      pyproject.toml registra ocm/ocm-api/live/paper/streaming; run.sh expone solo
+      ocm/live/paper y su cabecera declara 'SSOT idéntico a [project.scripts]'.
+    clasificacion: CONTRADICCIÓN FACTUAL / FINDING / DEUDA DE MIGRACIÓN
+    resolucion: postergada al execution contract (NO corregida en fase D5)
+  - id: DISP-D5-02
+    artefacto: docker-compose.yml
+    hallazgo: 'referencias python -m trading.main y python -m portfolio.main — módulos inexistentes'
+    clasificacion: ARCHITECTURAL DISCREPANCY / DEAD RUNTIME REFERENCE
+    resolucion: >-
+      postergada al execution contract (NO corregir creando trading.main/portfolio.main;
+      alinear Compose con el contrato aprobado)
+  adr_relacionado: ADR-0047
+  estado_materializacion: 'ACEPTADO CON ACLARACIONES (G4.3 — 2026-09-28). Aceptación humana formal; aclaraciones documentales/arquitectónicas incorporadas en ADR-0047 §23 (separación ADR/CONTRACT/REGISTRY/IMPLEMENTATION/VALIDATION/EVIDENCE; invariantes I-ENTRY-01..12). NO autoriza implementación ni migración.'
+  scope_no_autorizado:
+  - 'NO implementación de la arquitectura todavía'
+  - 'NO modificar código funcional / Dockerfile / docker-compose / systemd / run.sh / pyproject [project.scripts]'
+  - 'NO crear/eliminar entrypoints de runtime; NO mover archivos; NO reorganizar directorios'
+  - 'NO crear trading.main / portfolio.main; NO implementar Backtest'
+  - 'NO corregir discrepancias; NO modificar contratos de arquitectura existentes'
+  cadena:
+    conocimiento:
+      estado: HECHO
+      referencia: >-
+        Análisis D5 entrypoints (D5-01..D5-11), inventario E1-E9, consumer matrix,
+        comparación industria (NautilusTrader/Hummingbot/Freqtrade) — 2026-09-27.
+    decision_humana:
+      estado: HECHO
+      referencia: 'Decisión humana D5 — 2026-09-28 (D5-01=D, D5-02=A, D5-03=B, D5-04=D)'
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0047-d5-entrypoints-execution-model (Estado textual: ACEPTADO CON ACLARACIONES; G4.3 — 2026-09-28; aclaraciones formales en §23; invariantes I-ENTRY-01..12 formalizadas)'
+    gobernanza:
+      estado: HECHO
+      referencia: 'tracking.yaml bloque d5_entrypoints_execution_model (este bloque); registry.yaml SIN CAMBIO (sin estructura para decisiones/entrypoints; ADR en related_adrs generaría WARN M25 nuevo)'
+    implementacion:
+      estado: NO_APLICA
+      referencia: 'NO autorizada en fase D5 — Human/Build Gate separado para execution contract + migración consumers'
+    tests:
+      estado: NO_APLICA
+      referencia: 'Sin cambios de tests en fase D5 (materialización documental)'
+    ci:
+      estado: NO_APLICA
+      referencia: 'Sin cambios de CI en fase D5'
+    evidencia:
+      estado: HECHO
+      referencia: 'Validación READ-ONLY post-materialización: ADR refleja D5-01=D/D5-02=A/D5-03=B/D5-04=D; audit_validator sin FAIL nuevo vs baseline; git HEAD idéntico 05317f149c'
+    cierre:
+      estado: HECHO
+      referencia: >-
+        G4.3 (2026-09-28): ACEPTADO CON ACLARACIONES. Aceptación humana formal;
+        aclaraciones incorporadas a ADR-0047 §23; contradicción ADR↔tracking
+        resuelta (estado textual del ADR ahora coherente con tracking).
+        NO autoriza implementación ni migración de consumers.
+
+adr_0048_execution_contract:
+  estado: DECIDIDA
+  fecha: '2026-09-28'
+  descripcion: >-
+    Execution Contract y Runtime Architecture materializada por ADR-0048 (mandato humano
+    2026-09-28, Q1-Q8). Autoridad: ADR-0048 → Execution Contract → Registry Rule →
+    Execution Registry (config/execution_registry.yaml, Phase B). Registry dedicado (NO
+    policies/registry.yaml). market_data.main = PUBLIC MARKET DATA SERVICE ENTRYPOINT (se
+    mantiene python -m market_data.main; NO console script nuevo). run.sh = convenience layer
+    (NO SSOT; claim eliminado en fase H). trading.main/portfolio.main = DEAD RUNTIME REFS
+    (compose, DISP-D5-02; corregir en fase F sin crear módulos). fases A-L aprobadas con gates.;
+  q1_q8:
+    q1_registry_ubicacion: 'config/execution_registry.yaml (dedicado; separado de policies/registry.yaml; sin glob Hydra)'
+    q2_market_data_script: 'PUBLIC SERVICE; mantener python -m market_data.main; NO [project.scripts] market-data'
+    q3_run_sh_ssot: 'run.sh NO es SSOT; convenience layer; eliminar claim en fase H'
+    q4_compose_dead_refs: 'trading.main/portfolio.main = DEAD RUNTIME REFERENCE; corregir fase F sin crear módulos'
+    q5_fases_a_l: 'aprobadas con gates; cada fase SOLO tras su gate'
+    q6_estado_enum: 'ACTIVE / DISCREPANCY / DEAD / NOT_IMPLEMENTED'
+    q7_roles: 'live/paper/streaming = APPLICATION RUNTIME ENTRYPOINTS; api.main = APPLICATION API ENTRYPOINT; market_data.main = SERVICE'
+    q8_authority: 'ADR-0048 → Execution Contract → Approved Registry Rule → Execution Registry'
+  adr_relacionado: ADR-0048
+  estado_materializacion: 'GATE A RESUELTO — ACEPTADO CON ACLARACIONES (G4.3 — 2026-09-28). Aceptación humana formal; aclaraciones documentales incorporadas en ADR-0048 §16 (separación ADR/CONTRACT/REGISTRY/IMPLEMENTATION/VALIDATION/EVIDENCE; invariantes I-ENTRY-01..12). Registry NO crea autoridad; CI NO crea autoridad; evidence NO crea autoridad; existencia de artefacto NO crea autoridad.'
+  scope_no_autorizado:
+  - 'Registry config/execution_registry.yaml YA materializado (Phase B) y ACEPTADO (GATE A resuelto G4.3); el ítem previo "NO creación todavía" queda obsoleto'
+  - 'NO modificar código / pyproject / run.sh / Dockerfile / docker-compose / systemd / CI / tests'
+  - 'NO corregir DISP-D5-01 / DISP-D5-02 (fases H/F)'
+  - 'NO crear trading.main / portfolio.main; NO implementar Backtest'
+  - 'NO modificar policies/registry.yaml ni related_adrs'
+  - 'NO inventar schemas/datasets de Market Data; NO big-bang'
+  cadena:
+    conocimiento:
+      estado: HECHO
+      referencia: 'Decision Pack EXECUTION-CONTRACT-DECISION-PACK-2026-09-28 (PROPUESTA) + baseline Phase 0 (docs/audit/OCM-PRE-IMPLEMENTATION-BASELINE-2026-09-28.md)'
+    decision_humana:
+      estado: HECHO
+      referencia: 'Mandato MASTER ARCHITECTURE TRANSFORMATION — 2026-09-28 (Q1-Q8 resueltos) + D5 2026-09-28'
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0048-execution-contract-and-runtime-architecture (Estado textual: ACEPTADO CON ACLARACIONES; GATE A resuelto; G4.3 — 2026-09-28; aclaraciones formales en §16; invariantes I-ENTRY-01..12 formalizadas)'
+    gobernanza:
+      estado: HECHO
+      referencia: 'tracking.yaml bloque adr_0048_execution_contract (este bloque); registry.yaml SIN CAMBIO'
+    implementacion:
+      estado: HECHO
+      referencia: >-
+        Fases B-L 2026-09-28 (autorización GATE A): B registry config/execution_registry.yaml
+        (EP-001..006, 12 campos, estados ADR-0048); C app.cli auditado (sin procesos/BC nuevos);
+        D market_data frontera auditada (sin cross-BC, domain sin pandas; deep-schemas deferidos);
+        E Dockerfile CMD→EP-006; F compose retirados trading/portfolio (DISP-D5-02 RESUELTA);
+        G systemd ExecStart→EP-004/EP-006 (diffs preexistentes preservados); H run.sh SSOT claim
+        eliminado (DISP-D5-01 RESUELTA, convenience layer); I tests paridad (18 tests);
+        J CI job execution-registry-parity (fail-closed); K legacy refs (README vigente alineado).
+    tests:
+      estado: HECHO
+      referencia: >-
+        tests/architecture/test_execution_registry_parity.py (18 passed); tests/architecture 200
+        passed (2 FAIL pre-existentes baseline: M21, B-25); tests/market_data 203 passed; import-linter
+        51 KEPT; mypy apps OK; ruff OK.
+    ci:
+      estado: HECHO
+      referencia: 'ocm-ci.yml nuevo job execution-registry-parity (valida registry schema + parity tests; fail-closed). CI verifica, no decide (ADR-0048 §18).'
+    evidencia:
+      estado: HECHO
+      referencia: >-
+        Validación Phase L 2026-09-28: audit_validator ≤ baseline (M21/M25/M20 pre-existentes);
+        architecture_linter 3 PASS/7 FAIL idéntico baseline; config validation OK; compose config
+        OK; frontend parity 18/18. HEAD sin commit (05317f149c sigue siendo base).
+    cierre:
+      estado: HECHO
+      referencia: >-
+        G4.3 (2026-09-28): GATE A RESUELTO — ACEPTADO CON ACLARACIONES. Aceptación
+        humana formal; aclaraciones incorporadas a ADR-0048 §16; contradicción
+        ADR↔tracking resuelta (estado textual del ADR ahora coherente con tracking).
+        NO autoriza implementación funcional ni migración adicional; fases B-L
+        materializadas no se reinterpretan como autorización de nuevas fases.
