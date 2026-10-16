@@ -61,7 +61,7 @@ class OHLCVSource:
     BACKFILL: str = "backfill"
     REPLAY: str = "replay"
 
-    ALL: frozenset = frozenset({"rest", "live", "backfill", "replay"})
+    ALL: frozenset[str] = frozenset({"rest", "live", "backfill", "replay"})
 
     @classmethod
     def is_valid(cls, source: str) -> bool:

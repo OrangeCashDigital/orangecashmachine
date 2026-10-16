@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -91,7 +92,7 @@ def check_tracking_parses() -> None:
 # ---------------------------------------------------------------------------
 # 2. Coherencia interna y trazabilidad de referencias
 # ---------------------------------------------------------------------------
-def check_coherence(data: dict) -> None:
+def check_coherence(data: dict[str, Any]) -> None:
     backlog_ids = {h["id"] for h in data.get("hallazgos", [])}
 
     for r in data.get("reglas", []):
@@ -149,7 +150,7 @@ def check_import_contracts() -> None:
 # ---------------------------------------------------------------------------
 # 4. Cada gate de CI está respaldado por una regla activa del tracker
 # ---------------------------------------------------------------------------
-def check_ci_gates_mapped(data: dict) -> None:
+def check_ci_gates_mapped(data: dict[str, Any]) -> None:
     active = [r.get("id", "?") for r in data.get("reglas", []) if r.get("activada_en_ci")]
     if not active:
         err("tracking.yaml: no hay reglas con activada_en_ci=true")

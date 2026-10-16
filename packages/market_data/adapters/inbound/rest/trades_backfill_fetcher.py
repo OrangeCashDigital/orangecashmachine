@@ -65,7 +65,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal, InvalidOperation
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional, cast
 
 from loguru import logger
 
@@ -89,7 +89,7 @@ _MAX_BACKOFF_S: float = 15.0
 
 
 def _parse_raw_trade(
-    raw: dict,
+    raw: dict[str, Any],
     exchange_id: str,
     market_type: str,
     symbol: str,
@@ -351,11 +351,11 @@ class TradesBackfillFetcher:
     async def _fetch_page_with_retry(
         self,
         since_ms: Optional[int],
-    ) -> list:
+    ) -> list[Any]:
         """Fetcha una página delegando retry a _retry.retry_async (DRY)."""
         from market_data.adapters.inbound.rest._retry import retry_async
 
-        async def _call() -> list:
+        async def _call() -> list[Any]:
             return (
                 await self._adapter.fetch_trades(
                     symbol=self._symbol,
@@ -365,12 +365,15 @@ class TradesBackfillFetcher:
                 or []
             )
 
-        return await retry_async(
-            _call,
-            attempts=_RETRY_ATTEMPTS,
-            backoff_base=_BACKOFF_BASE,
-            backoff_cap=_MAX_BACKOFF_S,
-            context=f"TradesBackfillFetcher.fetch_trades symbol={self._symbol}",
+        return cast(
+            list[Any],
+            await retry_async(
+                _call,
+                attempts=_RETRY_ATTEMPTS,
+                backoff_base=_BACKOFF_BASE,
+                backoff_cap=_MAX_BACKOFF_S,
+                context=f"TradesBackfillFetcher.fetch_trades symbol={self._symbol}",
+            ),
         )
 
     def __repr__(self) -> str:

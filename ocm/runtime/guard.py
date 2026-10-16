@@ -36,7 +36,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 __all__ = ["ExecutionGuard", "ExecutionStoppedError"]
 
@@ -170,7 +170,7 @@ class ExecutionGuard:
     # Observability
     # ------------------------------------------------------------------ #
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, Any]:
         """
         Resumen del estado del guard para record_run y logging.
 

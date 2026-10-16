@@ -73,3 +73,10 @@ deploy/monitoring/grafana/provisioning/
 deploy/monitoring/grafana/dashboards/
 deploy/host.env
 deploy/systemd/rendered/
+deploy/monitoring/grafana.rootdirty/
+deploy/monitoring/grafana_root_docker/
+.vscode/
+
+# OmO runtime/generated
+.omo/run-continuation/
+.omo/*.bak.*

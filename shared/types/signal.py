@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 # SignalType re-exporta SignalDirection desde shared.enums (BC-45: el SSOT del
 # vocabulario de dominio vive en la raíz del kernel; types solo re-expone).
@@ -81,7 +81,7 @@ class Signal:
     price: float
     timestamp: datetime
     confidence: float = 1.0
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     quantity: Optional[float] = None
 
     def __post_init__(self) -> None:

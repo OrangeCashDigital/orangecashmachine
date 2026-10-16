@@ -31,6 +31,7 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -199,7 +200,7 @@ class AnomalyRegistry:
         except Exception as exc:
             logger.error("AnomalyRegistry: wipe failed | err={}", exc)
 
-    def stats(self) -> list[dict]:
+    def stats(self) -> list[dict[str, Any]]:
         """
         Retorna lista de anomalías conocidas con conteos para observabilidad.
 

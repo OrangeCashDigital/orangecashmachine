@@ -212,7 +212,7 @@ class DerivativesPipeline(PipelineTriggerPort):
         total = len(pairs)
         items = [(idx, ds, sym) for idx, (ds, sym) in enumerate(pairs, 1)]
 
-        async def _execute(item) -> DerivativesResult:
+        async def _execute(item: tuple[int, str, str]) -> DerivativesResult:
             idx, dataset, symbol = item
             return await self._fetch_pair(dataset, symbol, idx, total)
 

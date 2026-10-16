@@ -41,7 +41,7 @@ __all__ = ["ExternalKafkaEventPublisher"]
 class ExternalKafkaEventPublisher:
     """Productor Kafka de eventos canónicos de fuentes externas."""
 
-    _KAPPA_HEADERS: dict = {
+    _KAPPA_HEADERS: dict[str, str] = {
         HEADER_SOURCE: "replay",
         HEADER_DOMAIN: "external",
     }

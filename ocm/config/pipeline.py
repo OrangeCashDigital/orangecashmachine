@@ -221,7 +221,7 @@ class ConfigPipeline:
     # L3: OmegaConf → dict (coercion layer)
     # ------------------------------------------------------------------
 
-    def _l3_coerce(self, cfg: DictConfig) -> dict:
+    def _l3_coerce(self, cfg: DictConfig) -> dict[str, Any]:
         """
         L3: Coerción de tipos.
         OmegaConf → plain Python dict + limpieza de artefactos Hydra.
@@ -254,7 +254,7 @@ class ConfigPipeline:
     # L4: Pydantic validation (validation only — no business rules)
     # ------------------------------------------------------------------
 
-    def _l4_validate(self, raw_dict: dict) -> AppConfig:
+    def _l4_validate(self, raw_dict: dict[str, Any]) -> AppConfig:
         """
         L4: Validación Pydantic.
         Responsabilidad ÚNICA: tipos y estructura.

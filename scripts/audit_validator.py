@@ -30,7 +30,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import yaml
 
@@ -130,10 +130,12 @@ CANONICAL_COMMANDS: dict[str, tuple[str, int, str]] = {
     "MYPY": ("uv run mypy . --no-incremental", 0, "GATE calidad: tipado sin errores."),
     "SSOT_ENUMS": ("uv run python scripts/check_ssot_enums.py", 0, "GATE SSOT: literales solo en shared/enums.py."),
     "DEPENDENCY_AUDIT": (
-        "uv run pip-audit . --ignore-vuln PYSEC-2026-113 --ignore-vuln PYSEC-2026-1325",
+        "uv run pip-audit --ignore-vuln PYSEC-2026-113",
         0,
-        "GATE seguridad. Comando CANÓNICO = el del CI (risk-accept documentado 2026-08-03). "
-        "Sin los ignores del CI produce 6 vulns (no 4) — eso NO es un finding distinto.",
+        "GATE seguridad. Comando CANÓNICO = el del CI (risk-accept formal ADR-0056, pyarrow "
+        "PYSEC-2026-113; tracking B-61). Modo entorno real (sin ruta): 'pip-audit .' resuelve "
+        "con pip-resolve e ignora override-dependencies de uv (falso positivo). Retirar el "
+        "ignore al migrar pyarrow>=23.0.1.",
     ),
     "BANDIT": (
         "uv run bandit -r apps ocm packages shared infrastructure -ll",
@@ -482,9 +484,9 @@ def m10_reconciliation(ctx: AuditContext) -> None:
                 ctx.err("M10", f"{key}: declarado {dcount} != parseado {actual}")
 
 
-def _parse_register_summary(text: str) -> dict | None:
+def _parse_register_summary(text: str) -> dict[str, Any] | None:
     """Parse del resumen del registro (líneas `- CLASS: N` y `total N`)."""
-    summary: dict = {"classifications": {}, "total": None}
+    summary: dict[str, Any] = {"classifications": {}, "total": None}
     found = False
     for line in text.splitlines():
         m = re.match(r"^-\s*([A-ZÁÉÍÓÚÑ_]+):\s*(\d+)", line.strip())
@@ -728,7 +730,7 @@ def m21_canonical_audit_filenames(ctx: AuditContext) -> None:
         )
 
 
-def load_registry(path: Path) -> dict | None:
+def load_registry(path: Path) -> dict[str, Any] | None:
     """Carga policies/registry.yaml; None si no existe o no parsea."""
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -856,7 +858,7 @@ ALL_RULES: Sequence[tuple[str, str, object]] = [
 FUENTE_PRIMARIA_RE = re.compile(r"\*\*Fuente primaria:\*\*\s*`([^`]+)`")
 
 
-def _declared_report_for_register(register_path):
+def _declared_report_for_register(register_path: Path) -> Path | None:
     """Lee el campo explicito 'Fuente primaria' del propio registro."""
     try:
         text = register_path.read_text(encoding="utf-8")
@@ -869,7 +871,7 @@ def _declared_report_for_register(register_path):
     return candidate if candidate.is_file() else None
 
 
-def _matching_report_for_register(audits_dir, register_path):
+def _matching_report_for_register(audits_dir: Path, register_path: Path) -> Path | None:
     """Prioridad: 1) 'Fuente primaria' declarada (autoritativa);
     2) fallback por convencion slug+fecha, solo para registros
     que no la declaran."""

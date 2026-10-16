@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from architecture_linter.analyzers.ast_walk import ClassInfo
+from architecture_linter.engine import RepoContext
 from architecture_linter.models import Evidence, OrderStore, PositionStore
 
 # Patrones de nombre que sugieren posición (pero la regla exige más evidencia)
@@ -247,7 +248,7 @@ def has_container_mutation(cls: ClassInfo, attr: str) -> bool:
     return False
 
 
-def find_position_stores(ctx, scope_roots: tuple[str, ...]) -> list[PositionStore]:
+def find_position_stores(ctx: RepoContext, scope_roots: tuple[str, ...]) -> list[PositionStore]:
     """Detecta almacenes mutables de posición en los roots indicados.
 
     Criterio (evidencia correlacionada, no solo nombre):
@@ -292,7 +293,7 @@ def find_position_stores(ctx, scope_roots: tuple[str, ...]) -> list[PositionStor
     return stores
 
 
-def find_order_stores(ctx) -> list[OrderStore]:
+def find_order_stores(ctx: RepoContext) -> list[OrderStore]:
     """Detecta almacenes mutables de órdenes (contenedores de Order)."""
     stores: list[OrderStore] = []
     for path in ctx.files:
@@ -322,7 +323,9 @@ def find_order_stores(ctx) -> list[OrderStore]:
     return stores
 
 
-def find_global_mutable_stores(ctx, scope_roots: tuple[str, ...]) -> list[tuple[str, str, int, list[Evidence]]]:
+def find_global_mutable_stores(
+    ctx: RepoContext, scope_roots: tuple[str, ...]
+) -> list[tuple[str, str, int, list[Evidence]]]:
     """Contenedores mutables a nivel de módulo (estado global) en los roots indicados.
 
     Devuelve tuplas (file, name, line, evidence) de contenedores declarados a nivel
@@ -346,7 +349,7 @@ def find_global_mutable_stores(ctx, scope_roots: tuple[str, ...]) -> list[tuple[
     return out
 
 
-def analyze_owner_semantics(ctx, path: Path, cls: ClassInfo, attr: str) -> OwnerSemantics:
+def analyze_owner_semantics(ctx: RepoContext, path: Path, cls: ClassInfo, attr: str) -> OwnerSemantics:
     """Clasifica la semántica de escritura de `attr` en la clase (por método, AST)."""
     owner = OwnerSemantics(owner_class=f"{path}:{cls.name}", file=str(path))
     seen: set[str] = set()

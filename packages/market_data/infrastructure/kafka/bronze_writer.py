@@ -86,7 +86,7 @@ from market_data.infrastructure.kafka.dedup import (
 )
 from market_data.infrastructure.kafka.metrics import KafkaMetrics
 from market_data.infrastructure.storage.bronze.bronze_storage import BronzeStorage
-from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort
+from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort, KafkaMessage
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from shared.kafka.schemas.ohlcv import EventPayload
 
@@ -227,7 +227,7 @@ class KafkaBronzeWriter:
 
         return processed, write_errors
 
-    async def _process_message(self, msg) -> str:
+    async def _process_message(self, msg: KafkaMessage) -> str:
         """
         Procesa un mensaje individual.
 
@@ -242,7 +242,7 @@ class KafkaBronzeWriter:
             event: EventPayload = _shared_deserialize(msg.value, EventPayload)
         except Exception as exc:
             self._log.warning(
-                "bronze_writer_deserialize_error",
+                "bronze_writer_deserialize_error | offset={offset} | error={error}",
                 offset=msg.offset,
                 error=str(exc),
             )
@@ -293,7 +293,7 @@ class KafkaBronzeWriter:
             )
         except Exception as exc:
             self._log.error(
-                "bronze_write_error",
+                "bronze_write_error | {exchange} {symbol} {timeframe} | error={error}",
                 event_id=event.event_id,
                 exchange=event.exchange,
                 symbol=event.symbol,
@@ -318,7 +318,7 @@ class KafkaBronzeWriter:
         ).info("bronze_written")
         return "written"
 
-    async def _send_to_dlq(self, msg, reason: str) -> None:
+    async def _send_to_dlq(self, msg: KafkaMessage, reason: str) -> None:
         """
         Envía mensaje no procesable al DLQ. SafeOps — nunca lanza.
 

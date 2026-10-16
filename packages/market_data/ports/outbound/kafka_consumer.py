@@ -35,7 +35,7 @@ SafeOps — poll() retorna lista vacía si Kafka no responde (no lanza)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import Any, List, Optional, Protocol, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # KafkaMessage — value object inmutable del mensaje recibido
@@ -64,7 +64,7 @@ class KafkaMessage:
     key: Optional[bytes]
     value: bytes
     timestamp: int
-    headers: tuple = ()  # tuple para inmutabilidad (frozen=True)
+    headers: tuple[Any, ...] = ()  # tuple para inmutabilidad (frozen=True)
 
 
 # ---------------------------------------------------------------------------

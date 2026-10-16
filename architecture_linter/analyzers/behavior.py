@@ -118,7 +118,7 @@ def _never_true_state(cls: ClassInfo) -> list[tuple[str, int]]:
     return out
 
 
-def _is_self_attr_ast(node, attr: str) -> bool:
+def _is_self_attr_ast(node: ast.AST, attr: str) -> bool:
     return (
         isinstance(node, ast.Attribute)
         and isinstance(node.value, ast.Name)

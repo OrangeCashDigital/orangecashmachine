@@ -115,7 +115,7 @@ dependencies = [
     # razón documentada — corregido a un rango abierto razonable.
     # Validar en staging antes de fijar un techo definitivo si se necesita uno.
     "uvicorn[standard]>=0.30.0,<1.0",
-    "python-jose[cryptography]>=3.3.0,<4.0",
+    "pyjwt[crypto]>=2.8.0,<3.0",
     # ── Observabilidad (logging + métricas) ─────────────────────────────────
     # loguru: pinneado en 0.7.2 — API de sink Loki acoplada a esta versión.
     # Structlog también depende del record format de loguru. Actualizar con ambos.
@@ -179,6 +179,19 @@ ocm-api   = "api.main:serve"
 live      = "app.cli.live_hydra:main"
 paper     = "app.cli.paper_hydra:main"
 streaming = "app.cli.streaming_hydra:main"
+
+# =============================================================================
+# tool.uv — override de resolución (ADR-0053)
+# =============================================================================
+# CVE-2026-104874 (multidict 6.7.1, DoS GHSA-54p9-h82j-f925): fix real vía
+# override absoluto multidict==6.9.1, alineado con ccxt/ccxt#30764 (mergeado
+# 2026-10-07). El pin exacto multidict==6.7.1 de ccxt queda sobreescrito en la
+# resolución. Sin --ignore-vuln, sin risk-accept. NO se toca ccxt. Retirar el
+# override cuando ccxt 4.5.86+ publique el pin upstream (tarea de monitoreo).
+# =============================================================================
+
+[tool.uv]
+override-dependencies = ["multidict==6.9.1"]
 
 # =============================================================================
 # tool.ruff
@@ -336,7 +349,7 @@ show_missing = true
 # fijar fail_under un par de puntos por debajo del real (margen) y subirlo
 # gradualmente en PRs siguientes — no de un salto a 60.
 # *_COVERAGE.activada_en_ci=true en tracking.yaml (R5).
-fail_under = 40
+fail_under = 50
 
 # =============================================================================
 # tool.bandit
@@ -354,7 +367,7 @@ skips = ["B101"]  # assert_used: asserts válidos en guard checks controlados
 
 [tool.mypy]
 python_version         = "3.11"
-strict                 = false
+strict                 = true
 ignore_missing_imports = true
 exclude                 = ["tests/", ".venv/"]
 mypy_path               = "packages"

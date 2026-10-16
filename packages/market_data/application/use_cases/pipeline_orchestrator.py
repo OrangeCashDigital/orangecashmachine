@@ -125,7 +125,7 @@ class PipelineRequest:
     mode: PipelineModeStr = "incremental"
 
     # Parámetros de construcción del adapter
-    credentials: Optional[dict] = None
+    credentials: Optional[dict[str, Any]] = None
     resilience: "Optional[Union[ResilienceConfig, dict[str, Any]]]" = None
 
     # Parámetros de selección de datos

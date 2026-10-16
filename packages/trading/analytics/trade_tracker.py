@@ -33,7 +33,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import threading
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -109,7 +109,7 @@ class TradeTracker:
         with self._lock:
             return self._closed[-1] if self._closed else None
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, Any]:
         """Estado observable. SafeOps: nunca lanza."""
         try:
             with self._lock:

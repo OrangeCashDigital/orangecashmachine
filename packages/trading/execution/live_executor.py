@@ -75,9 +75,12 @@ class LiveExecutor:
     timeout_s      : int — presupuesto total del ciclo submit+reconciliación.
     """
 
-    # Guard R1 / B-01: fail-closed. Con el transport real commiteado y con
-    # pruebas (F3/B-12), IS_STUB pasa a False. assembly_root lo usa para decidir.
-    IS_STUB: ClassVar[bool] = False
+    # Guard R1 / B-01: fail-closed (decisión C3, Fase 0 — 2026-09-24).
+    # ADR-0016 fija la condición de flip: IS_STUB pasa a False SOLO cuando la
+    # implementación real de `_submit` esté commiteada con tests y R9/R10 activos
+    # (Fase 9 del Plan Maestro). Hasta entonces se mantiene True — no se opera
+    # capital real con un executor simulado. assembly_root lo usa para decidir.
+    IS_STUB: ClassVar[bool] = True
 
     def __init__(
         self,

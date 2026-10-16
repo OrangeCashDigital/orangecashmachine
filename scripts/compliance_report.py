@@ -18,6 +18,7 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 
 def _run(cmd: list[str]) -> tuple[int, str]:
@@ -141,7 +142,7 @@ def _parse_audit_validator(output: str) -> dict[str, object]:
     return result
 
 
-def generate_report() -> dict:
+def generate_report() -> dict[str, Any]:
     """Generate the compliance report as a dict."""
     today = date.today().isoformat()
 
@@ -225,7 +226,7 @@ def generate_report() -> dict:
     return report
 
 
-def _print_text(report: dict) -> None:
+def _print_text(report: dict[str, Any]) -> None:
     """Print human-readable report."""
     print(f"═══ Nightly Compliance Report — {report['date']} ═══")
     print()

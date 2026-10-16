@@ -21,7 +21,7 @@ import asyncio
 import math
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional, cast
+from typing import TYPE_CHECKING, Any, List, Optional, cast
 
 from loguru import logger
 
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     # El import de runtime ocurre en _LazyCalibrationStore._get() —
     # nunca en import time, preservando la inicialización diferida
     # y evitando conexiones Redis en tests (SafeOps · DIP).
-    from ocm.runtime.state.factories import LatenessCalibrationStore
+    from ocm.runtime.state import LatenessCalibrationStore
 
 from market_data.adapters.outbound.exchange import (
     CCXTAdapter,
@@ -62,7 +62,11 @@ from market_data.ports.outbound.transformer import OHLCVTransformerPort
 from ocm.runtime.state import InMemoryCursorStore  # fachada pública — BC-22
 
 
-def _fetcher_metrics():
+def _fetcher_metrics() -> dict[str, Any]:
+    # Any boundary: the registry mixes Histogram (CANDLE_DELAY_MS,
+    # FETCH_CHUNK_DURATION) and Counter (FETCH_CHUNKS_TOTAL,
+    # FETCH_CHUNK_ERRORS_TOTAL); a precise union would break the
+    # differing .labels().inc()/.observe() call sites below.
     from market_data.infrastructure.observability.metrics import (
         CANDLE_DELAY_MS,
         FETCH_CHUNK_DURATION,
@@ -355,7 +359,7 @@ class HistoricalFetcherAsync:
         since: Optional[int],
         limit: int = DEFAULT_CHUNK_LIMIT,
         end_ms: Optional[int] = None,
-    ) -> List[list]:
+    ) -> list[list[Any]]:
         """API pública de fetch de un chunk. Usada por BackfillStrategy."""
         return await self._fetch_chunk_with_retry(symbol, timeframe, since, limit, end_ms=end_ms)
 
@@ -584,7 +588,7 @@ class HistoricalFetcherAsync:
         since: Optional[int],
         limit: int,
         end_ms: Optional[int] = None,
-    ) -> List[list]:
+    ) -> list[list[Any]]:
         """
         Ejecuta fetch_ohlcv con una sola frontera de retry.
 
@@ -691,7 +695,7 @@ class HistoricalFetcherAsync:
 # ==========================================================
 
 
-def _raw_to_dataframe(raw: List[list]) -> pl.DataFrame:
+def _raw_to_dataframe(raw: list[list[Any]]) -> pl.DataFrame:
     df = pl.DataFrame(
         {
             "timestamp": [r[0] for r in raw],

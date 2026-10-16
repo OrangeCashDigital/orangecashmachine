@@ -436,11 +436,11 @@ class OHLCVPipeline(PipelineTriggerPort):
         abort_event: asyncio.Event = asyncio.Event()
         items = [(idx, sym, tf) for idx, (sym, tf) in enumerate(pairs, 1)]
 
-        async def _execute(item) -> PairResult:
+        async def _execute(item: tuple[int, str, str]) -> PairResult:
             idx, symbol, tf = item
             return await self._execute_pair(strategy, symbol, tf, idx, total, mode, abort_event)
 
-        def _on_abort(item, exc: Exception) -> bool:
+        def _on_abort(item: tuple[int, str, str], exc: Exception) -> bool:
             if not isinstance(exc, _ExchangeAbortError):
                 return False
             abort_event.set()
