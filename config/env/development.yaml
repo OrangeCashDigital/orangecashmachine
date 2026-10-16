@@ -23,7 +23,7 @@ pipeline:
 
 observability:
   logging:
-    level: DEBUG
+    level: INFO
     log_dir: logs
     rotation: 1 day
     retention: 7 days

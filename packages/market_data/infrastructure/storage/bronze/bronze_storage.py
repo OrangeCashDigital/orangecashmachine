@@ -186,7 +186,7 @@ class BronzeStorage:
 
         logger.debug(
             "Bronze append | exchange={} market_type={} symbol={} timeframe={} run_id={} rows={}",
-            self._exchange,
+            effective_exchange,
             self._market_type,
             symbol,
             timeframe,
