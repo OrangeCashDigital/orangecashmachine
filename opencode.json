@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "git *": "deny",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git show*": "allow",
+      "git blame*": "allow",
+      "git ls-files*": "allow",
+      "git rev-parse*": "allow",
+      "git check-ignore*": "allow",
+      "*.env*": "deny"
+    },
+    "read": {
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+    "skill": {
+      "ocm-context-bootstrap": "allow"
+    }
+  }
+}

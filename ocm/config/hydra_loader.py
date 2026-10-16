@@ -55,7 +55,7 @@ Principios: KISS · SafeOps · Fail-Fast · Sin efectos secundarios
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -167,7 +167,7 @@ def _load_module(config_dir: Path, rel_path: str) -> Optional[DictConfig]:
     wrapped: Any = OmegaConf.to_container(raw_cfg, resolve=False)
     for part in reversed(parts):
         wrapped = {part: wrapped}
-    return OmegaConf.create(wrapped)
+    return cast(DictConfig, OmegaConf.create(wrapped))
 
 
 def ensure_log_dir(log_dir_path: str) -> None:

@@ -373,97 +373,14 @@ services:
       - ocm_internal
       - ocm_public
 
-  # ⚠️ SCAFFOLDING FUTURO (EN CONSTRUCCIÓN — NO EJECUTABLE).
-  # trading es un bounded context en construcción: dominio + tests reales,
-  # pero integrado in-process en paper/live. NO existe trading.main.
-  # Este bloque anticipa la extracción futura; NO levantar hasta que exista
-  # el entrypoint real (ver ADR-0024, NIVEL 2 → NIVEL 1).
-  trading:
-    profiles: [microservices]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: ocm_trading:latest
-    container_name: ocm_trading
-    init: true
-    restart: on-failure:5
-    depends_on:
-      market-data:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      <<: [*common-env, *redis-env]
-      MARKET_DATA_URL: http://market-data:8001
-      TRADING_HOST: "0.0.0.0"
-      TRADING_PORT: "8002"
-    ports:
-      - "${TRADING_HOST_PORT:-8002}:8002"
-    volumes:
-      - ./config:/app/config:ro
-      - ./logs:/app/logs
-      - ./data_platform:/app/data_platform
-    command: python -m trading.main
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
-
-  # ⚠️ SCAFFOLDING FUTURO (EN CONSTRUCCIÓN — NO EJECUTABLE).
-  # portfolio es un bounded context en construcción: dominio + tests reales,
-  # pero integrado in-process en paper/live. NO existe portfolio.main.
-  # Este bloque anticipa la extracción futura; NO levantar hasta que exista
-  # el entrypoint real (ver ADR-0024, NIVEL 2 → NIVEL 1).
-  portfolio:
-    profiles: [microservices]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: ocm_portfolio:latest
-    container_name: ocm_portfolio
-    init: true
-    restart: on-failure:5
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      <<: [*common-env, *redis-env]
-      PORTFOLIO_HOST: "0.0.0.0"
-      PORTFOLIO_PORT: "8003"
-    ports:
-      - "${PORTFOLIO_HOST_PORT:-8003}:8003"
-    volumes:
-      - ./config:/app/config:ro
-      - ./logs:/app/logs
-    command: python -m portfolio.main
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8003/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-    logging: *default-logging
-    networks:
-      - ocm_internal
-      - ocm_public
+  # ─── trading / portfolio — RETIRADOS de Compose (Phase F, ADR-0048) ─────────
+  # trading y portfolio son bounded contexts Nivel 2 EMBEDDED (ADR-0024, ADR-0047 §12),
+  # ejecutados IN-PROCESS vía live/paper (EP-002/EP-003 del Execution Registry,
+  # config/execution_registry.yaml). NO tienen un runtime/proceso independiente y NO
+  # existe trading.main ni portfolio.main (DISP-D5-02 resuelta en Phase F: refs dead
+  # eliminadas sin crear los módulos — ADR-0047 §11/§12). Promoverlos a proceso requiere
+  # una decisión arquitectónica posterior (ADR-0047 §13), NO un servicio Compose.
+  # Histórico: ver DISP-D5-02 y ADR-0048 §6.2.
 
   # ────────────────────────────────────────────────────────────────────────────
   # ZOOKEEPER — coordinador de metadatos para Kafka

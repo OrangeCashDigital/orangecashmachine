@@ -39,6 +39,7 @@ Principios aplicados
 from __future__ import annotations
 
 from datetime import datetime, timezone  # stdlib — MIN_TIMESTAMP sin polars
+from typing import Any
 
 import polars as pl
 from loguru import logger
@@ -50,6 +51,11 @@ from market_data.domain.value_objects.timeframe import (
     InvalidTimeframeError,
     timeframe_to_ms,
 )
+
+# Boundary: pandera 0.31.1 expone SchemaError sin anotaciones en su __init__
+# (py.typed incompleto). Alias Any documentado: no existe un tipo concreto
+# importable sin acoplar este módulo a la jerarquía interna de pandera.
+_SchemaError: Any = SchemaError
 
 # ==========================================================
 # Constants
@@ -310,7 +316,7 @@ def validate_ohlcv(df: pl.DataFrame, timeframe: str = "unknown") -> pl.DataFrame
         else:
             ts_ms = df["timestamp"].dt.timestamp("ms")
             if not bool((ts_ms % tf_ms == 0).all()):
-                raise SchemaError(
+                raise _SchemaError(
                     schema=OHLCV_SCHEMA,
                     data=df,
                     message=(

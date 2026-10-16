@@ -57,7 +57,7 @@ import sys
 import types
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Callable
 
 import loguru  # noqa: F401 — loguru.Logger en type hint
 from loguru import logger
@@ -187,7 +187,7 @@ def _resolve_config(
     }
 
 
-def _make_patcher(run_id: str | None, env: str):
+def _make_patcher(run_id: str | None, env: str) -> Callable[["loguru.Record"], None]:
     """Crea un patcher que inyecta ``run_id``, ``service`` y ``env`` en cada record.
 
     Args:
@@ -199,7 +199,7 @@ def _make_patcher(run_id: str | None, env: str):
     """
     _run_id = run_id or "-"
 
-    def _patch(record: dict[str, Any]) -> None:
+    def _patch(record: "loguru.Record") -> None:
         extra = record["extra"]
         extra.setdefault("run_id", _run_id)
         extra.setdefault("service", "orangecashmachine")

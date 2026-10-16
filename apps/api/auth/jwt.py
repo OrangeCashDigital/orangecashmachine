@@ -16,7 +16,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt as _jwt
+from jwt import PyJWTError as JWTError
 from loguru import logger
 
 
@@ -44,7 +45,7 @@ def create_token(
         "iat": now,
         "exp": now + timedelta(minutes=expire_minutes),
     }
-    return jwt.encode(data, secret, algorithm=algorithm)
+    return _jwt.encode(data, secret, algorithm=algorithm)
 
 
 def verify_token(
@@ -68,7 +69,7 @@ def verify_token(
         Payload decodificado si el token es válido, None si no.
     """
     try:
-        return jwt.decode(token, secret, algorithms=[algorithm])
+        return _jwt.decode(token, secret, algorithms=[algorithm])
     except JWTError as exc:
         logger.debug("jwt_verify_failed | reason={}", exc)
         return None

@@ -49,7 +49,7 @@ SafeOps
 
 import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional, cast
 
 from loguru import logger
 
@@ -185,14 +185,14 @@ class LatenessCalibrationStore:
         self,
         exchange: str,
         timeframe: str,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """Obtiene el payload completo de calibración. None si no existe."""
         key = _cal_key(self._env, exchange, timeframe)
         try:
             raw = _retry(lambda: self._store.get(key))
             if raw is None:
                 return None
-            return json.loads(raw)
+            return cast(dict[str, Any], json.loads(raw))
         except Exception as exc:
             logger.warning(
                 "LatenessCalibration.get failed | exchange={} timeframe={} error={}",

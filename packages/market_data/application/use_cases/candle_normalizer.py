@@ -34,7 +34,7 @@ Principios: SOLID/SRP · SSOT · DRY · KISS
 
 from __future__ import annotations
 
-from typing import List
+from typing import Any, List
 
 import polars as pl
 
@@ -42,7 +42,7 @@ from market_data.domain.value_objects.candle_validator import ValidationResult
 
 # ── Schema SSOT ──────────────────────────────────────────────────────────────
 
-SILVER_SCHEMA: dict = {
+SILVER_SCHEMA: dict[str, Any] = {
     "timestamp": pl.Datetime("us", "UTC"),
     "open": pl.Float64,
     "high": pl.Float64,

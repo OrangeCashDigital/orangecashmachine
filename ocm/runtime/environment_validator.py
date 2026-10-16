@@ -28,7 +28,7 @@ Uso
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -100,7 +100,7 @@ class EnvironmentValidator:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _check_exchanges_enabled(config: "AppConfig", run_cfg: "RunConfig", log) -> None:
+    def _check_exchanges_enabled(config: "AppConfig", run_cfg: "RunConfig", log: Any) -> None:
         """Al menos un exchange debe estar configurado."""
         exchanges = getattr(config, "exchanges", [])
         if not exchanges:
@@ -112,7 +112,7 @@ class EnvironmentValidator:
             raise EnvironmentMismatchError(f"No exchanges configured for env='{run_cfg.env}'. Check your config file.")
 
     @staticmethod
-    def _check_production_credentials(config: "AppConfig", log) -> None:
+    def _check_production_credentials(config: "AppConfig", log: Any) -> None:
         """En producción, todos los exchanges habilitados deben tener credenciales."""
         exchanges = getattr(config, "exchanges", [])
         missing = [exc.name.value for exc in exchanges if not getattr(exc, "has_credentials", False)]
@@ -126,7 +126,7 @@ class EnvironmentValidator:
                 f"Production environment requires credentials for all exchanges. Missing: {missing}"
             )
 
-    def _check_production_test_symbols(self, config: "AppConfig", log) -> None:
+    def _check_production_test_symbols(self, config: "AppConfig", log: Any) -> None:
         """
         En producción, test_symbol genérico indica config copiada de dev.
 
@@ -153,7 +153,7 @@ class EnvironmentValidator:
             # pero queremos visibilidad en producción
 
     @staticmethod
-    def _check_storage_path(config: "AppConfig", log) -> None:
+    def _check_storage_path(config: "AppConfig", log: Any) -> None:
         """
         En producción, el warehouse Iceberg NO debe apuntar a data_platform/ local.
         Indica config de desarrollo sin sobrescribir.

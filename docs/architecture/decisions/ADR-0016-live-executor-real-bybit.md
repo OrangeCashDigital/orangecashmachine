@@ -103,3 +103,13 @@ ya fijó la semántica del contador `_open_positions` como **held-position** (BU
   B-01, B-03, B-12.
 - ADRs relacionados: ADR-0003 (CR trading), ADR-0011 (rebalance → movido a F4), ADR-0013
   (modelo de ingestión). Próximo: ADR-0021 (estado de posición, F4); ADR-0017 (Protocol Discovery Framework, F2.5).
+
+## Nota Fase 0 (2026-09-24) — re-aserción de `IS_STUB=True` (decisión C3)
+
+Este ADR fijó que `IS_STUB` pasa a `False` **únicamente** cuando la implementación real
+de `_submit` está commiteada con tests y `R9`/`R10` activos. En Fase 0 (renderizado del
+gate humano, decisión **C3**) se re-afirma `IS_STUB = True` como postura fail-closed
+interina: no hay capital real autorizado (F9), por lo que cualquier ejecución live real
+quedaría bloqueada por el guard de `composition_root`. Esta re-aserción no modifica la
+condición de aceptación de este ADR (se mantiene íntegra); simplemente restaura el estado
+fail-closed que la propia ADR exige hasta F9. Ver `scripts/check_production_gates.py` G8.

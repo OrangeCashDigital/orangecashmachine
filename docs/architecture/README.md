@@ -70,16 +70,22 @@ en que el sistema opera hoy en NIVEL 1.
 ```
 
 `microservices` es una **dirección arquitectónica**, documentada como tal
-en `docker-compose.yml` (profile `microservices`) y ahora formalizada en
-ADR-0024. No implica que los tres servicios deban estar operativos hoy.
+en ADR-0024. No implica que los tres servicios deban estar operativos hoy.
+
+> **Nota (Phase F, ADR-0048):** los bloques `trading`/`portfolio` de
+> `docker-compose.yml` (scaffolding con refs a `trading.main`/`portfolio.main` inexistentes)
+> fueron **retirados** por apuntar a módulos que nunca existieron (DISP-D5-02). trading y
+> portfolio se ejecutan in-process vía live/paper (EP-002/EP-003 del Execution Registry,
+> `config/execution_registry.yaml`). Promoverlos a proceso independiente requiere decisión
+> arquitectónica posterior (ADR-0047 §13), NO un servicio Compose.
 
 ## Matriz de madurez
 
 | Componente | Nivel | Entry point ejecutable | Tests dominio | Config Hydra propia | Import-linter | Docker |
 |---|---|---|---|---|---|---|
-| **market-data** | 1 — Implementado | `python -m market_data.main` ✅ | Sin `TestClient` (brecha conocida) | Sí | BC-50 | Compose ✅ / Dockerfile CMD ahora alineado |
-| **trading** | 2 — En construcción, real | No existe; runtime puro (`TradingEngine`) sin `__main__` | 9 archivos (`tests/trading/`) | No existe `config/trading/` | BC-12, BC-36, BC-50 | `command: python -m trading.main` (módulo inexistente) |
-| **portfolio** | 2 — En construcción, real | No existe | 4 archivos (`tests/portfolio/`) | Sí, `config/portfolio/portfolio.yaml` | BC-13, BC-43, BC-44 | `command: python -m portfolio.main` (módulo inexistente) |
+| **market-data** | 1 — Implementado | `python -m market_data.main` ✅ | Sin `TestClient` (brecha conocida) | Sí | BC-50 | Compose ✅ / Dockerfile CMD alineado (EP-006) |
+| **trading** | 2 — En construcción, real | No existe; runtime puro (`TradingEngine`) sin `__main__` | 9 archivos (`tests/trading/`) | No existe `config/trading/` | BC-12, BC-36, BC-50 | Sin servicio Docker (embebido en live/paper) |
+| **portfolio** | 2 — En construcción, real | No existe | 4 archivos (`tests/portfolio/`) | Sí, `config/portfolio/portfolio.yaml` | BC-13, BC-43, BC-44 | Sin servicio Docker (embebido en live/paper) |
 | **paper** (embebido) | 1 — Implementado | `apps/app/cli/paper_hydra.py` ✅ | Cubierto vía trading/portfolio | vía `AppConfig` | — | No es servicio Docker propio |
 | **live** (embebido) | 1 — Implementado (con hallazgo B-23 abierto, independiente) | `apps/app/cli/live_hydra.py` ✅ | Cubierto vía trading/portfolio | vía `AppConfig` | — | No es servicio Docker propio |
 

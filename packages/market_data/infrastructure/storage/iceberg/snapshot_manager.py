@@ -11,7 +11,7 @@ Bounded context: Infrastructure / Storage / Iceberg.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
 
@@ -36,7 +36,7 @@ class SnapshotManager:
         table: "Table",
         symbol: str,
         timeframe: str,
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """
         Retorna metadatos del snapshot actual como proxy de versión semántica.
 

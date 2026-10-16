@@ -14,12 +14,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from market_data.domain.events import LineageEvent
+
 
 @runtime_checkable
 class LineageTrackerPort(Protocol):
     """Contrato mínimo para registrar eventos de linaje."""
 
-    def record(self, event: object) -> None:
+    def record(self, event: LineageEvent) -> None:
         """Persiste un LineageEvent. Implementaciones: fail-soft."""
         ...
 

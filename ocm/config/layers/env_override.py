@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from typing import Final
+from typing import Any, Final, cast
 
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -84,7 +84,7 @@ def apply_env_overrides(
                            Si no hay overrides, retorna el input sin modificar.
     """
     _env = env if env is not None else os.environ
-    overrides: dict = {}
+    overrides: dict[str, Any] = {}
     skipped: list[str] = []
 
     for key, raw_value in _env.items():
@@ -170,10 +170,10 @@ def _coerce_value(value: str) -> bool | str:
     Returns:
         True/False si es boolean semántico reconocido, str original en caso contrario.
     """
-    return _coerce_string_canonical(value)  # SSOT: coercion.py — sin duplicación de lógica
+    return cast(bool | str, _coerce_string_canonical(value))  # SSOT: coercion.py — sin duplicación de lógica
 
 
-def _count_leaves(d: dict) -> int:
+def _count_leaves(d: dict[str, Any]) -> int:
     """Cuenta hojas en un dict anidado (número de overrides reales aplicados)."""
     count = 0
     for v in d.values():

@@ -351,6 +351,60 @@ class ConfigurationError(MarketDataError):
     """
 
 
+# ===========================================================================
+# Instrument Identity (G1 — ADR-0049, D01–D15)
+# ===========================================================================
+
+
+class IdentityError(MarketDataError):
+    """
+    Raíz de los errores de identidad canónica de instrumentos (G1).
+
+    Serie D01–D14 de ADR-0049. La resolución de identidad es
+    determinista y FAIL-CLOSED: ante ausencia, ambigüedad o conflicto
+    no resoluble se eleva una excepción — nunca se elige silenciosamente.
+    """
+
+
+class UnknownIdentityError(IdentityError):
+    """
+    No existe una Listing Identity válida para la resolución solicitada.
+
+    FAIL-CLOSED (G1-D10): 0 candidatos activos en (context, time,
+    native_symbol) → resolución falla. Nunca se infiere una identidad
+    a partir de datos incompletos.
+    """
+
+
+class AmbiguousResolutionError(IdentityError):
+    """
+    Más de una Listing Identity válida coincide con la resolución.
+
+    FAIL-CLOSED (G1-D10): >1 candidatos activos → resolución falla,
+    jamás se selecciona un candidato silenciosamente. Exige evidencia
+    adicional o resolución formal (G1-D11 autoridad).
+    """
+
+
+class IdentityConflictError(IdentityError):
+    """
+    Conflicto de autoridad/provenance no resoluble entre fuentes.
+
+    FAIL-CLOSED (G1-D11): ante UNKNOWN_CONFLICT se conserva la
+    evidencia del conflicto y se aborta — prohibido elegir una fuente
+    o inferir una transición/relación no declarada.
+    """
+
+
+class InvalidLifecycleTransitionError(IdentityError):
+    """
+    Transición de lifecycle no permitida entre dos estados.
+
+    Guarda de G1-D09: el lifecycle tiene transiciones declaradas; una
+    transición no autorizada no se infiere (Fail-Fast).
+    """
+
+
 __all__ = [
     # Raíz
     "MarketDataError",
@@ -391,4 +445,10 @@ __all__ = [
     "DataReadError",
     "VersionNotFoundError",
     "MarketDataLoaderError",
+    # Instrument Identity (G1 — ADR-0049)
+    "IdentityError",
+    "UnknownIdentityError",
+    "AmbiguousResolutionError",
+    "IdentityConflictError",
+    "InvalidLifecycleTransitionError",
 ]

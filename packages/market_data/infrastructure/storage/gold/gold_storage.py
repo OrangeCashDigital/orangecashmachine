@@ -40,7 +40,7 @@ from typing import List, Optional
 import polars as pl
 import pyarrow as pa
 from loguru import logger
-from pyiceberg.expressions import And, EqualTo
+from pyiceberg.expressions import And, BooleanExpression, EqualTo
 
 from market_data.infrastructure.storage.gold.transformer import (
     VERSION as _TRANSFORMER_VERSION,
@@ -384,11 +384,11 @@ def _dataset_filter(
     symbol: str,
     market_type: str,
     timeframe: str,
-):
+) -> BooleanExpression:
     """Filtro Iceberg que identifica un dataset específico."""
     return And(
-        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),  # type: ignore[call-arg,arg-type,misc]
-        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),  # type: ignore[call-arg,arg-type,misc]
+        And(EqualTo("exchange", exchange), EqualTo("symbol", symbol)),  # type: ignore[call-arg,misc]
+        And(EqualTo("market_type", market_type), EqualTo("timeframe", timeframe)),  # type: ignore[call-arg,misc]
     )
 
 

@@ -55,7 +55,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -294,7 +294,7 @@ class RiskManager:
         with self._lock:
             return sum(1 for _, avg in self._positions.values() if avg is None)
 
-    def state(self) -> dict:
+    def state(self) -> dict[str, Any]:
         """Estado observable para logging y métricas. SafeOps: nunca lanza."""
         try:
             with self._lock:

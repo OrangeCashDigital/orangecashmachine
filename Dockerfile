@@ -37,4 +37,7 @@ COPY . .
 RUN useradd --create-home appuser
 USER appuser
 
+# Execution Contract: EP-006 market_data.main = MARKET DATA SERVICE ENTRYPOINT
+# (config/execution_registry.yaml; autoridad ADR-0048). CMD = python -m market_data.main
+# por contrato explícito, no por conveniencia. Dockerfile = deployment consumer, no SSOT.
 CMD ["python", "-m", "market_data.main"]

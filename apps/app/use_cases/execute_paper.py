@@ -29,10 +29,12 @@ Principios: SRP · DIP · DRY · SSOT · SafeOps · Composition Root
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import polars as pl
     from portfolio.services.portfolio_service import PortfolioService
+    from trading.bootstrap.composition_root import TradingRuntime
 
     from ocm.config.schema import RiskConfig, TradingConfig
     from shared.contracts.boundaries import FeatureSource
@@ -73,8 +75,8 @@ class SyntheticDataSource:
         symbol: str,
         timeframe: str,
         market_type: str = "spot",
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> pl.DataFrame:
         from datetime import datetime, timedelta, timezone
 
         import numpy as np
@@ -142,7 +144,7 @@ def build_paper_engine(
     *,
     dry_run: bool,
     min_confidence: float,
-):
+) -> TradingRuntime:
     """
     Ensambla TradingEngine + PortfolioService para paper trading vía Composition Root.
 

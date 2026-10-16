@@ -52,6 +52,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+import loguru
 import polars as pl
 
 from market_data.application.processing.grid_alignment import align_to_grid
@@ -159,7 +160,7 @@ class ResampleSummary:
             return "partial"
         return "failed"
 
-    def log(self, log) -> None:
+    def log(self, log: loguru.Logger) -> None:
         log.info(
             "ResampleSummary | exchange=%s market=%s status=%s "
             "total=%s ok=%s skipped=%s failed=%s rows=%s duration_ms=%s",

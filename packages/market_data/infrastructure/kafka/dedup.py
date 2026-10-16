@@ -174,7 +174,7 @@ class CompositeSeenFilter:
 
     def __init__(
         self,
-        store=None,
+        store: Optional[DeduplicationStoreProtocol] = None,
         max_size: int = _DEFAULT_MAX_SIZE,
         ttl_days: int = _DEFAULT_TTL_DAYS,
     ) -> None:

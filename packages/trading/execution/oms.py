@@ -86,7 +86,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import threading
-from typing import Callable, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
@@ -104,7 +104,7 @@ from trading.execution.transport import (
 from trading.execution.transport import (
     OrderStatus as ExchangeStatus,
 )
-from trading.risk.manager import RiskManager
+from trading.risk.manager import RiskDecision, RiskManager
 
 # ---------------------------------------------------------------------------
 # Executor protocol
@@ -412,7 +412,7 @@ class OMS:
     def get_order(self, order_id: str) -> Optional[Order]:
         return self._orders.get(order_id)
 
-    def validate_signal(self, signal) -> object:
+    def validate_signal(self, signal: SignalProtocol) -> RiskDecision:
         """
         Expone la validación de riesgo como API pública del OMS.
 
@@ -426,7 +426,7 @@ class OMS:
         """
         return self._risk.validate(signal)
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, Any]:
         with self._lock:
             total = len(self._orders)
             open_ = len(self._open)

@@ -21,7 +21,7 @@ from __future__ import annotations
 import threading
 import time as _time
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger as _log
 from prometheus_client import REGISTRY, CollectorRegistry
@@ -62,8 +62,9 @@ class MetricsRuntime:
         self._started = False
         self._lock = threading.Lock()
 
+    # BC-26: config type not importable in observability → Any.
     @classmethod
-    def from_config(cls, metrics_cfg) -> "MetricsRuntime":
+    def from_config(cls, metrics_cfg: Any) -> "MetricsRuntime":
         """Construye MetricsRuntime desde MetricsConfig (schema.py)."""
         mode_str = getattr(metrics_cfg, "mode", "pull")
         try:
@@ -171,7 +172,8 @@ def get_metrics_runtime() -> Optional[MetricsRuntime]:
     return _runtime
 
 
-def init_metrics_runtime(cfg, *, validate_only: bool = False) -> MetricsRuntime:
+# BC-26: config type not importable in observability → Any.
+def init_metrics_runtime(cfg: Any, *, validate_only: bool = False) -> MetricsRuntime:
     """
     Inicializa y arranca el MetricsRuntime desde AppConfig.
 

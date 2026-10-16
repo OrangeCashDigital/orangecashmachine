@@ -57,7 +57,7 @@ class KafkaProducerPort(Protocol):
         topic: str,
         value: bytes,
         key: Optional[bytes] = None,
-        headers: Optional[dict] = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> None:
         """
         Encola un mensaje para publicación.

@@ -38,6 +38,7 @@ Principios: SRP · optional dependency · zero overhead sin Prometheus
 from __future__ import annotations
 
 import time
+from types import TracebackType
 from typing import Protocol, runtime_checkable
 
 try:
@@ -70,18 +71,18 @@ class _HistogramProtocol(Protocol):
 
 
 class _NoOpCounter:
-    def labels(self, **_):
+    def labels(self, **_: str) -> "_NoOpCounter":
         return self
 
-    def inc(self, _=1):
+    def inc(self, _: float = 1) -> None:
         return
 
 
 class _NoOpHistogram:
-    def labels(self, **_):
+    def labels(self, **_: str) -> "_NoOpHistogram":
         return self
 
-    def observe(self, _):
+    def observe(self, _: float) -> None:
         return
 
 
@@ -90,15 +91,15 @@ class _NoOpHistogram:
 # ---------------------------------------------------------------------------
 
 
-def _make_counter(name: str, doc: str, labels: list) -> "_CounterProtocol":
+def _make_counter(name: str, doc: str, labels: list[str]) -> "_CounterProtocol":
     return Counter(name, doc, labels) if _PROMETHEUS_AVAILABLE else _NoOpCounter()
 
 
-def _make_histogram(name: str, doc: str, labels: list, buckets: list) -> "_HistogramProtocol":
+def _make_histogram(name: str, doc: str, labels: list[str], buckets: list[float]) -> "_HistogramProtocol":
     return Histogram(name, doc, labels, buckets=buckets) if _PROMETHEUS_AVAILABLE else _NoOpHistogram()
 
 
-_LATENCY_BUCKETS = [1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000]
+_LATENCY_BUCKETS: list[float] = [1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000]
 
 _events_published = _make_counter(
     "ocm_kafka_events_published_total",
@@ -193,7 +194,12 @@ class timer:
         self._start = time.perf_counter()
         return self
 
-    def __exit__(self, *_) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self._elapsed_ms = (time.perf_counter() - self._start) * 1_000
 
     @property
