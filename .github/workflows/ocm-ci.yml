@@ -29,6 +29,12 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
+      # GUARD F-OCM-22 / D-62(c): pyproject.toml <-> uv.lock sincronizados (evita drift).
+      # Va ANTES de cualquier `uv sync`: uv sync re-lockea el arbol y ocultaria la deriva.
+      # Con el lock sincronizado sale 0; con drift sale 1 ("needs to be updated").
+      - name: Lockfile in sync (pyproject <-> uv.lock)
+        run: uv lock --check
+
 
       - name: Install dev dependencies
         run: uv sync --group dev
@@ -63,6 +69,11 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
+      # GUARD F-OCM-22 / D-62(c): este job no declara `needs`, asi que no hereda el
+      # guard de `architecture`; sin este step un drift pasaria aqui sin deteccion.
+      - name: Lockfile in sync (pyproject <-> uv.lock)
+        run: uv lock --check
+
 
       - name: Install dev dependencies
         run: uv sync --group dev
