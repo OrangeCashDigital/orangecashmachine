@@ -16,10 +16,11 @@ estructural del almacén.
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 from architecture_linter.analyzers.mutable_state import find_order_stores
 from architecture_linter.engine import RepoContext
-from architecture_linter.models import Finding, Status
+from architecture_linter.models import Finding, OrderStore, Status
 from architecture_linter.rules.base import Rule
 
 RECONCILIATION_MECHANISMS = (
@@ -126,7 +127,7 @@ class Arch003Rule(Rule):
         ]
 
 
-def _refs_in(ctx: RepoContext, symbol: str, roots: tuple[str, ...]) -> list:
+def _refs_in(ctx: RepoContext, symbol: str, roots: tuple[str, ...]) -> list[tuple[Path, int]]:
     out = []
     for path, line in ctx.references(symbol):
         if any(path.is_relative_to(ctx.root / r) for r in roots):
@@ -134,11 +135,11 @@ def _refs_in(ctx: RepoContext, symbol: str, roots: tuple[str, ...]) -> list:
     return out
 
 
-def _structural_reconciliation_callers(ctx: RepoContext, stores) -> list[str]:
+def _structural_reconciliation_callers(ctx: RepoContext, stores: list[OrderStore]) -> list[str]:
     """Métodos del owner que llaman `.fetch_*` en otro objeto mientras mutan el almacén."""
     out: list[str] = []
     for s in stores:
-        info = ctx.module(s.file)
+        info = ctx.module(Path(s.file))
         if not info:
             continue
         owner_name = s.owner_class.split(":")[-1]

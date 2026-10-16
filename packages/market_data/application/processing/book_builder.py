@@ -23,6 +23,11 @@ Cada método devuelve un ``BookBuilderOutcome`` (dataclass inmutable) que el
 adapter traduce a publicación Kafka (book.snapshot / book.delta) o a una
 respuesta de operación (gap / stale / deshechado). El use case nunca publica.
 
+Además implementa el port de lectura ``MarketDataViewPort`` (ADR-0028 §3.6,
+D4): expone mid/bid/ask/spread/depth/is_ready/stale_threshold_ms sin convertir
+el ``_BookState`` interno en API pública. Sin consumidor en Fase 1
+(B-MD-004 lo consumirá en Fase 2 desde trading/risk).
+
 Decisiones de diseño (D-7, aprobado)
 ------------------------------------
 - D-7a  : el delta llega ATÓMICO multinivel (un mensaje = una actualización).
@@ -291,6 +296,64 @@ class BookBuilder:
         if state is None or not state.has_snapshot:
             return None
         return self._viewport_levels(state)
+
+    # ------------------------------------------------------------------ #
+    # Vista pública de lectura (D4 — ADR-0028 §3.6)                         #
+    # ------------------------------------------------------------------ #
+    # Implementa market_data.ports.outbound.market_data_view.MarketDataViewPort
+    # (Protocol estructural, sin herencia — mismo patrón que BookBuilderPort).
+    # BookState permanece interno; esta es la ÚNICA frontera de lectura para
+    # consumidores externos (B-MD-004, Fase 2). BC-56: los externos dependen
+    # del port, nunca de este módulo. Fail-closed: sin snapshot ⇒ None/False.
+
+    @property
+    def stale_threshold_ms(self) -> int:
+        """Umbral de staleness configurado (ms) para evaluar not_stale (C1)."""
+        return self._stale_ms
+
+    def best_bid(self, exchange: str, symbol: str) -> Optional[str]:
+        """Mejor precio de compra (bids[0], DESC). None si no hay libro/snapshot."""
+        state = self._books.get((exchange, symbol))
+        if state is None or not state.has_snapshot or not state.bids:
+            return None
+        return self._fmt(max(state.bids))
+
+    def best_ask(self, exchange: str, symbol: str) -> Optional[str]:
+        """Mejor precio de venta (asks[0], ASC). None si no hay libro/snapshot."""
+        state = self._books.get((exchange, symbol))
+        if state is None or not state.has_snapshot or not state.asks:
+            return None
+        return self._fmt(min(state.asks))
+
+    def mid_price(self, exchange: str, symbol: str) -> Optional[str]:
+        """(best_bid + best_ask) / 2 en Decimal (D-7c). None si falta un lado."""
+        bid = self.best_bid(exchange, symbol)
+        ask = self.best_ask(exchange, symbol)
+        if bid is None or ask is None:
+            return None
+        return self._fmt((Decimal(bid) + Decimal(ask)) / Decimal(2))
+
+    def spread(self, exchange: str, symbol: str) -> Optional[str]:
+        """Diferencia absoluta best_ask - best_bid. None si falta un lado."""
+        bid = self.best_bid(exchange, symbol)
+        ask = self.best_ask(exchange, symbol)
+        if bid is None or ask is None:
+            return None
+        return self._fmt(Decimal(ask) - Decimal(bid))
+
+    def depth(self, exchange: str, symbol: str) -> Optional[int]:
+        """Nº de niveles (bids+asks) retenidos en el estado interno. None sin libro."""
+        state = self._books.get((exchange, symbol))
+        if state is None or not state.has_snapshot:
+            return None
+        return len(state.bids) + len(state.asks)
+
+    def is_ready(self, exchange: str, symbol: str, now_ms: int) -> bool:
+        """has_snapshot AND not_stale (C1). Misma semántica que check_stale."""
+        state = self._books.get((exchange, symbol))
+        if state is None or not state.has_snapshot:
+            return False
+        return not (state.last_update_at_ms and (now_ms - state.last_update_at_ms) > self._stale_ms)
 
     # ------------------------------------------------------------------ #
     # Internos                                                             #

@@ -43,7 +43,7 @@ from __future__ import annotations
 
 # stdlib
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 # terceros
 import polars as pl
@@ -389,7 +389,7 @@ class _NullAnomalyRegistry:
         """Null: toda anomalía es nueva — no persiste estado entre llamadas."""
         return True
 
-    def stats(self) -> list:
+    def stats(self) -> list[Any]:
         """Null: sin anomalías registradas."""
         return []
 

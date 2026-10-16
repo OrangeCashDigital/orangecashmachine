@@ -135,6 +135,66 @@ Regla: referencias nuevas a decisiones de arquitectura apuntan a
 `decisions/ADR-NNNN-*`. La serie heredada solo se cita como contexto
 histórico y nunca por su número de forma ambigua.
 
+## 10. Staged Ports Gobernados (ADR-0044)
+
+Política adoptada por decisión humana 2026-09-24 (modelo híbrido). Implementación
+técnica del enforcement pendiente de fase posterior (ARCH-006 consumo de registro +
+M26 + golden + tests + CI).
+
+Aplica a **todo Staged Port de OCM, presente o futuro**; MarketDataViewPort es el
+primer caso motivador, no el único.
+
+### Cuándo se permite
+
+Un Port sin consumidor solo puede existir como **Staged Port** con decisión
+arquitectónica explícita (ADR) y registro declarativo completo en
+`policies/registry.yaml` (sección `staged_ports`): ADR + fase + consumidor futuro +
+tracking + owner + expiry.
+
+### Qué necesita
+
+- ADR que lo justifique (con sección).
+- Fase actual y fase objetivo (con consumidor previsto).
+- `tracking_item` real en `docs/plans/tracking.yaml`.
+- Owner (categoría existente del registry).
+- `expires` ISO-8601 (`YYYY-MM-DD`), obligatorio, futura en el momento de la
+  autorización/registro y no indefinida. No se aceptan `indefinite`/`never`/`null`/
+  `TBD`/`open-ended` como sustitutos. Su **ausencia invalida el registro** como Staged
+  Port. La fecha concreta de cada caso la fija una decisión humana (caso por caso; un
+  ejemplo aislado no es una convención normativa); la renovación exige reautorización
+  explícita con nueva fecha.
+
+### Qué NO es
+
+No es una excepción libre ni un permiso indefinido. Un Port sin consumidor y sin
+registro staged válido es un **huérfano** y debe fallar (ARCH-006).
+
+### Qué ocurre al expirar
+
+`expires` es obligatorio. Sin `expires` válido o vencido, el staged deja de ser
+válido y los gates bloquean hasta nueva autorización o cierre del caso
+(reautorización con nueva justificación, o retirada del port). La expiración no se
+extiende automáticamente: antes de vencer se revisa el caso — cerrar/eliminar el
+Staged Port si el trabajo dejó de ser válido, o nueva autorización con nueva fecha y
+trazabilidad de `adr`/`justification`/`tracking`/`owner`/`target_phase`/`expires`.
+
+### Qué ocurre al completarse
+
+Cuando el consumidor real existe, el Port deja de ser staged, se elimina su entrada
+del registro y ARCH-006 lo trata como Port normal con consumidor.
+
+### Quién controla
+
+- **ARCH-006** — guard contra Ports huérfanos; consumirá el estado staged válido
+  (implementación pendiente; hoy detecta el port como huérfano).
+- **Policy validation** — `audit_validator` audita el registro (futuro M26 para
+  staged ports); CI policy gate sigue bloqueante.
+
+### Relación con CI
+
+Gates permanecen bloqueantes: `orphan → FAIL`, `staged inválido → FAIL`,
+`staged expirado → FAIL`, `staged legítimo → PASS`. No se degrada ningún gate.
+
 ## Addendum 2026-08-09 — convencion de campos estructurados en tracking.yaml
 
 **Contexto:** `engineering_health_check.py` (no listado antes en la seccion

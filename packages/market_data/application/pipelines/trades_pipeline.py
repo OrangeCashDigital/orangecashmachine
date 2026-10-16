@@ -195,7 +195,7 @@ class TradesPipeline(PipelineTriggerPort):
         """Delega al worker pool genérico — sin lógica de concurrencia local."""
         items = list(enumerate(self.symbols, 1))
 
-        async def _execute(item) -> TradesResult:
+        async def _execute(item: tuple[int, str]) -> TradesResult:
             idx, symbol = item
             return await self._fetch_symbol(symbol, mode, idx)
 

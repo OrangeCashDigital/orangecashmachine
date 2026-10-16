@@ -26,7 +26,7 @@ ISP  — interfaz mínima: is_new · stats · wipe
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -57,7 +57,7 @@ class AnomalyRegistryPort(Protocol):
         """
         ...
 
-    def stats(self) -> list[dict]:
+    def stats(self) -> list[dict[str, Any]]:
         """
         Lista de anomalías conocidas con conteos.
 

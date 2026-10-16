@@ -70,7 +70,7 @@ class HTTPDataSourceBase:
         self,
         *,
         base_url: str,
-        headers: Optional[dict] = None,
+        headers: Optional[dict[str, str]] = None,
         health_path: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")

@@ -13,6 +13,10 @@ Un VO es definido por su valor — sin identidad propia.
 Entidades presentes
 -------------------
 DataTier — clasificación de tier de calidad de un dataset Silver
+ListingIdentity — entidad de identidad canónica de instrumentos (G1/ADR-0049).
+                  ListingId (VO opaco) vive en domain/value_objects/;
+                  ListingIdentity (la entidad) vive en entities/listing_identity.py.
+                  Sigue la dirección DDD entities → value_objects.
 
 Nota sobre ValidationResult / ValidationSummary
 ------------------------------------------------
@@ -37,6 +41,14 @@ from __future__ import annotations
 from enum import Enum
 
 # ---------------------------------------------------------------------------
+# ListingIdentity — G1 (ADR-0049) — SSOT en listing_identity.py
+# ListingId (VO opaco) vive en domain/value_objects/listing_identity.py y se
+# re-exporta aquí SOLO por conveniencia de import; su definición no está aquí.
+# ---------------------------------------------------------------------------
+from market_data.domain.entities.listing_identity import ListingIdentity
+from market_data.domain.value_objects.listing_identity import ListingId
+
+# ---------------------------------------------------------------------------
 # DataTier — clasificación de tier de calidad de un dataset Silver
 # ---------------------------------------------------------------------------
 
@@ -57,4 +69,4 @@ class DataTier(str, Enum):
     REJECTED = "rejected"
 
 
-__all__ = ["DataTier"]
+__all__ = ["DataTier", "ListingId", "ListingIdentity"]

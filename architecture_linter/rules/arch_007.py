@@ -132,7 +132,7 @@ def _class_constant_values(ctx: RepoContext, path: Path, name: str) -> set[str]:
     return out
 
 
-def _consumers(ctx: RepoContext, path: Path, name: str) -> list:
+def _consumers(ctx: RepoContext, path: Path, name: str) -> list[tuple[Path, int]]:
     return [(p, line) for (p, line) in ctx.references(name) if p != path]
 
 

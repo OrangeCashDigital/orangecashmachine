@@ -223,14 +223,17 @@ class _BaseDerivativesFetcher:
         """
         from market_data.adapters.inbound.rest._retry import retry_async
 
-        return await retry_async(
-            lambda: self._fetch_raw(symbol),
-            attempts=MAX_RETRIES,
-            backoff_base=BACKOFF_BASE,
-            backoff_cap=MAX_BACKOFF_SECONDS,
-            context=f"{type(self).__name__}.{self._dataset} symbol={symbol}",
-            circuit_open_exc=ExchangeCircuitOpenError,
-            not_supported_passthrough=True,
+        return cast(
+            Optional[Dict[str, Any]],
+            await retry_async(
+                lambda: self._fetch_raw(symbol),
+                attempts=MAX_RETRIES,
+                backoff_base=BACKOFF_BASE,
+                backoff_cap=MAX_BACKOFF_SECONDS,
+                context=f"{type(self).__name__}.{self._dataset} symbol={symbol}",
+                circuit_open_exc=ExchangeCircuitOpenError,
+                not_supported_passthrough=True,
+            ),
         )
 
     async def _resolve_cursor(self, symbol: str) -> Optional[int]:
@@ -285,7 +288,7 @@ class FundingRateFetcher(_BaseDerivativesFetcher):
         # TECH-DEBT: accede a _get_client() interno del adapter (Ley de Demeter).
         # Pendiente: exponer fetch_funding_rate en la API pública de CCXTAdapter.
         client = await self._client._get_client()
-        return await client.fetch_funding_rate(symbol)
+        return cast(Optional[Dict[str, Any]], await client.fetch_funding_rate(symbol))
 
     def _parse(self, raw: Dict[str, Any]) -> pl.DataFrame:
         return _parse_funding_rate(raw)
@@ -300,7 +303,7 @@ class OpenInterestFetcher(_BaseDerivativesFetcher):
         # TECH-DEBT: accede a _get_client() interno del adapter (Ley de Demeter).
         # Pendiente: exponer fetch_open_interest en la API pública de CCXTAdapter.
         client = await self._client._get_client()
-        return await client.fetch_open_interest(symbol)
+        return cast(Optional[Dict[str, Any]], await client.fetch_open_interest(symbol))
 
     def _parse(self, raw: Dict[str, Any]) -> pl.DataFrame:
         return _parse_open_interest(raw)

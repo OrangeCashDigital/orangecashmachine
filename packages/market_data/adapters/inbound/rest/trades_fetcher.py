@@ -31,7 +31,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
     from market_data.ports.outbound.state import AsyncCursorStorePort
@@ -62,7 +62,7 @@ _MAX_BACKOFF_S = 15.0
 # ---------------------------------------------------------------------------
 
 
-def _parse_trades(raw: list) -> pl.DataFrame:
+def _parse_trades(raw: list[Any]) -> pl.DataFrame:
     """
     Convierte respuesta CCXT ``fetch_trades`` a DataFrame normalizado.
 
@@ -304,7 +304,7 @@ class TradesFetcher:
         )
         # retry_async lanza si agota intentos — result no puede ser None aquí
         assert result is not None
-        return result
+        return cast(pl.DataFrame, result)
 
     async def _update_cursor(self, symbol: str, ts_ms: int) -> None:
         """Actualiza cursor en Redis (silencia errores — no crítico)."""

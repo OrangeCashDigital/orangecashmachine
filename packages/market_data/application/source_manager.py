@@ -52,6 +52,7 @@ from typing import AsyncIterator, Optional
 
 from loguru import logger
 
+from market_data.domain.value_objects.raw_trade import RawTrade
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
 
 # ─── Constantes ───────────────────────────────────────────────────────────────
@@ -156,10 +157,10 @@ class TradesSourceManager:
     # AsyncIterator                                                        #
     # ------------------------------------------------------------------ #
 
-    def __aiter__(self) -> AsyncIterator:
+    def __aiter__(self) -> AsyncIterator[RawTrade]:
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> RawTrade:
         """
         Retorna el siguiente RawTrade validado.
 
@@ -233,7 +234,7 @@ class TradesSourceManager:
         )
         return self._rest, TradesSourceKind.BACKFILL
 
-    def _make_dedup_key(self, trade) -> str:
+    def _make_dedup_key(self, trade: RawTrade) -> str:
         """Clave compuesta para dedup cross-source determinista."""
         return (
             f"{getattr(trade, 'exchange', '')}:"
@@ -242,7 +243,7 @@ class TradesSourceManager:
             f"{getattr(trade, 'trade_id', '')}"
         )
 
-    def _is_duplicate(self, trade) -> bool:
+    def _is_duplicate(self, trade: RawTrade) -> bool:
         """LRU dedup en memoria. O(1) por operación."""
         key = self._make_dedup_key(trade)
         if key in self._dedup:
@@ -252,7 +253,7 @@ class TradesSourceManager:
         self._dedup[key] = None
         return False
 
-    def _advance_cursor(self, trade) -> None:
+    def _advance_cursor(self, trade: RawTrade) -> None:
         """Cursor monotónico — solo avanza, nunca retrocede."""
         self._cursor_ms = max(self._cursor_ms, trade.timestamp_ms)
 

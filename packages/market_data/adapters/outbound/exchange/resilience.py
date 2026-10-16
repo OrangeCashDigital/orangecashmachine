@@ -21,7 +21,7 @@ El resilience layer NO conoce CCXT — solo ve:
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Callable, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Optional, TypeVar, cast
 
 import aioresilience
 import ccxt.async_support as _ccxt_async
@@ -304,7 +304,7 @@ class ResilienceLayer:
             return await coro_fn()
 
         try:
-            return await policy.execute(_breaker_guard)
+            return cast(T, await policy.execute(_breaker_guard))
         except AioResilienceCBError as err:
             raise CircuitBreakerOpenError(self._exchange_id) from err
         except Exception as exc:
@@ -331,13 +331,13 @@ class ResilienceLayer:
         """
         policy = self._policies.get(error_type, self._policies["network"])
         try:
-            return await policy.execute(coro_fn)
+            return cast(T, await policy.execute(coro_fn))
         except Exception as exc:
             if classify_error(exc) == "unknown":
                 raise
             raise RetryExhaustedError(error_type, exc) from exc
 
-    def breaker_state(self) -> dict:
+    def breaker_state(self) -> dict[str, Any]:
         """Estado del circuit breaker."""
         try:
             state = self._breaker.get_state()
@@ -377,7 +377,11 @@ class ResilienceLayer:
           no puede interrumpir el retry loop del caller.
         """
         try:
-            await self._breaker.on_failure()
+            # aioresilience ships py.typed but CircuitBreaker.on_failure is
+            # untyped upstream: bind through Any (no new # type: ignore) to
+            # keep this typed call site clean.
+            breaker: Any = self._breaker
+            await breaker.on_failure()
         except Exception:
             pass  # Fail-Soft — nunca interrumpir el flujo del caller
 
@@ -407,7 +411,7 @@ def register_resilience_layer(exchange_id: str, layer: "ResilienceLayer") -> Non
     _layer_registry[exchange_id] = layer
 
 
-def get_breaker_state(exchange_id: str) -> dict:
+def get_breaker_state(exchange_id: str) -> dict[str, Any]:
     """
     Retorna el estado del circuit breaker para un exchange dado.
 

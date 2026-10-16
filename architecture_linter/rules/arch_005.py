@@ -8,6 +8,7 @@ Reporta exactamente dónde se rompe la cadena (PARTIAL por niveles).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 from architecture_linter.engine import RepoContext
@@ -29,7 +30,7 @@ class Arch005Rule(Rule):
     )
 
     def analyze(self, ctx: RepoContext) -> list[Finding]:
-        def refs_in(symbol: str, roots: tuple[str, ...]) -> list:
+        def refs_in(symbol: str, roots: tuple[str, ...]) -> list[tuple[Path, int]]:
             out = []
             for path, line in ctx.references(symbol):
                 if any(path.is_relative_to(ctx.root / r) for r in roots):
@@ -37,32 +38,32 @@ class Arch005Rule(Rule):
             return out
 
         # Nivel 1 — detección interna de silencio/stale
-        detection_refs: list = []
+        detection_refs: list[tuple[Path, int]] = []
         for sym in DETECTION_SYMBOLS:
             detection_refs.extend(refs_in(sym, ("packages/market_data/adapters/inbound/websocket",)))
 
         # Nivel 2 — recovery
-        recovery_refs: list = []
+        recovery_refs: list[tuple[Path, int]] = []
         for sym in RECOVERY_SYMBOLS:
             recovery_refs.extend(refs_in(sym, ("packages/market_data",)))
 
         # Nivel 3 — estado consultable en el port TradesSource
-        port_freshness: list = []
+        port_freshness: list[tuple[Path, int]] = []
         for sym in FRESHNESS_SYMBOLS:
             port_freshness.extend(refs_in(sym, ("packages/market_data/ports/inbound/trades_source.py",)))
 
         # Nivel 4 — contrato/parámetro en FeatureSource y TradesSourceProtocol
-        contract_refs: list = []
+        contract_refs: list[tuple[Path, int]] = []
         for sym in FRESHNESS_SYMBOLS:
             contract_refs.extend(refs_in(sym, ("shared/contracts/boundaries.py", "packages/market_data/ports")))
 
         # Nivel 5 — propagación a trading/portfolio
-        propagation_refs: list = []
+        propagation_refs: list[tuple[Path, int]] = []
         for sym in FRESHNESS_SYMBOLS:
             propagation_refs.extend(refs_in(sym, ("packages/trading", "packages/portfolio")))
 
         # Nivel 6 — enforcement antes de ejecutar orden
-        enforcement_refs: list = []
+        enforcement_refs: list[tuple[Path, int]] = []
         for sym in FRESHNESS_SYMBOLS:
             enforcement_refs.extend(refs_in(sym, ENFORCEMENT_FILES))
 

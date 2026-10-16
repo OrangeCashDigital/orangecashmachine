@@ -41,7 +41,7 @@ Principios: DIP . SRP . DRY . SSOT . SafeOps (fail-fast en live, fail-soft en pa
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
 
 from loguru import logger
 from trading.execution.transport import OrderState, OrderStatus, OrderTransport
@@ -297,7 +297,7 @@ class _BybitTransport:
         return f"BybitTransport(exchange={self._exchange!r})"
 
 
-def run_ccxt_async(factory, op):
+def run_ccxt_async(factory: Callable[[], Any], op: Callable[[Any], Awaitable[Any]]) -> Any:
     """Ejecuta una operación CCXT asíncrona con adapter efímero en loop limpio.
 
     CCXTAdapter es async; el motor de ejecución es sync. Cada operación abre
@@ -306,7 +306,7 @@ def run_ccxt_async(factory, op):
     """
     import asyncio
 
-    async def _work():
+    async def _work() -> Any:
         adapter = factory()
         try:
             await adapter.connect()
@@ -479,10 +479,12 @@ class TradingCompositionRoot:
             guard=self._guard,
         )
         if executor.IS_STUB:
-            raise RuntimeError(  # Guard R1 / B-01: fail-closed
-                "assemble_live bloqueado: LiveExecutor es STUB (CCXT no activo). "
+            raise RuntimeError(  # Guard R1 / B-01: fail-closed (C3, Fase 0 2026-09-24)
+                "assemble_live bloqueado: LiveExecutor es STUB (fail-closed). "
                 "No se opera capital real con un executor simulado. "
-                "F3 (B-12) reimplementa `_submit` y pone IS_STUB=False."
+                "Decisión C3 (Fase 0, 2026-09-24): IS_STUB = True hasta que la "
+                "implementación real de `_submit` esté commiteada con tests y "
+                "R9/R10 (ADR-0016) — objetivo Fase 9 del Plan Maestro."
             )
         oms = OMS(
             risk_manager=risk_manager,

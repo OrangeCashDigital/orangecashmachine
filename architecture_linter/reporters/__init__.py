@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from architecture_linter.models import RuleResult, Status
 
@@ -80,8 +81,8 @@ def render_json(results: list[RuleResult], root: Path, include_evidence: bool = 
 
 def render_sarif(results: list[RuleResult], root: Path) -> str:
     """SARIF 2.1.0 mínimo: resultados + reglas con ID y shortDescription."""
-    sarif_rules: list[dict] = []
-    sarif_results: list[dict] = []
+    sarif_rules: list[dict[str, Any]] = []
+    sarif_results: list[dict[str, Any]] = []
     for res in results:
         rule_index = len(sarif_rules)
         sarif_rules.append(

@@ -39,7 +39,7 @@ Principios: SOLID · DDD · SafeOps · KISS · SRP
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -306,7 +306,7 @@ class PortfolioService:
         except Exception:
             return 0.0
 
-    def state(self) -> dict:
+    def state(self) -> dict[str, Any]:
         """Estado observable para logging y métricas."""
         try:
             snap = self.snapshot()

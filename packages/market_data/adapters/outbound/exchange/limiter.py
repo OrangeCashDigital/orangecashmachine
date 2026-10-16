@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
 
@@ -183,10 +183,10 @@ class AdaptiveLimiter:
     async def __aenter__(self) -> "AdaptiveLimiter":
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, *args: object) -> None:
         pass
 
-    def state(self) -> dict:
+    def state(self) -> dict[str, Any]:
         """Estado observable del limiter para métricas."""
         return {
             "exchange_id": self._exchange_id,
@@ -243,7 +243,7 @@ def get_or_create_limiter(
     return _LIMITERS[exchange_id]
 
 
-def get_limiter_state(exchange_id: str) -> dict:
+def get_limiter_state(exchange_id: str) -> dict[str, Any]:
     """Estado observable del limiter."""
     limiter = _LIMITERS.get(exchange_id)
     if limiter is None:

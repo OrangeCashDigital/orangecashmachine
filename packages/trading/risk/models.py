@@ -10,6 +10,8 @@ Principios: SOLID · KISS · DRY · SafeOps
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -84,7 +86,7 @@ class RiskConfig(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         min_confidence = data.pop("min_confidence", None)
         super().__init__(**data)
         if min_confidence is not None:

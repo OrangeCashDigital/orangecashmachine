@@ -170,6 +170,7 @@ class BronzeStorage:
             timeframe=timeframe,
             exchange=effective_exchange,
             market_type=self._market_type,
+            run_id=run_id,
         )
 
         # Refresh antes de cada append — garantiza snapshot actual.
@@ -206,6 +207,7 @@ def _normalize_df(
     timeframe: str,
     exchange: str,
     market_type: str,
+    run_id: Optional[str] = None,
 ) -> pl.DataFrame:
     """
     Prepara el DataFrame para escritura en Iceberg:
@@ -229,8 +231,12 @@ def _normalize_df(
         pl.lit(market_type).alias("market_type"),
         pl.lit(symbol).alias("symbol"),
         pl.lit(timeframe).alias("timeframe"),
+        pl.lit(run_id, dtype=pl.String).alias("run_id"),
     )
-    return df.select(_BRONZE_COLS).sort("timestamp")
+    cols = list(_BRONZE_COLS)
+    if "run_id" not in cols:
+        cols.append("run_id")
+    return df.select(cols).sort("timestamp")
 
 
 def _validate_dataframe(df: pl.DataFrame) -> None:

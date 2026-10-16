@@ -340,7 +340,7 @@ class ConcretePipelineFactory:
             metrics=cast(MetricsPort, PrometheusPipelineMetrics()),
             repair_metrics=cast(RepairMetricsPort, PrometheusRepairMetrics()),
             quality=cast(QualityPipelinePort, quality),
-            cursor_store=cast(CursorStorePort, cursor),
+            cursor_store=cursor,
             market_type=request.market_type,
             dry_run=request.dry_run,
             auto_lookback_days=request.auto_lookback_days or 3650,
@@ -411,6 +411,7 @@ class ConcretePipelineFactory:
         )
         from market_data.adapters.inbound.websocket.gap_aware_stream import (
             GapAwareStream,
+            RecoveryFactory,
         )
         from market_data.adapters.inbound.websocket.ws_trades_source import (
             WSTradesSource,
@@ -430,7 +431,7 @@ class ConcretePipelineFactory:
             )
 
             # Closure que captura client y symbol — evita late-binding.
-            def _make_recovery_factory(sym: str, client: Any):
+            def _make_recovery_factory(sym: str, client: Any) -> RecoveryFactory:
                 def _factory(gap_start_ms: int, gap_end_ms: int) -> GapRecoveryFetcher:
                     return GapRecoveryFetcher(
                         exchange_adapter=client,

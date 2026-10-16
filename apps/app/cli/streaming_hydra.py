@@ -62,11 +62,15 @@ import argparse
 import asyncio
 import signal
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from shared.enums import DATASOURCE_REPLAY
+
+if TYPE_CHECKING:
+    from ocm.config.schema import AppConfig
+    from ocm.observability.pushers import NoopPusher, PrometheusPusher
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -115,7 +119,7 @@ def _setup_logging(debug: bool) -> None:
     setup_logging(debug=debug, color="green")
 
 
-def _load_config(env: str | None, *, run_id: str | None = None):
+def _load_config(env: str | None, *, run_id: str | None = None) -> AppConfig | None:
     """Carga AppConfig validado sin contexto Hydra (BC-51).
 
     Args:
@@ -137,7 +141,7 @@ def _load_config(env: str | None, *, run_id: str | None = None):
         return None
 
 
-def _build_pusher(config: Any):
+def _build_pusher(config: Any) -> PrometheusPusher | NoopPusher:
     """PrometheusPusher si metrics.enabled, NoopPusher si no. Fail-Soft.
 
     Reutiliza exactamente el mecanismo de apps/app/cli/main.py — no se

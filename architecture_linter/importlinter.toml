@@ -976,3 +976,38 @@ forbidden_modules = ["app.cli"]
 # "must_import" no existe (solo forbidden/layers/independence/protected). Se
 # implementa en el guard AST: scripts/app_layer_guard.py check_cli_must_import_bootstrap
 # (regla R14), que es además el mecanismo que ve los lazy imports.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIER 1 (detalle BookBuilder) — boundary DIP del BookBuilder (ADR-0028)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[tool.importlinter.contracts]]
+# BC-56 (NUEVO 2026-09-24, ADR-0028 §3.9/D4) — BookBuilder/BookState NO es API
+# pública. Los consumidores externos (trading, portfolio) y los adapters inbound
+# NO deben depender de los internals del BookBuilder:
+#   · market_data.application.processing.book_builder  (use case + BookState)
+#   · market_data.infrastructure.kafka.book_builder_consumer (consumidor concreto)
+# La frontera pública de lectura es MarketDataViewPort (ports/outbound/
+# market_data_view.py, Phase B posterior) y el port actual BookBuilderPort
+# (ports/outbound/book_builder.py) — ESOS son los puntos DIP legítimos.
+# El wiring real vive en market_data.infrastructure.bootstrap.composition_root
+# (cubierto por BC-07 ignore_imports) — no entra como source aquí.
+#
+# allow_indirect_imports = true: el contrato solo señala imports DIRECTOS.
+# Una cadena transitiva legítima (ej. composición externa → composition_root →
+# book_builder_consumer) no debe penalizarse — es wiring (mismo patrón que BC-35/BC-51).
+#
+# Verificado al crearlo: 0 imports directos desde trading/portfolio/adapters.inbound
+# hacia los módulos internos — BC-56 pasa limpio sin ignore_imports.
+name = "BC-56: BookBuilder internals are not public API — external consumers use ports/ReadView (D4)"
+type = "forbidden"
+source_modules = [
+    "trading",
+    "portfolio",
+    "market_data.adapters.inbound",
+]
+forbidden_modules = [
+    "market_data.application.processing.book_builder",
+    "market_data.infrastructure.kafka.book_builder_consumer",
+]
+allow_indirect_imports = true

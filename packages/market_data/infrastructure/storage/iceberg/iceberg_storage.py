@@ -32,13 +32,14 @@ from __future__ import annotations
 
 import datetime as _dt
 import time
-from typing import Optional
+from typing import Any, Optional
 
 import polars as pl
 import pyarrow.compute as pc
 from loguru import logger
 from pyiceberg.expressions import (
     And,
+    BooleanExpression,
     EqualTo,
     GreaterThanOrEqual,
     LessThanOrEqual,
@@ -143,7 +144,7 @@ class IcebergStorage:
     # Helpers internos
     # =========================================================================
 
-    def _base_filter(self, symbol: str, timeframe: str):
+    def _base_filter(self, symbol: str, timeframe: str) -> BooleanExpression:
         """
         Filtro Iceberg nativo para las cuatro columnas de identidad.
 
@@ -155,12 +156,12 @@ class IcebergStorage:
         market_type = self._market_type or "unknown"
         return And(
             And(
-                EqualTo(term="exchange", literal=exchange),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs: term/literal no declarados como kwargs
-                EqualTo(term="symbol", literal=symbol),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs: term/literal no declarados como kwargs
+                EqualTo(term="exchange", literal=exchange),  # type: ignore[call-arg]  # pyiceberg stubs: term/literal no declarados como kwargs
+                EqualTo(term="symbol", literal=symbol),  # type: ignore[call-arg]  # pyiceberg stubs: term/literal no declarados como kwargs
             ),
             And(
-                EqualTo(term="timeframe", literal=timeframe),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs
-                EqualTo(term="market_type", literal=market_type),  # type: ignore[call-arg,arg-type]  # pyiceberg stubs
+                EqualTo(term="timeframe", literal=timeframe),  # type: ignore[call-arg]  # pyiceberg stubs
+                EqualTo(term="market_type", literal=market_type),  # type: ignore[call-arg]  # pyiceberg stubs
             ),
         )
 
@@ -362,7 +363,7 @@ class IcebergStorage:
             )
             return None
 
-    def get_current_snapshot(self) -> Optional[dict]:
+    def get_current_snapshot(self) -> Optional[dict[str, Any]]:
         # Expone el snapshot actual sin acceso directo a _table.
         # GoldStorage usa este metodo para anclar lineage antes del build.
         # SafeOps: nunca lanza — retorna None si tabla nueva o Iceberg degradado.
@@ -406,12 +407,12 @@ class IcebergStorage:
                 # puede rechazar dependiendo de la versión. int epoch es seguro.
                 row_filter = And(
                     row_filter,
-                    GreaterThanOrEqual("timestamp", int(start.timestamp() * 1_000_000)),  # type: ignore[call-arg,arg-type,misc]
+                    GreaterThanOrEqual("timestamp", int(start.timestamp() * 1_000_000)),  # type: ignore[call-arg,misc]
                 )
             if end is not None:
                 row_filter = And(
                     row_filter,
-                    LessThanOrEqual("timestamp", int(end.timestamp() * 1_000_000)),  # type: ignore[call-arg,arg-type,misc]
+                    LessThanOrEqual("timestamp", int(end.timestamp() * 1_000_000)),  # type: ignore[call-arg,misc]
                 )
 
             import concurrent.futures as _cf
@@ -462,7 +463,7 @@ class IcebergStorage:
         symbol: str,
         timeframe: str,
         version: str = "latest",
-    ) -> Optional[dict]:
+    ) -> Optional[dict[str, Any]]:
         """Retorna metadata del snapshot actual como proxy de versión."""
         try:
             assert self._table is not None, "_table no inicializado en get_current_snapshot"
@@ -489,7 +490,7 @@ class IcebergStorage:
         timeframe: str,
         since: Optional[_dt.datetime] = None,
         until: Optional[_dt.datetime] = None,
-    ) -> list:
+    ) -> list[Any]:
         """
         No-op: Iceberg no expone archivos físicos de partición.
         RepairStrategy usará scan() directamente cuando soporte Iceberg.

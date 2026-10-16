@@ -31,7 +31,7 @@ Diseño
 import os
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from ocm.config.env_vars import (
     OCM_CONFIG_DIR,
@@ -141,14 +141,14 @@ def _expand_env(value: str) -> str:
         ${oc.env:VAR}             — OmegaConf sin default
     """
 
-    def _sub_omegaconf(m: re.Match) -> str:
+    def _sub_omegaconf(m: re.Match[str]) -> str:
         var = m.group(1)
         default = m.group(2) if m.group(2) is not None else ""
         return os.environ.get(var, default)
 
     value = re.sub(r"\$\{oc\.env:([^},]+)(?:,([^}]*))?\}", _sub_omegaconf, value)
 
-    def _sub_bash(m: re.Match) -> str:
+    def _sub_bash(m: re.Match[str]) -> str:
         var = m.group(1)
         default = m.group(2) or ""
         return os.environ.get(var, default)
@@ -199,7 +199,7 @@ def _read_yaml_lake_path() -> Optional[str]:
         # storage/datalake.yaml tiene @package _global_ — su storage.data_lake.path
         # es el mismo valor que Hydra resuelve en AppConfig.storage.data_lake.path.
         # settings.yaml NO se incluye — es solo para environment.default_env.
-        data: dict = {}
+        data: dict[str, Any] = {}
         for fname in ("base.yaml", f"env/{env}.yaml", "storage/datalake.yaml"):
             fpath = config_dir / fname
             chunk = YamlLoader.load(fpath, required=False)
