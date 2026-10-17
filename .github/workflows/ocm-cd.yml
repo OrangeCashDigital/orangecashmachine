@@ -20,18 +20,19 @@ jobs:
       evidence: ${{ steps.determine_status.outputs.evidence }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
+          enable-cache: false
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -42,7 +43,7 @@ jobs:
             echo "::error::Artifact SHA is required"
             exit 1
           fi
-          echo "ARTIFACT_SHA=${{ github.event.inputs.artifact_sha }}" >> $GITHUB_ENV
+          echo "ARTIFACT_SHA=${{ github.event.inputs.artifact_sha }}" >> "$GITHUB_ENV"
 
       - name: Run deploy script (ACCEPT)
         if: github.event.inputs.action == 'ACCEPT'
@@ -72,8 +73,8 @@ jobs:
             STATUS="ROLLBACK"
             EVIDENCE="No evidence file found"
           fi
-          echo "status=${STATUS}" >> $GITHUB_OUTPUT
-          echo "evidence=${EVIDENCE}" >> $GITHUB_OUTPUT
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          echo "evidence=${EVIDENCE}" >> "$GITHUB_OUTPUT"
 
       - name: Output deployment status
         run: |

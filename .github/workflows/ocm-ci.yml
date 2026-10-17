@@ -268,7 +268,7 @@ jobs:
           --deselect tests/architecture/test_audit_validator.py::test_full_repo_audit_validator_passes
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.xml

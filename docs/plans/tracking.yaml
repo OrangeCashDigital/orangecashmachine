@@ -3637,7 +3637,7 @@ hallazgos:
     y @ df8c5b06: workflow Actionlint (reviewdog/action-actionlint pin v1.80.0, fail_level: error)
     → failure por 4 usos de actions con runtime node20 deprecado, reportados con severidad error
     (no warning): ocm-cd.yml:23 actions/checkout@v4; ocm-cd.yml:26 docker/setup-qemu-action@v3;
-    ocm-cd.yml:29 docker/setup-buildx-action@v3; ocm-ci.yml:260 actions/upload-artifact@v4. El
+    ocm-cd.yml:29 docker/setup-buildx-action@v3; ocm-ci.yml:271 actions/upload-artifact@v4. El
     check NO figura entre los 15 required de la protección de main: main quedó rojo sin bloquear
     merges.'
   solucion: 'Ratificado MEDIA-ALTA (2026-10-16): bump a releases node24 donde existan
@@ -3672,10 +3672,57 @@ hallazgos:
       referencia: 'workflow Actionlint verde en main tras el fix'
     ci:
       estado: PENDIENTE
-      referencia: '.github/workflows/actionlint.yml + ocm-ci.yml:260 + ocm-cd.yml:23,26,29'
+      referencia: '.github/workflows/actionlint.yml + ocm-ci.yml:271 + ocm-cd.yml:23,26,29'
     evidencia:
       estado: HECHO
       referencia: 'runs 38918051643 y 38919538102 (failure) + main b434f43c 11:32; informe: docs/audits/AUDIT_OCM_ci-gate-gap_2026-10-16.md §2'
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+- id: F-OCM-24
+  hallazgo_informe: F-OCM-24
+  fase: F2
+  prioridad: BAJA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'Higiene de gobernanza. policies/evidence.json atesta 7 archivos, pero el job
+    policy-gate-evidence (.github/workflows/ocm-ci.yml:499-552) calcula y compara solo 5 hashes
+    (lineas 513-517 y 538-542): architecture_linter/staged_ports.py y
+    architecture_linter/rules/arch_006.py quedan atestados sin verificacion en CI. Detectado el
+    2026-10-17 durante el analisis del PR actionlint (F-OCM-23).'
+  solucion: 'Ampliar el job policy-gate-evidence para verificar los 7 archivos atestados (o
+    retirar del attest los no verificados) y documentar el alcance. Toda edicion de ocm-ci.yml
+    exige re-attest de policies/evidence.json en el mismo commit.'
+  pruebas:
+  - 'grep -n policy-gate-evidence -A100 ocm-ci.yml -> sha256sum de 5 archivos (513-517)'
+  - 'check_hash invocado 5 veces (ocm-ci.yml:538-542)'
+  - 'policies/evidence.json files{} -> 7 entradas (2 sin verificacion)'
+  adr_relacionado: null
+  riesgo_residual: 'Un cambio en staged_ports.py o arch_006.py no rompe el gate de evidencias
+    (cobertura aparente); impacto acotado a gobernanza, sin efecto en runtime.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: analisis PR actionlint 2026-10-17 (F-OCM-23), sin auditoria dedicada
+    backlog:
+      estado: PENDIENTE
+      referencia: F-OCM-24
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: PENDIENTE
+      referencia: '.github/workflows/ocm-ci.yml job policy-gate-evidence'
+    tests:
+      estado: NO_APLICA
+      referencia: null
+    ci:
+      estado: PENDIENTE
+      referencia: '.github/workflows/ocm-ci.yml - ampliar verificacion a 7 archivos'
+    evidencia:
+      estado: HECHO
+      referencia: 'policies/evidence.json:6-14 + .github/workflows/ocm-ci.yml:513-542'
     cierre:
       estado: PENDIENTE
       referencia: null
