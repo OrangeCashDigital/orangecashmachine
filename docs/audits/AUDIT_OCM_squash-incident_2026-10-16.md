@@ -5,6 +5,7 @@
 - **Régimen:** read-only (AUDIT_PROTOCOL §K). Única escritura permitida: este informe en `docs/audits/`.
 - **Tipo:** forense de integración Git (merge strategy) + higiene de lockfile
 - **Finding cards:** F-OCM-21 (NUEVO) · F-OCM-22 (NUEVO)
+- **Relacionado:** F-OCM-23 (NUEVO · MEDIA-ALTA) → `AUDIT_OCM_ci-gate-gap_2026-10-16.md`
 
 ---
 
@@ -159,7 +160,7 @@ de `main`; la política no-vigente no se eleva a norma (AUDIT_PROTOCOL §B).
 ## 5b. F-OCM-22 — `uv.lock` desincronizado (pydantic + pyarrow) respecto a `pyproject.toml` en `main`
 
 Severity: MEDIUM
-Status: ABIERTO
+Status: CERRADO
 Classification: **NUEVO**
 Control: Sincronía pyproject ↔ uv.lock / 1 (ver §4 #6)
 
@@ -240,10 +241,11 @@ Control: Sincronía pyproject ↔ uv.lock / 1 (ver §4 #6)
 | ID | Título | Severidad | Clasificación | Estado |
 |---|---|---|---|---|
 | F-OCM-21 | PR #64 mergeado con squash: colapsó 121 commits L13 | MEDIA-ALTA | NUEVO | ABIERTO |
-| F-OCM-22 | `uv.lock` desincronizado (pydantic 2.13.5 / pyarrow `<26`) vs pyproject (2.14.0 / `<27`) | MEDIA | NUEVO | ABIERTO |
+| F-OCM-22 | `uv.lock` desincronizado (pydantic 2.13.5 / pyarrow `<26`) vs pyproject (2.14.0 / `<27`) | MEDIA | NUEVO | CERRADO |
 
-**Registro en `tracking.yaml`: PENDIENTE de decisión humana.** El anexo A contiene los fragmentos
-YAML; **no se ha modificado `tracking.yaml`** (§K lo prohíbe explícitamente).
+**Registro en `tracking.yaml`: HECHO (2026-10-16).** Los fragmentos del Anexo A se registraron como
+F-OCM-21 (`PENDIENTE`), F-OCM-22 (`HECHO`) y F-OCM-23 (PENDIENTE, ver
+`AUDIT_OCM_ci-gate-gap_2026-10-16.md`).
 
 ---
 
@@ -402,8 +404,8 @@ cadena{hallazgo,backlog,adr,implementacion,tests,ci,evidencia,cierre}`. **No exi
   evidencia: 'docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §F-OCM-22: dos merges dependabot
     (fbc022b4 pydantic 2.14.0; 0ce216d7 pyarrow <27) tocan solo pyproject.toml; uv.lock mantiene
     pydantic version/specifier "2.13.5" y pyarrow specifier ">=17.0,<26.0".'
-  solucion: 'D-62 (c) ratificada 2026-10-16: uv lock + step "uv lock --check" en CI (guard
-    verificado: exit=1 con el lock desfasado) + bump AGENTS.md.'
+  solucion: 'D-62 (c) ratificada 2026-10-16 y ejecutada (PR #68): uv lock + step "uv lock
+    --check" en CI (guard verificado: exit=1 con el lock desfasado) + bump AGENTS.md.'
   pruebas:
   - 'git show --stat 0ce216d7 → files: [pyproject.toml] (1 ins / 1 del)'
   - 'gh api .../commits/fbc022b4 → files: [pyproject.toml]'
@@ -413,7 +415,7 @@ cadena{hallazgo,backlog,adr,implementacion,tests,ci,evidencia,cierre}`. **No exi
   adr_relacionado: null
   riesgo_residual: 'Re-lock silencioso en local (working tree sucio) + falsa confianza derivada de
     un CI sin --frozen.'
-  fecha_cierre: null
+  fecha_cierre: '2026-10-16'
   cadena:
     hallazgo:
       estado: HECHO
@@ -425,21 +427,27 @@ cadena{hallazgo,backlog,adr,implementacion,tests,ci,evidencia,cierre}`. **No exi
       estado: NO_APLICA
       referencia: null
     implementacion:
-      estado: PENDIENTE
-      referencia: uv.lock (regenerar) + pyproject.toml (invariante)
+      estado: HECHO
+      referencia: 'uv.lock sincronizado (419705b3): pydantic 2.14.0, pyarrow <27'
     tests:
-      estado: PENDIENTE
-      referencia: 'pydantic runtime: uv run pytest tests/ -x -q -m "not integration" + schema'
+      estado: HECHO
+      referencia: 'CI run 38919538181 @ c797b249 (y 38928456353 @ df8c5b06): jobs "Unit tests" y "Coverage gate (suite completa)" = success'
     ci:
-      estado: PENDIENTE
-      referencia: '.github/workflows/ocm-ci.yml (uv lock --check)'
+      estado: HECHO
+      referencia: '.github/workflows/ocm-ci.yml — step "Lockfile in sync (pyproject <-> uv.lock)" en 2 jobs (PR #68, df8c5b06)'
     evidencia:
       estado: HECHO
       referencia: docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §5b
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'PR #68 → merge commit df8c5b06 (2026-10-16)'
 ```
+
+**Actualizado 2026-10-16 (post-merge del PR #68):** el fragmento F-OCM-22 pasa de
+`PENDIENTE` a `HECHO` — `uv.lock` regenerado (`419705b3`: pydantic 2.14.0, pyarrow `<27`) y guard
+`uv lock --check` vivo en `.github/workflows/ocm-ci.yml` (2 jobs); merge commit `df8c5b06`,
+`fecha_cierre: '2026-10-16'`. **F-OCM-21 permanece `PENDIENTE`**: el tag `l13-atomic` no existe
+(`gh api .../git/refs/tags/l13-atomic` → 404).
 
 ---
 
