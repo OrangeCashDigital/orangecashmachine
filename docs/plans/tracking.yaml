@@ -3531,6 +3531,154 @@ hallazgos:
     cierre:
       estado: HECHO
       referencia: docs/audits/AUDIT_OCM_L13-closure_2026-10-14.md §5
+- id: F-OCM-21
+  hallazgo_informe: F-OCM-21
+  fase: F2
+  prioridad: ALTA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §F-OCM-21: PR #64 mergeado con
+    squash; 680ddf53 tiene 1 padre (09a44a9d) y los 121 commits de feat/m22b-governance
+    (bad8a450) no son ancestros de main. Contenido íntegro: tree(680ddf53) == tree(bad8a450) ==
+    59b7acab, git diff vacío.'
+  solucion: 'D-61 (ratificado 2026-10-16, ejecución humana pendiente): git tag -a l13-atomic
+    bad8a450 && git push origin l13-atomic; NO borrar feat/m22b-governance. Verificado
+    2026-10-16: api .../git/refs/tags/l13-atomic → 404 (tag inexistente). Alternativa (c): merge
+    adicional vía PR para restaurar ancestría en git log --graph.'
+  pruebas:
+  - 'git show -s --format=%H %P 680ddf53 → 1 padre'
+  - 'git log feat/m22b-governance --not main → 121 commits'
+  - 'git diff --stat 680ddf53 bad8a450 → vacío; tree 59b7acab'
+  - 'gh api .../branches → refs/heads/feat/m22b-governance = bad8a450 (viva)'
+  - 'gh api .../git/refs/tags/l13-atomic → 404 (D-61 no ejecutado)'
+  adr_relacionado: null
+  riesgo_residual: 'Si se borra feat/m22b-governance antes de crear el tag, los SHAs de evidencia
+    citados en ADRs/auditorías quedan irrecuperables.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md F-OCM-21
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-21
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: PENDIENTE
+      referencia: 'git tag: l13-atomic → bad8a450'
+    tests:
+      estado: NO_APLICA
+      referencia: 'remedio es tag, no test'
+    ci:
+      estado: PENDIENTE
+      referencia: 'técnico: permitir únicamente merge commit en la UI (out-of-repo setting)'
+    evidencia:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §3
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+- id: F-OCM-22
+  hallazgo_informe: F-OCM-22
+  fase: F2
+  prioridad: MEDIA
+  estado: HECHO
+  estado_auditoria: CONFIRMADO
+  evidencia: 'docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §5b: pyproject.toml declaraba
+    pydantic==2.14.0 y pyarrow>=17.0,<27.0 mientras uv.lock conservaba pydantic 2.13.5 y
+    pyarrow>=17.0,<26.0 (PR #65 y PR #66, ambos solo pyproject.toml). Ningún job del CI usaba
+    --frozen/--locked: la desincronización era invisible.'
+  solucion: 'D-62 (c) ejecutado: uv lock (419705b3 — pydantic 2.14.0, pydantic-core 2.46.5→2.50.0,
+    typing-inspection 0.4.2→0.4.4, specifier pyarrow <26→<27) + guard uv lock --check en
+    ocm-ci.yml. Merge df8c5b06 (PR #68) con merge commit; evidence.json re-attestado.'
+  pruebas:
+  - 'uv lock --check → exit 0 en main @ df8c5b06'
+  - 'pytest 1402 passed, 6 deselected (pre-push hook, commit c797b249)'
+  - 'CI PR #68: Policy gate (evidence hash) PASS; step Lockfile in sync PASS en architecture y engineering-health'
+  - 'gh api .../compare/b434f43c...main → 4 commits; merge commit df8c5b06 con 2 padres'
+  adr_relacionado: null
+  riesgo_residual: 'Nuevos bumps de dependabot pueden repetir el patrón (solo pyproject.toml); el
+    guard uv lock --check ahora detiene el job architecture antes de uv sync.'
+  fecha_cierre: '2026-10-16'
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md F-OCM-22
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-22
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: HECHO
+      referencia: 'uv.lock sincronizado (419705b3): pydantic 2.14.0, pyarrow <27'
+    tests:
+      estado: HECHO
+      referencia: 'pytest 1402 passed / 6 deselected (c797b249) + uv lock --check exit 0'
+    ci:
+      estado: HECHO
+      referencia: '.github/workflows/ocm-ci.yml — 2× step "uv lock --check" (PR #68, df8c5b06)'
+    evidencia:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §5b
+    cierre:
+      estado: HECHO
+      referencia: 'PR #68 → merge commit df8c5b06 (2026-10-16)'
+- id: F-OCM-23
+  hallazgo_informe: F-OCM-23
+  fase: F2
+  prioridad: ALTA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'docs/audits/AUDIT_OCM_ci-gate-gap_2026-10-16.md §F-OCM-23 — main @ b434f43c (11:32)
+    y @ df8c5b06: workflow Actionlint (reviewdog/action-actionlint pin v1.80.0, fail_level: error)
+    → failure por 4 usos de actions con runtime node20 deprecado, reportados con severidad error
+    (no warning): ocm-cd.yml:23 actions/checkout@v4; ocm-cd.yml:26 docker/setup-qemu-action@v3;
+    ocm-cd.yml:29 docker/setup-buildx-action@v3; ocm-ci.yml:260 actions/upload-artifact@v4. El
+    check NO figura entre los 15 required de la protección de main: main quedó rojo sin bloquear
+    merges.'
+  solucion: 'Ratificado MEDIA-ALTA (2026-10-16): bump a releases node24 donde existan
+    (upload-artifact@v4→v7, ya usado en nightly-compliance.yml:29; checkout@v4→v7; verificar
+    docker/setup-qemu-action y docker/setup-buildx-action) y, si no existe release node24,
+    -ignore dirigido en actionlint para runtime "node20" is deprecated, documentado. Editar
+    ocm-ci.yml exige re-attest de policies/evidence.json en el mismo commit.'
+  pruebas:
+  - 'gh run view 38918051643 --log-failed → e: ocm-cd.yml:23/26/29 + ocm-ci.yml:271 (8 líneas e:, 4 usos únicos)'
+  - 'gh run list --workflow=Actionlint → main b434f43c (11:32) failure; último success en main: 680ddf53 (11:01)'
+  - 'gh api .../branches/main/protection → 15 required contexts; "Lint workflow files" ausente'
+  - 'grep "uses: " → nightly-compliance.yml:29 ya usa actions/upload-artifact@v7'
+  adr_relacionado: null
+  riesgo_residual: 'Todo PR que toque .github/workflows/** queda con Actionlint rojo (no alcanza
+    mergeStateStatus CLEAN) y, al no ser required, el fallo pasa sin bloquear el merge.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_ci-gate-gap_2026-10-16.md F-OCM-23
+    backlog:
+      estado: HECHO
+      referencia: F-OCM-23
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: PENDIENTE
+      referencia: 'rama chore/actionlint-node24 (bump de actions node24 + opcional -ignore)'
+    tests:
+      estado: PENDIENTE
+      referencia: 'workflow Actionlint verde en main tras el fix'
+    ci:
+      estado: PENDIENTE
+      referencia: '.github/workflows/actionlint.yml + ocm-ci.yml:260 + ocm-cd.yml:23,26,29'
+    evidencia:
+      estado: HECHO
+      referencia: 'runs 38918051643 y 38919538102 (failure) + main b434f43c 11:32; informe: docs/audits/AUDIT_OCM_ci-gate-gap_2026-10-16.md §2'
+    cierre:
+      estado: PENDIENTE
+      referencia: null
 mediciones_f0:
   fecha: '2026-08-06'
   commit: eaca97a
