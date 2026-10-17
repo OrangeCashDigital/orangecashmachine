@@ -103,8 +103,10 @@ infrastructure are hybrid during migration. Key facts:
 - `pytest.ini` adds `.` and `apps` to pythonpath. `asyncio_mode=auto` in pyproject.toml `[tool.pytest.ini_options]`. Integration tests marked `@pytest.mark.integration`.
 - `mypy` excludes `tests/` and `.venv/` by default (pyproject.toml config).
 - Pinned deps with known reasons in pyproject.toml (read comments before bumping):
-  `pydantic==2.8.2`, `ccxt==4.3.58`, `loguru==0.7.2`, `pyyaml==6.0.2`,
+  `pydantic==2.14.0`, `ccxt==4.3.58`, `loguru==0.7.2`, `pyyaml==6.0.2`,
   `aioresilience==0.2.1`, `pybreaker==1.4.1`.
+  Nota: `pyarrow>=17.0,<27.0` es un specifier estrecho acoplado a `uv.lock`; el guard
+  `uv lock --check` (CI, 2 jobs) detecta divergencias pyproject ↔ uv.lock.
 - CD workflow is a placeholder (`workflow_dispatch` only, no automation).
 - `uv run ocm --cfg job` exposes secrets in stdout (Hydra DictConfig pre-Pydantic). Never pipe to logs in production.
 - Config validation: `OCM_VALIDATE_ONLY=true uv run python -m app.cli.main` — validates Hydra+Pydantic bootstrap and exits.
