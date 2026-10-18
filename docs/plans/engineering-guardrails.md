@@ -21,7 +21,7 @@ priorización). Ante discrepancia, esos dos mandan.
 
 | # | Guardrail | Estado | Evidencia |
 |---|---|---|---|
-| 1 | Contratos import-linter (arquitectura por capas) | ✅ Maduro, sin trabajo nuevo | 49+ contratos activos en `architecture/importlinter.toml` |
+| 1 | Contratos import-linter (arquitectura por capas) | ✅ Maduro, sin trabajo nuevo | 51 contratos activos en `architecture_linter/importlinter.toml` |
 | 2 | Fix F-031: publisher/chunk_converter obligatorios, NullOHLCVPublisher prohibido en producción | ✅ Cerrado | commit `74f8b09` |
 | 3 | `publish_chunk()` retorna `PublishResult` explícito en vez de `bool` ambiguo | ✅ Cerrado | commit `5724191` |
 | 4 | Test de wiring real del composition root sin mocks (`_build_kafka_publisher` → `KafkaOHLCVPublisher` real) | ✅ Cerrado | `tests/architecture/test_kafka_publisher_wiring.py`, commit `8afc09d` |

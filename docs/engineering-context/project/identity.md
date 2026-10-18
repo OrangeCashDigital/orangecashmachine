@@ -11,7 +11,7 @@ review_date: 2026-11-08
 # Project identity — OrangeCashMachine (OCM)
 
 **Summary.** Crypto market data lakehouse: Medallion (Bronze→Silver→Gold) +
-Iceberg + Hydra. Clean/Hexagonal with bounded contexts; 49 import-linter contracts
+Iceberg + Hydra. Clean/Hexagonal with bounded contexts; 51 import-linter contracts
 (BC-NN) verified in CI. Domain is 100% framework-agnostic (zero pandas/polars).
 
 **Package remapping (hatchling).**

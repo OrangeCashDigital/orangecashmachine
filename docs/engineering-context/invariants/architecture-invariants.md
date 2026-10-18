@@ -21,7 +21,7 @@ are normative; never relax them based on this note.
 3. **Composition Root per BC**: `market_data.infrastructure.bootstrap.composition_root`,
    `trading.bootstrap.composition_root`, `portfolio.bootstrap.composition_root`.
    *(ADR-0003 inherited series; GOVERNANCE §9)*
-4. **49 BC-NN contracts** (import-linter): broken contract = blocked merge.
+4. **51 BC-NN contracts** (import-linter): broken contract = blocked merge.
    *(architecture_linter/importlinter.toml)*
 5. **ARCH-001..010**: AST invariants (architecture_linter); exit 1 on
    FAIL/PARTIAL. Reproduces BC-08 layers (ARCH-009) including ignore_imports.

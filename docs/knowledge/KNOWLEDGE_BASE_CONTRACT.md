@@ -28,7 +28,7 @@
 | Metadatos documentales (title/status/authority/provenance) | `manifest.yaml` |
 | Identidad física de artefacto | `document_id` = `sha256:<contenido>` (fingerprint; no es registro competitivo) |
 | Integridad (esperado vs observado) | `docs/knowledge/integrity.yaml` (derivable desde catálogo+corpus) |
-| Clases/contratos de dominio OCM | código + ADRs (fuera de este contrato; ver `GOVERNANCE.md`) |
+| Clases/contratos de dominio OCM | código + ADRs (fuera de este contrato; ver `docs/architecture/GOVERNANCE.md`) |
 
 No existe (ni se creará) un segundo registro/JSON/DB de conocimiento. `integrity.yaml` es **índice derivado**: regenerable y re-verificable; si diverge del contenido real, el validador lo marca `INTEGRITY_FAILURE`.
 

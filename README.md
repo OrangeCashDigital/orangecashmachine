@@ -96,7 +96,7 @@ La lista completa vive en [`architecture_linter/importlinter.toml`](architecture
 
 La calidad del Shared Kernel está gobernada por automatización (ADR-0010): contratos
 BC-46/47/48, verificación de SSOT de literales (`scripts/check_ssot_enums.py`),
-métricas de salud (`scripts/metrics_report.py`, genera `architecture/metrics.json` bajo demanda — artifact, no versionado),
+métricas de salud (`scripts/metrics_report.py`, genera un `metrics.json` de salud bajo demanda — artifact, no versionado),
 `pip-audit` (vulnerabilidades) y hooks de pre-commit (import-linter, mypy, SSOT).
 
 El ensamblaje de dependencias ocurre en **Composition Roots** (uno por bounded context),
@@ -119,7 +119,7 @@ por ejemplo `packages/market_data/infrastructure/bootstrap/` y
 | `apps/`                | `app` (CLI), `api` (gateway), `research` (notebooks, read-only)     |
 | `infrastructure/`      | Adaptadores de infraestructura compartida                           |
 | `config/`              | Capas de configuración Hydra (YAML)                                 |
-| `architecture/`        | Contratos de frontera (`importlinter.toml`)                         |
+| `architecture_linter/` | Contratos de frontera (`importlinter.toml`) + linter AST             |
 | `docs/`                | ADRs, guía de dominio, auditorías                                   |
 | `tests/`               | Suites por paquete                                                  |
 
@@ -215,7 +215,7 @@ uv run live --capital 10000 --symbol BTC/USDT --timeframe 1h \
 > reconciliación de fills fail-closed (ADR-0016). El estado vigente de cada hallazgo y
 > pendiente se consulta siempre en [`docs/plans/tracking.yaml`](docs/plans/tracking.yaml)
 > (fuente operativa por máquina); el historial del hallazgo H-01 y su resolución están en
-> [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md)
+> [`docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md`](docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md)
 > y el roadmap en [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md)
 > (fase F3).
 >
@@ -283,7 +283,7 @@ Dashboards y alertas se provisionan automáticamente desde `deploy/monitoring/`.
 | ccxt          | Conexión unificada a exchanges                                  |
 | Apache Iceberg | Capa Gold (features) con *time-travel*                        |
 | Parquet       | Capas Bronze/Silver                                             |
-| Polars        | DataFrames (⚠️ reemplazando a pandas en curso)                  |
+| Polars        | DataFrames (pandas eliminado — migración completa, 2026-08-23)  |
 | Redis         | Cursor store, estado compartido                                 |
 | Kafka         | Bus neutral de eventos (wire schemas en `shared/kafka/`)        |
 | Hydra + Pydantic | Configuración en capas con validación de schema              |
@@ -311,21 +311,35 @@ Estos principios están formalizados en
 | `market_data`   | **Estable** — pipeline medallion, Iceberg, Kafka, calidad, observabilidad|
 | `trading`       | **En desarrollo** — motor paper/live activo en evolución                |
 | `portfolio`     | **En desarrollo** — posiciones y rebalanceo en consolidación            |
-| API gateway     | **Experimental** — FastAPI/JWT en fase inicial                          |
-| pandas → polars | **En migración** — transición activa de DataFrames                      |
+| API gateway     | **Experimental** — FastAPI/JWT (PyJWT, ADR-0051) en fase inicial        |
+| pandas → polars | **Completa** — pandas eliminado del repo (PR #19, 2026-08-23)           |
+| Tipado          | **`mypy --strict` sin errores** sobre el código de producción           |
+| Contratos       | **51 kept / 0 broken** (`import-linter`, 51 contratos BC-NN)            |
+
+**Hitos recientes:**
+
+- **L13** completado: migración **pandas → polars** (pandas fuera de `pyproject.toml`;
+  SSOT de transformaciones en `ports/outbound/normalization.py`).
+- **Endurecimiento de dependencias de seguridad**: `python-jose` → **PyJWT** (ADR-0051);
+  `multidict` fijado a `6.9.1` (`override-dependencies`, ADR-0053); `pyarrow` con
+  *risk-accept* documentado (ADR-0056); guard `uv lock --check` en 2 jobs de CI.
+- **Gobernanza de CI**: gates `architecture` (`import-linter`, fail-fast), `quality`
+  (`ruff` + `mypy` strict + SSOT), `security` (`bandit`/`pip-audit`/CodeQL/Trivy),
+  `policy-gate` (evidence hash). Semgrep es *non-blocking*.
+- **Repositorio**: rama única `main`; el estado histórico se preserva en tags
+  (`l13-atomic` + `archive/*`), no en ramas paralelas.
 
 **Limitaciones conocidas** (se resuelven en el roadmap, no son defectos del README):
 
 - El modo `live` envía **órdenes reales** con `--mode live` y credenciales configuradas
   (`IS_STUB=False`, F3/B-12 cerrado); por defecto arranca en paper (ADR-0016). La
   reconciliación de fills es fail-closed por orden (ver
-  [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md) H-01, ya resuelto, y la fase F3 en
+  [`docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md`](docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md) H-01, ya resuelto, y la fase F3 en
   [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md)).
 - El **estado real y la trazabilidad** de cada hallazgo/pendiente se mantienen en
   [`docs/plans/tracking.yaml`](docs/plans/tracking.yaml) (fuente operativa por máquina);
   el [Plan Maestro](docs/PLAN-Maestro-Ingenieria.md) es la especificación del sistema de
   ingeniería que lo gobierna.
-- Errores de tipado (`mypy`) pendientes de resolución durante la migración a Polars.
 - El control plane de orquestación sigue consolidándose (Docker Compose + Hydra CLIs;
   ver [ADR-0002](docs/architecture/0002-event-driven-kappa-architecture.md) y el
   [log de verificación de ADRs](docs/architecture/logs/verificacion-adrs-vs-codigo-2026-08-02.md)).
@@ -338,7 +352,7 @@ Estos principios están formalizados en
 | Recurso                                   | Qué encontrarás                                                        |
 |-------------------------------------------|------------------------------------------------------------------------|
 | [`docs/DOMAIN.md`](docs/DOMAIN.md)        | Guía por bounded context, deuda técnica, camino de evolución           |
-| [`docs/audits/2026-08-auditoria-integral.md`](docs/audits/2026-08-auditoria-integral.md) | Auditoría técnica integral (fotografía del estado en `dcd1741`, 2026-08-06) |
+| [`docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md`](docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md) | Auditoría técnica integral (fotografía del estado en `dcd1741`, 2026-08-06) |
 | [`docs/PLAN-Maestro-Ingenieria.md`](docs/PLAN-Maestro-Ingenieria.md) | **SSOT de la evolución técnica**: fases F0–F5, reglas auto-defendibles, Production Gate, scorecard |
 | [`docs/plans/tracking.yaml`](docs/plans/tracking.yaml) | **Fuente operativa de estado y trazabilidad** del backlog (por máquina); el Plan Maestro es la especificación que lo gobierna |
 | [`docs/architecture/`](docs/architecture/) | Serie heredada 0000–0005 (principios, Kappa, Composition Root, Hydra) |

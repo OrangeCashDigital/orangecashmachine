@@ -1,7 +1,7 @@
 # AGENTS.md — OrangeCashMachine
 
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
-Clean/Hexagonal with bounded contexts and 49 import-linter contracts (BC-NN; baseline F2.1, verificada en CI).
+Clean/Hexagonal with bounded contexts and 51 import-linter contracts (BC-NN; baseline F2.1, verificado en CI: 51 kept / 0 broken).
 
 ## ⚠️ Autonomous Agent Audit & Compliance Protocol
 
@@ -66,7 +66,7 @@ If hooks modify files: stop and report. The human re-stages and commits; agents 
 Herramienta independiente (stdlib-only, sin imports de OCM) que detecta
 violaciones arquitectónicas por AST en 10 invariantes (ARCH-001..010). No
 sustituye a import-linter (BC-NN) ni a los guards de `scripts/`; los
-complementa. Detalles en `docs/audits/2026-08-16-architecture-linter.md`.
+complementa. Detalles en `docs/audits/AUDIT_OCM_architecture-linter_2026-08-16.md`.
 
 - Config: `architecture_linter/architecture_linter.toml` (severidad, allowlist por
   símbolo). Sin config → defaults y todas las reglas activas.
@@ -103,8 +103,9 @@ infrastructure are hybrid during migration. Key facts:
 - `pytest.ini` adds `.` and `apps` to pythonpath. `asyncio_mode=auto` in pyproject.toml `[tool.pytest.ini_options]`. Integration tests marked `@pytest.mark.integration`.
 - `mypy` excludes `tests/` and `.venv/` by default (pyproject.toml config).
 - Pinned deps with known reasons in pyproject.toml (read comments before bumping):
-  `pydantic==2.14.0`, `ccxt==4.3.58`, `loguru==0.7.2`, `pyyaml==6.0.2`,
+  `pydantic==2.14.0`, `loguru==0.7.3`, `pyyaml==6.0.3`,
   `aioresilience==0.2.1`, `pybreaker==1.4.1`.
+  Nota: `ccxt>=4.5.74` es un **rango** (no pin), no una dependencia fijada.
   Nota: `pyarrow>=17.0,<27.0` es un specifier estrecho acoplado a `uv.lock`; el guard
   `uv lock --check` (CI, 2 jobs) detecta divergencias pyproject ↔ uv.lock.
 - CD workflow is a placeholder (`workflow_dispatch` only, no automation).
