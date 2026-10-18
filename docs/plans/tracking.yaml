@@ -3777,6 +3777,56 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+- id: F-OCM-26
+  hallazgo_informe: F-OCM-26
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'D1 (2026-10-17): 20 ficheros nuevos existen SOLO en 4ad03eba (pre-L13) y
+    siguen ausentes de main pese a que el contrato que los exige ya esta en main:
+    docs/knowledge/KNOWLEDGE_BASE_CONTRACT.md (L4,15,16,30,33,71,113-115,146,160) referencia
+    scripts/knowledge_integrity.py y docs/knowledge/integrity.yaml; ADR-0049 (Estado: ACEPTADO,
+    G1-D01..D15) y ADR-0057 exigen la identidad canonica (policy + port + use case). PR #71
+    (0c624fed) rescato solo 9 docs. Verificado con git diff --name-status --diff-filter=A
+    main 4ad03eba (4 codigo + 1 baseline + 12 tests + 3 docs). Clasificacion: NUEVO.'
+  solucion: 'PR chore/d19-code-rescue: extrae los 20 ficheros desde 4ad03eba, los adapta a
+    gates L13 sin cambiar semantica y regenera docs/knowledge/integrity.yaml si diverge del corpus.'
+  pruebas:
+  - 'git diff --name-status --diff-filter=A main 4ad03eba -> 20 ficheros'
+  - 'grep -n knowledge_integrity docs/knowledge/KNOWLEDGE_BASE_CONTRACT.md -> L4,16,71,113,146'
+  - 'uv run python scripts/knowledge_integrity.py --json'
+  - 'uv run pytest tests/market_data/domain tests/knowledge -q'
+  adr_relacionado: ADR-0049
+  riesgo_residual: 'Codigo rescatado de base pre-L13: puede divergir de firmas y contratos
+    vigentes (polars, ADR-0055, BC-NN). Mitigado por gates y revision; F-OCM-26 monitoriza
+    la alineacion continua de D19/D20b.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: 'Analisis D1 (2026-10-17) + git diff --diff-filter=A main 4ad03eba'
+    backlog:
+      estado: PENDIENTE
+      referencia: F-OCM-26
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0049 (ACEPTADO) + ADR-0057'
+    implementacion:
+      estado: PENDIENTE
+      referencia: 'PR chore/d19-code-rescue'
+    tests:
+      estado: PENDIENTE
+      referencia: '12 tests rescatados + gates ruff/mypy/lint-imports/pytest'
+    ci:
+      estado: PENDIENTE
+      referencia: '.github/workflows/ocm-ci.yml (PR de rescue)'
+    evidencia:
+      estado: HECHO
+      referencia: 'git diff --name-status --diff-filter=A main 4ad03eba -> 20 ficheros'
+    cierre:
+      estado: PENDIENTE
+      referencia: null
 - id: F-OCM-01
   hallazgo_informe: F-OCM-01
   fase: F2
