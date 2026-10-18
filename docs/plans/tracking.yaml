@@ -3726,6 +3726,46 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+- id: F-OCM-01
+  hallazgo_informe: F-OCM-01
+  fase: F2
+  prioridad: CRITICA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'docs/audits/AUDIT_OCM_high-impact-improvements_2026-10-07.md §F-OCM-01 (L98-130) — ADR-0049:553-561 y el pack D19 (:2262-2270, :2289-2291) declaran D19-01 = DECIDED (C+) y D20b-01..06 = DECIDED con IMPLEMENTATION = NOT AUTHORIZED; INDUSTRY (:32-35, :167) y KNOWLEDGE_BASE_CONTRACT (:166) declaran D19-01 = HUMAN DECISION REQUIRED / D19 = PENDING-BLOCKED / GATE C = BLOCKED. Fuente en commit 4ad03eba (blob ecb791708a35a106489b47969644e95eefdcb348), ausente de main antes de D1.'
+  solucion: 'Registrada por ADR-0055 (D-OCM-01 Q1 = Opción A, 2026-10-08: ADR-0049 + registros humanos = normativos; INDUSTRY/KN_BASE = subordinados) y delimitada por ADR-0057 (§17.3, 2026-10-11: inventaría C1–C4 sin resolverlas). La contradicción histórica C1–C4 se preserva; IMPLEMENTATION = NOT AUTHORIZED y GATE C BLOCKED se mantienen.'
+  pruebas:
+  - 'ADR-0055:L25-28 (Bounded context resuelto), L187 (HD-P6-02 = No), L212 (IMPLEMENTATION = NOT AUTHORIZED · GATE C: BLOCKED · Q2: UNAUTHORIZED)'
+  - 'ADR-0057:L24 (§17.3), L109 (§17.4 HUMAN ACTION REQUIRED), L113-157 (inventario C1–C4)'
+  - 'ADR-0049:L53-54 (afirmación A) vs L542-562 (afirmación B) — contradicción C1'
+  adr_relacionado: ADR-0055
+  riesgo_residual: 'CRITICO: la contradicción C1–C4 permanece preservada sin resolver (ADR-0057:189); la materialización de D20b-01..06 sigue bloqueada por Q2 (UNAUTHORIZED) y GATE C sigue BLOCKED.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_high-impact-improvements_2026-10-07.md §F-OCM-01 (4ad03eba)
+    backlog:
+      estado: PENDIENTE
+      referencia: F-OCM-01
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0055 (D-OCM-01 Q1) + ADR-0057 (§17.3)'
+    implementacion:
+      estado: NO_APLICA
+      referencia: null
+    tests:
+      estado: NO_APLICA
+      referencia: null
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: 'ADR-0055:L212 + ADR-0057:L109-113 (estado y contradicciones registrados en main)'
+    cierre:
+      estado: PENDIENTE
+      referencia: null
 mediciones_f0:
   fecha: '2026-08-06'
   commit: eaca97a

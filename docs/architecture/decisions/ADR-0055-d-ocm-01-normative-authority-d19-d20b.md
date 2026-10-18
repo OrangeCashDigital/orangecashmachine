@@ -2,9 +2,9 @@
 > (0055 verificado libre) · Cinco puntos de Q1: **conservados literales** ·
 > Fecha: **formulación triple conservada** · Correcciones **F-01, F-02 y F-04
 > ratificadas y aplicadas** · Fila F-03 de Evidencia: **ratificada por el
-> propietario humano** (condición documental confirmada). **Pendiente
-> únicamente:** clasificación `Bounded context(s)` = `PENDIENTE DE DECISIÓN
-> HUMANA`. La aprobación del contenido no constituye autorización de escritura.
+> propietario humano** (condición documental confirmada). **Sin pendientes de
+> contenido:** `Bounded context(s)` = `market_data | trading` (decisión humana
+> 2026-10-17). La aprobación del contenido no constituye autorización de escritura.
 
 # ADR-0055: Registrar la autoridad normativa de D19-01 y D20b-01..06 (D-OCM-01 Q1)
 
@@ -22,10 +22,7 @@
   REVISIÓN HUMANA RESUELTA — ACEPTACIÓN DOCUMENTAL REALIZADA EL 2026-10-09 (ver
   campo `Estado`). La aceptación documental no declara vigencia normativa ni
   autoriza implementación.
-**Bounded context(s) afectado(s):** PENDIENTE DE DECISIÓN HUMANA — valor
-  sugerido por el agente: `market_data | ocm` (**no es una decisión humana**; la
-  decisión humana no especificó bounded contexts; el campo figura por convención
-  de plantilla, ADR-template.md:5).
+**Bounded context(s) afectado(s):** market_data | trading — decisión humana D-OCM-01 (2026-10-17).
 
 ## Contexto
 
