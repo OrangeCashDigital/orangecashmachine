@@ -3535,7 +3535,7 @@ hallazgos:
   hallazgo_informe: F-OCM-21
   fase: F2
   prioridad: ALTA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: 'docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §F-OCM-21: PR #64 mergeado con
     squash; 680ddf53 tiene 1 padre (09a44a9d) y los 121 commits de feat/m22b-governance
@@ -3554,7 +3554,7 @@ hallazgos:
   adr_relacionado: null
   riesgo_residual: 'Si se borra feat/m22b-governance antes de crear el tag, los SHAs de evidencia
     citados en ADRs/auditorías quedan irrecuperables.'
-  fecha_cierre: null
+  fecha_cierre: '2026-10-17'
   cadena:
     hallazgo:
       estado: HECHO
@@ -3566,7 +3566,7 @@ hallazgos:
       estado: NO_APLICA
       referencia: null
     implementacion:
-      estado: PENDIENTE
+      estado: HECHO
       referencia: 'git tag: l13-atomic → bad8a450'
     tests:
       estado: NO_APLICA
@@ -3578,8 +3578,8 @@ hallazgos:
       estado: HECHO
       referencia: docs/audits/AUDIT_OCM_squash-incident_2026-10-16.md §3
     cierre:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'tag l13-atomic creado en bad8a450 (1411 commits)'
 - id: F-OCM-22
   hallazgo_informe: F-OCM-22
   fase: F2
@@ -3723,6 +3723,57 @@ hallazgos:
     evidencia:
       estado: HECHO
       referencia: 'policies/evidence.json:6-14 + .github/workflows/ocm-ci.yml:513-542'
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+- id: F-OCM-25
+  hallazgo_informe: F-OCM-25
+  fase: F2
+  prioridad: MEDIA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: 'D1 (2026-10-17): 7 referencias con grafia antigua a rutas inexistentes en
+    ficheros preexistentes de main (nunca existieron en main ni en 4ad03eba). ADR-0054:L33,
+    L314, L327 (docs/audits/D19_HUMAN_DECISION_PACK_2026-09-30.md); ADR-0055:L157, L158
+    (docs/audits/D19_HUMAN_DECISION_PACK_2026-09-30.md y
+    docs/audits/D19-01_INDUSTRY_BOW_ARCHITECTURE_REVIEW_2026-10-03.md);
+    docs/engineering-context/decisions/d19-d20-identity-decisions.md:L2, L51. Grafia canonica:
+    docs/audits/AUDIT_OCM_<slug>_<fecha>.md (ADR-0057). ADR-0049 y ADR-0057 no tienen referencias
+    colgantes. Nota: 9 referencias con la misma grafia viven DENTRO de las 7 fuentes restauradas
+    (d19-01:L22,176,211; d19-human-decision-pack:L749,2276; d19-kb-pdfs:L228;
+    high-impact-improvements:L105,108,114) y no se tocan.'
+  solucion: 'PR futuro de correccion documental: reescribir las 7 referencias a la grafia
+    canonica docs/audits/AUDIT_OCM_<slug>_<fecha>.md (ver ADR-0057).'
+  pruebas:
+  - 'grep -rn D19_HUMAN_DECISION_PACK_2026-09-30 docs/ -> ADR-0054 (L33, L314, L327) + ADR-0055 (L157, L158)'
+  - 'grep -rn D19-01_INDUSTRY_BOW_ARCHITECTURE_REVIEW docs/ -> ADR-0055 (L158)'
+  - 'grep -n d19-d20-identity-decisions docs/engineering-context -> L2, L51'
+  adr_relacionado: null
+  riesgo_residual: 'Referencias documentales colgantes en ADR-0054, ADR-0055 y
+    docs/engineering-context; impacto acotado a trazabilidad, sin efecto en runtime ni contratos.'
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: 'restauracion D1 (2026-10-17) + grep de grafias antiguas'
+    backlog:
+      estado: PENDIENTE
+      referencia: F-OCM-25
+    adr:
+      estado: NO_APLICA
+      referencia: null
+    implementacion:
+      estado: PENDIENTE
+      referencia: 'PR futuro: corregir 7 refs a la grafia canonica'
+    tests:
+      estado: NO_APLICA
+      referencia: null
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: 'grep docs/ -> 16 refs (7 colgantes + 9 verbatim)'
     cierre:
       estado: PENDIENTE
       referencia: null
