@@ -1,5 +1,5 @@
 ---
-source: docs/audits/D19_HUMAN_DECISION_PACK_2026-09-30.md; docs/architecture/decisions/ADR-0049-canonical-instrument-identity-g1.md#L548-L561; docs/audits/AUDIT_OCM_high-impact-improvements_2026-10-07.md
+source: docs/audits/AUDIT_OCM_d19-human-decision-pack_2026-09-30.md; docs/architecture/decisions/ADR-0049-canonical-instrument-identity-g1.md#L548-L561; docs/audits/AUDIT_OCM_high-impact-improvements_2026-10-07.md
 authority: MEMORY
 type: DECISION
 status: CURRENT
@@ -48,7 +48,7 @@ the sources. Verified against both on 2026-10-08.
 ## Open / conflict flags (fail-closed)
 
 - **F-OCM-01** (audit 2026-10-07) documents a source contradiction on D19-01
-  status: pack + ADR-0049 say DECIDED; `D19-01_INDUSTRY_BOW_ARCHITECTURE_REVIEW_2026-10-03.md`
+  status: pack + ADR-0049 say DECIDED; `docs/audits/AUDIT_OCM_d19-01-industry-bow-review_2026-10-03.md`
   and `docs/knowledge/KNOWLEDGE_BASE_CONTRACT.md` say HUMAN DECISION REQUIRED.
   → Do NOT resolve from memory. Consult the sources; escalate per fail-closed
   rules if a task depends on it.

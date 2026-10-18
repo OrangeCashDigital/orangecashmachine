@@ -72,14 +72,14 @@ CI y en el commit local. Ver ADR-0010 para la decisión completa.
 
 ### Gates de CI (`.github/workflows/ocm-ci.yml`)
 
-- `architecture` (import-linter, 50 contratos) — fail-fast, bloquea el merge si un BC-NN se rompe.
+- `architecture` (import-linter, 51 contratos) — fail-fast, bloquea el merge si un BC-NN se rompe.
 - `quality` — ruff check, ruff format, mypy . (todo el código de producción, no solo shared/), SSOT literales, pip-audit.
 
 ### Scripts de gobernanza (`scripts/`)
 
 - `check_ssot_enums.py` — verifica que los literales de dominio (OrderSide, PositionSide,
   SignalDirection, DataSource) solo se definan en `shared/enums.py`. Falla en CI si se duplica.
-- `metrics_report.py` — genera `architecture/metrics.json` (contratos KEPT/BROKEN, errores mypy,
+- `metrics_report.py` — genera un `metrics.json` de salud (contratos KEPT/BROKEN, errores mypy,
   tests passed, vulnerabilidades). En CI se sube como artifact, no se commitea.
 
 ### Contratos del kernel (shared)
@@ -101,7 +101,7 @@ kafka) · BC-46 (`enums` stdlib-only) · BC-47 (`kafka` no importa dominio) · B
 
 ### SafeOps — LOCAL BYPASS ≠ REPOSITORY BYPASS (M22-B)
 
-- `pre-commit` (`ruff, import-linter:50, mypy shared/, SSOT`) es **control local / feedback temprano** — puede saltarse con `git commit --no-verify` (`-n`) por diseño, no es fuente de autoridad.
+- `pre-commit` (`ruff, import-linter:51, mypy shared/, SSOT`) es **control local / feedback temprano** — puede saltarse con `git commit --no-verify` (`-n`) por diseño, no es fuente de autoridad.
 - `CI` `OrangeCashMachine CI` (`ocm-ci.yml` 13 jobs: `architecture`, `engineering-health`, `app-guard`, `domain-guard`, `trading-guards`, `unit-tests`, `integration-tests`, `config-validation`, `quality`, `semgrep` non-blocking, `policy-gate`, `security`, `Analyze`, `Scan`) es **validación autoritativa y reproducible** — no saltable vía `--no-verify`.
 - `Required Status Checks` (`Branch Protection` `main` `strict: true`, 13→14 contexts incluyendo `Policy gate (evidence hash)` tras M22-B) es **condición técnica de integración** — `PR` solo mergeable si `CI PASS`.
 - `Branch Protection` / `Rulesets` (`enforce_admins: true`, `allow_force_pushes: false`, `allow_deletions: false`) es **enforcement del repositorio** — impide `push directo a main` y `admin bypass`.

@@ -4,8 +4,9 @@
 
 - **Estado:** Activo — documento operativo vivo (no un PDF). El historial se preserva en Git, no en versiones de archivo.
 - **Rol:** fuente de verdad (SSOT) para la evolución técnica del proyecto.
-- **Alineado con:** `docs/audits/2026-08-auditoria-integral.md` — fotografía histórica del estado en commit `dcd1741` (2026-08-06 00:08:04 -0500), **inmutable**.
+- **Alineado con:** `docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md` — fotografía histórica del estado en commit `dcd1741` (2026-08-06 00:08:04 -0500), **inmutable**.
 - **Datos operativos:** `docs/plans/tracking.yaml` (v2) — fuente de verdad **por máquina**; este documento es el **mapa** que explica cómo funciona el sistema, no el tracker.
+- **Nota de actualización (2026-10-18):** las cifras *baseline* de F0 y los cierres fechados (F0/F1/F2.6) son **fotografías históricas** y no se reescriben. Estado vigente verificado: **51 contratos BC-NN** (51 kept / 0 broken), `fail_under = 50` en `pyproject.toml` (baseline medido 44 %), `mypy --strict` sin errores en producción, `pandas` eliminado del repo. Detalle por hallazgo en `docs/plans/tracking.yaml`.
 
 > ## ⚖️ Regla suprema (preamble)
 > **No se implementará ninguna funcionalidad nueva si degrada cualquiera de los artefactos normativos del proyecto.**
@@ -63,7 +64,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 > Usamos **B-03 / H-03** (drift del contador de riesgo) como el ejemplo canónico. Demuestra cómo se ve la cadena en la vida real.
 
-1. **Hallazgo** — `docs/audits/2026-08-auditoria-integral.md` H-03: `packages/trading/execution/oms.py:172` llama `record_open()` en todo `submit()`; `record_close()` solo en `cancel()` (`:217`) y `_reject()` (`:308`); `_fill()` (`:270-289`) no decrementa → un ciclo BUY→SELL deja `_open_positions` inflado. **Evidencia:** lectura directa de `oms.py` y `risk/manager.py:126-139`. `estado_auditoria: CONFIRMADO`.
+1. **Hallazgo** — `docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md` H-03: `packages/trading/execution/oms.py:172` llama `record_open()` en todo `submit()`; `record_close()` solo en `cancel()` (`:217`) y `_reject()` (`:308`); `_fill()` (`:270-289`) no decrementa → un ciclo BUY→SELL deja `_open_positions` inflado. **Evidencia:** lectura directa de `oms.py` y `risk/manager.py:126-139`. `estado_auditoria: CONFIRMADO`.
 2. **Backlog** — Entrada `B-03` en tracking.yaml v2: fase F1, prioridad CRÍTICA, estado `PENDIENTE`.
 3. **ADR** — Revisión: ¿decisión de arquitectura? La semántica de `_open_positions` ("órdenes activas" vs "posiciones reales") **sí** es decisión → se documenta. **Guard ejecutado:** `ls docs/architecture/decisions/` → ADR-0015 ya está ocupado por el blindaje de apps, así que el siguiente libre es **ADR-0016** (ver §5). La decisión queda **dentro de ADR-0016** (tema: LiveExecutor real + reconciliación de fills + semántica del contador de posiciones), que agrupa el ciclo orden→fill→estado (§5, §7).
 4. **Implementación** — Commits atómicos: (a) `test(rules): R3 — round-trip BUY→SELL aserta contador` (rojo sobre el bug); (b) `fix(trading): record_close en flujo de fill` (verde); (c) `docs(plans): B-03 → EN_CURSO`.
@@ -101,7 +102,7 @@ Cada eslabón responde a las 4 preguntas del sistema:
 
 ### F0 — Verificación de la auditoría (2–3 días) ✅ Cerrada (2026-08-06)
 
-- **Objetivo:** confirmar/descartar cada hallazgo de `docs/audits/2026-08-auditoria-integral.md` con re-lectura; medir métricas en vivo (cobertura por módulo, conteos) para fijar umbrales **después**, nunca antes.
+- **Objetivo:** confirmar/descartar cada hallazgo de `docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md` con re-lectura; medir métricas en vivo (cobertura por módulo, conteos) para fijar umbrales **después**, nunca antes.
 - **DOR:** informe base + repo en `dcd1741`.
 - **Entregables:** tracking.yaml v2 con `estado_auditoria` decidido para todos; mediciones en vivo registradas (con comando y hash).
 - **DOD:** 100 % de hallazgos con estado de auditoría; los `PARCIALMENTE_CONFIRMADO` resueltos o marcados como "requiere F0 para decidirse".
@@ -409,7 +410,7 @@ escalabilidad (solo con evidencia).
 |---|---|---|
 | `docs/plans/tracking.yaml` | Estado real de los 22 hallazgos (backlog + cadena de trazabilidad completa) y las 16 reglas auto-defendibles (backtest + `activada_en_ci`) | **SSOT operativo** |
 | Este documento (§2) | La **cadena** (cómo funciona el backlog) y **un ejemplo transversal** (B-03) | Mapa / filosofía |
-| `docs/audits/2026-08-auditoria-integral.md` | La **evidencia original** de cada hallazgo (fotografía inmutable de `dcd1741`) | Historial |
+| `docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md` | La **evidencia original** de cada hallazgo (fotografía inmutable de `dcd1741`) | Historial |
 
 ### Vista conceptual del backlog (cómo funciona, no qué hay dentro)
 
@@ -453,7 +454,7 @@ B-NN:
 
 ## 9. Scorecard evolutivo (estado → objetivo → acciones → evidencia)
 
-> **Principios 3, 9, 10.** Los puntajes se recalculan al cierre de cada fase (no se congelan). Cada punto ganado exige **evidencia de cheque** (qué gate/regla lo demuestra). Baseline: `docs/audits/2026-08-auditoria-integral.md` §7 (2026-08-06).
+> **Principios 3, 9, 10.** Los puntajes se recalculan al cierre de cada fase (no se congelan). Cada punto ganado exige **evidencia de cheque** (qué gate/regla lo demuestra). Baseline: `docs/audits/AUDIT_OCM_auditoria-integral_2026-08-06.md` §7 (2026-08-06).
 
 | Eje | Actual | Objetivo | Acciones (mapeo) | Evidencia de cada punto ganado |
 |---|---|---|---|---|
@@ -483,7 +484,7 @@ B-NN:
 | Umbral pendiente | Se define en | Método de medición |
 |---|---|---|
 | G6 cobertura crítica | F2 (tras F0) | `pytest --cov` sobre `trading/execution` y `storage/iceberg` (medición en vivo) |
-| `fail_under` | F2 | **FIJADO: 40** (baseline medido 44%, margen 4pts; subir gradualmente en PRs) |
+| `fail_under` | F2 | **FIJADO: 50** (baseline medido 44%, margen 6pts; subir gradualmente en PRs) |
 | Bandit severidad mínima | F2 | ejecutar `bandit -ll -r ...` y clasificar hallazgos reales — **FIJADO: sin BLOCKER (0 HIGH)** |
 | Scorecard (puntajes) | cierre de cada fase | re-ejecución de gates y mediciones |
 
@@ -510,7 +511,7 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 | N1 | Plan Maestro | Especificación normativa del cambio; fases + DOR/DOD | `docs/PLAN-Maestro-Ingenieria.md` | SSOT documental |
 | N2 | tracking.yaml | SSOT operativo del backlog y hallazgos | `docs/plans/tracking.yaml` | SSOT de `fase`/`estado` |
 | N3 | ADRs | Decisiones de arquitectura (activo) | `docs/architecture/decisions/ADR-*.md` | único SSOT, sin legacy |
-| N4 | Contratos de arquitectura | Boundaries/capas (BC-NN) | `architecture/importlinter.toml` | gate CI, ≥ 50 en vivo |
+| N4 | Contratos de arquitectura | Boundaries/capas (BC-NN) | `architecture_linter/importlinter.toml` | gate CI, ≥ 50 en vivo |
 | N5 | Contratos de código | Guards AST / invariantes | `tests/architecture/` | gate CI |
 | N6 | CI | Puerta del cambio | `.github/workflows/ocm-ci.yml` | fail-fast |
 | N7 | Auditorías | Fotografías históricas (inmutables) | `docs/audits/` | no se editan |

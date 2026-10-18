@@ -25,8 +25,10 @@ files for the authoritative text.
 ## Dependencies
 
 - Pinned with documented reasons (read comments before bumping):
-  `pydantic==2.8.2`, `ccxt==4.3.58`, `loguru==0.7.2`, `pyyaml==6.0.2`,
+  `pydantic==2.14.0`, `loguru==0.7.3`, `pyyaml==6.0.3`,
   `aioresilience==0.2.1`, `pybreaker==1.4.1`.
+  `ccxt>=4.5.74` (rango, no pin) y `pyarrow>=17.0,<27.0` (specifier estrecho acoplado
+  a `uv.lock`; guard `uv lock --check` en CI).
 - `uv.lock`: change only on a real dependency change. Never regenerate/sync/
   revert casually (external drift observed 2026-10-08: report, do not repair).
 
