@@ -64,11 +64,16 @@ jobs:
       - name: Determine deployment status
         id: determine_status
         run: |
-          # Read evidence file if it exists
           EVIDENCE_FILE="${{ github.workspace }}/deploy_evidence_${ARTIFACT_SHA}.json"
           if [[ -f "${EVIDENCE_FILE}" ]]; then
-            STATUS="ACCEPT"
-            EVIDENCE="$(cat "${EVIDENCE_FILE}")"
+            EVIDENCE_CONTENT="$(cat "${EVIDENCE_FILE}")"
+            STATUS="$(echo "${EVIDENCE_CONTENT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")"
+            if [[ "${STATUS}" == "ACCEPT" ]]; then
+              EVIDENCE="${EVIDENCE_CONTENT}"
+            else
+              STATUS="ROLLBACK"
+              EVIDENCE="Evidence exists but status is not ACCEPT: ${EVIDENCE_CONTENT}"
+            fi
           else
             STATUS="ROLLBACK"
             EVIDENCE="No evidence file found"
