@@ -567,3 +567,26 @@ Todo valor fijado queda registrado en tracking.yaml con el comando y el hash de 
 
 > Actualización de numeración: ADR-0015 real (blindaje Application Layer, serie `AUDIT-apps-2026-08-03#Hx`) se commiteó con ese número; las propuestas que este documento asignaba a ADR-0015–0019 se desplazan a **ADR-0016–0020** (ver §5).
 | 2026-08-23 | (B-51) | **B-51 (Option 3) — avance documentado, pendiente de cierre en tracking (PENDIENTE):** policies/registry.yaml = SSOT canónico para reglas R1-R16; tracking.yaml rules marcadas DEPRECATED (compatibility layer). IDs R1-R16 alineados. audit_validator M21-M25 PASS. engineering_health_check.py sin cambios (lee tracking.yaml rules deprecated).
+<!-- HISTÓRICO: extraído de stash@{2} (7e5a0044), plan
+     derivado de AUDIT_OCM_master-consolidation_2026-09-17.
+     Ver también AUDIT_OCM_B59-architecture-triage_2026-09-21. -->
+
+### Fases siguientes — P0..P8 (consolidación 2026-09-17)
+
+> Tramo documental derivado de `docs/audits/AUDIT_OCM_master-consolidation_2026-09-17.md` (§19), que
+> agrupa por causa raíz los findings consolidados F-MC-01..F-MC-20. Requiere autorización y
+> replanificación por fase; **P5 es un GATE de validación del equipo** y bloquea cualquier decisión
+> de escala (F5) o de capital hasta su sign-off.
+
+| Fase | Ámbito | DOR (salidas clave) | Criterio de salida |
+|---|---|---|---|
+| **P0** | Estado del cluster y data plane (orderbook/snapshot/delta/trades) | doc baseline data-plane; F-MC-02 verificado | métricas verificables de producción |
+| **P1** | Readiness + crash-loop (B-59) | F-MC-03 → fail-fast + readiness pump | `systemctl` active sin crash-loop sostenido |
+| **P2** | SSOT entrypoints/units (F-MC-06/19) | run.sh=pyproject=systemd | diff limpio |
+| **P3** | Config exchanges + env L2 (F-MC-01/12) | validación lista exchange, sin cascade | config validation green |
+| **P4** | Schema v1→v2 evolución con ventana + DLQ (F-MC-04/09) | dual-read + replay/DTAP probado | reconciliación v1/v2 completa |
+| **P5** | **GATE de validación del equipo** — revisión humana de P0..P4 | sign-off Ops/QA del tramo | acta/PR de validación |
+| **P6** | Observabilidad (F-MC-08/10, B-58) | métricas streaming + dashboards | alertas operativas |
+| **P7** | ADR-0017 discovery + perfil Bybit (F-MC-05, P0) | Discovery Profile operativo | tests de gap/checksum |
+| **P8** | BookBuilder producción (ADR-0028) | schema aceptado → producer → snapshot/delta | offsets > 0 + fixture e2e |
+
