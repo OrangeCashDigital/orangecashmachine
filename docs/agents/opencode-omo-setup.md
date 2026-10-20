@@ -71,3 +71,81 @@ uno de ellos, `opencode run` falla con `UnknownError`
 Comprueba la lista con `opencode agent list` y los permisos
 resueltos con `opencode debug agent sisyphus`. En esas reglas,
 la última que coincide gana: `*.env*` debe ir al final.
+
+---
+
+## Configuración obligatoria tras clonar (git hooks)
+
+> **Nota**: la sección "Qué trae ya el repo" arriba está desactualizada
+> desde PR #81. Ver "Política de permisos" abajo para el estado actual.
+
+El repo tiene `.githooks/pre-commit` y `.githooks/pre-push` que bloquean
+cambios a archivos de gobernanza (`opencode.json`, `AGENTS.md`,
+`CONTRIBUTING.md`, `.githooks/*`, `.github/**`) sin autorización humana
+explícita.
+
+**Después de clonar, activa los hooks**:
+
+~~~bash
+git config core.hooksPath .githooks
+~~~
+
+Verifica:
+
+~~~bash
+git config --get core.hooksPath
+# Debe devolver: .githooks
+~~~
+
+Sin esto, git usa `.git/hooks/` (vacío por default) y los guardarraíles
+NO se ejecutan. Cualquier agente podría commitear `opencode.json` sin el
+override humano.
+
+**Para autorizar cambios a archivos de gobernanza (solo humano)**:
+
+~~~bash
+GIT_HUMAN_OVERRIDE=1 git commit -m "..."
+GIT_HUMAN_OVERRIDE=1 git push
+~~~
+
+**El agente NUNCA debe usar `GIT_HUMAN_OVERRIDE=1`.** Está en `deny` de
+`opencode.json`.
+
+## Política de permisos del agente (actualizada)
+
+`opencode.json` define permisos por herramienta:
+
+- `permission.bash` (86 patrones): allow / ask / deny.
+  - **allow**: lectura pura (`git status|diff|log|show|blame|ls-files|
+    rev-parse|check-ignore`, `git fetch`, `git ls-remote`,
+    `gh pr view|checks`, `gh run view|list`, `ls`, `cat`, `grep`, etc.)
+  - **ask** (confirmación humana por cada uno): `git add`, `git commit`,
+    `git switch`, `git pull --ff-only`, `git push origin`,
+    `gh pr create`.
+  - **deny** (permanente): `gh pr merge`, `gh api`, `git push --force/-f/
+    --delete`, `git reset`, `git rebase`, `git merge`, `git stash`,
+    `git clean`, `git branch -D/-d`, `git commit --amend/-n/--no-verify`,
+    y toda evasión (`export`, `env`, `curl`, `ssh`, `scp`, `bash -c`,
+    `sh -c`, `python -c`, `eval`, `exec`, `source`, `xargs`, `nohup`,
+    `nice`, `time`, `script`, `setsid`, `wget`, `nc`, `rsync`).
+- `permission.read`: `.env*` en deny (excepto `.env.example`).
+- `permission.edit` y `permission.write`: **NO SOPORTADOS** por OpenCode
+  2.46+. El agente PUEDE editar archivos con Edit/Write. La mitigación
+  real son los git hooks: aunque edite `opencode.json`, el commit está
+  bloqueado.
+
+## Verificación empírica (validado en PR #81)
+
+Dentro de `opencode`, en la raíz del repo, ejecutar uno por uno y
+verificar el resultado:
+
+| Comando | Resultado esperado |
+|---|---|
+| `git status` | PERMITIDO |
+| `git log --oneline -3` | PERMITIDO |
+| `git push --force origin main` | DENEGADO por bash |
+| `gh pr merge 79` | DENEGADO por bash |
+| `export CI=true; git status` | DENEGADO (evasión con prefijo) |
+| `curl https://api.github.com` | DENEGADO |
+| `git reset --hard HEAD` | DENEGADO |
+| Edit `opencode.json` + `git add` + `git commit` | BLOQUEADO por hook |
