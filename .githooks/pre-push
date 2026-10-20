@@ -1,0 +1,35 @@
+#!/bin/bash
+set -e
+
+PROTECTED=(
+  "opencode.json"
+  "AGENTS.md"
+  "CONTRIBUTING.md"
+)
+
+RANGE=$(git rev-parse "$1" 2>/dev/null || echo "")
+if [ -z "$RANGE" ]; then exit 0; fi
+
+COMMITS=$(git rev-list "$RANGE" --not --remotes=origin 2>/dev/null || echo "")
+if [ -z "$COMMITS" ]; then exit 0; fi
+
+BLOCKED=0
+for commit in $COMMITS; do
+  for file in "${PROTECTED[@]}"; do
+    if git diff-tree --no-commit-id --name-only -r "$commit" | grep -qxF "$file"; then
+      echo "🔒 BLOQUEADO: commit $commit modifica $file"
+      BLOCKED=1
+    fi
+  done
+done
+
+if [ "$BLOCKED" = "1" ]; then
+  if [ "${GIT_HUMAN_OVERRIDE:-0}" = "1" ]; then
+    echo "✅ GIT_HUMAN_OVERRIDE=1 detectado. Permitido."
+    exit 0
+  fi
+  echo ""
+  echo "Para autorizar (solo humano):"
+  echo "  GIT_HUMAN_OVERRIDE=1 git push ..."
+  exit 1
+fi
