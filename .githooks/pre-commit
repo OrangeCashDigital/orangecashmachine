@@ -1,0 +1,37 @@
+#!/bin/bash
+# Bloquea commits a archivos de gobernanza sin override humano
+set -e
+
+PROTECTED=(
+  "opencode.json"
+  "AGENTS.md"
+  "CONTRIBUTING.md"
+  ".githooks/pre-commit"
+  ".githooks/pre-push"
+)
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+BLOCKED=0
+
+for file in "${PROTECTED[@]}"; do
+  if echo "$STAGED" | grep -qxF "$file"; then
+    echo "🔒 BLOQUEADO: $file está protegido"
+    BLOCKED=1
+  fi
+done
+
+if echo "$STAGED" | grep -qE "^\.github/"; then
+  echo "🔒 BLOQUEADO: .github/ está protegido"
+  BLOCKED=1
+fi
+
+if [ "$BLOCKED" = "1" ]; then
+  if [ "${GIT_HUMAN_OVERRIDE:-0}" = "1" ]; then
+    echo "✅ GIT_HUMAN_OVERRIDE=1 detectado. Permitido."
+    exit 0
+  fi
+  echo ""
+  echo "Para autorizar (solo humano):"
+  echo "  GIT_HUMAN_OVERRIDE=1 git commit ..."
+  exit 1
+fi
