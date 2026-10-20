@@ -47,7 +47,7 @@ contracts, plain `uv sync` for tests+config.
 
     ruff check --fix → ruff format
 
-If hooks modify files: stop and report. The human re-stages and commits; agents never run `git add/commit/push/reset/stash/rebase/merge`. Never skip hooks.
+If hooks modify files: stop and report. The human re-stages and commits; agents may run `git add/commit` (never `add -A`/`add .`); `push` and `commit --amend` require human confirmation; agents never run `git reset/stash/rebase/merge`, force-push, `--no-verify` or `gh pr merge`. Never skip hooks.
 
 ## Dependency direction
 
@@ -200,7 +200,7 @@ The skill is procedural and never authority; ADR-0054 is accepted as documentati
 
 ## Agent rules (OpenCode / OmO)
 
-- Agents never run `git add/commit/push/reset/stash/rebase/merge`; the human commits.
+- Agent git policy (SSOT: `opencode.json`): allow `fetch/switch/pull --ff-only/branch/add/commit`; ask `push`, `commit --amend`, `add -A`; deny `reset/stash/rebase/merge`, force-push, branch delete, `clean`, `--no-verify`, `gh pr merge`. The human merges PRs.
 - Never read or print `.env` or secrets. Never run `uv run ocm --cfg job` (it prints secrets).
 - Gate before reporting done: `uv run ruff check . && uv run lint-imports --config architecture_linter/importlinter.toml && uv run pytest tests/ -x -q`.
 - Do not run `/init-deep` or create nested AGENTS.md files.
