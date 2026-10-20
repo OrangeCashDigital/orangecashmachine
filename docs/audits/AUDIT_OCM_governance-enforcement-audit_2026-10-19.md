@@ -27,9 +27,7 @@ Hallazgos estructurales:
   case-insensitive en todo el árbol, excluyendo `.venv`/`*.lock`). Tampoco existen
   `scope-kit`, `scope_kit` ni `spec-driven`. El acrónimo **`SSD` NO EXISTE** como token
   independiente; todas las coincidencias aparentes corresponden a la frase *"single source
-  of"* (i.e. **SSOT**, *Single Source of Truth*). Hipótesis a validar por el humano: los
-  términos `scopekit`/`SSD` provienen de una convención **externa al repositorio** y NO son
-  vocabulario OCM. Ver §5 y §6.
+  of"* (i.e. **SSOT**, *Single Source of Truth*). **RETIRADO 2026-10-19:** SSOT = *Single Source of Truth*. Son sinónimos, no hay gap. Los términos `scopekit`/`SSD` provienen de una convención externa al repositorio y no son vocabulario OCM. Ver §5 y §6.
 - **F-E.3:** Los controles **sí** existen y funcionan donde hay validador mecánico
   (`audit_validator.py`, `engineering_health_check.py`, `import-linter`). El fallo de
   enforcement se concentra en controles que dependen de **disciplina humana** (tags de
@@ -67,7 +65,7 @@ rendimiento, seguridad de runtime (cubierta por otras auditorías).
 3. Investigación de los patrones P1–P9 y del meta-patrón (§5–§7).
 4. Verificación de vocabulario (`scopekit`/`SSD`) (§6).
 5. Matriz de trazabilidad y clasificación (§8, §9).
-6. Diseño de gates A/B/C y plan por fases (§10, §11).
+6. Diseño de gates A/B/Doc-Refs y plan por fases (§10, §11).
 7. Reproducibilidad (§12).
 
 ### §1.4 Restricciones respetadas
@@ -332,7 +330,7 @@ cadena de adopción ADR/Governance.**
 - **Relación con AUDIT_PROTOCOL:** el protocolo ya mitiga parcialmente el meta-patrón
   exigiendo **validación mecánica primero** y **comando canónico por control** (§Q/§R).
   El paso que falta es **ampliar la superficie mecánica** a los controles hoy humanos
-  (gates A/B/C, §10).
+  (gates A/B/Doc-Refs, §10).
 
 ### §7.4 Por qué NO es "el repo está roto"
 
@@ -406,10 +404,10 @@ cadena de adopción ADR/Governance.**
 - **Señal de fallo:** referencia rota o tag exigido inexistente ⇒ job rojo.
 - **Costo:** medio (requiere un registro de "tags exigidos" y un checker de refs).
 
-### §10.3 Gate C — Contradicciones y checks requeridos (P1/P4)
+### §10.3 Gate-Doc-Refs — Contradicciones y checks requeridos (P1/P4)
 
 > Nomenclatura **deliberadamente distinta** del "GATE C" de §17.3 de ADR-0057 (decisión
-> humana D20b). Aquí "Gate C" es una propuesta de control de auditoría; **NO abre ni
+> humana D20b). Aquí "Gate-Doc-Refs" es una propuesta de control de auditoría; **NO abre ni
 > autoriza** el GATE C de gobernanza.
 - **Objetivo:** (a) exigir que las contradicciones inventariadas tengan un estado
   explícito (resuelta/preservada-con-plazo) y (b) promover actionlint a required check.
@@ -422,10 +420,10 @@ cadena de adopción ADR/Governance.**
 
 | Fase | Contenido | Depende de | Riesgo |
 |---|---|---|---|
-| F0 | Aprobación humana del diseño de gates A/B/C | este documento | — |
+| F0 | Aprobación humana del diseño de gates A/B/Doc-Refs | este documento | — |
 | F1 | Gate A (cobertura evidencia) + re-attest atómico | F0 | bajo |
 | F2 | Gate B (refs + preservación D-61) | F0 | medio |
-| F3 | Gate C (contradicciones + required checks) | F0 | alto (out-of-repo) |
+| F3 | Gate-Doc-Refs (contradicciones + required checks) | F0 | alto (out-of-repo) |
 | F4 | Cierre de C1–C4 según decisión humana | F0 | alto (normativo) |
 
 **Regla transversal:** ningún gate se implementa sin PR + re-attest + gates verdes, y sin
