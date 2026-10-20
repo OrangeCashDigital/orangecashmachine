@@ -1,3 +1,24 @@
+## Reglas de seguridad no negociables
+
+- El agente NUNCA ejecuta `git push`, `gh pr merge`, `git reset`,
+  `git rebase`, `git stash`, `git clean`, `git commit --amend`,
+  `git commit --no-verify`, `git branch -D`, `git branch -d`,
+  `git push --force`, `git push -f`, `git push --delete`.
+- El agente NUNCA usa `export`, `env`, `bash -c`, `sh -c`,
+  `python -c`, `eval`, `exec`, `source`, `command`, `builtin`,
+  `nohup`, `nice`, `time`, `xargs`, `script`, `setsid`, `curl`,
+  `wget`, `ssh`, `scp`, `nc`, `rsync`.
+- El agente NUNCA encadena comandos con `;`, `&&`, `||`, `|`,
+  backticks o `$()`.
+- El agente NUNCA intenta extraer credenciales de
+  `credential.helper`, `.gitconfig`, `.env` ni ningún otro sitio.
+- Si un comando está bloqueado por el entorno: PARAR. No sustituir,
+  no probar variantes, no rodear. Pedir al humano que lo ejecute.
+- Ante cualquier duda: proponer y esperar. El humano es el único
+  autorizado a modificar el remoto (push, PR, merge).
+
+---
+
 # AGENTS.md — OrangeCashMachine
 
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
@@ -47,7 +68,7 @@ contracts, plain `uv sync` for tests+config.
 
     ruff check --fix → ruff format
 
-If hooks modify files: stop and report. The human re-stages and commits; agents never run `git add/commit/push/reset/stash/rebase/merge`. Never skip hooks.
+If hooks modify files: stop and report. The human re-stages and commits; agents may run `git add/commit` (never `add -A`/`add .`); `push` and `commit --amend` require human confirmation; agents never run `git reset/stash/rebase/merge`, force-push, `--no-verify` or `gh pr merge`. Never skip hooks.
 
 ## Dependency direction
 
@@ -200,7 +221,7 @@ The skill is procedural and never authority; ADR-0054 is accepted as documentati
 
 ## Agent rules (OpenCode / OmO)
 
-- Agents never run `git add/commit/push/reset/stash/rebase/merge`; the human commits.
+- Agent git policy (SSOT: `opencode.json`; patterns are a guardrail, not a guarantee): allow `fetch/switch/pull --ff-only/add <paths>/commit`, read-only `branch`; ask `push`, `commit --amend`, `gh pr create`; deny `add -A`/`add .`/`--all`/`-f`, `commit -n`/`--no-verify`, `switch -f/--discard-changes`, `reset/stash/rebase/merge`, force-push/delete, branch delete/force, `clean`, `gh pr merge`. The human merges PRs.
 - Never read or print `.env` or secrets. Never run `uv run ocm --cfg job` (it prints secrets).
 - Gate before reporting done: `uv run ruff check . && uv run lint-imports --config architecture_linter/importlinter.toml && uv run pytest tests/ -x -q`.
 - Do not run `/init-deep` or create nested AGENTS.md files.
@@ -209,3 +230,19 @@ The skill is procedural and never authority; ADR-0054 is accepted as documentati
 ## Setup de agentes
 
 Guía de instalación y configuración: `docs/agents/opencode-omo-setup.md`.
+
+### Limitación conocida de OpenCode (permission.edit/write)
+
+`permission.edit` y `permission.write` NO están soportados en esta
+versión de OpenCode. El agente PUEDE editar archivos con Edit/Write
+sin restricción del entorno.
+
+**Mitigación**:
+- `.githooks/pre-commit` y `.githooks/pre-push` bloquean commits/pushes
+  que toquen `opencode.json`, `AGENTS.md`, `CONTRIBUTING.md`,
+  `.githooks/*` y `.github/**`.
+- Override: `GIT_HUMAN_OVERRIDE=1` (variable de entorno, solo humano).
+- El agente NUNCA debe ejecutar `git commit` ni `git push` con esa
+  variable. Es exclusiva del humano.
+- `git commit --no-verify` está en deny, así que el agente no puede
+  saltarse los hooks.
