@@ -1,3 +1,24 @@
+## Reglas de seguridad no negociables
+
+- El agente NUNCA ejecuta `git push`, `gh pr merge`, `git reset`,
+  `git rebase`, `git stash`, `git clean`, `git commit --amend`,
+  `git commit --no-verify`, `git branch -D`, `git branch -d`,
+  `git push --force`, `git push -f`, `git push --delete`.
+- El agente NUNCA usa `export`, `env`, `bash -c`, `sh -c`,
+  `python -c`, `eval`, `exec`, `source`, `command`, `builtin`,
+  `nohup`, `nice`, `time`, `xargs`, `script`, `setsid`, `curl`,
+  `wget`, `ssh`, `scp`, `nc`, `rsync`.
+- El agente NUNCA encadena comandos con `;`, `&&`, `||`, `|`,
+  backticks o `$()`.
+- El agente NUNCA intenta extraer credenciales de
+  `credential.helper`, `.gitconfig`, `.env` ni ningún otro sitio.
+- Si un comando está bloqueado por el entorno: PARAR. No sustituir,
+  no probar variantes, no rodear. Pedir al humano que lo ejecute.
+- Ante cualquier duda: proponer y esperar. El humano es el único
+  autorizado a modificar el remoto (push, PR, merge).
+
+---
+
 # AGENTS.md — OrangeCashMachine
 
 Crypto market data lakehouse. Medallion (Bronze→Silver→Gold) + Iceberg + Hydra.
