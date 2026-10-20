@@ -230,3 +230,19 @@ The skill is procedural and never authority; ADR-0054 is accepted as documentati
 ## Setup de agentes
 
 Guía de instalación y configuración: `docs/agents/opencode-omo-setup.md`.
+
+### Limitación conocida de OpenCode (permission.edit/write)
+
+`permission.edit` y `permission.write` NO están soportados en esta
+versión de OpenCode. El agente PUEDE editar archivos con Edit/Write
+sin restricción del entorno.
+
+**Mitigación**:
+- `.githooks/pre-commit` y `.githooks/pre-push` bloquean commits/pushes
+  que toquen `opencode.json`, `AGENTS.md`, `CONTRIBUTING.md`,
+  `.githooks/*` y `.github/**`.
+- Override: `GIT_HUMAN_OVERRIDE=1` (variable de entorno, solo humano).
+- El agente NUNCA debe ejecutar `git commit` ni `git push` con esa
+  variable. Es exclusiva del humano.
+- `git commit --no-verify` está en deny, así que el agente no puede
+  saltarse los hooks.

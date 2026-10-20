@@ -119,5 +119,7 @@
       "**/*.pem": "deny",
       "**/*.key": "deny"
     }
-  }
+  },
+  "_comment_permission_edit": "permission.edit y permission.write NO estan soportados en esta version de OpenCode. Proteccion real en .githooks/pre-commit y pre-push con GIT_HUMAN_OVERRIDE=1.",
+  "_comment_protected_files": "opencode.json, AGENTS.md, CONTRIBUTING.md, .githooks/*, .github/**"
 }
