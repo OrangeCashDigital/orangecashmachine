@@ -38,7 +38,8 @@
       "git branch --delete*": "deny",
       "git clean*": "deny",
       "*--no-verify*": "deny",
-      "gh pr merge*": "deny"
+      "gh pr merge*": "deny",
+      "gh pr create*": "ask"
     },
     "read": {
       "*.env": "deny",
