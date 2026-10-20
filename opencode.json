@@ -96,6 +96,28 @@
     },
     "skill": {
       "ocm-context-bootstrap": "allow"
+    },
+    "edit": {
+      "**": "ask",
+      "opencode.json": "deny",
+      "AGENTS.md": "deny",
+      "CONTRIBUTING.md": "deny",
+      ".github/**": "deny",
+      "scripts/check_production_gates.py": "ask",
+      "scripts/audit_validator.py": "ask",
+      "**/*.env": "deny",
+      "**/*.pem": "deny",
+      "**/*.key": "deny"
+    },
+    "write": {
+      "**": "ask",
+      "opencode.json": "deny",
+      "AGENTS.md": "deny",
+      "CONTRIBUTING.md": "deny",
+      ".github/**": "deny",
+      "**/*.env": "deny",
+      "**/*.pem": "deny",
+      "**/*.key": "deny"
     }
   }
 }
