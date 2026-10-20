@@ -200,7 +200,7 @@ The skill is procedural and never authority; ADR-0054 is accepted as documentati
 
 ## Agent rules (OpenCode / OmO)
 
-- Agent git policy (SSOT: `opencode.json`): allow `fetch/switch/pull --ff-only/branch/add/commit`; ask `push`, `commit --amend`, `add -A`; deny `reset/stash/rebase/merge`, force-push, branch delete, `clean`, `--no-verify`, `gh pr merge`. The human merges PRs.
+- Agent git policy (SSOT: `opencode.json`; patterns are a guardrail, not a guarantee): allow `fetch/switch/pull --ff-only/add <paths>/commit`, read-only `branch`; ask `push`, `commit --amend`, `gh pr create`; deny `add -A`/`add .`/`--all`/`-f`, `commit -n`/`--no-verify`, `switch -f/--discard-changes`, `reset/stash/rebase/merge`, force-push/delete, branch delete/force, `clean`, `gh pr merge`. The human merges PRs.
 - Never read or print `.env` or secrets. Never run `uv run ocm --cfg job` (it prints secrets).
 - Gate before reporting done: `uv run ruff check . && uv run lint-imports --config architecture_linter/importlinter.toml && uv run pytest tests/ -x -q`.
 - Do not run `/init-deep` or create nested AGENTS.md files.
