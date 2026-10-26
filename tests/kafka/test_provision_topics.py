@@ -107,7 +107,9 @@ def fake_admin(monkeypatch: pytest.MonkeyPatch) -> type[FakeAdmin]:
 
 class TestProvision:
     @pytest.mark.asyncio
-    async def test_counts_mixed_results(self, fake_admin: type[FakeAdmin], monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_counts_mixed_results(
+        self, fake_admin: type[FakeAdmin], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         orig = fake_admin.create_topics
 
         async def patched(self: FakeAdmin, new_topics: list[Any]) -> Any:
@@ -122,7 +124,9 @@ class TestProvision:
         assert fake_admin.instances[0].closed
 
     @pytest.mark.asyncio
-    async def test_connection_error_propagates_and_closes(self, fake_admin: type[FakeAdmin], monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_connection_error_propagates_and_closes(
+        self, fake_admin: type[FakeAdmin], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         async def boom(self: FakeAdmin, new_topics: list[Any]) -> Any:
             raise ConnectionError("down")
 
