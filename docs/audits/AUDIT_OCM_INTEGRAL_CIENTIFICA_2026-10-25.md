@@ -224,3 +224,35 @@
 - **Única modificación intencional:** creación del nuevo informe. No se modificaron código, tests, config, CI, ADRs, tracking.yaml, planes, políticas ni documentos existentes.
 - Sin operaciones git mutantes, sin servicios/trading, sin dependencias.
 
+
+---
+
+## ERRATA — Correcciones post-review (2026-10-26)
+
+### E-B1 — H-INT-02: recomendación obsoleta
+
+El texto original (§148 y §172) lista como pendiente "ADR nuevo formalizado por
+humano + tracking + contrato/linter" y "Formalizar ADR nuevo para
+HD-VC-1..7/HD-1..8 según §17.3-17.4".
+
+**Corrección:** ADR-0057 §176 indica que §17.3 queda materializada
+documentalmente como ADR-0057. El ADR nuevo ya existe. Trabajo restante real:
+
+- **§17.4:** registro en `tracking.yaml` + contrato/linter (NO un ADR nuevo).
+- **GATE C:** BLOCKED — requiere autorización humana separada.
+- **Materialización** de D19/D20b/HD*/HD-VC*: sujeta a autorización humana.
+
+### E-D1 — Atribución de conteos históricos
+
+El texto original (§43 y derivadas) atribuye los conteos históricos y el
+disclaimer de no-reverificación a
+`AUDIT_OCM_SCIENTIFIC_BIBLIOGRAPHIC_GOVERNANCE_DECISIONS_2026-10-20.md`.
+
+**Corrección:** ese informe declara en §2 limitaciones (sin acceso completo a
+todos los libros en docs/knowledge, sin verificación de branch protection) y no
+contiene conteos históricos ni disclaimer de re-verificación.
+
+**Atribución correcta:** los conteos históricos y el disclaimer de
+no-reverificación aparecen en
+`AUDIT_OCM_PHASE2_EVIDENCE_SYNTHESIS_2026-10-21.md` y en
+`AUDIT_OCM_CROSS_REVIEW_THREE_REPORTS_2026-10-25.md`.
