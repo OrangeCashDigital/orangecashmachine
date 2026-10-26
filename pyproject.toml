@@ -191,7 +191,7 @@ streaming = "app.cli.streaming_hydra:main"
 # =============================================================================
 
 [tool.uv]
-override-dependencies = ["multidict==6.9.1"]
+override-dependencies = ["multidict==6.9.1", "certifi>=2026.10.19"]
 
 # =============================================================================
 # tool.ruff
