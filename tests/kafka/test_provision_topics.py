@@ -107,9 +107,7 @@ def fake_admin(monkeypatch: pytest.MonkeyPatch) -> type[FakeAdmin]:
 
 class TestProvision:
     @pytest.mark.asyncio
-    async def test_counts_mixed_results(
-        self, fake_admin: type[FakeAdmin], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_counts_mixed_results(self, fake_admin: type[FakeAdmin], monkeypatch: pytest.MonkeyPatch) -> None:
         orig = fake_admin.create_topics
 
         async def patched(self: FakeAdmin, new_topics: list[Any]) -> Any:
