@@ -1,6 +1,6 @@
 ## Reglas de seguridad no negociables
 
-- El agente NUNCA ejecuta `git push`, `gh pr merge`, `git reset`,
+- El agente NUNCA ejecuta `gh pr merge`, `git reset`,
   `git rebase`, `git stash`, `git clean`, `git commit --amend`,
   `git commit --no-verify`, `git branch -D`, `git branch -d`,
   `git push --force`, `git push -f`, `git push --delete`.
@@ -14,8 +14,9 @@
   `credential.helper`, `.gitconfig`, `.env` ni ningún otro sitio.
 - Si un comando está bloqueado por el entorno: PARAR. No sustituir,
   no probar variantes, no rodear. Pedir al humano que lo ejecute.
-- Ante cualquier duda: proponer y esperar. El humano es el único
-  autorizado a modificar el remoto (push, PR, merge).
+- `git push origin <rama>` y `gh pr create` solo con confirmación humana
+  explícita (permiso `ask` en `opencode.json`).
+- Ante cualquier duda: proponer y esperar. El merge lo hace siempre el humano.
 
 ---
 
@@ -32,7 +33,7 @@ Clean/Hexagonal with bounded contexts and 51 import-linter contracts (BC-NN; bas
 - **Control FAIL $\neq$ Finding Nuevo:** Todo fallo detectado (ej. por `architecture_linter`) debe contrastarse obligatoriamente contra `tracking.yaml`, ADRs y auditorías históricas. Si ya está registrado, se clasifica como `REVALIDADO`, nunca como `NUEVO`.
 - **Modelo de Fuentes y Jerarquía:** Las fuentes externas de conocimiento (libros, papers, notas) no son normas. Toda obligación requiere la cadena de adopción: `Conocimiento` → `Decisión Humana` → `ADR / Governance` → `Control`.
 - **Orden de Descubrimiento:** Plan Maestro (`docs/PLAN-Maestro-Ingenieria.md`) → Governance (`docs/architecture/GOVERNANCE.md`) → Tracking (`docs/plans/tracking.yaml`) → ADRs → CI/Linters.
-- **Tooling mecánico primero:** Antes de emitir juicios, ejecuta `uv run python scripts/audit_validator.py` (reglas M1..M20, ver AUDIT_PROTOCOL §Q). El LLM solo juzga donde no hay validación mecánica. Comando canónico de cada control: AUDIT_PROTOCOL §R.
+- **Tooling mecánico primero:** Antes de emitir juicios, ejecuta `uv run python scripts/audit_validator.py` (reglas M1..M25, ver AUDIT_PROTOCOL §Q). El LLM solo juzga donde no hay validación mecánica. Comando canónico de cada control: AUDIT_PROTOCOL §R.
 
 ## Commands
 
