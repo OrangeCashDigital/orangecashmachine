@@ -246,3 +246,97 @@ sin restricción del entorno.
   variable. Es exclusiva del humano.
 - `git commit --no-verify` está en deny, así que el agente no puede
   saltarse los hooks.
+
+---
+
+
+---
+
+## Reglas de operación con Git (v2 post-incidente 2026-10-26)
+
+Estas reglas están alineadas con la política SSOT existente
+(`opencode.json` L224, AGENTS.md L71). **Donde el agente no puede
+actuar solo, la regla dice DETENTE.**
+
+### R-GIT-1 — Un tema por PR
+
+- **Un PR = un tema** (deps / ADR / fix / test / docs). No mezclar.
+- Si surge un segundo tema: **el agente DETIENE y pregunta al humano**.
+  El agente **no ejecuta** `git stash` (SSOT L71/L224 lo deniega).
+- El humano decide: stash, rama WIP separada, o descartar.
+- Un PR con >500 líneas o >5 ficheros requiere justificación en el cuerpo.
+
+### R-GIT-2 — Rama desde `main` limpio
+
+Antes de crear rama nueva, el agente:
+
+    git fetch origin
+    git switch main
+    git pull --ff-only origin main
+    git status                            # DEBE estar limpio
+    git switch -c <tipo>/<descripcion>
+
+- **Prohibido** crear rama desde otra feature branch.
+- **Prohibido** crear rama con cambios sin commitear.
+- `switch` (con `-c`) y `pull --ff-only` son los únicos verbos
+  permitidos por SSOT L224; `checkout` y `pull --rebase` no.
+
+### R-GIT-3 — Antes de mergear: evidenciar y DETENER (merge = human-only)
+
+El agente **nunca** ejecuta `gh pr merge` (SSOT L71/L224). El agente:
+
+    git fetch origin
+    git log --oneline origin/main..HEAD         # log: 2 puntos (commits nuevos)
+    git diff --stat origin/main...HEAD          # diff: 3 puntos (merge-base)
+    git diff --name-only origin/main...HEAD     # 3 puntos
+
+Presenta la evidencia y **DETIENE**.
+
+- 2 puntos en `log`: commits en HEAD no en origin/main → los del PR.
+- 3 puntos en `diff`: diff desde merge-base → solo cambios del PR.
+- 2 puntos en `diff` incluiría lo que main avanzó → **falsos positivos**.
+
+Si aparecen commits o ficheros ajenos al tema del PR:
+**el agente DETIENE y reporta al humano**. El agente **no ejecuta**
+`git rebase`, `reset` ni `--force-with-lease` (SSOT L71/L224 los deniega).
+El humano decide si reorganiza la rama o cierra el PR.
+
+### R-GIT-4 — Squash vs merge: human-only
+
+El humano decide `--squash` o `--merge` viendo la evidencia de R-GIT-3.
+El agente no ejecuta ninguno de los dos (`gh pr merge` prohibido).
+Preferencia del proyecto: `--squash` para PRs de 1-3 commits propios;
+`--merge` si hay >3 commits con historia útil.
+
+### R-GIT-5 — `--admin` es human-only
+
+Solo el humano puede usar `--admin` y solo si todos los checks están
+verdes y el único bloqueante es "required reviews pendientes".
+Un check rojo se resuelve, no se salta. Un falso positivo documentado
+se gestiona con `--ignore-vuln` + justificación en el workflow.
+El agente no corre `gh pr merge` en ningún caso.
+
+### R-GIT-6 — Pull nunca con `rebase`
+
+- Configurado: `git config --global pull.rebase false`.
+- El agente usa **solo** `git pull --ff-only origin <branch>` (SSOT L224).
+- Si falla por non-ff, el agente **DETIENE y pregunta al humano**.
+- El agente **no ejecuta** `git pull --rebase` ni `git rebase` (SSOT L71/L224).
+
+### R-GIT-7 — Mensaje truthful
+
+- El mensaje debe describir **todo** lo que el commit contiene.
+- Si un "fix(deps)" contiene cambios de ADR/docs → no es un fix(deps).
+  Reorganizar (el humano) o cambiar el mensaje.
+- Conventional Commits: feat, fix, docs, test, style, refactor, chore.
+- El agente puede hacer `git commit` (SSOT L224); `push` requiere
+  confirmación humana explícita.
+
+### R-GIT-8 — Cero force-push
+
+- El agente **nunca** ejecuta `git push --force`, `--force-with-lease`,
+  ni `--delete` (SSOT L71/L224).
+- Si el flujo requiere reescribir historia: **el agente DETIENE** y el
+  humano decide con `--force-with-lease` (nunca `--force`).
+- `main` está protegido: cualquier force-push rebota por branch protection.
+
