@@ -12,7 +12,7 @@ Uso:
     python scripts/provision_kafka_topics.py
     python scripts/provision_kafka_topics.py --bootstrap-server localhost:9093
 
-Clasificación por topic (contrato aiokafka 0.14.0 — ver tests/kafka/test_provision_topics.py):
+Clasificación por topic (contrato aiokafka 0.14.0):
     create_topics() NO lanza TopicAlreadyExistsError; devuelve la
     CreateTopicsResponse con un resultado por topic en `topic_errors`
     (error_code 0=creado, 36=ya existe; resto=fallo del broker).
