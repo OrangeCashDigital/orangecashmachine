@@ -246,3 +246,79 @@ sin restricción del entorno.
   variable. Es exclusiva del humano.
 - `git commit --no-verify` está en deny, así que el agente no puede
   saltarse los hooks.
+
+---
+
+## Reglas de operación con Git (post-incidente 2026-10-26)
+
+Estas reglas son **obligatorias** y no admiten excepción. Fueron ratificadas
+tras el incidente del PR #86 (squash que arrastró commits de feature branches
+ajenas + `pull.rebase=true` que descartó commits del reflog).
+
+### R-GIT-1 — Un tema por PR
+
+- **Un PR = un tema** (deps / ADR / fix / test / docs). No mezclar.
+- Si surge un segundo tema: `git stash push -m "wip: <tema 2>"` y abre rama nueva.
+- Un PR con >500 líneas de diff o >5 ficheros modificados requiere justificación
+  explícita en el cuerpo del PR.
+
+### R-GIT-2 — Rama siempre desde `main` limpio
+
+Antes de crear una rama nueva:
+
+    git checkout main
+    git pull origin main
+    git status                          # DEBE decir "nada para hacer commit"
+    git log --oneline -1                # DEBE ser HEAD de origin/main
+    git checkout -b <tipo>/<descripcion-corta>
+
+- **Prohibido** crear rama desde otra feature branch (el squash arrastra commits ajenos).
+- **Prohibido** crear rama desde `main` con cambios sin commitear.
+
+### R-GIT-3 — Verificar `git log main..mi-rama` antes de squash-mergear
+
+Antes de `gh pr merge --squash`:
+
+    git log --oneline main..HEAD
+    git diff --stat main..HEAD
+
+- Solo deben aparecer commits y ficheros del tema del PR.
+- Si aparece un commit o fichero ajeno → **ABORTAR el merge**, reorganizar la
+  rama (`git rebase -i main` + drop de los ajenos + `--force-with-lease`).
+
+### R-GIT-4 — Squash solo de commits propios
+
+- `--squash` es por defecto para PRs pequeños (1-3 commits).
+- `--merge` (merge commit) si el PR tiene >3 commits con historia útil.
+- **Prohibido** `--squash` si la rama contiene commits cuya autoría no es del
+  agente/usuario que la creó.
+
+### R-GIT-5 — Nunca `--admin` sobre checks rojos
+
+- `--admin` solo si TODOS los checks verdes y el único bloqueante es "required
+  reviews pendientes".
+- Si hay un check `X` (rojo): resolverlo, no saltarlo.
+- Si el check rojo es falso positivo documentado (ej. CVE no aplicable), ignorar
+  con `--ignore-vuln` + justificación en el workflow.
+
+### R-GIT-6 — Pull nunca con `rebase`
+
+- Configurado globalmente: `pull.rebase=false`. No cambiar por sesión.
+- Si necesitas rebase explícito: `git fetch origin && git rebase origin/main`,
+  nunca `git pull --rebase`.
+- Tras rebase: `git log --oneline origin/main..HEAD` para confirmar que los
+  commits siguen ahí.
+
+### R-GIT-7 — Commits con mensaje truthful
+
+- El mensaje debe describir **todo** lo que el commit contiene.
+- Si un "fix(deps)" contiene cambios de ADR/docs, **no es un fix(deps)**.
+  Reorganizar en commits atómicos o cambiar el mensaje.
+- Usar Conventional Commits: feat, fix, docs, test, style, refactor, chore.
+
+### R-GIT-8 — Cero force-push a `main`
+
+- `main` está protegido. Cualquier intento rebota.
+- Force-push solo en feature branches propias, con `--force-with-lease`
+  (nunca `--force`).
+
