@@ -252,5 +252,7 @@ disclaimer de no-reverificación a
 todos los libros en docs/knowledge, sin verificación de branch protection) y no
 contiene conteos históricos ni disclaimer de re-verificación.
 
-**Atribución correcta:** solo
-`AUDIT_OCM_CROSS_REVIEW_THREE_REPORTS_2026-10-25.md` los contiene.
+**Atribución correcta:** los conteos históricos y el disclaimer de
+no-reverificación aparecen en
+`AUDIT_OCM_PHASE2_EVIDENCE_SYNTHESIS_2026-10-21.md` y en
+`AUDIT_OCM_CROSS_REVIEW_THREE_REPORTS_2026-10-25.md`.
