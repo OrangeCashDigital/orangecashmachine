@@ -331,3 +331,33 @@ La conclusión debe separar claramente:
 **Confirmación de que no se autorizó ni se inició implementación:** GATE C = BLOCKED, IMPLEMENTATION = NOT AUTHORIZADO en todas las fuentes. No se ejecutaron acciones de implementación.
 
 **INFORME ENTREGADO.** Tras este resumen, el agente se detiene. No se abre otra fase, no se crea otro archivo y no se repite el diagnóstico en mensajes sucesivos.
+---
+
+## ERRATA — Correcciones post-review (2026-10-26)
+
+### E-A1 — Cronología C2
+
+El texto original (§114, §124, §126) afirma que el pack D19 humano (2026-09-30)
+"precede" a la actualización G1-MAT-D13 (2026-09-28) y trata C2 como
+"explicable por evolución temporal".
+
+**Corrección:** 2026-09-30 es POSTERIOR a 2026-09-28. El propio texto original
+reconoce la contradicción a mitad de frase (§124) sin corregirla. Además,
+ADR-0057 §3 declara `C1–C4 sin resolver`.
+
+**Estado correcto:** C2 permanece **UNRESOLVED**. La diferencia de fechas
+documenta la contradicción, no la resuelve.
+
+### E-C1 — Conteo de decisiones D19/D20
+
+El texto original (§321) afirma: "22 (D19-01 a D19-10 = 10, D20a-D20b-06 = 7,
+superposición de 5 compartidas = total 22 afirmaciones de DECIDED en ADR-0049)".
+
+**Doble error aritmético:**
+
+1. 10 + 7 = **17**, no 22.
+2. Con 5 superposiciones: 10 + 7 − 5 = **12**, no 22.
+3. 22 es mayor que el total sin solapamiento (17): imposible.
+
+**Estado:** el conteo de 22 es **NO VERIFICADO** hasta listar el conjunto único
+de decisiones D19/D20 con sus identificadores completos.
