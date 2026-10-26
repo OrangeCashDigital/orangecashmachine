@@ -549,6 +549,7 @@ D19-07      = DECIDED (A — Durable Canonical State; H-07-01..H-07-04 = YES)
 D19-08      = DECIDED (D — Hybrid Relational + Iceberg)
 D19-09      = DECIDED (B — Domain Events by Semantic Lane with Optional Transport)
 D19-10      = DECIDED (C — Hybrid Core Registry + Lane-Specific Extensions)
+D19-03..D19-10 = AMBIGUO — pendientes de verificación y reconciliación normativa (medida provisional de control documental)
 D20         = DECIDED — SPLIT GATES
 D20a        = DECIDED — Transactional Outbox + Domain Event Propagation Semantics
 D20b        = DECIDED — Physical Persistence / Representation Architecture
@@ -561,6 +562,15 @@ D20b-06     = DECIDED — Hybrid event-history + state/analytical projection
 D21–D24     = BLOCKED
 IMPLEMENTATION = NOT AUTHORIZED
 ```
+
+### Contradicciones no resueltas (C1–C4)
+
+- **C1 (D19-03..D19-10 / D20):** Contradicción interna entre ADR-0049:L53-L54 (D19-03..D19-10 permanecen pendientes; NO se anticipa D20–D24) y ADR-0049:L545-L551 (D19-03..D19-10 = DECIDED con sus opciones respectivas; D20/D20a/D20b-01..06 = DECIDED). No se declara qué pasaje prevalece. Se conservan ambos registros históricos íntegramente. La clasificación como "AMBIGUO" es una medida provisional de control documental, **no** una declaración sobre la validez o invalidez de los registros DECIDED existentes. La determinación del estado normativo efectivo deberá realizarse mediante las reglas de precedencia aplicables y evidencia documental verificable.
+- **C2 (PENDING/HUMAN DECISION REQUIRED vs DECIDED):** Persisten etiquetas históricas (`HUMAN DECISION REQUIRED`/`PENDING`) en documentos subordinados (p. ej. D19-01_INDUSTRY_BOW, KNOWLEDGE_BASE_CONTRACT) frente a las decisiones registradas. La precedencia normativa establecida por Q1 (ADR-0055) **no implica** la supresión automática de dichas etiquetas ni una reconciliación material. Se mantiene la contradicción abierta. No se infiere precedencia por mera posición de pasajes.
+- **C3 (histórico Industry/KN_BASE vs ADR-0049):** Se documenta la discrepancia entre registros históricos y los estados reflejados en ADR-0049. No se infiere precedencia sin una regla expresa y aplicable. La contradicción permanece sin resolver.
+- **C4 (D12 / relación con D20b):** Se documenta la discrepancia relacionada con el tratamiento C/RESTRICTED de D12 y su relación con D20b. **D12 queda fuera del alcance de esta enmienda.** No se adopta ninguna decisión arquitectónica nueva sobre D12 en esta ronda. La relación entre estos elementos permanece sin resolver en el presente ámbito.
+
+*Nota:* Se conserva la distinción entre **existencia de registros históricos DECIDED** y **estado normativo efectivo pendiente de reconciliación**. Esta medida provisional **no** autoriza implementación, **no** levanta `IMPLEMENTATION = NOT AUTHORIZED`, **no** abre GATE C y **no** autoriza Q2. D20b-01..06 no se ven afectados por esta clasificación ambigua.
 
 G1-D13 está DECIDED + MATERIALIZED + ACCEPTED WITH CLARIFICATIONS. La aceptación
 (G1-ACCEPTANCE = B) cierra la serie G1-D01..D13 como decisión arquitectónica, pero NO
