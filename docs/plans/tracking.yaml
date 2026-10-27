@@ -4410,3 +4410,52 @@ adr_0048_execution_contract:
         ADR↔tracking resuelta (estado textual del ADR ahora coherente con tracking).
         NO autoriza implementación funcional ni migración adicional; fases B-L
         materializadas no se reinterpretan como autorización de nuevas fases.
+
+vcom_designacion_autoridad:
+  estado: DECIDED
+  fecha: '2026-10-27'
+  descripcion: >-
+    Designación formal de autoridad decisoria para reconciliación de gobernanza
+    según ADR-0058. El titular de la cuenta OrangeCashDigital (owner del
+    repositorio, id 207955556) queda designado como autoridad decisoria para
+    resolver C1, C2, C3, C4/D12, T-PLAN y VCOM-1..VCOM-5, así como para
+    levantar GATE C, autorizar IMPLEMENTATION y decidir Q2.
+  vcom_resueltos:
+    - VCOM-2: DECIDED — designación formal de autoridad decisoria
+    - VCOM-3: DECIDED — designación formal de autoridad decisoria
+  vcom_desbloqueados:
+    - VCOM-1: selección P1/P2/P3/P4 o combinación (pendiente decisión explícita)
+    - VCOM-4: procedimiento y autoridad para modificar el Plan Maestro (pendiente decisión explícita)
+    - VCOM-5: alcance próximas fases (pendiente decisión explícita)
+  competencias_no_autorizadas:
+    - Levantar GATE C: requiere decisión explícita separada
+    - Autorizar IMPLEMENTATION: requiere decisión explícita separada
+    - Decidir Q2 / materialización D20b-01..06: requiere decisión explícita separada
+  cadena:
+    conocimiento:
+      estado: HECHO
+      referencia: 'Expediente de vacío de autoridad (auditoría de gobernanza 2026-10-27)'
+    decision_humana:
+      estado: HECHO
+      referencia: 'ADR-0058: designación de autoridad decisoria al titular de OrangeCashDigital'
+    adr:
+      estado: HECHO
+      referencia: 'ADR-0058-authority-designation-governance-reconciliation (Estado: ACEPTADO)'
+    gobernanza:
+      estado: HECHO
+      referencia: 'GOVERNANCE.md sección "Autoridad decisoria"'
+    implementacion:
+      estado: NO_APLICA
+      referencia: 'ADR-0058 no autoriza implementación por sí misma'
+    tests:
+      estado: NO_APLICA
+      referencia: null
+    ci:
+      estado: NO_APLICA
+      referencia: null
+    evidencia:
+      estado: HECHO
+      referencia: 'gh api user confirma OrangeCashDigital (id 207955556) como titular del repositorio'
+    cierre:
+      estado: HECHO
+      referencia: 'VCOM-2 y VCOM-3 registrados como DECIDED en tracking.yaml'
