@@ -14,7 +14,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 STORE = REPO / "docs" / "engineering-context"
-SKILL = REPO / ".agents" / "skills" / "ocm-context-bootstrap" / "SKILL.md"
+SKILL = REPO / ".opencode" / "skills" / "ocm-context-bootstrap" / "SKILL.md"
 
 ALLOWED_TYPES = {
     "FACT",
