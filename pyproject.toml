@@ -71,7 +71,7 @@ dependencies = [
     # de merge keys (<<) que se usan en config/. Desbloquear con Hydra 2.x.
     "pyyaml==6.0.3",
     "python-dotenv>=1.0,<3.0",
-    "hydra-core>=1.3.2,<2.0",
+    "hydra-core>=1.3.8,<2.0",
     # ── Validación / calidad de datos ───────────────────────────────────────
     # pandera: schema-level validation nativo en Polars
     "pandera>=0.20.0",
@@ -191,7 +191,7 @@ streaming = "app.cli.streaming_hydra:main"
 # =============================================================================
 
 [tool.uv]
-override-dependencies = ["multidict==6.9.1", "certifi>=2026.10.19"]
+override-dependencies = ["multidict==6.9.1", "certifi>=2026.10.19", "msgpack>=1.2.3"]
 
 # =============================================================================
 # tool.ruff
