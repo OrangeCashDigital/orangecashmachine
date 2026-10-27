@@ -47,7 +47,21 @@ data/lineage/*.db
 data/quality/*.db
 .coverage
 .import_linter_cache/
-.opencode/
+
+# ── OpenCode ──────────────────────────────────────────────
+# Config compartida del proyecto (versionar):
+#   .opencode/agents/
+#   .opencode/commands/
+#   .opencode/skills/
+#   .opencode/plugins/
+# Runtime generado por OpenCode / plugins (NO versionar):
+.opencode/node_modules/
+.opencode/plans/
+.opencode/.gitignore
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+
 AUDITORIA_IMPORT_LINTER.txt
 docs/arch/import_graph_*.svg
 *.pyc

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Read-only, capped retrieval for ocm-context-bootstrap (steps 3-9).
-# Usage: bash .agents/skills/ocm-context-bootstrap/scripts/ctx-search.sh "<keyword>" [max_lines_per_group]
+# Usage: bash .opencode/skills/ocm-context-bootstrap/scripts/ctx-search.sh "<keyword>" [max_lines_per_group]
 # Retrieves only. Status labels (CURRENT/HISTORICAL/...) come from reading each source.
 kw="${1:?usage: ctx-search.sh <keyword> [max]}"; max="${2:-8}"
 cd "$(git rev-parse --show-toplevel)" || exit 2
