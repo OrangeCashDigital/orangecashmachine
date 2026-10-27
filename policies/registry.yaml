@@ -1,7 +1,7 @@
 schema_version: 1
 adr: ADR-0031
 created: '2026-08-19'
-modified: '2026-09-24'
+modified: '2026-10-26'
 related_adrs:
   - ADR-0006
   - ADR-0015
@@ -148,12 +148,13 @@ rules:
       job: unit-tests
       command: uv run pytest tests/ -x -q -m "not integration" --cov=packages --cov=ocm --cov=shared --cov=apps --cov-report=term
     master_plan: F2.1
-    adr: null
+    adr: ADR-0020
     status: ACTIVE
     created: '2026-08-19'
-    modified: '2026-08-19'
+    modified: '2026-10-26'
     history:
       - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+      - {date: '2026-10-26', author: 'human', change: 'adr: null -> ADR-0020 (B-06/B-07; resuelve WARN M25)'}
 
   - id: R6
     name: Bandit sin hallazgos BLOCKER
@@ -172,12 +173,13 @@ rules:
       job: security
       command: uv run bandit -r apps ocm packages shared infrastructure -ll
     master_plan: F2.1
-    adr: null
+    adr: ADR-0020
     status: ACTIVE
     created: '2026-08-19'
-    modified: '2026-08-19'
+    modified: '2026-10-26'
     history:
       - {date: '2026-08-19', author: 'auditor', change: 'created (recuperado por git fsck, campos created/modified/history reconstruidos, no originales)'}
+      - {date: '2026-10-26', author: 'human', change: 'adr: null -> ADR-0020 (B-06/B-07; resuelve WARN M25)'}
 
   - id: R7
     name: Paridad config.yaml#defaults ↔ _MODULE_GLOBS

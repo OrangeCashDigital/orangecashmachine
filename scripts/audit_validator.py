@@ -2,7 +2,7 @@
 """scripts/audit_validator.py — Audit Validator (sistema de auditoría OCM).
 
 Validador mecánico y determinista del sistema de auditoría de OCM.
-Implementa las reglas M1..M20 del AUDIT_PROTOCOL.md.
+Implementa las reglas M1..M25 del AUDIT_PROTOCOL.md.
 
 Principio: MACHINE CHECKS FIRST. LLM JUDGMENT SECOND.
 El LLM solo decide donde la semántica lo requiere; todo lo verificable
@@ -324,7 +324,7 @@ def normalize_adr_state(raw: str) -> str | None:
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# Reglas mecánicas M1..M20
+# Reglas mecánicas M1..M25
 # ───────────────────────────────────────────────────────────────────────────
 
 
@@ -685,9 +685,8 @@ def m20_control_counts(ctx: AuditContext) -> None:
     # Si hay controles FAIL y ninguno genera finding NUEVO, es consistente.
     # Si un control FAIL no tiene ningún finding asociado (por control), aviso.
     fails = counts.get("FAIL", 0)
-    nuevos = sum(1 for f in ctx.findings if f.classification == "NUEVO")
-    if fails > 0 and nuevos == 0:
-        ctx.warn("M20", f"{fails} controles FAIL sin ningún finding NUEVO (verificar deduplicación)")
+    if fails > 0 and not ctx.findings:
+        ctx.warn("M20", f"{fails} controles FAIL sin ningún finding registrado (verificar deduplicación)")
 
 
 def _parse_control_summary(text: str) -> int | None:
@@ -821,6 +820,9 @@ def m25_orphan_adr_warning(ctx: AuditContext) -> None:
         ctx.err("M25", f"{ctx.registry}: no existe o no parsea")
         return
     referenced = {r.get("adr") for r in data.get("rules") or [] if r.get("adr")}
+    # staged_ports (ADR-0044): cualquier ADR citado en esas entradas cuenta como referenciado
+    staged_txt = str(data.get("staged_ports") or "")
+    referenced |= set(re.findall(r"ADR-\d{4}", staged_txt))
     for adr in data.get("related_adrs") or []:
         if adr not in referenced:
             ctx.warn("M25", f"{adr}: en related_adrs pero ninguna regla lo referencia")
@@ -953,7 +955,7 @@ def run_checks(ctx: AuditContext) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="OCM Audit Validator (M1..M20)")
+    parser = argparse.ArgumentParser(description="OCM Audit Validator (M1..M25)")
     parser.add_argument("--register", help="registro de findings (default: último OCM_AUDIT_FINDINGS_*.md)")
     parser.add_argument("--report", help="informe canónico (default: último AUDIT_OCM_FORENSIC_COMPLIANCE_*.md)")
     parser.add_argument("--tracking", help="tracking.yaml")
@@ -961,7 +963,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--golden", help="test_golden.py para M11")
     parser.add_argument("--registry", help="policies/registry.yaml")
     parser.add_argument("--versions", action="store_true", help="imprime versiones de herramientas canónicas y sale")
-    parser.add_argument("--list-rules", action="store_true", help="imprime las reglas M1..M20 y sale")
+    parser.add_argument("--list-rules", action="store_true", help="imprime las reglas M1..M25 y sale")
     args = parser.parse_args(argv)
 
     if args.list_rules:
