@@ -157,3 +157,18 @@ verificar el resultado:
 | `curl https://api.github.com` | DENEGADO |
 | `git reset --hard HEAD` | DENEGADO |
 | Edit `opencode.json` + `git add` + `git commit` | BLOQUEADO por hook |
+
+## Reglas Git para agentes (R-GIT)
+
+Cualquier agente que opere sobre este repo debe conocer las reglas R-GIT
+definidas en `AGENTS.md` § "Reglas de operación con Git". Resumen:
+
+- **R-GIT-1..8**: un tema por PR, rama desde main limpio, merge human-only,
+  verificación antes de commit, política de push.
+- **R-GIT-9**: prohibido `gh pr close` sin merge y prohibido cherry-pick.
+  Si un PR está BLOCKED, se corrige en la rama; solo el humano cierra.
+- **R-GIT-10**: si `--admin` falla, verificar `enforce_admins` en branch
+  protection. Con `enforce_admins=true`, no hay atajo: los checks de CI
+  deben pasar.
+
+Ver `AGENTS.md` para texto completo y justificaciones.
