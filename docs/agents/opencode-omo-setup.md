@@ -115,12 +115,15 @@ GIT_HUMAN_OVERRIDE=1 git push
 
 `opencode.json` define permisos por herramienta:
 
-- `permission.bash` (86 patrones): allow / ask / deny.
+- `permission.bash` (130 patrones): allow / ask / deny.
   - **allow**: lectura pura (`git status|diff|log|show|blame|ls-files|
     rev-parse|check-ignore`, `git fetch`, `git ls-remote`,
     `gh pr view|checks`, `gh run view|list`, `ls`, `cat`, `grep`, etc.)
-  - **ask** (confirmación humana por cada uno): `git add`, `git commit`,
-    `git switch`, `git pull --ff-only`, `git push origin`,
+  - **allow (git de trabajo)**: `git add`, `git commit`, `git switch`,
+    `git pull --ff-only`, sin confirmación. Siguen en deny `git add -A/
+    --all/./-f/--force` y `git switch -f/--force/--discard-changes`, con
+    la opción en cualquier posición.
+  - **ask** (confirmación humana por cada uno): `git push origin`,
     `gh pr create`.
   - **deny** (permanente): `gh pr merge`, `gh api`, `git push --force/-f/
     --delete`, `git reset`, `git rebase`, `git merge`, `git stash`,
