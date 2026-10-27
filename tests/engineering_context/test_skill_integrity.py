@@ -7,7 +7,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 ADR_DIR = REPO / "docs" / "architecture" / "decisions"
-CHECK_SKILL = REPO / ".agents" / "skills" / "ocm-context-bootstrap" / "scripts" / "check-skill.sh"
+CHECK_SKILL = REPO / ".opencode" / "skills" / "ocm-context-bootstrap" / "scripts" / "check-skill.sh"
 
 # Known collisions awaiting human renumbering. Remove an entry once fixed;
 # test_known_collisions_not_stale fails if an entry no longer collides.

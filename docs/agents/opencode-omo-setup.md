@@ -8,7 +8,7 @@ defines tú en tu config global.
 - Global (no va en git): `~/.omo/omo.jsonc` y `~/.config/opencode/`
   (modelos, `agents`, `categories`, plugins, proveedores, telemetría).
 - Repo (en git): `AGENTS.md`, `opencode.json` (permisos), `.omo/omo.jsonc`
-  (políticas) y `.agents/skills/` (skills).
+  (políticas) y `.opencode/skills/` (skills).
 
 Los modelos no se versionan: dependen de la cuenta de cada persona.
 
