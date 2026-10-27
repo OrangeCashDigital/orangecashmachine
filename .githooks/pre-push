@@ -2,16 +2,19 @@
 set -e
 PROTECTED_RE='^(opencode\.json|AGENTS\.md|CONTRIBUTING\.md|\.githooks/.*|\.github/.*)$'
 ZERO=0000000000000000000000000000000000000000
+BASE_REF=origin/main
 BLOCKED=0
 while read -r _ local_sha _ _; do
   [ "$local_sha" = "$ZERO" ] && continue
-  for c in $(git rev-list "$local_sha" --not --remotes=origin); do
-    HIT=$(git diff-tree --root --cc --no-commit-id --name-only -r -z "$c" | grep -zaE "$PROTECTED_RE" | tr '\0' ' ' || true)
-    if [ -n "$HIT" ]; then
-      echo "🔒 BLOQUEADO: commit $c modifica: $HIT"
-      BLOCKED=1
-    fi
-  done
+  if BASE=$(git merge-base "$local_sha" "$BASE_REF" 2>/dev/null); then
+    HIT=$(git diff --no-renames --name-only -z "$BASE" "$local_sha" | { grep -zaE "$PROTECTED_RE" || true; } | tr '\0' '\n')
+  else
+    HIT="(sin $BASE_REF: no se puede comparar)"
+  fi
+  if [ -n "$HIT" ]; then
+    echo "🔒 BLOQUEADO: $local_sha modifica respecto a $BASE_REF: $HIT"
+    BLOCKED=1
+  fi
 done
 if [ "$BLOCKED" = "1" ]; then
   if [ "${GIT_HUMAN_OVERRIDE:-0}" = "1" ]; then
