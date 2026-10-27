@@ -53,7 +53,7 @@ Exhaust in order: E1 existing ADR, E2 spec/contract, E3 governance/AGENTS, E4 re
 
 ## Retrieval helper
 
-`bash .agents/skills/ocm-context-bootstrap/scripts/ctx-search.sh "<keyword>" [max]` runs the greps of steps 3-9 in one capped, read-only pass. It excludes PDFs/ZIPs/.bak, prints the Estado line of every ADR hit and flags ADR number collisions. It retrieves only: status labels come from reading each source.
+`bash .opencode/skills/ocm-context-bootstrap/scripts/ctx-search.sh "<keyword>" [max]` runs the greps of steps 3-9 in one capped, read-only pass. It excludes PDFs/ZIPs/.bak, prints the Estado line of every ADR hit and flags ADR number collisions. It retrieves only: status labels come from reading each source.
 Pack template: assets/context-pack.template.md
 
 ## Authority boundary
