@@ -22,6 +22,16 @@ Titularidad de la cuenta de usuario OrangeCashDigital en GitHub (id 207955556, l
 
 No hay organización, estatutos ni comité con competencia superior documentada. `gh api orgs/OrangeCashDigital` devuelve 404, confirmando que no es una organización.
 
+## Nota meta-normativa (bootstrap consciente)
+
+El corpus normativo revisado (GOVERNANCE.md, ADR-template.md, AUDIT_PROTOCOL.md, PLAN-Maestro-Ingenieria.md, ADR-0045, ADR-0046) no contiene una regla preexistente que transfiera autoridad normativa al titular administrativo de la cuenta de GitHub. La sección "Autoridad decisoria" de GOVERNANCE.md es producto de este mismo ADR-0058, por lo que no puede invocarse como fuente independiente.
+
+El titular de la cuenta OrangeCashDigital declara explícitamente asumir la autoridad normativa de OCM por vía de los hechos, en ausencia documentada de una instancia superior con competencia establecida. No existe organización, comité, estatutos ni documento de gobernanza externo al repositorio que designe una autoridad alternativa.
+
+Esta declaración no infiere autoridad de fuentes que no la contienen: la ejerce como titular administrativo único del repositorio, con reconocimiento explícito de que se trata de un bootstrap normativo y no de una derivación de una regla preexistente.
+
+Si en el futuro se crea una organización con estatutos o se designa una autoridad superior, este bootstrap quedará sujeto a revisión según la sección "Vigencia y revisión" de este ADR.
+
 ## Alcance
 
 Competencias delegadas, cada una **independiente**:
