@@ -1,35 +1,26 @@
 #!/bin/bash
 set -e
-
-PROTECTED=(
-  "opencode.json"
-  "AGENTS.md"
-  "CONTRIBUTING.md"
-)
-
-RANGE=$(git rev-parse "$1" 2>/dev/null || echo "")
-if [ -z "$RANGE" ]; then exit 0; fi
-
-COMMITS=$(git rev-list "$RANGE" --not --remotes=origin 2>/dev/null || echo "")
-if [ -z "$COMMITS" ]; then exit 0; fi
-
+PROTECTED_RE='^(opencode\.json|AGENTS\.md|CONTRIBUTING\.md|\.githooks/.*|\.github/.*)$'
+ZERO=0000000000000000000000000000000000000000
+BASE_REF=origin/main
 BLOCKED=0
-for commit in $COMMITS; do
-  for file in "${PROTECTED[@]}"; do
-    if git diff-tree --no-commit-id --name-only -r "$commit" | grep -qxF "$file"; then
-      echo "🔒 BLOQUEADO: commit $commit modifica $file"
-      BLOCKED=1
-    fi
-  done
+while read -r _ local_sha _ _; do
+  [ "$local_sha" = "$ZERO" ] && continue
+  if BASE=$(git merge-base "$local_sha" "$BASE_REF" 2>/dev/null); then
+    HIT=$(git diff --no-renames --name-only -z "$BASE" "$local_sha" | { grep -zaE "$PROTECTED_RE" || true; } | tr '\0' '\n')
+  else
+    HIT="(sin $BASE_REF: no se puede comparar)"
+  fi
+  if [ -n "$HIT" ]; then
+    echo "🔒 BLOQUEADO: $local_sha modifica respecto a $BASE_REF: $HIT"
+    BLOCKED=1
+  fi
 done
-
 if [ "$BLOCKED" = "1" ]; then
   if [ "${GIT_HUMAN_OVERRIDE:-0}" = "1" ]; then
     echo "✅ GIT_HUMAN_OVERRIDE=1 detectado. Permitido."
     exit 0
   fi
-  echo ""
-  echo "Para autorizar (solo humano):"
-  echo "  GIT_HUMAN_OVERRIDE=1 git push ..."
+  echo "Para autorizar (solo humano): GIT_HUMAN_OVERRIDE=1 git push ..."
   exit 1
 fi
