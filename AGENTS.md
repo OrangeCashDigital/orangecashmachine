@@ -341,3 +341,31 @@ El agente no corre `gh pr merge` en ningún caso.
   humano decide con `--force-with-lease` (nunca `--force`).
 - `main` está protegido: cualquier force-push rebota por branch protection.
 
+### R-GIT-9 — Cerrar PR sin merge y cherry-pick: DENEGADO
+
+- El agente **NUNCA** ejecuta `gh pr close` sobre un PR propio sin mergear.
+- El agente **NUNCA** aplica cambios de un PR a `main` mediante
+  `git cherry-pick`, `git am` o equivalente.
+- Si un PR está BLOCKED:
+  1. Diagnostica: `gh pr checks <n>` y `gh run view <run-id> --log-failed`.
+  2. Corrige en la rama del PR (nuevo commit) y hace push.
+  3. Espera checks verdes.
+  4. Si sigue BLOCKED, **DETIENE** y reporta al humano.
+- Solo el humano cierra PRs.
+- Justificación: cherry-pick + close rompe trazabilidad (PR aparece CLOSED,
+  no MERGED) y puede duplicar commits si los SHAs coinciden. Incidente
+  real: PR #102 (2026-10-27) cerrado por agente tras cherry-pick, main
+  desincronizado con 3 commits locales duplicados.
+
+### R-GIT-10 — Diagnóstico cuando `--admin` falla
+
+Complementa R-GIT-5 (que ya establece `--admin` como human-only).
+
+- Si `gh pr merge --admin` devuelve un error de branch protection, verifica:
+  `gh api repos/<owner>/<repo>/branches/main/protection --jq '.enforce_admins.enabled'`
+- Si `true`: `--admin` **NO funcionará nunca**. Los checks requeridos deben
+  pasar por CI. DETIENE y reporta al humano. No insistas, no sortees con
+  cherry-pick ni close.
+- Si `false`: `--admin` es válido solo cuando todos los checks están verdes
+  y el único bloqueante son reviews pendientes.
+- **Nunca** `--admin` para saltarse checks rojos.
