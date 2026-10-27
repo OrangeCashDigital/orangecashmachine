@@ -128,7 +128,7 @@ Antes de declarar `AUDITORÍA TERMINADA`, el agente debe verificar:
 
 ## Q. Rule Classification (Clasificación de Reglas: Máquina vs LLM)
 
-### M1..M20 — Reglas MECÁNICAS (validación ejecutable en `scripts/audit_validator.py`)
+### M1..M25 — Reglas MECÁNICAS (validación ejecutable en `scripts/audit_validator.py`)
 
 | Regla | Descripción | Validación |
 |---|---|---|
@@ -151,7 +151,12 @@ Antes de declarar `AUDITORÍA TERMINADA`, el agente debe verificar:
 | M17 | Informe ↔ registro | findings del registro presentes en el informe |
 | M18 | Consistencia severidad | misma severidad en informe y registro |
 | M19 | Consistencia clasificación | misma clasificación en informe y registro |
-| M20 | Control counts | Σ filas de la matriz de controles = total declarado; FAIL no genera NUEVO sin dedup |
+| M20 | Control counts | Σ filas de la matriz de controles = total declarado; FAIL sin ningún finding registrado → WARN (verificar deduplicación) |
+| M21 | Nombres canónicos | artefactos de `docs/audits` usan naming canónico |
+| M22 | Enforcement + CI | cada regla del registry declara enforcement y se verifica contra el CI real |
+| M23 | Regla muerta | `evidence.path` de una regla debe existir en disco |
+| M24 | Waiver | waiver expirado → FAIL; waiver sin `adr` → FAIL |
+| M25 | ADR huérfano | ADR en `related_adrs` sin regla ni `staged_ports` que lo cite → WARN |
 
 **Ejecución:** `uv run python scripts/audit_validator.py [--register ...] [--report ...] [--golden ...]` — exit 0 = PASS, 1 = FAIL, 2 = error de ejecución.
 
