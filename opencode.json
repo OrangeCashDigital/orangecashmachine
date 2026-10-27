@@ -123,7 +123,16 @@
             "git add -f*": "deny",
             "git add --force*": "deny",
             "git switch -f*": "deny",
-            "git switch --discard-changes*": "deny"
+            "git switch --discard-changes*": "deny",
+            "git add* -A*": "deny",
+            "git add* --all*": "deny",
+            "git add* -f*": "deny",
+            "git add* --force*": "deny",
+            "git add* .": "deny",
+            "git add* . *": "deny",
+            "git switch* -f*": "deny",
+            "git switch* --force*": "deny",
+            "git switch* --discard-changes*": "deny"
         },
         "read": {
             "*.env": "deny",
