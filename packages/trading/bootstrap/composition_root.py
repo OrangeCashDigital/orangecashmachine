@@ -450,7 +450,7 @@ class TradingCompositionRoot:
                 "Los defaults de RiskConfig no son apropiados para capital real."
             )
 
-        tracker = TradeTracker(exchange=self._trading.exchange)
+        tracker = TradeTracker(exchange=self._trading.exchange, portfolio=self._portfolio)
 
         risk_config = self._resolve_risk_config(min_confidence)
         strategy = StrategyRegistry.get(self._trading.strategy_name)(**self._trading.strategy_cfg)
@@ -539,7 +539,7 @@ class TradingCompositionRoot:
                 "assemble_paper: data_source es obligatorio. Sintético en dry-run, build_gold_data_source() si no."
             )
 
-        tracker = TradeTracker(exchange=self._trading.exchange)
+        tracker = TradeTracker(exchange=self._trading.exchange, portfolio=self._portfolio)
 
         risk_config = self._resolve_risk_config(min_confidence)
         strategy = StrategyRegistry.get(self._trading.strategy_name)(**self._trading.strategy_cfg)
