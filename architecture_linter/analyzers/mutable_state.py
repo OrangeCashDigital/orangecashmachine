@@ -32,7 +32,10 @@ POSITION_ATTR_PATTERNS = ("_positions", "_open_positions", "_entry_positions", "
 ORDER_ATTR_PATTERNS = ("_orders", "_open_orders", "_open")
 
 # Tipos de valor que delatan almacenamiento de posición
-POSITION_TYPE_HINTS = ("tuple[float", "Position", "Order", "PositionSnapshot", "tuple[float, float]")
+# NOTA: "Order" NO está aquí — una orden es un concepto distinto de una posición;
+# `dict[str, Order]` (p. ej. OMS._orders) es un catálogo de órdenes, no un
+# position store. Corregido en ARCH-001/010 remediation.
+POSITION_TYPE_HINTS = ("tuple[float", "Position", "PositionSnapshot", "tuple[float, float]")
 ORDER_TYPE_HINTS = ("Order",)
 
 # Etiquetas de semántica de escritura
