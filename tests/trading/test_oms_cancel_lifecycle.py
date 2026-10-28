@@ -70,9 +70,10 @@ def _inject(oms: OMS, side: OrderSide = OrderSide.BUY) -> Order:
     order = Order(symbol="BTC/USDT", side=side, size_pct=0.05, signal=_sg(side))
     order.transition(OrderStatus.SUBMITTED)
     oms._orders[order.order_id] = order
-    oms._open[order.order_id] = order
+    oms._orders[order.order_id] = order
     if side == OrderSide.BUY:
-        oms._risk.record_open()
+        # ARCH-001: record_open es no-op; usar record_position (SSOT del conteo)
+        oms._risk.record_position(order.symbol, quantity=1.0, avg_entry=100.0)
     return order
 
 
