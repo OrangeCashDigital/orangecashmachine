@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Estado esperado (verificado) tras remediación arquitectónica — 2026-08-16.
 GOLDEN_EXPECTED: dict[str, Status] = {
-    "ARCH-001": Status.FAIL,  # multiple position owners (trading + portfolio)
+    "ARCH-001": Status.PASS,  # único owner de position: RiskManager mirror; OMS._orders no es position
     "ARCH-002": Status.PASS,  # resuelto por delegación de _entry_positions a PortfolioService (ARCH-001 fix)
     "ARCH-003": Status.PASS,  # gate de reconciliación submit-time e inicio de ciclo (ADR-0029, manage_open_orders)
     "ARCH-004": Status.FAIL,  # sin balance real; sizing contra capital_usd
@@ -32,7 +32,7 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-007": Status.PASS,  # ARCH-007 remediado: contratos permitidos/consolidados
     "ARCH-008": Status.PASS,  # sin stubs de producción (NoopWSTradesSource es null-object intencional; InfraMetricsKafkaProducer eliminado)
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
-    "ARCH-010": Status.FAIL,  # position ×3 (SSOT + RiskManager mirror + OMS._orders); order PASS
+    "ARCH-010": Status.FAIL,  # position ×2 (SSOT InMemoryPositionStore + RiskManager mirror); order PASS
 }
 
 
