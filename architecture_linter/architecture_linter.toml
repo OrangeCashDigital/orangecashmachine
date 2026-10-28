@@ -24,4 +24,5 @@ exclude_dirs = [".venv", "__pycache__", ".git", ".pytest_cache"]
     "RiskConfig",
     "ConfigurationError",
     "CursorStore",
+    "OrderStatus",
 ]
