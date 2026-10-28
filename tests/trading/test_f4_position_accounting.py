@@ -95,6 +95,7 @@ def _chain(executor) -> tuple[OMS, PortfolioService, RiskManager]:
     oms = OMS(
         risk_manager=risk,
         executor=executor,
+        portfolio=portfolio,
         on_fill=build_fill_sync(tracker, portfolio),
     )
     return oms, portfolio, risk

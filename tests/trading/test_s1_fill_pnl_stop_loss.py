@@ -25,9 +25,12 @@ from datetime import datetime, timezone
 
 import pytest
 from portfolio.models.position import PortfolioState, PositionSnapshot
+from portfolio.services.portfolio_service import PortfolioService
+from portfolio.infra.memory_store import InMemoryPositionStore
 from trading.analytics.trade_tracker import TradeTracker
 from trading.engine import TradingEngine
 from trading.execution.oms import OMS
+from trading.execution.fill_sync import build_fill_sync
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.execution.transport import OrderResult, OrderState
 from trading.execution.transport import OrderStatus as TStatus
@@ -164,7 +167,27 @@ def _filled_order(
 
 def _new_oms(executor) -> tuple[RiskManager, OMS]:
     risk = RiskManager(config=RiskConfig())
-    oms = OMS(risk_manager=risk, executor=executor)
+    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    tracker = TradeTracker(exchange="bybit")
+    oms = OMS(
+        risk_manager=risk,
+        executor=executor,
+        portfolio=portfolio,
+        on_fill=build_fill_sync(tracker, portfolio),
+    )
+    return risk, oms
+
+
+def _new_oms_with_tracker(executor, tracker: TradeTracker) -> tuple[RiskManager, OMS]:
+    """Variante que permite al caller retener el tracker (para asserts)."""
+    risk = RiskManager(config=RiskConfig())
+    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    oms = OMS(
+        risk_manager=risk,
+        executor=executor,
+        portfolio=portfolio,
+        on_fill=build_fill_sync(tracker, portfolio),
+    )
     return risk, oms
 
 
@@ -243,9 +266,13 @@ def test_trade_record_paper_has_zero_costs_net_equals_gross() -> None:
 
 def test_losing_round_trip_reflects_real_pnl() -> None:
     """TEST 4: BUY@100 SELL@90 → P&L ≈ -10% en risk y analytics."""
-    risk, oms = _new_oms(_ScriptedExecutor({"buy": (100.0, 1.0, 0.0), "sell": (90.0, 1.0, 0.0)}))
+    # ARCH-001: usar el tracker que _new_oms ya conectó vía build_fill_sync
+    # (no sobreescribir oms._on_fill — rompe la sincronización del portfolio).
     tracker = TradeTracker(exchange="bybit")
-    oms._on_fill = tracker.on_fill
+    risk, oms = _new_oms_with_tracker(
+        _ScriptedExecutor({"buy": (100.0, 1.0, 0.0), "sell": (90.0, 1.0, 0.0)}),
+        tracker=tracker,
+    )
 
     oms.submit(_signal("buy", price=100.0))
     oms.submit(_signal("sell", price=95.0))
@@ -278,7 +305,14 @@ def _build_stop_loss_engine(stop_loss: StopLossConfig, close: float):
         ]
     )
     risk = RiskManager(config=RiskConfig(stop_loss=stop_loss))
-    oms = OMS(risk_manager=risk, executor=_SignalPriceExecutor())
+    portfolio2 = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    tracker2 = TradeTracker(exchange="bybit")
+    oms = OMS(
+        risk_manager=risk,
+        executor=_SignalPriceExecutor(),
+        portfolio=portfolio2,
+        on_fill=build_fill_sync(tracker2, portfolio2),
+    )
     engine = TradingEngine(
         strategy=_NoSignalStrategy(),
         oms=oms,
