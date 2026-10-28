@@ -159,6 +159,7 @@ class OMS:
         self,
         risk_manager: RiskManager,
         executor: OrderExecutor,
+        portfolio: "PortfolioService",
         guard: Optional[ExecutionGuard] = None,
         on_fill: Optional[Callable[[Order], None]] = None,
         on_reject: Optional[Callable[[Order], None]] = None,
@@ -167,9 +168,12 @@ class OMS:
             raise ValueError("OMS: risk_manager es obligatorio")
         if executor is None:
             raise ValueError("OMS: executor es obligatorio")
+        if portfolio is None:
+            raise ValueError("OMS: portfolio es obligatorio (SSOT de posiciones)")
 
         self._risk = risk_manager
         self._executor = executor
+        self._portfolio = portfolio
         self._guard = guard
         self._on_fill = on_fill
         self._on_reject = on_reject
@@ -182,7 +186,6 @@ class OMS:
         # cost, determinista (INV-04) y preservado en cierres parciales. El
         # P&L realizado del SELL se calcula contra este avg, no contra
         # signal.price ni contra la última entrada (criterio G).
-        self._entry_positions: dict[str, tuple[float, float]] = {}
         self._lock = threading.RLock()
         self._log = logger.bind(component="OMS")
 
@@ -237,8 +240,9 @@ class OMS:
         # SELL sin cantidad (ni local ni TARGET) se rechaza — fail-closed.
         target_qty: Optional[float] = getattr(signal, "quantity", None)
         if raw_side == "sell":
-            with self._lock:
-                available, _ = self._entry_positions.get(signal.symbol, (0.0, 0.0))
+            positions = self._portfolio.snapshot().positions
+            existing = next((p for p in positions if p.symbol == signal.symbol), None)
+            available = existing.quantity if existing is not None else 0.0
             if available > 0.0:
                 target_qty = min(target_qty if target_qty is not None else available, available)
             if target_qty is None or target_qty <= 0.0:
@@ -457,7 +461,7 @@ class OMS:
         OrderState devuelto por el executor (exchange), NO de signal.price.
         En paper, el state trae fill_price = signal.price (fill al precio de
         señal). El P&L realizado del SELL se calcula contra el weighted average
-        cost del BUY que abrió la posición (self._entry_positions, ADR-0025),
+        cost del BUY que abrió la posición (portfolio.snapshot().positions, ADR-0025),
         no contra signal.price.
 
         F1 — fill_price UNKNOWN: si el executor no reporta el precio económico
@@ -487,16 +491,15 @@ class OMS:
             # precio: sin fill_price no hay avg (INV-10), no se usa
             # signal.price.
             if filled_qty is not None and filled_qty > 0:
-                with self._lock:
-                    # `fill_price or 0.0` solo alimenta el default de prev_avg,
-                    # que solo se usa cuando prev_qty == 0 (else → fill_price).
-                    prev_qty, prev_avg = self._entry_positions.get(order.symbol, (0.0, fill_price or 0.0))
+                positions = self._portfolio.snapshot().positions
+                existing = next((p for p in positions if p.symbol == order.symbol), None)
+                prev_qty = existing.quantity if existing is not None else 0.0
+                prev_avg = existing.avg_entry if existing is not None else (fill_price or 0.0)
                 if fill_price is not None and fill_price > 0:
                     new_qty = prev_qty + filled_qty
                     new_avg = (prev_qty * prev_avg + filled_qty * fill_price) / new_qty if prev_qty > 0 else fill_price
-                    with self._lock:
-                        self._entry_positions[order.symbol] = (new_qty, new_avg)
                     # F2 — espejo económico real en Risk: cantidad ejecutada + WAC.
+                    # (portfolio.open_position lo hace on_fill→fill_sync)
                     self._risk.record_position(order.symbol, new_qty, new_avg)
                 else:
                     self._log.warning(
@@ -514,24 +517,18 @@ class OMS:
                     order.symbol,
                 )
         elif order.side == OrderSide.SELL:
-            with self._lock:
-                entry = self._entry_positions.get(order.symbol)
-            if entry is not None:
-                prev_qty, avg = entry
+            positions = self._portfolio.snapshot().positions
+            existing = next((p for p in positions if p.symbol == order.symbol), None)
+            if existing is not None:
+                prev_qty = existing.quantity
+                avg = existing.avg_entry
                 # F1 (INV-08): defensiva — la cantidad cerrada nunca supera lo
                 # mantenido, aunque el exchange reporte un fill mayor.
                 closed_qty = min(filled_qty, prev_qty) if filled_qty is not None else prev_qty
                 remaining = prev_qty - closed_qty
-                with self._lock:
-                    if remaining > 0:
-                        # Cierre parcial: se reduce qty y se preserva el WAC.
-                        self._entry_positions[order.symbol] = (remaining, avg)
-                    else:
-                        self._entry_positions.pop(order.symbol, None)
-                # F2 (INV-F2-02/03): un cierre parcial reduce la cantidad y la
-                # exposición pero NO cierra la posición — el conteo de posiciones
-                # HELD solo decrementa en cierre completo (remaining <= 0). El
-                # espejo económico de Risk refleja la cantidad restante real.
+                # F2 (INV-F2-02/03): cierre parcial NO decrementa el conteo de
+                # posiciones HELD; solo lo hace el cierre completo (remaining <= 0).
+                # (portfolio.close_position lo hace on_fill→fill_sync)
                 self._risk.record_position(order.symbol, remaining if remaining > 0 else None, avg)
                 if fill_price is not None and avg > 0:
                     # --- settlement canónico ---

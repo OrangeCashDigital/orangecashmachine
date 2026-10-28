@@ -489,6 +489,7 @@ class TradingCompositionRoot:
         oms = OMS(
             risk_manager=risk_manager,
             executor=executor,
+            portfolio=self._portfolio,
             guard=self._guard,
             on_fill=build_fill_sync(tracker, self._portfolio),
             on_reject=None,
@@ -550,6 +551,7 @@ class TradingCompositionRoot:
         oms = OMS(
             risk_manager=risk_manager,
             executor=executor,
+            portfolio=self._portfolio,
             guard=self._guard,
             on_fill=build_fill_sync(tracker, self._portfolio),
             on_reject=None,

@@ -112,6 +112,7 @@ def _chain(executor) -> tuple[OMS, PortfolioService, RiskManager]:
     oms = OMS(
         risk_manager=risk,
         executor=executor,
+        portfolio=portfolio,
         on_fill=build_fill_sync(tracker, portfolio),
     )
     return oms, portfolio, risk
@@ -291,9 +292,13 @@ def test_min_order_usd_blocks_small_entries_but_not_reductions() -> None:
     porque su notional no coincida con el sizing de una nueva posición."""
     cfg = RiskConfig(order=OrderLimits(min_order_usd=600.0, max_order_usd=1000.0))
     risk = RiskManager(config=cfg, capital_usd=10_000.0)
+    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    tracker = TradeTracker(exchange="bybit")
     oms = OMS(
         risk_manager=risk,
         executor=_ScriptedExecutor({"buy": [], "sell": [(110.0, 0.01, 0.0)]}),
+        portfolio=portfolio,
+        on_fill=build_fill_sync(tracker, portfolio),
     )
 
     # (a) ENTRADA: BUY con capital×size_pct = $500 < min $600 → rechazado.
@@ -303,7 +308,16 @@ def test_min_order_usd_blocks_small_entries_but_not_reductions() -> None:
     # (b) REDUCCIÓN: posición existente (espejo local, p. ej. sesión previa).
     #     Un SELL pequeño ($1.1 de notional) NO se rechaza por min_order_usd
     #     de entrada — su tamaño lo gobierna la posición, no capital×size_pct.
-    oms._entry_positions["BTC/USDT"] = (0.37, 100.0)
+    # ARCH-001: sembrar la posición vía el SSOT (portfolio), no el espejo interno.
+    portfolio.open_position(
+        order_id="seed-1",
+        symbol="BTC/USDT",
+        side="long",
+        avg_entry=100.0,
+        size_pct=0.05,
+        entry_at=None,
+        quantity=0.37,
+    )
     sell = oms.submit(_signal("sell", price=110.0, quantity=0.01))
     assert sell is not None, "una reducción no se bloquea por min_order_usd de ENTRADA"
     assert sell.quantity == pytest.approx(0.01)
@@ -366,6 +380,7 @@ def test_stop_loss_reduction_not_treated_as_opening() -> None:
     oms = OMS(
         risk_manager=risk,
         executor=_ScriptedExecutor({"sell": [(48_000.0, 1.0, 0.0)]}),
+        portfolio=portfolio,
     )
     engine = TradingEngine(
         strategy=_NoSignalStrategy(),
