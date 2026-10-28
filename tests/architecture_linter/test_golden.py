@@ -24,15 +24,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Estado esperado (verificado) tras remediación arquitectónica — 2026-08-16.
 GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-001": Status.FAIL,  # multiple position owners (trading + portfolio)
-    "ARCH-002": Status.FAIL,  # divergencia semántica WAC vs reemplazo/pop
+    "ARCH-002": Status.PASS,  # resuelto por delegación de _entry_positions a PortfolioService (ARCH-001 fix)
     "ARCH-003": Status.PASS,  # gate de reconciliación submit-time e inicio de ciclo (ADR-0029, manage_open_orders)
     "ARCH-004": Status.FAIL,  # sin balance real; sizing contra capital_usd
     "ARCH-005": Status.FAIL,  # cadena de freshness rota en niveles 3–6
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)
     "ARCH-007": Status.PASS,  # ARCH-007 remediado: contratos permitidos/consolidados
-    "ARCH-008": Status.FAIL,  # 1 stub de producción (WSTradesSource; InfraMetricsKafkaProducer eliminado)
+    "ARCH-008": Status.PASS,  # sin stubs de producción (NoopWSTradesSource es null-object intencional; InfraMetricsKafkaProducer eliminado)
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
-    "ARCH-010": Status.FAIL,  # estado mutable duplicado (position ×6, order ×4)
+    "ARCH-010": Status.FAIL,  # position ×3 (SSOT + RiskManager mirror + OMS._orders); order PASS
 }
 
 
@@ -90,13 +90,30 @@ def test_golden_arch007_duplicates() -> None:
 
 @pytest.mark.skipif(not (REPO_ROOT / "architecture_linter" / "importlinter.toml").is_file(), reason="requiere repo OCM")
 def test_golden_arch008_stubs() -> None:
+    """Tras ARCH-008 remediation: sin stubs de producción.
+
+    - WSTradesSource renombrado a NoopWSTradesSource (null-object intencional,
+      `__anext__` → StopAsyncIteration es comportamiento de null-object, no de
+      stub productivo; excluido por `_is_null_object_name`).
+    - InfraMetricsKafkaProducer eliminado en remediación anterior.
+    - Streams y null-objects legítimos no son falsos positivos.
+    """
     cfg = load_config()
     ctx = RepoContext(root=REPO_ROOT, roots=cfg.roots, exclude_dirs=frozenset(cfg.exclude_dirs))
     rules = build_rules(enabled={"ARCH-008"}, allow=cfg.allow)
     (res,) = LinterEngine(ctx).run(rules)
+    # PASS esperado: ningún stub de producción
+    assert res.status == Status.PASS, f"ARCH-008 no debería fallar: {res}"
     symbols = {f.symbol for f in res.findings}
-    assert "WSTradesSource" in symbols  # golden F1 — diseñado con fallback REST, honesto
-    assert "InfraMetricsKafkaProducer" not in symbols  # eliminado en remediación
-    # No FPs: streams legítimos (StopAsyncIteration = terminación normal) y null-objects
-    for legit in ("GapAwareStream", "GapRecoveryFetcher", "TradesBackfillFetcher", "NullMetrics", "NoopGapPublisher"):
+    # Null-objects y streams legítimos NO son falsos positivos
+    for legit in (
+        "NoopWSTradesSource",
+        "GapAwareStream",
+        "GapRecoveryFetcher",
+        "TradesBackfillFetcher",
+        "NullMetrics",
+        "NoopGapPublisher",
+    ):
         assert legit not in symbols, f"FP ARCH-008: {legit}"
+    # Nada del proyecto debería ser stub de producción
+    assert "InfraMetricsKafkaProducer" not in symbols
