@@ -13,7 +13,6 @@ en domain/policies/base.py:
   · PipelineContext   — DI container de ejecución (ports + runtime state)
   · StrategyMixin     — Template Method: timeout, captura, métricas, logging
   · classify_error    — clasificación transitorio/permanente (SSOT)
-  · _TransientProxy   — proxy para classify_error con strings en lugar de exc
   · Timeout constants — calibrados por granularidad de timeframe
 
 Por qué aquí y no en domain/
@@ -156,58 +155,6 @@ def classify_error(exc: BaseException) -> bool:
         return False  # SafeOps: fallo en clasificación → asumir permanente
 
 
-class _TransientProxy(Exception):
-    """
-    Proxy mínimo para classify_error() cuando solo tenemos strings
-    (error_type, error_msg) en lugar del objeto excepción original.
-
-    Permite que PairResult.is_transient_error delegue en classify_error()
-    sin duplicar lógica de clasificación (DRY — SSOT).
-
-    Prioridad en classify_error():
-      1. hasattr(proxy, 'is_transient') → declarativo, para tipos conocidos
-      2. fallback de strings sobre __str__() → para tipos externos/desconocidos
-    """
-
-    _KNOWN_TRANSIENT: frozenset[str] = frozenset(
-        {
-            "ChunkFetchError",
-            "ExchangeConnectionError",
-            "ExchangeCircuitOpenError",
-            "TimeoutError",
-            "ConnectionError",
-            "OSError",
-            "ConnectionRefusedError",
-            "ConnectionResetError",
-            "BrokenPipeError",
-            "ClientConnectorError",
-            "ServerDisconnectedError",
-            "ClientOSError",
-            "ClientResponseError",
-        }
-    )
-    _KNOWN_PERMANENT: frozenset[str] = frozenset(
-        {
-            "NoDataAvailableError",
-            "MissingStartDateError",
-            "SymbolNotFoundError",
-            "InvalidMarketTypeError",
-            "UnsupportedExchangeError",
-            "AuthenticationError",
-        }
-    )
-
-    def __init__(self, error_type: str, error_msg: str | None) -> None:
-        super().__init__(error_msg or "")
-        self._error_msg = error_msg or ""
-        if error_type in self._KNOWN_TRANSIENT:
-            self.is_transient = True
-        elif error_type in self._KNOWN_PERMANENT:
-            self.is_transient = False
-        # Tipos desconocidos: sin atributo → classify_error usa fallback de strings
-
-    def __str__(self) -> str:
-        return self._error_msg
 
 
 # =============================================================================

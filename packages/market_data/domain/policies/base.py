@@ -37,7 +37,7 @@ Pure — todo función/clase en este módulo es determinista y sin side-effects
 
 Nota de migración
 -----------------
-classify_error y _TransientProxy se re-exportan desde runtime.py para que
+classify_error se re-exporta desde runtime.py para que
 PairResult.is_transient_error funcione sin ciclos. Una vez que todos los
 importadores apunten a application/pipeline/runtime.py, este re-export
 puede eliminarse.
