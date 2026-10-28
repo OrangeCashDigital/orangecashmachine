@@ -325,7 +325,9 @@ def test_validate_skips_max_open_positions_for_reduction() -> None:
     un SELL (reducción) pasa — no se bloquea un cierre por regla de entrada."""
     cfg = RiskConfig(position=PositionConfig(max_position_pct=0.05, max_open_positions=1))
     risk = RiskManager(config=cfg, capital_usd=10_000.0)
-    risk.record_open()  # 1 posición HELD → límite alcanzado
+    # ARCH-001/010: el conteo se deriva de _positions. Simular 1 posición HELD
+    # vía la API real (record_position), no vía record_open() (no-op).
+    risk.record_position("BTC/USDT", quantity=1.0, avg_entry=100.0)
 
     assert risk.validate(_signal("buy", price=100.0)).rejected, "apertura bloqueada"
     assert risk.validate(_signal("sell", price=100.0, quantity=0.37)).approved, (
