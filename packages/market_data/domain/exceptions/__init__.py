@@ -9,18 +9,16 @@ Jerarquía
 ---------
 MarketDataError                     ← raíz del BC
 ├── IngestionError                  ← fallos en ingestión de datos
-│   ├── FetcherError                ← error genérico de fetcher
-│   │   ├── ChunkFetchError         ← fallo en un chunk específico
-│   │   ├── NoDataAvailableError    ← exchange sin datos para el rango
-│   │   ├── SymbolNotFoundError     ← símbolo no listado en exchange
-│   │   └── InvalidMarketTypeError  ← market_type inválido (spot/swap)
-│   └── RetryExhaustedError         ← reintentos agotados
+│   └── FetcherError                ← error genérico de fetcher
+│       ├── ChunkFetchError         ← fallo en un chunk específico
+│       ├── NoDataAvailableError    ← exchange sin datos para el rango
+│       ├── SymbolNotFoundError     ← símbolo no listado en exchange
+│       └── InvalidMarketTypeError  ← market_type inválido (spot/swap)
 ├── StorageError                    ← fallos en escritura/lectura de capas
 │   └── ChunkRejectedError          ← chunk rechazado por schema/validación
 ├── QualityError                    ← violación de calidad de datos
 │   ├── SchemaValidationError       ← schema Silver/Gold no satisfecho
 │   ├── AnomalyDetectedError        ← anomalía estadística detectada
-│   ├── SchemaVersionError          ← payload con versión de schema incompatible
 │   └── DataQualityError            ← fallo genérico en checks de calidad
 ├── PipelineError                   ← fallo de orquestación de pipeline
 │   ├── MissingStartDateError       ← cursor sin fecha de inicio definida
@@ -102,15 +100,6 @@ class InvalidMarketTypeError(FetcherError):
     """El market_type solicitado (spot/swap/futures) no es válido para este exchange."""
 
 
-class RetryExhaustedError(IngestionError):
-    """
-    Reintentos agotados sin éxito.
-
-    Fail-fast: si todos los reintentos fallan, el pipeline aborta
-    el símbolo afectado y lo registra en lineage como FAILED.
-    """
-
-
 # ===========================================================================
 # Storage
 # ===========================================================================
@@ -144,15 +133,6 @@ class SchemaValidationError(QualityError):
 
 class AnomalyDetectedError(QualityError):
     """Anomalía estadística detectada en el dataset (outlier, drift, gap)."""
-
-
-class SchemaVersionError(QualityError):
-    """
-    El payload tiene una versión de schema incompatible con la esperada.
-
-    Fail-fast: un consumer no puede procesar un payload de versión
-    desconocida sin riesgo de corrupción silenciosa.
-    """
 
 
 class DataQualityError(QualityError):
@@ -415,7 +395,6 @@ __all__ = [
     "NoDataAvailableError",
     "SymbolNotFoundError",
     "InvalidMarketTypeError",
-    "RetryExhaustedError",
     # Storage
     "StorageError",
     "ChunkRejectedError",
@@ -423,7 +402,6 @@ __all__ = [
     "QualityError",
     "SchemaValidationError",
     "AnomalyDetectedError",
-    "SchemaVersionError",
     "DataQualityError",
     # Pipeline
     "PipelineError",
