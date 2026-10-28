@@ -26,13 +26,13 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-001": Status.PASS,  # único owner de position: RiskManager mirror; OMS._orders no es position
     "ARCH-002": Status.PASS,  # resuelto por delegación de _entry_positions a PortfolioService (ARCH-001 fix)
     "ARCH-003": Status.PASS,  # gate de reconciliación submit-time e inicio de ciclo (ADR-0029, manage_open_orders)
-    "ARCH-004": Status.FAIL,  # sin balance real; sizing contra capital_usd
-    "ARCH-005": Status.FAIL,  # cadena de freshness rota en niveles 3–6
+    "ARCH-004": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de ADR-0030 / B-MD-009 (multi-paso, Fase 3)
+    "ARCH-005": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de freshness chain / B-MD-001 (F2/F3)
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)
     "ARCH-007": Status.PASS,  # ARCH-007 remediado: contratos permitidos/consolidados
     "ARCH-008": Status.PASS,  # sin stubs de producción (NoopWSTradesSource es null-object intencional; InfraMetricsKafkaProducer eliminado)
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
-    "ARCH-010": Status.FAIL,  # position ×2 (SSOT InMemoryPositionStore + RiskManager mirror); order PASS
+    "ARCH-010": Status.FAIL,  # position ×2: SSOT InMemoryPositionStore + RiskManager mirror pasivo (contrato push-only, BC-12/BC-13); order PASS
 }
 
 
