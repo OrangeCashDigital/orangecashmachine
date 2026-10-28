@@ -175,7 +175,7 @@ class OMS:
         self._on_reject = on_reject
 
         self._orders: dict[str, Order] = {}
-        self._open: dict[str, Order] = {}
+        # ARCH-001/010: `_open` se deriva de `_orders` vía property (abajo).
         # symbol → (open_qty, avg_entry) — acumulador WAC de la entrada real
         # (ADR-0025/F4b). Sustituye a `_entry_prices` (last-entry-wins): la
         # entrada media de una posición multi-entry es el weighted average
@@ -259,7 +259,6 @@ class OMS:
 
         with self._lock:
             self._orders[order.order_id] = order
-            self._open[order.order_id] = order
 
         self._log.info(
             "Order created | {} {} {} size={:.1%}",
@@ -381,9 +380,10 @@ class OMS:
         if state.status == ExchangeStatus.CANCELLED:
             with self._lock:
                 order.transition(OrderStatus.CANCELLED)
-                self._open.pop(order_id, None)
+                pass  # ARCH-001/010: _open ya no es almacén mutable
             if order.side == OrderSide.BUY:
                 self._risk.record_close(pnl_usd=None)
+                self._risk.record_position(order.symbol, None, None)  # ARCH-001: cerrar posición real
             self._log.info("Order CANCELLED (confirmado) | {}", order_id)
             return OrderStatus.CANCELLED
 
@@ -402,7 +402,7 @@ class OMS:
     @property
     def open_orders(self) -> list[Order]:
         with self._lock:
-            return list(self._open.values())
+            return [o for o in self._orders.values() if o.is_open]
 
     @property
     def all_orders(self) -> list[Order]:
@@ -429,7 +429,7 @@ class OMS:
     def summary(self) -> dict[str, Any]:
         with self._lock:
             total = len(self._orders)
-            open_ = len(self._open)
+            open_ = len([o for o in self._orders.values() if o.is_open])
             filled = sum(1 for o in self._orders.values() if o.status == OrderStatus.FILLED)
             rejected = sum(1 for o in self._orders.values() if o.status == OrderStatus.REJECTED)
         return {
@@ -478,7 +478,7 @@ class OMS:
             fees=fees,
         )
         with self._lock:
-            self._open.pop(order.order_id, None)
+            pass  # ARCH-001/010: _open ya no es almacén mutable
 
         if order.side == OrderSide.BUY:
             # ADR-0025/F4b — acumular WAC (qty, avg). La cantidad viene del
@@ -625,10 +625,11 @@ class OMS:
         """
         order.transition(OrderStatus.REJECTED, reject_reason=reason)
         with self._lock:
-            self._open.pop(order.order_id, None)
+            pass  # ARCH-001/010: _open ya no es almacén mutable
 
         if revert_open and order.side == OrderSide.BUY:
             self._risk.record_close(pnl_usd=None)
+            self._risk.record_position(order.symbol, None, None)  # ARCH-001: cerrar posición real
 
         self._log.warning(
             "Order REJECTED | {} reason={}",
