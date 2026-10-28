@@ -193,6 +193,7 @@ class QualityPipelineConsumer(BaseConsumer):
         return pl.DataFrame(
             [c.to_tuple() for c in event.batch.candles],
             schema=_schema,
+            orient="row",
         )
 
 
