@@ -12,11 +12,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from portfolio.infra.memory_store import InMemoryPositionStore
+from portfolio.services.portfolio_service import PortfolioService
 from trading.analytics.performance import PerformanceEngine
 from trading.analytics.trade_record import TradeRecord
 from trading.analytics.trade_tracker import TradeTracker
-from portfolio.infra.memory_store import InMemoryPositionStore
-from portfolio.services.portfolio_service import PortfolioService
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.execution.settlement import FeeStatus
 from trading.strategies.base import Signal

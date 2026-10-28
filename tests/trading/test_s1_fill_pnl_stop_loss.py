@@ -24,15 +24,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.models.position import PortfolioState, PositionSnapshot
 from portfolio.services.portfolio_service import PortfolioService
-from portfolio.infra.memory_store import InMemoryPositionStore
 from trading.analytics.trade_tracker import TradeTracker
 from trading.engine import TradingEngine
-from trading.execution.oms import OMS
 from trading.execution.fill_sync import build_fill_sync
-from trading.execution.settlement import FeeStatus, Settlement
+from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderSide, OrderStatus
+from trading.execution.settlement import FeeStatus, Settlement
 from trading.execution.transport import OrderResult, OrderState
 from trading.execution.transport import OrderStatus as TStatus
 from trading.risk.manager import RiskManager

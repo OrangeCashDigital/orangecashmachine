@@ -86,7 +86,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import threading
-from typing import Any, Callable, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
@@ -140,6 +140,11 @@ class OrderExecutor(Protocol):
 # ---------------------------------------------------------------------------
 # OMS
 # ---------------------------------------------------------------------------
+
+
+
+if TYPE_CHECKING:
+    from portfolio.services.portfolio_service import PortfolioService
 
 
 class OMS:

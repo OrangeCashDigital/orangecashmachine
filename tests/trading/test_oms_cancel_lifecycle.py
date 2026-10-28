@@ -27,10 +27,11 @@ import pytest
 from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderSide, OrderStatus
 
+
 def _empty_portfolio():
     """PortfolioService vacío para tests de ciclo de vida (sin fills)."""
-    from portfolio.services.portfolio_service import PortfolioService
     from portfolio.infra.memory_store import InMemoryPositionStore
+    from portfolio.services.portfolio_service import PortfolioService
     return PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
 from trading.execution.transport import OrderResult, OrderState
 from trading.execution.transport import OrderStatus as ExchangeStatus

@@ -19,9 +19,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from trading.execution.oms import OMS
-from trading.execution.fill_sync import build_fill_sync
 from trading.analytics.trade_tracker import TradeTracker
+from trading.execution.fill_sync import build_fill_sync
+from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderSide
 from trading.execution.transport import OrderResult, OrderState, OrderStatus
 from trading.risk.manager import RiskManager
@@ -66,8 +66,8 @@ def _sg(side: OrderSide) -> Signal:
 
 
 def _new_oms() -> tuple[RiskManager, OMS]:
-    from portfolio.services.portfolio_service import PortfolioService
     from portfolio.infra.memory_store import InMemoryPositionStore
+    from portfolio.services.portfolio_service import PortfolioService
     risk = RiskManager(config=_risk_cfg())
     portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
     tracker = TradeTracker(exchange="bybit")

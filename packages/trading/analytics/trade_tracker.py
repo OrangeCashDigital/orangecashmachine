@@ -154,7 +154,9 @@ class TradeTracker:
             )
             return
 
-        assert position.avg_entry is not None and position.avg_entry > 0,             "TradeRecord.close: position.avg_entry inválido"
+        assert position.avg_entry is not None and position.avg_entry > 0, (
+            "TradeRecord.close: position.avg_entry inválido"
+        )
         assert order.fill_price is not None, "TradeRecord.close: exit order sin fill_price"
         assert position.entry_at is not None, "TradeRecord.close: position.entry_at ausente"
 

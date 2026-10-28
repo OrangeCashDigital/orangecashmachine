@@ -30,9 +30,11 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-005": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de freshness chain / B-MD-001 (F2/F3)
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)
     "ARCH-007": Status.FAIL,  # 8 duplicados/homónimos: pendiente merge de fix/ccxt-factory-release
-    "ARCH-008": Status.PASS,  # sin stubs de producción (NoopWSTradesSource es null-object intencional; InfraMetricsKafkaProducer eliminado)
+    "ARCH-008": Status.PASS,  # sin stubs: NoopWSTradesSource = null-object
+    # intencional; InfraMetricsKafkaProducer eliminado.
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
-    "ARCH-010": Status.FAIL,  # position ×2: SSOT InMemoryPositionStore + RiskManager mirror pasivo (contrato push-only, BC-12/BC-13); order PASS
+    "ARCH-010": Status.FAIL,  # position ×2: SSOT + RiskManager mirror pasivo
+    # (push-only, BC-12/BC-13); order PASS.
 }
 
 
