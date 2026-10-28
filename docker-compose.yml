@@ -401,10 +401,10 @@ services:
       - zookeeper_logs:/var/lib/zookeeper/log
     healthcheck:
       test: ["CMD-SHELL", "zookeeper-shell localhost:2181 ls / > /dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 30s
       retries: 5
-      start_period: 15s
+      start_period: 60s
     logging: *default-logging
     networks:
       - ocm_internal
