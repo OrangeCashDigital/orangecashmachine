@@ -31,6 +31,7 @@ from trading.analytics.trade_tracker import TradeTracker
 from trading.engine import TradingEngine
 from trading.execution.oms import OMS
 from trading.execution.fill_sync import build_fill_sync
+from trading.execution.settlement import FeeStatus, Settlement
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.execution.transport import OrderResult, OrderState
 from trading.execution.transport import OrderStatus as TStatus
@@ -178,10 +179,17 @@ def _new_oms(executor) -> tuple[RiskManager, OMS]:
     return risk, oms
 
 
-def _new_oms_with_tracker(executor, tracker: TradeTracker) -> tuple[RiskManager, OMS]:
-    """Variante que permite al caller retener el tracker (para asserts)."""
+def _new_oms_with_tracker(
+    executor, tracker: TradeTracker, portfolio=None
+) -> tuple[RiskManager, OMS]:
+    """Variante que permite al caller retener el tracker (para asserts).
+
+    Si `portfolio` es None, crea uno nuevo. Si se pasa, usa el mismo
+    portfolio que tiene el tracker (evita BUY y SELL en portfolios distintos).
+    """
     risk = RiskManager(config=RiskConfig())
-    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    if portfolio is None:
+        portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
     oms = OMS(
         risk_manager=risk,
         executor=executor,
@@ -227,19 +235,36 @@ def test_slippage_exit_below_entry_yields_negative_realized_pnl() -> None:
 
 def test_trade_record_net_pnl_subtracts_costs() -> None:
     """TEST 3: pnl_pct bruto y fee_amount_usd tras costs (costes del dominio)."""
-    tracker = TradeTracker(exchange="bybit")
+    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    tracker = TradeTracker(exchange="bybit", portfolio=portfolio)
     entry = _filled_order(OrderSide.BUY, 50_000.0, filled_qty=0.02, fees=5.0, oid="b1")
     exit_ = _filled_order(OrderSide.SELL, 51_000.0, filled_qty=0.02, fees=5.0, oid="s1")
 
-    tracker.on_fill(entry)
+    portfolio.open_position(
+        order_id=entry.order_id, symbol=entry.symbol, side="long",
+        avg_entry=entry.fill_price, size_pct=entry.size_pct,
+        entry_at=entry.fill_timestamp, quantity=entry.filled_qty,
+    )
+    # F3: adjuntar settlement canónico al SELL (lo que el OMS haría en _fill).
+    # Fees totales = entry_fees + exit_fees = 5 + 5 = 10 USD (KNOWN).
+    exit_.settlement = Settlement.compute(
+        order_id=exit_.order_id,
+        symbol=exit_.symbol,
+        closed_qty=0.02,
+        avg_entry_price=50_000.0,
+        exit_price=51_000.0,
+        fee_amount_usd=10.0,  # 5 + 5
+        fee_status=FeeStatus.KNOWN,
+    )
+
     tracker.on_fill(exit_)
 
     trade = tracker.last_trade()
     assert trade is not None
     # pnl_pct bruto derivado: (51000-50000)/50000 = 2%
     assert trade.pnl_pct == pytest.approx(0.02)
-    # fee_amount_usd en lugar de fees (atributo eliminado en F3).
-    assert trade.fee_amount_usd == pytest.approx(10.0)  # 5 + 5
+    # fee_amount_usd: 5 + 5 = 10 USD
+    assert trade.fee_amount_usd == pytest.approx(10.0)
     # fees_pct derivado: fee_amount_usd / (closed_qty × avg_entry) = 10/1000 = 0.01
     assert trade.fees_pct == pytest.approx(0.01)
     # Under F3, net P&L USD: gross 20.0 - fees 10.0 = 10.0 USD.
@@ -248,11 +273,16 @@ def test_trade_record_net_pnl_subtracts_costs() -> None:
 
 def test_trade_record_paper_has_zero_costs_net_equals_gross() -> None:
     """TEST 3: sin fees (paper) → net_pnl_pct == pnl_pct (costes = 0)."""
-    tracker = TradeTracker(exchange="bybit")
+    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    tracker = TradeTracker(exchange="bybit", portfolio=portfolio)
     entry = _filled_order(OrderSide.BUY, 50_000.0, filled_qty=0.02, fees=0.0, oid="b1")
     exit_ = _filled_order(OrderSide.SELL, 52_000.0, filled_qty=0.02, fees=0.0, oid="s1")
 
-    tracker.on_fill(entry)
+    portfolio.open_position(
+        order_id=entry.order_id, symbol=entry.symbol, side="long",
+        avg_entry=entry.fill_price, size_pct=entry.size_pct,
+        entry_at=entry.fill_timestamp, quantity=entry.filled_qty,
+    )
     tracker.on_fill(exit_)
 
     trade = tracker.last_trade()
@@ -266,12 +296,13 @@ def test_trade_record_paper_has_zero_costs_net_equals_gross() -> None:
 
 def test_losing_round_trip_reflects_real_pnl() -> None:
     """TEST 4: BUY@100 SELL@90 → P&L ≈ -10% en risk y analytics."""
-    # ARCH-001: usar el tracker que _new_oms ya conectó vía build_fill_sync
-    # (no sobreescribir oms._on_fill — rompe la sincronización del portfolio).
-    tracker = TradeTracker(exchange="bybit")
+    # Mismo portfolio para tracker y OMS (SSOT compartido).
+    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    tracker = TradeTracker(exchange="bybit", portfolio=portfolio)
     risk, oms = _new_oms_with_tracker(
         _ScriptedExecutor({"buy": (100.0, 1.0, 0.0), "sell": (90.0, 1.0, 0.0)}),
         tracker=tracker,
+        portfolio=portfolio,
     )
 
     oms.submit(_signal("buy", price=100.0))

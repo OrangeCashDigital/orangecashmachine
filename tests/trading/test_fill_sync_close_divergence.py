@@ -208,8 +208,9 @@ def test_tracker_real_still_syncs_on_fill(monkeypatch: pytest.MonkeyPatch) -> No
         def close_position(self, order_id, quantity=None):
             return None, 0.0
 
-    tracker = TradeTracker(exchange="bybit")
-    on_fill = build_fill_sync(tracker, _Portfolio())
+    portfolio_fake = _Portfolio()
+    tracker = TradeTracker(exchange="bybit", portfolio=portfolio_fake)
+    on_fill = build_fill_sync(tracker, portfolio_fake)
 
     on_fill(_order(OrderSide.BUY, order_id="buy-1"))
     on_fill(_order(OrderSide.SELL, order_id="sell-1"))
