@@ -440,7 +440,7 @@ class ConcretePipelineFactory:
             RecoveryFactory,
         )
         from market_data.adapters.inbound.websocket.ws_trades_source import (
-            WSTradesSource,
+            NoopWSTradesSource,
         )
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.application.source_manager import TradesSourceManager
@@ -450,7 +450,7 @@ class ConcretePipelineFactory:
         managers: dict[str, TradesSourceManager] = {}
 
         for symbol in request.symbols:
-            ws_source = WSTradesSource(
+            ws_source = NoopWSTradesSource(
                 exchange_id=request.exchange,
                 symbol=symbol,
                 market_type=request.market_type,
