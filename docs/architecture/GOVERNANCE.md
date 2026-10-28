@@ -230,3 +230,13 @@ cadena:
 adopcion de OSCAL como formato de trabajo -- esta convencion es un paso
 intermedio compatible que deja la puerta abierta a exportar OSCAL como
 artefacto derivado en el futuro, sin migrar el flujo diario.
+
+## Autoridad decisoria
+
+La autoridad para resolver contradicciones normativas, aprobar cambios
+en documentos de gobernanza, levantar GATE C, autorizar IMPLEMENTATION
+y decidir Q2 recae en el titular de la cuenta `OrangeCashDigital`
+(propietaria del repositorio), según ADR-0058.
+
+Cada competencia se ejerce por separado. Aprobar una no implica
+aprobar las demás.

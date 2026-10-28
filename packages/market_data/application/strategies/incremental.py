@@ -131,7 +131,7 @@ class IncrementalStrategy(StrategyMixin):
 
         # ── Cursor update y métricas desde el dominio ────────────────────────
         last_ts_ms = chunk.candles[-1].timestamp_ms
-        ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)
+        await ctx.cursor.update(ctx.exchange_id, symbol, timeframe, last_ts_ms)  # type: ignore[func-returns-value]  # CursorStorePort.update es sync en el Protocol pero async en RedisCursorStore/InMemoryCursorStore
 
         result.rows = chunk.count
 
