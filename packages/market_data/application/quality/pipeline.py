@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 market_data/quality/pipeline.py
 =================================
@@ -38,7 +39,6 @@ SafeOps — lineage y registry: fail-soft, nunca bloquean el pipeline
 SSOT   — DataTier definida en domain/entities (no duplicada aquí)
 """
 from market_data.ports.outbound.quality_pipeline import QualityPipelineResult
-from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 import polars as pl
