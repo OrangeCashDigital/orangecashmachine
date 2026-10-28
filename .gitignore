@@ -95,3 +95,8 @@ deploy/monitoring/grafana_root_docker/
 .omo/run-continuation/
 .omo/*.bak.*
 .coverage.*
+
+# Node.js residual (no es un proyecto Node — ignorar si aparece)
+node_modules/
+package-lock.json
+package.json
