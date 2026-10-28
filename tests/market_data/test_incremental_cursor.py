@@ -14,11 +14,8 @@ y descarga completa innecesaria.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 import polars as pl
 import pytest
-
 from market_data.application.pipeline.runtime import PipelineContext
 from market_data.application.strategies.incremental import IncrementalStrategy
 from market_data.domain.policies.base import PairResult, PipelineMode
