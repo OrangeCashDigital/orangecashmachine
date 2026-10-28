@@ -29,7 +29,7 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-004": Status.FAIL,  # sin balance real; sizing contra capital_usd
     "ARCH-005": Status.FAIL,  # cadena de freshness rota en niveles 3–6
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)
-    "ARCH-007": Status.FAIL,  # 8 contratos duplicados/homónimos (ExchangeCircuitOpenError consolidado)
+    "ARCH-007": Status.FAIL,  # 6 contratos duplicados/homónimos (ExchangeCircuitOpenError consolidado)
     "ARCH-008": Status.FAIL,  # 1 stub de producción (WSTradesSource; InfraMetricsKafkaProducer eliminado)
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
     "ARCH-010": Status.FAIL,  # estado mutable duplicado (position ×6, order ×4)
@@ -83,8 +83,6 @@ def test_golden_arch007_duplicates() -> None:
     symbols = {f.symbol for f in res.findings}
     for expected in (
         "OrderStatus",
-        "StorageFactoryPort",
-        "AnomalyRegistryPort",
         "QualityPipelineResult",
         "RetryExhaustedError",
         "SchemaVersionError",

@@ -13,7 +13,7 @@ backend. Las implementaciones concretas deben satisfacer estructuralmente
 cada Protocol (runtime_checkable: isinstance() funciona sin herencia).
 
 ISP — Un Protocol por responsabilidad. OHLCVStorage no contamina a
-TradesStoragePort; DerivatesStoragePort no contamina a StorageFactoryPort.
+TradesStoragePort; DerivatesStoragePort no contamina a otros contratos.
 
 SafeOps — Lecturas: retornar None / DataFrame vacío, nunca lanzar.
           Escrituras: pueden lanzar — son operaciones críticas.
@@ -218,38 +218,6 @@ class DerivativesStoragePort(Protocol):
         Returns
         -------
         int si hay datos, None si no hay datos.
-        """
-        ...
-
-
-# =========================================================================== #
-# Storage factory                                                              #
-# =========================================================================== #
-
-
-@runtime_checkable
-class StorageFactoryPort(Protocol):
-    """
-    Contrato de fábrica de instancias OHLCVStorage por (exchange, market_type).
-
-    Implementación canónica
-    -----------------------
-    market_data.adapters.outbound.storage.iceberg_factory.IcebergStorageFactory
-
-    Principios: DIP · OCP · SRP · SSOT
-    """
-
-    def get_storage(
-        self,
-        exchange: str,
-        market_type: str = "spot",
-        dry_run: bool = False,
-    ) -> OHLCVStorage:
-        """
-        Retorna instancia de OHLCVStorage para (exchange, market_type).
-
-        Implementaciones deben cachear instancias — IcebergStorage es stateful.
-        Fail-Fast: lanza RuntimeError si el backend no puede inicializarse.
         """
         ...
 
