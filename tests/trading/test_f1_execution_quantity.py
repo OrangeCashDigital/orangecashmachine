@@ -105,6 +105,7 @@ def _chain(executor) -> tuple[OMS, PortfolioService, RiskManager]:
     oms = OMS(
         risk_manager=risk,
         executor=executor,
+        portfolio=portfolio,
         on_fill=build_fill_sync(tracker, portfolio),
     )
     return oms, portfolio, risk
@@ -170,7 +171,8 @@ def test_partial_close_request_sized_and_remaining_updated() -> None:
     assert positions[0].avg_entry == pytest.approx(100.0)
 
     # La cantidad disponible se redujo: el siguiente SELL se pide ≤ 0.27.
-    assert oms._entry_positions["BTC/USDT"][0] == pytest.approx(0.27)
+    pos_after = portfolio.snapshot().positions
+    assert len(pos_after) == 1 and pos_after[0].quantity == pytest.approx(0.27)
 
 
 # ── TEST 4 — close requested > position quantity → impedido ──────────────────
@@ -289,6 +291,7 @@ def test_stop_loss_sell_request_respects_position_quantity() -> None:
     oms = OMS(
         risk_manager=risk,
         executor=_ScriptedExecutor({"sell": [(48_000.0, 0.37, 0.0)]}),
+        portfolio=portfolio,
     )
     engine = TradingEngine(
         strategy=_NoSignalStrategy(),
@@ -319,7 +322,7 @@ def test_unknown_quantity_not_invented() -> None:
     buy = oms.submit(_signal("buy", price=100.0))
     assert buy is not None
     assert buy.filled_qty is None, "cantidad UNKNOWN (exchange no reporta) → None"
-    assert oms._entry_positions.get("BTC/USDT") is None, "sin cantidad → sin WAC acumulado"
+    assert portfolio.snapshot().positions == (), "sin cantidad → sin WAC acumulado"
     assert portfolio.snapshot().open_count == 0, "no se crea posición con cantidad inventada"
 
     # Sin cantidad económica disponible, el SELL se rechaza — no se inventa qty.
@@ -339,7 +342,7 @@ def test_unknown_buy_fill_price_not_replaced_by_signal_price() -> None:
     assert buy is not None
     assert buy.fill_price is None, "precio UNKNOWN → None, nunca signal.price (INV-10)"
     assert buy.filled_qty == pytest.approx(0.5)
-    assert oms._entry_positions.get("BTC/USDT") is None, "sin precio → sin avg inventado"
+    assert portfolio.snapshot().positions == (), "sin precio → sin avg inventado"
 
 
 def test_unknown_sell_fill_price_reduces_quantity_but_keeps_pnl_unknown() -> None:
@@ -350,7 +353,7 @@ def test_unknown_sell_fill_price_reduces_quantity_but_keeps_pnl_unknown() -> Non
     sell = oms.submit(_signal("sell", price=100.0))
 
     assert sell is not None and sell.fill_price is None
-    assert oms._entry_positions.get("BTC/USDT") is None, "cerrada a qty=0 (cantidad ejecutada)"
+    assert portfolio.snapshot().positions == (), "cerrada a qty=0 (cantidad ejecutada)"
     assert portfolio.snapshot().is_flat, "la posición se reduce con la cantidad ejecutada"
     # P&L no inventado: risk no gana ni pierde por un precio desconocido (ADR-0026).
     assert risk.state()["total_pnl_usd"] == 0.0

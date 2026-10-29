@@ -13,19 +13,24 @@ No calcula métricas — eso es PerformanceEngine.
 
 Integración con OMS
 -------------------
-    tracker = TradeTracker(exchange="bybit")
+    tracker = TradeTracker(exchange="bybit", portfolio=portfolio)
     oms = OMS(
         risk_manager = ...,
         executor     = ...,
+        portfolio    = portfolio,
         on_fill      = tracker.on_fill,   # ← callback
     )
 
+SSOT (ARCH-001/010)
+-------------------
+- TradeTracker NO mantiene su propio estado de posiciones.
+- open_positions property → vista del PortfolioService (SSOT).
+- Al cerrar (SELL), consulta position.avg_entry / entry_at del portfolio.
+
 SafeOps
 -------
-- Thread-safe: _open_positions y _closed bajo _lock.
+- Thread-safe: _closed bajo _lock.
 - on_fill nunca lanza — errores son logueados y descartados.
-- Posiciones BUY sin SELL correspondiente quedan en _open_positions
-  accesibles via open_positions property.
 
 Principios: SOLID · KISS · DRY · SafeOps
 """
@@ -51,12 +56,10 @@ class TradeTracker:
     exchange : str — exchange de origen (para enriquecer TradeRecord).
     """
 
-    def __init__(self, exchange: str = "bybit") -> None:
+    def __init__(self, exchange: str = "bybit", portfolio: Any = None) -> None:
         self._exchange = exchange
+        self._portfolio = portfolio
         self._lock = threading.Lock()
-
-        # symbol → Order de apertura (BUY fill pendiente de cierre)
-        self._open_positions: dict[str, Order] = {}
 
         # Historial de trades cerrados — append-only
         self._closed: list[TradeRecord] = []
@@ -91,14 +94,15 @@ class TradeTracker:
             return list(self._closed)
 
     @property
-    def open_positions(self) -> dict[str, Order]:
+    def open_positions(self) -> dict[str, Any]:
         """
-        Posiciones BUY abiertas sin SELL correspondiente.
+        Posiciones abiertas — vista del PortfolioService (SSOT).
 
-        Clave: symbol. Valor: Order de apertura.
+        Clave: symbol. Valor: PositionSnapshot.
         """
-        with self._lock:
-            return dict(self._open_positions)
+        if self._portfolio is None:
+            return {}
+        return {p.symbol: p for p in self._portfolio.snapshot().positions}
 
     @property
     def trade_count(self) -> int:
@@ -113,11 +117,13 @@ class TradeTracker:
         """Estado observable. SafeOps: nunca lanza."""
         try:
             with self._lock:
-                return {
-                    "closed_trades": len(self._closed),
-                    "open_positions": len(self._open_positions),
-                    "open_symbols": list(self._open_positions.keys()),
-                }
+                closed_n = len(self._closed)
+            open_pos = self.open_positions
+            return {
+                "closed_trades": closed_n,
+                "open_positions": len(open_pos),
+                "open_symbols": list(open_pos.keys()),
+            }
         except Exception:
             return {"closed_trades": 0, "open_positions": 0, "open_symbols": []}
 
@@ -127,37 +133,20 @@ class TradeTracker:
 
     def _process_fill(self, order: Order) -> None:
         if order.side == OrderSide.BUY:
-            self._register_open(order)
+            # Portfolio.open_position (via fill_sync) es el owner; aquí no se
+            # mantiene espejo (ARCH-001/010).
+            return
         elif order.side == OrderSide.SELL:
             self._register_close(order)
 
-    def _register_open(self, order: Order) -> None:
-        """Registra apertura de posición (BUY fill)."""
-        with self._lock:
-            if order.symbol in self._open_positions:
-                # Posición ya abierta — loguear y reemplazar
-                # (estrategia pyramid no soportada aún)
-                self._log.warning(
-                    "Posición ya abierta para {} — reemplazando | old={} new={}",
-                    order.symbol,
-                    self._open_positions[order.symbol].order_id,
-                    order.order_id,
-                )
-            self._open_positions[order.symbol] = order
-            self._log.debug(
-                "Posición abierta | {} {} @ {:.4f} size={:.1%}",
-                order.symbol,
-                order.order_id,
-                order.fill_price,
-                order.size_pct,
-            )
-
     def _register_close(self, order: Order) -> None:
-        """Empareja SELL con BUY abierto → TradeRecord."""
-        with self._lock:
-            entry_order = self._open_positions.pop(order.symbol, None)
+        """Empareja SELL con BUY abierto (vía portfolio, SSOT) → TradeRecord."""
+        position = None
+        if self._portfolio is not None:
+            positions = self._portfolio.snapshot().positions
+            position = next((p for p in positions if p.symbol == order.symbol), None)
 
-        if entry_order is None:
+        if position is None:
             self._log.warning(
                 "SELL sin BUY correspondiente | {} {} — ignorado",
                 order.symbol,
@@ -165,9 +154,11 @@ class TradeTracker:
             )
             return
 
-        assert entry_order.fill_price is not None, "TradeRecord.close: entry_order sin fill_price"
+        assert position.avg_entry is not None and position.avg_entry > 0, (
+            "TradeRecord.close: position.avg_entry inválido"
+        )
         assert order.fill_price is not None, "TradeRecord.close: exit order sin fill_price"
-        assert entry_order.fill_timestamp is not None, "TradeRecord.close: entry_order sin fill_timestamp"
+        assert position.entry_at is not None, "TradeRecord.close: position.entry_at ausente"
 
         # Costes (S1): usar fees del settlement si están disponibles.
         # Si fee_status es UNKNOWN, NO asumir zero (ADR-0026).
@@ -179,11 +170,11 @@ class TradeTracker:
             # proviene del settlement; aquí no se recalcula P&L.
             trade = TradeRecord.from_settlement(
                 settlement,
-                trade_id=entry_order.order_id,
+                trade_id=position.order_id,
                 exchange=self._exchange,
-                timeframe=entry_order.signal.timeframe,
-                size_pct=entry_order.size_pct,
-                entry_at=entry_order.fill_timestamp,
+                timeframe=order.signal.timeframe,  # contexto del cierre
+                size_pct=position.size_pct,
+                entry_at=position.entry_at,
                 exit_at=order.fill_timestamp,
             )
         else:
@@ -193,23 +184,21 @@ class TradeTracker:
                 "TradeTracker: settlement None — cayendo en cálculo legacy "
                 "(F3: settlement debería estar siempre presente)"
             )
-            closed_qty = entry_order.filled_qty or 1.0
-            avg_entry_price = entry_order.fill_price
+            closed_qty = order.filled_qty or position.quantity or 1.0
+            avg_entry_price = position.avg_entry
             exit_price = order.fill_price
-            fees = (entry_order.fees or 0.0) + (order.fees or 0.0)
-            entry_notional = (
-                entry_order.fill_price * entry_order.filled_qty if entry_order.filled_qty is not None else None
-            )
+            fees = order.fees or 0.0  # solo fees del exit (entry fees desconocidas aquí)
+            entry_notional = position.avg_entry * position.quantity if position.quantity else None
 
             trade = TradeRecord.close(
-                trade_id=entry_order.order_id,
+                trade_id=position.order_id,
                 symbol=order.symbol,
                 exchange=self._exchange,
-                timeframe=entry_order.signal.timeframe,
+                timeframe=order.signal.timeframe,
                 entry_price=avg_entry_price,
                 exit_price=exit_price,
-                size_pct=entry_order.size_pct,
-                entry_at=entry_order.fill_timestamp,
+                size_pct=position.size_pct,
+                entry_at=position.entry_at,
                 exit_at=order.fill_timestamp,
                 fees=fees,
                 entry_notional=entry_notional,

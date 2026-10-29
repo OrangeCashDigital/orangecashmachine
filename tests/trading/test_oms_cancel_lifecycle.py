@@ -26,6 +26,16 @@ from datetime import datetime, timezone
 import pytest
 from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderSide, OrderStatus
+
+
+def _empty_portfolio():
+    """PortfolioService vacío para tests de ciclo de vida (sin fills)."""
+    from portfolio.infra.memory_store import InMemoryPositionStore
+    from portfolio.services.portfolio_service import PortfolioService
+
+    return PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+
+
 from trading.execution.transport import OrderResult, OrderState
 from trading.execution.transport import OrderStatus as ExchangeStatus
 from trading.risk.manager import RiskManager
@@ -57,7 +67,7 @@ def _oms() -> tuple[RiskManager, OMS]:
         def execute(self, order: Order) -> OrderResult:
             return OrderResult(accepted=False, reason="pending")
 
-    oms = OMS(risk_manager=risk, executor=_PendingExecutor())
+    oms = OMS(risk_manager=risk, executor=_PendingExecutor(), portfolio=_empty_portfolio())
     return risk, oms
 
 
@@ -70,9 +80,19 @@ def _inject(oms: OMS, side: OrderSide = OrderSide.BUY) -> Order:
     order = Order(symbol="BTC/USDT", side=side, size_pct=0.05, signal=_sg(side))
     order.transition(OrderStatus.SUBMITTED)
     oms._orders[order.order_id] = order
-    oms._open[order.order_id] = order
+    oms._orders[order.order_id] = order
     if side == OrderSide.BUY:
-        oms._risk.record_open()
+        # ARCH-001: simular estado HELD en el SSOT (portfolio) y en Risk.
+        oms._portfolio.open_position(
+            order_id=order.order_id,
+            symbol=order.symbol,
+            side="long",
+            avg_entry=100.0,
+            size_pct=0.05,
+            entry_at=None,
+            quantity=1.0,
+        )
+        oms._risk.record_position(order.symbol, quantity=1.0, avg_entry=100.0)
     return order
 
 
@@ -175,7 +195,12 @@ def test_resolve_cancel_filled_prevails() -> None:
 
 
 def test_resolve_cancel_cancelled_confirmed_reverts_held_buy() -> None:
-    """Cancel confirmado → CANCELLED; la posición HELD del BUY se revierte."""
+    """Finding #1: CANCELLED confirmado NO toca el mirror de Risk.
+
+    Un BUY que solo llegó a SUBMITTED y se cancela nunca tuvo fill, así que
+    no hay estado patrimonial que revertir. El _inject del test simula una
+    posición previa que debe persistir (el mirror refleja solo fills reales).
+    """
     risk, oms = _oms()
     order = _inject(oms)
     assert risk.open_positions == 1, "BUY vivo mantiene la posición HELD"
@@ -189,7 +214,9 @@ def test_resolve_cancel_cancelled_confirmed_reverts_held_buy() -> None:
     assert result == OrderStatus.CANCELLED
     assert order.status == OrderStatus.CANCELLED
     assert order.is_terminal
-    assert risk.open_positions == 0, "CANCELLED confirmado debe revertir HELD del BUY"
+    # Finding #1: CANCELLED no toca el mirror de Risk (el BUY nunca llegó
+    # a _fill; portfolio.open_position no se ejecutó para esta orden).
+    assert risk.open_positions == 1, "CANCELLED no revierte el mirror (Finding #1)"
 
 
 def test_resolve_cancel_rejected() -> None:
@@ -284,7 +311,7 @@ def test_submit_captures_exchange_order_id_on_fill() -> None:
             )
             return OrderResult(accepted=True, state=state)
 
-    oms = OMS(risk_manager=risk, executor=_FillingExecutor())
+    oms = OMS(risk_manager=risk, executor=_FillingExecutor(), portfolio=_empty_portfolio())
     order = oms.submit(_sg(OrderSide.BUY))
 
     assert order is not None
@@ -303,7 +330,7 @@ def test_submit_captures_exchange_order_id_even_when_rejected() -> None:
             state = OrderState(order_id="exch-67890", status=ExchangeStatus.SUBMITTED)
             return OrderResult(accepted=False, reason="reconciliation_no_confirmed", state=state)
 
-    oms = OMS(risk_manager=risk, executor=_UnconfirmedExecutor())
+    oms = OMS(risk_manager=risk, executor=_UnconfirmedExecutor(), portfolio=_empty_portfolio())
     order = oms.submit(_sg(OrderSide.BUY))
 
     assert order is not None
@@ -320,7 +347,7 @@ def test_submit_exchange_order_id_none_when_no_state() -> None:
         def execute(self, order: Order) -> OrderResult:
             return OrderResult(accepted=False, reason="transport_error")
 
-    oms = OMS(risk_manager=risk, executor=_NoStateExecutor())
+    oms = OMS(risk_manager=risk, executor=_NoStateExecutor(), portfolio=_empty_portfolio())
     order = oms.submit(_sg(OrderSide.BUY))
 
     assert order is not None

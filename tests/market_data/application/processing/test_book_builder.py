@@ -107,7 +107,10 @@ class TestDelta:
         out = _delta(b, update_id=105)  # esperaba 101
         assert out.kind is OutcomeKind.GAP_DETECTED
         assert not out.publishes
-        assert "dE=4" in out.detail
+        assert out.last_u == 100
+        assert out.expected_u == 101
+        assert out.observed_u == 105
+        assert out.missing_count == 4
         # estado invalidado → el siguiente delta se descarta hasta snapshot
         out2 = _delta(b, update_id=106)
         assert out2.kind is OutcomeKind.DELTA_BEFORE_SNAPSHOT

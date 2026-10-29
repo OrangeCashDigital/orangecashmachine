@@ -16,6 +16,7 @@ from architecture_linter.analyzers.mutable_state import (
 )
 from architecture_linter.engine import RepoContext
 from architecture_linter.models import Evidence, Finding, OrderStore, PositionStore, Status
+from architecture_linter.rules.arch_001 import SSOT_HINTS
 from architecture_linter.rules.base import Rule
 
 
@@ -42,12 +43,17 @@ class Arch010Rule(Rule):
         for concept, stores in concept_stores.items():
             if not stores:
                 continue
-            if len(stores) < 2:
+            # Clasificar SSOT vs owners (mismo patrón que ARCH-001).
+            # Los stores del SSOT portfolio (InMemoryPositionStore/RedisPositionStore)
+            # y los mirrors pasivos declarados no cuentan como owners duplicados.
+            owners = [s for s in stores if not any(h in s.file for h in SSOT_HINTS)]
+            if len(owners) < 2:
                 # un solo almacén mutable → no duplicado (puede ser SSOT o mirror)
                 findings.append(
                     self.finding(
                         Status.PASS,
-                        f"Concepto '{concept}': un solo almacén mutable (no duplicado).",
+                        f"Concepto '{concept}': {len(owners)} owner(s) mutable(s) "
+                        f"(además del SSOT portfolio) — sin duplicación.",
                         related_files=sorted({s.file for s in stores}),
                         confidence=0.85,
                         concept=concept,
@@ -69,14 +75,15 @@ class Arch010Rule(Rule):
             findings.append(
                 self.finding(
                     Status.FAIL,
-                    f"Estado mutable de '{concept}' duplicado en {len(stores)} almacenes: "
-                    + ", ".join(f"{s.owner_class.split(':')[-1]}.{s.attr}" for s in stores),
+                    f"Estado mutable de '{concept}' duplicado en {len(owners)} owners "
+                    f"(además del SSOT portfolio): "
+                    + ", ".join(f"{s.owner_class.split(':')[-1]}.{s.attr}" for s in owners),
                     file=stores[0].file,
                     line=stores[0].line,
                     symbol=concept,
                     evidence=evidence,
                     related_files=sorted({s.file for s in stores}),
-                    related_symbols=[f"{s.owner_class.split(':')[-1]}.{s.attr}" for s in stores],
+                    related_symbols=[f"{s.owner_class.split(':')[-1]}.{s.attr}" for s in owners],
                     confidence=0.9,
                     concept=concept,
                 )

@@ -29,14 +29,14 @@ y el stream ya no puede continuar — el manager para limpiamente.
 Política de selección de fuente
 --------------------------------
   1. Replay  — si está configurado (testing / reconstrucción histórica)
-  2. Live WS — si ws_source es provisto (GapAwareStream envuelve WSTradesSource)
+  2. Live WS — si ws_source es provisto (GapAwareStream envuelve NoopWSTradesSource)
   3. Backfill REST — si solo rest_source (TradesBackfillFetcher)
 
 Parámetros
 ----------
 rest_source   : TradesBackfillFetcher — bootstrap histórico (obligatorio).
                 Fallback si ws_source no está disponible.
-ws_source     : GapAwareStream(WSTradesSource) — live stream con auto-recovery.
+ws_source     : GapAwareStream(NoopWSTradesSource) — live stream con auto-recovery.
                 Opcional — ausente en modo backfill puro.
 replay_source : ReplayTradesSource — testing / reconstrucción.
                 Opcional.

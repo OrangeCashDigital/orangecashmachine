@@ -33,10 +33,10 @@ from market_data.domain.events import (
     PipelineLayer,
 )
 from market_data.domain.events.ingestion import DomainEvent, OHLCVBatchReceived
+from market_data.ports.outbound.anomaly_registry import AnomalyRegistryPort
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 from market_data.ports.outbound.event_bus import EventBusPort
 from market_data.ports.outbound.lineage import LineageTrackerPort
-from market_data.ports.outbound.quality import AnomalyRegistryPort
 
 # Columnas del DataFrame OHLCV — SSOT con OHLCVChunk.candles
 _CANDLE_COLS = ("timestamp", "open", "high", "low", "close", "volume")
