@@ -90,7 +90,7 @@ def test_golden_arch007_duplicates() -> None:
 
     # Si ARCH-007 está pendiente (FAIL), skip — su remediación vive en otra rama.
     if res.status == Status.FAIL:
-        pytest.skip(f"ARCH-007 pendiente: ver issue #111")
+        pytest.skip("ARCH-007 pendiente: ver issue #111")
 
     # Post-remediación: los duplicados no deben reportarse
     symbols = {f.symbol for f in res.findings}
