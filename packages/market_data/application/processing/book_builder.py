@@ -218,10 +218,23 @@ class BookBuilder:
                 detail="delta antes de snapshot — deshechado",
             )
 
-        # Continuidad por update_id (D-7b). El primer delta tras un snapshot
-        # debe continuar exactamente con update_id == last + 1.
-        if state.last_update_id != 0 and update_id != state.last_update_id + 1:
-            expected = state.last_update_id + 1
+        # Continuidad por update_id (D-7b).
+        if update_id <= state.last_update_id:
+            # Stale o duplicado (D6). Ignorar.
+            return BookBuilderOutcome(
+                kind=OutcomeKind.STALE,
+                exchange=exchange,
+                symbol=symbol,
+                update_id=update_id,
+                timestamp_ms=timestamp_ms,
+                detail=f"delta stale/duplicado: recibido u={update_id}, last u={state.last_update_id} — ignorado",
+            )
+
+        if update_id > state.last_update_id + 1:
+            last_u = state.last_update_id
+            expected_u = last_u + 1
+            observed_u = update_id
+            missing_count = observed_u - expected_u
             state.reset()
             return BookBuilderOutcome(
                 kind=OutcomeKind.GAP_DETECTED,
@@ -229,9 +242,14 @@ class BookBuilder:
                 symbol=symbol,
                 update_id=update_id,
                 timestamp_ms=timestamp_ms,
+                last_u=last_u,
+                expected_u=expected_u,
+                observed_u=observed_u,
+                missing_count=missing_count,
                 detail=(
-                    f"gap detectado: esperado u={expected}, recibido u={update_id} "
-                    f"(dE={update_id - expected}) — estado invalidado, requiere snapshot"
+                    f"gap detectado: last_u={last_u}, expected_u={expected_u}, "
+                    f"observed_u={observed_u}, missing_count={missing_count} "
+                    f"— estado invalidado, requiere snapshot"
                 ),
             )
 
