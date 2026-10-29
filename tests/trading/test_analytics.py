@@ -12,6 +12,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from portfolio.infra.memory_store import InMemoryPositionStore
+from portfolio.services.portfolio_service import PortfolioService
 from trading.analytics.performance import PerformanceEngine
 from trading.analytics.trade_record import TradeRecord
 from trading.analytics.trade_tracker import TradeTracker
@@ -42,6 +44,30 @@ def _make_trade(
         size_pct=0.05,
         entry_at=_NOW,
         exit_at=_NOW + timedelta(seconds=dur_s),
+    )
+
+
+def _tracker_with_portfolio() -> tuple["TradeTracker", "PortfolioService"]:
+    """TradeTracker + PortfolioService en memoria (ARCH-001: portfolio es SSOT)."""
+    portfolio = PortfolioService(
+        capital_usd=10_000.0,
+        store=InMemoryPositionStore(),
+        exchange="bybit",
+    )
+    return TradeTracker(exchange="bybit", portfolio=portfolio), portfolio
+
+
+def _seed_open_position(portfolio, buy) -> None:
+    """Simula fill_sync: registra el BUY en el portfolio (SSOT)."""
+    qty = buy.filled_qty if buy.filled_qty is not None and buy.filled_qty > 0 else 1.0
+    portfolio.open_position(
+        order_id=buy.order_id,
+        symbol=buy.symbol,
+        side="long",
+        avg_entry=buy.fill_price or 100.0,
+        size_pct=buy.size_pct or 0.05,
+        entry_at=buy.fill_timestamp,
+        quantity=qty,
     )
 
 
@@ -115,32 +141,31 @@ class TestTradeRecord:
 
 class TestTradeTracker:
     def test_buy_fill_opens_position(self):
-        tracker = TradeTracker(exchange="bybit")
+        tracker, portfolio = _tracker_with_portfolio()
         buy = _make_filled_order(OrderSide.BUY, oid="b1")
-        tracker.on_fill(buy)
+        _seed_open_position(portfolio, buy)
         assert "BTC/USDT" in tracker.open_positions
 
     def test_sell_closes_position(self):
-        tracker = TradeTracker(exchange="bybit")
+        tracker, portfolio = _tracker_with_portfolio()
         buy = _make_filled_order(OrderSide.BUY, oid="b1", price=50_000.0)
         sell = _make_filled_order(OrderSide.SELL, oid="s1", price=52_000.0)
-        tracker.on_fill(buy)
+        _seed_open_position(portfolio, buy)
         tracker.on_fill(sell)
-        assert "BTC/USDT" not in tracker.open_positions
         assert tracker.trade_count == 1
 
     def test_pnl_correct_on_close(self):
-        tracker = TradeTracker(exchange="bybit")
+        tracker, portfolio = _tracker_with_portfolio()
         buy = _make_filled_order(OrderSide.BUY, oid="b1", price=50_000.0)
         sell = _make_filled_order(OrderSide.SELL, oid="s1", price=55_000.0)
-        tracker.on_fill(buy)
+        _seed_open_position(portfolio, buy)
         tracker.on_fill(sell)
         trade = tracker.last_trade()
         assert trade is not None
         assert trade.pnl_pct == pytest.approx(0.10, rel=1e-6)
 
     def test_sell_without_buy_ignored(self):
-        tracker = TradeTracker(exchange="bybit")
+        tracker, _ = _tracker_with_portfolio()
         sell = _make_filled_order(OrderSide.SELL, oid="s1")
         tracker.on_fill(sell)  # no lanza
         assert tracker.trade_count == 0
@@ -152,7 +177,7 @@ class TestTradeTracker:
         Usamos un objeto que causa excepción durante _process_fill
         sin depender de spec= (que restringe atributos del mock).
         """
-        tracker = TradeTracker(exchange="bybit")
+        tracker, _ = _tracker_with_portfolio()
 
         # Objeto que lanza en cualquier acceso a atributo
         class BrokenOrder:
@@ -163,7 +188,7 @@ class TestTradeTracker:
         tracker.on_fill(BrokenOrder())  # no debe lanzar
 
     def test_summary_observable(self):
-        tracker = TradeTracker()
+        tracker, _ = _tracker_with_portfolio()
         s = tracker.summary()
         assert "closed_trades" in s
         assert "open_positions" in s

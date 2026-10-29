@@ -119,7 +119,8 @@ class RiskManager:
         self._lock = threading.Lock()
 
         # Estado mutable — SIEMPRE mutado bajo _lock
-        self._open_positions: int = 0
+        # ARCH-001/010: el conteo de posiciones se DERIVA de _positions.
+        # No hay int separado — no hay owner duplicado.
         self._daily_pnl_usd: float = 0.0
         self._total_pnl_usd: float = 0.0
         self._halted: bool = False
@@ -162,9 +163,13 @@ class RiskManager:
             return RiskDecision(approved=False, reason=f"internal_error:{exc}")
 
     def record_open(self) -> None:
-        """Registra apertura de posición."""
-        with self._lock:
-            self._open_positions += 1
+        """DEPRECATED (ARCH-001): el conteo se deriva de _positions.
+
+        El OMS ya llama a ``record_position`` con la cantidad real del fill,
+        que es la fuente de verdad. Mantenido como no-op para compatibilidad
+        con call sites existentes.
+        """
+        pass
 
     def record_position(
         self,
@@ -214,8 +219,10 @@ class RiskManager:
         silenciosamente en 0 para calcular exposición financiera o drawdown.
         """
         with self._lock:
-            if close_position:
-                self._open_positions = max(0, self._open_positions - 1)
+            # ARCH-001/010: el conteo se deriva de _positions (ver open_positions).
+            # El decremento por close_position ahora es implícito: cuando el
+            # OMS llama a record_position(symbol, quantity<=0) tras el fill,
+            # _positions.pop() hace que len(_positions) refleje el cierre.
             if pnl_usd is None:
                 self._pnl_unknown_closes += 1
             else:
@@ -230,11 +237,13 @@ class RiskManager:
             self._halt_locked(reason)
 
     def revert_open(self) -> None:
-        """Decrementa el conteo de posiciones HELD sin registrar P&L
-        (BUY rechazado/cancelado). No afecta a los contadores de drawdown."""
-        with self._lock:
-            self._open_positions = max(0, self._open_positions - 1)
-            # No se toca _daily/_total_pnl_usd ni _pnl_unknown_closes
+        """DEPRECATED (ARCH-001): el conteo se deriva de _positions.
+
+        Un BUY rechazado/cancelado nunca llegó a tener un fill, así que
+        ``record_position`` no se llamó → ``_positions`` no lo cuenta.
+        No hay nada que revertir. No-op para compatibilidad.
+        """
+        pass
 
     def reset_daily(self) -> None:
         """Resetea contadores diarios (llamar al inicio de cada sesión)."""
@@ -261,7 +270,8 @@ class RiskManager:
 
     @property
     def open_positions(self) -> int:
-        return self._open_positions
+        """ARCH-001/010: derivado de _positions — no es owner separado."""
+        return len(self._positions)
 
     def quantity(self, symbol: str) -> Optional[float]:
         """
@@ -306,7 +316,7 @@ class RiskManager:
                 return {
                     "halted": self._halted,
                     "halt_reason": self._halt_reason,
-                    "open_positions": self._open_positions,
+                    "open_positions": len(self._positions),
                     "daily_pnl_usd": round(self._daily_pnl_usd, 4),
                     "total_pnl_usd": round(self._total_pnl_usd, 4),
                     "capital_usd": self._capital_usd,
@@ -339,7 +349,7 @@ class RiskManager:
         with self._lock:
             halted = self._halted
             halt_r = self._halt_reason
-            opens = self._open_positions
+            opens = len(self._positions)
 
         # Checks de solo-lectura — fuera del lock (no mutan estado)
         # ----------------------------------------------------------------

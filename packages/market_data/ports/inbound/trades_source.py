@@ -17,7 +17,7 @@ stream semántico de RawTrade. El pipeline downstream (OHLCV builder,
 OrderBook builder, feature pipeline) depende de este protocolo —
 nunca de una implementación concreta.
 
-    GapAwareStream(WSTradesSource)  ─┐
+    GapAwareStream(NoopWSTradesSource)  ─┐
     TradesBackfillFetcher           ├── TradesSourceProtocol → AsyncIterator[RawTrade]
     GapRecoveryFetcher              |
     ReplayTradesSource (futuro)    ─┘
@@ -72,7 +72,7 @@ class TradesSourceProtocol(Protocol):
     Responsabilidad del implementador
     ----------------------------------
     Cada RawTrade producido DEBE declarar ``source`` explícitamente (SSOT):
-      GapAwareStream / WSTradesSource → source=TradeSource.WS
+      GapAwareStream / NoopWSTradesSource → source=TradeSource.WS
       TradesBackfillFetcher           → source=TradeSource.REST_BACKFILL
       GapRecoveryFetcher              → source=TradeSource.REST_RECOVERY
       ReplayTradesSource (futuro)     → source=TradeSource.REPLAY
