@@ -32,7 +32,10 @@ def _empty_portfolio():
     """PortfolioService vacío para tests de ciclo de vida (sin fills)."""
     from portfolio.infra.memory_store import InMemoryPositionStore
     from portfolio.services.portfolio_service import PortfolioService
+
     return PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+
+
 from trading.execution.transport import OrderResult, OrderState
 from trading.execution.transport import OrderStatus as ExchangeStatus
 from trading.risk.manager import RiskManager

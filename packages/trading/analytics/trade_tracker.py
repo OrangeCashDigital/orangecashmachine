@@ -187,7 +187,7 @@ class TradeTracker:
             closed_qty = order.filled_qty or position.quantity or 1.0
             avg_entry_price = position.avg_entry
             exit_price = order.fill_price
-            fees = (order.fees or 0.0)  # solo fees del exit (entry fees desconocidas aquí)
+            fees = order.fees or 0.0  # solo fees del exit (entry fees desconocidas aquí)
             entry_notional = position.avg_entry * position.quantity if position.quantity else None
 
             trade = TradeRecord.close(

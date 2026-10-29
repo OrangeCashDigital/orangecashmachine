@@ -179,9 +179,7 @@ def _new_oms(executor) -> tuple[RiskManager, OMS]:
     return risk, oms
 
 
-def _new_oms_with_tracker(
-    executor, tracker: TradeTracker, portfolio=None
-) -> tuple[RiskManager, OMS]:
+def _new_oms_with_tracker(executor, tracker: TradeTracker, portfolio=None) -> tuple[RiskManager, OMS]:
     """Variante que permite al caller retener el tracker (para asserts).
 
     Si `portfolio` es None, crea uno nuevo. Si se pasa, usa el mismo
@@ -241,9 +239,13 @@ def test_trade_record_net_pnl_subtracts_costs() -> None:
     exit_ = _filled_order(OrderSide.SELL, 51_000.0, filled_qty=0.02, fees=5.0, oid="s1")
 
     portfolio.open_position(
-        order_id=entry.order_id, symbol=entry.symbol, side="long",
-        avg_entry=entry.fill_price, size_pct=entry.size_pct,
-        entry_at=entry.fill_timestamp, quantity=entry.filled_qty,
+        order_id=entry.order_id,
+        symbol=entry.symbol,
+        side="long",
+        avg_entry=entry.fill_price,
+        size_pct=entry.size_pct,
+        entry_at=entry.fill_timestamp,
+        quantity=entry.filled_qty,
     )
     # F3: adjuntar settlement canónico al SELL (lo que el OMS haría en _fill).
     # Fees totales = entry_fees + exit_fees = 5 + 5 = 10 USD (KNOWN).
@@ -279,9 +281,13 @@ def test_trade_record_paper_has_zero_costs_net_equals_gross() -> None:
     exit_ = _filled_order(OrderSide.SELL, 52_000.0, filled_qty=0.02, fees=0.0, oid="s1")
 
     portfolio.open_position(
-        order_id=entry.order_id, symbol=entry.symbol, side="long",
-        avg_entry=entry.fill_price, size_pct=entry.size_pct,
-        entry_at=entry.fill_timestamp, quantity=entry.filled_qty,
+        order_id=entry.order_id,
+        symbol=entry.symbol,
+        side="long",
+        avg_entry=entry.fill_price,
+        size_pct=entry.size_pct,
+        entry_at=entry.fill_timestamp,
+        quantity=entry.filled_qty,
     )
     tracker.on_fill(exit_)
 

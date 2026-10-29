@@ -68,6 +68,7 @@ def _sg(side: OrderSide) -> Signal:
 def _new_oms() -> tuple[RiskManager, OMS]:
     from portfolio.infra.memory_store import InMemoryPositionStore
     from portfolio.services.portfolio_service import PortfolioService
+
     risk = RiskManager(config=_risk_cfg())
     portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
     tracker = TradeTracker(exchange="bybit")

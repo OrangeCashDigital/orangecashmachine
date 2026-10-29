@@ -142,7 +142,6 @@ class OrderExecutor(Protocol):
 # ---------------------------------------------------------------------------
 
 
-
 if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
 
