@@ -108,7 +108,21 @@ class RetryExhaustedError(IngestionError):
 
     Fail-fast: si todos los reintentos fallan, el pipeline aborta
     el símbolo afectado y lo registra en lineage como FAILED.
+
+    Attributes
+    ----------
+    error_type   : taxonomía canónica ("rate_limit" | "timeout" | "network" | "unknown")
+    original_exc : excepción original del adapter (CCXT, aiohttp, etc.)
     """
+
+    def __init__(self, error_type: str, original_exc: Exception) -> None:
+        self.error_type = error_type
+        self.original_exc = original_exc
+        super().__init__(f"Retry exhausted for {error_type}: {original_exc}")
+
+    def __reduce__(self) -> tuple[type, tuple[str, Exception]]:
+        """Soporte para pickling con los 2 args del constructor."""
+        return (self.__class__, (self.error_type, self.original_exc))
 
 
 # ===========================================================================
