@@ -33,8 +33,7 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-008": Status.PASS,  # sin stubs: NoopWSTradesSource = null-object
     # intencional; InfraMetricsKafkaProducer eliminado.
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
-    "ARCH-010": Status.FAIL,  # position ×2: SSOT + RiskManager mirror pasivo
-    # (push-only, BC-12/BC-13); order PASS.
+    "ARCH-010": Status.PASS,  # position: 1 owner (RiskManager mirror); order: 1 store
 }
 
 
