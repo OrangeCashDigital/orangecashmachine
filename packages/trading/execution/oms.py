@@ -17,9 +17,9 @@ Ciclo correcto de posiciones (importante)
   _open_positions = posiciones HELD (abiertas y tenidas).
   submit()  → record_open() SOLO si BUY (abre la posición y la mantiene)
   _fill()   → record_close() SOLO si SELL (cierra la posición realizada)
-  _reject() → record_close() SOLO si era BUY (revertir: no se mantuvo abierta)
+  _reject() → no-op en Risk (BUY rechazado nunca llegó a _fill; Finding #1)
   request_cancel() → CANCELLING; resolve_cancel() con estado del exchange:
-      CANCELLED → record_close() SOLO si era BUY (revertir: no se completó)
+      CANCELLED → no-op en Risk (BUY CANCELLED nunca llegó a _fill; Finding #1)
 
 S1 — integridad de P&L y fills reales
 --------------------------------------
@@ -389,9 +389,9 @@ class OMS:
             with self._lock:
                 order.transition(OrderStatus.CANCELLED)
                 pass  # ARCH-001/010: _open ya no es almacén mutable
-            if order.side == OrderSide.BUY:
-                self._risk.record_close(pnl_usd=None)
-                self._risk.record_position(order.symbol, None, None)  # ARCH-001: cerrar posición real
+            # NOTE (Finding #1 / ARCH-001): el BUY CANCELLED nunca llegó
+            # a _fill, entonces portfolio.open_position nunca se ejecutó.
+            # No hay estado patrimonial que revertir en el mirror de Risk.
             self._log.info("Order CANCELLED (confirmado) | {}", order_id)
             return OrderStatus.CANCELLED
 
@@ -628,9 +628,11 @@ class OMS:
         with self._lock:
             pass  # ARCH-001/010: _open ya no es almacén mutable
 
-        if revert_open and order.side == OrderSide.BUY:
-            self._risk.record_close(pnl_usd=None)
-            self._risk.record_position(order.symbol, None, None)  # ARCH-001: cerrar posición real
+        # NOTE (Finding #1 / ARCH-001): revert_open se preserva por
+        # compatibilidad de firma pero es no-op. Un BUY rechazado nunca
+        # llegó a _fill, entonces portfolio.open_position nunca se ejecutó.
+        # No hay estado patrimonial que revertir en el mirror de Risk.
+        _ = revert_open  # noqa: F841 — parámetro preservado por compat
 
         self._log.warning(
             "Order REJECTED | {} reason={}",

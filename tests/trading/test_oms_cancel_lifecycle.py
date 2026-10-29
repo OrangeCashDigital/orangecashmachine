@@ -195,7 +195,12 @@ def test_resolve_cancel_filled_prevails() -> None:
 
 
 def test_resolve_cancel_cancelled_confirmed_reverts_held_buy() -> None:
-    """Cancel confirmado → CANCELLED; la posición HELD del BUY se revierte."""
+    """Finding #1: CANCELLED confirmado NO toca el mirror de Risk.
+
+    Un BUY que solo llegó a SUBMITTED y se cancela nunca tuvo fill, así que
+    no hay estado patrimonial que revertir. El _inject del test simula una
+    posición previa que debe persistir (el mirror refleja solo fills reales).
+    """
     risk, oms = _oms()
     order = _inject(oms)
     assert risk.open_positions == 1, "BUY vivo mantiene la posición HELD"
@@ -209,7 +214,9 @@ def test_resolve_cancel_cancelled_confirmed_reverts_held_buy() -> None:
     assert result == OrderStatus.CANCELLED
     assert order.status == OrderStatus.CANCELLED
     assert order.is_terminal
-    assert risk.open_positions == 0, "CANCELLED confirmado debe revertir HELD del BUY"
+    # Finding #1: CANCELLED no toca el mirror de Risk (el BUY nunca llegó
+    # a _fill; portfolio.open_position no se ejecutó para esta orden).
+    assert risk.open_positions == 1, "CANCELLED no revierte el mirror (Finding #1)"
 
 
 def test_resolve_cancel_rejected() -> None:
