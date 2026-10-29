@@ -66,12 +66,12 @@ from market_data.domain.policies.data_quality_policy import (
     QualityDecision,
     default_policy,
 )
+from market_data.ports.outbound.anomaly_registry import AnomalyRegistryPort
 from market_data.ports.outbound.data_quality_checker import CheckerFactory
 
 # ports — DIP: pipeline depende de abstracciones, nunca de infrastructure concreta
 from market_data.ports.outbound.lineage import LineageTrackerPort
 from market_data.ports.outbound.metrics import NullQualityMetrics, QualityMetricsPort
-from market_data.ports.outbound.quality import AnomalyRegistryPort
 
 # ===========================================================================
 # Resultado del pipeline

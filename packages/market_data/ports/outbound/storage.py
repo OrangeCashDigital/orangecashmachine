@@ -223,38 +223,6 @@ class DerivativesStoragePort(Protocol):
 
 
 # =========================================================================== #
-# Storage factory                                                              #
-# =========================================================================== #
-
-
-@runtime_checkable
-class StorageFactoryPort(Protocol):
-    """
-    Contrato de fábrica de instancias OHLCVStorage por (exchange, market_type).
-
-    Implementación canónica
-    -----------------------
-    market_data.adapters.outbound.storage.iceberg_factory.IcebergStorageFactory
-
-    Principios: DIP · OCP · SRP · SSOT
-    """
-
-    def get_storage(
-        self,
-        exchange: str,
-        market_type: str = "spot",
-        dry_run: bool = False,
-    ) -> OHLCVStorage:
-        """
-        Retorna instancia de OHLCVStorage para (exchange, market_type).
-
-        Implementaciones deben cachear instancias — IcebergStorage es stateful.
-        Fail-Fast: lanza RuntimeError si el backend no puede inicializarse.
-        """
-        ...
-
-
-# =========================================================================== #
 # Snapshottable — extensión ISP para lineage tracking                         #
 # =========================================================================== #
 
