@@ -29,7 +29,7 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-004": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de ADR-0030 / B-MD-009 (multi-paso, Fase 3)
     "ARCH-005": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de freshness chain / B-MD-001 (F2/F3)
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)
-    "ARCH-007": Status.FAIL,  # 8 duplicados/homónimos: pendiente merge de fix/ccxt-factory-release
+    "ARCH-007": Status.FAIL,  # 8 duplicados/homónimos: tracking en issue #111
     "ARCH-008": Status.PASS,  # sin stubs: NoopWSTradesSource = null-object
     # intencional; InfraMetricsKafkaProducer eliminado.
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
@@ -76,8 +76,9 @@ def test_golden_arch006_orphan_ports() -> None:
 
 @pytest.mark.skipif(not (REPO_ROOT / "architecture_linter" / "importlinter.toml").is_file(), reason="requiere repo OCM")
 def test_golden_arch007_duplicates() -> None:
-    """ARCH-007 está pendiente en `main` (8 duplicados). El fix vive en
-    `fix/ccxt-factory-release`, fuera de este PR.
+    """ARCH-007 está pendiente en `main` (8 duplicados). Tracking en issue #111.
+    (El fix NO vive en `fix/ccxt-factory-release`: ese PR #109 era de CCXT factory
+    ownership y mergeó sin tocar ARCH-007.)
 
     Se saltea cuando ARCH-007 está en FAIL. Cuando esa rama mergee, la
     remediación hará pasar este test sin modificarlo.
@@ -89,7 +90,7 @@ def test_golden_arch007_duplicates() -> None:
 
     # Si ARCH-007 está pendiente (FAIL), skip — su remediación vive en otra rama.
     if res.status == Status.FAIL:
-        pytest.skip("ARCH-007 pendiente: remediación vive en fix/ccxt-factory-release")
+        pytest.skip(f"ARCH-007 pendiente: ver issue #111")
 
     # Post-remediación: los duplicados no deben reportarse
     symbols = {f.symbol for f in res.findings}
