@@ -40,7 +40,7 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
-from trading.analytics.trade_record import TradeRecord
+from trading.domain.analytics.trade_record import TradeRecord
 
 # ---------------------------------------------------------------------------
 # Summary
