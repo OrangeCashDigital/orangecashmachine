@@ -83,6 +83,12 @@ class QualityPipelineResult:
     """
     Resultado completo de ejecutar QualityPipeline sobre un DataFrame.
 
+    Distinto del QualityGateResult de ports/outbound/quality_pipeline.py:
+      - QualityPipelineResult (aquí): resultado rico de aplicación,
+        incluye df + report + policy + tier con @property derivadas.
+      - QualityGateResult (puerto): contrato inmutable del gate,
+        con accepted/decision/score/tier planos (frozen dataclass).
+
     Attributes
     ----------
     df     : DataFrame original (no modificado — inmutabilidad de dominio)
