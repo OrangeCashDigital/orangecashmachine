@@ -119,57 +119,6 @@ def classify_error(exc: BaseException) -> bool:  # noqa: F811
         return False
 
 
-class _TransientProxy(Exception):
-    """
-    Proxy mínimo para classify_error() cuando solo tenemos strings.
-    Ver docstring completo en application/pipeline/runtime.py.
-    """
-
-    _KNOWN_TRANSIENT: frozenset[str] = frozenset(
-        {
-            "ChunkFetchError",
-            "ExchangeConnectionError",
-            "ExchangeCircuitOpenError",
-            "TimeoutError",
-            "ConnectionError",
-            "OSError",
-            "ConnectionRefusedError",
-            "ConnectionResetError",
-            "BrokenPipeError",
-            "ClientConnectorError",
-            "ServerDisconnectedError",
-            "ClientOSError",
-            "ClientResponseError",
-        }
-    )
-    _KNOWN_PERMANENT: frozenset[str] = frozenset(
-        {
-            "NoDataAvailableError",
-            "MissingStartDateError",
-            "SymbolNotFoundError",
-            "InvalidMarketTypeError",
-            "UnsupportedExchangeError",
-            "AuthenticationError",
-        }
-    )
-
-    def __init__(self, error_type: str, error_msg: str | None) -> None:
-        super().__init__(error_msg or "")
-        self._error_msg = error_msg or ""
-        if error_type in self._KNOWN_TRANSIENT:
-            self.is_transient = True
-        elif error_type in self._KNOWN_PERMANENT:
-            self.is_transient = False
-
-    def __str__(self) -> str:
-        return self._error_msg
-
-
-# =============================================================================
-# PairResult
-# =============================================================================
-
-
 @dataclass
 class PairResult:
     """
@@ -208,6 +157,10 @@ class PairResult:
         """
         if not self.error_type and not self.error:
             return False
+        # Lazy import para evitar ciclo runtime.py ↔ policies/base.py
+        # (mismo patrón ya documentado en classify_error, líneas 71-75)
+        from market_data.application.pipeline.runtime import _TransientProxy
+
         return classify_error(_TransientProxy(self.error_type, self.error or ""))
 
     def __str__(self) -> str:
