@@ -20,7 +20,6 @@ MarketDataError                     ← raíz del BC
 ├── QualityError                    ← violación de calidad de datos
 │   ├── SchemaValidationError       ← schema Silver/Gold no satisfecho
 │   ├── AnomalyDetectedError        ← anomalía estadística detectada
-│   ├── SchemaVersionError          ← payload con versión de schema incompatible
 │   └── DataQualityError            ← fallo genérico en checks de calidad
 ├── PipelineError                   ← fallo de orquestación de pipeline
 │   ├── MissingStartDateError       ← cursor sin fecha de inicio definida
@@ -158,15 +157,6 @@ class SchemaValidationError(QualityError):
 
 class AnomalyDetectedError(QualityError):
     """Anomalía estadística detectada en el dataset (outlier, drift, gap)."""
-
-
-class SchemaVersionError(QualityError):
-    """
-    El payload tiene una versión de schema incompatible con la esperada.
-
-    Fail-fast: un consumer no puede procesar un payload de versión
-    desconocida sin riesgo de corrupción silenciosa.
-    """
 
 
 class DataQualityError(QualityError):
@@ -437,7 +427,6 @@ __all__ = [
     "QualityError",
     "SchemaValidationError",
     "AnomalyDetectedError",
-    "SchemaVersionError",
     "DataQualityError",
     # Pipeline
     "PipelineError",
