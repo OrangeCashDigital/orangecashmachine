@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Shim temporal: contrato en trading.ports.execution.transport, PaperTransport en trading.adapters.execution.paper_transport."""
+"""Shim trading.ports.execution.transport contrato."""
 
 from trading.adapters.execution.paper_transport import PaperTransport  # noqa: F401  # TODO: eliminar shim
 from trading.ports.execution.transport import (  # noqa: F401  # TODO: eliminar shim

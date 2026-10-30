@@ -8,10 +8,7 @@ PaperTransport: implementación simulada (sin I/O) del puerto OrderTransport.
 
 from __future__ import annotations
 
-from typing import Optional
-
-from trading.ports.execution.transport import OrderResult, OrderState, OrderStatus
-
+from trading.ports.execution.transport import OrderState, OrderStatus
 
 
 class PaperTransport:
