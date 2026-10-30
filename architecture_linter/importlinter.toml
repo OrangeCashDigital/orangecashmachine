@@ -436,8 +436,13 @@ forbidden_modules = ["trading", "portfolio"]
 # No conocen ejecución ni analytics — violaría SRP y crearía acoplamiento circular.
 name = "BC-36: trading.strategies isolated from execution and analytics"
 type = "forbidden"
-source_modules = ["trading.strategies"]
-forbidden_modules = ["trading.execution", "trading.analytics"]
+source_modules = ["trading.strategies", "trading.domain.strategies"]
+forbidden_modules = [
+    "trading.execution",
+    "trading.analytics",
+    "trading.domain.models",
+    "trading.domain.analytics",
+]
 
 [[tool.importlinter.contracts]]
 # risk es el guard layer previo a ejecución.
@@ -445,8 +450,8 @@ forbidden_modules = ["trading.execution", "trading.analytics"]
 # (execution ya conoce risk para validar órdenes).
 name = "BC-12: trading.risk isolated from execution"
 type = "forbidden"
-source_modules = ["trading.risk"]
-forbidden_modules = ["trading.execution"]
+source_modules = ["trading.risk", "trading.domain.risk"]
+forbidden_modules = ["trading.execution", "trading.domain.models"]
 
 [[tool.importlinter.contracts]]
 # portfolio gestiona estado de posiciones — no orquesta ejecución ni estrategias.
@@ -455,7 +460,12 @@ forbidden_modules = ["trading.execution"]
 name = "BC-13: portfolio isolated from trading execution and strategies"
 type = "forbidden"
 source_modules = ["portfolio"]
-forbidden_modules = ["trading.execution", "trading.strategies"]
+forbidden_modules = [
+    "trading.execution",
+    "trading.strategies",
+    "trading.domain.models",
+    "trading.domain.strategies",
+]
 
 [[tool.importlinter.contracts]]
 # BC-50: trading→market_data — solo trading.bootstrap.composition_root puede
@@ -473,6 +483,24 @@ name = "BC-50: trading imports market_data only from trading/bootstrap/compositi
 type = "forbidden"
 source_modules = ["trading"]
 forbidden_modules = ["market_data"]
+
+[[tool.importlinter.contracts]]
+# trading.domain es el nucleo puro de trading (PR-A: models, risk, strategies y
+# analytics movidos desde execution/risk/strategies/analytics). Espejo de BC-03
+# para market_data: no puede conocer ports, adapters, bootstrap ni las rutas
+# legacy que hoy sobreviven como shims.
+name = "BC-57: trading.domain isolated from ports, adapters, bootstrap and legacy paths"
+type = "forbidden"
+source_modules = ["trading.domain"]
+forbidden_modules = [
+    "trading.ports",
+    "trading.adapters",
+    "trading.bootstrap",
+    "trading.execution",
+    "trading.risk",
+    "trading.strategies",
+    "trading.analytics",
+]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER 2 (detalle shared) — contratos de neutralidad del bus Kafka
