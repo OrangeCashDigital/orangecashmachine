@@ -16,32 +16,32 @@ OrderTransport.cancel, PaperTransport.cancel y _BybitTransport.cancel.
 from __future__ import annotations
 
 from trading.bootstrap.composition_root import _BybitTransport, map_ccxt_order
-from trading.execution.transport import OrderStatus, PaperTransport
+from trading.execution.transport import ExchangeOrderStatus, PaperTransport
 
 
 def test_closed_maps_to_filled() -> None:
     raw = {"id": "o1", "status": "closed", "filled": 0.02, "average": 50_000.0}
     state = map_ccxt_order(raw)
-    assert state.status == OrderStatus.FILLED
+    assert state.status == ExchangeOrderStatus.FILLED
     assert state.fill_price == 50_000.0
     assert state.confirmed_filled
 
 
 def test_open_maps_to_submitted() -> None:
     state = map_ccxt_order({"id": "o2", "status": "open"})
-    assert state.status == OrderStatus.SUBMITTED
+    assert state.status == ExchangeOrderStatus.SUBMITTED
     assert not state.confirmed_filled
 
 
 def test_canceled_rejected_mapping() -> None:
-    assert map_ccxt_order({"status": "canceled"}).status == OrderStatus.CANCELLED
-    assert map_ccxt_order({"status": "cancelled"}).status == OrderStatus.CANCELLED
-    assert map_ccxt_order({"status": "rejected"}).status == OrderStatus.REJECTED
-    assert map_ccxt_order({"status": "expired"}).status == OrderStatus.REJECTED
+    assert map_ccxt_order({"status": "canceled"}).status == ExchangeOrderStatus.CANCELLED
+    assert map_ccxt_order({"status": "cancelled"}).status == ExchangeOrderStatus.CANCELLED
+    assert map_ccxt_order({"status": "rejected"}).status == ExchangeOrderStatus.REJECTED
+    assert map_ccxt_order({"status": "expired"}).status == ExchangeOrderStatus.REJECTED
 
 
 def test_unknown_status_defaults_submitted() -> None:
-    assert map_ccxt_order({"status": "weird"}).status == OrderStatus.SUBMITTED
+    assert map_ccxt_order({"status": "weird"}).status == ExchangeOrderStatus.SUBMITTED
 
 
 def test_order_id_and_missing_optional_fields() -> None:
@@ -60,7 +60,7 @@ def test_paper_transport_cancel_returns_cancelled() -> None:
     """PaperTransport confirma CANCELLED sin I/O (ADR-0029 decisión 2)."""
     t = PaperTransport()
     state = t.cancel("BTC/USDT", "e1")
-    assert state.status == OrderStatus.CANCELLED
+    assert state.status == ExchangeOrderStatus.CANCELLED
     assert state.order_id == "e1"
     assert state.error is None
 
@@ -69,7 +69,7 @@ def test_paper_transport_submit_still_filled() -> None:
     """PaperTransport sigue confirmando FILLED en submit (sin regresión)."""
     t = PaperTransport()
     state = t.submit("BTC/USDT", "buy", 0.02, client_order_id="c1")
-    assert state.status == OrderStatus.FILLED
+    assert state.status == ExchangeOrderStatus.FILLED
 
 
 def test_bybit_transport_cancel_maps_confirmed_cancelled(monkeypatch) -> None:
@@ -105,7 +105,7 @@ def test_bybit_transport_cancel_maps_confirmed_cancelled(monkeypatch) -> None:
     state = transport.cancel("BTC/USDT", "e1")
 
     assert captured == {"order_id": "e1", "symbol": "BTC/USDT"}
-    assert state.status == OrderStatus.CANCELLED
+    assert state.status == ExchangeOrderStatus.CANCELLED
     assert state.order_id == "e1"
 
 
@@ -124,6 +124,6 @@ def test_bybit_transport_cancel_fail_closed_on_error(monkeypatch) -> None:
 
     state = transport.cancel("BTC/USDT", "e1")
 
-    assert state.status == OrderStatus.ERROR
+    assert state.status == ExchangeOrderStatus.ERROR
     assert "network down" in (state.error or "")
     assert state.order_id == "e1"

@@ -97,12 +97,12 @@ from shared.contracts.boundaries import (
 from trading.execution.order import Order, OrderSide, OrderStatus
 from trading.execution.settlement import FeeStatus, Settlement
 from trading.execution.transport import (
+    ExchangeOrderStatus as ExchangeStatus,
+)
+from trading.execution.transport import (
     OrderResult,
     OrderState,
     OrderTransport,
-)
-from trading.execution.transport import (
-    OrderStatus as ExchangeStatus,
 )
 from trading.risk.manager import RiskDecision, RiskManager
 

@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
 
 from loguru import logger
-from trading.execution.transport import OrderState, OrderStatus, OrderTransport
+from trading.execution.transport import ExchangeOrderStatus, OrderState, OrderTransport
 from trading.risk.models import (
     DrawdownConfig,
     OrderLimits,
@@ -249,7 +249,7 @@ class _BybitTransport:
                 ),
             )
         except Exception as exc:
-            return OrderState(status=OrderStatus.ERROR, error=f"{type(exc).__name__}: {exc}")
+            return OrderState(status=ExchangeOrderStatus.ERROR, error=f"{type(exc).__name__}: {exc}")
         return map_ccxt_order(raw)
 
     def fetch_state(self, exchange_order_id: str) -> "OrderState":
@@ -259,7 +259,7 @@ class _BybitTransport:
             error = f"{type(exc).__name__}: {exc}"
             return OrderState(
                 order_id=exchange_order_id,
-                status=OrderStatus.ERROR,
+                status=ExchangeOrderStatus.ERROR,
                 error=error,
             )
         return map_ccxt_order(raw)
@@ -274,7 +274,7 @@ class _BybitTransport:
             error = f"{type(exc).__name__}: {exc}"
             return OrderState(
                 order_id=exchange_order_id,
-                status=OrderStatus.ERROR,
+                status=ExchangeOrderStatus.ERROR,
                 error=error,
             )
         return map_ccxt_order(raw)
@@ -328,13 +328,13 @@ def map_ccxt_order(raw: Any) -> "OrderState":
     exchange no las reporta, fees=None (sin información de costes).
     """
     ccxt_status = raw.get("status")  # 'open' | 'closed' | 'canceled' | 'rejected'
-    status = OrderStatus.SUBMITTED
+    status = ExchangeOrderStatus.SUBMITTED
     if ccxt_status in ("closed", "filled"):
-        status = OrderStatus.FILLED
+        status = ExchangeOrderStatus.FILLED
     elif ccxt_status in ("canceled", "cancelled"):
-        status = OrderStatus.CANCELLED
+        status = ExchangeOrderStatus.CANCELLED
     elif ccxt_status in ("rejected", "expired"):
-        status = OrderStatus.REJECTED
+        status = ExchangeOrderStatus.REJECTED
 
     fees: Optional[float] = None
     fee_entry = raw.get("fee")
