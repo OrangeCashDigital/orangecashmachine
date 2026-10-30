@@ -466,7 +466,7 @@ class TestDynamicMarketDataDetector:
 class TestLiveExecutorFailClosed:
     """R1 / B-01: mientras LiveExecutor sea un stub, live trading queda BLOQUEADO."""
 
-    LIVE_EXECUTOR = TRADING / "adapters" / "execution" / "live_executor.py"
+    LIVE_EXECUTOR = TRADING / "adapters" / "outbound" / "live_executor.py"
     COMPOSITION_ROOT = TRADING_BOOTSTRAP / "composition_root.py"
 
     def test_executor_declares_stub_flag(self):

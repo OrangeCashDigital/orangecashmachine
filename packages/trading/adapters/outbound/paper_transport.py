@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-trading/adapters/execution/paper_transport.py
+trading/adapters/outbound/paper_transport.py
 =============================================
 
 PaperTransport: implementación simulada (sin I/O) del puerto OrderTransport.
@@ -8,7 +8,7 @@ PaperTransport: implementación simulada (sin I/O) del puerto OrderTransport.
 
 from __future__ import annotations
 
-from trading.ports.execution.transport import ExchangeOrderStatus, OrderState
+from trading.ports.outbound.transport import ExchangeOrderStatus, OrderState
 
 
 class PaperTransport:

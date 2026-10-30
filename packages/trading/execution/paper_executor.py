@@ -1,1 +1,1 @@
-from trading.adapters.execution.paper_executor import PaperExecutor  # TODO: eliminar shim  # noqa: F401
+from trading.adapters.outbound.paper_executor import PaperExecutor  # TODO: eliminar shim  # noqa: F401
