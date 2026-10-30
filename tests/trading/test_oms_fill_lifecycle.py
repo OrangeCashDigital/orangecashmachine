@@ -23,7 +23,7 @@ from trading.analytics.trade_tracker import TradeTracker
 from trading.execution.fill_sync import build_fill_sync
 from trading.execution.oms import OMS
 from trading.execution.order import Order, OrderSide
-from trading.execution.transport import OrderResult, OrderState, OrderStatus
+from trading.execution.transport import ExchangeOrderStatus, OrderResult, OrderState
 from trading.risk.manager import RiskManager
 from trading.risk.models import RiskConfig
 from trading.strategies.base import Signal
@@ -42,7 +42,7 @@ class _AcceptingExecutor:
             accepted=True,
             state=OrderState(
                 order_id=order.order_id,
-                status=OrderStatus.FILLED,
+                status=ExchangeOrderStatus.FILLED,
                 fill_price=order.signal.price,
                 filled_qty=1.0,
                 fees=0.0,

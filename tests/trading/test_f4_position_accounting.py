@@ -38,8 +38,8 @@ from trading.analytics.trade_tracker import TradeTracker
 from trading.execution.fill_sync import build_fill_sync
 from trading.execution.oms import OMS
 from trading.execution.order import Order
+from trading.execution.transport import ExchangeOrderStatus as TStatus
 from trading.execution.transport import OrderResult, OrderState
-from trading.execution.transport import OrderStatus as TStatus
 from trading.risk.manager import RiskManager
 from trading.risk.models import RiskConfig
 from trading.strategies.base import Signal

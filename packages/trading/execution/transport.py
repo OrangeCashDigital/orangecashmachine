@@ -42,7 +42,7 @@ from enum import Enum
 from typing import Optional, Protocol, runtime_checkable
 
 __all__ = [
-    "OrderStatus",
+    "ExchangeOrderStatus",
     "OrderState",
     "OrderResult",
     "OrderTransport",
@@ -50,7 +50,7 @@ __all__ = [
 ]
 
 
-class OrderStatus(str, Enum):
+class ExchangeOrderStatus(str, Enum):
     """Estado de una orden en el exchange (vista transporte)."""
 
     SUBMITTED = "submitted"  # aceptada, pendiente de fill
@@ -72,7 +72,7 @@ class OrderState:
     """
 
     order_id: Optional[str] = None
-    status: OrderStatus = OrderStatus.SUBMITTED
+    status: ExchangeOrderStatus = ExchangeOrderStatus.SUBMITTED
     filled_qty: Optional[float] = None
     fill_price: Optional[float] = None
     fees: Optional[float] = None
@@ -80,7 +80,7 @@ class OrderState:
 
     @property
     def confirmed_filled(self) -> bool:
-        return self.status == OrderStatus.FILLED and self.filled_qty is not None
+        return self.status == ExchangeOrderStatus.FILLED and self.filled_qty is not None
 
 
 @dataclass(frozen=True)
@@ -168,17 +168,17 @@ class PaperTransport:
     ) -> OrderState:
         return OrderState(
             order_id=client_order_id,
-            status=OrderStatus.FILLED,
+            status=ExchangeOrderStatus.FILLED,
             filled_qty=qty,
         )
 
     def fetch_state(self, exchange_order_id: str) -> OrderState:
         # Papel no mantiene estado persistente; cualquier id es del ciclo actual.
-        return OrderState(order_id=exchange_order_id, status=OrderStatus.FILLED)
+        return OrderState(order_id=exchange_order_id, status=ExchangeOrderStatus.FILLED)
 
     def cancel(self, symbol: str, exchange_order_id: str) -> OrderState:
         # Sin I/O: el papel confirma el cancel inmediatamente (ADR-0029).
-        return OrderState(order_id=exchange_order_id, status=OrderStatus.CANCELLED)
+        return OrderState(order_id=exchange_order_id, status=ExchangeOrderStatus.CANCELLED)
 
     def fetch_open_orders(self) -> list[OrderState]:
         # Papel no mantiene estado persistente entre ordenes (submit()
