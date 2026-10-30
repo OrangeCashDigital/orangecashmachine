@@ -1,1 +1,4 @@
-from trading.adapters.outbound.live_executor import LiveExecutor  # TODO: eliminar shim  # noqa: F401
+# TODO: eliminar shim
+from trading.adapters.outbound.live_executor import LiveExecutor
+
+__all__ = ["LiveExecutor"]
