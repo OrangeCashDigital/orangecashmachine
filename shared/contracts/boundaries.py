@@ -17,6 +17,7 @@ Principios: DIP · OCP · SSOT
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
@@ -148,4 +149,62 @@ class RebalancePort(Protocol):
 
         Returns (valid, error_message). error_message vacío si valid=True.
         """
+        ...
+
+
+# =============================================================================
+# portfolio -> trading  (RiskManager consume vía port — ADR-0030, B-MD-009)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class BalanceSnapshot:
+    """
+    Estado del balance de una cuenta en un instante (ADR-0030, B-MD-009).
+
+    Snapshot inmutable del saldo. `age_ms(now_ms)` calcula la edad para
+    freshness (B-MD-001). El consumidor (RiskManager) valida freshness
+    antes de usar el snapshot para sizing/drawdown.
+
+    Atributos
+    ---------
+    currency              — "USDT", "USD", "BTC", etc.
+    total                 — walletBalance (equity total en USD)
+    available_operational — totalAvailableBalance (UNIFIED, disponible operativo)
+    locked                — totalOrderIM + totalPositionIM
+    unrealised_pnl        — P&L no realizado
+    read_at_ms            — timestamp de lectura (epoch ms, UTC)
+    source                — "bybit" | "test" | ... (trazabilidad)
+    """
+
+    currency: str
+    total: float
+    available_operational: float
+    locked: float
+    unrealised_pnl: float
+    read_at_ms: int
+    source: str = "unknown"
+
+    def age_ms(self, now_ms: int) -> int:
+        """Edad del snapshot en milisegundos. Caller pasa `now_ms` para testear sin reloj real."""
+        return now_ms - self.read_at_ms
+
+
+@runtime_checkable
+class BalancePort(Protocol):
+    """
+    Contrato de consulta de balance real del exchange (ADR-0030, B-MD-009).
+
+    SSOT: el balance vive en Portfolio. RiskManager consume vía este port,
+    nunca directamente del exchange (evita segunda fuente de verdad).
+
+    Implementado por: _BybitBalanceSource en portfolio/bootstrap/composition_root.py
+    (BC-50: único punto autorizado a importar CCXT en portfolio).
+    Consumido por: RiskManager (sizing/drawdown), PortfolioReconciler.
+
+    Fail-closed: si no puede leer, lanza. NO retorna None ni valor mágico.
+    """
+
+    def get_balance(self, currency: str = "USDT") -> BalanceSnapshot:
+        """Retorna snapshot del balance. Fail-closed: lanza si no puede leer."""
         ...

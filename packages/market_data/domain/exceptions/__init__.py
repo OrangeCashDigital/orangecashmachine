@@ -120,7 +120,13 @@ class RetryExhaustedError(IngestionError):
         super().__init__(f"Retry exhausted for {error_type}: {original_exc}")
 
     def __reduce__(self) -> tuple[type, tuple[str, Exception]]:
-        """Soporte para pickling con los 2 args del constructor."""
+        """Soporte para pickling con los 2 args del constructor.
+
+        Sin __reduce__, Exception.__reduce__ reconstruye con self.args
+        (1 string) y el constructor requiere 2 args → TypeError al deserializar.
+        Necesario aunque hoy no se pickle explícitamente: cualquier uso futuro
+        (multiprocessing.Queue, Celery, RQ) fallaría sin esto.
+        """
         return (self.__class__, (self.error_type, self.original_exc))
 
 
