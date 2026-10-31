@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
+from trading.adapters.outbound.paper_executor import PaperExecutor
+from trading.domain.models.order import Order, OrderSide, OrderStatus
 from trading.execution.oms import OMS, OrderExecutor
-from trading.execution.order import Order, OrderSide, OrderStatus
-from trading.execution.paper_executor import PaperExecutor
 
 __all__ = [
     "Order",

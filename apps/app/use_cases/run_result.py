@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from trading.analytics.performance import PerformanceSummary
+    from trading.domain.analytics.performance import PerformanceSummary
+    from trading.domain.models.order import Order
     from trading.engine import EngineResult
-    from trading.execution.order import Order
 
 __all__ = ["CycleRunResult"]
 

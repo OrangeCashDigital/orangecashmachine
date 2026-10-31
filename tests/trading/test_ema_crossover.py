@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import polars as pl
 import pytest
-from trading.strategies.ema_crossover import EMACrossoverStrategy
+from trading.domain.strategies.ema_crossover import EMACrossoverStrategy
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

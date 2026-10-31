@@ -25,13 +25,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from trading.execution.live_executor import LiveExecutor
-from trading.execution.order import Order, OrderSide
-from trading.execution.transport import (
-    OrderState,
-    OrderStatus,
-)
-from trading.strategies.base import Signal
+from trading.adapters.outbound.live_executor import LiveExecutor
+from trading.domain.models.order import Order, OrderSide
+from trading.domain.strategies.base import Signal
+from trading.ports.outbound.transport import ExchangeOrderStatus, OrderState
 
 from ocm.runtime.guard import ExecutionGuard
 
@@ -75,7 +72,7 @@ class _FakeTransport:
             return self._submit_state
         return OrderState(
             order_id=f"exc-{client_order_id}",
-            status=OrderStatus.FILLED,
+            status=ExchangeOrderStatus.FILLED,
             filled_qty=qty,
         )
 
@@ -83,7 +80,7 @@ class _FakeTransport:
         self.fetch_ids.append(exchange_order_id)
         if self._fetch_state is not None:
             return self._fetch_state
-        return OrderState(order_id=exchange_order_id, status=OrderStatus.FILLED)
+        return OrderState(order_id=exchange_order_id, status=ExchangeOrderStatus.FILLED)
 
     def close(self):
         self.closed = True
@@ -109,7 +106,7 @@ def _make_executor(
 
 
 def test_filled_confirmed_transport_accepts() -> None:
-    t = _FakeTransport(submit_state=OrderState(order_id="e1", status=OrderStatus.FILLED, filled_qty=0.02))
+    t = _FakeTransport(submit_state=OrderState(order_id="e1", status=ExchangeOrderStatus.FILLED, filled_qty=0.02))
     exe = _make_executor(t)
 
     assert exe.execute(_order()).accepted is True
@@ -120,7 +117,7 @@ def test_filled_confirmed_transport_accepts() -> None:
 
 def test_filled_confirmed_records_success_on_guard() -> None:
     guard = ExecutionGuard(max_errors=2)
-    t = _FakeTransport(submit_state=OrderState(order_id="e1", status=OrderStatus.FILLED, filled_qty=0.02))
+    t = _FakeTransport(submit_state=OrderState(order_id="e1", status=ExchangeOrderStatus.FILLED, filled_qty=0.02))
     exe = _make_executor(t, guard=guard)
 
     exe.execute(_order())
@@ -142,8 +139,8 @@ def test_submit_error_rejects_and_guard_records_error() -> None:
 def test_reconciliation_unconfirmed_rejects() -> None:
     """fill no confirmado → rechazada (fail-closed, caso B/H)."""
     t = _FakeTransport(
-        submit_state=OrderState(order_id="e1", status=OrderStatus.SUBMITTED),
-        fetch_state=OrderState(order_id="e1", status=OrderStatus.ERROR, error="timeout"),
+        submit_state=OrderState(order_id="e1", status=ExchangeOrderStatus.SUBMITTED),
+        fetch_state=OrderState(order_id="e1", status=ExchangeOrderStatus.ERROR, error="timeout"),
     )
     exe = _make_executor(t)
 
@@ -173,10 +170,10 @@ def test_transient_error_then_success() -> None:
             self.calls += 1
             if self.calls == 1:
                 raise RuntimeError("transient")
-            return OrderState(order_id="e1", status=OrderStatus.FILLED, filled_qty=qty)
+            return OrderState(order_id="e1", status=ExchangeOrderStatus.FILLED, filled_qty=qty)
 
         def fetch_state(self, exchange_order_id):
-            return OrderState(order_id=exchange_order_id, status=OrderStatus.FILLED)
+            return OrderState(order_id=exchange_order_id, status=ExchangeOrderStatus.FILLED)
 
         def close(self):
             pass
@@ -206,7 +203,7 @@ def test_requires_positive_capital() -> None:
 
 
 def test_print_executor_and_paper_transport_repr() -> None:
-    from trading.execution.transport import PaperTransport
+    from trading.adapters.outbound.paper_transport import PaperTransport
 
     empty = PaperTransport()
     exe = _make_executor(_FakeTransport())

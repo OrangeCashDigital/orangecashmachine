@@ -24,8 +24,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+from trading.domain.models.order import Order, OrderSide, OrderStatus
 from trading.execution.oms import OMS
-from trading.execution.order import Order, OrderSide, OrderStatus
 
 
 def _empty_portfolio():
@@ -36,11 +36,11 @@ def _empty_portfolio():
     return PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
 
 
-from trading.execution.transport import OrderResult, OrderState
-from trading.execution.transport import OrderStatus as ExchangeStatus
+from trading.domain.risk.models import RiskConfig
+from trading.domain.strategies.base import Signal
+from trading.ports.outbound.transport import ExchangeOrderStatus as ExchangeStatus
+from trading.ports.outbound.transport import OrderResult, OrderState
 from trading.risk.manager import RiskManager
-from trading.risk.models import RiskConfig
-from trading.strategies.base import Signal
 
 
 def _risk_cfg() -> RiskConfig:

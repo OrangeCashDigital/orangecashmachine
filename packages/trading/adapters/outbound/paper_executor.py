@@ -15,8 +15,12 @@ from typing import Optional
 
 from loguru import logger
 
-from trading.execution.order import Order
-from trading.execution.transport import OrderResult, OrderState, OrderStatus
+from trading.domain.models.order import Order
+from trading.ports.outbound.transport import (
+    ExchangeOrderStatus,
+    OrderResult,
+    OrderState,
+)
 
 
 class PaperExecutor:
@@ -71,7 +75,7 @@ class PaperExecutor:
             accepted=True,
             state=OrderState(
                 order_id=order.order_id,
-                status=OrderStatus.FILLED,
+                status=ExchangeOrderStatus.FILLED,
                 fill_price=price,
                 filled_qty=filled_qty,  # fill completo del tamaño pedido (paper)
                 fees=0.0,

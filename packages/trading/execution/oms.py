@@ -94,16 +94,10 @@ from ocm.runtime.guard import ExecutionGuard
 from shared.contracts.boundaries import (
     SignalProtocol,
 )  # DIP — execution depende de abstraccion
-from trading.execution.order import Order, OrderSide, OrderStatus
-from trading.execution.settlement import FeeStatus, Settlement
-from trading.execution.transport import (
-    OrderResult,
-    OrderState,
-    OrderTransport,
-)
-from trading.execution.transport import (
-    OrderStatus as ExchangeStatus,
-)
+from trading.domain.models.order import Order, OrderSide, OrderStatus
+from trading.domain.models.settlement import FeeStatus, Settlement
+from trading.ports.outbound.transport import ExchangeOrderStatus as ExchangeStatus
+from trading.ports.outbound.transport import OrderResult, OrderState, OrderTransport
 from trading.risk.manager import RiskDecision, RiskManager
 
 # ---------------------------------------------------------------------------

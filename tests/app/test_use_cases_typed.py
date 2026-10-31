@@ -223,7 +223,7 @@ def test_execute_paper_dry_run_returns_success_cycle_result() -> None:
 def test_execute_paper_h7_analytics_failure_is_caught(monkeypatch) -> None:
     """Si summarize lanza, execute devuelve success=False en vez de propagar."""
     from app.use_cases import execute_paper
-    from trading.analytics.performance import PerformanceEngine
+    from trading.domain.analytics.performance import PerformanceEngine
     from trading.engine import EngineResult
 
     fake_runtime = SimpleNamespace(

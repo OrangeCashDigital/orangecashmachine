@@ -29,7 +29,7 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-004": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de ADR-0030 / B-MD-009 (multi-paso, Fase 3)
     "ARCH-005": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de freshness chain / B-MD-001 (F2/F3)
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)
-    "ARCH-007": Status.FAIL,  # 4 homónimos de bucket B (bucket A resuelto; ver #111)
+    "ARCH-007": Status.PASS,  # bucket B 5/5 — todos los duplicados/homónimos resueltos
     "ARCH-008": Status.PASS,  # sin stubs: NoopWSTradesSource = null-object
     # intencional; InfraMetricsKafkaProducer eliminado.
     "ARCH-009": Status.PASS,  # capas BC-08 respetadas (ignore_imports documentados)
@@ -76,19 +76,18 @@ def test_golden_arch006_orphan_ports() -> None:
 
 @pytest.mark.skipif(not (REPO_ROOT / "architecture_linter" / "importlinter.toml").is_file(), reason="requiere repo OCM")
 def test_golden_arch007_duplicates() -> None:
-    """ARCH-007 está pendiente en `main` (8 duplicados). Tracking en issue #111.
-    (El fix NO vive en `fix/ccxt-factory-release`: ese PR #109 era de CCXT factory
-    ownership y mergeó sin tocar ARCH-007.)
+    """ARCH-007: sin duplicados ni homónimos (bucket A 3/3 + bucket B 5/5).
 
-    Se saltea cuando ARCH-007 está en FAIL. Cuando esa rama mergee, la
-    remediación hará pasar este test sin modificarlo.
+    El último homónimo del bucket B era el enum de transporte
+    `OrderStatus` → `ExchangeOrderStatus` (colisionaba con
+    `order.OrderStatus`). (El PR #109 era de CCXT factory ownership y
+    no tocó ARCH-007.)
     """
     cfg = load_config()
     ctx = RepoContext(root=REPO_ROOT, roots=cfg.roots, exclude_dirs=frozenset(cfg.exclude_dirs))
     rules = build_rules(enabled={"ARCH-007"}, allow=cfg.allow)
     (res,) = LinterEngine(ctx).run(rules)
 
-    # Si ARCH-007 está pendiente (FAIL), skip — su remediación vive en otra rama.
     if res.status == Status.FAIL:
         pytest.skip("ARCH-007 pendiente: ver issue #111")
 

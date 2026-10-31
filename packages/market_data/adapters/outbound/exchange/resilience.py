@@ -29,6 +29,10 @@ from aioresilience import CircuitBreakerOpenError as AioResilienceCBError
 from aioresilience import RetryConfig, RetryPolicy
 from aioresilience.config import CircuitConfig
 
+# RetryExhaustedError vive en domain/exceptions/__init__.py (SSOT).
+# Se importa aquí y se re-exporta en __all__ para mantener compatibilidad
+# con consumidores existentes (exchange/__init__.py, ccxt_adapter.py, etc.).
+from market_data.domain.exceptions import RetryExhaustedError
 from ocm.config.schema import ResilienceConfig, ResilienceRetryPolicy
 
 __all__ = [
@@ -46,15 +50,6 @@ T = TypeVar("T")
 ErrorType = str
 
 _RETRYABLE_ERROR_TYPES: frozenset[str] = frozenset({"rate_limit", "timeout", "network"})
-
-
-class RetryExhaustedError(Exception):
-    """Todas las tentativas de retry se agotaron."""
-
-    def __init__(self, error_type: ErrorType, original_exc: Exception):
-        self.error_type = error_type
-        self.original_exc = original_exc
-        super().__init__(f"Retry exhausted for {error_type}: {original_exc}")
 
 
 class CircuitBreakerOpenError(Exception):

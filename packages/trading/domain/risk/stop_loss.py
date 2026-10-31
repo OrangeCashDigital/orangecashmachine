@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Protocol
 
-from trading.risk.models import StopLossConfig
+from trading.domain.risk.models import StopLossConfig
 
 
 class StopLossPosition(Protocol):

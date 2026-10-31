@@ -10,7 +10,7 @@ módulo — este __init__ no necesita cambiar al añadir estrategias.
 """
 
 from shared.types.signal import Signal, SignalType
-from trading.strategies.base import BaseStrategy
+from trading.domain.strategies.base import BaseStrategy
 from trading.strategies.registry import (
     StrategyNotFoundError,
     StrategyRegistry,
