@@ -441,6 +441,7 @@ forbidden_modules = [
     "trading.execution",
     "trading.analytics",
     "trading.domain.models",
+    "trading.domain.risk",
     "trading.domain.analytics",
 ]
 
@@ -451,7 +452,12 @@ forbidden_modules = [
 name = "BC-12: trading.risk isolated from execution"
 type = "forbidden"
 source_modules = ["trading.risk", "trading.domain.risk"]
-forbidden_modules = ["trading.execution", "trading.domain.models"]
+forbidden_modules = [
+    "trading.execution",
+    "trading.domain.models",
+    "trading.domain.strategies",
+    "trading.domain.analytics",
+]
 
 [[tool.importlinter.contracts]]
 # portfolio gestiona estado de posiciones — no orquesta ejecución ni estrategias.
@@ -464,7 +470,9 @@ forbidden_modules = [
     "trading.execution",
     "trading.strategies",
     "trading.domain.models",
+    "trading.domain.risk",
     "trading.domain.strategies",
+    "trading.domain.analytics",
 ]
 
 [[tool.importlinter.contracts]]
