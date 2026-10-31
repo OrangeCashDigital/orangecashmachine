@@ -46,20 +46,20 @@ from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.models.position import PortfolioState, PositionSnapshot
 from portfolio.services.portfolio_service import PortfolioService
 from trading.analytics.trade_tracker import TradeTracker
-from trading.engine import TradingEngine
-from trading.execution.fill_sync import build_fill_sync
-from trading.execution.oms import OMS
-from trading.execution.order import Order
-from trading.execution.transport import ExchangeOrderStatus as TStatus
-from trading.execution.transport import OrderResult, OrderState
-from trading.risk.manager import RiskManager
-from trading.risk.models import (
+from trading.domain.models.order import Order
+from trading.domain.risk.models import (
     OrderLimits,
     PositionConfig,
     RiskConfig,
     StopLossConfig,
 )
-from trading.strategies.base import BaseStrategy, Signal
+from trading.domain.strategies.base import BaseStrategy, Signal
+from trading.engine import TradingEngine
+from trading.execution.fill_sync import build_fill_sync
+from trading.execution.oms import OMS
+from trading.ports.outbound.transport import ExchangeOrderStatus as TStatus
+from trading.ports.outbound.transport import OrderResult, OrderState
+from trading.risk.manager import RiskManager
 
 _NOW = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 

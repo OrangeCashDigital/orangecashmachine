@@ -15,8 +15,9 @@ OrderTransport.cancel, PaperTransport.cancel y _BybitTransport.cancel.
 
 from __future__ import annotations
 
+from trading.adapters.outbound.paper_transport import PaperTransport
 from trading.bootstrap.composition_root import _BybitTransport, map_ccxt_order
-from trading.execution.transport import ExchangeOrderStatus, PaperTransport
+from trading.ports.outbound.transport import ExchangeOrderStatus
 
 
 def test_closed_maps_to_filled() -> None:

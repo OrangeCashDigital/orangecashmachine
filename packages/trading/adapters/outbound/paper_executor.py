@@ -15,8 +15,12 @@ from typing import Optional
 
 from loguru import logger
 
-from trading.execution.order import Order
-from trading.execution.transport import ExchangeOrderStatus, OrderResult, OrderState
+from trading.domain.models.order import Order
+from trading.ports.outbound.transport import (
+    ExchangeOrderStatus,
+    OrderResult,
+    OrderState,
+)
 
 
 class PaperExecutor:

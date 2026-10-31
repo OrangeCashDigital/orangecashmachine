@@ -44,13 +44,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
 
 from loguru import logger
-from trading.execution.transport import ExchangeOrderStatus, OrderState, OrderTransport
-from trading.risk.models import (
+from trading.domain.risk.models import (
     DrawdownConfig,
     OrderLimits,
     PositionConfig,
     RiskConfig,
     StopLossConfig,
+)
+from trading.ports.outbound.transport import (
+    ExchangeOrderStatus,
+    OrderState,
+    OrderTransport,
 )
 
 from ocm.runtime.guard import ExecutionGuard
@@ -103,12 +107,12 @@ class TradingRuntime:
 
 
 # ---------------------------------------------------------------------------
-# Mapeo de riesgo: AppConfig.risk -> trading.risk.models.RiskConfig
+# Mapeo de riesgo: AppConfig.risk -> trading.domain.risk.models.RiskConfig
 # ---------------------------------------------------------------------------
 
 
 def _map_risk_config(app_risk: "AppRiskConfig") -> RiskConfig:
-    """Traduce ocm.config.schema.RiskConfig -> trading.risk.models.RiskConfig.
+    """Traduce ocm.config.schema.RiskConfig -> trading.domain.risk.models.RiskConfig.
 
     Ambos modelos comparten campos en position/stop_loss/drawdown/order —
     se copian 1:1. ``signal_filter.min_confidence`` NO existe en AppConfig.risk
@@ -430,12 +434,12 @@ class TradingCompositionRoot:
         (Strategy, RiskManager, LiveExecutor, OMS) — el root es el único punto
         de ensamblado (ADR-0003/ADR-0012).
         """
+        from trading.adapters.outbound.live_executor import LiveExecutor
+        from trading.adapters.outbound.paper_transport import PaperTransport
         from trading.analytics.trade_tracker import TradeTracker
         from trading.engine import TradingEngine
         from trading.execution.fill_sync import build_fill_sync
-        from trading.execution.live_executor import LiveExecutor
         from trading.execution.oms import OMS
-        from trading.execution.transport import PaperTransport
         from trading.risk.manager import RiskManager
         from trading.strategies.registry import StrategyRegistry
 
@@ -526,11 +530,11 @@ class TradingCompositionRoot:
         mismo las dependencias internas (Strategy, RiskManager, PaperExecutor,
         OMS) — el root es el único punto de ensamblado (ADR-0003/ADR-0012).
         """
+        from trading.adapters.outbound.paper_executor import PaperExecutor
         from trading.analytics.trade_tracker import TradeTracker
         from trading.engine import TradingEngine
         from trading.execution.fill_sync import build_fill_sync
         from trading.execution.oms import OMS
-        from trading.execution.paper_executor import PaperExecutor
         from trading.risk.manager import RiskManager
         from trading.strategies.registry import StrategyRegistry
 
@@ -626,7 +630,7 @@ class TradingCompositionRoot:
         el override de min_confidence del CLI sobre signal_filter — sin
         inventar un valor en _map_risk_config.
         """
-        from trading.risk.models import SignalFilterConfig
+        from trading.domain.risk.models import SignalFilterConfig
 
         risk_config = _map_risk_config(self._risk) if self._risk is not None else RiskConfig()
         if min_confidence is not None:

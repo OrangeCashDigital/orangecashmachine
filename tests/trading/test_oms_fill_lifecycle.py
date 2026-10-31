@@ -20,13 +20,17 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from trading.analytics.trade_tracker import TradeTracker
+from trading.domain.models.order import Order, OrderSide
+from trading.domain.risk.models import RiskConfig
+from trading.domain.strategies.base import Signal
 from trading.execution.fill_sync import build_fill_sync
 from trading.execution.oms import OMS
-from trading.execution.order import Order, OrderSide
-from trading.execution.transport import ExchangeOrderStatus, OrderResult, OrderState
+from trading.ports.outbound.transport import (
+    ExchangeOrderStatus,
+    OrderResult,
+    OrderState,
+)
 from trading.risk.manager import RiskManager
-from trading.risk.models import RiskConfig
-from trading.strategies.base import Signal
 
 
 class _AcceptingExecutor:

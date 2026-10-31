@@ -63,7 +63,7 @@ class SignalProtocol(Protocol):
     """
     Contrato minimo que execution espera de un Signal.
 
-    Implementado por: trading.strategies.base.Signal
+    Implementado por: trading.domain.strategies.base.Signal
     (se movera a signals/ en la migracion del monolito).
     """
 
