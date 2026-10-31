@@ -381,7 +381,7 @@ def _trading_stub_blocked() -> bool:
       2. No hay ningún proceso `live_hydra`/`execute_live` corriendo.
     """
     try:
-        src = (ROOT / "packages" / "trading" / "execution" / "live_executor.py").read_text()
+        src = (ROOT / "packages" / "trading" / "adapters" / "outbound" / "live_executor.py").read_text()
         stub_ok = "IS_STUB: ClassVar[bool] = True" in src
     except Exception:
         stub_ok = False  # fail-closed

@@ -45,13 +45,13 @@ from shared.contracts.boundaries import (
     SignalProtocol,
 )  # SSOT — unica definicion del contrato
 from shared.types.signal import Signal
-from trading.execution.order import Order, OrderStatus
-from trading.risk.models import StopLossConfig
-from trading.risk.stop_loss import (
+from trading.domain.models.order import Order, OrderStatus
+from trading.domain.risk.models import StopLossConfig
+from trading.domain.risk.stop_loss import (
     StopLossEvaluator,
     SupportsPositionSnapshot,
 )
-from trading.strategies.base import BaseStrategy
+from trading.domain.strategies.base import BaseStrategy
 
 # ---------------------------------------------------------------------------
 # Result

@@ -62,7 +62,7 @@ from loguru import logger
 from shared.contracts.boundaries import (
     SignalProtocol,
 )  # DIP — risk depende de abstraccion
-from trading.risk.models import RiskConfig
+from trading.domain.risk.models import RiskConfig
 
 # ---------------------------------------------------------------------------
 # Domain types

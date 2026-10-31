@@ -25,13 +25,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from trading.execution.live_executor import LiveExecutor
-from trading.execution.order import Order, OrderSide
-from trading.execution.transport import (
-    ExchangeOrderStatus,
-    OrderState,
-)
-from trading.strategies.base import Signal
+from trading.adapters.outbound.live_executor import LiveExecutor
+from trading.domain.models.order import Order, OrderSide
+from trading.domain.strategies.base import Signal
+from trading.ports.outbound.transport import ExchangeOrderStatus, OrderState
 
 from ocm.runtime.guard import ExecutionGuard
 
@@ -206,7 +203,7 @@ def test_requires_positive_capital() -> None:
 
 
 def test_print_executor_and_paper_transport_repr() -> None:
-    from trading.execution.transport import PaperTransport
+    from trading.adapters.outbound.paper_transport import PaperTransport
 
     empty = PaperTransport()
     exe = _make_executor(_FakeTransport())

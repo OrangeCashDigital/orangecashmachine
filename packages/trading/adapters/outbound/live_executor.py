@@ -47,8 +47,8 @@ from typing import ClassVar, Optional
 from loguru import logger
 
 from ocm.runtime.guard import ExecutionGuard
-from trading.execution.order import Order
-from trading.execution.transport import (
+from trading.domain.models.order import Order
+from trading.ports.outbound.transport import (
     ExchangeOrderStatus,
     OrderResult,
     OrderState,

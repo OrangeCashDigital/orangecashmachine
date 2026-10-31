@@ -293,7 +293,7 @@ def execute(
     -------
     CycleRunResult con todo lo necesario para que el CLI loguee y salga.
     """
-    from trading.analytics.performance import PerformanceEngine
+    from trading.domain.analytics.performance import PerformanceEngine
 
     try:
         runtime = build_paper_engine(

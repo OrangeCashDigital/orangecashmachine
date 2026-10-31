@@ -42,9 +42,9 @@ from typing import Any, Optional
 
 from loguru import logger
 
-from trading.analytics.trade_record import TradeRecord
-from trading.execution.order import Order, OrderSide
-from trading.execution.settlement import Settlement
+from trading.domain.analytics.trade_record import TradeRecord
+from trading.domain.models.order import Order, OrderSide
+from trading.domain.models.settlement import Settlement
 
 
 class TradeTracker:

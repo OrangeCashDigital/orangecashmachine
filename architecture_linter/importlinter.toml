@@ -441,6 +441,7 @@ forbidden_modules = [
     "trading.execution",
     "trading.analytics",
     "trading.domain.models",
+    "trading.domain.risk",
     "trading.domain.analytics",
 ]
 
@@ -451,7 +452,12 @@ forbidden_modules = [
 name = "BC-12: trading.risk isolated from execution"
 type = "forbidden"
 source_modules = ["trading.risk", "trading.domain.risk"]
-forbidden_modules = ["trading.execution", "trading.domain.models"]
+forbidden_modules = [
+    "trading.execution",
+    "trading.domain.models",
+    "trading.domain.strategies",
+    "trading.domain.analytics",
+]
 
 [[tool.importlinter.contracts]]
 # portfolio gestiona estado de posiciones — no orquesta ejecución ni estrategias.
@@ -464,7 +470,9 @@ forbidden_modules = [
     "trading.execution",
     "trading.strategies",
     "trading.domain.models",
+    "trading.domain.risk",
     "trading.domain.strategies",
+    "trading.domain.analytics",
 ]
 
 [[tool.importlinter.contracts]]
@@ -500,6 +508,36 @@ forbidden_modules = [
     "trading.risk",
     "trading.strategies",
     "trading.analytics",
+]
+
+[[tool.importlinter.contracts]]
+# trading.ports son Protocols puros. Espejo de BC-04 (market_data.ports):
+# solo pueden depender de trading.domain, nunca de implementaciones ni del root.
+name = "BC-58: trading.ports depend only on trading.domain"
+type = "forbidden"
+source_modules = ["trading.ports"]
+forbidden_modules = [
+    "trading.adapters",
+    "trading.bootstrap",
+    "trading.execution",
+    "trading.risk",
+    "trading.strategies",
+    "trading.analytics",
+]
+
+[[tool.importlinter.contracts]]
+# Orden de capas real de trading: adapters > ports > domain. No hay application
+# commiteada, asi que no se declara. Espejo de BC-08 (market_data) y BC-44.
+# bootstrap queda fuera: es el composition root y es un namespace package sin
+# __init__.py. Los paquetes legacy (execution/risk/strategies/analytics) tampoco
+# se listan: son shims y codigo congelado que se retira en un PR posterior.
+name = "BC-59: trading layer order (adapters > ports > domain)"
+type = "layers"
+containers = ["trading"]
+layers = [
+    "adapters",
+    "ports",
+    "domain",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
