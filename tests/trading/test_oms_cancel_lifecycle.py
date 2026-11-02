@@ -24,8 +24,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+from trading.application.oms import OMS
 from trading.domain.models.order import Order, OrderSide, OrderStatus
-from trading.execution.oms import OMS
 
 
 def _empty_portfolio():

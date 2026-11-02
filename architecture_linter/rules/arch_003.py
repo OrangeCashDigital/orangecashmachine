@@ -3,7 +3,7 @@
 Distinguishes PASS / FAIL / PARTIAL / UNKNOWN for the in-memory order state
 reconciliation responsibility (ADR-0029):
 
-  * no order stores in trading/execution → UNKNOWN (no se puede auditar);
+  * no order stores in trading/application → UNKNOWN (no se puede auditar);
   * stores + gestión periódica de órdenes abiertas → PASS;
   * stores + reconciliación puntual (submit-time fetch_state/OrderTransport) → PARTIAL;
   * stores + ningún mecanismo → FAIL.
@@ -46,7 +46,7 @@ class Arch003Rule(Rule):
             return [
                 self.finding(
                     Status.UNKNOWN,
-                    "No se detectó almacén mutable de órdenes en trading/execution: no se "
+                    "No se detectó almacén mutable de órdenes en trading/application: no se "
                     "puede auditar la responsabilidad de reconciliación.",
                     confidence=0.5,
                     concept="order",
@@ -69,7 +69,7 @@ class Arch003Rule(Rule):
             for m in s.mutations[:3]:
                 evidence.append(m)
 
-        oms_stores = [s for s in stores if "execution/oms.py" in s.file]
+        oms_stores = [s for s in stores if "application/oms.py" in s.file]
         if oms_stores and management:
             return [
                 self.finding(
@@ -118,7 +118,7 @@ class Arch003Rule(Rule):
         return [
             self.finding(
                 Status.UNKNOWN,
-                "Almacenes de órdenes detectados fuera de trading/execution: responsabilidad "
+                "Almacenes de órdenes detectados fuera de trading/application: responsabilidad "
                 "de reconciliación no adscrita a una capa auditable.",
                 related_files=sorted({s.file for s in stores}),
                 confidence=0.5,
