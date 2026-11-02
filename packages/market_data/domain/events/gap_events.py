@@ -48,8 +48,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# ── GapDetectedEvent ──────────────────────────────────────────────────────────
-
 
 @dataclass(frozen=True)
 class GapDetectedEvent:
@@ -83,6 +81,33 @@ class GapDetectedEvent:
     def duration_ms(self) -> int:
         """Duración del hueco en milisegundos."""
         return self.end_ms - self.start_ms
+
+
+@dataclass(frozen=True)
+class OrderBookGapDetectedEvent:
+    """
+    Hueco detectado en el stream de OrderBook (L2, v2).
+
+    Campos
+    ------
+    event_id        : UUID4.
+    exchange_id     : exchange origen.
+    symbol          : par normalizado.
+    last_u          : update_id del mensaje previo.
+    observed_u      : update_id del mensaje que dispara el gap.
+    expected_u      : update_id esperado (last_u + 1).
+    missing_count   : número de update_id perdidos.
+    detected_at_ms  : epoch ms de emisión.
+    """
+
+    event_id: str
+    exchange_id: str
+    symbol: str
+    last_u: int
+    observed_u: int
+    expected_u: int
+    missing_count: int
+    detected_at_ms: int
 
 
 # ── GapHealedEvent ────────────────────────────────────────────────────────────

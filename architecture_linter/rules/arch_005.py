@@ -18,7 +18,7 @@ from architecture_linter.rules.base import Rule
 DETECTION_SYMBOLS = ("wait_for", "TimeoutError", "_handle_silence_gap", "gap_threshold_ms")
 RECOVERY_SYMBOLS = ("_run_recovery", "_restart_source", "GapRecoveryFetcher", "recovery_factory")
 FRESHNESS_SYMBOLS = ("freshness", "stale", "lag_ms", "last_trade_ms", "age_ms", "stale_ms", "sequence_gap")
-ENFORCEMENT_FILES = ("packages/trading/execution", "packages/trading/risk")
+ENFORCEMENT_FILES = ("packages/trading/application", "packages/trading/risk")
 
 
 class Arch005Rule(Rule):

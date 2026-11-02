@@ -67,6 +67,7 @@ class ConcretePipelineFactory:
 
     def __init__(self, cfg: "AppConfig") -> None:
         self._cfg = cfg
+        self._owned: list[Any] = []
 
     def build(self, request: Any) -> Any:
         """
@@ -88,9 +89,34 @@ class ConcretePipelineFactory:
             raise ValueError(f"PipelineType desconocido: {request.pipeline!r}. Registrados: {list(dispatch)}")
         return builder(request)
 
+    async def release(self) -> None:
+        """Cierra los adaptadores creados por `build()` (SafeOps · idempotente).
+
+        El orquestador la invoca desde un `finally`, por eso no propaga
+        errores: una excepción aquí enmascararía el fallo original del
+        pipeline. El registro se vacía antes de cerrar para que un `close()`
+        defectuoso no deje entradas obsoletas en el siguiente request.
+        """
+        owned, self._owned = self._owned, []
+        if not owned:
+            return
+
+        from loguru import logger as _log
+
+        for adapter in owned:
+            try:
+                await adapter.close()
+            except Exception as exc:  # noqa: BLE001 — SafeOps: release nunca falla
+                _log.debug("ConcretePipelineFactory.release: close failed | {}", exc)
+
     # ----------------------------------------------------------------------- #
     # Helpers internos                                                          #
     # ----------------------------------------------------------------------- #
+
+    def _own(self, adapter: Any) -> Any:
+        """Registra un adaptador para que `release()` lo cierre al final del request."""
+        self._owned.append(adapter)
+        return adapter
 
     def _resolve_adapter_kwargs(self, request: Any) -> dict[str, Any]:
         """Extrae kwargs de CCXTAdapter desde el request (DRY).
@@ -262,7 +288,7 @@ class ConcretePipelineFactory:
         from ocm.runtime.state import InMemoryCursorStore, build_cursor_store
         from shared.utils.repo import _get_git_hash
 
-        raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        raw_adapter = self._own(CCXTAdapter(**self._resolve_adapter_kwargs(request)))
         # cast: CCXTAdapter satisface ExchangeClientPort (runtime_checkable Protocol).
         exchange_client = raw_adapter
 
@@ -366,7 +392,7 @@ class ConcretePipelineFactory:
         )
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
-        raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        raw_adapter = self._own(CCXTAdapter(**self._resolve_adapter_kwargs(request)))
         exchange_client = raw_adapter
 
         catalog = _build_catalog()
@@ -414,17 +440,17 @@ class ConcretePipelineFactory:
             RecoveryFactory,
         )
         from market_data.adapters.inbound.websocket.ws_trades_source import (
-            WSTradesSource,
+            NoopWSTradesSource,
         )
         from market_data.adapters.outbound.exchange.ccxt_adapter import CCXTAdapter
         from market_data.application.source_manager import TradesSourceManager
 
-        exchange_client = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        exchange_client = self._own(CCXTAdapter(**self._resolve_adapter_kwargs(request)))
         gap_threshold_ms: int = getattr(request, "gap_threshold_ms", 30_000)
         managers: dict[str, TradesSourceManager] = {}
 
         for symbol in request.symbols:
-            ws_source = WSTradesSource(
+            ws_source = NoopWSTradesSource(
                 exchange_id=request.exchange,
                 symbol=symbol,
                 market_type=request.market_type,
@@ -491,7 +517,7 @@ class ConcretePipelineFactory:
         )
         from market_data.ports.outbound.exchange_client import ExchangeClientPort
 
-        raw_adapter = CCXTAdapter(**self._resolve_adapter_kwargs(request))
+        raw_adapter = self._own(CCXTAdapter(**self._resolve_adapter_kwargs(request)))
         exchange_client = raw_adapter
 
         catalog = _build_catalog()

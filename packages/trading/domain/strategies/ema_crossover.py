@@ -22,7 +22,7 @@ from typing import Literal
 import polars as pl
 
 from shared.types.signal import Signal
-from trading.strategies.base import BaseStrategy
+from trading.domain.strategies.base import BaseStrategy
 
 
 class EMACrossoverStrategy(BaseStrategy):

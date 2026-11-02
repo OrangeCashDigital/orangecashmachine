@@ -39,6 +39,12 @@ class Arch004Rule(Rule):
         balance_refs: dict[str, list[tuple[Path, int]]] = {}
         for sym in BALANCE_SYMBOLS:
             refs = ctx.references(sym)
+            # Excluir la DEFINICIÓN del contract en shared/contracts/boundaries.py —
+            # definir el port/interface ≠ consultar el balance real.
+            # Ref: ADR-0030 step 2 (contract existe, wiring pendiente en issue #121).
+            # Sin este filtro, el contrato recién creado marca ARCH-004 PASS antes
+            # de que RiskManager lo consuma (falso PASS).
+            refs = [(p, line) for p, line in refs if "shared/contracts/boundaries.py" not in str(p).replace("\\", "/")]
             if refs:
                 balance_refs[sym] = refs
 

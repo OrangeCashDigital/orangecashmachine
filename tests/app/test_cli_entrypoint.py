@@ -78,6 +78,10 @@ class _FakeFactory:
     def build(self, request):
         return _FakePipeline()
 
+    async def release(self) -> None:
+        """No-op: el fake no crea adapters reales que cerrar."""
+        pass
+
 
 class _StubRoot:
     factory = _FakeFactory()

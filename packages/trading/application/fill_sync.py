@@ -49,7 +49,7 @@ from typing import Any, Callable, Optional, Protocol
 
 from loguru import logger
 
-from trading.execution.order import Order, OrderSide
+from trading.domain.models.order import Order, OrderSide
 
 
 class SupportsOnFill(Protocol):

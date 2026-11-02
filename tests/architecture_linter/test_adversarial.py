@@ -36,7 +36,7 @@ def test_adversarial_rename_store_attr_still_fails(make_repo) -> None:
     """`_book`/`_ledger` (nada que ver con `_positions`) se detectan por forma/anotación."""
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._book: dict[str, tuple[float, float]] = {}\n"
@@ -69,7 +69,7 @@ def test_adversarial_rename_store_attr_still_fails(make_repo) -> None:
 def test_adversarial_rename_wac_variables_still_fails(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._entry_positions: dict[str, tuple[float, float]] = {}\n"
@@ -101,7 +101,7 @@ def test_adversarial_rename_wac_variables_still_fails(make_repo) -> None:
 def test_adversarial_rename_classes_still_fails(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class BookingEngine:\n"
                 "    def __init__(self):\n"
                 "        self._entry_positions: dict[str, float] = {}\n"
@@ -128,7 +128,7 @@ def test_adversarial_rename_classes_still_fails(make_repo) -> None:
 def test_adversarial_single_consistent_owner_passes(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._entry_positions: dict[str, tuple[float, float]] = {}\n"
@@ -202,14 +202,14 @@ def test_adversarial_known_fp_patterns_pass(make_repo) -> None:
 def test_adversarial_partial_reconciliation(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._orders: dict[str, object] = {}\n"
                 "    def submit(self, order_id, order):\n"
                 "        self._orders[order_id] = order\n"
             ),
-            "packages/trading/execution/transport.py": (
+            "packages/trading/application/transport.py": (
                 "class OrderTransport:\n    def fetch_state(self, order_id):\n        return {}\n"
             ),
         }
@@ -220,7 +220,9 @@ def test_adversarial_partial_reconciliation(make_repo) -> None:
 def test_adversarial_unknown_no_stores(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": ("class OMS:\n    def __init__(self):\n        self.engine = None\n"),
+            "packages/trading/application/oms.py": (
+                "class OMS:\n    def __init__(self):\n        self.engine = None\n"
+            ),
         }
     )
     assert Arch003Rule().run(ctx).status == Status.UNKNOWN
@@ -293,7 +295,7 @@ def test_adversarial_forbidden_violation_fails(make_repo) -> None:
 def test_adversarial_global_state_fails(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "_open_orders: dict[str, object] = {}\n_open_orders['x'] = object()\n"
             ),
         }

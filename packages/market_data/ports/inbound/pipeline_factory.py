@@ -32,3 +32,17 @@ class PipelineFactoryPort(Protocol):
         infrastructure + application.
         """
         ...
+
+    async def release(self) -> None:
+        """Libera los recursos de proceso creados por `build()`.
+
+        El orquestador la invoca desde un `finally`, incluso cuando la
+        construcción falla después de haber instanciado un adaptador.
+
+        Contrato
+        --------
+        - Idempotente: llamarla dos veces seguidas no tiene efecto adicional.
+        - SafeOps: no propaga excepciones. Un fallo de cierre no puede
+          enmascarar el error original del pipeline.
+        """
+        ...

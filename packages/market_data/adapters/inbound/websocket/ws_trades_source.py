@@ -3,6 +3,9 @@ market_data.adapters.inbound.websocket.ws_trades_source
 ======================================
 Fuente WebSocket — stub estructural.
 
+ARCH-008 exempt: null-object intencional (`Noop*` prefix); el linter lo
+reconoce como implementación vacía deliberada, no stub productivo.
+
 Rol en la arquitectura
 -----------------------
 - Fuente PRINCIPAL (live stream, baja latencia)
@@ -31,7 +34,7 @@ from loguru import logger
 from market_data.domain.value_objects.raw_trade import RawTrade
 
 
-class WSTradesSource:
+class NoopWSTradesSource:
     """
     Fuente WebSocket de trades.
 
@@ -60,7 +63,7 @@ class WSTradesSource:
         self._running = False
         self._stop_event = asyncio.Event()
         self._log = logger.bind(
-            component="WSTradesSource",
+            component="NoopWSTradesSource",
             exchange=exchange_id,
             symbol=symbol,
         )
@@ -86,7 +89,7 @@ class WSTradesSource:
     async def __anext__(self) -> RawTrade:
         # TODO: implementar conexión WS real (cryptofeed / ccxt-pro)
         self._log.warning(
-            "WSTradesSource no implementado — StopAsyncIteration inmediato | source_id={}",
+            "NoopWSTradesSource no implementado — StopAsyncIteration inmediato | source_id={}",
             self.source_id,
         )
         raise StopAsyncIteration
@@ -96,12 +99,12 @@ class WSTradesSource:
         try:
             self._stop_event.set()
             self._running = False
-            self._log.debug("WSTradesSource stopped | source_id={}", self.source_id)
+            self._log.debug("NoopWSTradesSource stopped | source_id={}", self.source_id)
         except Exception as _stop_exc:  # SafeOps — nunca propaga
             self._log.warning("stop() raised unexpectedly | error={}", _stop_exc)
 
     def __repr__(self) -> str:
-        return f"WSTradesSource(exchange={self._exchange_id!r}, symbol={self._symbol!r}, running={self._running})"
+        return f"NoopWSTradesSource(exchange={self._exchange_id!r}, symbol={self._symbol!r}, running={self._running})"
 
 
-__all__ = ["WSTradesSource"]
+__all__ = ["NoopWSTradesSource"]

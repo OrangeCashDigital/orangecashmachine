@@ -19,12 +19,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from trading.execution.oms import OMS
-from trading.execution.order import Order, OrderSide
-from trading.execution.transport import OrderResult, OrderState, OrderStatus
+from trading.analytics.trade_tracker import TradeTracker
+from trading.application.fill_sync import build_fill_sync
+from trading.application.oms import OMS
+from trading.domain.models.order import Order, OrderSide
+from trading.domain.risk.models import RiskConfig
+from trading.domain.strategies.base import Signal
+from trading.ports.outbound.transport import (
+    ExchangeOrderStatus,
+    OrderResult,
+    OrderState,
+)
 from trading.risk.manager import RiskManager
-from trading.risk.models import RiskConfig
-from trading.strategies.base import Signal
 
 
 class _AcceptingExecutor:
@@ -40,7 +46,7 @@ class _AcceptingExecutor:
             accepted=True,
             state=OrderState(
                 order_id=order.order_id,
-                status=OrderStatus.FILLED,
+                status=ExchangeOrderStatus.FILLED,
                 fill_price=order.signal.price,
                 filled_qty=1.0,
                 fees=0.0,
@@ -64,8 +70,18 @@ def _sg(side: OrderSide) -> Signal:
 
 
 def _new_oms() -> tuple[RiskManager, OMS]:
+    from portfolio.infra.memory_store import InMemoryPositionStore
+    from portfolio.services.portfolio_service import PortfolioService
+
     risk = RiskManager(config=_risk_cfg())
-    oms = OMS(risk_manager=risk, executor=_AcceptingExecutor())
+    portfolio = PortfolioService(capital_usd=10_000.0, store=InMemoryPositionStore(), exchange="bybit")
+    tracker = TradeTracker(exchange="bybit")
+    oms = OMS(
+        risk_manager=risk,
+        executor=_AcceptingExecutor(),
+        portfolio=portfolio,
+        on_fill=build_fill_sync(tracker, portfolio),
+    )
     return risk, oms
 
 

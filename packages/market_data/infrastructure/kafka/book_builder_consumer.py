@@ -47,6 +47,7 @@ from market_data.ports.outbound.book_builder import (
     BookBuilderPort,
     OutcomeKind,
 )
+from market_data.ports.outbound.gap_event_publisher import GapEventPublisherPort
 from market_data.ports.outbound.kafka_consumer import KafkaConsumerPort, KafkaMessage
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from shared.kafka.schemas.orderbook import (
@@ -60,11 +61,7 @@ from shared.kafka.topics import (
     TOPIC_DLQ,
 )
 
-# Unión del wire orderbook v2. Ambas clases comparten el subset de campos que
-# el BookBuilder consume (exchange, symbol, timestamp_ms, bids, asks, update_id)
-# y ambas son subtipos de BasePayload (serializable). La unión expresa el
-# contrato real de orderbook.raw: snapshot O delta, sin perder el tipado de
-# los miembros (a diferencia de Any).
+# Unión del wire orderbook v2.
 OrderBookPayload = OrderBookSnapshotPayload | OrderBookDeltaPayload
 
 
@@ -99,6 +96,7 @@ class BookBuilderConsumer:
         consumer: KafkaConsumerPort,
         producer: KafkaProducerPort,
         builder: BookBuilderPort,
+        gap_publisher: Optional[GapEventPublisherPort] = None,
         poll_timeout_ms: int = 1_000,
         max_poll_records: int = 500,
         metrics: Optional[KafkaMetrics] = None,
@@ -111,6 +109,7 @@ class BookBuilderConsumer:
         self._consumer = consumer
         self._producer = producer
         self._builder = builder
+        self._gap_publisher = gap_publisher
         self._poll_timeout_ms = poll_timeout_ms
         self._max_poll_records = max_poll_records
         self._metrics = metrics or KafkaMetrics(topic=TOPIC_BOOK_SNAPSHOT)
@@ -125,6 +124,11 @@ class BookBuilderConsumer:
     async def start(self) -> None:
         await self._consumer.start()
         await self._producer.start()
+        # B-25 / ADR-0028 (D3): inicializar el gap publisher.
+        # Sin esto, KafkaGapPublisher._producer queda None y
+        # publish_gap_event() descarta silenciosamente el evento.
+        if self._gap_publisher is not None and hasattr(self._gap_publisher, "start"):
+            await self._gap_publisher.start()
         self._running = True
         self._log.info("book_builder_consumer_started")
 
@@ -132,6 +136,9 @@ class BookBuilderConsumer:
         self._running = False
         await self._consumer.close()
         await self._producer.stop()
+        # B-25 / ADR-0028 (D3): cerrar el gap publisher.
+        if self._gap_publisher is not None and hasattr(self._gap_publisher, "stop"):
+            await self._gap_publisher.stop()
         self._log.info("book_builder_consumer_stopped")
 
     # ------------------------------------------------------------------ #
@@ -281,6 +288,26 @@ class BookBuilderConsumer:
                 return "write_error"
 
         # ── Outcomes no-publicables → métrica + log (ya contabilizados) ──
+        if outcome.kind is OutcomeKind.GAP_DETECTED and self._gap_publisher is not None:
+            from time import time
+            from uuid import uuid4
+
+            from market_data.domain.events.gap_events import OrderBookGapDetectedEvent
+
+            event = OrderBookGapDetectedEvent(
+                event_id=str(uuid4()),
+                exchange_id=outcome.exchange,
+                symbol=outcome.symbol,
+                last_u=outcome.last_u,
+                observed_u=outcome.observed_u,
+                expected_u=outcome.expected_u,
+                missing_count=outcome.missing_count,
+                detected_at_ms=int(time() * 1000),
+            )
+            # Publicar evento de gap (D3, ADR-0028) con datos reales.
+            # x-ocm-dataset=orderbook debe venir inyectado por el wiring.
+            await self._gap_publisher.publish_gap_event(event)
+
         if outcome.kind in (OutcomeKind.GAP_DETECTED, OutcomeKind.STRUCTURAL_INVALID):
             self._metrics.event_failed(exchange=outcome.exchange, reason=outcome.kind.value)
             self._log.bind(
