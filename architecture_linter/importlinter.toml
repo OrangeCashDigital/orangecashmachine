@@ -438,7 +438,7 @@ name = "BC-36: trading.strategies isolated from execution and analytics"
 type = "forbidden"
 source_modules = ["trading.strategies", "trading.domain.strategies"]
 forbidden_modules = [
-    "trading.execution",
+    "trading.application",
     "trading.analytics",
     "trading.domain.models",
     "trading.domain.risk",
@@ -453,7 +453,7 @@ name = "BC-12: trading.risk isolated from execution"
 type = "forbidden"
 source_modules = ["trading.risk", "trading.domain.risk"]
 forbidden_modules = [
-    "trading.execution",
+    "trading.application",
     "trading.domain.models",
     "trading.domain.strategies",
     "trading.domain.analytics",
@@ -467,7 +467,7 @@ name = "BC-13: portfolio isolated from trading execution and strategies"
 type = "forbidden"
 source_modules = ["portfolio"]
 forbidden_modules = [
-    "trading.execution",
+    "trading.application",
     "trading.strategies",
     "trading.domain.models",
     "trading.domain.risk",
@@ -504,7 +504,7 @@ forbidden_modules = [
     "trading.ports",
     "trading.adapters",
     "trading.bootstrap",
-    "trading.execution",
+    "trading.application",
     "trading.risk",
     "trading.strategies",
     "trading.analytics",
@@ -519,23 +519,23 @@ source_modules = ["trading.ports"]
 forbidden_modules = [
     "trading.adapters",
     "trading.bootstrap",
-    "trading.execution",
+    "trading.application",
     "trading.risk",
     "trading.strategies",
     "trading.analytics",
 ]
 
 [[tool.importlinter.contracts]]
-# Orden de capas real de trading: adapters > ports > domain. No hay application
-# commiteada, asi que no se declara. Espejo de BC-08 (market_data) y BC-44.
+# Orden de capas real de trading: adapters > application > ports > domain. Espejo de BC-08 (market_data) y BC-44.
 # bootstrap queda fuera: es el composition root y es un namespace package sin
 # __init__.py. Los paquetes legacy (execution/risk/strategies/analytics) tampoco
 # se listan: son shims y codigo congelado que se retira en un PR posterior.
-name = "BC-59: trading layer order (adapters > ports > domain)"
+name = "BC-59: trading layer order (adapters > application > ports > domain)"
 type = "layers"
 containers = ["trading"]
 layers = [
     "adapters",
+    "application",
     "ports",
     "domain",
 ]
@@ -592,7 +592,7 @@ forbidden_modules = [
     "market_data.application",
     "market_data.infrastructure",
     "market_data.adapters",
-    "trading.execution",
+    "trading.application",
     "trading.strategies",
     "trading.risk",
     "trading.analytics",

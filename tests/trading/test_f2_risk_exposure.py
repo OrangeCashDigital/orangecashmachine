@@ -46,6 +46,8 @@ from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.models.position import PortfolioState, PositionSnapshot
 from portfolio.services.portfolio_service import PortfolioService
 from trading.analytics.trade_tracker import TradeTracker
+from trading.application.fill_sync import build_fill_sync
+from trading.application.oms import OMS
 from trading.domain.models.order import Order
 from trading.domain.risk.models import (
     OrderLimits,
@@ -55,8 +57,6 @@ from trading.domain.risk.models import (
 )
 from trading.domain.strategies.base import BaseStrategy, Signal
 from trading.engine import TradingEngine
-from trading.execution.fill_sync import build_fill_sync
-from trading.execution.oms import OMS
 from trading.ports.outbound.transport import ExchangeOrderStatus as TStatus
 from trading.ports.outbound.transport import OrderResult, OrderState
 from trading.risk.manager import RiskManager

@@ -8,7 +8,7 @@ Importar desde los submódulos directamente:
 
     from trading.strategies import StrategyRegistry, BaseStrategy
     from trading.risk import RiskManager, RiskConfig
-    from trading.execution import OMS, PaperExecutor
+    from trading.application import OMS, PaperExecutor
     from trading.analytics import TradeTracker
 
   strategies/  — plugin system + estrategias
