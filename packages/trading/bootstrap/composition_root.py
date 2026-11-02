@@ -65,8 +65,8 @@ if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
     from portfolio.services.rebalance_service import RebalanceSignal
     from trading.analytics.trade_tracker import TradeTracker
+    from trading.application.oms import OMS
     from trading.engine import TradingEngine
-    from trading.execution.oms import OMS
 
     from ocm.config.schema import ExchangeConfig, TradingConfig
     from ocm.config.schema import RiskConfig as AppRiskConfig
@@ -216,7 +216,7 @@ class _GoldFeatureSource:
 class _BybitTransport:
     """Adapta CCXTAdapter al port OrderTransport (submit + fetch_state + cancel).
 
-    Vive aquí —no en trading/execution— para concentrar el acoplamiento a
+    Vive aquí —no en trading.application— para concentrar el acoplamiento a
     market_data en un solo archivo auditable (BC-50, mismo criterio que
     _GoldFeatureSource). CCXTAdapter es async; el motor de ejecución es sync,
     así que cada operación se resuelve con un loop limpio vía asyncio.run y
@@ -437,9 +437,9 @@ class TradingCompositionRoot:
         from trading.adapters.outbound.live_executor import LiveExecutor
         from trading.adapters.outbound.paper_transport import PaperTransport
         from trading.analytics.trade_tracker import TradeTracker
+        from trading.application.fill_sync import build_fill_sync
+        from trading.application.oms import OMS
         from trading.engine import TradingEngine
-        from trading.execution.fill_sync import build_fill_sync
-        from trading.execution.oms import OMS
         from trading.risk.manager import RiskManager
         from trading.strategies.registry import StrategyRegistry
 
@@ -532,9 +532,9 @@ class TradingCompositionRoot:
         """
         from trading.adapters.outbound.paper_executor import PaperExecutor
         from trading.analytics.trade_tracker import TradeTracker
+        from trading.application.fill_sync import build_fill_sync
+        from trading.application.oms import OMS
         from trading.engine import TradingEngine
-        from trading.execution.fill_sync import build_fill_sync
-        from trading.execution.oms import OMS
         from trading.risk.manager import RiskManager
         from trading.strategies.registry import StrategyRegistry
 
