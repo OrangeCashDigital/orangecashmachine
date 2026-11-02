@@ -227,6 +227,12 @@ class PipelineOrchestrator:
         factory : PipelineFactoryPort — override por llamada. Si es None,
                   usa la factory del constructor.
 
+        Notas
+        -----
+        `factory.release()` se ejecuta siempre al final, también cuando la
+        construcción falla: la factory puede haber instanciado el adaptador
+        antes de fallar y la sesión quedaría abierta.
+
         Returns
         -------
         PipelineSummary del pipeline ejecutado.
@@ -244,20 +250,22 @@ class PipelineOrchestrator:
                 "PipelineOrchestrator: se requiere factory — inyectar via constructor o parámetro run()"
             )
 
-        pipeline = self._build_pipeline(request, factory=f)
-
         try:
-            summary = await pipeline.run(mode=request.mode)
-            logger.info("PipelineOrchestrator.run OK | {} summary={}", request, summary)
-            return summary
-        except PipelineExecutionError:
-            raise  # Ya es el tipo correcto — re-lanzar sin wrappear
-        except Exception as exc:
-            logger.opt(exception=True).error(
-                "PipelineOrchestrator.run FAILED | {}",
-                request,
-            )
-            raise PipelineExecutionError(f"Fallo durante ejecución del pipeline: {request}") from exc
+            pipeline = self._build_pipeline(request, factory=f)
+            try:
+                summary = await pipeline.run(mode=request.mode)
+                logger.info("PipelineOrchestrator.run OK | {} summary={}", request, summary)
+                return summary
+            except PipelineExecutionError:
+                raise  # Ya es el tipo correcto — re-lanzar sin wrappear
+            except Exception as exc:
+                logger.opt(exception=True).error(
+                    "PipelineOrchestrator.run FAILED | {}",
+                    request,
+                )
+                raise PipelineExecutionError(f"Fallo durante ejecución del pipeline: {request}") from exc
+        finally:
+            await f.release()
 
     def _build_pipeline(
         self,

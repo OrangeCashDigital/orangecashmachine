@@ -10,7 +10,7 @@ Responsabilidad
 Definir QualityPipelinePort — el contrato mínimo que OHLCVPipeline
 y las strategies necesitan del quality gate.
 
-QualityPipelineResult vive aquí (SSOT) porque es un tipo de contrato
+QualityGateResult vive aquí (SSOT) porque es un tipo de contrato
 compartido entre ports/ y application/ — no lógica de aplicación.
 application/quality/pipeline.py lo re-exporta desde aquí.
 
@@ -45,12 +45,14 @@ from market_data.domain.entities import DataTier
 
 
 @dataclass(frozen=True)
-class QualityPipelineResult:
+class QualityGateResult:
     """
     Resultado del quality gate sobre un DataFrame Silver.
 
     Tipo de contrato compartido entre ports/ y application/.
-    SSOT: definido aquí; application/quality/pipeline.py lo re-exporta.
+    SSOT: definido aquí como contrato del puerto (QualityGateResult).
+    Distinto de application/quality/pipeline.py:QualityPipelineResult
+    (ese es el resultado rico de aplicación, con df + report + policy).
 
     Attributes
     ----------
@@ -83,9 +85,9 @@ class QualityPipelinePort(Protocol):
 
     Contrato semántico
     ------------------
-    check() evalúa un DataFrame Silver y retorna QualityPipelineResult.
+    check() evalúa un DataFrame Silver y retorna QualityGateResult.
     Nunca lanza — SafeOps: errores internos se loguean y retornan
-    QualityPipelineResult con accepted=False en modo degradado.
+    QualityGateResult con accepted=False en modo degradado.
 
     DIP
     ---
@@ -105,7 +107,7 @@ class QualityPipelinePort(Protocol):
         timeframe: str,
         market_type: str = "spot",
         rows_removed: int = 0,
-    ) -> QualityPipelineResult:
+    ) -> QualityGateResult:
         """
         Evalúa la calidad de un DataFrame Silver.
 
@@ -121,7 +123,7 @@ class QualityPipelinePort(Protocol):
 
         Returns
         -------
-        QualityPipelineResult con accepted, decision, score y tier.
+        QualityGateResult con accepted, decision, score y tier.
         """
         ...
 
@@ -133,7 +135,7 @@ class QualityPipelinePort(Protocol):
         exchange: str,
         run_id: Optional[str] = None,
         rows_removed: int = 0,
-    ) -> QualityPipelineResult:
+    ) -> QualityGateResult:
         """
         Alias de check() con firma compatible con QualityPipeline.check().
 
@@ -171,8 +173,8 @@ class NullQualityPipeline:
         timeframe: str,
         market_type: str = "spot",
         rows_removed: int = 0,
-    ) -> QualityPipelineResult:
-        return QualityPipelineResult(
+    ) -> QualityGateResult:
+        return QualityGateResult(
             accepted=True,
             decision="accept",
             score=1.0,
@@ -188,8 +190,8 @@ class NullQualityPipeline:
         exchange: str,
         run_id: Optional[str] = None,
         rows_removed: int = 0,
-    ) -> QualityPipelineResult:
-        return QualityPipelineResult(
+    ) -> QualityGateResult:
+        return QualityGateResult(
             accepted=True,
             decision="accept",
             score=1.0,
@@ -198,4 +200,4 @@ class NullQualityPipeline:
         )
 
 
-__all__ = ["QualityPipelineResult", "QualityPipelinePort", "NullQualityPipeline"]
+__all__ = ["QualityGateResult", "QualityPipelinePort", "NullQualityPipeline"]

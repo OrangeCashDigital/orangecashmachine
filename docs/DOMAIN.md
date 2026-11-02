@@ -83,7 +83,7 @@ No es "shared misceláneo" — es el catálogo SSOT de todos los puertos que cru
 | Protocol | Frontera | Implementado por (según docstring) |
 |---|---|---|
 | `FeatureSource` | market_data → trading | `GoldLoader`, `GoldLoaderAdapter` |
-| `SignalProtocol` | strategies → execution | `trading.strategies.base.Signal` |
+| `SignalProtocol` | strategies → execution | `trading.domain.strategies.base.Signal` |
 | `FillHandler` | execution → portfolio | *(ver Deuda Arquitectónica, punto 4)* |
 | `TradeHistory` | portfolio → backtesting | *(ver Deuda Arquitectónica, punto 4)* |
 | `RiskGate` | execution → risk | *(ver Deuda Arquitectónica, punto 4 — mismatch verificado)* |

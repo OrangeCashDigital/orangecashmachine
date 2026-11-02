@@ -1,6 +1,6 @@
 ## Reglas de seguridad no negociables
 
-- El agente NUNCA ejecuta `git push`, `gh pr merge`, `git reset`,
+- El agente NUNCA ejecuta `gh pr merge`, `git reset`,
   `git rebase`, `git stash`, `git clean`, `git commit --amend`,
   `git commit --no-verify`, `git branch -D`, `git branch -d`,
   `git push --force`, `git push -f`, `git push --delete`.
@@ -14,8 +14,9 @@
   `credential.helper`, `.gitconfig`, `.env` ni ningún otro sitio.
 - Si un comando está bloqueado por el entorno: PARAR. No sustituir,
   no probar variantes, no rodear. Pedir al humano que lo ejecute.
-- Ante cualquier duda: proponer y esperar. El humano es el único
-  autorizado a modificar el remoto (push, PR, merge).
+- `git push origin <rama>` y `gh pr create` solo con confirmación humana
+  explícita (permiso `ask` en `opencode.json`).
+- Ante cualquier duda: proponer y esperar. El merge lo hace siempre el humano.
 
 ---
 
@@ -32,7 +33,7 @@ Clean/Hexagonal with bounded contexts and 51 import-linter contracts (BC-NN; bas
 - **Control FAIL $\neq$ Finding Nuevo:** Todo fallo detectado (ej. por `architecture_linter`) debe contrastarse obligatoriamente contra `tracking.yaml`, ADRs y auditorías históricas. Si ya está registrado, se clasifica como `REVALIDADO`, nunca como `NUEVO`.
 - **Modelo de Fuentes y Jerarquía:** Las fuentes externas de conocimiento (libros, papers, notas) no son normas. Toda obligación requiere la cadena de adopción: `Conocimiento` → `Decisión Humana` → `ADR / Governance` → `Control`.
 - **Orden de Descubrimiento:** Plan Maestro (`docs/PLAN-Maestro-Ingenieria.md`) → Governance (`docs/architecture/GOVERNANCE.md`) → Tracking (`docs/plans/tracking.yaml`) → ADRs → CI/Linters.
-- **Tooling mecánico primero:** Antes de emitir juicios, ejecuta `uv run python scripts/audit_validator.py` (reglas M1..M20, ver AUDIT_PROTOCOL §Q). El LLM solo juzga donde no hay validación mecánica. Comando canónico de cada control: AUDIT_PROTOCOL §R.
+- **Tooling mecánico primero:** Antes de emitir juicios, ejecuta `uv run python scripts/audit_validator.py` (reglas M1..M25, ver AUDIT_PROTOCOL §Q). El LLM solo juzga donde no hay validación mecánica. Comando canónico de cada control: AUDIT_PROTOCOL §R.
 
 ## Commands
 
@@ -340,3 +341,31 @@ El agente no corre `gh pr merge` en ningún caso.
   humano decide con `--force-with-lease` (nunca `--force`).
 - `main` está protegido: cualquier force-push rebota por branch protection.
 
+### R-GIT-9 — Cerrar PR sin merge y cherry-pick: DENEGADO
+
+- El agente **NUNCA** ejecuta `gh pr close` sobre un PR propio sin mergear.
+- El agente **NUNCA** aplica cambios de un PR a `main` mediante
+  `git cherry-pick`, `git am` o equivalente.
+- Si un PR está BLOCKED:
+  1. Diagnostica: `gh pr checks <n>` y `gh run view <run-id> --log-failed`.
+  2. Corrige en la rama del PR (nuevo commit) y hace push.
+  3. Espera checks verdes.
+  4. Si sigue BLOCKED, **DETIENE** y reporta al humano.
+- Solo el humano cierra PRs.
+- Justificación: cherry-pick + close rompe trazabilidad (PR aparece CLOSED,
+  no MERGED) y puede duplicar commits si los SHAs coinciden. Incidente
+  real: PR #102 (2026-10-27) cerrado por agente tras cherry-pick, main
+  desincronizado con 3 commits locales duplicados.
+
+### R-GIT-10 — Diagnóstico cuando `--admin` falla
+
+Complementa R-GIT-5 (que ya establece `--admin` como human-only).
+
+- Si `gh pr merge --admin` devuelve un error de branch protection, verifica:
+  `gh api repos/<owner>/<repo>/branches/main/protection --jq '.enforce_admins.enabled'`
+- Si `true`: `--admin` **NO funcionará nunca**. Los checks requeridos deben
+  pasar por CI. DETIENE y reporta al humano. No insistas, no sortees con
+  cherry-pick ni close.
+- Si `false`: `--admin` es válido solo cuando todos los checks están verdes
+  y el único bloqueante son reviews pendientes.
+- **Nunca** `--admin` para saltarse checks rojos.

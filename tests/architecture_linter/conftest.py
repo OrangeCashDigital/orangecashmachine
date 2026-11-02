@@ -20,7 +20,7 @@ def make_repo(tmp_path: Path):
     Uso:
         def test_x(make_repo):
             ctx = make_repo({
-                "packages/trading/execution/oms.py": "...código...",
+                "packages/trading/application/oms.py": "...código...",
                 "packages/trading/risk/manager.py": "...código...",
             })
     """

@@ -20,8 +20,17 @@ exclude_dirs = [".venv", "__pycache__", ".git", ".pytest_cache"]
 # responsabilidades distintas (verificado manualmente; informe 2026-08-16).
 [linter.allow]
 "ARCH-007" = [
-    "CompositionRoot",
-    "RiskConfig",
-    "ConfigurationError",
-    "CursorStore",
+    "CompositionRoot",           # excepción por BC (ADR-0003)
+    "RiskConfig",                # Hydra Structured Config ↔ Pydantic SSOT
+    "ConfigurationError",        # idem
+    "CursorStore",               # idem
+    # _TransientProxy: duplicación NECESARIA por contrato de capas (BC-08 + BC-09).
+    # domain/policies/base.py NO puede importar de application/pipeline/runtime.py:
+    #   - BC-08 (layer order): domain < ports < application < adapters < infra
+    #   - BC-09: domain no puede importar loguru/polars (runtime.py los arrastra)
+    # PR #115 intentó consolidar vía lazy import → BC-08/BC-09 broken, 2 gates en rojo.
+    # La duplicación es el precio de mantener el dominio puro. Ver issue #111.
+    # Si en el futuro _TransientProxy se mueve a domain/_transient.py neutral,
+    # esta excepción se puede eliminar.
+    "_TransientProxy",
 ]

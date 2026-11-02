@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-trading/execution/transport.py
+trading/ports/outbound/transport.py
 ==============================
 
 OrderTransport — contrato de transporte de órdenes (límite → el exchange).
@@ -42,15 +42,14 @@ from enum import Enum
 from typing import Optional, Protocol, runtime_checkable
 
 __all__ = [
-    "OrderStatus",
+    "ExchangeOrderStatus",
     "OrderState",
     "OrderResult",
     "OrderTransport",
-    "PaperTransport",
 ]
 
 
-class OrderStatus(str, Enum):
+class ExchangeOrderStatus(str, Enum):
     """Estado de una orden en el exchange (vista transporte)."""
 
     SUBMITTED = "submitted"  # aceptada, pendiente de fill
@@ -72,7 +71,7 @@ class OrderState:
     """
 
     order_id: Optional[str] = None
-    status: OrderStatus = OrderStatus.SUBMITTED
+    status: ExchangeOrderStatus = ExchangeOrderStatus.SUBMITTED
     filled_qty: Optional[float] = None
     fill_price: Optional[float] = None
     fees: Optional[float] = None
@@ -80,7 +79,7 @@ class OrderState:
 
     @property
     def confirmed_filled(self) -> bool:
-        return self.status == OrderStatus.FILLED and self.filled_qty is not None
+        return self.status == ExchangeOrderStatus.FILLED and self.filled_qty is not None
 
 
 @dataclass(frozen=True)
@@ -148,46 +147,3 @@ class OrderTransport(Protocol):
     def close(self) -> None:
         """Cierra recursos del transporte. SafeOps: nunca lanza."""
         ...
-
-
-class PaperTransport:
-    """Transporte simulado — sigue el flujo orden→fill→estado sin I/O.
-
-    Usado en el modo paper del LiveExecutor para validar el ciclo completo
-    (orden→fill→reconciliación) con el mismo pipeline que live, pero sin
-    dinero real. Siempre confirma FILLED al precio de señal.
-    """
-
-    def submit(
-        self,
-        symbol: str,
-        side: str,
-        qty: float,
-        *,
-        client_order_id: str,
-    ) -> OrderState:
-        return OrderState(
-            order_id=client_order_id,
-            status=OrderStatus.FILLED,
-            filled_qty=qty,
-        )
-
-    def fetch_state(self, exchange_order_id: str) -> OrderState:
-        # Papel no mantiene estado persistente; cualquier id es del ciclo actual.
-        return OrderState(order_id=exchange_order_id, status=OrderStatus.FILLED)
-
-    def cancel(self, symbol: str, exchange_order_id: str) -> OrderState:
-        # Sin I/O: el papel confirma el cancel inmediatamente (ADR-0029).
-        return OrderState(order_id=exchange_order_id, status=OrderStatus.CANCELLED)
-
-    def fetch_open_orders(self) -> list[OrderState]:
-        # Papel no mantiene estado persistente entre ordenes (submit()
-        # siempre resuelve a FILLED en el mismo ciclo) — nunca hay ordenes
-        # abiertas que reconciliar.
-        return []
-
-    def close(self) -> None:
-        return None
-
-    def __repr__(self) -> str:
-        return "PaperTransport()"

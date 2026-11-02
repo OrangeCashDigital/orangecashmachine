@@ -9,7 +9,7 @@ materialization (see `docs/architecture/decisions/ADR-0054-persistent-engineerin
 - A small, git-versioned collection of concise notes that let a new agent recover
   project identity, architecture, decisions, invariants, constraints, rejected
   approaches and methodology **before** an engineering task.
-- A companion to the procedural skill `.agents/skills/ocm-context-bootstrap/SKILL.md`,
+- A companion to the procedural skill `.opencode/skills/ocm-context-bootstrap/SKILL.md`,
   which retrieves from this store plus existing authoritative sources.
 
 ## 2. What it is NOT

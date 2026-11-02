@@ -75,6 +75,10 @@ class BookBuilderOutcome:
     asks: Optional[List[Tuple[str, str]]] = None
     timestamp_ms: int = 0
     detail: str = ""
+    last_u: int = 0
+    expected_u: int = 0
+    observed_u: int = 0
+    missing_count: int = 0
 
     @property
     def publishes(self) -> bool:

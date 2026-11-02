@@ -42,7 +42,7 @@ from __future__ import annotations
 import threading
 from typing import Callable, Type, Union, overload
 
-from trading.strategies.base import BaseStrategy
+from trading.domain.strategies.base import BaseStrategy
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -169,7 +169,7 @@ def _register_builtins() -> None:
     import logging
 
     _builtins = [
-        ("ema_crossover", "trading.strategies.ema_crossover", "EMACrossoverStrategy"),
+        ("ema_crossover", "trading.domain.strategies.ema_crossover", "EMACrossoverStrategy"),
     ]
     for name, module_path, class_name in _builtins:
         try:

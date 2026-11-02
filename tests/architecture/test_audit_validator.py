@@ -311,3 +311,81 @@ class TestMatchingReportForRegister:
             encoding="utf-8",
         )
         assert av._matching_report_for_register(audits, register) == report
+
+
+# ── M20: warning solo si hay FAIL y ningún finding registrado ─────────────
+
+_REPORT_WITH_FAIL = """\
+# Informe
+
+## 19. Matriz de Controles (2)
+
+| Control | Comando | Resultado | Estado |
+|---|---|---|---|
+| A | x | ok | **PASS** |
+| B | y | ko | **FAIL** |
+
+Controles = PASS(1) + FAIL(1) = 2 ✅
+"""
+
+
+def test_m20_warns_when_fail_and_no_findings(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path, VALID_REGISTER, report=_REPORT_WITH_FAIL)
+    ctx.findings = []
+    av.m20_control_counts(ctx)
+    assert not ctx.errors
+    assert any("[M20]" in w for w in ctx.warnings)
+
+
+def test_m20_no_warning_with_revalidado_finding(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path, VALID_REGISTER, report=_REPORT_WITH_FAIL)
+    ctx.findings = [av.Finding(fid="F-1", classification="REVALIDADO")]
+    av.m20_control_counts(ctx)
+    assert not ctx.errors
+    assert not any("[M20]" in w for w in ctx.warnings)
+
+
+# ── M25: ADR huérfano, contando también staged_ports ──────────────────────
+
+
+def _registry_ctx(tmp_path: Path, registry_yaml: str) -> av.AuditContext:
+    ctx = _ctx(tmp_path, VALID_REGISTER)
+    reg = tmp_path / "registry.yaml"
+    reg.write_text(registry_yaml, encoding="utf-8")
+    ctx.registry = reg
+    return ctx
+
+
+def test_m25_adr_cited_only_in_staged_ports_does_not_warn(tmp_path: Path) -> None:
+    ctx = _registry_ctx(
+        tmp_path,
+        "related_adrs:\n"
+        "  - ADR-0044\n"
+        "rules:\n"
+        "  - id: R1\n"
+        "    adr: ADR-0016\n"
+        "staged_ports:\n"
+        "  - port: P\n"
+        "    adr: ADR-0028\n"
+        "    justification: 'Gobernanza: ADR-0044 (Staged Ports)'\n",
+    )
+    av.m25_orphan_adr_warning(ctx)
+    assert not ctx.errors
+    assert not any("ADR-0044" in w for w in ctx.warnings)
+
+
+def test_m25_unreferenced_adr_still_warns(tmp_path: Path) -> None:
+    ctx = _registry_ctx(
+        tmp_path,
+        "related_adrs:\n"
+        "  - ADR-0099\n"
+        "rules:\n"
+        "  - id: R1\n"
+        "    adr: ADR-0016\n"
+        "staged_ports:\n"
+        "  - port: P\n"
+        "    adr: ADR-0028\n",
+    )
+    av.m25_orphan_adr_warning(ctx)
+    assert not ctx.errors
+    assert any("ADR-0099" in w for w in ctx.warnings)

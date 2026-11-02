@@ -49,7 +49,7 @@ from shared.types.signal import (
 )  # DIP — order depende de domain, no de strategies
 
 if TYPE_CHECKING:
-    from trading.execution.settlement import Settlement
+    from trading.domain.models.settlement import Settlement
 
 # ---------------------------------------------------------------------------
 # Enums

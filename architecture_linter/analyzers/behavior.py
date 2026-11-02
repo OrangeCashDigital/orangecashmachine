@@ -131,6 +131,10 @@ def analyze_stub_class(ctx: RepoContext, path: Path, cls: ClassInfo) -> Optional
     """Devuelve StubEvidence si la clase es un stub; None si es una implementación real."""
     if cls.is_protocol or cls.is_abstract or cls.is_enum:
         return None
+    # Null-object intencional (Null*/Noop*): no es un stub productivo
+    # (exclusión deliberada por convención de nombre — ver ClassInfo.is_null_object_name).
+    if cls.is_null_object_name:
+        return None
 
     stub = StubEvidence(str(path), cls.name, cls.line)
 

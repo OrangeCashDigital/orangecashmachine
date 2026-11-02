@@ -47,11 +47,11 @@ from typing import ClassVar, Optional
 from loguru import logger
 
 from ocm.runtime.guard import ExecutionGuard
-from trading.execution.order import Order
-from trading.execution.transport import (
+from trading.domain.models.order import Order
+from trading.ports.outbound.transport import (
+    ExchangeOrderStatus,
     OrderResult,
     OrderState,
-    OrderStatus,
     OrderTransport,
 )
 
@@ -198,13 +198,13 @@ class LiveExecutor:
                     time.sleep(self._backoff_s * attempt)
                 continue
 
-            if state is not None and state.status != OrderStatus.ERROR:
+            if state is not None and state.status != ExchangeOrderStatus.ERROR:
                 break
             last_error = state.error if state else "transporte sin estado"
             if attempt < self._max_retries:
                 time.sleep(self._backoff_s * attempt)
 
-        if state is None or state.status == OrderStatus.ERROR:
+        if state is None or state.status == ExchangeOrderStatus.ERROR:
             self._log.error("submit agotó reintentos | order={} err={}", order.order_id, last_error)
             self._record_failure()
             return OrderResult(accepted=False, reason=last_error)
@@ -252,7 +252,7 @@ class LiveExecutor:
                 exc,
             )
             return None
-        if fetched.status != OrderStatus.ERROR and fetched.confirmed_filled:
+        if fetched.status != ExchangeOrderStatus.ERROR and fetched.confirmed_filled:
             return fetched
         self._log.warning(
             "reconciliacion NO confirma fill | order={} id={} status={} err={}",

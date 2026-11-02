@@ -40,5 +40,5 @@ LOG="$(mktemp /tmp/ocm-clean-pytest.XXXXXX)"
   -p no:cacheprovider >"$LOG" 2>&1 || rc=$?
 grep -E '^(FAILED|ERROR) |[0-9]+ (passed|failed)' "$LOG" | tail -40 || true
 echo "log completo: $LOG"
-bash .agents/skills/ocm-context-bootstrap/scripts/check-skill.sh || rc=$?
+bash .opencode/skills/ocm-context-bootstrap/scripts/check-skill.sh || rc=$?
 exit "$rc"

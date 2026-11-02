@@ -51,10 +51,11 @@ from market_data.domain.events.gap_events import (
     GapDetectedEvent,
     GapFailedEvent,
     GapHealedEvent,
+    OrderBookGapDetectedEvent,
 )
 
 # Tipo union para el método genérico — evita overloads innecesarios (KISS)
-GapEvent = Union[GapDetectedEvent, GapHealedEvent, GapFailedEvent]
+GapEvent = Union[GapDetectedEvent, GapHealedEvent, GapFailedEvent, OrderBookGapDetectedEvent]
 
 
 @runtime_checkable

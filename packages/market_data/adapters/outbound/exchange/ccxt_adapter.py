@@ -175,8 +175,6 @@ class CCXTAdapter(ExchangeAdapter):
 
         register_resilience_layer(self._exchange_id, self._resilience)
 
-        self._closed: bool = False
-
     # ----------------------------------------------------------
     # Sync primitives — lazy init (loop-safe)
     # ----------------------------------------------------------
@@ -239,10 +237,13 @@ class CCXTAdapter(ExchangeAdapter):
             return False
 
     async def close(self) -> None:
-        """Cierre seguro e idempotente — nunca lanza excepción."""
-        if self._closed:
-            return
-        self._closed = True
+        """Cierre seguro e idempotente — nunca lanza excepción.
+
+        La idempotencia descansa en `_client is None` dentro del lock, no en
+        un flag de instancia: un flag permanente quedaría desincronizado tras
+        `connect()` y el cliente nuevo ya no podría cerrarse (sesión huérfana,
+        warning de aiohttp en `__del__`).
+        """
         async with self._lock:
             if self._client is None:
                 return

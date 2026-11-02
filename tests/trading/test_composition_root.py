@@ -30,8 +30,8 @@ import pytest
 from portfolio.services.rebalance_service import RebalanceService
 from trading.analytics.trade_tracker import TradeTracker
 from trading.bootstrap.composition_root import TradingCompositionRoot
+from trading.domain.strategies.base import Signal
 from trading.engine import TradingEngine
-from trading.strategies.base import Signal
 
 from ocm.config.schema import (
     RiskConfig as AppRiskConfig,
@@ -170,7 +170,7 @@ def test_assemble_live_returns_runtime_with_injected_portfolio(
     procede y devuelve el runtime. El executor STUB por defecto aborta (ver
     test_assemble_live_blocks_while_executor_is_stub).
     """
-    from trading.execution.live_executor import LiveExecutor
+    from trading.adapters.outbound.live_executor import LiveExecutor
 
     monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
 
@@ -202,8 +202,8 @@ def test_assemble_live_prefers_real_transport_when_exchange_config(
     test_assemble_live_blocks_while_executor_is_stub).
     """
     import market_data  # noqa: F401  (disponible en CI)
-    from trading.execution.live_executor import LiveExecutor
-    from trading.execution.transport import PaperTransport
+    from trading.adapters.outbound.live_executor import LiveExecutor
+    from trading.adapters.outbound.paper_transport import PaperTransport
 
     portfolio = _FakePortfolio()
 
@@ -234,7 +234,7 @@ def test_assemble_live_ok_con_provenance_actual(
     profundidad para el futuro, no una corrección de un fallo actual.
     IS_STUB=True (default, C3) se relaja controladamente para aislar B-23.
     """
-    from trading.execution.live_executor import LiveExecutor
+    from trading.adapters.outbound.live_executor import LiveExecutor
 
     portfolio = _FakePortfolio()
     root = TradingCompositionRoot(
@@ -468,7 +468,7 @@ def test_constructor_requires_rebalance_port() -> None:
 
 
 def test_map_risk_config_is_1to1_no_field_lost() -> None:
-    """Mapeo 1:1: AppConfig.risk → trading.risk.models.RiskConfig sin perder campos."""
+    """Mapeo 1:1: AppConfig.risk → trading.domain.risk.models.RiskConfig sin perder campos."""
     from trading.bootstrap.composition_root import _map_risk_config
 
     app_risk = AppRiskConfig(
@@ -511,7 +511,7 @@ def test_resolve_risk_config_applies_min_confidence_only_via_override() -> None:
 
 def test_resolve_risk_config_uses_pure_defaults_when_risk_absent() -> None:
     """Fail-soft paper: sin risk explícito → defaults puros de RiskConfig."""
-    from trading.risk.models import RiskConfig as DomainRiskConfig
+    from trading.domain.risk.models import RiskConfig as DomainRiskConfig
 
     root = _build_root(guard=None, _risk_absent=True)
 

@@ -204,7 +204,7 @@ def execute(
     -------
     CycleRunResult con todo lo necesario para que el CLI loguee y salga.
     """
-    from trading.analytics.performance import PerformanceEngine
+    from trading.domain.analytics.performance import PerformanceEngine
 
     try:
         resources = build_live_engine(
@@ -227,7 +227,7 @@ def execute(
     logger.info("Portfolio | {}", resources.portfolio)
 
     if resources.oms is not None and resources.transport is not None:
-        from trading.execution.oms import manage_open_orders
+        from trading.application.oms import manage_open_orders
 
         try:
             manage_open_orders(resources.oms, resources.transport)

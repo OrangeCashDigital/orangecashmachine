@@ -413,6 +413,7 @@ class CompositionRoot:
         Returns:
             BookBuilderConsumer listo para start() → run().
         """
+        from market_data.adapters.outbound.kafka_gap_publisher import KafkaGapPublisher
         from market_data.application.processing.book_builder import BookBuilder
         from market_data.infrastructure.kafka.book_builder_consumer import (
             BookBuilderConsumer,
@@ -436,10 +437,19 @@ class CompositionRoot:
 
         metrics = KafkaMetrics(topic="orderbook.raw")
 
+        # B-25 / ADR-0028 (D3): gap publisher con header x-ocm-dataset=orderbook.
+        # KafkaGapPublisher.start()/stop() se gestionan vía el consumer lifecycle
+        # (ver BookBuilderConsumer.start/stop) — no se levanta conexión aquí.
+        gap_publisher = KafkaGapPublisher(
+            bootstrap_servers=bootstrap_servers,
+            headers={"x-ocm-dataset": "orderbook"},
+        )
+
         return BookBuilderConsumer(
             consumer=consumer,
             producer=producer,
             builder=builder,
+            gap_publisher=gap_publisher,
             metrics=metrics,
         )
 

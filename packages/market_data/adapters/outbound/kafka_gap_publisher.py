@@ -54,6 +54,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import time
+from typing import Optional
 
 from aiokafka import AIOKafkaProducer
 from loguru import logger
@@ -62,6 +63,7 @@ from market_data.domain.events.gap_events import (
     GapDetectedEvent,
     GapFailedEvent,
     GapHealedEvent,
+    OrderBookGapDetectedEvent,
 )
 from market_data.ports.outbound.gap_event_publisher import GapEvent
 
@@ -73,6 +75,7 @@ _EVENT_TYPE_NAMES: dict[type, str] = {
     GapDetectedEvent: "gap.detected",
     GapHealedEvent: "gap.healed",
     GapFailedEvent: "gap.failed",
+    OrderBookGapDetectedEvent: "orderbook.gap.detected",
 }
 
 
@@ -93,9 +96,11 @@ class KafkaGapPublisher:
         self,
         bootstrap_servers: str,
         topic: str = _DEFAULT_TOPIC,
+        headers: Optional[dict[str, str]] = None,
     ) -> None:
         self._bootstrap_servers = bootstrap_servers
         self._topic = topic
+        self._headers = headers or {}
         self._producer: AIOKafkaProducer | None = None
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
@@ -116,9 +121,10 @@ class KafkaGapPublisher:
         )
         await self._producer.start()
         logger.info(
-            "[kafka-gap-publisher] started | brokers={} topic={}",
+            "[kafka-gap-publisher] started | brokers={} topic={} headers={}",
             self._bootstrap_servers,
             self._topic,
+            self._headers,
         )
 
     async def stop(self) -> None:
@@ -146,16 +152,23 @@ class KafkaGapPublisher:
         try:
             payload = self._serialize(event)
             key = self._routing_key(event)
+
+            # Combinar headers del constructor con los de este mensaje
+            # (en esta fase solo usamos los del constructor)
+            kafka_headers = [(k, v.encode("utf-8") if isinstance(v, str) else v) for k, v in self._headers.items()]
+
             await self._producer.send(
                 self._topic,
                 value=payload,
                 key=key,
+                headers=kafka_headers,
             )
             logger.debug(
-                "[kafka-gap-publisher] published | topic={} type={} key={}",
+                "[kafka-gap-publisher] published | topic={} type={} key={} headers={}",
                 self._topic,
                 _EVENT_TYPE_NAMES.get(type(event), "unknown"),
                 key.decode(),
+                self._headers,
             )
         except Exception as exc:
             # SafeOps: nunca propagar al caller (RepairStrategy)
@@ -191,6 +204,9 @@ class KafkaGapPublisher:
         """
         if isinstance(event, GapDetectedEvent):
             key = f"{event.exchange_id}:{event.symbol}:{event.timeframe}"
+        elif isinstance(event, OrderBookGapDetectedEvent):
+            # OrderBook gaps: ordering por par (sin timeframe — es un stream continuo)
+            key = f"{event.exchange_id}:{event.symbol}:orderbook"
         else:
             # GapHealedEvent / GapFailedEvent: ordering por gap_event_id
             key = event.gap_event_id

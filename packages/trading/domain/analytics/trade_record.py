@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from trading.execution.settlement import FeeStatus, Settlement
+from trading.domain.models.settlement import FeeStatus, Settlement
 
 
 @dataclass(frozen=True)

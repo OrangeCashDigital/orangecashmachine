@@ -45,8 +45,8 @@ def _pos(order_id: str, symbol: str = "BTC/USDT", side: str = "long") -> Positio
 
 def test_order_id_generated_is_full_uuid_not_truncated() -> None:
     """B-16: Order.order_id deja de generarse truncado a 8 chars."""
-    from trading.execution.order import Order, OrderSide
-    from trading.strategies.base import Signal
+    from trading.domain.models.order import Order, OrderSide
+    from trading.domain.strategies.base import Signal
 
     signal = Signal(
         symbol="BTC/USDT",
