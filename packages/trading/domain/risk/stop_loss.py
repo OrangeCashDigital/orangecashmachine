@@ -10,7 +10,7 @@ Responsabilidad única (SRP)
 Dado el estado de posiciones abiertas y el precio actual, decidir qué
 símbolos han cruzado su nivel de stop-loss. No emite órdenes, no accede a
 exchanges, no conoce execution (BC-12: trading.risk no importa
-trading.execution).
+trading.application).
 
 Semántica (S1, aprobada)
 -----------------------

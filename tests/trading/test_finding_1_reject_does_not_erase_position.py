@@ -17,11 +17,11 @@ import pytest
 from portfolio.infra.memory_store import InMemoryPositionStore
 from portfolio.services.portfolio_service import PortfolioService
 from trading.analytics.trade_tracker import TradeTracker
+from trading.application.fill_sync import build_fill_sync
+from trading.application.oms import OMS
 from trading.domain.models.order import Order, OrderSide, OrderStatus
 from trading.domain.risk.models import RiskConfig
 from trading.domain.strategies.base import Signal
-from trading.execution.fill_sync import build_fill_sync
-from trading.execution.oms import OMS
 from trading.ports.outbound.transport import ExchangeOrderStatus as ExchangeStatus
 from trading.ports.outbound.transport import ExchangeOrderStatus as TStatus
 from trading.ports.outbound.transport import OrderResult, OrderState
