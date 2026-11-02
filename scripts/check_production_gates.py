@@ -19,6 +19,7 @@ la verificación = BLOCK.
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -373,19 +374,53 @@ def _health_check_healthy() -> bool:
         return False
 
 
-def _trading_stub_blocked() -> bool:
-    """Verifica G8 (C3, Fase 0 2026-09-24): fail-closed — no se opera capital real.
-
-    Dos condiciones de nivel código (CI-safe, sin infraestructura):
-      1. `live_executor.py` declara `IS_STUB: ClassVar[bool] = True`.
-      2. No hay ningún proceso `live_hydra`/`execute_live` corriendo.
-    """
+def _find_live_executor_source(root: Path) -> str | None:
+    """Texto del UNICO archivo bajo root que define class LiveExecutor; None si 0 o >1."""
+    found: list[str] = []
     try:
-        src = (ROOT / "packages" / "trading" / "adapters" / "outbound" / "live_executor.py").read_text()
-        stub_ok = "IS_STUB: ClassVar[bool] = True" in src
-    except Exception:
-        stub_ok = False  # fail-closed
-    # Proceso live: if pgrep finds none → no hay proceso → trading_ok=True
+        search_root = root / "packages" / "trading"
+        for path in sorted(search_root.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(text)
+            except (SyntaxError, ValueError):
+                continue
+            n = sum(isinstance(x, ast.ClassDef) and x.name == "LiveExecutor" for x in ast.walk(tree))
+            if n > 1:
+                return None
+            if n == 1:
+                found.append(text)
+    except (OSError, UnicodeDecodeError):
+        return None
+    return found[0] if len(found) == 1 else None
+
+
+def _assigns_is_stub_true(item: ast.stmt) -> bool:
+    if isinstance(item, ast.AnnAssign):
+        targets, value = [item.target], item.value
+    elif isinstance(item, ast.Assign):
+        targets, value = item.targets, item.value
+    else:
+        return False
+    named = any(isinstance(t, ast.Name) and t.id == "IS_STUB" for t in targets)
+    return named and isinstance(value, ast.Constant) and value.value is True
+
+
+def _is_stub_true(source: str) -> bool:
+    """True solo si class LiveExecutor (unica) declara IS_STUB = True en su cuerpo."""
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return False
+    classes = [x for x in ast.walk(tree) if isinstance(x, ast.ClassDef) and x.name == "LiveExecutor"]
+    if len(classes) != 1:
+        return False
+    return any(_assigns_is_stub_true(i) for i in classes[0].body)
+
+
+def _no_live_process() -> bool:
     try:
         r = subprocess.run(
             ["pgrep", "-af", "live_hydra|execute_live"],
@@ -393,10 +428,18 @@ def _trading_stub_blocked() -> bool:
             text=True,
             timeout=10,
         )
-        trading_ok = r.returncode != 0
+        return r.returncode != 0
     except Exception:
-        trading_ok = False  # fail-closed: sin poder verificar, BLOCK
-    return stub_ok and trading_ok
+        return False
+
+
+def _trading_stub_blocked(root: Path | None = None) -> bool:
+    """G8 fail-closed: una unica LiveExecutor con IS_STUB=True y sin proceso live."""
+    base = root if root is not None else ROOT
+    source = _find_live_executor_source(base)
+    if source is None:
+        return False
+    return _is_stub_true(source) and _no_live_process()
 
 
 def _bronze_fresh() -> bool:
