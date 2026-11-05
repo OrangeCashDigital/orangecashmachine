@@ -33,9 +33,9 @@ from datetime import datetime, timezone
 import pytest
 from loguru import logger
 from trading.analytics.trade_tracker import TradeTracker
+from trading.application.fill_sync import build_fill_sync
 from trading.domain.models.order import Order, OrderSide, OrderStatus
 from trading.domain.strategies.base import Signal
-from trading.execution.fill_sync import build_fill_sync
 
 
 def _signal(side: str) -> Signal:

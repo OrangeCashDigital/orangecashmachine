@@ -26,7 +26,7 @@ from architecture_linter.rules.arch_010 import Arch010Rule
 def test_arch001_fail_multiple_owners(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._entry_positions: dict[str, float] = {}\n"
@@ -49,7 +49,7 @@ def test_arch001_fail_multiple_owners(make_repo) -> None:
 def test_arch001_pass_single_owner(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._entry_positions: dict[str, float] = {}\n"
@@ -70,7 +70,7 @@ def test_arch001_pass_single_owner(make_repo) -> None:
 def test_arch002_fail_wac_vs_replace(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._open: dict[str, float] = {}\n"
@@ -102,7 +102,7 @@ def test_arch002_fail_wac_vs_replace(make_repo) -> None:
 def test_arch003_fail_no_reconciliation(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._orders: dict[str, object] = {}\n"
@@ -118,7 +118,7 @@ def test_arch003_fail_no_reconciliation(make_repo) -> None:
 def test_arch003_pass_with_management(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._orders: dict[str, object] = {}\n"
@@ -137,14 +137,14 @@ def test_arch003_partial_puntual_reconciliation(make_repo) -> None:
     """fetch_state submit-time sin loop periódico => PARTIAL, no FAIL."""
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._orders: dict[str, object] = {}\n"
                 "    def submit(self, order_id, order):\n"
                 "        self._orders[order_id] = order\n"
             ),
-            "packages/trading/execution/transport.py": (
+            "packages/trading/application/transport.py": (
                 "class OrderTransport:\n    def fetch_state(self, order_id):\n        return {}\n"
             ),
         }
@@ -157,7 +157,7 @@ def test_arch003_unknown_no_stores(make_repo) -> None:
     """Sin almacenes de órdenes en trading => UNKNOWN honesto, nunca PASS/FAIL artificial."""
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n    def __init__(self):\n        self.something_else = []\n"
             ),
         }
@@ -187,7 +187,7 @@ def test_arch004_fail_capital_only(make_repo) -> None:
 def test_arch004_pass_with_balance(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n    def fetch_balance(self):\n        return {'USDT': 100.0}\n"
             ),
         }
@@ -215,7 +215,7 @@ def test_arch005_fail_chain_broken(make_repo) -> None:
                 "    async def _handle_silence_gap(self):\n"
                 "        pass\n"
             ),
-            "packages/trading/execution/oms.py": ("class OMS:\n    def submit(self, order):\n        pass\n"),
+            "packages/trading/application/oms.py": ("class OMS:\n    def submit(self, order):\n        pass\n"),
         }
     )
     result = Arch005Rule().run(ctx)
@@ -293,10 +293,10 @@ def test_arch006_pass_consumed_port(make_repo) -> None:
 def test_arch007_fail_duplicate(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/order.py": (
+            "packages/trading/application/order.py": (
                 "class OrderStatus:\n    PENDING = 'pending'\n    FILLED = 'filled'\n"
             ),
-            "packages/trading/execution/transport.py": (
+            "packages/trading/application/transport.py": (
                 "class OrderStatus:\n    PENDING = 'pending'\n    FILLED = 'filled'\n"
             ),
         }
@@ -308,7 +308,7 @@ def test_arch007_fail_duplicate(make_repo) -> None:
 def test_arch007_pass_single_definition(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/order.py": ("class OrderStatus:\n    PENDING = 'pending'\n"),
+            "packages/trading/application/order.py": ("class OrderStatus:\n    PENDING = 'pending'\n"),
         }
     )
     result = Arch007Rule().run(ctx)
@@ -447,7 +447,7 @@ def test_arch009_pass_ignored_import(make_repo) -> None:
 def test_arch010_fail_duplicated_position(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._entry_positions: dict[str, float] = {}\n"
@@ -470,7 +470,7 @@ def test_arch010_fail_duplicated_position(make_repo) -> None:
 def test_arch010_pass_single_store(make_repo) -> None:
     ctx = make_repo(
         {
-            "packages/trading/execution/oms.py": (
+            "packages/trading/application/oms.py": (
                 "class OMS:\n"
                 "    def __init__(self):\n"
                 "        self._entry_positions: dict[str, float] = {}\n"
