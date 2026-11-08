@@ -86,7 +86,7 @@ rules:
     severity: HIGH
     owner: trading
     enforcement: blocking
-    mechanism: AST guard sobre trading.execution.oms + test round-trip BUY→SELL
+    mechanism: AST guard sobre trading.application.oms + test round-trip BUY→SELL
     mechanism_type: guard_script
     tests:
       positive: tests/trading/test_oms_fill_lifecycle.py::test_buy_fill_keeps_position_open

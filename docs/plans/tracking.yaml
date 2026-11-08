@@ -20,7 +20,7 @@ reglas:
 - id: R3
   hallazgo: H-03
   descripcion: '`record_open()` sin `record_close()` en flujo de fill'
-  mecanismo: AST guard sobre trading.execution.oms + test round-trip BUY→SELL
+  mecanismo: AST guard sobre trading.application.oms + test round-trip BUY→SELL
   backtest: ok
   activada_en_ci: true
 - id: R4

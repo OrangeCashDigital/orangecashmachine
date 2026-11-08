@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-trading/execution/oms.py
+trading/application/oms.py
 =========================
 
 OMS — Order Management System.
