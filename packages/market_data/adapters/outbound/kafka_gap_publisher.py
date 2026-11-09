@@ -67,8 +67,7 @@ from market_data.domain.events.gap_events import (
     GapHealedEvent,
     OrderBookGapDetectedEvent,
 )
-from market_data.infrastructure.kafka.metrics import KafkaMetrics
-from market_data.infrastructure.kafka.metrics import KafkaMetrics
+from market_data.ports.outbound.metrics import MetricsPort, NullMetrics
 from market_data.ports.outbound.gap_event_publisher import GapEvent
 
 _DEFAULT_TOPIC = "market.gaps"
@@ -103,7 +102,7 @@ class KafkaGapPublisher:
         headers: Optional[dict[str, str]] = None,
         is_test_env: bool = False,
         on_failure: Optional[Callable[[Exception, GapEvent], None]] = None,
-        metrics: Optional[KafkaMetrics] = None,
+        metrics: Optional[MetricsPort] = None,
         broker_identity: str = "production",
     ) -> None:
         self._bootstrap_servers = bootstrap_servers
@@ -111,7 +110,7 @@ class KafkaGapPublisher:
         self._headers = headers or {}
         self._is_test_env = is_test_env
         self._on_failure = on_failure
-        self._metrics = metrics or KafkaMetrics(topic=topic)
+        self._metrics = metrics or MetricsPort(topic=topic)
         self._broker_identity = broker_identity
         self._producer: AIOKafkaProducer | None = None
 
