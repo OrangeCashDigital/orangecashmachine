@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from market_data.adapters.outbound.kafka_gap_publisher import KafkaGapPublisher
 from market_data.domain.events.gap_events import OrderBookGapDetectedEvent
 from market_data.infrastructure.kafka.metrics import KafkaMetrics
+
 
 @pytest.fixture
 def publisher():
@@ -25,7 +27,7 @@ async def test_publisher_start_success():
     # This just tests the fail-closed logic
     try:
         await publisher.start()
-    except Exception as e:
+    except Exception:
         # AIOKafkaProducer.start() will fail without a broker, which is expected.
         # We just want to check the fail-closed logic didn't stop it first.
         assert "e2e-test-broker" in str(publisher._broker_identity)

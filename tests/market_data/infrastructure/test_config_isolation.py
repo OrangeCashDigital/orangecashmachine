@@ -1,5 +1,5 @@
-import pytest
 from ocm.config.schema import AppConfig
+
 
 def test_config_topic_defaults():
     # Simulate config loading with minimum required fields

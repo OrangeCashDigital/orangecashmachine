@@ -1,11 +1,14 @@
-import pytest
 import asyncio
-import uuid
 import json
+import uuid
+
+import pytest
 from aiokafka import AIOKafkaConsumer
 from aiokafka.admin import AIOKafkaAdminClient, NewTopic
 from market_data.adapters.outbound.kafka_gap_publisher import KafkaGapPublisher
 from market_data.domain.events.gap_events import OrderBookGapDetectedEvent
+
+pytestmark = pytest.mark.integration
 
 # Broker real dedicado
 BOOTSTRAP_SERVERS = "localhost:9093"

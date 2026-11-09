@@ -58,7 +58,6 @@ from collections.abc import Callable
 from typing import Optional
 
 from aiokafka import AIOKafkaProducer
-from aiokafka.client import AIOKafkaClient
 from loguru import logger
 
 from market_data.domain.events.gap_events import (
@@ -67,8 +66,8 @@ from market_data.domain.events.gap_events import (
     GapHealedEvent,
     OrderBookGapDetectedEvent,
 )
-from market_data.ports.outbound.metrics import MetricsPort, NullMetrics
 from market_data.ports.outbound.gap_event_publisher import GapEvent
+from market_data.ports.outbound.gap_publisher_metrics import GapPublisherMetricsPort, NullGapPublisherMetrics
 
 _DEFAULT_TOPIC = "market.gaps"
 
@@ -102,7 +101,7 @@ class KafkaGapPublisher:
         headers: Optional[dict[str, str]] = None,
         is_test_env: bool = False,
         on_failure: Optional[Callable[[Exception, GapEvent], None]] = None,
-        metrics: Optional[MetricsPort] = None,
+        metrics: Optional[GapPublisherMetricsPort] = None,
         broker_identity: str = "production",
     ) -> None:
         self._bootstrap_servers = bootstrap_servers
@@ -110,7 +109,7 @@ class KafkaGapPublisher:
         self._headers = headers or {}
         self._is_test_env = is_test_env
         self._on_failure = on_failure
-        self._metrics = metrics or MetricsPort(topic=topic)
+        self._metrics = metrics or NullGapPublisherMetrics()
         self._broker_identity = broker_identity
         self._producer: AIOKafkaProducer | None = None
 
@@ -150,13 +149,15 @@ class KafkaGapPublisher:
                 logger.info("[kafka-gap-publisher] Verificando broker dedicado | cluster_id={}", cluster_id)
                 
                 # Si se configuró una identidad esperada específica, validarla (Broker Lock).
-                if self._broker_identity not in ("any", "production"):
-                    if cluster_id != self._broker_identity:
-                        raise ValueError(
-                            f"[kafka-gap-publisher] Broker identity mismatch! "
-                            f"Expected: '{self._broker_identity}', Actual: '{cluster_id}'. "
-                            "Aisolation failure detected: connecting to wrong cluster."
-                        )
+                if (
+                    self._broker_identity not in ("any", "production")
+                    and cluster_id != self._broker_identity
+                ):
+                    raise ValueError(
+                        f"[kafka-gap-publisher] Broker identity mismatch! "
+                        f"Expected: '{self._broker_identity}', Actual: '{cluster_id}'. "
+                        "Aisolation failure detected: connecting to wrong cluster."
+                    )
         except Exception as exc:
             logger.error("[kafka-gap-publisher] Error de verificación de identidad: {}", str(exc))
             raise ValueError(f"Fallo de aislamiento Kafka: {str(exc)}") from exc
