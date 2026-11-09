@@ -41,6 +41,8 @@ integrations:
 
   kafka:
     enabled: false
+    topic_gaps: market.gaps.test
+    broker_identity: e2e-test-broker
 
   postgres:
     enabled: false
