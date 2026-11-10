@@ -173,6 +173,7 @@ class GapFailedEvent:
 
 __all__ = [
     "GapDetectedEvent",
+    "OrderBookGapDetectedEvent",
     "GapHealedEvent",
     "GapFailedEvent",
 ]
