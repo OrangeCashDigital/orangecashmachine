@@ -293,7 +293,7 @@ case "${ACTION}" in
         deploy
         if wait_for_health; then
             log "INFO" "Health checks passed"
-            POST_DEPLOY_HEALTH="$(${ROOT_DIR}/deploy/scripts/health_check.sh 2>&1)"
+            POST_DEPLOY_HEALTH="$("${ROOT_DIR}/deploy/scripts/health_check.sh" 2>&1)" || true
             if check_post_deploy_health; then
                 determine_status
                 write_evidence
