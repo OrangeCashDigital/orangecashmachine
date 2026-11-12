@@ -102,3 +102,7 @@ package-lock.json
 package.json
 .serena/
 staged_gap_events*.diff
+deploy/.backup_*/
+deploy/.prev_sha
+deploy/deploy_*.log
+deploy/deploy_evidence_*.json
