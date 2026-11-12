@@ -2495,6 +2495,45 @@ hallazgos:
     cierre:
       estado: PENDIENTE
       referencia: null
+- id: B-MD-001
+  hallazgo_informe: B-MD-001
+  fase: F3
+  prioridad: CRITICA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: El linter reporta ARCH-005 FAIL; no existe freshness como estado consultable ni su propagación (F-MD-001).
+  solucion: 'ADR-0059 (MERGED #142): FreshnessPort con estado consultable y propagación a trading/portfolio.'
+  pruebas:
+  - 'verificación: ADR-0059 en main'
+  - 'pendiente: implementación FreshnessPort'
+  adr_relacionado: ADR-0059 (MERGED #142)
+  riesgo_residual: Alto — sin freshness, un feed congelado es indistinguible de un mercado quieto (bloqueante de live).
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_market-data-deep-audit_2026-08-14.md
+    backlog:
+      estado: HECHO
+      referencia: B-MD-001 en tracking.yaml
+    adr:
+      estado: HECHO
+      referencia: ADR-0059 (MERGED #142)
+    implementacion:
+      estado: PENDIENTE
+      referencia: null
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
+    cierre:
+      estado: PENDIENTE
+      referencia: null
 - id: B-22
   hallazgo_informe: H-13
   fase: F5
