@@ -60,4 +60,33 @@ Owner revisa PR #142 → si aprueba, se implementa el contract puro (como PR #12
 - **No se pueden ejecutar** `git stash list`, `uv run pytest`, `git push --delete` en este entorno.
 - **Sí se pueden ejecutar** `gh`, `cat`, `grep`, `git log`, `git worktree list`, edición de archivos en el repo.
 - **Tests de contrato** ejecutados en sesiones anteriores: PASS.
-- **Linter:** PASS=8 FAIL=2 (pre-existente).
+
+## Acoplamiento ARCH-004 ↔ ARCH-005 (2026-11-12)
+
+**Hallazgo de auditoría:** ARCH-005 (Freshness Chain) no puede cerrarse de forma legítima sin ARCH-004 (Balance Port / sandbox Bybit).
+
+### Estado por nivel (verificado 2026-11-12)
+
+El linter `architecture_linter/rules/arch_005.py` mide 6 niveles y falla si cualquiera falta:
+
+| Nivel | Archivo/área medida | Estado | Notas |
+|---|---|---|---|
+| 1 · Detección de silencio | `packages/market_data/adapters/inbound/websocket/` | PASS | `GapAwareStream._handle_silence_gap`, `gap_threshold_ms` |
+| 2 · Recovery | `packages/market_data/` | PASS | `_run_recovery`, `_restart_source`, `GapRecoveryFetcher` |
+| 3 · Estado consultable en port | `packages/market_data/ports/inbound/trades_source.py` | **FAIL** | No menciona `FRESHNESS_SYMBOLS`. Accionable sin ARCH-004 |
+| 4 · Contrato en boundaries/ports | `shared/contracts/boundaries.py` + `packages/market_data/ports` | PASS | Docstring de `FreshnessSnapshot` contiene símbolos |
+| 5 · Propagación a trading/portfolio | `packages/trading/` + `packages/portfolio/` | **FAIL** | Requiere lógica real que consuma `FreshnessPort.get_freshness()` |
+| 6 · Enforcement pre-orden | `packages/trading/application/` + `packages/trading/risk/` | **FAIL** | Requiere validar freshness contra el exchange antes del submit → **bloqueado por ARCH-004** |
+
+### Por qué no se cierra hoy
+
+- **Nivel 3:** accionable (imports/referencias en `trades_source.py`), pero cerrarlo solo no hace pasar ARCH-005 (fallan 5 y 6).
+- **Nivel 5:** requiere que `packages/trading` y `packages/portfolio` consuman `FreshnessPort`. Sin conexión real al exchange, cualquier consumo sería un stub → viola ARCH-008 (stubs).
+- **Nivel 6:** requiere enforcement pre-orden. Sin sandbox Bybit (#121), no se puede validar contra el exchange. Enforcement stub = deuda disfrazada.
+
+### Conclusión
+
+`GapAwareStream` y `FreshnessPort` **ya están implementados correctamente**. Lo que falta es **consumo real** por parte de `trading`/`risk`, y eso depende de ARCH-004.
+
+**B-MD-001 permanece bloqueado por ARCH-004.** No es un fallo de implementación; es diseño correcto: no tiene sentido enforcement sin datos reales.
+
