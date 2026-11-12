@@ -2506,6 +2506,12 @@ hallazgos:
   pruebas:
   - 'verificación: ADR-0059 en main'
   - 'pendiente: implementación FreshnessPort'
+  blocked_by: [ARCH-004]  # enforcement pre-orden requiere sandbox Bybit (#121)
+  notes: >
+    FreshnessPort y FreshnessSnapshot ya existen en shared/contracts/boundaries.py.
+    GapAwareStream ya implementa el port (get_freshness línea 398).
+    Niveles 1, 2 y 4 del linter PASS. Niveles 3, 5 y 6 FAIL.
+    Niveles 5 y 6 requieren consumo real en trading/risk → bloqueado por ARCH-004.
   adr_relacionado: ADR-0059 (MERGED #142)
   riesgo_residual: Alto — sin freshness, un feed congelado es indistinguible de un mercado quieto (bloqueante de live).
   fecha_cierre: null
