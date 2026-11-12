@@ -440,9 +440,13 @@ class CompositionRoot:
         # B-25 / ADR-0028 (D3): gap publisher con header x-ocm-dataset=orderbook.
         # KafkaGapPublisher.start()/stop() se gestionan vía el consumer lifecycle
         # (ver BookBuilderConsumer.start/stop) — no se levanta conexión aquí.
+        is_test = config.environment.name == "test"
         gap_publisher = KafkaGapPublisher(
             bootstrap_servers=bootstrap_servers,
+            topic=config.integrations.kafka.topic_gaps,
             headers={"x-ocm-dataset": "orderbook"},
+            is_test_env=is_test,
+            metrics=metrics,
         )
 
         return BookBuilderConsumer(

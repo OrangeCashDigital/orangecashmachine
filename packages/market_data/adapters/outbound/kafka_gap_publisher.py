@@ -54,6 +54,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import time
+from collections.abc import Callable
 from typing import Optional
 
 from aiokafka import AIOKafkaProducer
@@ -66,6 +67,7 @@ from market_data.domain.events.gap_events import (
     OrderBookGapDetectedEvent,
 )
 from market_data.ports.outbound.gap_event_publisher import GapEvent
+from market_data.ports.outbound.gap_publisher_metrics import GapPublisherMetricsPort, NullGapPublisherMetrics
 
 _DEFAULT_TOPIC = "market.gaps"
 
@@ -97,21 +99,72 @@ class KafkaGapPublisher:
         bootstrap_servers: str,
         topic: str = _DEFAULT_TOPIC,
         headers: Optional[dict[str, str]] = None,
+        is_test_env: bool = False,
+        on_failure: Optional[Callable[[Exception, GapEvent], None]] = None,
+        metrics: Optional[GapPublisherMetricsPort] = None,
+        broker_identity: str = "production",
     ) -> None:
         self._bootstrap_servers = bootstrap_servers
         self._topic = topic
         self._headers = headers or {}
+        self._is_test_env = is_test_env
+        self._on_failure = on_failure
+        self._metrics = metrics or NullGapPublisherMetrics()
+        self._broker_identity = broker_identity
         self._producer: AIOKafkaProducer | None = None
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
         """
-        Inicializa el producer Kafka.
+        Inicializa el producer Kafka con validación fail-closed.
 
-        Fail-fast: si el broker no está disponible, lanza inmediatamente.
-        El composition root es responsable de capturar este error.
+        Fail-fast: si el broker no está disponible o la configuración
+        de test no es segura, lanza inmediatamente.
         """
+        # 1. Validación de tópico (fail-closed)
+        if self._is_test_env and not self._topic.endswith(".test"):
+            raise ValueError(
+                f"[kafka-gap-publisher] Configuración de test insegura: "
+                f"tópico '{self._topic}' no termina en '.test'. Abortando."
+            )
+
+        # 2. Verificación activa de identidad del broker (Evidencia de aislamiento)
+        # Usamos AIOKafkaAdminClient para consultar la metadata del clúster.
+        from aiokafka.admin import AIOKafkaAdminClient
+        from aiokafka.protocol.metadata import MetadataRequest
+        
+        admin = AIOKafkaAdminClient(bootstrap_servers=self._bootstrap_servers)
+        try:
+            await admin.start()
+            # Enviar petición de metadatos para obtener la respuesta completa, que contiene cluster_id.
+            response = await admin._send_request(MetadataRequest([]))
+            cluster_id = getattr(response, 'cluster_id', None)
+            
+            if self._is_test_env:
+                if cluster_id is None:
+                    raise ValueError("[kafka-gap-publisher] No se pudo obtener el Cluster ID del broker dedicado.")
+                
+                # Registramos el Cluster ID real para auditoría forense.
+                logger.info("[kafka-gap-publisher] Verificando broker dedicado | cluster_id={}", cluster_id)
+                
+                # Si se configuró una identidad esperada específica, validarla (Broker Lock).
+                if (
+                    self._broker_identity not in ("any", "production")
+                    and cluster_id != self._broker_identity
+                ):
+                    raise ValueError(
+                        f"[kafka-gap-publisher] Broker identity mismatch! "
+                        f"Expected: '{self._broker_identity}', Actual: '{cluster_id}'. "
+                        "Aisolation failure detected: connecting to wrong cluster."
+                    )
+        except Exception as exc:
+            logger.error("[kafka-gap-publisher] Error de verificación de identidad: {}", str(exc))
+            raise ValueError(f"Fallo de aislamiento Kafka: {str(exc)}") from exc
+        finally:
+            await admin.close()
+
+        # 3. Inicialización del productor real
         self._producer = AIOKafkaProducer(
             bootstrap_servers=self._bootstrap_servers,
             value_serializer=None,
@@ -121,10 +174,11 @@ class KafkaGapPublisher:
         )
         await self._producer.start()
         logger.info(
-            "[kafka-gap-publisher] started | brokers={} topic={} headers={}",
+            "[kafka-gap-publisher] started | brokers={} topic={} headers={} cluster_id={}",
             self._bootstrap_servers,
             self._topic,
             self._headers,
+            cluster_id if 'cluster_id' in locals() else 'unknown'
         )
 
     async def stop(self) -> None:
@@ -163,6 +217,7 @@ class KafkaGapPublisher:
                 key=key,
                 headers=kafka_headers,
             )
+            self._metrics.event_published(exchange="unknown")
             logger.debug(
                 "[kafka-gap-publisher] published | topic={} type={} key={} headers={}",
                 self._topic,
@@ -172,6 +227,15 @@ class KafkaGapPublisher:
             )
         except Exception as exc:
             # SafeOps: nunca propagar al caller (RepairStrategy)
+            self._metrics.event_failed(exchange="unknown", reason="write_error")
+            if self._on_failure:
+                try:
+                    self._on_failure(exc, event)
+                except Exception as callback_exc:
+                    logger.error(
+                        "[kafka-gap-publisher] callback failed — ignorando | error={}",
+                        str(callback_exc),
+                    )
             logger.error(
                 "[kafka-gap-publisher] publish failed — descartando | type={} error={}",
                 type(event).__name__,
