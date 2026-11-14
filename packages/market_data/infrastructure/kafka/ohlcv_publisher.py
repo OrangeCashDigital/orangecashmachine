@@ -39,6 +39,8 @@ from __future__ import annotations
 
 import uuid as _uuid
 
+from loguru import logger
+
 from market_data.domain.value_objects.ohlcv_chunk import OHLCVChunk
 from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 from market_data.ports.outbound.publisher_port import PublishResult
@@ -98,6 +100,10 @@ def _map_source(source: str) -> DataSource:
 # ---------------------------------------------------------------------------
 
 
+# ~111 B/vela en JSON: 500 velas ~ 56 KB, muy por debajo de 1 MiB.
+_MAX_BARS_PER_MESSAGE = 500
+
+
 class KafkaOHLCVPublisher:
     """
     Publica OHLCVChunks del dominio a Kafka en formato EventPayload.
@@ -142,6 +148,7 @@ class KafkaOHLCVPublisher:
                 f"timeframe={chunk.timeframe}"
             )
 
+        payload_size = -1
         try:
             await self._producer.start()  # idempotente — guarda _started flag
 
@@ -161,37 +168,57 @@ class KafkaOHLCVPublisher:
             # ACL: traducción de vocabulario en la frontera wire
             wire_source: DataSource = _map_source(chunk.source)
 
-            event = EventPayload(
-                event_id=str(_uuid.uuid4()),
-                exchange=chunk.exchange,
-                symbol=chunk.symbol,
-                timeframe=chunk.timeframe,
-                batch_start_ts=chunk.start_ms or 0,
-                bars=bars,
-                source=wire_source,
-                run_id=chunk.run_id,
-            )
+            # Un mensaje por trozo: aiokafka rechaza localmente > max_request_size (1 MiB).
+            for offset in range(0, len(bars), _MAX_BARS_PER_MESSAGE):
+                piece = bars[offset : offset + _MAX_BARS_PER_MESSAGE]
+                first_ts = chunk.candles[offset].timestamp_ms
+                # event_id determinista: un reintento reproduce los mismos ids
+                # y el dedup del bronze descarta los trozos ya entregados.
+                event_key = (
+                    f"ocm:ohlcv:{chunk.exchange}|{chunk.symbol}|"
+                    f"{chunk.timeframe}|{first_ts}|{len(piece)}|{chunk.source}"
+                )
+                event = EventPayload(
+                    event_id=str(_uuid.uuid5(_uuid.NAMESPACE_URL, event_key)),
+                    exchange=chunk.exchange,
+                    symbol=chunk.symbol,
+                    timeframe=chunk.timeframe,
+                    batch_start_ts=first_ts,
+                    bars=piece,
+                    source=wire_source,
+                    run_id=chunk.run_id,
+                )
 
-            payload_bytes = serialize(event)
-            routing_key = make_ohlcv_key(chunk.exchange, chunk.symbol, chunk.timeframe)
+                payload_bytes = serialize(event)
+                payload_size = len(payload_bytes)
+                routing_key = make_ohlcv_key(chunk.exchange, chunk.symbol, chunk.timeframe)
 
-            # HEADER_SOURCE lleva el source del dominio (legible para observabilidad).
-            # EventPayload.source lleva el wire DataSource (legible para consumers).
-            headers = {
-                HEADER_SOURCE: chunk.source,
-                HEADER_VERSION: str(PAYLOAD_SCHEMA_VERSION),
-                HEADER_RUN_ID: chunk.run_id,
-            }
+                # HEADER_SOURCE lleva el source del dominio (legible para observabilidad).
+                # EventPayload.source lleva el wire DataSource (legible para consumers).
+                headers = {
+                    HEADER_SOURCE: chunk.source,
+                    HEADER_VERSION: str(PAYLOAD_SCHEMA_VERSION),
+                    HEADER_RUN_ID: chunk.run_id,
+                }
 
-            await self._producer.produce(
-                topic=TOPIC_OHLCV_RAW,
-                value=payload_bytes,
-                key=routing_key,
-                headers=headers,
-            )
+                await self._producer.produce(
+                    topic=TOPIC_OHLCV_RAW,
+                    value=payload_bytes,
+                    key=routing_key,
+                    headers=headers,
+                )
             return PublishResult.SUCCESS
 
-        except Exception:
+        except Exception as exc:
+            logger.opt(exception=True).error(
+                "ohlcv_publish_failed | exchange={} symbol={} tf={} bars={} bytes={} err={}",
+                chunk.exchange,
+                chunk.symbol,
+                chunk.timeframe,
+                len(chunk.candles),
+                payload_size,
+                type(exc).__name__,
+            )
             return PublishResult.RETRYABLE_FAILURE  # SafeOps — caller activa fallback a Iceberg directo
 
 
