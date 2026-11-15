@@ -72,12 +72,11 @@ if TYPE_CHECKING:
     from trading.application.freshness_enforcement import FreshnessEnforcement
     from trading.application.oms import OMS
     from trading.engine import TradingEngine
+    from trading.ports.inbound.freshness_consumer import FreshnessConsumerPort
 
     from ocm.config.schema import ExchangeConfig, TradingConfig
     from ocm.config.schema import RiskConfig as AppRiskConfig
-    from shared.contracts.boundaries import FreshnessSnapshot
-    from shared.contracts.boundaries import RebalancePort
-    from trading.ports.inbound.freshness_consumer import FreshnessConsumerPort
+    from shared.contracts.boundaries import FreshnessSnapshot, RebalancePort
 
 __all__ = ["TradingCompositionRoot", "TradingRuntime"]
 
@@ -172,10 +171,6 @@ class _GoldFeatureSource:
         self._reader = GoldReader(exchange=exchange)
         self._exchange = exchange
         self._log = logger.bind(component="GoldFeatureSource", exchange=exchange)
-
-
-
-
 
     def load_features(
         self,
@@ -688,6 +683,7 @@ class TradingCompositionRoot:
         if self._stream_catalog is not None:
             return self._stream_catalog
         from shared.contracts.stream_identity import StreamIdentityCatalog
+
         cfg = getattr(self._trading, "strategy_cfg", None) or {}
         raw = cfg.get("symbols") or [cfg.get("symbol")]
         symbols = [str(s).strip() for s in raw if s]
@@ -718,12 +714,12 @@ class TradingCompositionRoot:
 
         # Identidad del proveedor: gramática ws:{exchange}:{symbol} (nunca se degrada)
         from shared.contracts.stream_identity import StreamIdentity, StreamIdentityError
+
         try:
             StreamIdentity.parse(self._ws_provider.source_id)
         except StreamIdentityError as exc:
             raise RuntimeError(
-                f"assemble_live bloqueado: identidad de proveedor inválida "
-                f"({self._ws_provider.source_id!r}). {exc}"
+                f"assemble_live bloqueado: identidad de proveedor inválida ({self._ws_provider.source_id!r}). {exc}"
             ) from exc
 
         # Y el stream debe estar declarado en el catálogo (nunca se infiere)
@@ -741,4 +737,3 @@ class TradingCompositionRoot:
             catalog=catalog,
             exchange=self._trading.exchange,
         )
-

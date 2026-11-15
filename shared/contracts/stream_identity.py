@@ -173,8 +173,7 @@ class StreamIdentity:
         # Cualquier ':' extra indica gramática inválida — fail-closed.
         if symbol.count(STREAM_ID_SEPARATOR) > 1:
             raise InvalidStreamIdError(
-                f"stream_id {stream_id!r} has extra {STREAM_ID_SEPARATOR!r} "
-                f"in symbol segment {symbol!r}"
+                f"stream_id {stream_id!r} has extra {STREAM_ID_SEPARATOR!r} in symbol segment {symbol!r}"
             )
         identity = cls(exchange=exchange, symbol=symbol)
         if identity.stream_id != stream_id.strip():
