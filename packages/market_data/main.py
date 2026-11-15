@@ -220,6 +220,17 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
     log.info("ingestion_loop_stopped", reason=guard.stop_reason)
 
 
+def _should_run_bronze_writer(dry_run: bool) -> bool:
+    """El bronze writer escribe a Iceberg de verdad; en dry_run no arranca.
+
+    Los mensajes quedan sin consumir en ohlcv.raw (retencion 7 dias) para que
+    un writer real los procese despues. Con BronzeStorage(dry_run=True) el
+    writer commitearia offsets y marcaria event_id en el dedup durable sin
+    haber escrito nada.
+    """
+    return not dry_run
+
+
 async def _bronze_writer_loop() -> None:
     """
     Loop permanente del KafkaBronzeWriter — Kappa stream processor.
@@ -372,10 +383,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kappa: KafkaBronzeWriter corre en paralelo — consume ohlcv.raw → Bronze.
     # Independiente del ingestion_loop — son bounded contexts distintos.
     # SafeOps: si Kafka no está disponible, el loop retorna sin matar el proceso.
-    bronze_writer_task = asyncio.create_task(
-        _bronze_writer_loop(),
-        name="kafka_bronze_writer",
-    )
+    bronze_writer_task: asyncio.Task[None] | None = None
+    if _should_run_bronze_writer(ctx.app_config.safety.dry_run):
+        bronze_writer_task = asyncio.create_task(
+            _bronze_writer_loop(),
+            name="kafka_bronze_writer",
+        )
+    else:
+        _log.info("bronze_writer_skipped — safety.dry_run=True, mensajes quedan en ohlcv.raw")
 
     # Kappa: FeedOrchestrator — WS feeds → Kafka trades.raw.
     # Fail-Soft: build_feed_orchestrator retorna None si feeds.yaml tiene
