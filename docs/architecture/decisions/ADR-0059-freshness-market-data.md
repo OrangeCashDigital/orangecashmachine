@@ -1,7 +1,15 @@
 # ADR-0059: Freshness de datos de mercado — contrato, propagación y enforcement pre-orden
 
-**Estado:** Propuesto
-**Fecha:** 2026-11-09
+**Estado:** Aceptado
+**Fecha:** 2026-11-14
+
+## Decisión Humana (2026-11-14)
+
+“El Owner acepta formalmente el diseño propuesto en ADR-0059 para Freshness Chain y autoriza la materialización de las Fases 5, 6 y 7.
+
+La implementación debe garantizar enforcement fail-closed antes de la ejecución de órdenes, Live startup gate y umbrales configurables mediante Hydra por exchange/símbolo.
+
+La aceptación del ADR no constituye autorización para activar trading real ni para eliminar restricciones de LiveExecutor.”
 **Bounded context(s) afectado(s):** market_data (propietario del contrato), trading (consumidor), portfolio (consumidor), shared (contratos cruzados)
 
 ## Contexto

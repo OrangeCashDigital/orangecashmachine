@@ -96,6 +96,7 @@ from shared.contracts.boundaries import (
 )  # DIP — execution depende de abstraccion
 from trading.domain.models.order import Order, OrderSide, OrderStatus
 from trading.domain.models.settlement import FeeStatus, Settlement
+from trading.ports.inbound.freshness_consumer import FreshnessConsumerPort
 from trading.ports.outbound.transport import ExchangeOrderStatus as ExchangeStatus
 from trading.ports.outbound.transport import OrderResult, OrderState, OrderTransport
 from trading.risk.manager import RiskDecision, RiskManager
@@ -148,9 +149,13 @@ class OMS:
     ----------
     risk_manager : RiskManager     — decide si la señal puede ejecutarse.
     executor     : OrderExecutor   — paper o live.
+    portfolio    : PortfolioService — SSOT de posiciones.
     guard        : ExecutionGuard, optional — kill switch.
     on_fill      : callable, optional — callback(order) al fill.
     on_reject    : callable, optional — callback(order) al rechazo.
+    freshness_consumer : FreshnessConsumerPort, optional — consulta de freshness
+                         de datos de mercado antes de enviar la orden.
+                         Si no se provee, no hay enforcement de freshness.
     """
 
     def __init__(
@@ -161,6 +166,7 @@ class OMS:
         guard: Optional[ExecutionGuard] = None,
         on_fill: Optional[Callable[[Order], None]] = None,
         on_reject: Optional[Callable[[Order], None]] = None,
+        freshness_consumer: Optional[FreshnessConsumerPort] = None,
     ) -> None:
         if risk_manager is None:
             raise ValueError("OMS: risk_manager es obligatorio")
@@ -175,6 +181,7 @@ class OMS:
         self._guard = guard
         self._on_fill = on_fill
         self._on_reject = on_reject
+        self._freshness_consumer = freshness_consumer
 
         self._orders: dict[str, Order] = {}
         # ARCH-001/010: `_open` se deriva de `_orders` vía property (abajo).
@@ -207,6 +214,28 @@ class OMS:
                 self._guard.stop_reason,
             )
             return None
+
+        # Verificación de freshness de datos de mercado antes de validar riesgo
+        # Si los datos están obsoletos (stale), no se envía la orden (fail-closed).
+        if self._freshness_consumer is not None:
+            try:
+                freshness = self._freshness_consumer.get_freshness(signal.symbol)
+                if freshness.is_stale:
+                    self._log.warning(
+                        "submit bloqueado — freshness stale | symbol={} lag_ms={} threshold_ms={} reason={}",
+                        signal.symbol,
+                        freshness.lag_ms,
+                        freshness.threshold_ms,
+                        freshness.staleness_reason,
+                    )
+                    return None
+            except Exception as exc:
+                self._log.warning(
+                    "submit bloqueado — error consultando freshness | symbol={} error={}",
+                    signal.symbol,
+                    exc,
+                )
+                return None
 
         # Validación de riesgo
         decision = self._risk.validate(signal)

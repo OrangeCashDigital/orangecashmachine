@@ -58,7 +58,7 @@ from trading.ports.outbound.transport import (
 )
 
 from ocm.runtime.guard import ExecutionGuard
-from shared.contracts.boundaries import FeatureSource
+from shared.contracts.boundaries import FeatureSource, FreshnessPort
 from shared.kafka.provenance import require_promoted
 
 if TYPE_CHECKING:
@@ -377,6 +377,7 @@ class TradingCompositionRoot:
         portfolio: "PortfolioService",
         guard: Optional[ExecutionGuard] = None,
         rebalance_port: Optional["RebalancePort"] = None,
+        freshness_port: Optional["FreshnessPort"] = None,
     ) -> None:
         if trading is None:
             raise ValueError(
@@ -401,10 +402,24 @@ class TradingCompositionRoot:
         self._portfolio = portfolio
         self._guard = guard
         self._rebalance_port: "RebalancePort" = rebalance_port
+        self._freshness_port: Optional["FreshnessPort"] = freshness_port
 
-    # ------------------------------------------------------------------
-    # Data source
-    # ------------------------------------------------------------------
+    def build_freshness_consumer(self, exchange: str) -> Optional["FreshnessConsumerPort"]:
+        """Construye el consumidor de freshness para trading (B-MD-001)."""
+        if self._freshness_port is None:
+            return None
+        
+        # Adaptador efímero para adaptar FreshnessPort (market_data) -> FreshnessConsumerPort (trading)
+        class _FreshnessConsumerAdapter:
+            def __init__(self, port: "FreshnessPort", exchange: str):
+                self._port = port
+                self._exchange = exchange
+
+            def get_freshness(self, symbol: str) -> "FreshnessSnapshot":
+                stream_id = f"ws:{self._exchange}:{symbol}"
+                return self._port.get_freshness(stream_id)
+
+        return _FreshnessConsumerAdapter(self._freshness_port, exchange)
 
     def build_gold_data_source(self) -> FeatureSource:
         """Construye la FeatureSource real sobre GoldReader (Iceberg).

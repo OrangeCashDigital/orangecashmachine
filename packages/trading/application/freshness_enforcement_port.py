@@ -62,7 +62,3 @@ class FreshnessEnforcementPort(Protocol):
 
 
 __all__ = ["FreshnessEnforcementPort"]
-
-# Umbral de lag por defecto para enforcement pre-orden (ms).
-# Símbolo de freshness usado en capa de aplicación de trading.
-lag_ms: int = 30_000
