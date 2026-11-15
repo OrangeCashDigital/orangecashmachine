@@ -717,6 +717,25 @@ class TradingCompositionRoot:
                 "assemble_live bloqueado: sin proveedor WS real (StreamProvider). "
                 "LIVE no opera sobre un stream que no existe — fail-closed (D-3)."
             )
+
+        # Identidad del proveedor: gramática ws:{exchange}:{symbol} (nunca se degrada)
+        from shared.contracts.stream_identity import StreamIdentity, StreamIdentityError
+        try:
+            StreamIdentity.parse(self._ws_provider.source_id)
+        except StreamIdentityError as exc:
+            raise RuntimeError(
+                f"assemble_live bloqueado: identidad de proveedor inválida "
+                f"({self._ws_provider.source_id!r}). {exc}"
+            ) from exc
+
+        # Y el stream debe estar declarado en el catálogo (nunca se infiere)
+        if not catalog.contains_stream_id(self._ws_provider.source_id):
+            raise RuntimeError(
+                f"assemble_live bloqueado: stream del proveedor "
+                f"({self._ws_provider.source_id!r}) no declarado en catálogo — "
+                f"fail-closed (D-1/D-3)."
+            )
+
         consumer = self.build_freshness_consumer(self._trading.exchange)
         assert consumer is not None
         return FreshnessEnforcement(

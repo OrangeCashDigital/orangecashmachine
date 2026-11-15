@@ -169,6 +169,13 @@ class StreamIdentity:
         prefix, exchange, symbol = parts
         if prefix != STREAM_ID_PREFIX:
             raise InvalidStreamIdError(f"stream_id {stream_id!r} has unsupported prefix {prefix!r}")
+        # Un symbol sólo admite 1 ':' como separador base:settle (ej. ETH/USDT:USDT).
+        # Cualquier ':' extra indica gramática inválida — fail-closed.
+        if symbol.count(STREAM_ID_SEPARATOR) > 1:
+            raise InvalidStreamIdError(
+                f"stream_id {stream_id!r} has extra {STREAM_ID_SEPARATOR!r} "
+                f"in symbol segment {symbol!r}"
+            )
         identity = cls(exchange=exchange, symbol=symbol)
         if identity.stream_id != stream_id.strip():
             raise InvalidStreamIdError(f"stream_id {stream_id!r} does not round-trip (got {identity.stream_id!r})")
