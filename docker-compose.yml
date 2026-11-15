@@ -194,7 +194,7 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
     ports:
-      - "${ALERTMANAGER_HOST_PORT:-9093}:9093"
+      - "${ALERTMANAGER_HOST_PORT:-9094}:9093"
     volumes:
       - type: bind
         source: ./deploy/monitoring/alertmanager.yml

@@ -1,6 +1,6 @@
 # ADR-0037: Artifact digest/signature + CD verify/deploy/rollback
 
-**Estado:** Propuesto
+**Estado:** Reemplazado por ADR-0060
 **Fecha:** 2026-08-19
 **Bounded context(s) afectado(s):** ocm (plataforma), CI/CD, OrangeHouse operations
 
