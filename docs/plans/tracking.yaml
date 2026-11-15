@@ -2499,16 +2499,20 @@ hallazgos:
   hallazgo_informe: B-MD-001
   fase: F3
   prioridad: CRITICA
-  estado: EN_PROGRESO
+  estado: PENDIENTE
   estado_auditoria: CONFIRMADO
-  evidencia: El linter reporta ARCH-005 FAIL (niveles 5-6). ADR-0059 Aceptado. Fases 5, 6, 7 en implementación.
-  solucion: 'ADR-0059 (ACCEPTED 2026-11-14): Freshness Chain end-to-end.'
+  evidencia: El linter reporta ARCH-005 FAIL; no existe freshness como estado consultable ni su propagación (F-MD-001).
+  solucion: 'ADR-0059 (MERGED #142): FreshnessPort con estado consultable y propagación a trading/portfolio.'
   pruebas:
   - 'verificación: ADR-0059 en main'
-  - 'Fase 5: implementación FreshnessConsumerPort'
-  - 'Fase 6: enforcement en OMS.submit()'
-  - 'Fase 7: Live startup gate'
-  adr_relacionado: ADR-0059 (ACCEPTED, 2026-11-14)
+  - 'pendiente: implementación FreshnessPort'
+  blocked_by: [ARCH-004]  # enforcement pre-orden requiere sandbox Bybit (#121)
+  notes: >
+    FreshnessPort y FreshnessSnapshot ya existen en shared/contracts/boundaries.py.
+    GapAwareStream ya implementa el port (get_freshness línea 398).
+    Niveles 1, 2 y 4 del linter PASS. Niveles 3, 5 y 6 FAIL.
+    Niveles 5 y 6 requieren consumo real en trading/risk → bloqueado por ARCH-004.
+  adr_relacionado: ADR-0059 (MERGED #142)
   riesgo_residual: Alto — sin freshness, un feed congelado es indistinguible de un mercado quieto (bloqueante de live).
   fecha_cierre: null
   cadena:
