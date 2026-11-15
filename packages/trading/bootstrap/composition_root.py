@@ -512,6 +512,7 @@ class TradingCompositionRoot:
             guard=self._guard,
             on_fill=build_fill_sync(tracker, self._portfolio),
             on_reject=None,
+            freshness_consumer=self.build_freshness_consumer(self._trading.exchange),
         )
         engine = TradingEngine(
             strategy=strategy,
@@ -574,6 +575,7 @@ class TradingCompositionRoot:
             guard=self._guard,
             on_fill=build_fill_sync(tracker, self._portfolio),
             on_reject=None,
+            freshness_consumer=self.build_freshness_consumer(self._trading.exchange),
         )
         engine = TradingEngine(
             strategy=strategy,
