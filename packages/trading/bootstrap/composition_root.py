@@ -60,9 +60,7 @@ from trading.ports.outbound.transport import (
 from ocm.runtime.guard import ExecutionGuard
 from shared.contracts.boundaries import FeatureSource, FreshnessPort
 from shared.contracts.stream_identity import (
-    StreamIdentity,
     StreamIdentityCatalog,
-    StreamIdentityError,
     StreamProvider,
 )
 from shared.kafka.provenance import require_promoted
@@ -77,9 +75,9 @@ if TYPE_CHECKING:
 
     from ocm.config.schema import ExchangeConfig, TradingConfig
     from ocm.config.schema import RiskConfig as AppRiskConfig
+    from shared.contracts.boundaries import FreshnessSnapshot
     from shared.contracts.boundaries import RebalancePort
     from trading.ports.inbound.freshness_consumer import FreshnessConsumerPort
-    from shared.contracts.boundaries import FreshnessSnapshot
 
 __all__ = ["TradingCompositionRoot", "TradingRuntime"]
 

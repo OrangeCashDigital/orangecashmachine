@@ -580,6 +580,7 @@ def test_build_gold_data_source_is_a_feature_source_without_io() -> None:
 def test_assemble_live_blocks_without_freshness_port(monkeypatch) -> None:
     """Startup gate: LIVE sin freshness_port ⇒ fail-closed."""
     from trading.adapters.outbound.live_executor import LiveExecutor
+
     monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
 
     root = TradingCompositionRoot(
@@ -597,6 +598,7 @@ def test_assemble_live_blocks_without_freshness_port(monkeypatch) -> None:
 def test_assemble_live_wires_freshness_enforcement(monkeypatch) -> None:
     """El OMS recibe FreshnessEnforcement cuando freshness_port se inyecta."""
     from trading.adapters.outbound.live_executor import LiveExecutor
+
     monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
 
     root = TradingCompositionRoot(
@@ -616,6 +618,7 @@ def test_assemble_live_wires_freshness_enforcement(monkeypatch) -> None:
 def test_assemble_live_blocks_without_ws_provider(monkeypatch) -> None:
     """Startup gate: LIVE sin ws_provider ⇒ fail-closed (no hay stream real)."""
     from trading.adapters.outbound.live_executor import LiveExecutor
+
     monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
 
     root = TradingCompositionRoot(
