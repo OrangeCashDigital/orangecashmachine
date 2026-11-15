@@ -44,7 +44,8 @@ from ocm.config.schema import (
     TradingConfig,
 )
 from ocm.runtime.guard import ExecutionGuard
-from shared.contracts.boundaries import FeatureSource
+from shared.contracts.boundaries import FeatureSource, FreshnessSnapshot
+from shared.contracts.stream_identity import StreamIdentityCatalog
 
 # ── Fakes ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,42 @@ class _FakeDataSourceWithData:
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+class _FakeStreamProvider:
+    """StreamProvider fake (LIVE tests) — source_id declarado, running."""
+
+    def __init__(self, source_id: str = "ws:bybit:BTC/USDT", running: bool = True) -> None:
+        self._source_id = source_id
+        self._running = running
+
+    @property
+    def source_id(self) -> str:
+        return self._source_id
+
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
+
+class _FakeFreshnessPort:
+    """Port fake de FreshnessPort (LIVE tests). Snapshot siempre fresco."""
+
+    def __init__(self, *, stale: bool = False) -> None:
+        self._stale = stale
+
+    def get_freshness(self, stream_id: str):
+        return FreshnessSnapshot(
+            stream_id=stream_id,
+            stream_type="ws_trades",
+            last_seen_ms=0,
+            lag_ms=500 if self._stale else 0,
+            is_stale=self._stale,
+            staleness_reason="test_stale" if self._stale else None,
+            threshold_ms=1000,
+            read_at_ms=0,
+            source="test",
+        )
 
 
 def _trading_config(**overrides) -> TradingConfig:
@@ -181,6 +218,9 @@ def test_assemble_live_returns_runtime_with_injected_portfolio(
         portfolio=portfolio,
         guard=ExecutionGuard(max_errors=3),
         rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        ws_provider=_FakeStreamProvider(),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
     )
 
     runtime = root.assemble_live()
@@ -216,6 +256,9 @@ def test_assemble_live_prefers_real_transport_when_exchange_config(
         portfolio=portfolio,
         guard=ExecutionGuard(max_errors=3),
         rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        ws_provider=_FakeStreamProvider(),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
     )
     runtime = root.assemble_live()
     assert isinstance(runtime.engine, TradingEngine)
@@ -243,6 +286,9 @@ def test_assemble_live_ok_con_provenance_actual(
         portfolio=portfolio,
         guard=ExecutionGuard(max_errors=3),
         rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        ws_provider=_FakeStreamProvider(),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
     )
 
     monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
@@ -529,3 +575,159 @@ def test_build_gold_data_source_is_a_feature_source_without_io() -> None:
     data_source = root.build_gold_data_source()
 
     assert isinstance(data_source, FeatureSource)
+
+
+def test_assemble_live_blocks_without_freshness_port(monkeypatch) -> None:
+    """Startup gate: LIVE sin freshness_port ⇒ fail-closed."""
+    from trading.adapters.outbound.live_executor import LiveExecutor
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+        # freshness_port ausente a propósito
+    )
+    with pytest.raises(RuntimeError, match="freshness consumer|freshness enforcement"):
+        root.assemble_live()
+
+
+def test_assemble_live_wires_freshness_enforcement(monkeypatch) -> None:
+    """El OMS recibe FreshnessEnforcement cuando freshness_port se inyecta."""
+    from trading.adapters.outbound.live_executor import LiveExecutor
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        ws_provider=_FakeStreamProvider(),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
+    )
+    runtime = root.assemble_live()
+    assert runtime.oms._freshness_enforcement is not None
+
+
+def test_assemble_live_blocks_without_ws_provider(monkeypatch) -> None:
+    """Startup gate: LIVE sin ws_provider ⇒ fail-closed (no hay stream real)."""
+    from trading.adapters.outbound.live_executor import LiveExecutor
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        # ws_provider ausente a propósito
+    )
+    with pytest.raises(RuntimeError, match="proveedor WS"):
+        root.assemble_live()
+
+
+def test_assemble_live_blocks_with_empty_stream_catalog(monkeypatch) -> None:
+    """Startup gate: catálogo vacío ⇒ fail-closed (no hay identidad que resolver)."""
+    from trading.adapters.outbound.live_executor import LiveExecutor
+
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        ws_provider=_FakeStreamProvider(),
+        stream_catalog=StreamIdentityCatalog([]),
+    )
+    with pytest.raises(RuntimeError, match="catálogo"):
+        root.assemble_live()
+
+
+def test_assemble_live_blocks_with_invalid_provider_identity(monkeypatch) -> None:
+    """Startup gate: source_id no parseable ⇒ identidad de proveedor inválida."""
+    from trading.adapters.outbound.live_executor import LiveExecutor
+
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        ws_provider=_FakeStreamProvider(source_id="not-a-stream-id"),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
+    )
+    with pytest.raises(RuntimeError, match="identidad de proveedor inválida"):
+        root.assemble_live()
+
+
+def test_assemble_live_blocks_when_provider_not_declared_in_catalog(monkeypatch) -> None:
+    """Startup gate: el stream del proveedor no está en el catálogo ⇒ fail-closed."""
+    from trading.adapters.outbound.live_executor import LiveExecutor
+
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(),
+        ws_provider=_FakeStreamProvider(source_id="ws:bybit:ETH/USDT"),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
+    )
+    with pytest.raises(RuntimeError, match="no declarado"):
+        root.assemble_live()
+
+
+def test_assemble_live_stub_gate_precedes_freshness_gate() -> None:
+    """Orden de gates: sin deps de freshness y con IS_STUB=True gana el de STUB."""
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+    )
+    with pytest.raises(RuntimeError, match="STUB"):
+        root.assemble_live()
+
+
+def test_live_startup_gate_and_execution_gate_block_stale_signal(monkeypatch) -> None:
+    """Integración: LIVE ensamblado con feed stale ⇒ submit bloqueado pre-ejecución."""
+    from trading.adapters.outbound.live_executor import LiveExecutor
+
+    monkeypatch.setattr(LiveExecutor, "IS_STUB", False)
+
+    root = TradingCompositionRoot(
+        trading=_trading_config(),
+        risk=_risk_config(),
+        portfolio=_FakePortfolio(),
+        guard=ExecutionGuard(max_errors=3),
+        rebalance_port=RebalanceService(),
+        freshness_port=_FakeFreshnessPort(stale=True),
+        ws_provider=_FakeStreamProvider(),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
+    )
+    runtime = root.assemble_live()
+
+    signal = Signal(
+        symbol="BTC/USDT",
+        timeframe="1h",
+        direction="buy",
+        price=100.0,
+        timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        confidence=1.0,
+    )
+    assert runtime.oms.submit(signal) is None

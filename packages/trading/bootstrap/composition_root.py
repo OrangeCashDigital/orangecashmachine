@@ -59,12 +59,19 @@ from trading.ports.outbound.transport import (
 
 from ocm.runtime.guard import ExecutionGuard
 from shared.contracts.boundaries import FeatureSource, FreshnessPort
+from shared.contracts.stream_identity import (
+    StreamIdentity,
+    StreamIdentityCatalog,
+    StreamIdentityError,
+    StreamProvider,
+)
 from shared.kafka.provenance import require_promoted
 
 if TYPE_CHECKING:
     from portfolio.services.portfolio_service import PortfolioService
     from portfolio.services.rebalance_service import RebalanceSignal
     from trading.analytics.trade_tracker import TradeTracker
+    from trading.application.freshness_enforcement import FreshnessEnforcement
     from trading.application.oms import OMS
     from trading.engine import TradingEngine
 
@@ -165,6 +172,62 @@ class _GoldFeatureSource:
         self._reader = GoldReader(exchange=exchange)
         self._exchange = exchange
         self._log = logger.bind(component="GoldFeatureSource", exchange=exchange)
+
+
+    def build_freshness_consumer(self, exchange: str) -> Optional["FreshnessConsumerPort"]:
+        """Consumidor de freshness (B-MD-001). F-02: adapter delega stream_id."""
+        if self._freshness_port is None:
+            return None
+
+        class _FreshnessConsumerAdapter:
+            def __init__(self, port: "FreshnessPort", exchange: str):
+                self._port = port
+                self._exchange = exchange
+
+            def get_freshness(self, stream_id: str) -> "FreshnessSnapshot":
+                return self._port.get_freshness(stream_id)
+
+        return _FreshnessConsumerAdapter(self._freshness_port, exchange)
+
+    def _resolve_stream_catalog(self) -> "StreamIdentityCatalog":
+        """Catálogo (exchange, symbol): inyectado o derivado de strategy_cfg."""
+        if self._stream_catalog is not None:
+            return self._stream_catalog
+        from shared.contracts.stream_identity import StreamIdentityCatalog
+        cfg = getattr(self._trading, "strategy_cfg", None) or {}
+        raw = cfg.get("symbols") or [cfg.get("symbol")]
+        symbols = [str(s).strip() for s in raw if s]
+        return StreamIdentityCatalog([(self._trading.exchange, s) for s in symbols])
+
+    def _require_live_freshness_gate(self) -> "FreshnessEnforcement":
+        """Startup gate de LIVE (D-3) — fail-closed si falta cualquier eslabón."""
+        from trading.application.freshness_enforcement import FreshnessEnforcement
+
+        if self._freshness_port is None:
+            raise RuntimeError(
+                "assemble_live bloqueado: sin freshness consumer (FreshnessPort). "
+                "LIVE exige certificar freshness pre-orden — fail-closed (D-3)."
+            )
+        catalog = self._resolve_stream_catalog()
+        self._stream_catalog = catalog
+        if len(catalog) == 0:
+            raise RuntimeError(
+                "assemble_live bloqueado: sin catálogo de identidad de stream "
+                "(StreamIdentityCatalog ausente o vacío). Sin mapping "
+                "exchange+symbol→stream_id no se puede certificar freshness — fail-closed (D-1/D-3)."
+            )
+        if self._ws_provider is None:
+            raise RuntimeError(
+                "assemble_live bloqueado: sin proveedor WS real (StreamProvider). "
+                "LIVE no opera sobre un stream que no existe — fail-closed (D-3)."
+            )
+        consumer = self.build_freshness_consumer(self._trading.exchange)
+        assert consumer is not None
+        return FreshnessEnforcement(
+            consumer=consumer,
+            catalog=catalog,
+            exchange=self._trading.exchange,
+        )
 
     def load_features(
         self,
@@ -378,6 +441,8 @@ class TradingCompositionRoot:
         guard: Optional[ExecutionGuard] = None,
         rebalance_port: Optional["RebalancePort"] = None,
         freshness_port: Optional["FreshnessPort"] = None,
+        stream_catalog: Optional[StreamIdentityCatalog] = None,
+        ws_provider: Optional[StreamProvider] = None,
     ) -> None:
         if trading is None:
             raise ValueError(
@@ -403,23 +468,11 @@ class TradingCompositionRoot:
         self._guard = guard
         self._rebalance_port: "RebalancePort" = rebalance_port
         self._freshness_port: Optional["FreshnessPort"] = freshness_port
-
-    def build_freshness_consumer(self, exchange: str) -> Optional["FreshnessConsumerPort"]:
-        """Construye el consumidor de freshness para trading (B-MD-001)."""
-        if self._freshness_port is None:
-            return None
-        
-        # Adaptador efímero para adaptar FreshnessPort (market_data) -> FreshnessConsumerPort (trading)
-        class _FreshnessConsumerAdapter:
-            def __init__(self, port: "FreshnessPort", exchange: str):
-                self._port = port
-                self._exchange = exchange
-
-            def get_freshness(self, symbol: str) -> "FreshnessSnapshot":
-                stream_id = f"ws:{self._exchange}:{symbol}"
-                return self._port.get_freshness(stream_id)
-
-        return _FreshnessConsumerAdapter(self._freshness_port, exchange)
+        # D-1: el catálogo es la AUTORIDAD del mapping (exchange, symbol) → stream_id.
+        # Este root no construye identidades; solo las cablea.
+        self._stream_catalog: Optional[StreamIdentityCatalog] = stream_catalog
+        # D-3: proveedor WS declarado. Sin él, LIVE no se ensambla (startup gate).
+        self._ws_provider: Optional[StreamProvider] = ws_provider
 
     def build_gold_data_source(self) -> FeatureSource:
         """Construye la FeatureSource real sobre GoldReader (Iceberg).
@@ -505,6 +558,10 @@ class TradingCompositionRoot:
                 "implementación real de `_submit` esté commiteada con tests y "
                 "R9/R10 (ADR-0016) — objetivo Fase 9 del Plan Maestro."
             )
+        # Startup gate de freshness — INDEPENDIENTE del execution gate del OMS
+        # (ambos obligatorios en LIVE, D-3). Fail-closed: sin port/catálogo/
+        # proveedor WS no se ensambla el runtime.
+        freshness_enforcement = self._require_live_freshness_gate()
         oms = OMS(
             risk_manager=risk_manager,
             executor=executor,
@@ -512,7 +569,7 @@ class TradingCompositionRoot:
             guard=self._guard,
             on_fill=build_fill_sync(tracker, self._portfolio),
             on_reject=None,
-            freshness_consumer=self.build_freshness_consumer(self._trading.exchange),
+            freshness_enforcement=freshness_enforcement,
         )
         engine = TradingEngine(
             strategy=strategy,
@@ -575,7 +632,7 @@ class TradingCompositionRoot:
             guard=self._guard,
             on_fill=build_fill_sync(tracker, self._portfolio),
             on_reject=None,
-            freshness_consumer=self.build_freshness_consumer(self._trading.exchange),
+            freshness_enforcement=None,  # PAPER: contractual — ver OMS docstring
         )
         engine = TradingEngine(
             strategy=strategy,
@@ -661,3 +718,59 @@ class TradingCompositionRoot:
             f"TradingCompositionRoot(strategy={self._trading.strategy_name!r}, "
             f"exchange={self._trading.exchange!r}, portfolio={type(self._portfolio).__name__})"
         )
+
+    def build_freshness_consumer(self, exchange: str) -> Optional["FreshnessConsumerPort"]:
+        """Consumidor de freshness (B-MD-001). F-02: adapter delega stream_id."""
+        if self._freshness_port is None:
+            return None
+
+        class _FreshnessConsumerAdapter:
+            def __init__(self, port: "FreshnessPort", exchange: str):
+                self._port = port
+                self._exchange = exchange
+
+            def get_freshness(self, stream_id: str) -> "FreshnessSnapshot":
+                return self._port.get_freshness(stream_id)
+
+        return _FreshnessConsumerAdapter(self._freshness_port, exchange)
+
+    def _resolve_stream_catalog(self) -> "StreamIdentityCatalog":
+        """Catálogo (exchange, symbol): inyectado o derivado de strategy_cfg."""
+        if self._stream_catalog is not None:
+            return self._stream_catalog
+        from shared.contracts.stream_identity import StreamIdentityCatalog
+        cfg = getattr(self._trading, "strategy_cfg", None) or {}
+        raw = cfg.get("symbols") or [cfg.get("symbol")]
+        symbols = [str(s).strip() for s in raw if s]
+        return StreamIdentityCatalog([(self._trading.exchange, s) for s in symbols])
+
+    def _require_live_freshness_gate(self) -> "FreshnessEnforcement":
+        """Startup gate LIVE (D-3) — fail-closed si falta cualquier eslabón."""
+        from trading.application.freshness_enforcement import FreshnessEnforcement
+
+        if self._freshness_port is None:
+            raise RuntimeError(
+                "assemble_live bloqueado: sin freshness consumer (FreshnessPort). "
+                "LIVE exige certificar freshness pre-orden — fail-closed (D-3)."
+            )
+        catalog = self._resolve_stream_catalog()
+        self._stream_catalog = catalog
+        if len(catalog) == 0:
+            raise RuntimeError(
+                "assemble_live bloqueado: sin catálogo de identidad de stream "
+                "(StreamIdentityCatalog ausente o vacío). Sin mapping "
+                "exchange+symbol→stream_id no se puede certificar freshness — fail-closed (D-1/D-3)."
+            )
+        if self._ws_provider is None:
+            raise RuntimeError(
+                "assemble_live bloqueado: sin proveedor WS real (StreamProvider). "
+                "LIVE no opera sobre un stream que no existe — fail-closed (D-3)."
+            )
+        consumer = self.build_freshness_consumer(self._trading.exchange)
+        assert consumer is not None
+        return FreshnessEnforcement(
+            consumer=consumer,
+            catalog=catalog,
+            exchange=self._trading.exchange,
+        )
+
