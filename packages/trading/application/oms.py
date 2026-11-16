@@ -94,6 +94,7 @@ from ocm.runtime.guard import ExecutionGuard
 from shared.contracts.boundaries import (
     SignalProtocol,
 )  # DIP — execution depende de abstraccion
+from trading.application.freshness_enforcement import FreshnessBlockedError, FreshnessEnforcement
 from trading.domain.models.order import Order, OrderSide, OrderStatus
 from trading.domain.models.settlement import FeeStatus, Settlement
 from trading.ports.outbound.transport import ExchangeOrderStatus as ExchangeStatus
@@ -148,9 +149,18 @@ class OMS:
     ----------
     risk_manager : RiskManager     — decide si la señal puede ejecutarse.
     executor     : OrderExecutor   — paper o live.
+    portfolio    : PortfolioService — SSOT de posiciones.
     guard        : ExecutionGuard, optional — kill switch.
     on_fill      : callable, optional — callback(order) al fill.
     on_reject    : callable, optional — callback(order) al rechazo.
+    freshness_enforcement : FreshnessEnforcement, optional — execution gate
+                         pre-orden: resuelve la identidad del stream vía
+                         catálogo, consulta freshness y bloquea (fail-closed)
+                         si no puede certificarla.
+                         ``None`` solo es contractual en PAPER (no hay stream
+                         de mercado que certificar). En LIVE el startup gate
+                         del Composition Root exige que esté presente: el
+                         enforcement no se puede desactivar por configuración.
     """
 
     def __init__(
@@ -161,6 +171,7 @@ class OMS:
         guard: Optional[ExecutionGuard] = None,
         on_fill: Optional[Callable[[Order], None]] = None,
         on_reject: Optional[Callable[[Order], None]] = None,
+        freshness_enforcement: Optional[FreshnessEnforcement] = None,
     ) -> None:
         if risk_manager is None:
             raise ValueError("OMS: risk_manager es obligatorio")
@@ -175,6 +186,7 @@ class OMS:
         self._guard = guard
         self._on_fill = on_fill
         self._on_reject = on_reject
+        self._freshness_enforcement = freshness_enforcement
 
         self._orders: dict[str, Order] = {}
         # ARCH-001/010: `_open` se deriva de `_orders` vía property (abajo).
@@ -207,6 +219,24 @@ class OMS:
                 self._guard.stop_reason,
             )
             return None
+
+        # Execution gate — freshness pre-orden (INDEPENDIENTE del startup gate:
+        # no asume que el Composition Root ya validó nada). Resuelve la identidad
+        # del stream vía catálogo — nunca usa signal.symbol como stream_id (F-02)
+        # — y bloquea si no puede certificar datos frescos: identidad
+        # desconocida/ambigua, proveedor caído, snapshot de otro stream o stale.
+        if self._freshness_enforcement is not None:
+            try:
+                self._freshness_enforcement.check(signal.symbol)
+            except FreshnessBlockedError as exc:
+                self._log.error(
+                    "submit bloqueado — freshness | symbol={} reason={} stream_id={} detail={}",
+                    signal.symbol,
+                    exc.reason,
+                    exc.stream_id or "-",
+                    exc.detail or "-",
+                )
+                return None
 
         # Validación de riesgo
         decision = self._risk.validate(signal)
