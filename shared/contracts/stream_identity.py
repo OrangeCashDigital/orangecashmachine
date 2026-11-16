@@ -140,6 +140,12 @@ class StreamIdentity:
             raise ValueError("StreamIdentity.symbol must be non-empty")
         if STREAM_ID_SEPARATOR in exchange:
             raise ValueError(f"StreamIdentity.exchange must not contain {STREAM_ID_SEPARATOR!r}, got {exchange!r}")
+        # Un symbol sólo admite 1 ':' como separador base:settle (ej. ETH/USDT:USDT).
+        # Cualquier ':' extra indica gramática inválida — fail-closed (mismo criterio que parse()).
+        if symbol.count(STREAM_ID_SEPARATOR) > 1:
+            raise ValueError(
+                f"StreamIdentity.symbol has extra {STREAM_ID_SEPARATOR!r} in {symbol!r}"
+            )
         object.__setattr__(self, "exchange", exchange)
         object.__setattr__(self, "symbol", symbol)
 
