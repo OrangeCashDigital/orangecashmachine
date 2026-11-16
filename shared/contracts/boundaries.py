@@ -208,3 +208,63 @@ class BalancePort(Protocol):
     def get_balance(self, currency: str = "USDT") -> BalanceSnapshot:
         """Retorna snapshot del balance. Fail-closed: lanza si no puede leer."""
         ...
+
+
+# =============================================================================
+# market_data -> trading/portfolio  (freshness de datos de mercado, B-MD-001)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class FreshnessSnapshot:
+    """
+    Estado de freshness de un stream de datos de mercado (B-MD-001).
+
+    Snapshot inmutable de la frescura de un feed. `is_stale` indica si los
+    datos son obsoletos respecto al umbral configurado para el tipo de stream.
+
+    Atributos
+    ---------
+    stream_id       — identificador del stream (ej. "ws:bybit:BTC/USDT")
+    stream_type     — "ws_trades" | "rest_backfill" | "rest_recovery" | "replay"
+    last_seen_ms    — timestamp del último dato recibido (epoch ms, UTC)
+    lag_ms          — demora entre last_seen_ms y ahora (now_ms - last_seen_ms)
+    is_stale        — True si lag_ms > threshold_ms
+    staleness_reason — razón del stale (None si no está stale)
+    threshold_ms    — umbral configurado para este tipo de stream
+    read_at_ms      — timestamp de lectura del snapshot (epoch ms, UTC)
+    source          — "gap_aware_stream" | "test" | ...
+    """
+
+    stream_id: str
+    stream_type: str
+    last_seen_ms: int
+    lag_ms: int
+    is_stale: bool
+    staleness_reason: str | None
+    threshold_ms: int
+    read_at_ms: int
+    source: str = "unknown"
+
+
+@runtime_checkable
+class FreshnessPort(Protocol):
+    """
+    Contrato de consulta de freshness de datos de mercado (B-MD-001).
+
+    SSOT: el estado de freshness vive en market_data (GapAwareStream).
+    Consumido por: trading (OMS pre-submit), portfolio, RiskManager.
+
+    Implementado por: GapAwareStream en
+    market_data/adapters/inbound/websocket/gap_aware_stream.py.
+
+    Fail-closed: si no puede determinar freshness, lanza. NO retorna None.
+    """
+
+    def get_freshness(self, stream_id: str) -> FreshnessSnapshot:
+        """
+        Retorna el estado de freshness de un stream.
+
+        Fail-closed: lanza si no puede determinar la freshness.
+        """
+        ...

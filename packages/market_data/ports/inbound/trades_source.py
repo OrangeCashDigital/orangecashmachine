@@ -86,6 +86,13 @@ class TradesSourceProtocol(Protocol):
     __anext__() puede lanzar StopAsyncIteration para finalizar el stream limpiamente.
     Errores de red/transporte se logean internamente y el stream se reinicia
     (resiliencia) o termina con StopAsyncIteration (fail-soft).
+
+    Freshness
+    ---------
+    El estado de freshness del stream (last_seen_ms, lag_ms, is_stale) se
+    consulta vía FreshnessPort (shared/contracts/boundaries.py), no a través
+    de este puerto. Cada implementación de TradesSourceProtocol debe poder
+    ser asociada a un FreshnessPort para permitir enforcement pre-orden.
     """
 
     def __aiter__(self) -> AsyncIterator[RawTrade]:
