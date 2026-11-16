@@ -62,13 +62,16 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import AsyncIterator, Callable, Optional
+from typing import TYPE_CHECKING, AsyncIterator, Callable, Optional
 
 from loguru import logger
 
 from market_data.domain.value_objects.raw_trade import RawTrade, TradeSource
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
 from shared.contracts.boundaries import FreshnessPort, FreshnessSnapshot
+
+if TYPE_CHECKING:
+    from market_data.infrastructure.storage.freshness_store import FreshnessStore
 
 # ---------------------------------------------------------------------------
 # Tipos
@@ -119,6 +122,7 @@ class GapAwareStream(TradesSourceProtocol, FreshnessPort):
         symbol: str,
         gap_threshold_ms: int = _DEFAULT_GAP_THRESHOLD_MS,
         reconnect: bool = True,
+        freshness_store: Optional[FreshnessStore] = None,
     ) -> None:
         # -- fail-fast -------------------------------------------------------
         if source is None:
@@ -138,6 +142,7 @@ class GapAwareStream(TradesSourceProtocol, FreshnessPort):
         self._symbol = symbol
         self._gap_threshold_ms = gap_threshold_ms
         self._reconnect = reconnect
+        self._freshness_store = freshness_store
 
         # -- estado interno --------------------------------------------------
         self._last_trade_ms: Optional[int] = None
@@ -210,11 +215,13 @@ class GapAwareStream(TradesSourceProtocol, FreshnessPort):
 
                 # Trade válido — actualizar cursor y retornar
                 self._last_trade_ms = trade.timestamp_ms
+                self._publish_freshness()
                 return trade
 
             except asyncio.TimeoutError:
                 # Silencio > gap_threshold_ms → gap detectado
                 await self._handle_silence_gap()
+                self._publish_freshness()
                 # Continuar loop — recovery buffer rellenado
 
             except StopAsyncIteration:
@@ -379,6 +386,16 @@ class GapAwareStream(TradesSourceProtocol, FreshnessPort):
             _MAX_RESTART_ATTEMPTS,
         )
         return False
+
+    def _publish_freshness(self) -> None:
+        """Publica el estado de freshness en el store compartido (Redis)."""
+        if self._freshness_store is None:
+            return
+        try:
+            snapshot = self.get_freshness(self.source_id)
+            self._freshness_store.set(snapshot.stream_id, snapshot)
+        except Exception as exc:
+            self._log.warning("publish_freshness failed | error={}", exc)
 
     def __repr__(self) -> str:
         return (

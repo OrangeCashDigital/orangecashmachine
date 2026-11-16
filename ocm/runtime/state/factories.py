@@ -59,6 +59,9 @@ from ocm.runtime.state.cursor_store import RedisCursorStore, build_cursor_store_
 from ocm.runtime.state.gap_store import RedisGapStore
 
 if TYPE_CHECKING:
+    from market_data.infrastructure.storage.freshness_store import FreshnessStore
+    from trading.infrastructure.freshness_consumer import RedisFreshnessConsumer
+
     from ocm.runtime.state.gap_registry import GapRegistry
     from ocm.runtime.state.lateness_calibration import LatenessCalibrationStore
 
@@ -78,6 +81,38 @@ def build_cursor_store(env: Optional[str] = None) -> RedisCursorStore:
         via resolve_env() (OCM_ENV → settings.yaml → "development").
     """
     return build_cursor_store_from_env(env=env)
+
+
+def build_freshness_store(env: Optional[str] = None) -> Optional["FreshnessStore"]:
+    """
+    Construye un FreshnessStore reutilizando el cliente Redis.
+    """
+    from market_data.infrastructure.storage.freshness_store import FreshnessStore
+
+    try:
+        store = build_cursor_store_from_env(env=env)
+        if not store.is_healthy():
+            return None
+        return FreshnessStore(store._client)
+    except Exception as exc:
+        logger.warning("build_freshness_store failed | error={}", exc)
+        return None
+
+
+def build_freshness_consumer(env: Optional[str] = None) -> Optional["RedisFreshnessConsumer"]:
+    """
+    Construye un RedisFreshnessConsumer para trading.
+    """
+    from trading.infrastructure.freshness_consumer import RedisFreshnessConsumer
+
+    try:
+        store = build_cursor_store_from_env(env=env)
+        if not store.is_healthy():
+            return None
+        return RedisFreshnessConsumer(store._client)
+    except Exception as exc:
+        logger.warning("build_freshness_consumer failed | error={}", exc)
+        return None
 
 
 def build_gap_registry(
