@@ -62,3 +62,10 @@ def test_publish_rechaza_evento_que_no_es_order(mock_producer):
     with pytest.raises(TypeError):
         adapter.publish("orders.filled", object())
     mock_producer.produce.assert_not_called()
+
+
+def test_map_filled_incluye_timeframe_y_filled_qty(mock_producer, order):
+    adapter = KafkaEventBusAdapter(mock_producer)
+    payload = adapter._map_filled(order)
+    assert payload.timeframe == "1m"
+    assert payload.filled_qty >= 0.0
