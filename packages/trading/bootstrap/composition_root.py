@@ -416,6 +416,10 @@ class TradingCompositionRoot:
         self._stream_catalog: Optional[StreamIdentityCatalog] = stream_catalog
         # D-3: proveedor WS declarado. Sin él, LIVE no se ensambla (startup gate).
         self._ws_provider: Optional[StreamProvider] = ws_provider
+        self._kafka_consumer_factory: Optional[Callable[[], Any]] = None # Placeholder para integración TT
+
+    def set_kafka_consumer_factory(self, factory: Callable[[], Any]) -> None:
+        self._kafka_consumer_factory = factory
 
     def build_gold_data_source(self) -> FeatureSource:
         """Construye la FeatureSource real sobre GoldReader (Iceberg).
@@ -513,7 +517,25 @@ class TradingCompositionRoot:
             on_fill=build_fill_sync(tracker, self._portfolio),
             on_reject=None,
             freshness_enforcement=freshness_enforcement,
+            event_bus=None, # FIXME: Inyectar aquí KafkaEventBusAdapter real
         )
+
+        # Integración TradeTrackerConsumer
+        trade_tracker_consumer = None
+        if self._kafka_consumer_factory:
+            from trading.infrastructure.kafka.trade_tracker_consumer import TradeTrackerConsumer
+            from ocm.runtime.state.cursor_store import RedisCursorStore # Asumimos implementación
+            
+            consumer = self._kafka_consumer_factory()
+            # RedisCursorStore requiere acceso a Redis; en composición LIVE 
+            # debe inyectarse la instancia de Redis o el factory.
+            # Por simplicidad aquí, usamos un placeholder o adaptamos
+            cursor_store = self._portfolio._store # Acceso temporal a store de portfolio
+            trade_tracker_consumer = TradeTrackerConsumer(
+                tracker=tracker,
+                consumer=consumer,
+                cursor_store=cursor_store
+            )
 
         engine = TradingEngine(
             strategy=strategy,

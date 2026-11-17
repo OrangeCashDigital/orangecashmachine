@@ -628,6 +628,7 @@ def test_assemble_live_blocks_without_ws_provider(monkeypatch) -> None:
         guard=ExecutionGuard(max_errors=3),
         rebalance_port=RebalanceService(),
         freshness_port=_FakeFreshnessPort(),
+        stream_catalog=StreamIdentityCatalog([("bybit", "BTC/USDT")]),
         # ws_provider ausente a propósito
     )
     with pytest.raises(RuntimeError, match="proveedor WS"):

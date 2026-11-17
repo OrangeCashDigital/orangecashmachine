@@ -268,3 +268,12 @@ class FreshnessPort(Protocol):
         Fail-closed: lanza si no puede determinar la freshness.
         """
         ...
+
+
+@runtime_checkable
+class EventBusPort(Protocol):
+    """Contrato de publicación de eventos de dominio (OMS → Kafka)."""
+
+    def publish(self, topic: str, order: Order) -> None:
+        """Publica un evento sobre una orden."""
+        ...
