@@ -271,7 +271,7 @@ class FreshnessPort(Protocol):
 
 
 @runtime_checkable
-class EventBusPort(Protocol):
+class OrderEventPublisherPort(Protocol):
     """Contrato de publicación de eventos de dominio (OMS → Kafka)."""
 
     def publish(self, topic: str, event: object) -> None:

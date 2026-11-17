@@ -3,10 +3,10 @@ import json
 from typing import Any, Optional
 from loguru import logger
 from trading.domain.models.order import Order
-from shared.contracts.boundaries import EventBusPort
+from shared.contracts.boundaries import OrderEventPublisherPort
 from shared.kafka.schemas.orders import OrderFilledPayload, OrderRejectedPayload
 
-class KafkaEventBusAdapter(EventBusPort):
+class KafkaEventBusAdapter(OrderEventPublisherPort):
     def __init__(self, producer: Any) -> None:
         self._producer = producer
         self._log = logger.bind(component="KafkaEventBusAdapter")
