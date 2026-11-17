@@ -55,3 +55,10 @@ def test_unsupported_topic(mock_producer, order):
     adapter = KafkaEventBusAdapter(mock_producer)
     adapter.publish("unknown.topic", order)
     assert not mock_producer.produce.called
+
+
+def test_publish_rechaza_evento_que_no_es_order(mock_producer):
+    adapter = KafkaEventBusAdapter(mock_producer)
+    with pytest.raises(TypeError):
+        adapter.publish("orders.filled", object())
+    mock_producer.produce.assert_not_called()
