@@ -38,6 +38,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import threading
+from datetime import datetime
 from typing import Any, Optional
 
 from loguru import logger
@@ -208,6 +209,55 @@ class TradeTracker:
         with self._lock:
             self._closed.append(trade)
 
+        self._log.info(
+            "Trade cerrado | {} pnl={:+.2%} net={:+.2%} entry={:.4f} exit={:.4f} dur={:.0f}s",
+            trade.trade_id,
+            trade.pnl_pct,
+            trade.net_pnl_pct,
+            trade.entry_price,
+            trade.exit_price,
+            trade.duration_s,
+        )
+
+    def record_settlement(
+        self,
+        settlement: Settlement,
+        *,
+        exchange: str,
+        timeframe: str,
+        size_pct: float,
+        entry_at: datetime,
+        exit_at: Optional[datetime] = None,
+        trade_id: str = "",
+    ) -> Optional[TradeRecord]:
+        """Registra un cierre desde el Settlement canónico (ruta Kafka).
+
+        Única vía pública para consumidores externos (TradeTrackerConsumer):
+        TradeRecord.from_settlement es el constructor canónico y aquí no se
+        recalcula P&L. SafeOps: nunca lanza; devuelve None si no se registra.
+        """
+        try:
+            trade = TradeRecord.from_settlement(
+                settlement,
+                trade_id=trade_id or settlement.order_id,
+                exchange=exchange,
+                timeframe=timeframe,
+                size_pct=size_pct,
+                entry_at=entry_at,
+                exit_at=exit_at,
+            )
+        except Exception as exc:
+            self._log.error(
+                "record_settlement error | symbol={} error={}", settlement.symbol, exc
+            )
+            return None
+
+        self._append_trade(trade)
+        return trade
+
+    def _append_trade(self, trade: TradeRecord) -> None:
+        with self._lock:
+            self._closed.append(trade)
         self._log.info(
             "Trade cerrado | {} pnl={:+.2%} net={:+.2%} entry={:.4f} exit={:.4f} dur={:.0f}s",
             trade.trade_id,
