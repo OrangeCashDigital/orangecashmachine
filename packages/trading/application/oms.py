@@ -86,6 +86,7 @@ Principios: SOLID · KISS · DRY · SafeOps
 from __future__ import annotations
 
 import threading
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol, runtime_checkable
 
 from loguru import logger
@@ -172,6 +173,7 @@ class OMS:
         on_fill: Optional[Callable[[Order], None]] = None,
         on_reject: Optional[Callable[[Order], None]] = None,
         freshness_enforcement: Optional[FreshnessEnforcement] = None,
+        event_bus: Optional[Any] = None,
     ) -> None:
         if risk_manager is None:
             raise ValueError("OMS: risk_manager es obligatorio")
@@ -187,6 +189,7 @@ class OMS:
         self._on_fill = on_fill
         self._on_reject = on_reject
         self._freshness_enforcement = freshness_enforcement
+        self._event_bus = event_bus
 
         self._orders: dict[str, Order] = {}
         # ARCH-001/010: `_open` se deriva de `_orders` vía property (abajo).
@@ -317,6 +320,7 @@ class OMS:
             self._reject(order, reason=f"state_error:{exc}", revert_open=True)
             return order
 
+
         # Enviar al executor
         try:
             result = self._executor.execute(order)
@@ -336,10 +340,26 @@ class OMS:
             order.exchange_order_id = result.state.order_id
 
         if result.accepted:
-            self._fill(order, result.state)
+            if result.state is not None and result.state.status == ExchangeStatus.FILLED:
+                self._fill(order, result.state)
+                if self._event_bus:
+                    try:
+                        self._event_bus.publish("orders.filled", order)
+                    except Exception as exc:
+                        self._log.warning("OMS-Kafka: fallo publicación fill | order={} error={}", order.order_id, exc)
+            elif result.state is not None and result.state.status == ExchangeStatus.PARTIALLY_FILLED:
+                # Fill parcial: la orden NO se cierra. Permanece abierta y
+                # acumula la cantidad ejecutada hasta su resolución terminal
+                # (FILLED, o CANCELLED conservando lo ejecutado).
+                self._apply_partial_fill(order, result.state)
         else:
             reason = result.reason or "executor_rejected"
             self._reject(order, reason=reason, revert_open=True)
+            if self._event_bus:
+                try:
+                    self._event_bus.publish("orders.rejected", order)
+                except Exception as exc:
+                    self._log.warning("OMS-Kafka: fallo publicación reject | order={} error={}", order.order_id, exc)
 
         return order
 
@@ -374,8 +394,11 @@ class OMS:
 
         - state.status == FILLED   → aplica el flujo _fill existente (WAC,
           settlement, fill_sync, portfolio) → FILLED terminal.
-        - state.status == CANCELLED → CANCELLED definitivo; revierte la
-          posición HELD (record_close).
+        - state.status == PARTIALLY_FILLED → conserva la cantidad ejecutada
+          acumulada y permanece CANCELLING (la orden sigue viva); el
+          asentamiento económico se difiere a la resolución terminal.
+        - state.status == CANCELLED → CANCELLED definitivo; si hubo fill
+          parcial previo, asienta la cantidad ejecutada antes de cerrar.
         - state.status == REJECTED → REJECTED (cancel rechazado / not found
           concluyente).
         - state.status == ERROR / timeout / sin confirmación → permanece
@@ -404,24 +427,31 @@ class OMS:
             self._fill(order, state)
             return OrderStatus.FILLED
 
+        if state.status == ExchangeStatus.PARTIALLY_FILLED:
+            # Fill parcial: NO se marca FILLED. Se conserva lo ejecutado y la
+            # orden permanece CANCELLING hasta que el exchange confirme el
+            # estado terminal (FILLED o CANCELLED).
+            self._apply_partial_fill(order, state)
+            return OrderStatus.CANCELLING
+
         if state.status == ExchangeStatus.REJECTED:
             # Cancel rechazado / orden no cancelable de forma concluyente.
             self._reject(order, reason=state.error or "cancel_rejected", revert_open=True)
             return OrderStatus.REJECTED
 
         if state.status == ExchangeStatus.CANCELLED:
+            # Conserva lo ejecutado: un fill parcial no pasó por _fill, así
+            # que su cantidad ejecutada se asienta ahora (posición/P&L) antes
+            # de cerrar la orden como CANCELLED.
+            self._book_partial_execution(order)
             with self._lock:
                 order.transition(OrderStatus.CANCELLED)
-                pass  # ARCH-001/010: _open ya no es almacén mutable
-            # NOTE (Finding #1 / ARCH-001): el BUY CANCELLED nunca llegó
-            # a _fill, entonces portfolio.open_position nunca se ejecutó.
-            # No hay estado patrimonial que revertir en el mirror de Risk.
             self._log.info("Order CANCELLED (confirmado) | {}", order_id)
             return OrderStatus.CANCELLED
 
-        # Otros estados (SUBMITTED/open, sin decisión) → permanece CANCELLING.
+        # Otros estados (SUBMITTED/open, REJECTED, ERROR, sin decisión) → permanece CANCELLING.
         self._log.warning(
-            "cancel: estado exchange sin decisión final — permanece CANCELLING | {} status={}",
+            "cancel: estado exchange sin decisión final o rechazado — permanece CANCELLING | {} status={}",
             order_id,
             state.status.value,
         )
@@ -498,7 +528,12 @@ class OMS:
         ejecutada (filled_qty) SÍ se contabiliza: reduce la cantidad económica
         disponible (la invariante F1 es de cantidad). El P&L UNKNOWN se loguea
         y la contabilidad de cierre usa el patrón existente (record_close 0.0).
+
+        Idempotente: si la orden ya está FILLED, no hace nada.
         """
+        if order.status == OrderStatus.FILLED:
+            return
+
         fill_price = state.fill_price if state is not None else None
         filled_qty = state.filled_qty if state is not None else None
         fees = state.fees if state is not None else None
@@ -512,6 +547,41 @@ class OMS:
         with self._lock:
             pass  # ARCH-001/010: _open ya no es almacén mutable
 
+        self._apply_fill_accounting(
+            order,
+            fill_price=fill_price,
+            filled_qty=filled_qty,
+            fees=fees,
+        )
+
+        self._log.info(
+            "Order FILLED | {} {} @ {} qty={} fees={}",
+            order.order_id,
+            order.symbol,
+            order.fill_price,
+            filled_qty,
+            fees,
+        )
+        if self._on_fill:
+            try:
+                self._on_fill(order)
+            except Exception as exc:
+                self._log.warning("on_fill callback error | {}", exc)
+
+    def _apply_fill_accounting(
+        self,
+        order: Order,
+        *,
+        fill_price: Optional[float],
+        filled_qty: Optional[float],
+        fees: Optional[float],
+    ) -> None:
+        """Asienta posición/WAC/P&L de una cantidad ejecutada real.
+
+        Compartido por `_fill` (terminal FILLED) y `_book_partial_execution`
+        (parcial + CANCELLED): la contabilidad económica es la misma, solo
+        cambia el estado final de la orden.
+        """
         if order.side == OrderSide.BUY:
             # ADR-0025/F4b — acumular WAC (qty, avg). La cantidad viene del
             # fill real (filled_qty). Si el executor no la reporta, no se
@@ -622,13 +692,40 @@ class OMS:
                     fill_price,
                 )
 
+    def _apply_partial_fill(self, order: Order, state: Optional[OrderState]) -> None:
+        """Acumula la cantidad ejecutada de un fill parcial sin cerrar la orden.
+
+        `OrderState.filled_qty` es la cantidad ejecutada acumulada que reporta
+        el exchange. La orden permanece abierta (SUBMITTED/CANCELLING); el
+        asentamiento económico se difiere a la resolución terminal.
+        """
+        if state is None:
+            return
+        if state.filled_qty is not None and state.filled_qty > 0:
+            order.filled_qty = state.filled_qty
+        if state.fill_price is not None:
+            order.fill_price = state.fill_price
+        if state.fees is not None:
+            order.fees = state.fees
+        if order.fill_timestamp is None:
+            order.fill_timestamp = datetime.now(timezone.utc)
         self._log.info(
-            "Order FILLED | {} {} @ {} qty={} fees={}",
+            "Order PARTIALLY_FILLED — orden abierta, qty acumulada | {} status={} filled_qty={} fill_price={}",
             order.order_id,
-            order.symbol,
+            order.status.value,
+            order.filled_qty,
             order.fill_price,
-            filled_qty,
-            fees,
+        )
+
+    def _book_partial_execution(self, order: Order) -> None:
+        """Asienta el fill parcial ejecutado cuando la orden termina CANCELLED."""
+        if order.filled_qty is None or order.filled_qty <= 0:
+            return
+        self._apply_fill_accounting(
+            order,
+            fill_price=order.fill_price,
+            filled_qty=order.filled_qty,
+            fees=order.fees,
         )
         if self._on_fill:
             try:
