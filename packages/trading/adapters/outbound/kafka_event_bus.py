@@ -48,6 +48,7 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
             side=event.side.value,
             fill_price=event.fill_price or 0.0,
             size_pct=event.size_pct,
+            **self._economics(event),
             filled_at=event.fill_timestamp.isoformat() if event.fill_timestamp else "",
             signal_event_id=event.signal.metadata.get("signal_event_id", ""),
             run_id=event.signal.metadata.get("run_id", ""),
@@ -65,3 +66,21 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
             signal_event_id=event.signal.metadata.get("signal_event_id", ""),
             run_id=event.signal.metadata.get("run_id", ""),
         )
+
+    def _economics(self, event: Order) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "filled_qty": event.filled_qty or 0.0,
+            "timeframe": event.signal.timeframe,
+        }
+        s = getattr(event, "settlement", None)
+        if s is None:
+            return out
+        out.update(
+            closed_qty=s.closed_qty,
+            avg_entry_price=s.avg_entry_price,
+            remaining_qty=s.remaining_qty,
+            fee_amount_usd=s.fee_amount_usd,
+            fee_currency=s.fee_currency or "",
+            fee_status=s.fee_status.value,
+        )
+        return out
