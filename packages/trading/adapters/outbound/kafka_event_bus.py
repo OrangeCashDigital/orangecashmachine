@@ -16,9 +16,7 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
 
     def publish(self, topic: str, event: object) -> None:
         if not isinstance(event, Order):
-            raise TypeError(
-                f"KafkaEventBusAdapter espera Order, recibió {type(event).__name__}"
-            )
+            raise TypeError(f"KafkaEventBusAdapter espera Order, recibió {type(event).__name__}")
         try:
             payload: OrderFilledPayload | OrderRejectedPayload
             if topic == "orders.filled":
@@ -37,9 +35,7 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
             )
             self._log.debug("Event published | topic={} event={}", topic, event.order_id)
         except Exception as exc:
-            self._log.error(
-                "Kafka publish failed | topic={} event={} error={}", topic, event.order_id, exc
-            )
+            self._log.error("Kafka publish failed | topic={} event={} error={}", topic, event.order_id, exc)
             raise
 
     def _map_filled(self, event: Order) -> OrderFilledPayload:
