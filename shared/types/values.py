@@ -43,11 +43,7 @@ class Price:
 
     def __post_init__(self) -> None:
         value = _coerce_decimal("value", self.value)
-        tick_size = (
-            _coerce_decimal("tick_size", self.tick_size)
-            if self.tick_size is not None
-            else None
-        )
+        tick_size = _coerce_decimal("tick_size", self.tick_size) if self.tick_size is not None else None
         if value <= 0:
             raise ValueError("Price.value must be > 0")
         if tick_size is not None:
@@ -71,11 +67,7 @@ class Quantity:
 
     def __post_init__(self) -> None:
         value = _coerce_decimal("value", self.value)
-        step_size = (
-            _coerce_decimal("step_size", self.step_size)
-            if self.step_size is not None
-            else None
-        )
+        step_size = _coerce_decimal("step_size", self.step_size) if self.step_size is not None else None
         if value < 0:
             raise ValueError("Quantity.value must be >= 0")
         if step_size is not None:

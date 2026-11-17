@@ -21,13 +21,13 @@ class MockSignal:
         self.direction = "buy"
         self.price = 50000.0
 
+
 class ControllableTransport(OrderTransport):
     """Transporte stateful — nunca auto-fill, el test controla transiciones."""
+
     def __init__(self):
         self._states: dict[str, OrderState] = {}
-        self._execute_state = OrderState(
-            order_id="exchange-123", status=ExchangeOrderStatus.SUBMITTED
-        )
+        self._execute_state = OrderState(order_id="exchange-123", status=ExchangeOrderStatus.SUBMITTED)
 
     def force_execute_state(self, state: OrderState) -> None:
         self._execute_state = state
@@ -41,93 +41,83 @@ class ControllableTransport(OrderTransport):
     def force_state(self, order_id: str, state: OrderState) -> None:
         self._states[order_id] = state
 
+
 @pytest.fixture
 def mocks():
     transport = ControllableTransport()
     risk = MagicMock()
     risk.validate.return_value = MagicMock(rejected=False, size_pct=0.1)
-    
+
     portfolio = MagicMock()
     portfolio.snapshot.return_value = MagicMock(positions=[])
-    
-    return {
-        "risk": risk,
-        "executor": transport,
-        "portfolio": portfolio
-    }
+
+    return {"risk": risk, "executor": transport, "portfolio": portfolio}
+
 
 def test_resolve_cancel_fill_prevails_over_cancel(mocks):
     # Setup
     oms = OMS(risk_manager=mocks["risk"], executor=mocks["executor"], portfolio=mocks["portfolio"])
     signal = MockSignal("BTC/USDT", 1.0)
-    
+
     # 1. Submit and cancel
     order = oms.submit(signal)
     assert order is not None
     assert order.status == OrderStatus.SUBMITTED
-    
+
     order_id = order.order_id
     oms.request_cancel(order_id)
     assert oms.get_order(order_id).status == OrderStatus.CANCELLING
-    
+
     # 2. Reconcile with FILLED state
     filled_state = OrderState(
-        order_id="exchange-123",
-        status=ExchangeOrderStatus.FILLED,
-        fill_price=50000.0,
-        filled_qty=1.0,
-        fees=0.0
+        order_id="exchange-123", status=ExchangeOrderStatus.FILLED, fill_price=50000.0, filled_qty=1.0, fees=0.0
     )
-    
+
     # Simulamos que el transporte ya tiene el fill
     mocks["executor"].force_state("exchange-123", filled_state)
-    
+
     status = oms.resolve_cancel(order_id, filled_state)
-    
+
     # 3. Assert: FILLED gana sobre CANCELLING
     assert status == OrderStatus.FILLED
     assert oms.get_order(order_id).status == OrderStatus.FILLED
+
 
 def test_resolve_cancel_confirmed_cancel(mocks):
     # Setup
     oms = OMS(risk_manager=mocks["risk"], executor=mocks["executor"], portfolio=mocks["portfolio"])
     signal = MockSignal("BTC/USDT", 1.0)
-    
+
     order = oms.submit(signal)
     assert order is not None
     order_id = order.order_id
     oms.request_cancel(order_id)
-    
+
     # Reconcile with CANCELLED state
-    cancelled_state = OrderState(
-        order_id="exchange-123",
-        status=ExchangeOrderStatus.CANCELLED
-    )
+    cancelled_state = OrderState(order_id="exchange-123", status=ExchangeOrderStatus.CANCELLED)
     mocks["executor"].force_state("exchange-123", cancelled_state)
-    
+
     status = oms.resolve_cancel(order_id, cancelled_state)
-    
+
     assert status == OrderStatus.CANCELLED
     assert oms.get_order(order_id).status == OrderStatus.CANCELLED
+
 
 def test_resolve_cancel_invalid_state_stays_cancelling(mocks):
     # Setup
     oms = OMS(risk_manager=mocks["risk"], executor=mocks["executor"], portfolio=mocks["portfolio"])
     signal = MockSignal("BTC/USDT", 1.0)
-    
+
     order = oms.submit(signal)
     assert order is not None
     order_id = order.order_id
     oms.request_cancel(order_id)
-    
+
     # Reconcile with SUBMITTED (unknown state in terms of cancel)
-    unknown_state = OrderState(
-        order_id="exchange-123",
-        status=ExchangeOrderStatus.SUBMITTED
-    )
-    
+    unknown_state = OrderState(order_id="exchange-123", status=ExchangeOrderStatus.SUBMITTED)
+
     status = oms.resolve_cancel(order_id, unknown_state)
-    
+
     assert status == OrderStatus.CANCELLING
 
 

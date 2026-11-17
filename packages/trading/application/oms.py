@@ -320,7 +320,6 @@ class OMS:
             self._reject(order, reason=f"state_error:{exc}", revert_open=True)
             return order
 
-
         # Enviar al executor
         try:
             result = self._executor.execute(order)
