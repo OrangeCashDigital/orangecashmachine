@@ -247,9 +247,7 @@ class TradeTracker:
                 exit_at=exit_at,
             )
         except Exception as exc:
-            self._log.error(
-                "record_settlement error | symbol={} error={}", settlement.symbol, exc
-            )
+            self._log.error("record_settlement error | symbol={} error={}", settlement.symbol, exc)
             return None
 
         self._append_trade(trade)
