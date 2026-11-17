@@ -54,6 +54,7 @@ class ExchangeOrderStatus(str, Enum):
 
     SUBMITTED = "submitted"  # aceptada, pendiente de fill
     FILLED = "filled"  # totalmente ejecutada
+    PARTIALLY_FILLED = "partially_filled"  # ejecutada parcialmente
     CANCELLED = "cancelled"
     REJECTED = "rejected"
     ERROR = "error"  # no se pudo determinar / transporte falló

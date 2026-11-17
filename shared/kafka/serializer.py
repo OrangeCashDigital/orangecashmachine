@@ -71,7 +71,7 @@ def deserialize(data: bytes, payload_cls: Type[P]) -> P:
         raise ValueError("deserialize: data no puede ser None")
     raw: Dict[str, Any] = json.loads(data.decode("utf-8"))
     # from_dict solo está definido en subclases de BasePayload (lifted por cls).
-    return cast(P, payload_cls.from_dict(raw))  # type: ignore[attr-defined]
+    return cast(P, payload_cls.from_dict(raw))
 
 
 # ---------------------------------------------------------------------------
