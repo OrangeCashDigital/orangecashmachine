@@ -4,7 +4,7 @@ import pytest
 from trading.domain.models.order import Order, OrderSide, OrderStatus
 from trading.domain.strategies.base import Signal
 from datetime import datetime, timezone
-from packages.trading.adapters.outbound.kafka_event_bus import KafkaEventBusAdapter
+from trading.adapters.outbound.kafka_event_bus import KafkaEventBusAdapter
 
 @pytest.fixture
 def mock_producer():
