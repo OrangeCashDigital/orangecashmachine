@@ -46,7 +46,7 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
             exchange=event.signal.metadata.get("exchange", "unknown"),
             symbol=event.symbol,
             side=event.side.value,
-            fill_price=event.fill_price or 0.0,
+            fill_price=event.fill_price if event.fill_price is not None else self._raise_missing_price(event.order_id),
             size_pct=event.size_pct,
             **self._economics(event),
             filled_at=event.fill_timestamp.isoformat() if event.fill_timestamp else "",
@@ -69,9 +69,12 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
 
     def _economics(self, event: Order) -> dict[str, Any]:
         out: dict[str, Any] = {
-            "filled_qty": event.filled_qty or 0.0,
+            "filled_qty": event.filled_qty if event.filled_qty is not None else 0.0,
             "timeframe": event.signal.timeframe,
         }
+...
+    def _raise_missing_price(self, order_id: str) -> float:
+        raise ValueError(f"Order {order_id} filled but missing fill_price")
         s = getattr(event, "settlement", None)
         if s is None:
             return out

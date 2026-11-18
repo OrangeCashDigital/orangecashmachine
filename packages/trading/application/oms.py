@@ -591,7 +591,10 @@ class OMS:
                 positions = self._portfolio.snapshot().positions
                 existing = next((p for p in positions if p.symbol == order.symbol), None)
                 prev_qty = existing.quantity if existing is not None else 0.0
-                prev_avg = existing.avg_entry if existing is not None else (fill_price or 0.0)
+                prev_avg = existing.avg_entry if existing is not None else (fill_price if fill_price is not None else self._raise_missing_price(order.order_id))
+...
+    def _raise_missing_price(self, order_id: str) -> float:
+        raise ValueError(f"Order {order_id} filled but missing fill_price")
                 if fill_price is not None and fill_price > 0:
                     new_qty = prev_qty + filled_qty
                     new_avg = (prev_qty * prev_avg + filled_qty * fill_price) / new_qty if prev_qty > 0 else fill_price
