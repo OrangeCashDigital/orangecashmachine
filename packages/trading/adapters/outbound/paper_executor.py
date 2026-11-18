@@ -52,21 +52,21 @@ class PaperExecutor:
         self._capital_usd = float(capital_usd)
 
     def execute(self, order: Order) -> OrderResult:
-        price = order.signal.price
+        price = order.signal.price.value
         # F1: cantidad REQUESTED explícita (SELL/cierre, derivada por el OMS de
         # la posición) → fill completo de esa cantidad. Sin ella (BUY por
         # asignación) → sizing por capital (modelo paper F4a).
         filled_qty: Optional[float]
         if order.quantity is not None:
-            filled_qty = order.quantity
+            filled_qty = float(order.quantity)
         else:
-            filled_qty = (self._capital_usd * order.size_pct) / price if price > 0 else None
+            filled_qty = (self._capital_usd * order.size_pct) / float(price) if price > 0 else None
         logger.info(
             "[PAPER] EXECUTE {} {} {} @ {:.4f} | size={:.1%} qty={} requested={}",
             order.order_id,
             order.side.value.upper(),
             order.symbol,
-            price,
+            float(price),
             order.size_pct,
             filled_qty,
             order.quantity,
@@ -76,7 +76,7 @@ class PaperExecutor:
             state=OrderState(
                 order_id=order.order_id,
                 status=ExchangeOrderStatus.FILLED,
-                fill_price=price,
+                fill_price=float(price),
                 filled_qty=filled_qty,  # fill completo del tamaño pedido (paper)
                 fees=0.0,
             ),

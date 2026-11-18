@@ -5,27 +5,12 @@ tests/trading/test_ema_crossover.py
 
 Tests unitarios de EMACrossoverStrategy.
 Sin I/O — lógica pura con DataFrames sintéticos (polars).
-
-Nota sobre fixtures de cruce
------------------------------
-La estrategia evalúa SOLO la última vela.
-
-golden cross — patrón verificado numéricamente:
-  N-1 velas a 40k, última vela a 80k.
-  EMA(9) reacciona antes que EMA(21) → fast cruza sobre slow en la última vela.
-
-death cross — patrón verificado numéricamente:
-  Base 40k, bloque alto 80k desde índice 10 hasta índice 58 (penúltima),
-  última vela cae a 40k. Fast ya estaba sobre a slow (cruce en idx 10),
-  y la caída brusca hace que fast cruce bajo slow en la última vela.
-
-  No funciona con precio altoa plano desde el inicio porque las EMAs
-  convergen al mismo valor — no hay "arriba" establecida antes del drop.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import numpy as np
 import polars as pl
@@ -207,7 +192,7 @@ def test_signal_metadata_contains_ema_values(strategy):
 def test_signal_price_equals_last_close(strategy):
     df = _make_golden_cross_df()
     signals = strategy.generate_signals(df)
-    assert signals[0].price == float(df.row(-1)[df.columns.index("close")])
+    assert signals[0].price.value == Decimal(str(df.row(-1)[df.columns.index("close")]))
 
 
 def test_input_df_is_not_mutated(strategy):

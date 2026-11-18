@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from shared.enums import SignalDirection
+from shared.types.values import Price
 
 # =============================================================================
 # market_data -> signals
@@ -70,7 +71,7 @@ class SignalProtocol(Protocol):
     symbol: str
     timeframe: str
     direction: SignalDirection
-    price: float
+    price: Price
     confidence: float
     timestamp: datetime
 

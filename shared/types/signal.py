@@ -28,9 +28,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
-# SignalType re-exporta SignalDirection desde shared.enums (BC-45: el SSOT del
-# vocabulario de dominio vive en la raíz del kernel; types solo re-expone).
 from shared.enums import SignalDirection
+from shared.types.values import Price
 
 SignalType = SignalDirection
 
@@ -78,7 +77,7 @@ class Signal:
     symbol: str
     timeframe: str
     direction: SignalType
-    price: float
+    price: Price
     timestamp: datetime
     confidence: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -88,8 +87,6 @@ class Signal:
         """Fail-fast: invariantes de dominio validadas en construcción."""
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError(f"Signal.confidence debe estar en [0, 1], recibido: {self.confidence}")
-        if self.price <= 0.0:
-            raise ValueError(f"Signal.price debe ser positivo, recibido: {self.price}")
         if not self.symbol:
             raise ValueError("Signal.symbol no puede estar vacío")
         if not self.timeframe:
@@ -128,7 +125,7 @@ class Signal:
 
     def __str__(self) -> str:
         return (
-            f"Signal({self.direction.upper()} {self.symbol} @ {self.price:.4f}"
+            f"Signal({self.direction.upper()} {self.symbol} @ {self.price.value:.4f}"
             f" tf={self.timeframe} conf={self.confidence:.2f})"
         )
 
