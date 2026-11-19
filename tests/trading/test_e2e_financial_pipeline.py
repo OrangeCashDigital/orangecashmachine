@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import json
+import os
 import uuid
 from typing import Any, Callable, Coroutine
 
 import pytest
+from trading.analytics.trade_tracker import TradeTracker
+from trading.infrastructure.kafka.trade_tracker_consumer import TradeTrackerConsumer
+
 from ocm.runtime.state.cursor_store import RedisCursorStore
 from shared.kafka.topics import TOPIC_ORDERS_FILLED
 from tests.kafka.conftest import _raw_consumer, _raw_producer, _unique_group
-from trading.analytics.trade_tracker import TradeTracker
-from trading.infrastructure.kafka.trade_tracker_consumer import TradeTrackerConsumer
 
 
 async def _wait_until(predicate: Callable[[], Coroutine[Any, Any, bool]], timeout: float = 5.0) -> bool:
@@ -23,7 +25,7 @@ async def _wait_until(predicate: Callable[[], Coroutine[Any, Any, bool]], timeou
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_order_filled_pipeline():
+async def test_e2e_order_filled_pipeline(redis_store):
     fill_id = f"e2e-{uuid.uuid4().hex}"
     event = {
         "event_id": fill_id,
@@ -43,11 +45,9 @@ async def test_e2e_order_filled_pipeline():
 
     tracker = TradeTracker(exchange="bybit")
     # Redis para el test debe estar limpio
-    redis = RedisCursorStore(host="localhost", port=6379)
-    # Limpiamos usando delete_exchange si existiera, o flushdb si es posible.
-    # Como no tenemos acceso directo al cliente raw del RedisCursorStore fácilmente sin _client,
-    # instanciamos uno nuevo y usamos el client interno.
-    redis._client.flushdb()
+    redis = redis_store
+    redis.flush_test_namespace()
+    redis.flush_pattern("trade_tracker:processed:*")
 
     consumer = await _raw_consumer(_unique_group("e2e"), TOPIC_ORDERS_FILLED)
 
@@ -70,8 +70,7 @@ async def test_e2e_order_filled_pipeline():
     finally:
         await trade_tracker_consumer.stop()
         consumer_task.cancel()
-        try:
+        import contextlib
+        with contextlib.suppress(asyncio.CancelledError):
             await consumer_task
-        except asyncio.CancelledError:
-            pass
         await redis.close()
