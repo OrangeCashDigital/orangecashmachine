@@ -369,3 +369,19 @@ Complementa R-GIT-5 (que ya establece `--admin` como human-only).
 - Si `false`: `--admin` es válido solo cuando todos los checks están verdes
   y el único bloqueante son reviews pendientes.
 - **Nunca** `--admin` para saltarse checks rojos.
+
+## Deploy (autoridad)
+
+- `deploy/scripts/deploy_ocm.sh ACCEPT <sha>` — ÚNICO deploy. Rollback automático.
+- `deploy/scripts/install_systemd.sh [--verify-only|--enable]` — ÚNICO para units.
+- NO editar `/etc/systemd/system/*.service` a mano. Usar `install_systemd.sh`.
+- NO usar `systemctl --user` para servicios de producción.
+- Rechaza árbol sucio. Si falla: `git status` y commit/stash primero.
+
+## Herramientas
+
+- `rg` (ripgrep) instalado. Usar siempre en vez de `grep`.
+- `python -c`, `|`, `$()` — PROHIBIDOS. Alternativas:
+  - `python -c` → crear `scripts/verify_<x>.py` y ejecutar
+  - `cmd | grep x` → `cmd > /tmp/x.txt` + `rg x /tmp/x.txt`
+  - `$(whoami)` → `whoami` (ya expande solo)
