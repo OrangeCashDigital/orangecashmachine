@@ -105,7 +105,7 @@ dependencies = [
     # pyiceberg: <1.0 — API pública no estabilizada en 1.x todavía.
     # >=0.9.1: requiere TimestampType microsecond epoch (int) en scan filters.
     # Actualizar solo tras smoke test completo en staging (iceberg_storage tests).
-    "pyiceberg[pyarrow,sql-sqlite]>=0.9.1,<1.0",
+    "pyiceberg[pyarrow,sql-sqlite,pyiceberg-core]>=0.9.1,<1.0",
     "duckdb>=1.5.1,<2.0",
     "lz4>=4.4.5",
     # ── Web / API layer ───────────────────────────────────────────────────────
