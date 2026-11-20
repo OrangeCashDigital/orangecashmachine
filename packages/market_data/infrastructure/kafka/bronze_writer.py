@@ -148,9 +148,15 @@ class KafkaBronzeWriter:
         self._log.info("bronze_writer_started")
 
     async def stop(self) -> None:
-        """Detiene el loop y cierra el consumer. SafeOps."""
+        """Detiene el loop y cierra consumer + DLQ. SafeOps."""
         self._running = False
         await self._consumer.close()
+        if self._dlq is not None:
+            try:
+                await self._dlq.stop()
+            except Exception as exc:
+                # SafeOps: fallo cerrando DLQ no debe impedir shutdown.
+                self._log.warning("dlq_producer_close_error", error=str(exc))
         self._log.info("bronze_writer_stopped")
 
     # ------------------------------------------------------------------
@@ -171,7 +177,11 @@ class KafkaBronzeWriter:
             try:
                 await self._run_once()
             except asyncio.CancelledError:
-                break
+                # PO-03: propagar — el caller (main._bronze_writer_loop)
+                # necesita ver CancelledError para ejecutar writer.stop()
+                # → consumer.close() + dlq.stop(). Absorberla con break
+                # dejaba AIOKafkaProducer sin cerrar (Task was destroyed).
+                raise
             except Exception as exc:
                 # Fail-soft: loguear y continuar — no detener el loop
                 self._log.error("bronze_writer_loop_error", error=str(exc))
