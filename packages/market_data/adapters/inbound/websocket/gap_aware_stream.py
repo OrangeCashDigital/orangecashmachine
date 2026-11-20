@@ -68,6 +68,7 @@ from loguru import logger
 
 from market_data.domain.value_objects.raw_trade import RawTrade, TradeSource
 from market_data.ports.inbound.trades_source import TradesSourceProtocol
+from shared.contracts.boundaries import FreshnessPort, FreshnessSnapshot
 
 # ---------------------------------------------------------------------------
 # Tipos
@@ -92,7 +93,7 @@ _RESTART_BACKOFF_S: float = 2.0  # segundos entre reintentos
 # ---------------------------------------------------------------------------
 
 
-class GapAwareStream:
+class GapAwareStream(TradesSourceProtocol, FreshnessPort):
     """
     Wrapper de resiliencia sobre cualquier TradesSourceProtocol.
     Implementa TradesSourceProtocol.
@@ -387,6 +388,40 @@ class GapAwareStream:
             f"symbol={self._symbol!r}, "
             f"gap_threshold_ms={self._gap_threshold_ms}, "
             f"running={self._running})"
+        )
+
+    # ------------------------------------------------------------------
+    # FreshnessPort
+    # ------------------------------------------------------------------
+
+    def get_freshness(self, stream_id: str) -> FreshnessSnapshot:
+        """
+        Retorna el estado de freshness de este stream.
+
+        Implementa FreshnessPort. Fail-closed: nunca retorna None.
+        """
+        now_ms = int(time.time() * 1_000)
+        last_seen = self._last_trade_ms
+        reason: str | None
+        if last_seen is None:
+            lag_ms = now_ms  # nunca recibió un trade
+            is_stale = True
+            reason = "no_datos_todavia"
+        else:
+            lag_ms = now_ms - last_seen
+            is_stale = lag_ms > self._gap_threshold_ms
+            reason = None if not is_stale else "silencio_sobre_umbral"
+
+        return FreshnessSnapshot(
+            stream_id=stream_id,
+            stream_type="ws_trades",
+            last_seen_ms=last_seen if last_seen is not None else 0,
+            lag_ms=lag_ms,
+            is_stale=is_stale,
+            staleness_reason=reason,
+            threshold_ms=self._gap_threshold_ms,
+            read_at_ms=now_ms,
+            source="gap_aware_stream",
         )
 
 

@@ -42,9 +42,14 @@ class OCMInfrastructureError(OCMError):
     """Error de conectividad con infraestructura externa (exchange, Redis, Kafka)."""
 
 
+class MissingField(OCMError):
+    """Campo requerido faltante en payload."""
+
+
 __all__ = [
     "OCMError",
     "OCMConfigError",
     "OCMRuntimeError",
     "OCMInfrastructureError",
+    "MissingField",
 ]
