@@ -72,9 +72,6 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
             "filled_qty": event.filled_qty if event.filled_qty is not None else 0.0,
             "timeframe": event.signal.timeframe,
         }
-...
-    def _raise_missing_price(self, order_id: str) -> float:
-        raise ValueError(f"Order {order_id} filled but missing fill_price")
         s = getattr(event, "settlement", None)
         if s is None:
             return out
@@ -87,3 +84,6 @@ class KafkaEventBusAdapter(OrderEventPublisherPort):
             fee_status=s.fee_status.value,
         )
         return out
+
+    def _raise_missing_price(self, order_id: str) -> float:
+        raise ValueError(f"Order {order_id} filled but missing fill_price")

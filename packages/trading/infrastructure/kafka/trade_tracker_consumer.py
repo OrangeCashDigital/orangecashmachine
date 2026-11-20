@@ -1,7 +1,6 @@
-import asyncio
 # -*- coding: utf-8 -*-
-import json
 import asyncio
+import json
 from datetime import datetime
 from typing import Any
 
@@ -38,7 +37,7 @@ class TradeTrackerConsumer:
         # Detectar si el consumer ya está iniciado (caso AIOKafkaConsumer en tests)
         # o si es un Adaptador que gestiona su propio inicio.
         is_started = getattr(self._consumer, "_started", False)
-        
+
         if not is_started:
             try:
                 await self._consumer.start()
@@ -51,6 +50,9 @@ class TradeTrackerConsumer:
                     raise
 
         self._log.info("consumer_loop_started")
+        await self._poll_loop()
+
+    async def _poll_loop(self) -> None:
         while self._running:
             try:
                 # Compatibilidad: Adapter usa getmany(), AIOKafkaConsumer usa poll() o getmany()
@@ -67,7 +69,7 @@ class TradeTrackerConsumer:
                     if isinstance(val, (bytes, bytearray)):
                         val = json.loads(val)
                     await self._on_event(val)
-                
+
                 if messages:
                     await self._consumer.commit()
             except Exception as exc:
@@ -87,7 +89,7 @@ class TradeTrackerConsumer:
         except Exception as exc:
             self._log.warning("stop_error | error={}", exc)
 
-    async def _on_event(self, event: dict) -> None:
+    async def _on_event(self, event: dict[str, Any]) -> None:
         """Procesa un evento individual de orders.filled."""
         try:
             payload = OrderFilledPayload.from_dict(event)
@@ -141,5 +143,3 @@ class TradeTrackerConsumer:
 
         except Exception as exc:
             self._log.error("process_fill_error | fill_id={} error={}", fill_id, exc)
-
-

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import json
-import os
 import uuid
 from typing import Any, Callable, Coroutine
 
@@ -9,7 +8,6 @@ import pytest
 from trading.analytics.trade_tracker import TradeTracker
 from trading.infrastructure.kafka.trade_tracker_consumer import TradeTrackerConsumer
 
-from ocm.runtime.state.cursor_store import RedisCursorStore
 from shared.kafka.topics import TOPIC_ORDERS_FILLED
 from tests.kafka.conftest import _raw_consumer, _raw_producer, _unique_group
 
@@ -42,7 +40,6 @@ async def test_e2e_order_filled_pipeline(redis_store):
         "event_version": 1,
     }
 
-
     tracker = TradeTracker(exchange="bybit")
     # Redis para el test debe estar limpio
     redis = redis_store
@@ -71,6 +68,7 @@ async def test_e2e_order_filled_pipeline(redis_store):
         await trade_tracker_consumer.stop()
         consumer_task.cancel()
         import contextlib
+
         with contextlib.suppress(asyncio.CancelledError):
             await consumer_task
         await redis.close()

@@ -5,9 +5,12 @@
 
 
 import os
+
 import polars as pl
 import pytest
+
 from ocm.runtime.state.cursor_store import RedisCursorStore
+
 
 @pytest.fixture
 def redis_store():
@@ -15,10 +18,9 @@ def redis_store():
     if not password:
         pytest.skip("REDIS_PASSWORD no configurado, saltando test de integración")
     return RedisCursorStore(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
-        password=password
+        host=os.getenv("REDIS_HOST", "localhost"), port=int(os.getenv("REDIS_PORT", "6379")), password=password
     )
+
 
 def assert_no_inf_nan(df: pl.DataFrame, *, allow_nan: bool = True) -> None:
     """Helper de auditoría: verifica ausencia de inf (y opcionalmente NaN).

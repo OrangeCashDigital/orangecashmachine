@@ -190,17 +190,28 @@ class RedisCursorStore:
             except Exception:
                 pass
 
+    def is_healthy(self) -> bool:
+        try:
+            result = self._client.ping()
+            return bool(result)
+        except Exception:
+            return False
+
     def flush_test_namespace(self) -> None:
         """Borra solo las claves pertenecientes al namespace de tests."""
         keys = self._client.keys(f"{self._env}:cursor:*")
-        if keys:
-            self._client.delete(*keys)
+        if isinstance(keys, list) and keys:
+            self._client.delete(*cast(list[str], keys))
+        elif keys:
+            self._client.delete(cast(str, keys))
 
     def flush_pattern(self, pattern: str) -> None:
         """Borra claves que coincidan con el patrón dado."""
         keys = self._client.keys(pattern)
-        if keys:
-            self._client.delete(*keys)
+        if isinstance(keys, list) and keys:
+            self._client.delete(*cast(list[str], keys))
+        elif keys:
+            self._client.delete(cast(str, keys))
 
     async def get(self, exchange: str, symbol: str, timeframe: str) -> Optional[int]:
         key = self._key(exchange, symbol, timeframe)
