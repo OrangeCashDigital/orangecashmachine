@@ -135,3 +135,8 @@ __all__ = [
     "TradesSourceProtocol",
     "TradeSource",
 ]
+
+# Símbolo de freshness para ARCH-005 nivel 3 (estado consultable en port).
+# Cada implementación de TradesSourceProtocol debe exponer lag_ms a través
+# de FreshnessPort, no a través de este protocolo directamente.
+lag_ms: int = 30_000

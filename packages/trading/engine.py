@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Optional, cast
 
 import polars as pl
@@ -45,6 +46,7 @@ from shared.contracts.boundaries import (
     SignalProtocol,
 )  # SSOT — unica definicion del contrato
 from shared.types.signal import Signal
+from shared.types.values import Price
 from trading.domain.models.order import Order, OrderStatus
 from trading.domain.risk.models import StopLossConfig
 from trading.domain.risk.stop_loss import (
@@ -310,7 +312,7 @@ class TradingEngine:
                 symbol=symbol_hit,
                 timeframe=self._strategy.timeframe,
                 direction="sell",
-                price=current_price,
+                price=Price(Decimal(str(current_price))),
                 timestamp=self._last_timestamp(),
                 confidence=1.0,
                 quantity=qty,
