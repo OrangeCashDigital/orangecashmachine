@@ -1,4 +1,5 @@
 """Regression tests PO-03: el writer cierra DLQ y propaga CancelledError."""
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
