@@ -207,7 +207,7 @@ def test_signal_metadata_contains_ema_values(strategy):
 def test_signal_price_equals_last_close(strategy):
     df = _make_golden_cross_df()
     signals = strategy.generate_signals(df)
-    assert signals[0].price == float(df.row(-1)[df.columns.index("close")])
+    assert float(signals[0].price.value) == float(df.row(-1)[df.columns.index("close")])
 
 
 def test_input_df_is_not_mutated(strategy):
