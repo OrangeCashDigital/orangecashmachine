@@ -27,7 +27,7 @@ GOLDEN_EXPECTED: dict[str, Status] = {
     "ARCH-002": Status.PASS,  # resuelto por delegación de _entry_positions a PortfolioService (ARCH-001 fix)
     "ARCH-003": Status.PASS,  # gate de reconciliación submit-time e inicio de ciclo (ADR-0029, manage_open_orders)
     "ARCH-004": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de ADR-0030 / B-MD-009 (multi-paso, Fase 3)
-    "ARCH-005": Status.FAIL,  # P1 LIVE-blocker: pendiente implementación de freshness chain / B-MD-001 (F2/F3)
+    "ARCH-005": Status.PASS,  # freshness chain completa: contract + enforcement + lag_ms en TradesSourceProtocol
     "ARCH-006": Status.PASS,  # ports huérfanos eliminados o cableados (remediación)
     "ARCH-007": Status.PASS,  # bucket B 5/5 — todos los duplicados/homónimos resueltos
     "ARCH-008": Status.PASS,  # sin stubs: NoopWSTradesSource = null-object
