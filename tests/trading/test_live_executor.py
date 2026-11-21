@@ -23,6 +23,7 @@ Se cubren además:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 from trading.adapters.outbound.live_executor import LiveExecutor
@@ -38,7 +39,7 @@ def _signal(side: OrderSide = OrderSide.BUY) -> Signal:
         symbol="BTC/USDT",
         timeframe="1m",
         direction=side.value,
-        price=50_000.0,
+        price=Price(Decimal("50000.0")),
         timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
         confidence=1.0,
     )
