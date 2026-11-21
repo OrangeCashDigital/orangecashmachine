@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import uuid
 
 import pytest
@@ -12,7 +13,7 @@ pytestmark = pytest.mark.integration
 
 # Broker real dedicado
 BOOTSTRAP_SERVERS = "localhost:9093"
-EXPECTED_CLUSTER_ID = "BzDDULoJTiyazxHGjtSIhg"
+EXPECTED_CLUSTER_ID = os.getenv("OCM_TEST_KAFKA_CLUSTER_ID", "BzDDULoJTiyazxHGjtSIhg")
 TOPIC_NAME = "market.gaps.test"
 
 
