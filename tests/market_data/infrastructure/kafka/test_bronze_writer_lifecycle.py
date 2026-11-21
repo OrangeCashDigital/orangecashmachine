@@ -3,7 +3,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from market_data.infrastructure.kafka.bronze_writer import KafkaBronzeWriter
 
 
