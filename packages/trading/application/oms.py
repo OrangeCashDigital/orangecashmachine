@@ -591,10 +591,14 @@ class OMS:
                 positions = self._portfolio.snapshot().positions
                 existing = next((p for p in positions if p.symbol == order.symbol), None)
                 prev_qty = existing.quantity if existing is not None else 0.0
-                prev_avg = existing.avg_entry if existing is not None else (fill_price or 0.0)
+                prev_avg: float | None = existing.avg_entry if existing is not None else None
                 if fill_price is not None and fill_price > 0:
                     new_qty = prev_qty + filled_qty
-                    new_avg = (prev_qty * prev_avg + filled_qty * fill_price) / new_qty if prev_qty > 0 else fill_price
+                    if prev_qty > 0 and prev_avg is not None:
+                        new_avg = (prev_qty * prev_avg + filled_qty * fill_price) / new_qty
+                    else:
+                        # sin avg previo utilizable, el fill fija el WAC
+                        new_avg = fill_price
                     # F2 — espejo económico real en Risk: cantidad ejecutada + WAC.
                     # (portfolio.open_position lo hace on_fill→fill_sync)
                     self._risk.record_position(order.symbol, new_qty, new_avg)
