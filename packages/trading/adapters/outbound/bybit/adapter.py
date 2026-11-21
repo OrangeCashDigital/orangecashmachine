@@ -51,9 +51,10 @@ class BybitRestTransport(OrderTransport):
         return float(Decimal(str(value)))
 
     def _sign(self, payload: str, timestamp: str) -> str:
+        # por Bybit V5 para autenticar requests (MAC de mensajes), no un
         return hmac.new(
             self.api_secret.encode("utf-8"),
-            (timestamp + self.api_key + "5000" + payload).encode("utf-8"),
+            (timestamp + self.api_key + "5000" + payload).encode("utf-8"),  # codeql[py/weak-sensitive-data-hashing] falso positivo: HMAC, no KDF
             hashlib.sha256,
         ).hexdigest()
 
