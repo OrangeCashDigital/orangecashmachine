@@ -32,6 +32,7 @@ from trading.domain.strategies.base import Signal
 from trading.ports.outbound.transport import ExchangeOrderStatus, OrderState
 
 from ocm.runtime.guard import ExecutionGuard
+from shared.types.values import Price
 
 
 def _signal(side: OrderSide = OrderSide.BUY) -> Signal:
