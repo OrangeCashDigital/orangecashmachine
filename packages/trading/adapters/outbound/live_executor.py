@@ -156,7 +156,7 @@ class LiveExecutor:
             if order.quantity <= 0:
                 raise ValueError(f"LiveExecutor: order.quantity inválido {order.quantity}")
             return float(order.quantity)
-        price = float(order.signal.price)
+        price = float(order.signal.price.value)
         if price <= 0:
             raise ValueError(f"LiveExecutor: precio de señal inválido {price}")
         return (self._capital_usd * order.size_pct) / price
