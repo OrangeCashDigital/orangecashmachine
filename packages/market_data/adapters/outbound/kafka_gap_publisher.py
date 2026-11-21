@@ -133,26 +133,23 @@ class KafkaGapPublisher:
         # Usamos AIOKafkaAdminClient para consultar la metadata del clúster.
         from aiokafka.admin import AIOKafkaAdminClient
         from aiokafka.protocol.metadata import MetadataRequest
-        
+
         admin = AIOKafkaAdminClient(bootstrap_servers=self._bootstrap_servers)
         try:
             await admin.start()
             # Enviar petición de metadatos para obtener la respuesta completa, que contiene cluster_id.
             response = await admin._send_request(MetadataRequest([]))
-            cluster_id = getattr(response, 'cluster_id', None)
-            
+            cluster_id = getattr(response, "cluster_id", None)
+
             if self._is_test_env:
                 if cluster_id is None:
                     raise ValueError("[kafka-gap-publisher] No se pudo obtener el Cluster ID del broker dedicado.")
-                
+
                 # Registramos el Cluster ID real para auditoría forense.
                 logger.info("[kafka-gap-publisher] Verificando broker dedicado | cluster_id={}", cluster_id)
-                
+
                 # Si se configuró una identidad esperada específica, validarla (Broker Lock).
-                if (
-                    self._broker_identity not in ("any", "production")
-                    and cluster_id != self._broker_identity
-                ):
+                if self._broker_identity not in ("any", "production") and cluster_id != self._broker_identity:
                     raise ValueError(
                         f"[kafka-gap-publisher] Broker identity mismatch! "
                         f"Expected: '{self._broker_identity}', Actual: '{cluster_id}'. "
@@ -178,7 +175,7 @@ class KafkaGapPublisher:
             self._bootstrap_servers,
             self._topic,
             self._headers,
-            cluster_id if 'cluster_id' in locals() else 'unknown'
+            cluster_id if "cluster_id" in locals() else "unknown",
         )
 
     async def stop(self) -> None:
