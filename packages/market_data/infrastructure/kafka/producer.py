@@ -13,6 +13,8 @@ Principios: DIP · SRP · SafeOps · Resiliencia · SSOT
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import os
 from typing import Optional
 
@@ -139,9 +141,22 @@ class KafkaProducerAdapter:
         except Exception as exc:
             self._log.warning("kafka_close_flush_error", error=str(exc))
         try:
-            await self._producer.stop()
+            # aiokafka >=0.10: stop() espera al Sender task. Si hay un
+            # send in-flight colgado, esto cuelga -> systemd SIGKILL (#187).
+            await asyncio.wait_for(self._producer.stop(), timeout=5.0)
             self._started = False
             self._log.info("kafka_producer_closed")
+        except asyncio.TimeoutError:
+            self._log.error("kafka_producer_stop_timeout", timeout=5.0)
+            # Forzar cancelación del Sender para no dejar
+            # Sender._sender_routine() pendiente -> SIGKILL.
+            sender = getattr(self._producer, "_sender", None)
+            task = getattr(sender, "task", None) if sender is not None else None
+            if task is not None and not task.done():
+                task.cancel()
+                with contextlib.suppress(BaseException):
+                    await task
+            self._started = False
         except Exception as exc:
             self._log.warning("kafka_producer_close_error", error=str(exc))
 
@@ -221,7 +236,6 @@ class KafkaProducerAdapter:
         """
         if not self._started or self._producer is None:
             return
-        import asyncio
 
         try:
             await asyncio.wait_for(self._producer.flush(), timeout=timeout)
