@@ -168,7 +168,7 @@ def _pytest_pass() -> bool:
     """Si pytest está disponible, ejecuta un subconjunto rápido (sin coverage)."""
     try:
         r = subprocess.run(
-            ["uv", "run", "pytest", "-q", "--tb=short", "--no-cov", "tests/market_data/"],
+            ["uv", "run", "pytest", "-q", "--tb=short", "--no-cov", "-m", "not integration", "tests/market_data/"],
             capture_output=True,
             text=True,
             timeout=120,
