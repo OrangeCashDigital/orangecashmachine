@@ -64,7 +64,7 @@ dependencies = [
     # puede requerir pydantic>=2.9 internamente — correr
     # `uv lock --dry-run` ANTES de tocar cualquiera de las dos versiones,
     # como single source of truth de resolución de dependencias.
-    "pydantic==2.14.0",
+    "pydantic==2.14.2",
     "pydantic-settings>=2.13.1,<3.0",
     # pyyaml: pinneado en 6.0.2 — Hydra 1.3.x requiere exactamente esta API
     # de yaml.safe_load con soporte de anchors. 6.1 cambió el comportamiento
@@ -106,7 +106,7 @@ dependencies = [
     # >=0.9.1: requiere TimestampType microsecond epoch (int) en scan filters.
     # Actualizar solo tras smoke test completo en staging (iceberg_storage tests).
     "pyiceberg[pyarrow,sql-sqlite]>=0.9.1,<1.0",
-    "duckdb>=1.5.1,<2.0",
+    "duckdb>=1.5.1,<3.0",
     "lz4>=4.4.5",
     # ── Web / API layer ───────────────────────────────────────────────────────
     "fastapi>=0.111.0,<1.0",
@@ -119,7 +119,7 @@ dependencies = [
     # ── Observabilidad (logging + métricas) ─────────────────────────────────
     # loguru: pinneado en 0.7.2 — API de sink Loki acoplada a esta versión.
     # Structlog también depende del record format de loguru. Actualizar con ambos.
-    "loguru==0.7.3",
+    "loguru==0.8.0",
     "structlog>=24.1.0,<27.0",
     "httpx>=0.27.0,<1.0",
     "prometheus-client>=0.20.0,<1.0",
