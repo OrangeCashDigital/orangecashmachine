@@ -310,8 +310,9 @@ ignore = [
 "packages/market_data/adapters/inbound/rest/gap_recovery_fetcher.py"      = ["C901"]
 "packages/market_data/adapters/inbound/rest/ohlcv_fetcher.py"             = ["C901"]
 "packages/market_data/adapters/inbound/rest/trades_backfill_fetcher.py"   = ["C901"]
-"packages/market_data/adapters/outbound/exchange/ccxt_adapter.py" = ["C901", "SIM103", "PLR0913", "PLR0917"]
+"packages/market_data/adapters/outbound/exchange/ccxt_adapter.py"         = ["C901", "SIM103", "PLR0913", "PLR0917"]
 "packages/market_data/adapters/outbound/exchange/resilience.py"           = ["C901", "SIM105"]
+
 "packages/market_data/application/pipelines/_worker_pool.py"              = ["C901"]
 "packages/market_data/application/strategies/backfill.py"                 = ["C901"]
 "packages/market_data/application/strategies/repair.py"                   = ["C901"]
