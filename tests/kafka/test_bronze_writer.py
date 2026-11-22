@@ -322,6 +322,26 @@ class TestBronzeWriterDedup:
 
         asyncio.run(writer.run_once())
 
+        # Batching (#212): mismo (exchange, symbol, timeframe) → UN solo append
+        # (= un commit Iceberg) con las filas de ambos eventos.
+        assert len(bronze.appended) == 1
+        # Ambos event_id quedan marcados como vistos (mark_seen tras write ok).
+        assert writer._dedup.is_duplicate("evt-A")
+        assert writer._dedup.is_duplicate("evt-B")
+
+    def test_different_groups_one_append_each(self):
+        """Eventos de distinto timeframe → un append por grupo."""
+        consumer = _FakeConsumer(
+            [
+                _make_msg(_make_event(event_id="evt-A", timeframe="1h")),
+                _make_msg(_make_event(event_id="evt-B", timeframe="5m")),
+            ]
+        )
+        bronze = _FakeBronze()
+        writer = _build_writer(consumer, bronze)
+
+        asyncio.run(writer.run_once())
+
         assert len(bronze.appended) == 2
 
 
