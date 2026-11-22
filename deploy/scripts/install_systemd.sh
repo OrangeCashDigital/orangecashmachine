@@ -40,10 +40,15 @@ if [[ ! -f "${HOST_ENV}" ]]; then
     if [[ -f "${HOST_ENV_EXAMPLE}" ]]; then
         echo "[install-systemd] host.env no encontrado. Creando desde host.env.example..."
         cp "${HOST_ENV_EXAMPLE}" "${HOST_ENV}"
+        sed -i "s|^OCM_HOST_USER=.*|OCM_HOST_USER=$(whoami)|; s|^OCM_REPO_ROOT=.*|OCM_REPO_ROOT=${REPO_ROOT}|" "${HOST_ENV}"
     else
         echo "[install-systemd] ERROR: No existe ni ${HOST_ENV} ni ${HOST_ENV_EXAMPLE}"
         exit 1
     fi
+fi
+
+if grep -qE '^[A-Z_]+=<' "${HOST_ENV}"; then
+    echo "[install-systemd] ERROR: placeholders <...> sin resolver en ${HOST_ENV}"; exit 1
 fi
 
 # Fallbacks de variables de entorno de infraestructura

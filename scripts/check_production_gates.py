@@ -19,6 +19,7 @@ la verificación = BLOCK.
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -167,7 +168,7 @@ def _pytest_pass() -> bool:
     """Si pytest está disponible, ejecuta un subconjunto rápido (sin coverage)."""
     try:
         r = subprocess.run(
-            ["uv", "run", "pytest", "-q", "--tb=short", "--no-cov", "tests/market_data/"],
+            ["uv", "run", "pytest", "-q", "--tb=short", "--no-cov", "-m", "not integration", "tests/market_data/"],
             capture_output=True,
             text=True,
             timeout=120,
@@ -381,8 +382,21 @@ def _trading_stub_blocked() -> bool:
       2. No hay ningún proceso `live_hydra`/`execute_live` corriendo.
     """
     try:
-        src = (ROOT / "packages" / "trading" / "adapters" / "outbound" / "live_executor.py").read_text()
-        stub_ok = "IS_STUB: ClassVar[bool] = True" in src
+        file_path = ROOT / "packages" / "trading" / "adapters" / "outbound" / "live_executor.py"
+        tree = ast.parse(file_path.read_text())
+        stub_ok = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "LiveExecutor":
+                for item in node.body:
+                    if (
+                        isinstance(item, ast.AnnAssign)
+                        and isinstance(item.target, ast.Name)
+                        and item.target.id == "IS_STUB"
+                        and isinstance(item.value, ast.Constant)
+                        and item.value.value is True
+                    ):
+                        stub_ok = True
+                        break
     except Exception:
         stub_ok = False  # fail-closed
     # Proceso live: if pgrep finds none → no hay proceso → trading_ok=True

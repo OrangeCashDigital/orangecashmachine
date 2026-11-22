@@ -49,14 +49,14 @@ Jerarquía dividida por nivel de dato, con `DomainEvent` (`events/_base.py`) com
 
 ---
 
-## 2. `trading` — organizado por capacidad, sin domain/ formal
+## 2. `trading` — organizado por arquitectura hexagonal (post-refactor)
 
-No sigue el mismo patrón de capas que `market_data`. Está organizado por capacidad técnica: `execution/`, `risk/`, `analytics/`, `strategies/`, `data/`, `engine.py`. No existen carpetas `domain/`, `ports/` ni `application/` explícitas.
+Sigue el patrón hexagonal tras la migración de `execution/`: `domain/` → `ports/` → `application/` → `adapters/`.
 
-**Esto no implica acoplamiento real verificado** — es deuda de convención/nomenclatura, no de dependencias rotas:
-
-- `execution/order.py` define **`Order`** — sí es una Entity de dominio genuina (identidad vía `order_id`, máquina de estados explícita `PENDING → SUBMITTED → FILLED/REJECTED/CANCELLED`, invariantes validadas en `__post_init__`). Convive en la carpeta con `LiveExecutor` (adapter real hacia CCXT, actualmente STUB) y `PaperExecutor`, pero la dirección de dependencia es correcta: los executors importan `Order`, `Order` no importa nada de ellos.
-- `execution/oms.py` define **`OMS`** (Order Management System) y el Protocol **`OrderExecutor`** — este último es, conceptualmente, un *port* hexagonal, pero está definido inline en vez de vivir en una carpeta `ports/` dedicada (a diferencia de `portfolio`).
+- `domain/models/order.py` define **`Order`** — Entity de dominio genuina (identidad vía `order_id`, máquina de estados explícita `PENDING → SUBMITTED → FILLED/REJECTED/CANCELLED`).
+- `ports/outbound/live_executor.py` define el Protocol **`OrderExecutor`** (movido desde `oms.py`).
+- `application/oms.py` define **`OMS`** (Order Management System).
+- `adapters/outbound/live_executor.py` — **`LiveExecutor`** (adapter real hacia CCXT, actualmente STUB).
 - `risk/models.py` — configuración Pydantic (`RiskConfig`, `PositionConfig`, `DrawdownConfig`, etc.), correctamente separada de:
 - `risk/manager.py` — **`RiskManager`**, **`RiskDecision`**, **`RiskViolation`** — estos sí son conceptos de dominio (decisión de riesgo, violación como excepción). BC-12 de `import-linter` ya protege `trading.risk` de importar `trading.execution`.
 - `strategies/base.py` — **`BaseStrategy`** es Policy pura: stateless, solo depende de `Signal` (de `shared/types/`) y pandas, sin fugas hacia infraestructura. `strategies/ema_crossover.py` es una implementación limpia del contrato.
@@ -103,11 +103,11 @@ Todo lo siguiente está verificado leyendo código, no es especulación.
 ### 2. `classify_error()` duplicado — deuda ya reconocida en el propio código
 
 `domain/policies/base.py` re-exporta una copia idéntica de `classify_error()` cuya fuente real vive en `application/pipeline/runtime.py`. El código ya lo marca: *"se eliminará esta al completar la migración de todos los importadores"*. No es un hallazgo nuevo — es trabajo pendiente ya identificado por el propio equipo.
-
 ### 3. Docstrings con rutas de archivo obsoletas — patrón recurrente, no incidente aislado
 
 Aparece al menos tres veces:
-- `Signal` (`shared/types/signal.py`) dice `"Ubicación: domain/"` — no existe ningún `domain/` bajo `trading`, y el archivo vive en `shared/types/`.
+
+- `Signal` (`shared/types/signal.py`) docstring dice `"Ubicación: domain/"` — no existe ningún `domain/` bajo `trading`; el archivo vive en `shared/types/`.
 - `data_quality_policy.py` tiene el encabezado `market_data/quality/policies/data_quality_policy.py` — la ruta real es `market_data/domain/policies/data_quality_policy.py`.
 - `strategies/base.py` comenta *"Signal vive en domain/ — re-exportado aquí"* — mismo error que el punto anterior.
 

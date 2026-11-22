@@ -70,3 +70,28 @@ class TestBalancePortProtocol:
         assert isinstance(snap, BalanceSnapshot)
         assert snap.currency == "USDT"
         assert snap.age_ms(now_ms=1_500) == 500
+
+
+class TestBalancePortFailureModes:
+    """Casos borde del contract: fail-closed y edades extremas."""
+
+    def test_get_balance_puede_lanzar(self) -> None:
+        """El contrato permite que get_balance lance (fail-closed)."""
+
+        class _FailingBalancePort:
+            def get_balance(self, currency: str = "USDT") -> BalanceSnapshot:
+                raise ConnectionError("exchange unreachable")
+
+        port = _FailingBalancePort()
+        # El contrato NO exige que get_balance nunca lance — fail-closed es válido
+        assert isinstance(port, BalancePort)
+        with pytest.raises(ConnectionError):
+            port.get_balance()
+
+    def test_snapshot_age_ms_extremos(self) -> None:
+        """age_ms con valores extremos (fresco y muy viejo)."""
+        snap = _make_snapshot(read_at_ms=0)
+        # Edad 0 → fresco
+        assert snap.age_ms(now_ms=0) == 0
+        # Edad muy grande → viejo
+        assert snap.age_ms(now_ms=10**12) == 10**12

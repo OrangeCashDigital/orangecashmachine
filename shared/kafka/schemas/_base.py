@@ -68,6 +68,7 @@ from shared.enums import (
     PositionSide,
     SignalDirection,
 )
+from shared.exceptions import MissingField
 
 
 def _utc_now() -> str:
@@ -148,6 +149,19 @@ class BasePayload:
             "event_version": type(self).SCHEMA_VERSION,
             "occurred_at": self.occurred_at,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BasePayload":
+        """Deserializa envelope base. Fail-fast si faltan campos requeridos."""
+        if "event_id" not in data or data["event_id"] is None:
+            raise MissingField(f"{cls.__name__}: required field 'event_id' is missing or None")
+        occurred_at = data.get("occurred_at")
+        if occurred_at is None:
+            occurred_at = ""
+        return cls(
+            event_id=str(data["event_id"]),
+            occurred_at=str(occurred_at),
+        )
 
 
 __all__ = [

@@ -50,7 +50,7 @@ Principios: SSOT · DDD · Fail-Fast · KISS · exactly-once awareness
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from shared.kafka.schemas._base import BasePayload, OrderSide, SchemaVersionError
 
@@ -84,9 +84,26 @@ class OrderFilledPayload(BasePayload):
     side       : "buy" | "sell"
     fill_price : precio de ejecución real
     size_pct   : % del capital asignado ∈ (0, 1]
+    filled_qty : cantidad ejecutada real (Order.filled_qty del exchange)
+    fee_amount_usd : coste de comisiones en USD; None = UNKNOWN (ADR-0026,
+                     UNKNOWN ≠ 0 — no se asume cero)
+    fee_currency   : moneda de las comisiones ("" si no disponible)
+    fee_status     : known | unknown | provisional | final (ADR-0026)
+    timeframe      : timeframe de la señal que originó la orden
+    closed_qty     : cantidad cerrada por este fill SELL (0.0 en BUY)
+    avg_entry_price: WAC antes del cierre (None en BUY / precio UNKNOWN)
+    remaining_qty  : cantidad que queda abierta tras el cierre
     filled_at  : ISO-8601 UTC de ejecución
     signal_event_id : event_id del ApprovedSignalPayload que originó la orden
     run_id     : correlación con el run
+
+    Versionado
+    ----------
+    Los campos económicos son un cambio ADITIVO (defaults seguros): el
+    SCHEMA_VERSION permanece en 1 según la política de ``_base.py``
+    (additive → mismo SCHEMA_VERSION). Un payload v1 antiguo sin estos
+    campos sigue siendo válido; un consumer no puede inferir cantidades
+    que el productor no emitió.
     """
 
     order_id: str = ""
@@ -95,6 +112,14 @@ class OrderFilledPayload(BasePayload):
     side: OrderSide = "buy"
     fill_price: float = 0.0
     size_pct: float = 0.0
+    filled_qty: float = 0.0
+    fee_amount_usd: Optional[float] = None
+    fee_currency: str = ""
+    fee_status: str = "unknown"
+    timeframe: str = ""
+    closed_qty: float = 0.0
+    avg_entry_price: Optional[float] = None
+    remaining_qty: float = 0.0
     filled_at: str = ""  # ISO-8601 UTC
     signal_event_id: str = ""
     run_id: str = ""
@@ -109,6 +134,14 @@ class OrderFilledPayload(BasePayload):
                 "side": self.side,
                 "fill_price": self.fill_price,
                 "size_pct": self.size_pct,
+                "filled_qty": self.filled_qty,
+                "fee_amount_usd": self.fee_amount_usd,
+                "fee_currency": self.fee_currency,
+                "fee_status": self.fee_status,
+                "timeframe": self.timeframe,
+                "closed_qty": self.closed_qty,
+                "avg_entry_price": self.avg_entry_price,
+                "remaining_qty": self.remaining_qty,
                 "filled_at": self.filled_at,
                 "signal_event_id": self.signal_event_id,
                 "run_id": self.run_id,
@@ -123,6 +156,8 @@ class OrderFilledPayload(BasePayload):
             raise SchemaVersionError(
                 f"OrderFilledPayload schema v{version} incompatible con v{cls.SCHEMA_VERSION} esperada."
             )
+        fee_amount = data.get("fee_amount_usd")
+        avg_entry = data.get("avg_entry_price")
         return cls(
             event_id=str(data["event_id"]),
             occurred_at=str(data.get("occurred_at", "")),
@@ -132,6 +167,14 @@ class OrderFilledPayload(BasePayload):
             side=data["side"],
             fill_price=float(data["fill_price"]),
             size_pct=float(data["size_pct"]),
+            filled_qty=float(data.get("filled_qty", 0.0)),
+            fee_amount_usd=None if fee_amount is None else float(fee_amount),
+            fee_currency=str(data.get("fee_currency", "")),
+            fee_status=str(data.get("fee_status", "unknown")),
+            timeframe=str(data.get("timeframe", "")),
+            closed_qty=float(data.get("closed_qty", 0.0)),
+            avg_entry_price=None if avg_entry is None else float(avg_entry),
+            remaining_qty=float(data.get("remaining_qty", 0.0)),
             filled_at=str(data.get("filled_at", "")),
             signal_event_id=str(data.get("signal_event_id", "")),
             run_id=str(data.get("run_id", "")),

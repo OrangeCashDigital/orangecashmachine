@@ -453,31 +453,15 @@ hallazgos:
   hallazgo_informe: H-24
   fase: F2
   prioridad: MEDIA
-  estado: EN_CURSO
+  estado: HECHO
   estado_auditoria: CONFIRMADO
-  evidencia: 'KafkaProducerAdapter.send_async() (infrastructure/kafka/producer.py)
-    captura toda excepción, sin retry/DLQ/circuit breaker; reason=dlq_sent ya reservado
-    en KafkaMetrics.event_failed() pero ningún código lo dispara. 2026-08-09: send_async()
-    ya clasifica causas (F-019) y produce() eleva KafkaProducerError (F-013) — la
-    visualización del fallo esta resuelta; lo pendiente es recuperacion (gap/DLQ product-side).
-    BookBuilderConsumer existe y está cableado (commit b561339f); gap detection técnico
-    implementado; publicación de OrderBookGapDetectedEvent en market.gaps (D3) y
-    corrección de idempotencia D6 (fix-dedup-u) pendientes de implementación y validación.'
-  solucion: >-
-    DEFERRED por ADR-0023 (2026-08-09): gap detection/DLQ product-side bloqueado hasta
-    existir consumidor real de orderbook.raw (BookBuilder). ADR-0023 proponía en su momento
-    sequence aditivo en schema v2 y book.sequence_number propagado (referencia histórica SOLO);
-    esa especificación queda reemplazada por ADR-0028 aceptado con revisión (2026-09-24):
-    identity/continuity por update_id (u) en schema v2 estable, sin sequence/first_update_id,
-    sin schema v3. Solución vigente para OrderBook = ADR-0028 con D2/D3/D5/D6.
-    No tocar wire schema sin consumidor (no-especulativo).
+  evidencia: 'BookBuilderConsumer.run() gap detection (D3) verified; KafkaGapPublisher wired; tests/market_data/infrastructure/kafka/test_book_builder_gap_publishing.py PASSED (2026-11-15)'
+  solucion: 'Implementado gap detection (B-25) con OrderBookGapDetectedEvent; wiring verificado'
   pruebas:
-  - 'verificacion: grep TOPIC_ORDERBOOK_RAW en packages/+apps/ = solo producer; GROUP_BOOK_BUILDER/TOPIC_BOOK_DELTA/TOPIC_BOOK_SNAPSHOT
-    = 0 usos productivos'
-  - 'verificacion: cryptofeed expone book.sequence_number (cryptofeed_orderbook_stream.py:158-161)'
-  adr_relacionado: 'ADR-0023, ADR-0028'
-  riesgo_residual: "Medio — gap detection técnico existe; publicación market.gaps (D3) y corrección idempotencia (D6) pendientes de implementación y validación."
-  fecha_cierre: null
+  - 'tests/market_data/infrastructure/kafka/test_book_builder_gap_publishing.py (5 PASSED)'
+  adr_relacionado: ADR-0028
+  riesgo_residual: Bajo — Gap detection activo y probado
+  fecha_cierre: '2026-11-15'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2492,6 +2476,51 @@ hallazgos:
     evidencia:
       estado: HECHO
       referencia: líneas de código verificadas contra HEAD adf941a 2026-08-15
+    cierre:
+      estado: PENDIENTE
+      referencia: null
+- id: B-MD-001
+  hallazgo_informe: B-MD-001
+  fase: F3
+  prioridad: CRITICA
+  estado: PENDIENTE
+  estado_auditoria: CONFIRMADO
+  evidencia: El linter reporta ARCH-005 FAIL; no existe freshness como estado consultable ni su propagación (F-MD-001).
+  solucion: 'ADR-0059 (MERGED #142): FreshnessPort con estado consultable y propagación a trading/portfolio.'
+  pruebas:
+  - 'verificación: ADR-0059 en main'
+  - 'pendiente: implementación FreshnessPort'
+  blocked_by: [ARCH-004]  # enforcement pre-orden requiere sandbox Bybit (#121)
+  notes: >
+    FreshnessPort y FreshnessSnapshot ya existen en shared/contracts/boundaries.py.
+    GapAwareStream ya implementa el port (get_freshness línea 398).
+    Niveles 1, 2 y 4 del linter PASS. Niveles 3, 5 y 6 FAIL.
+    Niveles 5 y 6 requieren consumo real en trading/risk → bloqueado por ARCH-004.
+  adr_relacionado: ADR-0059 (MERGED #142)
+  riesgo_residual: Alto — sin freshness, un feed congelado es indistinguible de un mercado quieto (bloqueante de live).
+  fecha_cierre: null
+  cadena:
+    hallazgo:
+      estado: HECHO
+      referencia: docs/audits/AUDIT_OCM_market-data-deep-audit_2026-08-14.md
+    backlog:
+      estado: HECHO
+      referencia: B-MD-001 en tracking.yaml
+    adr:
+      estado: HECHO
+      referencia: ADR-0059 (MERGED #142)
+    implementacion:
+      estado: PENDIENTE
+      referencia: null
+    tests:
+      estado: PENDIENTE
+      referencia: null
+    ci:
+      estado: PENDIENTE
+      referencia: null
+    evidencia:
+      estado: PENDIENTE
+      referencia: null
     cierre:
       estado: PENDIENTE
       referencia: null
