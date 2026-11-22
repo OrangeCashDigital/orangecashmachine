@@ -8,7 +8,7 @@
     "scripts/backtest_app_guard.py": "7794844fa4b46346ea18e43bf2f3489e2534ecd6b64b2541de287c59ddca55bb",
     "scripts/domain_subprocess_guard.py": "459cd395f45e90f2ad1aabf91ee16b5aae3f8613b5687c3be7f21374cd1c9e81",
     "policies/registry.yaml": "3ad07310d713a9d8201dcb479856e9c6286bdf97a5b53fd6171555804461fab8",
-    ".github/workflows/ocm-ci.yml": "08d55fca1e6fb882f0f427d8db057f30349c93796996825711bb93d53472e913",
+    ".github/workflows/ocm-ci.yml": "995aeb93f4dd5dde7bb84ddede174a036d8a4e5b06e79b1ea21704264f9bed6a",
     "architecture_linter/staged_ports.py": "49be20fabc73287654506eaf006a766974d572b7f2ac34dfb40743c5d43799ad",
     "architecture_linter/rules/arch_006.py": "f8828d6dbaa549beb607f2d28b11caa59f9922c714af593a5501f9579ecc9fe8"
   }
