@@ -260,31 +260,33 @@ class CCXTAdapter(ExchangeAdapter):
     # ----------------------------------------------------------
 
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
+        """Consulta el ticker actual."""
         client = await self._get_client()
-        async with self._limiter.slot():
+        return await self._execute_ticker_call(client, symbol)
 
-            async def _call() -> Dict[str, Any]:
-                return cast(
-                    Dict[str, Any],
-                    await asyncio.wait_for(
-                        client.fetch_ticker(symbol),
-                        timeout=_FETCH_TICKER_TIMEOUT,
-                    ),
-                )
+    async def _execute_ticker_call(self, client: Any, symbol: str) -> Dict[str, Any]:
+        async def _call() -> Dict[str, Any]:
+            return cast(
+                Dict[str, Any],
+                await asyncio.wait_for(
+                    client.fetch_ticker(symbol),
+                    timeout=_FETCH_TICKER_TIMEOUT,
+                ),
+            )
 
-            try:
-                _t0 = time.perf_counter()
-                result = await self._resilience.retry_call(_call)
-                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
-            except RetryExhaustedError as exc:
-                self._throttle.record_error(error_type=exc.error_type)
-                if exc.error_type == "rate_limit":
-                    self._throttle.record_rate_limit_hit()
-                raise
-            except ExchangeCircuitOpenError:
-                self._handle_circuit_open("fetch_ticker")
-                raise
+        try:
+            _t0 = time.perf_counter()
+            result = await self._resilience.retry_call(_call)
+            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+            return result
+        except RetryExhaustedError as exc:
+            self._throttle.record_error(error_type=exc.error_type)
+            if exc.error_type == "rate_limit":
+                self._throttle.record_rate_limit_hit()
+            raise
+        except ExchangeCircuitOpenError:
+            self._handle_circuit_open("fetch_ticker")
+            raise
 
     async def fetch_ohlcv(
         self,
@@ -425,54 +427,63 @@ class CCXTAdapter(ExchangeAdapter):
         price: Optional[float] = None,
         params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Envía una orden al exchange (order creation) con timeout explícito.
-
-        Para órdenes market, ``price`` debe ser None (el exchange marketa).
-        ``client_order_id`` se propaga como idempotencia cuando el exchange lo
-        soporta (params clientOrderId/implicit_schema vía quirks)
-        """
+        """Envía una orden al exchange (order creation) con timeout explícito."""
         client = await self._get_client()
+        order_params = self._build_order_params(client_order_id, params)
+        return await self._execute_order_call(client, symbol, side, amount, order_type, price, order_params)
+
+    def _build_order_params(self, client_order_id: Optional[str], params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         order_params: Dict[str, Any] = dict(params or {})
         if client_order_id:
             order_params["clientOrderId"] = client_order_id
-        async with self._limiter.slot():
+        return order_params
 
-            async def _call() -> Dict[str, Any]:
-                return cast(
-                    Dict[str, Any],
-                    await asyncio.wait_for(
-                        client.create_order(
-                            symbol,
-                            order_type,
-                            side,
-                            amount,
-                            price,
-                            order_params,
-                        ),
-                        timeout=_CREATE_ORDER_TIMEOUT,
+    async def _execute_order_call(
+        self,
+        client: Any,
+        symbol: str,
+        side: str,
+        amount: float,
+        order_type: str,
+        price: Optional[float],
+        order_params: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        async def _call() -> Dict[str, Any]:
+            return cast(
+                Dict[str, Any],
+                await asyncio.wait_for(
+                    client.create_order(
+                        symbol,
+                        order_type,
+                        side,
+                        amount,
+                        price,
+                        order_params,
                     ),
-                )
+                    timeout=_CREATE_ORDER_TIMEOUT,
+                ),
+            )
 
-            try:
-                _t0 = time.perf_counter()
-                result = await self._resilience.retry_call(_call)
-                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
-            except RetryExhaustedError as exc:
-                self._throttle.record_error(error_type=exc.error_type)
-                if exc.error_type == "rate_limit":
-                    self._throttle.record_rate_limit_hit()
-                raise
-            except ExchangeCircuitOpenError:
-                self._handle_circuit_open("create_order")
-                raise
-            except asyncio.TimeoutError as exc:
-                self._throttle.record_error(error_type="timeout")
-                raise ExchangeAdapterError(f"create_order timeout ({symbol}) after {_CREATE_ORDER_TIMEOUT}s") from exc
-            except ccxt.AuthenticationError as exc:
-                raise ExchangeAdapterError(
-                    f"Authentication failed for {self._exchange_id} on create_order: {exc}"
-                ) from exc
+        return await self._resilience.retry_call(_call)
+
+        try:
+            _t0 = time.perf_counter()
+            result = await self._resilience.retry_call(_call)
+            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+            return result
+        except RetryExhaustedError as exc:
+            self._throttle.record_error(error_type=exc.error_type)
+            if exc.error_type == "rate_limit":
+                self._throttle.record_rate_limit_hit()
+            raise
+        except ExchangeCircuitOpenError:
+            self._handle_circuit_open("create_order")
+            raise
+        except asyncio.TimeoutError as exc:
+            self._throttle.record_error(error_type="timeout")
+            raise ExchangeAdapterError(f"create_order timeout ({symbol}) after {_CREATE_ORDER_TIMEOUT}s") from exc
+        except ccxt.AuthenticationError as exc:
+            raise ExchangeAdapterError(f"Authentication failed for {self._exchange_id} on create_order: {exc}") from exc
 
     async def fetch_order(
         self,
