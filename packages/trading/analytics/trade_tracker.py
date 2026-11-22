@@ -256,11 +256,14 @@ class TradeTracker:
     def _append_trade(self, trade: TradeRecord) -> None:
         with self._lock:
             self._closed.append(trade)
+        # ADR-0026: con fees UNKNOWN, net_pnl_pct es None — formatearlo con
+        # {:+.2%} lanza TypeError y rompería el registro del trade en el log.
+        net_pnl = trade.net_pnl_pct
         self._log.info(
-            "Trade cerrado | {} pnl={:+.2%} net={:+.2%} entry={:.4f} exit={:.4f} dur={:.0f}s",
+            "Trade cerrado | {} pnl={:+.2%} net={} entry={:.4f} exit={:.4f} dur={:.0f}s",
             trade.trade_id,
             trade.pnl_pct,
-            trade.net_pnl_pct,
+            "n/a" if net_pnl is None else f"{net_pnl:+.2%}",
             trade.entry_price,
             trade.exit_price,
             trade.duration_s,
