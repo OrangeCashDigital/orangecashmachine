@@ -209,22 +209,49 @@ class KafkaBronzeWriter:
         if not messages:
             return 0, 0
 
-        processed = 0
         handled = 0
+        processed = 0
         write_errors = 0
+        groups: dict[tuple[str, str, str], list[tuple[EventPayload, pl.DataFrame]]] = {}
+        seen_in_batch: set[str] = set()
 
+        # Fase 1: deserializar, dedup y validar (sin tocar Iceberg)
         for msg in messages:
-            outcome = await self._process_message(msg)
-            if outcome == "written":
-                processed += 1
-            elif outcome == "handled":
+            prepared = await self._prepare_message(msg, seen_in_batch)
+            if prepared is None:
                 handled += 1
-            else:  # "write_error"
-                write_errors += 1
+                continue
+            event, df = prepared
+            seen_in_batch.add(event.event_id)
+            groups.setdefault((event.exchange, event.symbol, event.timeframe), []).append((event, df))
 
-        # at-least-once: commitear solo si no hubo errores de escritura.
-        # Los mensajes exitosos dentro del batch son idempotentes
-        # (SeenFilter L1 + Iceberg dedup).
+        # Fase 2: UN append (= un commit Iceberg) por grupo
+        for (exchange, symbol, timeframe), items in groups.items():
+            big = pl.concat([df for _, df in items], how="vertical_relaxed")
+            try:
+                await asyncio.to_thread(
+                    self._bronze.append,
+                    df=big,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    exchange=exchange,
+                    run_id=items[0][0].event_id,
+                )
+            except Exception as exc:
+                write_errors += len(items)
+                self._log.error(
+                    "bronze_write_error | {exchange} {symbol} {timeframe} | msgs={n} error={error}",
+                    exchange=exchange,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    n=len(items),
+                    error=str(exc),
+                )
+                continue  # B-19: sin mark_seen -> el retry reintenta
+            for event, _ in items:
+                self._dedup.mark_seen(event.event_id)
+            processed += len(items)
+
         if write_errors == 0 and (processed + handled) > 0:
             await self._consumer.commit()
         elif write_errors > 0:
@@ -239,9 +266,49 @@ class KafkaBronzeWriter:
             handled=handled,
             write_errors=write_errors,
             total=len(messages),
+            commits=len(groups),
         ).debug("bronze_writer_cycle")
 
         return processed, write_errors
+
+    async def _prepare_message(
+        self, msg: KafkaMessage, seen_in_batch: set[str]
+    ) -> "tuple[EventPayload, pl.DataFrame] | None":
+        """None = mensaje handled (DLQ/dedup/vacío). Si no, (event, df) listo para escribir."""
+        try:
+            event: EventPayload = _shared_deserialize(msg.value, EventPayload)
+        except Exception as exc:
+            self._log.warning(
+                "bronze_writer_deserialize_error | offset={offset} | error={error}",
+                offset=msg.offset,
+                error=str(exc),
+            )
+            await self._send_to_dlq(msg, reason=f"deserialize_error:{exc}")
+            return None
+
+        if event.event_id in seen_in_batch or self._dedup.is_duplicate(event.event_id):
+            self._log.bind(event_id=event.event_id).debug("bronze_writer_dedup_skip")
+            return None
+
+        if not event.bars:
+            self._log.bind(event_id=event.event_id).warning("bronze_writer_empty_bars — descartado")
+            await self._send_to_dlq(msg, reason="empty_bars")
+            return None
+
+        df = pl.DataFrame(
+            [
+                {
+                    "timestamp": datetime.fromtimestamp(b.ts / 1000, tz=timezone.utc),
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                }
+                for b in event.bars
+            ]
+        )
+        return event, df
 
     async def _process_message(self, msg: KafkaMessage) -> str:
         """
