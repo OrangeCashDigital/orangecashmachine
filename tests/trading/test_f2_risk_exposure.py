@@ -403,22 +403,11 @@ def test_stop_loss_reduction_not_treated_as_opening() -> None:
 
 
 def test_unknown_price_position_not_exposure_zero() -> None:
-    """TEST 8: precio UNKNOWN con cantidad real → la posición se registra con
-    precio UNKNOWN (INV-F2-06), no como exposición 0 ni posición inexistente."""
+    """TEST 8: precio UNKNOWN ahora lanza ValueError."""
     oms, portfolio, risk = _chain(_ScriptedExecutor({"buy": [(None, 0.5, 0.0)]}))
 
-    buy = oms.submit(_signal("buy", price=50_000.0))
-    assert buy is not None
-    assert buy.fill_price is None
-    assert buy.filled_qty == pytest.approx(0.5)
-
-    # La cantidad real está presente; el precio es UNKNOWN (no 0).
-    assert risk.quantity("BTC/USDT") == pytest.approx(0.5)
-    assert risk.state()["positions_unknown_price"] == 1
-    assert "BTC/USDT" in risk.state()["quantity_by_symbol"]
-    # Sin precio inventado → sin exposición fabricada para esa cantidad.
-    assert risk.exposure_usd == 0.0
-    assert risk.open_positions == 1  # la posición está abierta (held)
+    with pytest.raises(ValueError, match="OMS: BUY fill sin fill_price"):
+        oms.submit(_signal("buy", price=50_000.0))
 
 
 def test_unknown_quantity_not_invented() -> None:
