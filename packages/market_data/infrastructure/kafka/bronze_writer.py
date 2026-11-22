@@ -142,10 +142,16 @@ class KafkaBronzeWriter:
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        """Arranca el consumer. Llamar antes de run()."""
+        """Arranca consumer + DLQ. DLQ primero: si falla deserialización
+        antes de que el DLQ esté listo, el bug #188 vuelve a morder."""
+        if self._dlq is not None:
+            try:
+                await self._dlq.start()
+            except Exception as exc:
+                self._log.error("dlq_producer_start_failed", error=str(exc))
         await self._consumer.start()
         self._running = True
-        self._log.info("bronze_writer_started")
+        self._log.info("bronze_writer_started", dlq_ready=self._dlq is not None)
 
     async def stop(self) -> None:
         """Detiene el loop y cierra consumer + DLQ. SafeOps."""
