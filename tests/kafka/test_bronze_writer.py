@@ -424,8 +424,10 @@ class TestBronzeWriterAtLeastOnce:
 
     def test_mixed_batch_no_commit(self):
         """Batch con un write_error → todo el batch sin commit (at-least-once)."""
-        good_event = _make_event(event_id="evt-good")
-        bad_event = _make_event(event_id="evt-bad")
+        # #212 batching: separar en grupos distintos (timeframe ≠) para que
+        # el fallo parcial del fake (keyed por run_id) pueda ocurrir.
+        good_event = _make_event(event_id="evt-good", timeframe="1h")
+        bad_event = _make_event(event_id="evt-bad", timeframe="5m")
 
         call_count = 0
 
