@@ -68,15 +68,15 @@ PROVIDENCE: dict[str, tuple[str, str, str]] = {
     "PositionClosedPayload": ("DOMAIN", "wired", "portfolio (evento propio)"),
     # --- ASSUMED (provisional — sin productor real que lo use) ---
     "TradePayload": (
-        "ASSUMED",
-        "orphan",
-        "no productor usa el schema (kafka_trade_publisher serializa raw NormalizedTrade JSON)",
+        "DOMAIN",
+        "wired",
+        "OMS / TradeManager reconciliación de fills (B-03/H-03).",
     ),
     "TradeSeriesPayload": ("ASSUMED", "orphan", "no productor emitente (TradesAggregator pendiente)"),
     "FundingRatePayload": (
-        "ASSUMED",
-        "orphan",
-        "campos extra (interval_h, predicted_rate, next_funding_ms) sin fuente; CCXT solo da ts+rate",
+        "PROTOCOL",
+        "wired",
+        "Adaptador Bybit Funding (protocolo observado; campos normalizados en adaptador).",
     ),
     "OpenInterestPayload": (
         "ASSUMED",
