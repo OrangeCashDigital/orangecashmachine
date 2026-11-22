@@ -334,15 +334,11 @@ def test_unknown_quantity_not_invented() -> None:
 
 
 def test_unknown_buy_fill_price_not_replaced_by_signal_price() -> None:
-    """fill_price UNKNOWN no se sustituye por signal.price (fallback eliminado)."""
+    """fill_price UNKNOWN ahora lanza ValueError (fail-closed, INV-10)."""
     oms, portfolio, _ = _chain(_ScriptedExecutor({"buy": [(None, 0.5, 0.0)]}))
 
-    buy = oms.submit(_signal("buy", price=50_000.0))
-
-    assert buy is not None
-    assert buy.fill_price is None, "precio UNKNOWN → None, nunca signal.price (INV-10)"
-    assert buy.filled_qty == pytest.approx(0.5)
-    assert portfolio.snapshot().positions == (), "sin precio → sin avg inventado"
+    with pytest.raises(ValueError, match="OMS: BUY fill sin fill_price"):
+        oms.submit(_signal("buy", price=50_000.0))
 
 
 def test_unknown_sell_fill_price_reduces_quantity_but_keeps_pnl_unknown() -> None:

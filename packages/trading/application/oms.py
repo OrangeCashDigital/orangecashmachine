@@ -592,7 +592,11 @@ class OMS:
                 existing = next((p for p in positions if p.symbol == order.symbol), None)
                 prev_qty = existing.quantity if existing is not None else 0.0
                 prev_avg: float | None = existing.avg_entry if existing is not None else None
-                if fill_price is not None and fill_price > 0:
+                if fill_price is None:
+                    raise ValueError(
+                        f"OMS: BUY fill sin fill_price — imposible calcular WAC para orden {order.order_id}"
+                    )
+                if fill_price > 0:
                     new_qty = prev_qty + filled_qty
                     if prev_qty > 0 and prev_avg is not None:
                         new_avg = (prev_qty * prev_avg + filled_qty * fill_price) / new_qty
