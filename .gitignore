@@ -106,3 +106,6 @@ deploy/.backup_*/
 deploy/.prev_sha
 deploy/deploy_*.log
 deploy/deploy_evidence_*.json
+audit/
+ruff_violations.txt
+violation_report.txt

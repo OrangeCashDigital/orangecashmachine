@@ -44,6 +44,9 @@ integrations:
   kafka:
     enabled: ${oc.env:KAFKA_ENABLED,false}
     bootstrap_servers: ${oc.env:KAFKA_BOOTSTRAP_SERVERS,localhost:9092}
+    topic_gaps: ${oc.env:KAFKA_TOPIC_GAPS,market.gaps}
+    cluster_id: ${oc.env:KAFKA_CLUSTER_ID,production-cluster-id}
+    broker_identity: ${oc.env:KAFKA_BROKER_IDENTITY,production}
 
   postgres:
     enabled: false

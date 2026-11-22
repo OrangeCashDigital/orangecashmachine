@@ -17,11 +17,13 @@ Parámetros por defecto: EMA(9) / EMA(21) — conservadores para crypto 1h.
 from __future__ import annotations
 
 from datetime import timezone
+from decimal import Decimal
 from typing import Literal
 
 import polars as pl
 
 from shared.types.signal import Signal
+from shared.types.values import Price
 from trading.domain.strategies.base import BaseStrategy
 
 
@@ -91,7 +93,7 @@ class EMACrossoverStrategy(BaseStrategy):
                 symbol=self.symbol,
                 timeframe=self.timeframe,
                 direction=signal_type,
-                price=float(last["close"]),
+                price=Price(Decimal(str(last["close"]))),
                 timestamp=ts,
                 confidence=1.0,
                 metadata={

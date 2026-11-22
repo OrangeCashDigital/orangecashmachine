@@ -260,31 +260,33 @@ class CCXTAdapter(ExchangeAdapter):
     # ----------------------------------------------------------
 
     async def fetch_ticker(self, symbol: str) -> Dict[str, Any]:
+        """Consulta el ticker actual."""
         client = await self._get_client()
-        async with self._limiter.slot():
+        return await self._execute_ticker_call(client, symbol)
 
-            async def _call() -> Dict[str, Any]:
-                return cast(
-                    Dict[str, Any],
-                    await asyncio.wait_for(
-                        client.fetch_ticker(symbol),
-                        timeout=_FETCH_TICKER_TIMEOUT,
-                    ),
-                )
+    async def _execute_ticker_call(self, client: Any, symbol: str) -> Dict[str, Any]:
+        async def _call() -> Dict[str, Any]:
+            return cast(
+                Dict[str, Any],
+                await asyncio.wait_for(
+                    client.fetch_ticker(symbol),
+                    timeout=_FETCH_TICKER_TIMEOUT,
+                ),
+            )
 
-            try:
-                _t0 = time.perf_counter()
-                result = await self._resilience.retry_call(_call)
-                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
-            except RetryExhaustedError as exc:
-                self._throttle.record_error(error_type=exc.error_type)
-                if exc.error_type == "rate_limit":
-                    self._throttle.record_rate_limit_hit()
-                raise
-            except ExchangeCircuitOpenError:
-                self._handle_circuit_open("fetch_ticker")
-                raise
+        try:
+            _t0 = time.perf_counter()
+            result = await self._resilience.retry_call(_call)
+            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+            return result
+        except RetryExhaustedError as exc:
+            self._throttle.record_error(error_type=exc.error_type)
+            if exc.error_type == "rate_limit":
+                self._throttle.record_rate_limit_hit()
+            raise
+        except ExchangeCircuitOpenError:
+            self._handle_circuit_open("fetch_ticker")
+            raise
 
     async def fetch_ohlcv(
         self,
@@ -425,54 +427,63 @@ class CCXTAdapter(ExchangeAdapter):
         price: Optional[float] = None,
         params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Envía una orden al exchange (order creation) con timeout explícito.
-
-        Para órdenes market, ``price`` debe ser None (el exchange marketa).
-        ``client_order_id`` se propaga como idempotencia cuando el exchange lo
-        soporta (params clientOrderId/implicit_schema vía quirks)
-        """
+        """Envía una orden al exchange (order creation) con timeout explícito."""
         client = await self._get_client()
+        order_params = self._build_order_params(client_order_id, params)
+        return await self._execute_order_call(client, symbol, side, amount, order_type, price, order_params)
+
+    def _build_order_params(self, client_order_id: Optional[str], params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         order_params: Dict[str, Any] = dict(params or {})
         if client_order_id:
             order_params["clientOrderId"] = client_order_id
-        async with self._limiter.slot():
+        return order_params
 
-            async def _call() -> Dict[str, Any]:
-                return cast(
-                    Dict[str, Any],
-                    await asyncio.wait_for(
-                        client.create_order(
-                            symbol,
-                            order_type,
-                            side,
-                            amount,
-                            price,
-                            order_params,
-                        ),
-                        timeout=_CREATE_ORDER_TIMEOUT,
+    async def _execute_order_call(
+        self,
+        client: Any,
+        symbol: str,
+        side: str,
+        amount: float,
+        order_type: str,
+        price: Optional[float],
+        order_params: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        async def _call() -> Dict[str, Any]:
+            return cast(
+                Dict[str, Any],
+                await asyncio.wait_for(
+                    client.create_order(
+                        symbol,
+                        order_type,
+                        side,
+                        amount,
+                        price,
+                        order_params,
                     ),
-                )
+                    timeout=_CREATE_ORDER_TIMEOUT,
+                ),
+            )
 
-            try:
-                _t0 = time.perf_counter()
-                result = await self._resilience.retry_call(_call)
-                self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
-                return result
-            except RetryExhaustedError as exc:
-                self._throttle.record_error(error_type=exc.error_type)
-                if exc.error_type == "rate_limit":
-                    self._throttle.record_rate_limit_hit()
-                raise
-            except ExchangeCircuitOpenError:
-                self._handle_circuit_open("create_order")
-                raise
-            except asyncio.TimeoutError as exc:
-                self._throttle.record_error(error_type="timeout")
-                raise ExchangeAdapterError(f"create_order timeout ({symbol}) after {_CREATE_ORDER_TIMEOUT}s") from exc
-            except ccxt.AuthenticationError as exc:
-                raise ExchangeAdapterError(
-                    f"Authentication failed for {self._exchange_id} on create_order: {exc}"
-                ) from exc
+        return await self._resilience.retry_call(_call)
+
+        try:
+            _t0 = time.perf_counter()
+            result = await self._resilience.retry_call(_call)
+            self._throttle.record_success(latency_ms=(time.perf_counter() - _t0) * 1000)
+            return result
+        except RetryExhaustedError as exc:
+            self._throttle.record_error(error_type=exc.error_type)
+            if exc.error_type == "rate_limit":
+                self._throttle.record_rate_limit_hit()
+            raise
+        except ExchangeCircuitOpenError:
+            self._handle_circuit_open("create_order")
+            raise
+        except asyncio.TimeoutError as exc:
+            self._throttle.record_error(error_type="timeout")
+            raise ExchangeAdapterError(f"create_order timeout ({symbol}) after {_CREATE_ORDER_TIMEOUT}s") from exc
+        except ccxt.AuthenticationError as exc:
+            raise ExchangeAdapterError(f"Authentication failed for {self._exchange_id} on create_order: {exc}") from exc
 
     async def fetch_order(
         self,
@@ -696,100 +707,20 @@ class CCXTAdapter(ExchangeAdapter):
         return self._client
 
     async def _initialize(self) -> None:
-        if not hasattr(ccxt, self._exchange_id):
-            raise UnsupportedExchangeError(f"Exchange '{self._exchange_id}' not supported by ccxt")
-
+        self._validate_exchange_support()
         exchange_class = getattr(ccxt, self._exchange_id)
         last_exc: Optional[Exception] = None
 
         for attempt in range(1, _INIT_RETRIES + 1):
             try:
-                params: Dict[str, Any] = {
-                    "enableRateLimit": True,
-                    "options": {
-                        "adjustForTimeDifference": True,
-                        "recvWindow": 10_000,
-                    },
-                }
-                if self._api_key:
-                    params["apiKey"] = self._api_key
-                if self._api_secret:
-                    params["secret"] = self._api_secret
-                if self._api_password:
-                    params["password"] = self._api_password
-                if self._default_type:
-                    params["options"]["defaultType"] = self._default_type
-
-                client = exchange_class(params)
-
-                now = time.perf_counter()
-                global_key = f"{self._exchange_id}:{self._default_type or 'spot'}"
-                # Prioridad de cache: instancia > global > load_markets()
-                instance_valid = (
-                    self._markets_cache is not None and (now - self._markets_cached_at) < _MARKETS_CACHE_TTL
-                )
-                global_valid = (
-                    global_key in _GLOBAL_MARKETS_CACHE
-                    and (now - _GLOBAL_MARKETS_CACHED_AT.get(global_key, 0.0)) < _MARKETS_CACHE_TTL
-                )
-
-                if instance_valid:
-                    client.markets = self._markets_cache
-                    latency = 0.0
-                    logger.debug(
-                        "Exchange connected (markets from instance cache) | {} cache_age={:.1f}s",
-                        self._exchange_id,
-                        now - self._markets_cached_at,
-                    )
-                elif global_valid:
-                    client.markets = copy.deepcopy(_GLOBAL_MARKETS_CACHE[global_key])
-                    self._markets_cache = client.markets
-                    self._markets_cached_at = now
-                    latency = 0.0
-                    logger.debug(
-                        "Exchange connected (markets from global cache) | {} cache_age={:.1f}s",
-                        self._exchange_id,
-                        now - _GLOBAL_MARKETS_CACHED_AT[global_key],
-                    )
-                else:
-                    start = time.perf_counter()
-                    await asyncio.wait_for(
-                        client.load_markets(),
-                        timeout=_LOAD_MARKETS_TIMEOUT,
-                    )
-                    latency = (time.perf_counter() - start) * 1000
-                    self._markets_cache = client.markets
-                    self._markets_cached_at = time.perf_counter()
-                    _GLOBAL_MARKETS_CACHE[global_key] = copy.deepcopy(client.markets)
-                    _GLOBAL_MARKETS_CACHED_AT[global_key] = self._markets_cached_at
-
+                client = self._configure_client(exchange_class)
+                await self._load_markets_with_cache(client)
                 self._client = client
-                logger.info(
-                    "Exchange connected | {} latency={:.1f}ms",
-                    self._exchange_id,
-                    latency,
-                )
                 return
-
             except asyncio.TimeoutError as exc:
                 last_exc = exc
-                logger.warning(
-                    "load_markets timeout | {} attempt={}",
-                    self._exchange_id,
-                    attempt,
-                )
-                # Destruir cliente parcialmente inicializado — puede tener
-                # sockets abiertos o estado inconsistente tras cancel de wait_for.
-                try:
-                    await client.close()
-                except Exception as _close_exc:
-                    logger.debug(
-                        "_initialize: client close after cancel failed | {} | {}",
-                        self._exchange_id,
-                        _close_exc,
-                    )
-                client = None
-
+                logger.warning("load_markets timeout | {} attempt={}", self._exchange_id, attempt)
+                await self._cleanup_client(client)
             except Exception as exc:
                 last_exc = exc
                 delay = (_BACKOFF_BASE**attempt) + random.random()
@@ -800,18 +731,76 @@ class CCXTAdapter(ExchangeAdapter):
                     delay,
                     exc,
                 )
-                # Destruir cliente antes de reintentar — evita leaks de sesión.
-                try:
-                    await client.close()
-                except Exception as _close_exc:
-                    logger.debug(
-                        "_initialize: client close before retry failed | {} | {}",
-                        self._exchange_id,
-                        _close_exc,
-                    )
-                client = None
+                await self._cleanup_client(client)
                 await asyncio.sleep(delay)
 
         raise ExchangeConnectionError(
             f"Failed to connect to '{self._exchange_id}' after {_INIT_RETRIES} attempts"
         ) from last_exc
+
+    def _validate_exchange_support(self) -> None:
+        if not hasattr(ccxt, self._exchange_id):
+            raise UnsupportedExchangeError(f"Exchange '{self._exchange_id}' not supported by ccxt")
+
+    def _configure_client(self, exchange_class: Any) -> Any:
+        params: Dict[str, Any] = {
+            "enableRateLimit": True,
+            "options": {
+                "adjustForTimeDifference": True,
+                "recvWindow": 10_000,
+            },
+        }
+        if self._api_key:
+            params["apiKey"] = self._api_key
+        if self._api_secret:
+            params["secret"] = self._api_secret
+        if self._api_password:
+            params["password"] = self._api_password
+        if self._default_type:
+            params["options"]["defaultType"] = self._default_type
+        return exchange_class(params)
+
+    async def _load_markets_with_cache(self, client: Any) -> None:
+        now = time.perf_counter()
+        global_key = f"{self._exchange_id}:{self._default_type or 'spot'}"
+        instance_valid = self._markets_cache is not None and (now - self._markets_cached_at) < _MARKETS_CACHE_TTL
+        global_valid = (
+            global_key in _GLOBAL_MARKETS_CACHE
+            and (now - _GLOBAL_MARKETS_CACHED_AT.get(global_key, 0.0)) < _MARKETS_CACHE_TTL
+        )
+
+        if instance_valid:
+            client.markets = self._markets_cache
+            latency = 0.0
+            logger.debug(
+                "Exchange connected (markets from instance cache) | {} cache_age={:.1f}s",
+                self._exchange_id,
+                now - self._markets_cached_at,
+            )
+        elif global_valid:
+            client.markets = copy.deepcopy(_GLOBAL_MARKETS_CACHE[global_key])
+            self._markets_cache = client.markets
+            self._markets_cached_at = now
+            latency = 0.0
+            logger.debug(
+                "Exchange connected (markets from global cache) | {} cache_age={:.1f}s",
+                self._exchange_id,
+                now - _GLOBAL_MARKETS_CACHED_AT[global_key],
+            )
+        else:
+            start = time.perf_counter()
+            await asyncio.wait_for(client.load_markets(), timeout=_LOAD_MARKETS_TIMEOUT)
+            latency = (time.perf_counter() - start) * 1000
+            self._markets_cache = client.markets
+            self._markets_cached_at = time.perf_counter()
+            _GLOBAL_MARKETS_CACHE[global_key] = copy.deepcopy(client.markets)
+            _GLOBAL_MARKETS_CACHED_AT[global_key] = self._markets_cached_at
+
+        logger.info("Exchange connected | {} latency={:.1f}ms", self._exchange_id, latency)
+
+    async def _cleanup_client(self, client: Optional[Any]) -> None:
+        if client:
+            try:
+                await client.close()
+            except Exception as exc:
+                logger.debug("_initialize: client close failed | {} | {}", self._exchange_id, exc)

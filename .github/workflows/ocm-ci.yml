@@ -346,6 +346,8 @@ jobs:
         run: uv sync
 
       - name: Run integration tests
+        env:
+          OCM_TEST_KAFKA_CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qg"
         run: uv run pytest tests/ -q -m integration --no-cov
 
   # ──────────────────────────────────────────────────────────────────────────
