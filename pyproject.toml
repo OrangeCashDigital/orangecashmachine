@@ -224,11 +224,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# ── Per-file overrides for CCXT Adapter (B-47) ─────────────────────────────
-"packages/market_data/adapters/outbound/exchange/ccxt_adapter.py" = [
-    "PLR0913", # create_order y _execute_order_call reflejan firma de CCXT
-    "PLR0917", # positional args espejo del SDK
-]
 # ── Composition roots y entrypoints ────────────────────────────────────────
 # Lazy imports son intencionales: evitan circular imports en bootstrap order.
 # Paths relativos al repo root (donde está pyproject.toml).
@@ -308,7 +303,6 @@ ignore = [
 "architecture_linter/rules/arch_006.py"                 = ["SIM110"]
 # ── Tests — imports condicionales y fixtures con setup previo ───────────────
 "tests/**/*.py"                                                      = ["E402"]
-"**/ccxt_adapter.py"                                             = ["PLR0913", "PLR0917"]
 
 
 
@@ -316,7 +310,7 @@ ignore = [
 "packages/market_data/adapters/inbound/rest/gap_recovery_fetcher.py"      = ["C901"]
 "packages/market_data/adapters/inbound/rest/ohlcv_fetcher.py"             = ["C901"]
 "packages/market_data/adapters/inbound/rest/trades_backfill_fetcher.py"   = ["C901"]
-"packages/market_data/adapters/outbound/exchange/ccxt_adapter.py"         = ["C901", "SIM103"]
+"packages/market_data/adapters/outbound/exchange/ccxt_adapter.py" = ["C901", "SIM103", "PLR0913", "PLR0917"]
 "packages/market_data/adapters/outbound/exchange/resilience.py"           = ["C901", "SIM105"]
 "packages/market_data/application/pipelines/_worker_pool.py"              = ["C901"]
 "packages/market_data/application/strategies/backfill.py"                 = ["C901"]
