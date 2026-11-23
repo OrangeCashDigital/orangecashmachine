@@ -2483,7 +2483,7 @@ hallazgos:
   hallazgo_informe: B-MD-001
   fase: F3
   prioridad: CRITICA
-  estado: HECHO
+  estado: VERIFICACION
   estado_auditoria: CONFIRMADO
   evidencia: El linter reporta ARCH-005 FAIL; no existe freshness como estado consultable ni su propagación (F-MD-001).
   solucion: 'ADR-0059 (MERGED #142): FreshnessPort con estado consultable y propagación a trading/portfolio.'
@@ -2521,8 +2521,6 @@ hallazgos:
     evidencia:
       estado: PENDIENTE
       referencia: null
-    cierre:
-      estado: PENDIENTE
       referencia: null
 - id: B-22
   hallazgo_informe: H-13
