@@ -73,7 +73,9 @@ def test_probe_gold_data_raises_on_load_error() -> None:
         )
 
 
-def test_probe_gold_data_raises_on_empty_dataframe() -> None:
+def test_probe_gold_data_raises_on_empty_polars_dataframe() -> None:
+    """Regresión: Polars usa is_empty() (método), no empty (atributo pandas).
+    Con dry_run=False, Gold vacío debe fallar-Fast, no producir 0 señales."""
     src = MagicMock()
     src.load_features.return_value = pl.DataFrame()
     with pytest.raises(RuntimeError, match="Gold data empty"):
