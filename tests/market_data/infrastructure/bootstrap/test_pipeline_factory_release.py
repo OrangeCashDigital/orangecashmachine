@@ -68,3 +68,46 @@ def test_own_registers_the_adapter() -> None:
 
     assert factory._own(adapter) is adapter
     assert factory._owned == [adapter]
+
+
+async def test_kafka_publisher_registers_and_closes_producer(monkeypatch) -> None:
+    """El productor creado por el publisher queda bajo ownership de la factory."""
+    from importlib import import_module
+    from types import SimpleNamespace
+
+    producer_module = import_module("market_data.infrastructure.kafka.producer")
+    publisher_module = import_module("market_data.infrastructure.kafka.ohlcv_publisher")
+
+    class FakeProducer:
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        async def close(self) -> None:
+            self.close_calls += 1
+
+    fake_producer = FakeProducer()
+    fake_publisher = object()
+
+    factory = _factory()
+    factory._cfg = SimpleNamespace(integrations=SimpleNamespace(kafka=SimpleNamespace(enabled=True)))
+
+    monkeypatch.setattr(
+        producer_module.KafkaProducerAdapter,
+        "from_env",
+        classmethod(lambda cls: fake_producer),
+    )
+    monkeypatch.setattr(
+        publisher_module,
+        "KafkaOHLCVPublisher",
+        lambda *, producer: fake_publisher if producer is fake_producer else None,
+    )
+
+    publisher = factory._build_kafka_publisher()
+
+    assert publisher is fake_publisher
+    assert factory._owned == [fake_producer]
+
+    await factory.release()
+
+    assert fake_producer.close_calls == 1
+    assert factory._owned == []

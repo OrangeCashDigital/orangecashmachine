@@ -1,7 +1,7 @@
 # OCM — AUDIT FINDINGS REGISTER
 
 **Ejecución de auditoría:** 2026-08-18 (baseline `bee9fb5a3917c32fcc81fcc81fa5177ce0e57283`)
-**Fuente primaria:** `docs/audits/AUDIT_OCM_TECHNICAL_COMPLIANCE_2026-08-18.md` + artefactos en `/tmp/ocm-audit-20260818/` y `/tmp/ocm-audit-20260818-s2/` (revalidación de esta sesión)
+**Fuente primaria:** `docs/audits/archive/AUDIT_OCM_TECHNICAL_COMPLIANCE_2026-08-18.md` + artefactos en `/tmp/ocm-audit-20260818/` y `/tmp/ocm-audit-20260818-s2/` (revalidación de esta sesión)
 **Estado de este registro:** OPEN (se actualiza conforme los findings se resuelven o se toma decisión humana)
 **Nota de revalidación (2026-08-18T02:05Z+):** todos los hallazgos se re-verificaron en esta sesión — CI remoto vía `gh` (runs 32069832325 FAIL, 32069832475 FAIL), `architecture_linter` standalone (E-101, exit 1, 7/1/2), golden/adversarial (E-102/E-103, 4/12 passed), pip-audit (E-105, exit 1, 4 vulns), yamllint (E-106, exit 1). Las referencias de evidencia E-0xx del informe canónico son la SSOT de trazabilidad.
 
