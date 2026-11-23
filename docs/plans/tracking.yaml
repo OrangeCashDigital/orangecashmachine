@@ -3421,6 +3421,7 @@ hallazgos:
       evidencia: 'fix aplicado y verificado en CI'
 
 - id: OCM-212
+  fase: F3
   titulo: "Flake: test_mixed_batch_no_commit — race en fake del bronze_writer"
   tipo: bug
   prioridad: MEDIA
