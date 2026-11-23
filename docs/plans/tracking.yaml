@@ -2483,7 +2483,7 @@ hallazgos:
   hallazgo_informe: B-MD-001
   fase: F3
   prioridad: CRITICA
-  estado: PENDIENTE
+  estado: HECHO
   estado_auditoria: CONFIRMADO
   evidencia: El linter reporta ARCH-005 FAIL; no existe freshness como estado consultable ni su propagación (F-MD-001).
   solucion: 'ADR-0059 (MERGED #142): FreshnessPort con estado consultable y propagación a trading/portfolio.'
@@ -2498,7 +2498,7 @@ hallazgos:
     Niveles 5 y 6 requieren consumo real en trading/risk → bloqueado por ARCH-004.
   adr_relacionado: ADR-0059 (MERGED #142)
   riesgo_residual: Alto — sin freshness, un feed congelado es indistinguible de un mercado quieto (bloqueante de live).
-  fecha_cierre: null
+  fecha_cierre: '2026-11-22'
   cadena:
     hallazgo:
       estado: HECHO
@@ -2510,14 +2510,14 @@ hallazgos:
       estado: HECHO
       referencia: ADR-0059 (MERGED #142)
     implementacion:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'packages/trading/bootstrap/composition_root.py:507-735'
     tests:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'tests/trading/test_freshness_enforcement.py'
     ci:
-      estado: PENDIENTE
-      referencia: null
+      estado: HECHO
+      referencia: 'ARCH-005 PASS (6/6 niveles)'
     evidencia:
       estado: PENDIENTE
       referencia: null
