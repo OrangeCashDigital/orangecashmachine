@@ -869,7 +869,17 @@ def _declared_report_for_register(register_path: Path) -> Path | None:
     m = FUENTE_PRIMARIA_RE.search(text)
     if not m:
         return None
-    candidate = register_path.parent / Path(m.group(1)).name
+    declared_path = Path(m.group(1))
+    parts = declared_path.parts
+
+    relative_path = Path(*parts[2:]) if parts[:2] == ("docs", "audits") else declared_path
+
+    audits_root = register_path.parent.resolve()
+    candidate = (audits_root / relative_path).resolve()
+
+    if not candidate.is_relative_to(audits_root):
+        return None
+
     return candidate if candidate.is_file() else None
 
 

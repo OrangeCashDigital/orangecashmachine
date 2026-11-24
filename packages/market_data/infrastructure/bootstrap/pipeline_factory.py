@@ -216,7 +216,7 @@ class ConcretePipelineFactory:
             from market_data.infrastructure.kafka.producer import KafkaProducerAdapter
             from market_data.ports.outbound.kafka_producer import KafkaProducerPort
 
-            producer = KafkaProducerAdapter.from_env()
+            producer = self._own(KafkaProducerAdapter.from_env())
             # cast: KafkaProducerAdapter satisface KafkaProducerPort estructuralmente.
             # mypy no infiere structural subtyping desde clases concretas — cast explicita
             # la intención sin ocultar bugs reales (el runtime verifica en uso).

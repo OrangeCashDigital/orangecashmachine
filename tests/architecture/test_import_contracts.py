@@ -286,6 +286,32 @@ class TestCompositionRoot:
         src = (INFRA / "bootstrap" / "pipeline_factory.py").read_text()
         assert "storage.catalog import" not in src, "import legacy storage.catalog presente (B-02)"
 
+    def test_expire_bronze_snapshots_imports_canonical_get_catalog(self):
+        """F-QA-01 / B-02: el script de expiración usa el facade canónico Iceberg.
+
+        El import desde ``bronze_storage`` no está declarado en su ``__all__`` y
+        hace fallar mypy. La fuente canónica ya gobernada por B-02 es
+        ``market_data.infrastructure.storage.iceberg.catalog.get_catalog``.
+        """
+        tree = ast.parse((ROOT / "scripts" / "expire_bronze_snapshots.py").read_text())
+        modules = {
+            alias.name: node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module
+            for alias in node.names
+        }
+        assert modules.get("get_catalog") != ("market_data.infrastructure.storage.bronze.bronze_storage"), (
+            "get_catalog importado desde bronze_storage (F-QA-01)"
+        )
+        assert modules.get("get_catalog") == ("market_data.infrastructure.storage.iceberg.catalog"), (
+            "get_catalog debe importarse desde iceberg.catalog (B-02)"
+        )
+
+        import importlib
+
+        mod = importlib.import_module("market_data.infrastructure.storage.iceberg.catalog")
+        assert callable(getattr(mod, "get_catalog")), "iceberg.catalog.get_catalog inexistente (B-02)"
+
 
 class TestPortfolioCompositionRoot:
     """BC-43: CompositionRoot de portfolio es el único punto de ensamblaje."""

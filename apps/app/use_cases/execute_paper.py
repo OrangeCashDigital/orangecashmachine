@@ -248,7 +248,12 @@ def _probe_gold_data(
             f"Error: {exc}"
         ) from exc
 
-    if probe is None or (hasattr(probe, "empty") and probe.empty):
+    _is_empty = (
+        probe is None
+        or (hasattr(probe, "is_empty") and probe.is_empty())
+        or (hasattr(probe, "__len__") and len(probe) == 0)
+    )
+    if _is_empty:
         raise RuntimeError(
             f"Gold data empty | exchange={exchange} "
             f"symbol={symbol} tf={timeframe} "
