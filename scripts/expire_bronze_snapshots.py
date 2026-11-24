@@ -3,7 +3,7 @@
 import time
 from datetime import datetime, timedelta
 
-from market_data.infrastructure.storage.bronze.bronze_storage import get_catalog
+from market_data.infrastructure.storage.iceberg.catalog import get_catalog
 from pyiceberg.exceptions import CommitFailedException
 
 for attempt in range(5):
