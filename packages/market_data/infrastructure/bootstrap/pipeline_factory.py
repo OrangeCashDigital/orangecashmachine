@@ -26,6 +26,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, cast
 
+# AUD-03: singleton del consumer de calidad. Bug previo: cada
+# _build_event_bus_wiring() creaba un QualityPipelineConsumer nuevo y lo
+# suscribía; stop() desuscribía self.handle (≠ _traced_handle) → nunca
+# se desuscribía. handlers creció 835→888 en 43h, 893 conexiones Kafka.
+_quality_consumer = None
+
+
 if TYPE_CHECKING:
     from ocm.config.schema import AppConfig
 
@@ -167,6 +174,12 @@ class ConcretePipelineFactory:
         -------
         EventBusPort — listo para inyectar en PipelineContext.
         """
+        global _quality_consumer
+        if _quality_consumer is not None:
+            from market_data.infrastructure.event_bus import event_bus
+
+            return event_bus
+
         from loguru import logger as _log
 
         from market_data.application.consumers.quality_consumer import (
@@ -186,6 +199,7 @@ class ConcretePipelineFactory:
                 git_hash=_get_git_hash(),  # B-20: inyectado desde composition root
             )
             consumer.start()
+            _quality_consumer = consumer
         except Exception as exc:
             _log.warning(
                 "quality_consumer_wiring_failed — bus sin observador de calidad",

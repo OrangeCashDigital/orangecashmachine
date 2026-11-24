@@ -107,7 +107,7 @@ class BaseConsumer(ABC):
         Llamar en shutdown para evitar procesamiento de eventos huérfanos.
         Fail-soft: no lanza si no estaba registrado.
         """
-        self._bus.unsubscribe(self.event_type, self.handle)
+        self._bus.unsubscribe(self.event_type, self._traced_handle)
 
     @abstractmethod
     def handle(self, event: DomainEvent) -> None:

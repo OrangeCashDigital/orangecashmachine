@@ -16,6 +16,7 @@ verifica log + counter, en lugar del warning invisible del stdlib logging.
 from __future__ import annotations
 
 import loguru
+import pytest
 from market_data.infrastructure.bootstrap.pipeline_factory import (
     ConcretePipelineFactory,
 )
@@ -23,6 +24,16 @@ from market_data.infrastructure.event_bus import event_bus
 from market_data.infrastructure.observability.metrics import (
     QUALITY_CONSUMER_WIRING_FAILURES,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_quality_consumer_singleton():
+    """AUD-03: resetear singleton entre tests para no contaminar estado."""
+    from market_data.infrastructure.bootstrap import pipeline_factory
+
+    pipeline_factory._quality_consumer = None
+    yield
+    pipeline_factory._quality_consumer = None
 
 
 class _FakeCfg:

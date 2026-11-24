@@ -109,3 +109,12 @@ deploy/deploy_evidence_*.json
 audit/
 ruff_violations.txt
 violation_report.txt
+
+# AUD-16: archivos sueltos que no deben versionarse
+coverage.json
+feedhandler.log
+ruff_violations.txt
+violation_report.txt
+staged_*.diff
+logs/*.log
+logs/*.log.gz

@@ -68,6 +68,7 @@ class DataQualityChecker:
         self._tf_ms = _TF_MS.get(timeframe)
         self._flatline_threshold = _FLATLINE_THRESHOLD_BY_TF.get(timeframe, _FLATLINE_THRESHOLD_DEFAULT)
         self._rows_removed = max(0, int(rows_removed))
+        self._last_log_time: dict[str, float] = {}
 
     def check(self, df: pl.DataFrame, *, symbol: str) -> DataQualityReport:
         report = DataQualityReport(
@@ -110,14 +111,24 @@ class DataQualityChecker:
                 rows,
             )
         else:
+            import time as _time
+
+            # AUD-07: rate-limit 1/min por (symbol, tf) + incluir motivos
+            key = f"{symbol}:{self._timeframe}"
+            now = _time.time()
+            if now - self._last_log_time.get(key, 0) < 60.0:
+                return
+            self._last_log_time[key] = now
+            reasons = "; ".join(f"{i.check}:{i.description}" for i in report.issues[:3])
             level = "error" if report.has_critical_issues else "warning"
             getattr(logger, level)(
-                "Data quality issues | {}/{} exchange={} warnings={} criticals={}",
+                "Data quality issues | {}/{} exchange={} warnings={} criticals={} | {}",
                 symbol,
                 self._timeframe,
                 self._exchange,
                 len(report.warnings),
                 len(report.criticals),
+                reasons,
             )
 
     @staticmethod
