@@ -85,7 +85,7 @@ def run(ctx: "RuntimeContext", pusher: "MetricsPusherPort | None" = None) -> int
                 continue
 
             for market_type, symbols in [
-                ("spot", getattr(exc_cfg.markets, "spot_symbols", [])),
+                ("spot", exc_cfg.markets.spot_symbols),
                 ("futures", getattr(exc_cfg.markets, "futures_symbols", [])),
             ]:
                 if not symbols:

@@ -164,7 +164,7 @@ async def _ingestion_loop(ctx: RuntimeContext, guard: ExecutionGuard) -> None:
                     continue
 
                 for market_type, symbols in [
-                    ("spot", getattr(exc_cfg.markets, "spot_symbols", [])),
+                    ("spot", exc_cfg.markets.spot_symbols),
                     ("futures", getattr(exc_cfg.markets, "futures_symbols", [])),
                 ]:
                     if not symbols:
