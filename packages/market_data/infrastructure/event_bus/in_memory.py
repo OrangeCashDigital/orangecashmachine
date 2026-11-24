@@ -121,6 +121,14 @@ class InMemoryEventBus:
             event_type.__name__,
             getattr(handler, "__qualname__", repr(handler)),
         )
+        # AUD-03 defense: si un tipo supera 20 handlers, es un leak. Grita.
+        n = len(self._handlers[event_type])
+        if n > 20:
+            logger.warning(
+                "EventBus: {} tiene {} handlers — posible leak de suscripciones",
+                event_type.__name__,
+                n,
+            )
 
     def unsubscribe(
         self,

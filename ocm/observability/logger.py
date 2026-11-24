@@ -139,6 +139,10 @@ _NOISY_LOGGERS: tuple[str, ...] = (
     "ccxt",
     "ccxt.async_support",
     "ccxt.async_support.base.exchange",
+    "aiokafka",
+    "asyncio",
+    "aiohttp",
+    "urllib3",
 )
 
 
